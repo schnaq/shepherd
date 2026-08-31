@@ -1,0 +1,72 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "reviewThreads": {
+          "pageInfo": { "hasNextPage": false, "endCursor": "Y3Vyc29yOjI=" },
+          "nodes": [
+            {
+              "id": "PRRT_kwDOThreadOne",
+              "isResolved": false,
+              "isOutdated": false,
+              "path": "Sources/Auth/TokenStore.swift",
+              "line": 42,
+              "originalLine": 40,
+              "diffSide": "RIGHT",
+              "comments": {
+                "nodes": [
+                  {
+                    "id": "PRRC_kwDOCommentOne",
+                    "databaseId": 987654321,
+                    "body": "This should not force-unwrap.",
+                    "createdAt": "2026-08-31T07:00:00Z",
+                    "author": {
+                      "__typename": "User",
+                      "login": "octocat",
+                      "avatarUrl": "https://avatars.githubusercontent.com/u/583231?v=4"
+                    }
+                  },
+                  {
+                    "id": "PRRC_kwDOCommentTwo",
+                    "databaseId": 987654322,
+                    "body": "Fixed in 3f1a9c0.",
+                    "createdAt": "2026-08-31T07:20:00Z",
+                    "author": {
+                      "__typename": "Bot",
+                      "login": "claude[bot]",
+                      "avatarUrl": "https://avatars.githubusercontent.com/in/1?v=4"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "id": "PRRT_kwDOThreadTwo",
+              "isResolved": true,
+              "isOutdated": true,
+              "path": "Sources/Auth/Keychain.swift",
+              "line": null,
+              "originalLine": 12,
+              "diffSide": "LEFT",
+              "comments": {
+                "nodes": [
+                  {
+                    "id": "PRRC_kwDOCommentThree",
+                    "databaseId": 987654323,
+                    "body": "Superseded by the rename.",
+                    "createdAt": "2026-08-30T18:00:00Z",
+                    "author": {
+                      "__typename": "User",
+                      "login": "octocat",
+                      "avatarUrl": null
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

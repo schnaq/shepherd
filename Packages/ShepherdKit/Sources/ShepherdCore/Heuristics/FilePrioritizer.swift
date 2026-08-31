@@ -254,18 +254,22 @@ public enum FilePrioritizer {
             }
         }
 
+        // Churn signals are meaningless for generated content — a regenerated lockfile is
+        // always huge and always dominates the diff, and neither fact deserves attention.
         let churn = file.churn
-        if churn >= 300 {
-            score += 15
-            reasons.append("Large change (\(churn) lines)")
-        } else if churn >= 100 {
-            score += 8
-            reasons.append("Sizeable change (\(churn) lines)")
-        }
+        if category != .generated {
+            if churn >= 300 {
+                score += 15
+                reasons.append("Large change (\(churn) lines)")
+            } else if churn >= 100 {
+                score += 8
+                reasons.append("Sizeable change (\(churn) lines)")
+            }
 
-        if totalChurn > 0, churn > 0, Double(churn) / Double(totalChurn) > 0.4 {
-            score += 10
-            reasons.append("Dominates this pull request's changes")
+            if totalChurn > 0, churn > 0, Double(churn) / Double(totalChurn) > 0.4 {
+                score += 10
+                reasons.append("Dominates this pull request's changes")
+            }
         }
 
         if file.status == .added, category == .source {

@@ -1,0 +1,38 @@
+[
+  {
+    "sha": "1a2b3c",
+    "filename": "Sources/Auth/TokenStore.swift",
+    "status": "modified",
+    "additions": 120,
+    "deletions": 40,
+    "changes": 160,
+    "patch": "@@ -1,6 +1,8 @@\n-final class TokenStore {\n+protocol TokenStore {\n+    func token(for login: String) async throws -> TokenSet?\n }"
+  },
+  {
+    "sha": "4d5e6f",
+    "filename": "Sources/Auth/KeychainTokenStore.swift",
+    "previous_filename": "Sources/Auth/Keychain.swift",
+    "status": "renamed",
+    "additions": 100,
+    "deletions": 50,
+    "changes": 150,
+    "patch": "@@ -1,3 +1,3 @@\n-struct Keychain {\n+struct KeychainTokenStore: TokenStore {\n }"
+  },
+  {
+    "sha": "7g8h9i",
+    "filename": "Resources/icon.png",
+    "status": "added",
+    "additions": 0,
+    "deletions": 0,
+    "changes": 0
+  },
+  {
+    "sha": "abcdef",
+    "filename": "Tests/AuthTests/LegacyKeychainTests.swift",
+    "status": "removed",
+    "additions": 0,
+    "deletions": 6,
+    "changes": 6,
+    "patch": "@@ -1,6 +0,0 @@\n-final class LegacyKeychainTests: XCTestCase {}"
+  }
+]

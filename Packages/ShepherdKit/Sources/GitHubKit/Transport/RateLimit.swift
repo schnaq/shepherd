@@ -42,12 +42,12 @@ public struct RateLimitSnapshot: Sendable, Hashable {
     ///   - observedAt: The observation time. Defaults to now.
     /// - Returns: A snapshot, or `nil` when the response carried no rate-limit headers.
     public static func parse(from response: HTTPResponse, observedAt: Date = Date()) -> RateLimitSnapshot? {
-        let limit = response.header("x-ratelimit-limit").flatMap(Int.init)
-        let remaining = response.header("x-ratelimit-remaining").flatMap(Int.init)
-        let used = response.header("x-ratelimit-used").flatMap(Int.init)
+        let limit = response.header("x-ratelimit-limit").flatMap { Int($0) }
+        let remaining = response.header("x-ratelimit-remaining").flatMap { Int($0) }
+        let used = response.header("x-ratelimit-used").flatMap { Int($0) }
         let resource = response.header("x-ratelimit-resource")
         let reset = response.header("x-ratelimit-reset")
-            .flatMap(Double.init)
+            .flatMap { Double($0) }
             .map { Date(timeIntervalSince1970: $0) }
         if limit == nil, remaining == nil, used == nil, resource == nil, reset == nil {
             return nil
@@ -97,8 +97,8 @@ public enum RateLimitPolicy {
         if response.statusCode == 429 { return true }
         guard response.statusCode == 403 else { return false }
         if response.header("retry-after") != nil { return true }
-        if let remaining = response.header("x-ratelimit-remaining").flatMap(Int.init),
-           remaining <= 0 {
+        let remainingHeader = response.header("x-ratelimit-remaining").flatMap { Int($0) }
+        if let remaining = remainingHeader, remaining <= 0 {
             return true
         }
         let body = String(decoding: response.body, as: UTF8.self).lowercased()

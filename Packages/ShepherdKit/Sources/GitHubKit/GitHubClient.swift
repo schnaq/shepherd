@@ -558,7 +558,7 @@ public actor GitHubClient {
             extraHeaders: extraHeaders
         )
 
-        let pollInterval = response.header("x-poll-interval").flatMap(TimeInterval.init)
+        let pollInterval = response.header("x-poll-interval").flatMap { TimeInterval($0) }
         let newLastModified = response.header("last-modified") ?? lastModified
 
         if response.statusCode == 304 && response.body.isEmpty {

@@ -1,0 +1,358 @@
+import Foundation
+import GRDB
+import ShepherdCore
+import XCTest
+@testable import ShepherdPersistence
+
+final class DraftStoreTests: XCTestCase {
+    func testDraftSurvivesAReopenOfTheDatabase() async throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("shepherd-draft-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("db.sqlite")
+
+        let draft = PersistenceFixtures.draft()
+        do {
+            let database = try DatabaseManager(url: url)
+            try await database.saveDraft(draft)
+        }
+
+        // A fresh manager over the same file is what an app relaunch looks like.
+        let reopened = try DatabaseManager(url: url)
+        let loaded = try await reopened.fetchDraft(prID: draft.prID)
+        XCTAssertEqual(loaded, draft)
+    }
+
+    func testDraftRoundTripKeepsCommentOrderAndRanges() async throws {
+        let database = try DatabaseManager.inMemory()
+        let draft = PersistenceFixtures.draft()
+        try await database.saveDraft(draft)
+
+        let loaded = try await database.fetchDraft(prID: draft.prID)
+        XCTAssertEqual(loaded?.verdict, .requestChanges)
+        XCTAssertEqual(loaded?.summaryBody, "Please fix the token handling.")
+        XCTAssertEqual(loaded?.basedOnHeadOid, "abc123")
+        XCTAssertEqual(loaded?.comments.map(\.path), draft.comments.map(\.path))
+        XCTAssertEqual(loaded?.comments[1].startLine, 15)
+        XCTAssertEqual(loaded?.comments[1].side, .left)
+        XCTAssertEqual(loaded?.comments[0].localID, draft.comments[0].localID)
+    }
+
+    func testSavingADraftReplacesItsComments() async throws {
+        let database = try DatabaseManager.inMemory()
+        var draft = PersistenceFixtures.draft()
+        try await database.saveDraft(draft)
+
+        draft.comments = [draft.comments[0]]
+        try await database.saveDraft(draft)
+
+        let loaded = try await database.fetchDraft(prID: draft.prID)
+        XCTAssertEqual(loaded?.comments.count, 1)
+    }
+
+    func testDeletingADraftRemovesItsComments() async throws {
+        let database = try DatabaseManager.inMemory()
+        let draft = PersistenceFixtures.draft()
+        try await database.saveDraft(draft)
+        try await database.deleteDraft(prID: draft.prID)
+
+        let loaded = try await database.fetchDraft(prID: draft.prID)
+        XCTAssertNil(loaded)
+
+        let orphanCount = try await database.writer.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM draft_comments") ?? 0
+        }
+        XCTAssertEqual(orphanCount, 0)
+    }
+
+    func testUpsertingACommentCreatesTheDraftWhenNeeded() async throws {
+        let database = try DatabaseManager.inMemory()
+        let comment = DraftComment(
+            path: "Sources/App/View.swift",
+            line: 7,
+            side: .right,
+            body: "Typo."
+        )
+        try await database.upsertDraftComment(comment, prID: "PR_9", headRefOid: "head9")
+
+        let loaded = try await database.fetchDraft(prID: "PR_9")
+        XCTAssertEqual(loaded?.basedOnHeadOid, "head9")
+        XCTAssertEqual(loaded?.comments.count, 1)
+        XCTAssertEqual(loaded?.comments.first?.body, "Typo.")
+        XCTAssertNil(loaded?.verdict)
+    }
+
+    func testDeletingASingleComment() async throws {
+        let database = try DatabaseManager.inMemory()
+        let draft = PersistenceFixtures.draft()
+        try await database.saveDraft(draft)
+
+        try await database.deleteDraftComment(localID: draft.comments[0].localID)
+        let loaded = try await database.fetchDraft(prID: draft.prID)
+        XCTAssertEqual(loaded?.comments.count, 1)
+        XCTAssertEqual(loaded?.comments.first?.localID, draft.comments[1].localID)
+    }
+
+    func testPullRequestsWithDraftsAreListed() async throws {
+        let database = try DatabaseManager.inMemory()
+        try await database.saveDraft(PersistenceFixtures.draft(prID: "PR_1"))
+        try await database.saveDraft(PersistenceFixtures.draft(prID: "PR_2"))
+
+        let ids = try await database.pullRequestIDsWithDrafts()
+        XCTAssertEqual(Set(ids), ["PR_1", "PR_2"])
+    }
+}
+
+final class OutboxStoreTests: XCTestCase {
+    private let now = Date(timeIntervalSince1970: 1_788_162_000)
+
+    private func item(
+        id: UUID = UUID(),
+        action: OutboxAction = .resolveThread(threadID: "PRRT_1"),
+        nextAttemptAt: Date = Date(timeIntervalSince1970: 0)
+    ) -> OutboxItem {
+        OutboxItem(
+            id: id,
+            prID: "PR_1",
+            repo: PersistenceFixtures.repo,
+            number: 128,
+            action: action,
+            createdAt: Date(timeIntervalSince1970: 1_788_161_000),
+            attemptCount: 0,
+            nextAttemptAt: nextAttemptAt,
+            lastError: nil,
+            state: .pending
+        )
+    }
+
+    func testEnqueueAndDequeueRoundTripEveryActionKind() async throws {
+        let database = try DatabaseManager.inMemory()
+        let actions: [OutboxAction] = [
+            .submitReview(PersistenceFixtures.draft()),
+            .replyToComment(commentDatabaseID: 987_654_321, body: "Thanks!"),
+            .resolveThread(threadID: "PRRT_1"),
+            .unresolveThread(threadID: "PRRT_2"),
+            .merge(method: "squash", expectedHeadOid: "abc123"),
+            .markReadyForReview,
+        ]
+        for (index, action) in actions.enumerated() {
+            var queued = item(action: action)
+            // Distinct creation times so the "oldest first" ordering is deterministic.
+            queued.createdAt = Date(timeIntervalSince1970: 1_788_161_000 + Double(index))
+            try await database.enqueue(queued)
+        }
+
+        let ready = try await database.dequeueReadyOutboxItems(now: now, limit: 50)
+        XCTAssertEqual(ready.count, actions.count)
+        XCTAssertEqual(ready.map(\.action), actions, "actions must round-trip exactly")
+        XCTAssertTrue(ready.allSatisfy { $0.repo == PersistenceFixtures.repo })
+        XCTAssertTrue(ready.allSatisfy { $0.number == 128 })
+    }
+
+    func testItemsWaitingOutTheirBackoffAreNotDequeued() async throws {
+        let database = try DatabaseManager.inMemory()
+        let due = item(nextAttemptAt: now.addingTimeInterval(-1))
+        let notDue = item(nextAttemptAt: now.addingTimeInterval(60))
+        try await database.enqueue(due)
+        try await database.enqueue(notDue)
+
+        let ready = try await database.dequeueReadyOutboxItems(now: now, limit: 50)
+        XCTAssertEqual(ready.map(\.id), [due.id])
+    }
+
+    func testSucceedingRemovesTheRow() async throws {
+        let database = try DatabaseManager.inMemory()
+        let queued = item()
+        try await database.enqueue(queued)
+        try await database.markOutboxItemSucceeded(id: queued.id)
+
+        let remaining = try await database.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty)
+        let pending = try await database.pendingOutboxCount()
+        XCTAssertEqual(pending, 0)
+    }
+
+    func testFailingSchedulesAnExponentialRetry() async throws {
+        let database = try DatabaseManager.inMemory()
+        let queued = item()
+        try await database.enqueue(queued)
+
+        try await database.markOutboxItemFailed(id: queued.id, error: "offline", now: now)
+        var stored = try await database.allOutboxItems()
+        XCTAssertEqual(stored.first?.attemptCount, 1)
+        XCTAssertEqual(stored.first?.lastError, "offline")
+        XCTAssertEqual(stored.first?.state, .pending)
+        XCTAssertEqual(
+            stored.first?.nextAttemptAt.timeIntervalSince1970 ?? 0,
+            now.addingTimeInterval(5).timeIntervalSince1970,
+            accuracy: 0.001
+        )
+
+        try await database.markOutboxItemFailed(id: queued.id, error: "offline", now: now)
+        stored = try await database.allOutboxItems()
+        XCTAssertEqual(stored.first?.attemptCount, 2)
+        XCTAssertEqual(
+            stored.first?.nextAttemptAt.timeIntervalSince1970 ?? 0,
+            now.addingTimeInterval(10).timeIntervalSince1970,
+            accuracy: 0.001
+        )
+    }
+
+    func testNonRetryableFailuresStopBeingDequeued() async throws {
+        let database = try DatabaseManager.inMemory()
+        let queued = item()
+        try await database.enqueue(queued)
+        try await database.markOutboxItemFailed(
+            id: queued.id,
+            error: "422 Validation Failed",
+            now: now,
+            retriable: false
+        )
+
+        let stored = try await database.allOutboxItems()
+        XCTAssertEqual(stored.first?.state, .failed)
+
+        let ready = try await database.dequeueReadyOutboxItems(
+            now: now.addingTimeInterval(86_400),
+            limit: 50
+        )
+        XCTAssertTrue(ready.isEmpty)
+    }
+
+    func testConflictedItemsAreParkedNotRetried() async throws {
+        let database = try DatabaseManager.inMemory()
+        let queued = item(action: .submitReview(PersistenceFixtures.draft()))
+        try await database.enqueue(queued)
+        try await database.markOutboxItemConflicted(id: queued.id, reason: "head moved")
+
+        let stored = try await database.allOutboxItems()
+        XCTAssertEqual(stored.first?.state, .conflicted)
+        XCTAssertEqual(stored.first?.lastError, "head moved")
+
+        let ready = try await database.dequeueReadyOutboxItems(
+            now: now.addingTimeInterval(86_400),
+            limit: 50
+        )
+        XCTAssertTrue(ready.isEmpty, "a conflict needs a human, not a retry")
+    }
+
+    func testDiscardingAConflictDeletesIt() async throws {
+        let database = try DatabaseManager.inMemory()
+        let queued = item()
+        try await database.enqueue(queued)
+        try await database.deleteOutboxItem(id: queued.id)
+
+        let stored = try await database.allOutboxItems()
+        XCTAssertTrue(stored.isEmpty)
+    }
+
+    func testDequeueRespectsTheLimitAndOrdersOldestFirst() async throws {
+        let database = try DatabaseManager.inMemory()
+        for index in 0..<5 {
+            var queued = item()
+            queued.createdAt = Date(timeIntervalSince1970: 1_788_160_000 + Double(index))
+            try await database.enqueue(queued)
+        }
+        let ready = try await database.dequeueReadyOutboxItems(now: now, limit: 3)
+        XCTAssertEqual(ready.count, 3)
+        XCTAssertEqual(ready.map(\.createdAt), ready.map(\.createdAt).sorted())
+    }
+}
+
+final class ConditionalCacheStoreTests: XCTestCase {
+    func testETagsRoundTripThroughSQLite() async throws {
+        let database = try DatabaseManager.inMemory()
+        let cache = DatabaseConditionalCache(database: database)
+        let entry = ConditionalCacheEntry(
+            etag: "W/\"abc123\"",
+            lastModified: "Mon, 31 Aug 2026 07:41:12 GMT",
+            payload: Data("[]".utf8),
+            storedAt: Date(timeIntervalSince1970: 1_788_162_000)
+        )
+        await cache.store(entry, for: "https://api.github.com/notifications")
+
+        let loaded = await cache.entry(for: "https://api.github.com/notifications")
+        XCTAssertEqual(loaded, entry)
+    }
+
+    func testStoringTwiceReplacesTheEntry() async throws {
+        let database = try DatabaseManager.inMemory()
+        let cache = DatabaseConditionalCache(database: database)
+        await cache.store(ConditionalCacheEntry(etag: "one"), for: "key")
+        await cache.store(ConditionalCacheEntry(etag: "two"), for: "key")
+
+        let loaded = await cache.entry(for: "key")
+        XCTAssertEqual(loaded?.etag, "two")
+
+        let rowCount = try await database.writer.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM etags") ?? 0
+        }
+        XCTAssertEqual(rowCount, 1)
+    }
+
+    func testRemovalAndClear() async throws {
+        let database = try DatabaseManager.inMemory()
+        let cache = DatabaseConditionalCache(database: database)
+        await cache.store(ConditionalCacheEntry(etag: "one"), for: "a")
+        await cache.store(ConditionalCacheEntry(etag: "two"), for: "b")
+
+        await cache.remove(for: "a")
+        let removed = await cache.entry(for: "a")
+        XCTAssertNil(removed)
+
+        await cache.removeAll()
+        let cleared = await cache.entry(for: "b")
+        XCTAssertNil(cleared)
+    }
+
+    func testMissingKeysReturnNil() async throws {
+        let database = try DatabaseManager.inMemory()
+        let cache = DatabaseConditionalCache(database: database)
+        let loaded = await cache.entry(for: "never-stored")
+        XCTAssertNil(loaded)
+    }
+}
+
+final class ObservationTests: XCTestCase {
+    func testObserveInboxEmitsTheCurrentValue() async throws {
+        let database = try DatabaseManager.inMemory()
+        try await database.savePullRequestSummaries([PersistenceFixtures.summary()])
+
+        var iterator = database.observeInbox().makeAsyncIterator()
+        let first = await iterator.next()
+        XCTAssertEqual(first?.count, 1)
+        XCTAssertEqual(first?.first?.id, "PR_1")
+    }
+
+    func testObserveDraftEmitsNilWhenThereIsNoDraft() async throws {
+        let database = try DatabaseManager.inMemory()
+        var iterator = database.observeDraft(prID: "PR_missing").makeAsyncIterator()
+        let first = await iterator.next()
+        XCTAssertNil(first ?? nil)
+    }
+
+    func testObserveDraftEmitsTheStoredDraft() async throws {
+        let database = try DatabaseManager.inMemory()
+        try await database.saveDraft(PersistenceFixtures.draft())
+
+        var iterator = database.observeDraft(prID: "PR_1").makeAsyncIterator()
+        let first = await iterator.next()
+        XCTAssertEqual(first??.prID, "PR_1")
+        XCTAssertEqual(first??.comments.count, 2)
+    }
+
+    func testObservePendingOutboxCount() async throws {
+        let database = try DatabaseManager.inMemory()
+        try await database.enqueue(
+            OutboxItem(
+                prID: "PR_1",
+                repo: PersistenceFixtures.repo,
+                number: 128,
+                action: .resolveThread(threadID: "PRRT_1")
+            )
+        )
+        var iterator = database.observePendingOutboxCount().makeAsyncIterator()
+        let first = await iterator.next()
+        XCTAssertEqual(first, 1)
+    }
+}

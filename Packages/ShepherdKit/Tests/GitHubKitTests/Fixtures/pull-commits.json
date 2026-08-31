@@ -1,0 +1,28 @@
+[
+  {
+    "sha": "1111111111111111111111111111111111111111",
+    "commit": {
+      "message": "refactor: hide the Keychain behind a protocol\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
+      "author": { "name": "Claude", "email": "noreply@anthropic.com", "date": "2026-08-30T09:10:00Z" },
+      "committer": { "name": "GitHub", "email": "noreply@github.com", "date": "2026-08-30T09:10:00Z" }
+    },
+    "author": {
+      "login": "claude[bot]",
+      "avatar_url": "https://avatars.githubusercontent.com/in/1?v=4",
+      "type": "Bot"
+    }
+  },
+  {
+    "sha": "3f1a9c0d5b7e2a4c6d8f0b1a2c3e4d5f60718293",
+    "commit": {
+      "message": "test: cover the in-memory store",
+      "author": { "name": "Claude", "email": "noreply@anthropic.com", "date": "2026-08-31T07:40:00Z" },
+      "committer": { "name": "GitHub", "email": "noreply@github.com", "date": "2026-08-31T07:40:00Z" }
+    },
+    "author": {
+      "login": "claude[bot]",
+      "avatar_url": "https://avatars.githubusercontent.com/in/1?v=4",
+      "type": "Bot"
+    }
+  }
+]

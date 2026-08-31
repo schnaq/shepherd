@@ -1,0 +1,85 @@
+{
+  "data": {
+    "search": {
+      "issueCount": 3,
+      "pageInfo": { "hasNextPage": false, "endCursor": "Y3Vyc29yOjM=" },
+      "nodes": [
+        {
+          "__typename": "PullRequest",
+          "id": "PR_kwDOAgentOne",
+          "number": 128,
+          "title": "Refactor the token store",
+          "createdAt": "2026-08-30T09:15:00Z",
+          "updatedAt": "2026-08-31T07:41:12Z",
+          "isDraft": false,
+          "additions": 240,
+          "deletions": 96,
+          "changedFiles": 7,
+          "headRefName": "claude/refactor-token-store",
+          "headRefOid": "3f1a9c0d5b7e2a4c6d8f0b1a2c3e4d5f60718293",
+          "baseRefName": "main",
+          "mergeable": "MERGEABLE",
+          "reviewDecision": "REVIEW_REQUIRED",
+          "repository": { "name": "review", "owner": { "login": "schnaq" } },
+          "author": {
+            "__typename": "Bot",
+            "login": "claude[bot]",
+            "avatarUrl": "https://avatars.githubusercontent.com/in/1?v=4"
+          },
+          "labels": { "nodes": [{ "name": "agent" }, { "name": "refactor" }] },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "oid": "3f1a9c0d5b7e2a4c6d8f0b1a2c3e4d5f60718293",
+                  "statusCheckRollup": {
+                    "state": "FAILURE",
+                    "contexts": { "totalCount": 4 }
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "__typename": "PullRequest",
+          "id": "PR_kwDOHumanTwo",
+          "number": 129,
+          "title": "Docs: describe the sync loops",
+          "createdAt": "2026-08-31T06:00:00Z",
+          "updatedAt": "2026-08-31T06:30:00Z",
+          "isDraft": true,
+          "additions": 40,
+          "deletions": 2,
+          "changedFiles": 1,
+          "headRefName": "docs/sync-loops",
+          "headRefOid": "aa11bb22cc33dd44ee55ff6677889900aabbccdd",
+          "baseRefName": "main",
+          "mergeable": "CONFLICTING",
+          "reviewDecision": null,
+          "repository": { "name": "review", "owner": { "login": "schnaq" } },
+          "author": {
+            "__typename": "User",
+            "login": "octocat",
+            "avatarUrl": "https://avatars.githubusercontent.com/u/583231?v=4"
+          },
+          "labels": { "nodes": [] },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "oid": "aa11bb22cc33dd44ee55ff6677889900aabbccdd",
+                  "statusCheckRollup": null
+                }
+              }
+            ]
+          }
+        },
+        {
+          "__typename": "Issue",
+          "id": "I_kwDOSomeIssue"
+        }
+      ]
+    }
+  }
+}

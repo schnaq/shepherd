@@ -242,6 +242,9 @@ public enum PullRequestDigestBuilder {
         // 3. Diff excerpts for the remaining budget.
         var hunkBudget = budget.maxCharacters - bodyExcerpt.count - statsUsed
             - summary.title.count - summary.repo.fullName.count - 64
+        // `statsUsed` may overshoot `statsLimit` by one entry (the first file is always
+        // listed); the subtraction above absorbs that, so `hunkBudget` can legitimately be
+        // negative here and the guard below stops immediately.
         var hunks: [PullRequestDigest.Hunk] = []
         for priority in priorities where priority.bucket != .generated {
             guard hunkBudget > 200 else {
@@ -256,7 +259,8 @@ public enum PullRequestDigestBuilder {
                 PullRequestDigest.Hunk(path: priority.file.path, text: text, truncated: wasCut)
             )
             truncated = truncated || wasCut
-            hunkBudget -= text.count
+            // The path travels with the excerpt, so it has to come out of the same budget.
+            hunkBudget -= text.count + priority.file.path.count
         }
         if hunks.count < priorities.filter({ $0.bucket != .generated && $0.file.hasPatch }).count {
             truncated = true

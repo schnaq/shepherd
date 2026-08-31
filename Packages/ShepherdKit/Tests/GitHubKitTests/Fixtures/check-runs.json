@@ -1,0 +1,38 @@
+{
+  "total_count": 3,
+  "check_runs": [
+    {
+      "id": 100001,
+      "node_id": "CR_kwDOOne",
+      "name": "ShepherdKit tests (macOS)",
+      "status": "completed",
+      "conclusion": "success",
+      "details_url": "https://github.com/schnaq/review/actions/runs/1",
+      "started_at": "2026-08-31T07:30:00Z",
+      "completed_at": "2026-08-31T07:35:00Z",
+      "output": { "title": "All tests passed", "summary": "142 tests, 0 failures" }
+    },
+    {
+      "id": 100002,
+      "node_id": "CR_kwDOTwo",
+      "name": "ShepherdKit tests (Linux)",
+      "status": "completed",
+      "conclusion": "failure",
+      "details_url": "https://github.com/schnaq/review/actions/runs/2",
+      "started_at": "2026-08-31T07:30:00Z",
+      "completed_at": "2026-08-31T07:36:00Z",
+      "output": { "title": "1 test failed", "summary": "GitHubClientTests.testMergeConflict" }
+    },
+    {
+      "id": 100003,
+      "node_id": "CR_kwDOThree",
+      "name": "App build (macOS)",
+      "status": "in_progress",
+      "conclusion": null,
+      "details_url": "https://github.com/schnaq/review/actions/runs/3",
+      "started_at": "2026-08-31T07:30:00Z",
+      "completed_at": null,
+      "output": { "title": null, "summary": null }
+    }
+  ]
+}

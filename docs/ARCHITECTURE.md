@@ -182,7 +182,9 @@ never auto-applied.
 ## Verification reality check
 
 Development of this repo happens partly in Linux CI/agent environments where Xcode is
-unavailable. Therefore: `Packages/ShepherdKit` must build and test with plain `swift test`
-(it may use GRDB — persistence tests are skipped off-macOS via `#if canImport(GRDB)` guards
-when needed); `web/diff-viewer` builds and tests with Node 22. The app target compiles only
-on macOS — CI runs `xcodegen` + `xcodebuild` on a macOS runner as the gate.
+unavailable. Therefore: `Packages/ShepherdKit` must build and test with plain `swift test` on
+**both macOS and Linux**. GRDB has shipped SwiftPM support for Linux since 7.10 (community
+supported); the Linux CI job installs `libsqlite3-dev` for GRDB's system-SQLite target, and
+the persistence tests use an in-memory `DatabaseQueue` so they behave identically on both
+platforms. `web/diff-viewer` builds and tests with Node 22. The app target compiles only on
+macOS — CI runs `xcodegen` + `xcodebuild` on a macOS runner as the gate.

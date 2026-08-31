@@ -1,0 +1,52 @@
+[
+  {
+    "id": "12345678",
+    "unread": true,
+    "reason": "review_requested",
+    "updated_at": "2026-08-31T07:41:12Z",
+    "last_read_at": null,
+    "subject": {
+      "title": "Refactor the token store",
+      "url": "https://api.github.com/repos/schnaq/review/pulls/128",
+      "latest_comment_url": "https://api.github.com/repos/schnaq/review/pulls/comments/987654321",
+      "type": "PullRequest"
+    },
+    "repository": {
+      "name": "review",
+      "full_name": "schnaq/review",
+      "owner": { "login": "schnaq" }
+    }
+  },
+  {
+    "id": "12345679",
+    "unread": true,
+    "reason": "subscribed",
+    "updated_at": "2026-08-31T06:00:00Z",
+    "subject": {
+      "title": "Weekly digest",
+      "url": "https://api.github.com/repos/schnaq/review/issues/12",
+      "type": "Issue"
+    },
+    "repository": {
+      "name": "review",
+      "full_name": "schnaq/review",
+      "owner": { "login": "schnaq" }
+    }
+  },
+  {
+    "id": "12345680",
+    "unread": false,
+    "reason": "ci_activity",
+    "updated_at": "2026-08-31T05:00:00Z",
+    "subject": {
+      "title": "Docs: describe the sync loops",
+      "url": "https://api.github.com/repos/schnaq/review/pulls/129",
+      "type": "PullRequest"
+    },
+    "repository": {
+      "name": "review",
+      "full_name": "schnaq/review",
+      "owner": { "login": "schnaq" }
+    }
+  }
+]

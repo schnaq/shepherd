@@ -28,7 +28,9 @@ swift test
 ```
 
 It must keep building without AppKit/SwiftUI/WebKit imports and pass tests headlessly —
-this is enforced by CI on both macOS and Linux (persistence tests may be macOS-only).
+this is enforced by CI on both macOS and Linux. GRDB supports Linux via SwiftPM since 7.10,
+so the persistence tests run on both runners; on Linux you need `libsqlite3-dev` installed
+(`sudo apt-get install libsqlite3-dev`), which CI does for you.
 
 ## Working on the diff viewer
 

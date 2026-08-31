@@ -10,7 +10,8 @@ public enum ResponseMapping {
 
     /// Maps GraphQL's `PullRequestReviewDecision`.
     static func reviewDecision(_ raw: String?) -> ReviewDecision? {
-        switch raw?.uppercased() {
+        guard let value = raw?.uppercased() else { return nil }
+        switch value {
         case "APPROVED": return .approved
         case "CHANGES_REQUESTED": return .changesRequested
         case "REVIEW_REQUIRED": return .reviewRequired
@@ -20,7 +21,8 @@ public enum ResponseMapping {
 
     /// Maps GraphQL's `MergeableState`.
     static func mergeable(_ raw: String?) -> Mergeable? {
-        switch raw?.uppercased() {
+        guard let value = raw?.uppercased() else { return nil }
+        switch value {
         case "MERGEABLE": return .mergeable
         case "CONFLICTING": return .conflicting
         case "UNKNOWN": return .unknown
@@ -39,7 +41,8 @@ public enum ResponseMapping {
 
     /// Maps GraphQL's `StatusState` onto a rollup state.
     static func rollupState(_ raw: String?) -> CheckRollup.State? {
-        switch raw?.uppercased() {
+        guard let value = raw?.uppercased() else { return nil }
+        switch value {
         case "SUCCESS": return .success
         case "FAILURE", "ERROR": return .failure
         case "PENDING", "EXPECTED": return .pending
@@ -63,7 +66,7 @@ public enum ResponseMapping {
             owner: components[reposIndex + 1],
             name: components[reposIndex + 2]
         )
-        let number = components.last.flatMap(Int.init)
+        let number = components.last.flatMap { Int($0) }
         return (repo, number)
     }
 
@@ -75,7 +78,7 @@ public enum ResponseMapping {
         detector: AgentDetector,
         branchName: String? = nil,
         commitTrailers: [String] = []
-    ) -> Actor {
+    ) -> ShepherdCore.Actor {
         let signal = AuthorSignal(
             login: dto?.login ?? "ghost",
             isBotAccount: dto?.isBot ?? false,
@@ -95,7 +98,7 @@ public enum ResponseMapping {
         detector: AgentDetector,
         branchName: String? = nil,
         commitTrailers: [String] = []
-    ) -> Actor {
+    ) -> ShepherdCore.Actor {
         let signal = AuthorSignal(
             login: dto?.login ?? "ghost",
             isBotAccount: dto?.isBot ?? false,
@@ -262,7 +265,9 @@ public enum ResponseMapping {
         let date = dto.commit?.author?.date.flatMap(GitHubTimestamp.parse)
             ?? dto.commit?.committer?.date.flatMap(GitHubTimestamp.parse)
             ?? Date(timeIntervalSince1970: 0)
-        let author: Actor? = dto.author.map { makeActor(from: $0, detector: detector) }
+        let author: ShepherdCore.Actor? = dto.author.map {
+            makeActor(from: $0, detector: detector)
+        }
         return CommitInfo(
             oid: oid,
             messageHeadline: split.headline,
@@ -275,7 +280,7 @@ public enum ResponseMapping {
     /// Maps one check run.
     static func checkRun(from dto: RESTCheckRunsDTO.Run) -> CheckRun? {
         guard let name = dto.name else { return nil }
-        let identifier = dto.nodeId ?? dto.id.map(String.init) ?? name
+        let identifier = dto.nodeId ?? dto.id.map { String($0) } ?? name
         return CheckRun(
             id: identifier,
             name: name,
@@ -330,7 +335,7 @@ public enum ResponseMapping {
                 id: "commit:\(commit.oid)",
                 kind: .commit,
                 author: commit.author
-                    ?? Actor(login: "ghost", kind: .human),
+                    ?? ShepherdCore.Actor(login: "ghost", kind: .human),
                 createdAt: commit.committedDate,
                 summary: commit.messageHeadline
             )
@@ -341,7 +346,7 @@ public enum ResponseMapping {
                 continue
             }
             let kind: TimelineEvent.Kind
-            switch review.state?.uppercased() {
+            switch review.state?.uppercased() ?? "" {
             case "APPROVED": kind = .reviewApproved
             case "CHANGES_REQUESTED": kind = .reviewChangesRequested
             case "COMMENTED": kind = .reviewCommented

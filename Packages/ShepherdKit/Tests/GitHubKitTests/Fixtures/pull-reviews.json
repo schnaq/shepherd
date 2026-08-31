@@ -1,0 +1,29 @@
+[
+  {
+    "id": 555001,
+    "node_id": "PRR_kwDOOne",
+    "user": { "login": "octocat", "avatar_url": null, "type": "User" },
+    "body": "A couple of nits.",
+    "state": "COMMENTED",
+    "submitted_at": "2026-08-31T07:05:00Z",
+    "commit_id": "1111111111111111111111111111111111111111"
+  },
+  {
+    "id": 555002,
+    "node_id": "PRR_kwDOTwo",
+    "user": { "login": "hubot", "avatar_url": null, "type": "User" },
+    "body": "Blocking on the force-unwrap.",
+    "state": "CHANGES_REQUESTED",
+    "submitted_at": "2026-08-31T07:10:00Z",
+    "commit_id": "1111111111111111111111111111111111111111"
+  },
+  {
+    "id": 555003,
+    "node_id": "PRR_kwDOThree",
+    "user": { "login": "octocat", "avatar_url": null, "type": "User" },
+    "body": "Looks good now.",
+    "state": "APPROVED",
+    "submitted_at": "2026-08-31T07:30:00Z",
+    "commit_id": "3f1a9c0d5b7e2a4c6d8f0b1a2c3e4d5f60718293"
+  }
+]

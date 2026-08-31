@@ -112,12 +112,16 @@ public struct CheckRun: Sendable, Codable, Hashable, Identifiable {
     }
 
     /// Whether this run counts as green, red or still running for the rollup.
+    ///
+    /// A completed run without a conclusion is treated as green: GitHub always sets one, and
+    /// a missing value must not paint the inbox red.
     public var rollupContribution: RollupContribution {
         guard status == .completed else { return .pending }
+        guard let conclusion else { return .success }
         switch conclusion {
         case .failure, .timedOut, .actionRequired, .cancelled:
             return .failure
-        case .success, .neutral, .skipped, .stale, .unknown, .none:
+        case .success, .neutral, .skipped, .stale, .unknown:
             return .success
         }
     }
