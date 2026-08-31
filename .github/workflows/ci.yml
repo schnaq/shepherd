@@ -38,7 +38,7 @@ jobs:
 
   shepherdkit-macos:
     name: ShepherdKit tests (macOS)
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS]
     steps:
       - uses: actions/checkout@v4
       - run: swift test
@@ -46,17 +46,14 @@ jobs:
 
   app:
     name: App build (macOS)
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
       - name: Build diff viewer bundle
         run: npm ci && npm run build
         working-directory: web/diff-viewer
-      - name: Install XcodeGen
-        run: brew install xcodegen
+      - name: Install XcodeGen if missing
+        run: command -v xcodegen >/dev/null 2>&1 || brew install xcodegen
       - run: xcodegen generate
       - name: Build app
         run: |
