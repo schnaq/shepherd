@@ -8,7 +8,6 @@
 
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
@@ -21,7 +20,8 @@ import {
   type OutboundMessageType,
 } from '../src/bridge/protocol.js';
 
-const fixturesDir = path.resolve(fileURLToPath(new URL('../fixtures', import.meta.url)));
+// Resolved from the project root: vitest sets cwd to the directory holding vitest.config.ts.
+const fixturesDir = path.resolve(process.cwd(), 'fixtures');
 
 interface Fixture {
   readonly file: string;
