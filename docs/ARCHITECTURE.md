@@ -188,3 +188,87 @@ supported); the Linux CI job installs `libsqlite3-dev` for GRDB's system-SQLite 
 the persistence tests use an in-memory `DatabaseQueue` so they behave identically on both
 platforms. `web/diff-viewer` builds and tests with Node 22. The app target compiles only on
 macOS — CI runs `xcodegen` + `xcodebuild` on a macOS runner as the gate.
+
+## App layer (`Shepherd/`)
+
+The app target owns every Apple-only framework and all UI. Decisions worth knowing:
+
+### State machine and dependency container
+
+`AppEnvironment` (`@MainActor @Observable`) is the container and the top-level state machine:
+`launching → signedOut → signedIn(SignedInSession)`. Everything that needs a token, a
+database or the network lives in `SignedInSession`, so those things cannot exist in the
+signed-out state. `SignedInSession.make(…)` wires the stack in the order
+`Packages/ShepherdKit/README.md` prescribes: `DatabaseManager` → `GitHubClient`
+(`KeychainTokenStore` behind `RefreshingTokenProvider`, `DatabaseConditionalCache`,
+`AgentDetector` seeded with the user's registry overrides) → `SyncEngine`.
+
+Within the signed-in window a second, smaller route drives the screen: `.inbox` or
+`.review(prID)`. The review screen is full-window (as in the mockups) rather than a third
+navigation column.
+
+### Views render from the database, never from the network
+
+`InboxModel` subscribes to `DatabaseManager.observeInbox()`; `ReviewModel` subscribes to
+`observeDraft(prID:)`. Detail fetches read the cached `PullRequestDetail` first and only then
+refresh from GitHub, so opening a pull request offline shows the last-known state instead of a
+spinner (ADR 0006). Grouping uses `InboxGrouper`; the sort order inside a section is applied by
+the app on top of it (`priority` / `recentlyUpdated` / `oldestFirst`), with a deterministic
+`InboxModel.priorityScore` so two sweeps of the same data never reshuffle the list.
+
+### All writes go through the outbox
+
+`PullRequestActions` is the single write surface (`submitReview`, `reply`, `setThread`,
+`merge`, `markReadyForReview`). Every one of them enqueues an `OutboxItem` and then asks the
+sync engine to drain, so a queued approval survives a crash, a quit or an offline period. The
+app never calls a `GitHubClient` mutation directly. `SyncEvent.draftConflict` surfaces as an
+alert offering to re-open the review rather than submitting against the wrong commit.
+
+Two GitHub capabilities the UI wants are *not* modelled by the outbox, and the app does not
+pretend otherwise: deleting the head branch after a merge (the merge sheet shows the toggle
+disabled with an explanation), and dismissing an existing review.
+
+### Diff viewer: reconstructing both sides from the patch
+
+`ChangedFile.patch` is a unified diff; Monaco wants two documents. `PatchReconstructor` builds
+them from the hunks: context lines go to both sides, `-` lines only to the original, `+` lines
+only to the modified, and **the gaps between hunks are padded with empty lines on both sides**.
+The padding is what keeps 1-based line numbers identical to GitHub's — review threads and draft
+comments are anchored by absolute line number, so an off-by-N would attach comments to the
+wrong lines. Because the filler is identical on both sides, the diff editor treats it as
+unchanged and never highlights it. When `patch` is `nil` (binary or truncated) the webview is
+not created at all; a native `DiffUnavailableView` takes its place.
+
+`MarkdownHTML` is the Swift half of the bridge's `bodyHTML` contract: it escapes everything
+first and then emits a fixed, tiny tag set (`p`, `br`, `code`, `pre`, `strong`, `em`, `ul`,
+`li`, `blockquote`, `a` with an **https-only** `href`). There is no raw-HTML passthrough. The
+PR description, which never leaves the app, is rendered natively with `AttributedString`
+instead.
+
+### Intelligence
+
+`IntelligenceRouter` is a `Sendable` value rebuilt from `AppSettings` plus the Keychain
+whenever the settings change. It picks the tier, builds the digest with the *provider's* token
+budget (`TokenBudget.onDevice` ≈ 6K for Foundation Models, `TokenBudget.cloud` for BYOK) and
+degrades cloud → on-device → nothing. Results are returned as an `IntelligenceOutcome`, so the
+UI can say *why* a card is missing instead of silently hiding it. All FoundationModels usage is
+confined to `Intelligence/OnDeviceProvider.swift`, guarded by
+`SystemLanguageModel.default.availability`, and file paths a model invents are dropped before
+they reach the UI.
+
+### Keyboard model
+
+`KeySequenceState` is a pure value type implementing the two-keystroke commands (`r a`, `r x`,
+`r c`, `g a/r/s`) with a 1.5 s prefix timeout; views feed it characters from
+`onKeyPress(phases:)`. Menu commands and the ⌘K palette do not act directly — they raise an
+`AppEnvironment.PendingAction`, which the screen that owns the selection consumes. That keeps
+one implementation of "approve" for the menu bar, the palette, the shortcut and the button.
+
+### Test target
+
+`ShepherdTests` (added to `project.yml`, sources in top-level `ShepherdTests/`) covers the
+pure parts of the app: the bridge protocol against the **shared fixtures**, which are copied
+into the test bundle as a folder reference from `web/diff-viewer/fixtures` so both languages
+decode the same bytes; the patch reconstruction; the Markdown sanitiser; and the keyboard,
+palette and inbox-ordering logic. The web bundle is likewise added to the app target as a
+folder reference (`Shepherd/Resources/DiffViewer`) so `index.html` keeps its relative links.

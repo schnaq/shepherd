@@ -1,0 +1,114 @@
+import ShepherdCore
+import SwiftUI
+
+/// Shepherd's entry point.
+///
+/// One window group holds the whole app — onboarding, inbox and review screen are phases of
+/// the same window — plus the standard `Settings` scene.
+@main
+struct ShepherdApp: App {
+    @State private var environment = AppEnvironment()
+
+    var body: some Scene {
+        WindowGroup {
+            RootView()
+                .environment(environment)
+                .frame(minWidth: 1_040, minHeight: 640)
+                .preferredColorScheme(environment.settings.appearance.colorScheme)
+                .task {
+                    await environment.bootstrap()
+                }
+                .onChange(of: environment.settings.appearance) { _, _ in
+                    environment.applyAppearance()
+                }
+        }
+        .defaultSize(width: 1_440, height: 900)
+        .commands {
+            ShepherdCommands(environment: environment)
+        }
+
+        Settings {
+            SettingsView()
+                .environment(environment)
+                .preferredColorScheme(environment.settings.appearance.colorScheme)
+        }
+    }
+}
+
+/// The menu-bar commands. Every one of them is also reachable from ⌘K (`docs/ARCHITECTURE.md`).
+struct ShepherdCommands: Commands {
+    /// The shared container.
+    let environment: AppEnvironment
+
+    var body: some Commands {
+        CommandGroup(replacing: .newItem) {}
+
+        CommandMenu(String(localized: "Review")) {
+            Button(String(localized: "Approve")) {
+                environment.request(.approve)
+            }
+            .disabled(environment.session == nil)
+
+            Button(String(localized: "Request Changes")) {
+                environment.request(.requestChanges)
+            }
+            .disabled(environment.session == nil)
+
+            Button(String(localized: "Comment")) {
+                environment.request(.comment)
+            }
+            .disabled(environment.session == nil)
+
+            Divider()
+
+            Button(String(localized: "Merge…")) {
+                environment.request(.merge)
+            }
+            .disabled(environment.session == nil)
+        }
+
+        CommandGroup(after: .toolbar) {
+            Button(String(localized: "Command Palette")) {
+                environment.isCommandPaletteVisible = true
+            }
+            .keyboardShortcut("k", modifiers: .command)
+            .disabled(environment.session == nil)
+
+            Button(String(localized: "Sync Now")) {
+                Task { await environment.syncNow() }
+            }
+            .keyboardShortcut("r", modifiers: .command)
+            .disabled(environment.session == nil)
+
+            Divider()
+
+            Picker(String(localized: "Appearance"), selection: appearanceBinding) {
+                ForEach(AppearanceSetting.allCases) { setting in
+                    Text(setting.title).tag(setting)
+                }
+            }
+
+            Divider()
+
+            Picker(String(localized: "Group Inbox By"), selection: groupBinding) {
+                Text(String(localized: "Agent")).tag(InboxFacet.provenance)
+                Text(String(localized: "Repository")).tag(InboxFacet.repository)
+                Text(String(localized: "Review state")).tag(InboxFacet.reviewState)
+            }
+        }
+    }
+
+    private var appearanceBinding: Binding<AppearanceSetting> {
+        Binding(
+            get: { environment.settings.appearance },
+            set: { environment.settings.appearance = $0 }
+        )
+    }
+
+    private var groupBinding: Binding<InboxFacet> {
+        Binding(
+            get: { environment.settings.groupBy },
+            set: { environment.settings.groupBy = $0 }
+        )
+    }
+}

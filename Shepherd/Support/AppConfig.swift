@@ -1,0 +1,58 @@
+import Foundation
+
+/// Build-time configuration constants.
+///
+/// The GitHub App client ID is deliberately a plain constant (ADR 0004: a desktop app cannot
+/// keep a secret, so the *public* client ID lives in the repository). Maintainers and forks
+/// fill it in here; when it is empty the app hides the device flow and offers only the
+/// personal-access-token path, which needs no client ID at all.
+enum AppConfig {
+    /// The public client ID of the Shepherd GitHub App.
+    ///
+    /// Leave empty in forks that have not registered their own app — the sign-in screen
+    /// degrades to the personal-access-token field automatically.
+    static let githubAppClientID = ""
+
+    /// Whether the OAuth device flow can be offered.
+    static var isDeviceFlowConfigured: Bool { !githubAppClientID.isEmpty }
+
+    /// Keychain service for GitHub credentials.
+    static let githubKeychainService = "com.schnaq.shepherd.github"
+
+    /// Keychain service for everything else Shepherd must keep secret (AI API keys).
+    static let secretsKeychainService = "com.schnaq.shepherd.secrets"
+
+    /// Name of the SQLite file inside the application-support directory.
+    static let databaseFileName = "shepherd.sqlite"
+
+    /// `~/Library/Application Support/Shepherd`, created on demand by `DatabaseManager`.
+    static var applicationSupportDirectory: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/Application Support", isDirectory: true)
+        return base.appendingPathComponent("Shepherd", isDirectory: true)
+    }
+
+    /// Where the local database lives (ADR 0006).
+    static var databaseURL: URL {
+        applicationSupportDirectory.appendingPathComponent(databaseFileName, isDirectory: false)
+    }
+
+    /// `https://github.com`, used for "open on GitHub" links.
+    static var webBaseURL: URL {
+        URL(string: "https://github.com") ?? URL(fileURLWithPath: "/")
+    }
+
+    /// The URL a pull request lives at on github.com.
+    /// - Parameters:
+    ///   - owner: Repository owner.
+    ///   - name: Repository name.
+    ///   - number: Pull request number.
+    static func pullRequestURL(owner: String, name: String, number: Int) -> URL {
+        webBaseURL
+            .appendingPathComponent(owner)
+            .appendingPathComponent(name)
+            .appendingPathComponent("pull")
+            .appendingPathComponent(String(number))
+    }
+}

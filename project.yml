@@ -16,7 +16,14 @@ targets:
     sources:
       - path: Shepherd
         excludes:
-          - "Resources/DiffViewer/README.md"
+          - "Resources/DiffViewer"
+          - "Resources/DiffViewer/**"
+      # The built web bundle goes in as a *folder reference* so `index.html` keeps its
+      # relative `./viewer.js` / `./viewer.css` links and `loadFileURL(_:allowingReadAccessTo:)`
+      # can hand the webview exactly one directory (ADR 0003).
+      - path: Shepherd/Resources/DiffViewer
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: ShepherdKit
         product: ShepherdCore
@@ -49,13 +56,37 @@ targets:
         GENERATE_INFOPLIST_FILE: false
         SWIFT_STRICT_CONCURRENCY: complete
 
+  ShepherdTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: ShepherdTests
+      # The Swift⇄web bridge fixtures are the shared contract corpus: the same files the
+      # TypeScript suite validates are copied into the test bundle as a folder reference, so
+      # a fixture added on the web side is picked up here without touching this file.
+      - path: web/diff-viewer/fixtures
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - target: Shepherd
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        MACOSX_DEPLOYMENT_TARGET: "26.0"
+        ARCHS: arm64
+        GENERATE_INFOPLIST_FILE: true
+        SWIFT_STRICT_CONCURRENCY: complete
+        CODE_SIGN_IDENTITY: "-"
+
 schemes:
   Shepherd:
     build:
       targets:
         Shepherd: all
+        ShepherdTests: [test]
     run:
       config: Debug
     test:
       config: Debug
-      targets: []
+      targets:
+        - ShepherdTests
