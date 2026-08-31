@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "claude/**"]
+  pull_request:
+
+jobs:
+  diff-viewer:
+    name: Diff viewer (Node)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/diff-viewer/package-lock.json
+      - run: npm ci
+        working-directory: web/diff-viewer
+      - run: npm test
+        working-directory: web/diff-viewer
+      - run: npm run build
+        working-directory: web/diff-viewer
+      - name: Ensure committed dist is up to date
+        run: git diff --exit-code -- Shepherd/Resources/DiffViewer/dist || (echo "::error::web bundle out of date — run 'npm run build' in web/diff-viewer and commit" && exit 1)
+
+  shepherdkit-linux:
+    name: ShepherdKit tests (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "6.1"
+      - run: swift test
+        working-directory: Packages/ShepherdKit
+
+  shepherdkit-macos:
+    name: ShepherdKit tests (macOS)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test
+        working-directory: Packages/ShepherdKit
+
+  app:
+    name: App build (macOS)
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build diff viewer bundle
+        run: npm ci && npm run build
+        working-directory: web/diff-viewer
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - run: xcodegen generate
+      - name: Build app
+        run: |
+          xcodebuild -project Shepherd.xcodeproj -scheme Shepherd -configuration Debug \
+            -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO build

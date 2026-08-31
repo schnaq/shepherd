@@ -1,0 +1,21 @@
+# Xcode / Swift
+Shepherd.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+DerivedData/
+.build/
+.swiftpm/
+Package.resolved
+
+# Node
+node_modules/
+web/diff-viewer/.cache/
+
+# NOTE: Shepherd/Resources/DiffViewer/dist IS committed on purpose (ADR 0003)
+# so that app builders don't need Node.
+
+# OS / editors
+.DS_Store
+*.swp
+.idea/
+.vscode/

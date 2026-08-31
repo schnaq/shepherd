@@ -1,0 +1,61 @@
+name: Shepherd
+options:
+  bundleIdPrefix: com.schnaq
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+
+packages:
+  ShepherdKit:
+    path: Packages/ShepherdKit
+
+targets:
+  Shepherd:
+    type: application
+    platform: macOS
+    sources:
+      - path: Shepherd
+        excludes:
+          - "Resources/DiffViewer/README.md"
+    dependencies:
+      - package: ShepherdKit
+        product: ShepherdCore
+      - package: ShepherdKit
+        product: GitHubKit
+      - package: ShepherdKit
+        product: ShepherdPersistence
+      - package: ShepherdKit
+        product: ShepherdSync
+    entitlements:
+      path: Shepherd/Support/Shepherd.entitlements
+    info:
+      path: Shepherd/Support/Info.plist
+      properties:
+        CFBundleDisplayName: Shepherd
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        LSMinimumSystemVersion: "26.0"
+        LSApplicationCategoryType: public.app-category.developer-tools
+        NSHumanReadableCopyright: "MIT licensed — The Shepherd contributors"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.schnaq.shepherd
+        SWIFT_VERSION: "6.0"
+        MACOSX_DEPLOYMENT_TARGET: "26.0"
+        ARCHS: arm64
+        ENABLE_HARDENED_RUNTIME: true
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "-"
+        GENERATE_INFOPLIST_FILE: false
+        SWIFT_STRICT_CONCURRENCY: complete
+
+schemes:
+  Shepherd:
+    build:
+      targets:
+        Shepherd: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets: []
