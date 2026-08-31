@@ -201,11 +201,11 @@ public enum FilePrioritizer {
     /// - Parameter file: The changed file.
     /// - Returns: The detected category.
     public static func category(of file: ChangedFile) -> FileCategory {
-        let path = file.path.lowercased()
-        if isGenerated(path: path) { return .generated }
-        if isTest(path: path) { return .tests }
-        if isDocs(path: path) { return .docs }
-        if isConfig(path: path) { return .config }
+        let lowercased = file.path.lowercased()
+        if isGenerated(path: lowercased) { return .generated }
+        if isTest(originalPath: file.path) { return .tests }
+        if isDocs(path: lowercased) { return .docs }
+        if isConfig(path: lowercased) { return .config }
         return .source
     }
 
@@ -235,8 +235,8 @@ public enum FilePrioritizer {
         }
 
         if isContainerBuildFile(path: path) {
-            score += 25
-            reasons.append("Container build definition")
+            score += 40
+            reasons.append("Container build definition — supply-chain relevant")
         }
 
         if path.hasSuffix(".entitlements") {
@@ -339,24 +339,31 @@ public enum FilePrioritizer {
         return false
     }
 
-    private static func isTest(path: String) -> Bool {
-        let components = path.split(separator: "/").map(String.init)
-        let name = components.last ?? path
+    /// Detects test files.
+    ///
+    /// Takes the **original-case** path on purpose: the file-name heuristics below match
+    /// `FooTests.swift` and `TestFoo.cs` case-sensitively, so a source file called
+    /// `Latest.swift` is not mistaken for a test.
+    private static func isTest(originalPath: String) -> Bool {
+        let components = originalPath.split(separator: "/").map(String.init)
+        let name = components.last ?? originalPath
         for component in components.dropLast() {
-            if component == "test" || component == "tests" || component == "__tests__"
-                || component == "spec" || component == "specs" || component == "testing" {
+            let lowered = component.lowercased()
+            if lowered == "test" || lowered == "tests" || lowered == "__tests__"
+                || lowered == "spec" || lowered == "specs" || lowered == "testing" {
                 return true
             }
-            if component.hasSuffix("tests") && component != "tests" {
+            if lowered.hasSuffix("tests") {
                 // e.g. `ShepherdCoreTests/` (SwiftPM convention)
                 return true
             }
         }
-        if name.contains("_test.") || name.contains("test_") { return true }
-        if name.contains(".spec.") || name.contains(".test.") { return true }
-        // `FooTests.swift`, `FooTest.java`, `TestFoo.cs`
+        let loweredName = name.lowercased()
+        if loweredName.contains("_test.") || loweredName.hasPrefix("test_") { return true }
+        if loweredName.contains(".spec.") || loweredName.contains(".test.") { return true }
+        // `FooTests.swift`, `FooTest.java`, `TestFoo.cs` — case-sensitive on purpose.
         let stem = name.split(separator: ".").first.map(String.init) ?? name
-        if stem.hasSuffix("test") || stem.hasSuffix("tests") || stem.hasPrefix("test") {
+        if stem.hasSuffix("Test") || stem.hasSuffix("Tests") || stem.hasPrefix("Test") {
             return true
         }
         return false

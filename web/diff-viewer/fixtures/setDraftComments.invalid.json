@@ -1,0 +1,12 @@
+{
+  "v": 1,
+  "type": "setDraftComments",
+  "comments": [
+    {
+      "localID": "4E7B1B0E-6C1D-49F0-9B0B-3F0B2C6F7A11",
+      "line": 0,
+      "side": "right",
+      "body": "Can registry.match() be hoisted out of the hot path?"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "v": 1,
+  "type": "loadFile",
+  "path": "Packages/ShepherdKit/Sources/ShepherdCore/AgentDetector.swift",
+  "language": "swift",
+  "original": "import Foundation\n\n/// Detects whether a pull request author is an agent.\nstruct AgentDetector {\n    let registry: AgentRegistry\n\n    func detect(author: Actor, branchName: String) -> ActorKind {\n        if author.kind == .bot { return .bot }\n        return .human\n    }\n}\n",
+  "modified": "import Foundation\n\n/// Detects whether a pull request author is an agent.\nstruct AgentDetector {\n    let registry: AgentRegistry\n\n    func detect(author: Actor, branchName: String, commitTrailers: [String]) -> ActorKind {\n        if let identity = registry.match(login: author.login, branch: branchName, trailers: commitTrailers) {\n            return .agent(identity)\n        }\n        if author.kind == .bot { return .bot }\n        return .human\n    }\n}\n",
+  "mode": "unified",
+  "wrap": false
+}

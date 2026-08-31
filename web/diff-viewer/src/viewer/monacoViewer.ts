@@ -25,7 +25,7 @@ import { clampFontSize, documentThemeClass, THEME_IDS, THEMES } from './themes.j
 import { renderDraftZone, renderThreadZone } from './threadCard.js';
 import { throttle, type Throttled } from './throttle.js';
 import { installMonacoEnvironment } from './workerEnvironment.js';
-import { toDraftZones, toThreadZones, ZoneStore, zonesForSide, type Zone } from './zoneState.js';
+import { hostSide, toDraftZones, toThreadZones, ZoneStore, type Zone } from './zoneState.js';
 
 const VIEWPORT_THROTTLE_MS = 120;
 const ESTIMATED_ZONE_HEIGHT_PX = 72;
@@ -40,7 +40,7 @@ interface MountedZone {
   readonly viewZone: monaco.editor.IViewZone;
   readonly host: HTMLElement;
   readonly card: HTMLElement;
-  readonly observer: ResizeObserver | null;
+  observer: ResizeObserver | null;
   id: string;
 }
 
@@ -280,9 +280,7 @@ export class MonacoDiffViewer implements ViewerPort {
   }
 
   private mount(zone: Zone): void {
-    const targets = zonesForSide([zone], zone.side, this.mode);
-    if (targets.length === 0) return;
-    const editor = this.editorFor(zone.side);
+    const editor = this.editorFor(hostSide(zone.side, this.mode));
     const doc = this.container.ownerDocument;
 
     const activate = (): void => {
@@ -309,21 +307,10 @@ export class MonacoDiffViewer implements ViewerPort {
       id = accessor.addZone(viewZone);
     });
 
-    const entry: MountedZone = {
-      zone,
-      editor,
-      viewZone,
-      host,
-      card,
-      observer: null,
-      id,
-    };
-    const mountedEntry: MountedZone = {
-      ...entry,
-      observer: this.observeHeight(entry),
-    };
-    this.mounted.set(zone.key, mountedEntry);
-    this.relayout(mountedEntry);
+    const entry: MountedZone = { zone, editor, viewZone, host, card, observer: null, id };
+    entry.observer = this.observeHeight(entry);
+    this.mounted.set(zone.key, entry);
+    this.relayout(entry);
   }
 
   private observeHeight(entry: MountedZone): ResizeObserver | null {

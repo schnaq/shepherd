@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en" class="shepherd-theme-light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+    <!--
+      Offline by construction (ADR 0003). `connect-src 'none'` kills fetch/XHR/WebSocket, and
+      `default-src 'none'` means nothing loads unless listed below. `blob:` is required for the
+      Monaco editor worker (see src/viewer/workerEnvironment.ts).
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; worker-src 'self' blob:; child-src blob:; connect-src 'none'; form-action 'none'; base-uri 'none'"
+    />
+    <title>Shepherd diff</title>
+    <link rel="stylesheet" href="./viewer.css" />
+  </head>
+  <body>
+    <div id="shepherd-diff"></div>
+    <div id="shepherd-error" role="alert" aria-live="polite"></div>
+    <script src="./viewer.js"></script>
+  </body>
+</html>

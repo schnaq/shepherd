@@ -1,0 +1,42 @@
+{
+  "v": 1,
+  "type": "setThreads",
+  "threads": [
+    {
+      "id": "PRRT_kwDOABCD1234",
+      "line": 7,
+      "side": "right",
+      "resolved": false,
+      "outdated": false,
+      "comments": [
+        {
+          "author": "octocat",
+          "bodyHTML": "<p>Should <code>commitTrailers</code> be optional so existing call sites keep working?</p>",
+          "createdAt": "2026-08-30T09:12:44Z",
+          "isAgent": false
+        },
+        {
+          "author": "claude-code",
+          "bodyHTML": "<p>It has a default in the protocol extension, so no call site breaks.</p>",
+          "createdAt": "2026-08-30T09:31:02Z",
+          "isAgent": true
+        }
+      ]
+    },
+    {
+      "id": "PRRT_kwDOABCD5678",
+      "line": 3,
+      "side": "left",
+      "resolved": true,
+      "outdated": true,
+      "comments": [
+        {
+          "author": "hubot",
+          "bodyHTML": "<p>Doc comment drifted from the signature.</p>",
+          "createdAt": "2026-08-28T17:02:00Z",
+          "isAgent": false
+        }
+      ]
+    }
+  ]
+}

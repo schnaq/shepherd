@@ -1,0 +1,10 @@
+{
+  "v": 1,
+  "type": "loadFile",
+  "path": "web/diff-viewer/src/main.ts",
+  "language": "typescript",
+  "original": "export const version = 1;\n",
+  "modified": "export const version = 2;\nexport const name = 'shepherd';\n",
+  "mode": "inline",
+  "wrap": true
+}

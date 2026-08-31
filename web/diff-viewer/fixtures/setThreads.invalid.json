@@ -1,0 +1,21 @@
+{
+  "v": 1,
+  "type": "setThreads",
+  "threads": [
+    {
+      "id": "PRRT_kwDOABCD1234",
+      "line": 7,
+      "side": "right",
+      "resolved": false,
+      "outdated": false,
+      "comments": [
+        {
+          "author": "octocat",
+          "bodyHTML": "<p>Nit.</p>",
+          "createdAt": "2026-08-30T09:12:44Z",
+          "isAgent": "false"
+        }
+      ]
+    }
+  ]
+}
