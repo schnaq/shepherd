@@ -8,8 +8,11 @@ agent-authored PRs never receive any recorded human review. Shepherd herds them 
 place: a fast, local-first, Linear-style inbox where you triage, review, and merge every PR
 from every repo — without ever opening a browser tab.
 
-> Status: **pre-alpha, under active development.** The architecture and v1 scope are settled
-> (see [docs/adr](docs/adr)); the app is being built in the open.
+> Status: **pre-alpha, under active development.** The full v1 skeleton exists and builds:
+> domain/network/persistence/sync package (tested on macOS + Linux), the Monaco diff-viewer
+> bundle (158 tests), and the SwiftUI app (inbox, review flow, command palette, settings,
+> on-device + BYOK intelligence). Not yet exercised against real repositories — expect rough
+> edges. Decisions live in [docs/adr](docs/adr).
 
 ## What it does
 
