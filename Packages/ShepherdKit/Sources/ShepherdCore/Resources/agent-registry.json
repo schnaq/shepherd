@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "agents": [
+    {
+      "id": "claude-code",
+      "displayName": "Claude Code",
+      "loginPatterns": ["claude[bot]", "claude-code[bot]", "claude-code-action[bot]"],
+      "branchPrefixes": ["claude/"],
+      "commitTrailers": ["Co-Authored-By: Claude", "Co-Authored-By: Claude Code"]
+    },
+    {
+      "id": "github-copilot",
+      "displayName": "GitHub Copilot",
+      "loginPatterns": ["copilot-swe-agent[bot]", "copilot[bot]", "github-copilot[bot]"],
+      "branchPrefixes": ["copilot/"],
+      "commitTrailers": ["Co-Authored-By: Copilot"]
+    },
+    {
+      "id": "openai-codex",
+      "displayName": "OpenAI Codex",
+      "loginPatterns": ["codex[bot]", "chatgpt-codex-connector[bot]"],
+      "branchPrefixes": ["codex/"],
+      "commitTrailers": ["Co-Authored-By: Codex"]
+    },
+    {
+      "id": "devin",
+      "displayName": "Devin",
+      "loginPatterns": ["devin-ai-integration[bot]", "devin[bot]"],
+      "branchPrefixes": ["devin/"],
+      "commitTrailers": []
+    },
+    {
+      "id": "cursor",
+      "displayName": "Cursor",
+      "loginPatterns": ["cursor[bot]", "cursoragent", "cursor-agent[bot]"],
+      "branchPrefixes": ["cursor/"],
+      "commitTrailers": []
+    },
+    {
+      "id": "dependabot",
+      "displayName": "Dependabot",
+      "loginPatterns": ["dependabot[bot]", "dependabot-preview[bot]"],
+      "branchPrefixes": ["dependabot/"],
+      "commitTrailers": []
+    },
+    {
+      "id": "renovate",
+      "displayName": "Renovate",
+      "loginPatterns": ["renovate[bot]", "renovate-bot", "mend-for-github-com[bot]"],
+      "branchPrefixes": ["renovate/"],
+      "commitTrailers": []
+    },
+    {
+      "id": "github-actions",
+      "displayName": "GitHub Actions",
+      "loginPatterns": ["github-actions[bot]"],
+      "branchPrefixes": [],
+      "commitTrailers": []
+    }
+  ]
+}
