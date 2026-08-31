@@ -16,6 +16,8 @@ the review path — the founder's bar is "never need to open github.com for a ro
 
 **Review**
 - [ ] PR detail: description, timeline, commits, checks detail
+- [ ] Linked issues on PR detail: closing references ("closes #123") shown with title/state,
+      one keystroke to open; issue links in PR bodies/comments resolve to previews
 - [ ] Monaco diff viewer: side-by-side & inline, syntax highlighting, dark/light (ADR 0003)
 - [ ] File list ordered by review priority with reasons; viewed-state tracking (ADR 0007 tier 1)
 - [ ] Pending review composer: inline comments (incl. multi-line), summary, verdict;
@@ -43,6 +45,9 @@ the review path — the founder's bar is "never need to open github.com for a ro
   needs tier 2/3)
 - Multiple GitHub accounts; GitHub Enterprise Server base-URL support
 - Menu-bar quick inbox
+- Issues as a first-class inbox section: browse/triage issues across repos, link/unlink
+  issues to PRs, see which agent PRs address which issue — groundwork for "assign an issue
+  to an agent" flows
 - Signed + notarized releases, Homebrew cask, Sparkle appcast (ADR 0010)
 
 ## Later / explorations
