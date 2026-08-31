@@ -26,7 +26,9 @@ the review path — the founder's bar is "never need to open github.com for a ro
 **Intelligence (ADR 0007)**
 - [ ] Tier 1 heuristics: file prioritization, risk hints — always on
 - [ ] Tier 2 on-device PR summaries via Foundation Models (availability-gated)
-- [ ] Tier 3 BYOK Anthropic: whole-PR summary & review-focus hints
+- [ ] Tier 3 BYOK: whole-PR summary & review-focus hints — Anthropic, plus any
+      OpenAI-compatible endpoint (custom base URL, e.g. EU-hosted providers like konduit.eu,
+      or local Ollama)
 
 **Foundation**
 - [ ] Local-first SQLite cache + outbox (ADR 0006)

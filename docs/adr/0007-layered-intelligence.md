@@ -23,9 +23,14 @@ Three tiers, strictly layered; each tier degrades gracefully to the one below:
 2. **On-device (Foundation Models, when available):** short PR summaries, comment-tone
    assistance, labeling — bounded prompts that fit 8K tokens; diff content is pre-digested by
    tier 1 (per-file stats, top hunks) rather than fed raw.
-3. **BYOK cloud (optional):** user-supplied Anthropic API key (Keychain-stored) unlocks
-   whole-PR analysis and deeper review assistance via `claude-haiku-4-5`. Requests go directly
-   from the app to the API — no proxy, no middleman.
+3. **BYOK cloud (optional):** a user-supplied API key (Keychain-stored) unlocks whole-PR
+   analysis and deeper review assistance. Two provider shapes, selectable in settings:
+   - **Anthropic** (first-class default): `claude-haiku-4-5` via the Anthropic API.
+   - **Any OpenAI-compatible endpoint** (custom base URL + key + model name): covers
+     EU-hosted/GDPR-focused providers (e.g. konduit.eu, EUrouter, DeutschlandGPT, Infercom)
+     as well as local servers like Ollama or LM Studio — relevant for users with data-residency
+     requirements who still want cloud-grade context windows.
+   Requests go directly from the app to the configured endpoint — no proxy, no middleman.
 
 A single `IntelligenceProvider` protocol abstracts tiers 2–3; the UI treats AI output as
 *hints* (never auto-submits reviews). The app is fully functional with tiers 2–3 unavailable.

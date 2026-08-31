@@ -150,12 +150,18 @@ keystrokes beyond scrolling/selection.
 
 ```swift
 protocol IntelligenceProvider: Sendable {
-  var kind: IntelligenceKind { get }        // .onDevice / .anthropic
+  var kind: IntelligenceKind { get }        // .onDevice / .anthropic / .openAICompatible
   var isAvailable: Bool { get async }
   func summarizePullRequest(_ digest: PullRequestDigest) async throws -> PRSummary
   func suggestReviewFocus(_ digest: PullRequestDigest) async throws -> [FocusHint]
 }
 ```
+
+Three provider implementations: `OnDeviceProvider` (Foundation Models),
+`AnthropicProvider` (BYOK, `claude-haiku-4-5` default), and `OpenAICompatibleProvider`
+(user-configured base URL + key + model — chat-completions shape; covers EU-hosted
+providers such as konduit.eu and local servers like Ollama). API keys and custom base
+URLs live in the Keychain alongside GitHub tokens.
 
 `PullRequestDigest` is built by tier-1 heuristics in `ShepherdCore` (per-file stats, top
 hunks, title/body) with an explicit token budget parameter — the on-device provider requests
