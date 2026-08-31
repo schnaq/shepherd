@@ -21,6 +21,26 @@ public struct GlobPattern: Sendable, Hashable, Codable {
         self.patternCharacters = Array(pattern)
     }
 
+    // `patternCharacters` is a derived cache, so Codable conformance is hand-written
+    // over the raw pattern string ([Character] is not itself Codable).
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self.init(try container.decode(String.self))
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(pattern)
+    }
+
+    public static func == (lhs: GlobPattern, rhs: GlobPattern) -> Bool {
+        lhs.pattern == rhs.pattern
+    }
+
+    public func hash(into hasher: inout Hasher) {
+        hasher.combine(pattern)
+    }
+
     /// Whether the pattern matches a candidate string.
     /// - Parameters:
     ///   - candidate: The string to test.
