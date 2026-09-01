@@ -55,7 +55,8 @@ final class BulkTriageOutboxTests: XCTestCase {
         XCTAssertEqual(items.map(\.action.kind), ["submitReview", "submitReview", "submitReview"])
         XCTAssertTrue(items.allSatisfy { $0.state == .pending })
         XCTAssertTrue(items.allSatisfy { $0.repo == PersistenceFixtures.repo })
-        XCTAssertEqual(try await database.pendingOutboxCount(), 3)
+        let pendingCount = try await database.pendingOutboxCount()
+        XCTAssertEqual(pendingCount, 3)
 
         // Each row's payload is anchored to the head the user saw, and the draft is on disk so
         // the approval survives a crash between enqueue and drain.
@@ -71,10 +72,8 @@ final class BulkTriageOutboxTests: XCTestCase {
             XCTAssertEqual(stored?.verdict, .approve)
             XCTAssertEqual(stored?.basedOnHeadOid, "head\(index + 1)")
         }
-        XCTAssertEqual(
-            try await database.pullRequestIDsWithDrafts().sorted(),
-            ["PR_1", "PR_2", "PR_3"]
-        )
+        let idsWithDrafts = try await database.pullRequestIDsWithDrafts()
+        XCTAssertEqual(idsWithDrafts.sorted(), ["PR_1", "PR_2", "PR_3"])
     }
 
     func testApproveAndMergeEnqueuesTwoRowsPerPullRequestInSendOrder() async throws {
@@ -124,8 +123,10 @@ final class BulkTriageOutboxTests: XCTestCase {
         let items = try await database.allOutboxItems()
         XCTAssertEqual(Set(items.map(\.prID)), ["PR_ok"])
         XCTAssertEqual(items.count, 2)
-        XCTAssertNil(try await database.fetchDraft(prID: "PR_red"))
-        XCTAssertNil(try await database.fetchDraft(prID: "PR_draft"))
+        let redDraft = try await database.fetchDraft(prID: "PR_red")
+        XCTAssertNil(redDraft)
+        let draftDraft = try await database.fetchDraft(prID: "PR_draft")
+        XCTAssertNil(draftDraft)
     }
 
     func testAnExistingDraftKeepsItsCommentsWhenBulkApproved() async throws {
@@ -147,8 +148,10 @@ final class BulkTriageOutboxTests: XCTestCase {
     func testQueueingAnEmptyPlanIsANoOp() async throws {
         let database = try DatabaseManager.inMemory()
         try await database.saveBulkTriage(writes: [])
-        XCTAssertEqual(try await database.allOutboxItems().count, 0)
-        XCTAssertEqual(try await database.pullRequestIDsWithDrafts(), [])
+        let outboxCount = try await database.allOutboxItems().count
+        XCTAssertEqual(outboxCount, 0)
+        let draftIDs = try await database.pullRequestIDsWithDrafts()
+        XCTAssertEqual(draftIDs, [])
     }
 
     /// What the app reads before it builds its writes: every existing draft in one pass, with the
@@ -170,9 +173,11 @@ final class BulkTriageOutboxTests: XCTestCase {
         XCTAssertEqual(drafts["PR_2"], second)
         // Same answer as reading them one at a time, which is what this replaced.
         for prID in ["PR_1", "PR_2"] {
-            XCTAssertEqual(drafts[prID], try await database.fetchDraft(prID: prID))
+            let single = try await database.fetchDraft(prID: prID)
+            XCTAssertEqual(drafts[prID], single)
         }
         XCTAssertNil(drafts["PR_missing"])
-        XCTAssertTrue(try await database.fetchDrafts(prIDs: []).isEmpty)
+        let emptyFetch = try await database.fetchDrafts(prIDs: [])
+        XCTAssertTrue(emptyFetch.isEmpty)
     }
 }

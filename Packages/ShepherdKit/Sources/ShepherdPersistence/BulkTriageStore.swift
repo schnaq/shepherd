@@ -27,10 +27,10 @@ extension DatabaseManager {
         // Encoded before the transaction opens: a payload that will not encode should fail
         // without having held a write lock, and `OutboxRecord.init` is the only throwing step
         // that has nothing to do with the database.
-        var prepared: [(draft: ReviewDraft?, record: OutboxRecord)] = []
-        prepared.reserveCapacity(writes.count)
-        for write in writes {
-            prepared.append((write.draft, try OutboxRecord(item: write.item)))
+        // A `let`, not a mutated accumulator: the write closure runs concurrently and may only
+        // capture immutable state.
+        let prepared: [(draft: ReviewDraft?, record: OutboxRecord)] = try writes.map { write in
+            (draft: write.draft, record: try OutboxRecord(item: write.item))
         }
         try await writer.write { db in
             for entry in prepared {

@@ -27,23 +27,20 @@ final class RecordingPoster: WebhookPosting, @unchecked Sendable {
 
     /// Everything that was posted, in order.
     var requests: [WebhookRequest] {
-        lock.lock()
-        defer { lock.unlock() }
-        return recorded
+        lock.withLock { recorded }
     }
 
     func post(_ request: WebhookRequest) async throws -> WebhookResponse {
-        lock.lock()
-        recorded.append(request)
-        let answer: WebhookResponse
-        if answers.isEmpty {
-            answer = WebhookResponse(status: 200)
-        } else if answers.count > 1 {
-            answer = answers.removeFirst()
-        } else {
-            answer = answers[0]
+        let answer = lock.withLock { () -> WebhookResponse in
+            recorded.append(request)
+            if answers.isEmpty {
+                return WebhookResponse(status: 200)
+            } else if answers.count > 1 {
+                return answers.removeFirst()
+            } else {
+                return answers[0]
+            }
         }
-        lock.unlock()
         if let failure { throw failure }
         return answer
     }

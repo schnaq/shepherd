@@ -180,13 +180,25 @@ struct SigV4Signer: Sendable, Equatable {
     /// - Parameter items: The parameters.
     /// - Returns: The canonical query string, empty when there are no parameters.
     static func canonicalQuery(_ items: [QueryItem]) -> String {
-        items
-            .map { (uriEncode($0.name, encodeSlash: true), uriEncode($0.value, encodeSlash: true)) }
-            .sorted { left, right in
-                left.0 == right.0 ? left.1 < right.1 : left.0 < right.0
-            }
-            .map { "\($0.0)=\($0.1)" }
-            .joined(separator: "&")
+        // Distinct statements rather than one chained expression: the closure-heavy chain
+        // with tuple interpolation is exactly the shape the type checker times out on.
+        var encoded: [(name: String, value: String)] = []
+        encoded.reserveCapacity(items.count)
+        for item in items {
+            let name = uriEncode(item.name, encodeSlash: true)
+            let value = uriEncode(item.value, encodeSlash: true)
+            encoded.append((name: name, value: value))
+        }
+        encoded.sort { left, right in
+            if left.name == right.name { return left.value < right.value }
+            return left.name < right.name
+        }
+        var halves: [String] = []
+        halves.reserveCapacity(encoded.count)
+        for pair in encoded {
+            halves.append(pair.name + "=" + pair.value)
+        }
+        return halves.joined(separator: "&")
     }
 
     /// The canonical headers block: `name:value⏎` per header, lower-cased and sorted.
