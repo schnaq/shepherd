@@ -61,6 +61,47 @@ Consequence: adding a further preset is a case in one enum plus a line in the ro
 must not grow endpoint-specific request behaviour; anything that cannot be expressed as "a base
 URL for the OpenAI shape" needs its own provider and its own ADR.
 
+## Amendment (2026-09-01): AI-drafted review text, always as a suggestion
+
+Additive, inside the decision above: the tiers, the provider protocol's place in the design and the
+privacy line are unchanged. What is new is *which* work tiers 2–3 are used for — the "deeper review
+assistance" the tier-3 bullet already names, and the "comment-tone assistance" the tier-2 bullet
+already names, made concrete.
+
+Two surfaces, both in the review composer, both driven by an explicit click on a `sparkles` button
+that is only rendered when a tier could answer (`IntelligenceRouter.canDraft`):
+
+- **Review summary drafts.** Context: the tier-1 `PullRequestDigest` (title, description excerpt,
+  prioritised file list, top hunks — already budgeted) plus the reviewer's own pending inline
+  comments, quoted and capped. The digest is built against a budget that has the room for those
+  notes reserved (`ReviewSummaryDraftRequest.digestBudget(in:)`), because the two travel in one
+  prompt and tier 2's ceiling is a hard error.
+- **Inline comment drafts.** Context: the file path, the anchor, and a marked-up window of the
+  unified diff around the commented line (`InlineCommentDraftBuilder`) — a fixed number of diff
+  lines on either side, then trimmed to a share of the tier's character budget, with the anchored
+  lines the last thing to be given up. Not the whole digest: a question about three lines should
+  not spend the context window on the other forty files.
+
+The result is written into a text field the reviewer edits, and only into that field:
+
+- a draft never silently replaces text that is already there — the reviewer is asked to *replace*
+  or *append*, and until they answer, nothing is written (`AIDraftFieldState`, a pure value so the
+  rule is unit-tested);
+- while the field holds an unedited draft it carries a caption naming the tier that wrote it, which
+  disappears on the reviewer's first keystroke, because after that it is their text;
+- failures surface as one line of the tier's own words, through the existing `IntelligenceOutcome`,
+  exactly like a missing summary card.
+
+**The non-goal is reaffirmed: nothing auto-submits.** There is no code path from a drafted string to
+`submitReview`, to the outbox, or to a saved draft comment; every one of those still needs the
+reviewer's own click, and a review Shepherd sends is a review a human read. Requests continue to go
+only to the provider the user configured themselves — with drafting, the diff excerpt is part of
+what is sent there, which is now stated in `CONTRIBUTING.md`'s host list.
+
+Consequence: a new drafting surface is a new request type plus a case in the same four provider
+methods. Anything that would *act* on drafted text without a click needs its own ADR, and would
+have to overturn the non-goal above rather than quietly widen this one.
+
 ## Consequences
 
 - No feature may hard-depend on an LLM; every AI surface needs a heuristic-only fallback state.

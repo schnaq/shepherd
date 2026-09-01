@@ -85,6 +85,13 @@ from every repo — without ever opening a browser tab.
   Apple's Foundation Models framework when available. Optionally bring your own API key for
   deeper whole-PR analysis — Anthropic, or any OpenAI-compatible endpoint, with presets for
   EU-hosted Konduit and a local Ollama. The app is fully functional with AI switched off.
+- **AI-drafted review text — a suggestion, never a submission.** A ✨ button next to the review
+  summary and next to any inline comment drafts the text for you: the summary from the pull
+  request's digest and the comments you have already written, an inline comment from the diff
+  around the line you clicked. It lands in the field as editable text, labelled as a draft until
+  you touch it, and it never overwrites what you typed without asking whether to replace or
+  append. Nothing is ever submitted for you — Shepherd has no path from generated text to GitHub
+  that does not go through your click. See [ADR 0007](docs/adr/0007-layered-intelligence.md).
 - **Optional crash reports that never leave your Mac.** Switch on local diagnostics and macOS hands
   Shepherd its own crash, hang and CPU-exception reports on the next launch after one happened;
   Shepherd writes them as JSON files in Application Support, keeps the 30 newest, and shows you the

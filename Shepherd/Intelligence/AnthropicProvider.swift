@@ -51,6 +51,44 @@ struct AnthropicProvider: IntelligenceProvider {
         return IntelligenceJSON.hints(from: text).filter { knownPaths.contains($0.file) }
     }
 
+    func draftReviewSummary(_ request: ReviewSummaryDraftRequest) async throws -> String {
+        let text = try await complete(
+            system: IntelligencePrompt.draftSummaryInstructions + "\n"
+                + IntelligencePrompt.draftJSONContract,
+            user: IntelligencePrompt.body(for: request)
+        )
+        return try IntelligenceJSON.draft(from: text)
+    }
+
+    func draftInlineComment(_ request: InlineCommentDraftRequest) async throws -> String {
+        let text = try await complete(
+            system: IntelligencePrompt.draftInlineCommentInstructions + "\n"
+                + IntelligencePrompt.draftJSONContract,
+            user: IntelligencePrompt.body(for: request)
+        )
+        return try IntelligenceJSON.draft(from: text)
+    }
+
+    /// The JSON body one completion request sends.
+    ///
+    /// Extracted so the encoding — the `max_tokens` key, the system prompt sent as its own field
+    /// rather than as a message — is unit-testable without a network, the same way
+    /// ``ModelListing`` makes model discovery testable.
+    /// - Parameters:
+    ///   - system: The system prompt.
+    ///   - user: The user message.
+    /// - Returns: The encoded request body.
+    func completionRequestBody(system: String, user: String) throws -> Data {
+        try JSONEncoder().encode(
+            RequestBody(
+                model: model,
+                maxTokens: maxTokens,
+                system: system,
+                messages: [RequestBody.Message(role: "user", content: user)]
+            )
+        )
+    }
+
     /// Sends one non-streaming completion request.
     /// - Parameters:
     ///   - system: The system prompt.
@@ -67,14 +105,7 @@ struct AnthropicProvider: IntelligenceProvider {
         request.setValue(apiKey, forHTTPHeaderField: "x-api-key")
         request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
         request.setValue("application/json", forHTTPHeaderField: "content-type")
-        request.httpBody = try JSONEncoder().encode(
-            RequestBody(
-                model: model,
-                maxTokens: maxTokens,
-                system: system,
-                messages: [RequestBody.Message(role: "user", content: user)]
-            )
-        )
+        request.httpBody = try completionRequestBody(system: system, user: user)
 
         let (data, response) = try await URLSession.shared.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0

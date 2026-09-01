@@ -232,6 +232,8 @@ protocol IntelligenceProvider: Sendable {
   var isAvailable: Bool { get async }
   func summarizePullRequest(_ digest: PullRequestDigest) async throws -> PRSummary
   func suggestReviewFocus(_ digest: PullRequestDigest) async throws -> [FocusHint]
+  func draftReviewSummary(_ request: ReviewSummaryDraftRequest) async throws -> String
+  func draftInlineComment(_ request: InlineCommentDraftRequest) async throws -> String
 }
 ```
 
@@ -257,6 +259,17 @@ hunks, title/body) with an explicit token budget parameter — the on-device pro
 a small digest (≤ ~6K tokens), the Anthropic provider a large one. Providers are selected in
 settings: *Off / On-device / On-device + API key*. AI output is rendered as dismissible hints,
 never auto-applied.
+
+The two `draft…` methods are the review-composer surface (ADR 0007 amendment). Their request types
+budget themselves the same way the digest does: `ReviewSummaryDraftRequest.build(detail:…)`
+reserves room for the reviewer's quoted pending comments *before* building the digest, and
+`InlineCommentDraftBuilder` cuts a marked-up window out of the unified diff — `contextLines` on
+either side of the anchored line, then trimmed to `excerptShare` of the tier's characters, with the
+anchored lines the last thing surrendered. Both return plain text, parsed leniently
+(`IntelligenceJSON.draft(from:)`) so a model that ignores the `{"draft": …}` contract is still
+usable. The text goes into a `TextEditor` and nowhere else; `AIDraftFieldState` — a pure value —
+owns the rules around it (ask before overwriting typed text, label an unedited draft, drop the
+label on the first keystroke).
 
 ## UI conventions
 
@@ -470,7 +483,10 @@ instead.
 whenever the settings change. It picks the tier, builds the digest with the *provider's* token
 budget (`TokenBudget.onDevice` ≈ 6K for Foundation Models, `TokenBudget.cloud` for BYOK) and
 degrades cloud → on-device → nothing. Results are returned as an `IntelligenceOutcome`, so the
-UI can say *why* a card is missing instead of silently hiding it. All FoundationModels usage is
+UI can say *why* a card is missing instead of silently hiding it. `IntelligenceTiers` is the seam
+the ladder is tested through — a stub cloud tier that fails, a stub on-device tier that answers, an
+on-device tier that reports itself unavailable — so the degradation is verified without a key, a
+network or Apple Intelligence. All FoundationModels usage is
 confined to `Intelligence/OnDeviceProvider.swift`, guarded by
 `SystemLanguageModel.default.availability`, and file paths a model invents are dropped before
 they reach the UI.
@@ -719,6 +735,11 @@ pull request arriving mid-session does not join it, every cursor transition incl
 last entry and completing the last entry, an entry that left the inbox being walked past when it
 is reached, an empty queue producing no session at all, and both shapes of the closing summary); the intelligence endpoint layer (preset ↔ base-URL matching,
 `/models` parsing against fixtures, and the settings-side discovery gate through `ModelListing`);
+AI drafting (the diff excerpt's window and character cap against a long-diff fixture, the
+per-tier budget accounting for a digest plus quoted comments, the draft prompts and both cloud
+shapes' encoded request bodies, the answer parser against JSON/fenced/prose answers, the router's
+degradation ladder through `IntelligenceTiers`, and `AIDraftFieldState`'s replace/append/label
+rules);
 the delegation engine (stream-event fixtures, argv
 construction, template splitting, git command sequences, state transitions) and the app half of
 auto-delegation (event → signal mapping, ledger persistence across a relaunch, cap notices —

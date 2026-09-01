@@ -64,6 +64,22 @@ protocol IntelligenceProvider: Sendable {
     func summarizePullRequest(_ digest: PullRequestDigest) async throws -> PRSummary
     /// Suggests where a reviewer should look first.
     func suggestReviewFocus(_ digest: PullRequestDigest) async throws -> [FocusHint]
+    /// Drafts the body of a review as a **suggestion** for a human reviewer.
+    ///
+    /// The returned text is put in the summary field for the reviewer to edit; it is never
+    /// submitted by anything (ADR 0007 non-goal: auto-submitting AI reviews).
+    /// - Parameter request: The context, already inside the tier's token budget.
+    /// - Returns: The drafted text, trimmed and never empty.
+    /// - Throws: ``IntelligenceError`` when the tier cannot answer.
+    func draftReviewSummary(_ request: ReviewSummaryDraftRequest) async throws -> String
+    /// Drafts one inline comment as a **suggestion** for a human reviewer.
+    ///
+    /// Same contract as ``draftReviewSummary(_:)``: the text lands in the composer, and saving it
+    /// to the pending review is a separate click by the person reading it.
+    /// - Parameter request: The anchor and the diff excerpt around it.
+    /// - Returns: The drafted text, trimmed and never empty.
+    /// - Throws: ``IntelligenceError`` when the tier cannot answer.
+    func draftInlineComment(_ request: InlineCommentDraftRequest) async throws -> String
 }
 
 /// Failures the intelligence layer can produce.
@@ -121,6 +137,33 @@ enum IntelligencePrompt {
         paths that appear verbatim in the input.
         """
 
+    /// The system/instructions text for a drafted review summary.
+    ///
+    /// The wording carries the product rule, not just the format: the model is writing a
+    /// *suggestion* for a reviewer who will edit it, so it neither approves nor rejects, and it
+    /// says "unclear from the diff" instead of filling a gap with something plausible. No
+    /// greeting and no praise, because a drafted comment that opens with "Great work!" is a
+    /// comment the reviewer has to delete before they can use it.
+    static let draftSummaryInstructions = """
+        You draft the body of a pull-request review for a senior engineer, who edits it and \
+        decides whether to send it. Write at most six sentences: what the change does, then what \
+        you would want confirmed or looked at more closely. Short bullets are fine. No greeting, \
+        no sign-off, no praise, no restating of the diff line by line. Use only what the input \
+        states; never invent files, APIs, behaviour or test results, and write that something is \
+        unclear from the diff rather than guessing. This is a suggestion, not a verdict: do not \
+        approve, do not reject, and do not claim anything was run or tested.
+        """
+
+    /// The system/instructions text for a drafted inline comment.
+    static let draftInlineCommentInstructions = """
+        You draft one inline review comment for a senior engineer, who edits it and decides \
+        whether to send it. Write at most three sentences about the marked line or lines: what \
+        looks wrong or worth confirming, and what you would ask the author. No greeting, no \
+        sign-off, no praise, no restating of the code. Use only what the excerpt shows; if it is \
+        not enough to judge, say which context you would need instead of guessing. This is a \
+        suggestion for a human reviewer, not a verdict.
+        """
+
     /// The JSON shape the cloud providers are asked for (summaries).
     static let summaryJSONContract = """
         Answer with JSON only, no prose and no code fence: \
@@ -131,6 +174,17 @@ enum IntelligencePrompt {
     static let focusJSONContract = """
         Answer with JSON only, no prose and no code fence: \
         {"hints": [{"file": string, "reason": string}]}
+        """
+
+    /// The JSON shape the cloud providers are asked for (drafted text).
+    ///
+    /// One field rather than raw prose: models like to introduce themselves ("Here is a draft
+    /// review:"), and a preamble that lands in the reviewer's summary field is a preamble they
+    /// have to delete. The parser falls back to the whole answer anyway, so a model that ignores
+    /// this still produces something usable.
+    static let draftJSONContract = """
+        Answer with JSON only, no prose and no code fence: \
+        {"draft": string}
         """
 
     /// Renders a digest as the plain-text body of a prompt.
@@ -165,6 +219,53 @@ enum IntelligencePrompt {
         }
         return text
     }
+
+    /// Renders a summary-draft request: the digest, plus what the reviewer has already written.
+    /// - Parameter request: The request.
+    static func body(for request: ReviewSummaryDraftRequest) -> String {
+        var text = body(for: request.digest)
+        if !request.notes.isEmpty {
+            text += "\n\nInline comments the reviewer has already written on this pull request."
+                + " Refer to them, do not repeat them word for word:"
+            for note in request.notes {
+                text += "\n- \(note.path):\(note.line) — \(note.body)"
+            }
+        }
+        return text
+    }
+
+    /// Renders an inline-comment-draft request.
+    /// - Parameter request: The request.
+    static func body(for request: InlineCommentDraftRequest) -> String {
+        let side = request.anchor.side == .left ? "base" : "head"
+        let lines = request.anchor.lineRange.lowerBound == request.anchor.lineRange.upperBound
+            ? "\(request.anchor.line)"
+            : "\(request.anchor.lineRange.lowerBound)–\(request.anchor.lineRange.upperBound)"
+        var text = """
+            Repository: \(request.repoFullName)
+            Pull request: #\(request.number) — \(request.pullRequestTitle)
+            File: \(request.path)
+            """
+        if let status = request.fileStatus {
+            text += " [\(status.rawValue)]"
+        }
+        text += "\nCommented line: \(side) side, line \(lines)"
+        if request.excerpt.isEmpty {
+            // Said plainly rather than left out: a model given a file name and no diff should ask
+            // for the code, not improvise a review of it.
+            text += "\n\nNo diff excerpt is available for this file."
+            return text
+        }
+        text += "\n\nDiff excerpt."
+            + " The line or lines being commented on are prefixed with"
+            + " \"\(InlineCommentDraftBuilder.anchorMarker.trimmingCharacters(in: .whitespaces))\";"
+            + " every other line is context:\n"
+            + request.excerpt
+        if request.excerptWasTruncated {
+            text += "\n\n(Note: the excerpt is a window into a longer diff.)"
+        }
+        return text
+    }
 }
 
 // MARK: - Lenient JSON parsing
@@ -174,6 +275,10 @@ enum IntelligenceJSON {
     private struct SummaryPayload: Decodable {
         var overview: String?
         var riskNotes: [String]?
+    }
+
+    private struct DraftPayload: Decodable {
+        var draft: String?
     }
 
     private struct HintsPayload: Decodable {
@@ -208,6 +313,30 @@ enum IntelligenceJSON {
             )
         }
         return PRSummary(overview: text.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    /// Parses a drafted-text answer.
+    ///
+    /// Falls back to the whole trimmed answer when the JSON contract was ignored: a model that
+    /// simply wrote the draft has still done the job, and dropping it because it was not wrapped
+    /// in braces would be the parser being pedantic at the reviewer's expense. An empty answer is
+    /// an error, though — an empty field is worse than a red line saying why.
+    /// - Parameter text: The raw answer.
+    /// - Returns: The drafted text, trimmed.
+    /// - Throws: ``IntelligenceError/malformedResponse`` when nothing usable came back.
+    static func draft(from text: String) throws -> String {
+        if let object = extractObject(from: text),
+           let payload = try? JSONDecoder().decode(DraftPayload.self, from: Data(object.utf8)),
+           let draft = payload.draft {
+            // The contract was honoured, so it is honoured back: an explicitly empty draft is a
+            // failure rather than an excuse to hand the reviewer the raw JSON as their comment.
+            let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { throw IntelligenceError.malformedResponse }
+            return trimmed
+        }
+        let fallback = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !fallback.isEmpty else { throw IntelligenceError.malformedResponse }
+        return fallback
     }
 
     /// Parses a focus-hint answer.

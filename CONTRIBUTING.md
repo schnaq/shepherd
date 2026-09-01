@@ -89,7 +89,13 @@ bumping a dependency that ships inside the app also means a line in
 - No telemetry, ever. The complete list of hosts Shepherd may contact:
   - api.github.com / github.com;
   - only when the user configures a key: api.anthropic.com, or the OpenAI-compatible endpoint
-    they chose themselves (a preset's base URL is still their choice);
+    they chose themselves (a preset's base URL is still their choice). What travels there is the
+    tier-1 digest — title, description excerpt, file list, top hunks — and, when you use AI
+    drafting (ADR 0007 amendment), the diff excerpt around the line you are commenting on plus
+    the inline comments already in your pending review. So: yes, pull-request *code* reaches that
+    endpoint, only that endpoint, only for the pull request you are looking at, and only after you
+    configured it and clicked. Everything is capped against an explicit token budget before it is
+    sent;
   - only when the user enables webhooks and types a URL: **that URL** (ADR 0012). Outbound only,
     one destination, off by default, and the payload never carries review text, comment bodies,
     diffs or agent output;

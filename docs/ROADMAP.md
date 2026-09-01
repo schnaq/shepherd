@@ -97,6 +97,13 @@ the review path — the founder's bar is "never need to open github.com for a ro
       models, with a link to the console for the key; Ollama on localhost; or a custom base URL),
       model discovery via `GET {base}/models` with the free-text model field as the fallback, and
       a connection test (ADR 0007 amendment)
+- [ ] AI-drafted review text (tier 2 or 3): a "draft with AI" button beside the review summary and
+      beside every inline comment. The summary is drafted from the tier-1 digest plus the inline
+      comments already in your pending review; a comment is drafted from the diff excerpt around
+      the line you clicked. The draft is editable text in the field, labelled until you edit it,
+      and it asks before replacing anything you typed. Auto-submitting stays a non-goal, below —
+      prioritised in the founder interview of 2026-09-01 and pulled into v1 from v1.x
+      (ADR 0007 amendment)
 
 **Foundation**
 - [ ] Local-first SQLite cache + outbox (ADR 0006)
@@ -108,8 +115,9 @@ the review path — the founder's bar is "never need to open github.com for a ro
 - Authorization Code + PKCE loopback sign-in (nicer than device flow)
 - ~~Bulk triage actions (approve/merge a selected set of green agent PRs, one confirm)~~ —
   pulled into v1, see above (ADR 0015)
-- Draft AI-assisted review comments & commit/PR message suggestions (explicit founder wish;
-  needs tier 2/3)
+- ~~Draft AI-assisted review comments~~ (explicit founder wish) — pulled into v1, see above
+  (ADR 0007 amendment). Still open on top of it: commit and pull-request *message* suggestions,
+  which are a different surface (the delegation result, not the review composer)
 - Multiple GitHub accounts; GitHub Enterprise Server base-URL support
 - Automatic settings sync (ADR 0014 deferred it deliberately): needs a conflict story before
   last-write-wins may touch a document that contains the GitHub token. Candidates: per-Mac objects

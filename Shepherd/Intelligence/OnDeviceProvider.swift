@@ -39,6 +39,17 @@ struct OnDeviceFocus {
     var hints: [OnDeviceFocusHint]
 }
 
+/// The shape the on-device model fills in for a drafted review summary or inline comment.
+///
+/// One `String` field, which is all guided generation is needed for here: the value of the schema
+/// is that the answer arrives without a preamble the reviewer would have to delete.
+@Generable
+struct OnDeviceReviewDraft {
+    /// The drafted text, ready to be edited by the reviewer.
+    @Guide(description: "The review text itself, with no preamble and no sign-off.")
+    var draft: String
+}
+
 /// Tier 2: Apple's on-device Foundation Model (ADR 0007).
 ///
 /// **This is the only file in the app that imports `FoundationModels`.** Everything the rest
@@ -115,16 +126,55 @@ struct OnDeviceProvider: IntelligenceProvider {
             }
     }
 
+    func draftReviewSummary(_ request: ReviewSummaryDraftRequest) async throws -> String {
+        try OnDeviceProvider.preflight(approximateTokenCount: request.approximateTokenCount)
+        let session = LanguageModelSession(
+            instructions: IntelligencePrompt.draftSummaryInstructions
+        )
+        let prompt = IntelligencePrompt.body(for: request)
+        let response = try await session.respond(to: prompt, generating: OnDeviceReviewDraft.self)
+        return try OnDeviceProvider.usableDraft(in: response.content.draft)
+    }
+
+    func draftInlineComment(_ request: InlineCommentDraftRequest) async throws -> String {
+        try OnDeviceProvider.preflight(approximateTokenCount: request.approximateTokenCount)
+        let session = LanguageModelSession(
+            instructions: IntelligencePrompt.draftInlineCommentInstructions
+        )
+        let prompt = IntelligencePrompt.body(for: request)
+        let response = try await session.respond(to: prompt, generating: OnDeviceReviewDraft.self)
+        return try OnDeviceProvider.usableDraft(in: response.content.draft)
+    }
+
     /// Availability + budget check, run before any session is created.
     private static func preflight(_ digest: PullRequestDigest) throws {
+        try preflight(approximateTokenCount: digest.approximateTokenCount)
+    }
+
+    /// Availability + budget check for anything with a token estimate on it.
+    ///
+    /// ADR 0007 makes tier 2's context ceiling a hard error rather than a silent truncation, so
+    /// every entry point runs this before a session exists.
+    /// - Parameter approximateTokenCount: The request's own estimate.
+    private static func preflight(approximateTokenCount: Int) throws {
         if let reason = unavailabilityReason() {
             throw IntelligenceError.unavailable(reason)
         }
-        guard digest.approximateTokenCount <= budget.maxTokens else {
+        guard approximateTokenCount <= budget.maxTokens else {
             throw IntelligenceError.digestTooLarge(
-                tokens: digest.approximateTokenCount,
+                tokens: approximateTokenCount,
                 limit: budget.maxTokens
             )
         }
+    }
+
+    /// Trims a generated draft and refuses an empty one.
+    ///
+    /// An empty field with a spinner that stopped looks like a bug; a red line saying the model
+    /// returned nothing is at least true.
+    private static func usableDraft(in text: String) throws -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { throw IntelligenceError.malformedResponse }
+        return trimmed
     }
 }

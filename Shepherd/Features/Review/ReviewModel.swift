@@ -42,6 +42,11 @@ final class ReviewModel {
         var side: DiffSide
         /// The first line of a multi-line selection.
         var startLine: Int?
+
+        /// The same anchor, as the intelligence layer wants it.
+        var anchor: InlineCommentAnchor {
+            InlineCommentAnchor(path: path, line: line, side: side, startLine: startLine)
+        }
     }
 
     /// Which tab the right-hand area shows.
@@ -367,6 +372,44 @@ final class ReviewModel {
                     body: comment.body
                 )
             }
+    }
+
+    // MARK: - AI drafting (ADR 0007 amendment)
+
+    /// Whether the "Draft with AI" buttons are offered at all.
+    ///
+    /// Two conditions, both of which have to hold before a button appears: a tier could take the
+    /// request, and the pull request has actually loaded — there is nothing to draft from before
+    /// that.
+    var canDraftWithAI: Bool {
+        detail != nil && intelligence.canDraft
+    }
+
+    /// Drafts a review summary suggestion.
+    ///
+    /// Returns the outcome instead of writing anywhere: the field belongs to the composer, and
+    /// what happens to a draft that arrives over text the reviewer already wrote is
+    /// ``AIDraftFieldState``'s decision, not this model's. Nothing about this call submits
+    /// anything — the reviewer still presses Submit themselves.
+    /// - Returns: The drafted text, or why there is none.
+    func draftReviewSummary() async -> IntelligenceOutcome<String> {
+        guard let detail else {
+            return .unavailable(String(localized: "The pull request is still loading."))
+        }
+        return await intelligence.draftReviewSummary(
+            for: detail,
+            pendingComments: draft?.comments ?? []
+        )
+    }
+
+    /// Drafts an inline comment suggestion for one anchor.
+    /// - Parameter request: The composer's anchor.
+    /// - Returns: The drafted text, or why there is none.
+    func draftInlineComment(for request: ComposerRequest) async -> IntelligenceOutcome<String> {
+        guard let detail else {
+            return .unavailable(String(localized: "The pull request is still loading."))
+        }
+        return await intelligence.draftInlineComment(for: detail, anchor: request.anchor)
     }
 
     /// The AI focus hint for a file, if the provider produced one.

@@ -65,6 +65,24 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
         return IntelligenceJSON.hints(from: text).filter { knownPaths.contains($0.file) }
     }
 
+    func draftReviewSummary(_ request: ReviewSummaryDraftRequest) async throws -> String {
+        let text = try await complete(
+            system: IntelligencePrompt.draftSummaryInstructions + "\n"
+                + IntelligencePrompt.draftJSONContract,
+            user: IntelligencePrompt.body(for: request)
+        )
+        return try IntelligenceJSON.draft(from: text)
+    }
+
+    func draftInlineComment(_ request: InlineCommentDraftRequest) async throws -> String {
+        let text = try await complete(
+            system: IntelligencePrompt.draftInlineCommentInstructions + "\n"
+                + IntelligencePrompt.draftJSONContract,
+            user: IntelligencePrompt.body(for: request)
+        )
+        return try IntelligenceJSON.draft(from: text)
+    }
+
     /// Cleans up a configured base URL: surrounding whitespace and trailing slashes go, and
     /// anything that is not an absolute `http(s)` URL is rejected.
     ///
@@ -131,6 +149,29 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
         return try OpenAIModelsResponse.modelIDs(in: data)
     }
 
+    /// The JSON body one chat-completions request sends.
+    ///
+    /// Extracted for the same reason ``ModelListing`` exists: the shape that has to be right —
+    /// the `max_tokens` key, the system message first and the user message second — is then
+    /// unit-testable without a network, and the drafting prompts (ADR 0007 amendment) can be
+    /// asserted on the wire rather than only in the string constants.
+    /// - Parameters:
+    ///   - system: The system message.
+    ///   - user: The user message.
+    /// - Returns: The encoded request body.
+    func completionRequestBody(system: String, user: String) throws -> Data {
+        try JSONEncoder().encode(
+            RequestBody(
+                model: model,
+                maxTokens: maxTokens,
+                messages: [
+                    RequestBody.Message(role: "system", content: system),
+                    RequestBody.Message(role: "user", content: user),
+                ]
+            )
+        )
+    }
+
     /// Sends one non-streaming chat-completions request.
     /// - Parameters:
     ///   - system: The system message.
@@ -148,16 +189,7 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
         if !apiKey.isEmpty {
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "authorization")
         }
-        request.httpBody = try JSONEncoder().encode(
-            RequestBody(
-                model: model,
-                maxTokens: maxTokens,
-                messages: [
-                    RequestBody.Message(role: "system", content: system),
-                    RequestBody.Message(role: "user", content: user),
-                ]
-            )
-        )
+        request.httpBody = try completionRequestBody(system: system, user: user)
 
         let (data, response) = try await URLSession.shared.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0

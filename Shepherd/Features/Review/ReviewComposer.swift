@@ -77,6 +77,9 @@ struct SubmitReviewSheet: View {
     /// The write actions.
     let actions: PullRequestActions
 
+    /// The summary field's AI-drafting state (ADR 0007 amendment).
+    @State private var aiDraft = AIDraftFieldState()
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(String(localized: "Submit review"))
@@ -93,11 +96,23 @@ struct SubmitReviewSheet: View {
                 HStack(spacing: 8) {
                     CardTitle(String(localized: "SUMMARY"))
                     Spacer(minLength: 4)
+                    if model.canDraftWithAI {
+                        AIDraftButton(isDrafting: aiDraft.isDrafting) {
+                            Task { await requestSummaryDraft() }
+                        }
+                    }
                     SavedReplyMenu(replies: model.settings.usableSavedReplies) { snippet in
                         model.summaryText = SavedReply.inserting(snippet, into: model.summaryText)
                     }
                 }
                 ComposerTextEditor(text: summaryBinding, height: 130)
+                AIDraftStatusView(
+                    state: aiDraft,
+                    confirmationTitle: String(localized: "Replace current summary?"),
+                    onReplace: { apply(aiDraft.replaceWithPendingDraft()) },
+                    onAppend: { apply(aiDraft.appendPendingDraft(to: model.summaryText)) },
+                    onDiscard: { aiDraft.discardPendingDraft() }
+                )
             }
 
             Picker(String(localized: "Verdict"), selection: verdictBinding) {
@@ -158,6 +173,27 @@ struct SubmitReviewSheet: View {
         .padding(20)
         .frame(width: 460)
         .background(Theme.panel)
+        .onChange(of: model.summaryText) { _, text in
+            aiDraft.fieldChanged(to: text)
+        }
+    }
+
+    // MARK: - AI drafting
+
+    /// Asks the intelligence layer for a summary suggestion.
+    ///
+    /// Started only by the button's click, and its only effect is on the text field: the verdict
+    /// picker and the Submit button are untouched (ADR 0007 non-goal — nothing auto-submits).
+    private func requestSummaryDraft() async {
+        aiDraft.begin()
+        let outcome = await model.draftReviewSummary()
+        apply(aiDraft.finish(outcome, existingText: model.summaryText))
+    }
+
+    /// Writes text the drafting state produced into the field, when it produced any.
+    private func apply(_ text: String?) {
+        guard let text else { return }
+        model.summaryText = text
     }
 
     /// Whether the verdict needs a summary the user has not written.
@@ -191,6 +227,8 @@ struct InlineCommentComposer: View {
 
     @State private var commentText = ""
     @State private var errorMessage: String?
+    /// The comment field's AI-drafting state (ADR 0007 amendment).
+    @State private var aiDraft = AIDraftFieldState()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -206,12 +244,25 @@ struct InlineCommentComposer: View {
                         .truncationMode(.middle)
                 }
                 Spacer(minLength: 4)
+                if model.canDraftWithAI {
+                    AIDraftButton(isDrafting: aiDraft.isDrafting) {
+                        Task { await requestCommentDraft() }
+                    }
+                }
                 SavedReplyMenu(replies: model.settings.usableSavedReplies) { snippet in
                     commentText = SavedReply.inserting(snippet, into: commentText)
                 }
             }
 
             ComposerTextEditor(text: $commentText, height: 120)
+
+            AIDraftStatusView(
+                state: aiDraft,
+                confirmationTitle: String(localized: "Replace this comment?"),
+                onReplace: { apply(aiDraft.replaceWithPendingDraft()) },
+                onAppend: { apply(aiDraft.appendPendingDraft(to: commentText)) },
+                onDiscard: { aiDraft.discardPendingDraft() }
+            )
 
             Text(String(localized: "Saved to your pending review — nothing is sent until you submit."))
                 .font(.system(size: 11))
@@ -253,6 +304,28 @@ struct InlineCommentComposer: View {
         .onAppear {
             commentText = existingComment?.body ?? ""
         }
+        .onChange(of: commentText) { _, text in
+            aiDraft.fieldChanged(to: text)
+        }
+    }
+
+    // MARK: - AI drafting
+
+    /// Asks the intelligence layer for a comment suggestion about this line.
+    ///
+    /// The context is the file path and the diff around the anchored line, capped by
+    /// ``InlineCommentDraftBuilder`` — and it goes only to the provider the user configured
+    /// themselves (`CONTRIBUTING.md`, "the complete list of hosts Shepherd may contact").
+    private func requestCommentDraft() async {
+        aiDraft.begin()
+        let outcome = await model.draftInlineComment(for: request)
+        apply(aiDraft.finish(outcome, existingText: commentText))
+    }
+
+    /// Writes text the drafting state produced into the field, when it produced any.
+    private func apply(_ text: String?) {
+        guard let text else { return }
+        commentText = text
     }
 
     private var existingComment: DraftComment? {

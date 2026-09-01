@@ -77,6 +77,12 @@ struct ReviewScreen: View {
             }
         }
         .onDisappear { model.stop() }
+        // The router is a value snapshot, so a settings change has to be handed over — otherwise
+        // switching intelligence on (or off) in another window leaves the drafting buttons showing
+        // the state they had when this screen opened. Same hand-over as `InboxScreen`.
+        .onChange(of: environment.intelligence.configuration) { _, _ in
+            model.intelligence = environment.intelligence
+        }
         .onChange(of: environment.pendingAction) { _, pending in
             guard let pending else { return }
             environment.clearPendingAction()
