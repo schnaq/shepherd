@@ -32,6 +32,18 @@ struct InboxScreen: View {
                 .navigationSplitViewColumnWidth(min: 200, ideal: 232, max: 300)
         } content: {
             InboxListView(model: model, onOpen: open)
+                // Above the list header, as a top safe-area inset — the same mechanism the shortcut
+                // bar and the review session bar use, so the card is chrome around the list rather
+                // than a row inside it, and the list keeps its own focus and key handling.
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    if let report = environment.digest.report {
+                        DigestCardView(
+                            report: report,
+                            onShow: show,
+                            onDismiss: { environment.digest.dismiss() }
+                        )
+                    }
+                }
                 .navigationSplitViewColumnWidth(min: 380, ideal: 640)
         } detail: {
             InboxDetailPanel(
@@ -106,6 +118,34 @@ struct InboxScreen: View {
     private func openSettings(_ tab: SettingsDeepLinkTab) {
         settingsTab = tab
         isSettingsPresented = true
+    }
+
+    /// Hands one digest section over to the inbox.
+    ///
+    /// Every case routes through something that already exists rather than building a fifth way to
+    /// filter a list: the rail mapping a `shepherd://inbox?filter=…` link uses
+    /// (``InboxRailSelection``), the bulk-triage preselect (ADR 0015), and the Settings tab the
+    /// parked reviews are actually dealt with on.
+    /// - Parameter kind: The section whose *Show* was pressed.
+    private func show(_ kind: DigestSectionKind) {
+        switch kind {
+        case .newReviewRequests:
+            model.apply(.needsMyReview)
+        case .greenAgentPullRequests:
+            // "Involved" first, because an agent's pull request that is green and unmerged is
+            // usually not one that asked for a review — the "Needs my review" rail would show an
+            // empty list for a line that just promised four pull requests. Then the ordinary
+            // preselect ticks them, which is exactly what "only needs approve or merge" means: the
+            // next step is the bulk-triage dialog.
+            model.apply(.involved)
+            markGreenAgentRows()
+        case .ownPullRequestsNeedingAttention:
+            model.apply(.myPullRequests)
+        case .parkedReviews:
+            // Not an inbox filter at all: a parked mutation is an outbox row, and Settings → Sync
+            // is where it is counted and explained.
+            openSettings(.sync)
+        }
     }
 
     // MARK: - Toolbar

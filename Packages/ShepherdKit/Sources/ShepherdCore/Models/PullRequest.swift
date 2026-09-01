@@ -204,6 +204,21 @@ public struct PullRequestSummary: Sendable, Codable, Hashable, Identifiable {
 
     /// Total churn (added plus deleted lines).
     public var churn: Int { additions + deletions }
+
+    /// Whether this row is one somebody is waiting on the signed-in user for.
+    ///
+    /// The single definition of "needs my review", used by the inbox rail's *Needs my review*
+    /// smart view, by the count on the menu-bar item, by the focus session's queue, and by the
+    /// morning digest (``DigestReport``). It lives on the model rather than in any one of those
+    /// four so they cannot drift apart — a digest that disagreed with the badge about how many
+    /// pull requests are waiting would undermine both.
+    ///
+    /// An approval already recorded takes the row out: GitHub keeps the review request on the pull
+    /// request afterwards, and a queue that still listed pull requests the user has approved would
+    /// never empty.
+    public var needsMyReview: Bool {
+        myRelation.contains(.reviewRequested) && reviewDecision != .approved
+    }
 }
 
 /// Everything Shepherd knows about one pull request after a detail fetch.

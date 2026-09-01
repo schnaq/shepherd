@@ -86,6 +86,18 @@ final class AppEnvironment {
     let autoDelegationStore: AutoDelegationStore
     /// Decides whether a sweep event starts a delegation on its own (ADR 0016).
     let autoDelegation: AutoDelegationCoordinator
+    /// Delivers the opt-in morning digest: a notification when it is due, a card in the inbox
+    /// while the day lasts. Created inert — it does nothing until ``bootstrap()`` starts its check,
+    /// and that check does nothing until the user switches the digest on.
+    let digest: DigestCoordinator
+
+    /// Reopens the main window when AppKit has nothing left to bring forward.
+    ///
+    /// Set by ``RootView`` from SwiftUI's `openWindow`, which is the only thing that can create a
+    /// window and is not reachable from here — the same problem, and the same solution, as the
+    /// menu-bar quick inbox's `revealMainWindow()`. Not observed by anything (it is called
+    /// imperatively, from a notification click), so it stays out of the observation graph.
+    @ObservationIgnored var reopenMainWindow: (@MainActor () -> Void)?
 
     /// The provider router, rebuilt whenever the intelligence settings change.
     private(set) var intelligence: IntelligenceRouter = .disabled
@@ -136,7 +148,23 @@ final class AppEnvironment {
                 }
             }
         )
+        self.digest = DigestCoordinator(
+            settings: settings,
+            notify: { payload in
+                // Detached for the same reason the auto-delegation notice is: asking for
+                // notification authorisation must not sit inside a once-a-minute timer tick.
+                Task { [notifications] in
+                    await notifications.present(payload)
+                }
+            }
+        )
         refreshIntelligence()
+        // Registered here rather than in `bootstrap()`: a click on a digest notification that
+        // happened while Shepherd was not running is delivered to the delegate shortly after
+        // launch, and a delegate installed a moment later would miss it.
+        notifications.routeClicks { [weak self] in
+            self?.openInboxFromNotification()
+        }
     }
 
     // MARK: - Lifecycle
@@ -148,6 +176,7 @@ final class AppEnvironment {
         // diagnostics shortly after launch, and a subscriber registered after that moment would
         // miss the batch that describes the crash the user is here about (ADR 0017).
         applyDiagnosticsSetting()
+        startDigestChecks()
         guard let account = settings.account else {
             phase = .signedOut
             announceDeepLinkNeedsSignIn()
@@ -211,6 +240,9 @@ final class AppEnvironment {
         // The ledger names pull requests of the account that just signed out, and keeping it
         // would let a rule refuse to fire for a pull request the next account re-imports.
         autoDelegation.reset()
+        // Same argument for the digest's device state: the card names the leaving account's pull
+        // requests, and "already delivered today" belongs to that account's morning.
+        digest.reset()
     }
 
     private func startSession(for account: Account) async throws {
@@ -327,6 +359,41 @@ final class AppEnvironment {
     /// Idempotent, so it does not matter how many of those happen.
     func applyDiagnosticsSetting() {
         diagnostics.setSubscribed(settings.diagnosticsEnabled)
+    }
+
+    // MARK: - Morning digest
+
+    /// Starts the once-a-minute digest due check.
+    ///
+    /// Started at launch rather than at sign-in, and never stopped: the check's source answers `nil`
+    /// while there is no session, so signing in and out does not have to remember to restart a
+    /// timer. The source is `nil` until the inbox observation has spoken once
+    /// (``SignedInSession/hasLoadedInbox``) — without that, a digest delivered in the second
+    /// between launch and the first `SELECT` would report an empty inbox and then mark itself done
+    /// for the day.
+    private func startDigestChecks() {
+        digest.start { [weak self] in
+            guard let session = self?.session, session.hasLoadedInbox else { return nil }
+            return DigestInputs(
+                pullRequests: session.inboxRows,
+                parkedReviewCount: session.conflictedOutboxCount
+            )
+        }
+    }
+
+    /// Brings the inbox forward because the user clicked a Shepherd notification.
+    ///
+    /// The digest is the one notification that routes anywhere (see ``NotificationRouter``), and
+    /// "needs my review" is where it points: it is the section the digest leads with and the one
+    /// the user is being reminded about. The route is set through the same
+    /// ``AppEnvironment/pendingInboxFilter`` slot a `shepherd://inbox?filter=needs-my-review` link
+    /// uses, so there is one implementation of "filter the inbox" (ADR 0013).
+    func openInboxFromNotification() {
+        route = .inbox
+        pendingInboxFilter = Pending(.needsMyReview)
+        guard !activateMainWindow() else { return }
+        // Every window is closed; only SwiftUI can make a new one.
+        reopenMainWindow?()
     }
 
     /// Rebuilds the intelligence router from the current settings and Keychain.

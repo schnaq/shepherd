@@ -95,6 +95,34 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         }
     }
 
+    /// When the local morning digest is delivered.
+    ///
+    /// The *schedule* travels; **when this Mac last delivered one does not**. That date is device
+    /// state in the same category as the outbox and the auto-delegation ledger: sharing an "already
+    /// delivered today" between two Macs would mean whichever one woke up first silenced the other,
+    /// and a user who reviews from a laptop and a desktop wants the digest on whichever one they
+    /// open. Carrying the schedule itself is what CONTRIBUTING.md asks of every setting, and it is
+    /// the half worth carrying — nine o'clock on weekdays is a preference, not a machine fact.
+    struct DigestGroup: Codable, Sendable, Equatable {
+        /// The delivery schedule, including its opt-in flag.
+        var schedule: DigestSchedule
+
+        /// Creates the group.
+        /// - Parameter schedule: The delivery schedule.
+        init(schedule: DigestSchedule = DigestSchedule()) {
+            self.schedule = schedule
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case schedule
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            schedule = container.syncedValue(.schedule, default: DigestSchedule())
+        }
+    }
+
     /// The user's extensions to the bundled agent registry (ADR 0008).
     ///
     /// These live in the local database rather than `UserDefaults`, which is why applying them
@@ -493,6 +521,8 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
     var sync: SyncGroup
     /// Notification toggles.
     var notifications: NotificationGroup
+    /// The morning digest's delivery schedule.
+    var digest: DigestGroup
     /// Agent-registry extensions.
     var agents: AgentsGroup
     /// Intelligence configuration, without the key.
@@ -519,6 +549,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         v: Int = SyncedSettingsDocument.schemaVersion,
         sync: SyncGroup = SyncGroup(),
         notifications: NotificationGroup = NotificationGroup(),
+        digest: DigestGroup = DigestGroup(),
         agents: AgentsGroup = AgentsGroup(),
         intelligence: IntelligenceGroup = IntelligenceGroup(),
         delegation: DelegationGroup = DelegationGroup(),
@@ -533,6 +564,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         self.v = v
         self.sync = sync
         self.notifications = notifications
+        self.digest = digest
         self.agents = agents
         self.intelligence = intelligence
         self.delegation = delegation
@@ -546,7 +578,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case v, sync, notifications, agents, intelligence, delegation, automation
+        case v, sync, notifications, digest, agents, intelligence, delegation, automation
         case appearance, triage, composer, diagnostics, account, secrets
     }
 
@@ -563,6 +595,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         v = version
         sync = container.syncedValue(.sync, default: SyncGroup())
         notifications = container.syncedValue(.notifications, default: NotificationGroup())
+        digest = container.syncedValue(.digest, default: DigestGroup())
         agents = container.syncedValue(.agents, default: AgentsGroup())
         intelligence = container.syncedValue(.intelligence, default: IntelligenceGroup())
         delegation = container.syncedValue(.delegation, default: DelegationGroup())

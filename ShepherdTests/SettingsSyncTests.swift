@@ -205,6 +205,16 @@ final class SettingsSyncTests: XCTestCase {
             onChecksFailed: true,
             onDraftConflict: false
         )
+        // Non-default in every field, and for the digest "non-default" means switched *on*: the
+        // schedule ships off, at nine, weekdays only.
+        document.digest = SyncedSettingsDocument.DigestGroup(
+            schedule: DigestSchedule(
+                isEnabled: true,
+                hour: 6,
+                minute: 45,
+                weekdaysOnly: false
+            )
+        )
         document.agents = SyncedSettingsDocument.AgentsGroup(registryOverrides: [
             AgentRegistryEntry(
                 id: "my-agent",
@@ -657,6 +667,10 @@ final class SettingsSyncTests: XCTestCase {
         // A document written before diagnostics existed leaves them off rather than on.
         XCTAssertEqual(document.diagnostics, SyncedSettingsDocument.DiagnosticsGroup())
         XCTAssertFalse(document.diagnostics.isEnabled)
+        // Same for the morning digest: an absent group is the opt-in in its off position, which is
+        // what a document written before the digest existed has to mean.
+        XCTAssertEqual(document.digest, SyncedSettingsDocument.DigestGroup())
+        XCTAssertFalse(document.digest.schedule.isEnabled)
         XCTAssertEqual(document.secrets.webhookSecret, "s3cr3tsecret")
         XCTAssertNil(document.secrets.githubToken)
         XCTAssertEqual(document.secrets.count, 1)
@@ -987,6 +1001,13 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertFalse(settings.notifyOnReviewRequest)
         XCTAssertTrue(settings.notifyOnChecksFailed)
         XCTAssertFalse(settings.notifyOnDraftConflict)
+        // The digest's schedule travels; when this Mac last delivered one does not — that is the
+        // device state the applier deliberately leaves alone.
+        XCTAssertTrue(settings.digest.isEnabled)
+        XCTAssertEqual(settings.digest.hour, 6)
+        XCTAssertEqual(settings.digest.minute, 45)
+        XCTAssertFalse(settings.digest.weekdaysOnly)
+        XCTAssertNil(settings.digestLastDeliveredAt)
         XCTAssertEqual(settings.intelligenceMode, .onDeviceAndCloud)
         XCTAssertEqual(settings.cloudProviderKind, .openAICompatible)
         XCTAssertEqual(settings.openAICompatibleBaseURL, "https://api.example.eu/v1")

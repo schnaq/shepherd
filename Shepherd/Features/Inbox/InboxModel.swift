@@ -46,7 +46,10 @@ enum SmartView: String, CaseIterable, Identifiable, Sendable {
     func matches(_ row: PullRequestSummary) -> Bool {
         switch self {
         case .needsMyReview:
-            return row.myRelation.contains(.reviewRequested) && row.reviewDecision != .approved
+            // Delegated to the model, which is where the one definition of "needs my review"
+            // lives: the menu-bar badge, the focus session's queue and the morning digest read the
+            // same property, so none of the four can drift from the rail's count.
+            return row.needsMyReview
         case .myPullRequests:
             return row.myRelation.contains(.author)
         case .involved:

@@ -4,6 +4,10 @@ import SwiftUI
 /// The window's root: onboarding, or the signed-in app.
 struct RootView: View {
     @Environment(AppEnvironment.self) private var environment
+    /// Used for one case only: a notification is clicked while every window is closed, so AppKit
+    /// has nothing to bring forward (``AppEnvironment/openInboxFromNotification()``). The same
+    /// problem the menu-bar quick inbox has, and the same escape hatch.
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         ZStack {
@@ -14,6 +18,9 @@ struct RootView: View {
             ToastStackView(center: environment.toasts)
         }
         .tint(Theme.accent)
+        .task {
+            environment.reopenMainWindow = { openWindow(id: ShepherdScene.mainWindow) }
+        }
     }
 
     @ViewBuilder

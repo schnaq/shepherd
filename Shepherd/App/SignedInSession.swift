@@ -50,6 +50,13 @@ final class SignedInSession {
     /// the inbox is also on screen — which is cheaper than any arrangement that lets a screen's
     /// lifetime decide whether the menu bar is telling the truth.
     var inboxRows: [PullRequestSummary] = []
+    /// Whether ``inboxRows`` has been filled in at least once.
+    ///
+    /// An empty array means two very different things a fraction of a second apart — "this account
+    /// has nothing open" and "the first `SELECT` has not come back yet" — and the morning digest is
+    /// the one reader that has to tell them apart: a digest built from the second one would report
+    /// a quiet night and then mark itself delivered for the day.
+    private(set) var hasLoadedInbox = false
 
     private var eventTask: Task<Void, Never>?
     private var outboxTask: Task<Void, Never>?
@@ -154,6 +161,7 @@ final class SignedInSession {
         inboxTask = Task { [weak self] in
             for await rows in inbox {
                 self?.inboxRows = rows
+                self?.hasLoadedInbox = true
             }
         }
 

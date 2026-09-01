@@ -403,6 +403,8 @@ struct SyncSettingsTab: View {
                 }
             }
 
+            digestCard
+
             if let session = environment.session {
                 Card {
                     VStack(alignment: .leading, spacing: 6) {
@@ -438,6 +440,112 @@ struct SyncSettingsTab: View {
 
             SettingsSyncSection(model: syncModel)
         }
+    }
+
+    // MARK: - Morning digest
+
+    /// The opt-in, the time, the weekday switch, and what the digest actually reports.
+    ///
+    /// It sits on this tab, under the notification toggles, rather than on a tab of its own: it *is*
+    /// a notification preference — a scheduled one — and the two things it reports on that are not
+    /// pull requests, the outbox and its parked reviews, are counted in the card directly below.
+    /// A tab of its own would be three controls in an empty room.
+    ///
+    /// The wording carries the two facts the user cannot check for themselves: nothing is fetched or
+    /// sent when the digest is built, and a Mac that was asleep still gets its digest — once — when
+    /// it wakes up on the same day.
+    private var digestCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 8) {
+                CardTitle(String(localized: "MORNING DIGEST"))
+                Toggle(String(localized: "Send me a morning digest"), isOn: digestEnabledBinding)
+                HStack(spacing: 12) {
+                    DatePicker(
+                        String(localized: "At"),
+                        selection: digestTimeBinding,
+                        displayedComponents: .hourAndMinute
+                    )
+                    .datePickerStyle(.field)
+                    .fixedSize()
+                    Toggle(String(localized: "Weekdays only"), isOn: digestWeekdaysBinding)
+                }
+                .disabled(!environment.settings.digest.isEnabled)
+                Text(String(
+                    localized: "Off by default. One notification a day summarising what came in since the last one: new review requests, green agent pull requests that only need an approval or a merge, your own pull requests with red CI or a change request, and reviews the outbox could not send. Clicking it opens the inbox, and the same summary sits above the list as a card you can dismiss."
+                ))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                Text(String(
+                    localized: "It is built from the local database only — no GitHub call, no AI, nothing sent anywhere — because it runs while you are not watching. If your Mac was asleep at that time, the digest arrives when it wakes up, and only if that is still the same day. A quiet night produces nothing at all."
+                ))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                Text(digestStatusLine)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+        }
+    }
+
+    /// "No digest delivered on this Mac yet." / "Last digest 2 hours ago."
+    private var digestStatusLine: String {
+        guard let last = environment.settings.digestLastDeliveredAt else {
+            return String(localized: "No digest delivered on this Mac yet.")
+        }
+        return String(localized: "Last digest \(RelativeDate.long(last)).")
+    }
+
+    private var digestEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { environment.settings.digest.isEnabled },
+            // Nothing to apply: `DigestCoordinator` reads the schedule on every tick, so the
+            // next check — within a minute — sees the new value, whether it was flipped here or
+            // arrived in a settings-sync document.
+            set: { isOn in
+                var schedule = environment.settings.digest
+                schedule.isEnabled = isOn
+                environment.settings.digest = schedule
+            }
+        )
+    }
+
+    private var digestWeekdaysBinding: Binding<Bool> {
+        Binding(
+            get: { environment.settings.digest.weekdaysOnly },
+            set: { isOn in
+                var schedule = environment.settings.digest
+                schedule.weekdaysOnly = isOn
+                environment.settings.digest = schedule
+            }
+        )
+    }
+
+    /// The hour and minute as a `Date`, which is the only shape `DatePicker` speaks.
+    ///
+    /// Built on *today* rather than on a bare `DateComponents`: a components-only date lands in
+    /// year one, where a calendar's answers stop being interesting, and the picker shows the time
+    /// either way.
+    private var digestTimeBinding: Binding<Date> {
+        Binding(
+            get: {
+                let schedule = environment.settings.digest
+                let calendar = Calendar.current
+                var parts = calendar.dateComponents([.year, .month, .day], from: Date())
+                parts.hour = schedule.normalizedHour
+                parts.minute = schedule.normalizedMinute
+                parts.second = 0
+                return calendar.date(from: parts) ?? Date()
+            },
+            set: { picked in
+                let parts = Calendar.current.dateComponents([.hour, .minute], from: picked)
+                var schedule = environment.settings.digest
+                schedule.hour = parts.hour ?? DigestSchedule.defaultHour
+                schedule.minute = parts.minute ?? DigestSchedule.defaultMinute
+                environment.settings.digest = schedule
+            }
+        )
     }
 
     private var intervalBinding: Binding<Double> {

@@ -120,6 +120,14 @@ bumping a dependency that ships inside the app also means a line in
   that folder's code path — not a disabled one, none — so the host list above is unchanged, and a
   bug report happens only when a user opens the folder and attaches a file themselves. Anything
   that would *send* a diagnostic is a new host and therefore a new ADR.
+- **The morning digest stays local.** It is the one thing Shepherd does *while nobody is watching*,
+  so its whole path — `ShepherdCore/Digest/`, `Features/Digest/` — reads cached rows out of SQLite
+  and calls nothing. No GitHub request, no AI request, no webhook. The tiers above are all
+  user-triggered: somebody clicked a button and can see the result, which is what makes "your code
+  reaches the endpoint you configured" an informed choice. An unattended timer has nobody to inform,
+  so if a digest is ever to gain a generated sentence it may only use the **on-device** tier, and
+  wiring it up means a request type only that tier answers — never a method the two cloud providers
+  also implement.
 - Conventional commits appreciated (`feat:`, `fix:`, `docs:` …), not enforced.
 
 ## License

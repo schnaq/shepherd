@@ -41,6 +41,16 @@ from every repo — without ever opening a browser tab.
   while you work wait in the inbox instead of pushing your progress bar backwards — and anything
   that gets merged or closed in the meantime is skipped with a note when you reach it. It finishes
   with "Session complete — 9 reviewed, 3 skipped" and how long it took.
+- **A morning digest, built on your Mac.** Switch it on and once a day — nine o'clock by default,
+  weekdays only if you like — Shepherd tells you what came in since the last one: new review
+  requests, green agent pull requests that only need an approval or a merge, your own pull requests
+  with red CI or a change request, and reviews it could not send. One notification that opens the
+  inbox, plus the same summary as a dismissible card above the list, where each line has a *Show*
+  that takes you to it. Off by default. It is assembled entirely from the local database — no
+  GitHub call, no AI, nothing sent anywhere, because it runs while you are not watching — and there
+  is no launch agent or background daemon behind it: the app checks the time while it is open, and
+  if your Mac was asleep at nine the digest arrives when it wakes, once, on the same day. A quiet
+  night produces nothing at all.
 - **Quick inbox in the menu bar.** The menu-bar item carries the number of pull requests waiting
   for your review and opens a short list of them — repository and number, title, who or what wrote
   it, CI state — where one click opens the pull request in the main window. "Sync now" and the full

@@ -1,8 +1,9 @@
 # Roadmap
 
 Scope decisions from the founder interviews (2026-08-31, plus the 2026-09-01 follow-up that
-prioritised saved replies and the focus review session). v1 is deliberately full-featured on
-the review path — the founder's bar is "never need to open github.com for a routine review".
+prioritised saved replies, the focus review session and the morning digest). v1 is deliberately
+full-featured on the review path — the founder's bar is "never need to open github.com for a
+routine review".
 
 ## v0.x → v1.0 (current work)
 
@@ -14,6 +15,18 @@ the review path — the founder's bar is "never need to open github.com for a ro
 - [ ] CI check rollup, review decision, draft/mergeable badges on rows
 - [ ] `j`/`k` navigation, ⌘K command palette, saved filter views
 - [ ] macOS notifications: new review requests, checks failed on own PRs (polling, ADR 0005)
+- [x] Morning digest (founder interview 2026-09-01): an opt-in daily summary of what came in since
+      the last one — new review requests, green agent pull requests that only need an approval or a
+      merge (the ADR 0015 preselect), your own pull requests with red CI or a change request
+      (ADR 0016's "is this mine"), and reviews the outbox parked. Delivered as a macOS notification
+      that opens the inbox and as a dismissible card above the list whose lines each jump to the
+      right rail; it disappears by itself when the day rolls over. **Tier 1 only and no network at
+      all** — it is generated unattended, so the digest path may not call GitHub and may not call an
+      AI endpoint. No launch agent and no daemon either: the app evaluates a pure due rule once a
+      minute while it is running, so a nine-o'clock digest missed because the Mac was asleep arrives
+      when it wakes — once, and only on the same day. Off by default, with a time and a
+      weekdays-only switch in Settings → Sync; the schedule travels in the encrypted settings
+      document (ADR 0014) while "when this Mac last delivered one" deliberately stays put
 - [x] Menu-bar quick inbox (pulled into v1 from v1.x): a menu-bar item with the number of pull
       requests waiting for your review, and a small window with the top eight — repo#number,
       title, provenance chip, CI dot — where a click opens the pull request in the main window.
@@ -128,6 +141,13 @@ the review path — the founder's bar is "never need to open github.com for a ro
   (`{repo}`, `{number}`) the way auto-delegation's task template has them, and inserting a snippet
   at the caret rather than appending — the latter needs an `NSTextView`-backed comment field, which
   is a bigger change than the feature was worth
+- A one-sentence on-device summary on top of the morning digest's deterministic lines (ADR 0007
+  tier 2). Deliberately left out of v1: the digest runs unattended, so it may only ever use the
+  on-device tier — a cloud call while nobody is watching is out of the question — and the
+  `IntelligenceProvider` protocol has no digest-shaped request yet. Adding one means a method every
+  provider implements, including the two cloud ones, which is precisely the shape of change that
+  could route an unattended request to an endpoint. The deterministic lines are the feature; the
+  sentence is decoration, and it can wait for a tier-2-only entry point
 - More webhook events (thread replies, resolves, checks turning red) — additive under `"v": 1`
   (ADR 0012)
 - More auto-delegation conditions (ADR 0016 keeps the action fixed: a third *condition* is a case

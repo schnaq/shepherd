@@ -95,6 +95,8 @@ final class AppSettings {
         self.notifyOnReviewRequest = defaults.object(forKey: Keys.notifyReviewRequest) as? Bool ?? true
         self.notifyOnChecksFailed = defaults.object(forKey: Keys.notifyChecksFailed) as? Bool ?? true
         self.notifyOnDraftConflict = defaults.object(forKey: Keys.notifyDraftConflict) as? Bool ?? true
+        self.digest = Self.readJSON(defaults, Keys.digest, default: DigestSchedule())
+        self.digestLastDeliveredAt = defaults.object(forKey: Keys.digestLastDeliveredAt) as? Date
         self.intelligenceMode = Self.read(defaults, Keys.intelligenceMode, default: IntelligenceMode.off)
         self.cloudProviderKind = Self.read(defaults, Keys.cloudProviderKind, default: CloudProviderKind.anthropic)
         self.anthropicModel = defaults.string(forKey: Keys.anthropicModel) ?? "claude-haiku-4-5"
@@ -198,6 +200,33 @@ final class AppSettings {
     /// Notify when a queued review could not be submitted.
     var notifyOnDraftConflict: Bool {
         didSet { defaults.set(notifyOnDraftConflict, forKey: Keys.notifyDraftConflict) }
+    }
+
+    // MARK: - Morning digest
+
+    /// When the local morning digest is delivered, and whether it is delivered at all.
+    ///
+    /// Stored as one JSON blob, like ``agentCLI`` and ``autoDelegation``: three controls edited as
+    /// one card in Settings → Sync, and one key keeps the tolerant-decoding story in one place.
+    /// Off on a fresh install — ``ShepherdCore/DigestSchedule/isEnabled`` is what lets any of it
+    /// run, and with it false the once-a-minute due check is a single `Bool` read.
+    var digest: DigestSchedule {
+        didSet { Self.writeJSON(defaults, digest, Keys.digest) }
+    }
+
+    /// When this Mac last delivered a morning digest, or `nil` if it never has.
+    ///
+    /// Device state, and deliberately **not** part of the encrypted settings document (ADR 0014) —
+    /// for exactly the reason ``ShepherdCore/AutoDelegationLedger`` is not: two Macs sharing one
+    /// "already delivered today" would let whichever one woke up first silence the other. It sits
+    /// in ``AppSettings`` rather than in a store of its own because it is a single date with no
+    /// counting rules attached, next to ``settingsSyncLastUploadAt``, which is device state living
+    /// here for the same reason.
+    ///
+    /// It is also the digest's *window start*: the next digest reports on the span since this
+    /// moment (``ShepherdCore/DigestSchedule/window(now:lastDeliveredAt:calendar:)``).
+    var digestLastDeliveredAt: Date? {
+        didSet { defaults.set(digestLastDeliveredAt, forKey: Keys.digestLastDeliveredAt) }
     }
 
     // MARK: - Intelligence
@@ -601,6 +630,8 @@ final class AppSettings {
         static let notifyReviewRequest = "notify.reviewRequest"
         static let notifyChecksFailed = "notify.checksFailed"
         static let notifyDraftConflict = "notify.draftConflict"
+        static let digest = "digest.schedule"
+        static let digestLastDeliveredAt = "digest.lastDeliveredAt"
         static let intelligenceMode = "intelligence.mode"
         static let cloudProviderKind = "intelligence.cloudKind"
         static let anthropicModel = "intelligence.anthropic.model"

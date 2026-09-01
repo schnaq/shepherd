@@ -10,6 +10,7 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
   App/                         #   @main, DI container (AppEnvironment), shepherd:// routing
   Features/
     Inbox/                     #   inbox list, sections, filters, command palette actions
+    Digest/                    #   morning digest: due-check loop, inbox card, wording
     MenuBar/                   #   menu-bar quick inbox: badge label + mini-inbox window
     PullRequest/               #   PR detail: header, timeline, file list, checks
     Review/                    #   review composer, pending review UI, thread views,
@@ -36,6 +37,7 @@ Packages/ShepherdKit/          # SPM package, NO AppKit/SwiftUI imports
       Routing/                 #     shepherd:// grammar + CLI argument grammar (ADR 0013)
       Triage/                  #     bulk-triage partition + intended writes (ADR 0015)
       Automation/              #     auto-delegation rules, ledger and policy (ADR 0016)
+      Digest/                  #     morning-digest report + delivery schedule
     GitHubKit/                 #   GraphQL+REST client, device flow, rate limiting
     ShepherdPersistence/       #   GRDB schema, DAOs, outbox
     ShepherdSync/              #   sync engine orchestrating GitHubKit ⇄ Persistence
@@ -81,7 +83,10 @@ Names are normative; fields listed are the required minimum.
   (`.approved/.changesRequested/.reviewRequired`), `checkRollup: CheckRollup?`
   (`.success/.failure/.pending/.none` + counts), `myRelation: Set<Relation>`
   (`.reviewRequested/.author/.mentioned/.assigned`), `labels: [String]`,
-  `mergeable: Mergeable?` (`.mergeable/.conflicting/.unknown`)
+  `mergeable: Mergeable?` (`.mergeable/.conflicting/.unknown`), plus `needsMyReview` — the one
+  definition of "somebody is waiting on me", read by the inbox rail's *Needs my review*, the
+  menu-bar badge, the focus session's queue and the morning digest, so those four cannot drift
+  apart
 - `PullRequestDetail` — summary + `bodyMarkdown`, `commits: [CommitInfo]`,
   `files: [ChangedFile]`, `threads: [ReviewThread]`, `timeline: [TimelineEvent]`,
   `checks: [CheckRun]`
@@ -133,6 +138,17 @@ Pure logic in `ShepherdCore` (all unit-tested):
   *all three* of: a blank summary field, no draft or an entirely empty one (`ReviewDraft.isEmpty`),
   and a matching template with a body — so a template can only ever fill a new review and can
   never overwrite review work (ADR 0006).
+- `DigestReport` / `DigestSchedule` (`Digest/`) — the morning digest, as two pure values.
+  `DigestReport.make(pullRequests:parkedReviewCount:windowStart:now:)` turns cached inbox rows plus
+  the parked-outbox count into ordered sections with a count and up to three named pull requests
+  each; an empty report is the signal for "say nothing at all". The predicates are *borrowed*, not
+  restated: `PullRequestSummary.needsMyReview`, `BulkTriagePlan.greenAgentPullRequests(in:)`
+  (ADR 0015) and `AutoDelegationPolicy.isOwn(_:)` (ADR 0016). Only the review-request section is
+  windowed (`DigestSectionKind.isWindowed`) — the other two are standing state, because a green
+  agent PR nobody merged is exactly what a morning brief is for and a windowed version would go
+  quiet on the second morning. `DigestSchedule.window(now:lastDeliveredAt:calendar:)` is the whole
+  due rule — off/not-yet/weekend/already-delivered, in that fixed order — and returns the span to
+  report on: the previous delivery, a 16 h look-back on the first run, capped at seven days.
 - `DeepLink` (`Routing/`) — the whole `shepherd://` grammar as a value: `parse(URL) -> DeepLink?`
   and `urlString` in the other direction, round-trip tested. Strict by construction (closed
   vocabularies, GitHub's own character rules, decoding *after* the path split), because a URL is
@@ -362,6 +378,58 @@ The data flow is the point, and it is deliberately not a new one:
 
 Signed out the menu shows one line and a button that brings the sign-in window forward — the item
 stays in the menu bar, because disappearing chrome reads as a bug.
+
+### Morning digest (opt-in, local, no scheduler)
+
+Once a day, at a time the user picks, Shepherd says what came in: new review requests, green agent
+pull requests that only need an approval or a merge, the user's own pull requests with red CI or a
+change request, and reviews the outbox could not send. It arrives as a macOS notification and as a
+dismissible card above the inbox list. **Off by default** (Settings → Sync).
+
+`Features/Digest/` is three files and holds no judgement: `DigestCoordinator` (the loop and the
+delivery), `DigestCardView` (the card) and `DigestPresentation` (the words, shared by the card and
+the notification so their numbers cannot disagree). Everything that decides anything is the pure
+`ShepherdCore/Digest/` pair above.
+
+Four decisions are worth knowing:
+
+- **No launch agent, no daemon, no `BGTaskScheduler`.** A `Task` on `AppEnvironment.digest` checks
+  the pure due rule once a minute while Shepherd runs, starting at launch and never stopping — the
+  check's *source* answers `nil` while signed out, so sign-in and sign-out do not have to remember
+  to restart a timer. With the digest off, a tick is one `Bool` read. A digest that needed a login
+  item would be a much larger promise than the feature is worth, and one the app could not keep
+  after a sign-out.
+- **A missed nine o'clock is caught up, once, the same day.** Entirely `DigestSchedule`'s rule:
+  the comparison is "is it past today's delivery time and has today had one", not a timer that was
+  asleep. A Friday digest missed over a weekend is *not* replayed on Monday — Monday delivers
+  Monday's digest, whose window reaches back to Friday's, so nothing is lost and there is still
+  exactly one a day.
+- **The delivery is recorded even when the report is empty**, and that is what stops a quiet Mac
+  re-checking every minute until midnight. An empty report posts nothing and shows nothing:
+  `DigestReport.isEmpty` is the decision, made in the pure type rather than in a view.
+- **Nothing leaves the Mac.** The digest is built from rows the sweep already wrote to SQLite, and
+  it fires unattended — so it may not call GitHub and it may not call an AI endpoint. There is no
+  code path from here to either. An on-device sentence on top of the deterministic lines is the only
+  intelligence tier this path could ever use and is deliberately not wired up yet
+  (`docs/ROADMAP.md`, v1.x).
+
+Device state versus setting is the usual split: the *schedule* travels in the encrypted settings
+document (`digest` group, both directions of `SettingsSyncApplier`), while
+`AppSettings.digestLastDeliveredAt` deliberately does not — two Macs sharing an "already delivered
+today" would let the first one awake silence the other, exactly the argument
+`AutoDelegationLedger` makes (ADR 0016). The card is not persisted at all: the notification is the
+announcement, the card is the digest's presence while the day lasts, and it clears itself when the
+calendar day rolls over.
+
+The card's *Show* routes through surfaces that already exist rather than adding a fifth way to
+filter a list (`InboxScreen.show(_:)`): the rail mapping a `shepherd://inbox?filter=…` link uses,
+the bulk-triage preselect for the green-agent line, and Settings → Sync for parked reviews. A click
+on the **notification** goes through `NotificationRouter` — the app's only
+`UNUserNotificationCenterDelegate`, installed in `AppEnvironment.init` because a click that
+launched the app is delivered moments later — and lands on `openInboxFromNotification()`, which sets
+the same pending-filter slot a deep link does. The digest is the only notification that routes
+anywhere: a review-request banner that yanked the window to another screen mid-review would be
+hostile, so every other one keeps macOS's default of simply bringing the app forward.
 
 ### Focus review session (the queue over pending reviews)
 
@@ -750,6 +818,13 @@ encrypted settings sync (envelope round trip, wrong passphrase and AAD tampering
 error, KDF parameters — a low iteration count in the tests, the production constant asserted
 separately — SigV4 against the official AWS vectors, the three signed requests byte for byte, the
 document codec with unknown fields, and capture/apply over in-memory secret and token stores);
+the morning digest's delivery half
+(a switched-off digest posting nothing and recording nothing, a due one posting exactly one
+notification with the day in its identifier, a quiet night recording the delivery *without* a
+banner, five checks in five minutes still producing one digest, the card surviving until the day
+rolls over and going with a dismissal or with the toggle, a tick before the inbox observation has
+spoken leaving the day open, and the notification body's wording — the due rule and the report
+itself are tested in `ShepherdCoreTests`);
 the saved-reply and review-template store (order surviving a relaunch, editing in place, the
 reorder clamped at both ends, and which replies the insert menu is allowed to offer — the matching
 and prefill rules themselves are tested in `ShepherdCoreTests`);

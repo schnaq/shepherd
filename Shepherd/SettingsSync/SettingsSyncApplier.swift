@@ -66,6 +66,10 @@ enum SettingsSyncApplier {
             onChecksFailed: settings.notifyOnChecksFailed,
             onDraftConflict: settings.notifyOnDraftConflict
         )
+        // The schedule only. `settings.digestLastDeliveredAt` is deliberately absent: it is this
+        // Mac's own record of what it has already announced, and a shared one would let the first
+        // Mac awake silence the others.
+        document.digest = SyncedSettingsDocument.DigestGroup(schedule: settings.digest)
         document.agents = SyncedSettingsDocument.AgentsGroup(registryOverrides: overrides)
         document.intelligence = SyncedSettingsDocument.IntelligenceGroup(
             mode: settings.intelligenceMode,
@@ -161,6 +165,12 @@ enum SettingsSyncApplier {
         settings.notifyOnReviewRequest = document.notifications.onReviewRequest
         settings.notifyOnChecksFailed = document.notifications.onChecksFailed
         settings.notifyOnDraftConflict = document.notifications.onDraftConflict
+
+        // Only the schedule is applied; `digestLastDeliveredAt` stays this Mac's. Nothing else has
+        // to happen — the once-a-minute due check in `DigestCoordinator` reads the schedule on
+        // every tick, so a document that switches the digest on takes effect within the minute,
+        // whether it arrived here or through the toggle in Settings.
+        settings.digest = document.digest.schedule
 
         settings.intelligenceMode = document.intelligence.mode
         settings.cloudProviderKind = document.intelligence.cloudProviderKind
