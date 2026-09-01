@@ -7,6 +7,17 @@ DerivedData/
 .swiftpm/
 Package.resolved
 
+# Release artefacts (Scripts/release.sh writes here; the DMG/ZIP/appcast belong on a
+# GitHub release, never in git). Root-anchored, because Shepherd/Resources/DiffViewer/dist IS
+# committed — see below.
+/dist/
+
+# Signing material. A belt-and-braces net, not a place to keep these: the Sparkle private key
+# belongs in the login Keychain and a password manager, the App Store Connect key outside the
+# working tree entirely (docs/RELEASING.md).
+sparkle-private-key*.txt
+*.p8
+
 # Node
 node_modules/
 web/diff-viewer/.cache/

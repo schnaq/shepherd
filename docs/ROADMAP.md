@@ -100,7 +100,15 @@ the review path — the founder's bar is "never need to open github.com for a ro
 - Issues as a first-class inbox section: browse/triage issues across repos, link/unlink
   issues to PRs, see which agent PRs address which issue — groundwork for "assign an issue
   to an agent" flows
-- Signed + notarized releases, Homebrew cask, Sparkle appcast (ADR 0010)
+- ~~Signed + notarized releases, Homebrew cask, Sparkle appcast (ADR 0010)~~ — **built, waiting on
+  one credential.** `Scripts/release.sh` (build → Developer-ID sign → DMG → notarize → staple →
+  Sparkle-sign → appcast), `.github/workflows/release.yml` (tag `v*` or manual), Sparkle 2 in the
+  app with a "Check for Updates…" menu item and an opt-out toggle in Settings, and a Homebrew
+  cask template for `schnaq/homebrew-tap` are all committed. What is missing is the maintainer's
+  Apple Developer ID certificate and one run of Sparkle's `generate_keys`: until then the updater
+  refuses to start (and says why, rather than shipping something unverified) and the release
+  workflow aborts on its first step naming the missing secrets. One-time setup:
+  [docs/RELEASING.md](RELEASING.md)
 
 ## Later / explorations
 

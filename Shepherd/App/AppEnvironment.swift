@@ -76,6 +76,8 @@ final class AppEnvironment {
     let webhooks: WebhookDispatcher
     /// Maps Shepherd's events onto webhook deliveries.
     let webhookCoordinator: WebhookCoordinator
+    /// Sparkle 2, or an inert stand-in when the build has no update feed and key (ADR 0010).
+    let updates = UpdateController()
     /// Remembers what automatic delegation already did, across launches (ADR 0016).
     let autoDelegationStore: AutoDelegationStore
     /// Decides whether a sweep event starts a delegation on its own (ADR 0016).

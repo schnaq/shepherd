@@ -1,0 +1,170 @@
+name: Release
+
+# Two ways in, one path through:
+#
+#   * push a `v*` tag — the normal release,
+#   * or run it by hand with a version, to re-do a release whose upload failed without moving
+#     the tag.
+#
+# Everything the build does lives in `Scripts/release.sh`, which runs identically on a
+# maintainer's Mac (see docs/RELEASING.md). This file only supplies secrets and moves artefacts.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, without the leading v (e.g. 1.2.0). Must match CFBundleShortVersionString in project.yml."
+        required: true
+        type: string
+      draft:
+        description: "Create the GitHub release as a draft"
+        required: false
+        default: false
+        type: boolean
+
+# Releases are not something to run two of at once: the appcast is built by extending the
+# published feed, so a second run reading a half-published one would drop an item.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Notarized release (macOS)
+    # The same labels the app build in ci.yml uses: a release needs Xcode, an Apple Silicon
+    # host, and the signing identity in that runner's login keychain.
+    runs-on: [self-hosted, macOS]
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Fail before spending 20 minutes on a build that cannot be published ───────────────
+      #
+      # Secrets are not readable in an `if:` on the job, so the guard is the first step. It
+      # names the missing secret rather than letting `release.sh` fail on the same thing later,
+      # and it names nothing else: the values never reach the log.
+      - name: Check the release secrets are present
+        env:
+          CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
+          NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
+          NOTARY_API_KEY_P8: ${{ secrets.NOTARY_API_KEY_P8 }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          # A string rather than an array: the runner's /bin/bash is 3.2, where an empty array
+          # under `set -u` is its own small adventure.
+          missing=""
+          for name in CODESIGN_IDENTITY NOTARY_API_KEY_ID NOTARY_API_ISSUER_ID NOTARY_API_KEY_P8 SPARKLE_PRIVATE_KEY; do
+            if [ -z "${!name}" ]; then missing="$missing $name"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing. Set them under Settings → Secrets and variables → Actions; docs/RELEASING.md lists where each value comes from. Nothing was built."
+            exit 1
+          fi
+          echo "All release secrets are set."
+
+      # The version reaches the shell through the environment, never through `${{ }}`
+      # interpolation into the script body, and is then constrained to digits and dots. It ends
+      # up in file paths and a release title, so "it came from a tag" is not good enough.
+      - name: Resolve the version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            version="$INPUT_VERSION"
+          else
+            version="${GITHUB_REF_NAME#v}"
+          fi
+          case "$version" in
+            ''|*[!0-9.]*|.*|*.)
+              echo "::error::'$version' is not a version. Expected digits and dots only, e.g. 1.2.0 (tags are v1.2.0)."
+              exit 1
+              ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "Releasing $version"
+
+      # The Monaco bundle is committed (ADR 0003), but it is rebuilt here anyway so a release
+      # can never ship a `dist/` that drifted from `web/diff-viewer/src`. ci.yml enforces that
+      # they agree; this makes the release independent of that having been checked.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build and test the diff viewer bundle
+        run: npm ci && npm test && npm run build
+        working-directory: web/diff-viewer
+
+      - name: Install XcodeGen if missing
+        run: command -v xcodegen >/dev/null 2>&1 || brew install xcodegen
+      - run: xcodegen generate
+
+      # A tag push does not run ci.yml — that workflow watches branches and pull requests — so
+      # the release runs the suites itself. Shipping a signed, notarized binary that nothing
+      # checked is the one failure mode a release pipeline must not have.
+      - name: ShepherdKit tests
+        run: swift test
+        working-directory: Packages/ShepherdKit
+      - name: App unit tests
+        run: |
+          xcodebuild -project Shepherd.xcodeproj -scheme Shepherd -configuration Debug \
+            -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO test
+
+      # notarytool wants the App Store Connect key as a file. It is written outside the
+      # workspace and removed in a step that always runs, so it cannot end up in an artefact.
+      - name: Write the notarization key
+        env:
+          NOTARY_API_KEY_P8: ${{ secrets.NOTARY_API_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.shepherd-release"
+          printf '%s\n' "$NOTARY_API_KEY_P8" > "$HOME/.shepherd-release/notary.p8"
+          chmod 600 "$HOME/.shepherd-release/notary.p8"
+
+      - name: Build, sign, notarize, staple, appcast
+        env:
+          SHEPHERD_VERSION: ${{ steps.version.outputs.version }}
+          CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
+          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
+          NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
+          NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          export NOTARY_API_KEY_PATH="$HOME/.shepherd-release/notary.p8"
+          ./Scripts/release.sh
+
+      - name: Publish the GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Shepherd ${{ steps.version.outputs.version }}
+          draft: ${{ inputs.draft == true }}
+          # Re-running the workflow for the same tag replaces the assets instead of failing,
+          # which is the whole point of the manual trigger.
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          files: |
+            dist/Shepherd-${{ steps.version.outputs.version }}.dmg
+            dist/Shepherd-${{ steps.version.outputs.version }}.zip
+            dist/appcast.xml
+
+      # `appcast.xml` must be an asset of the *latest* release, because that is what the app's
+      # SUFeedURL resolves to (project.yml). A draft release is not "latest", so the feed would
+      # keep serving the previous release's appcast — say so rather than let it look published.
+      - name: Remind about drafts
+        if: ${{ inputs.draft == true }}
+        run: echo "::warning::This release is a draft. The Sparkle feed keeps serving the previous release's appcast until it is published."
+
+      - name: Remove the notarization key
+        if: always()
+        run: rm -rf "$HOME/.shepherd-release"

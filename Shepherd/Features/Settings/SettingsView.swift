@@ -62,73 +62,156 @@ struct SettingsView: View {
 
 // MARK: - Account
 
-/// Avatar, login, sign out & erase.
+/// Avatar, login, sign out & erase — plus the update section (ADR 0010).
+///
+/// Updates live here rather than in a tab of their own: it is three controls, and "which build am
+/// I running, and where does the next one come from" is the same question as "which account am I".
+/// The section is outside the signed-in branch on purpose — the app updates itself whether or not
+/// anyone is signed in.
 struct AccountSettingsTab: View {
     @Environment(AppEnvironment.self) private var environment
     @State private var isConfirmingSignOut = false
 
     var body: some View {
         SettingsPage {
-            if let session = environment.session {
-                HStack(spacing: 12) {
-                    AvatarView(
-                        login: session.account.login,
-                        url: session.account.avatarURL,
-                        size: 46
-                    )
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(session.account.login)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(Theme.textStrong)
-                        Text(authDescription(session.account.authKind))
-                            .font(.system(size: 12))
-                            .foregroundStyle(Theme.textMuted)
-                    }
-                    Spacer()
-                }
+            accountSection
+            updatesCard
+        }
+    }
 
-                Card {
-                    VStack(alignment: .leading, spacing: 6) {
-                        CardTitle(String(localized: "LOCAL DATA"))
-                        Text(String(
-                            localized: "Everything Shepherd has fetched lives in a SQLite file in Application Support. Your token lives in the Keychain and nowhere else."
-                        ))
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        Text(AppConfig.databaseURL.path)
-                            .font(Theme.mono(11))
-                            .foregroundStyle(Theme.textMuted)
-                            .textSelection(.enabled)
-                            .lineLimit(2)
-                    }
-                }
+    // MARK: - Account
 
-                Button(String(localized: "Sign out & erase local data")) {
-                    isConfirmingSignOut = true
-                }
-                .buttonStyle(SecondaryButtonStyle(tint: Theme.failure))
-                .confirmationDialog(
-                    String(localized: "Sign out and erase everything?"),
-                    isPresented: $isConfirmingSignOut
-                ) {
-                    Button(String(localized: "Sign out & erase"), role: .destructive) {
-                        Task { await environment.signOutAndErase() }
-                    }
-                    Button(String(localized: "Cancel"), role: .cancel) {}
-                } message: {
-                    Text(String(
-                        localized: "The Keychain token is deleted and the local database is emptied. Pending reviews that have not been sent are lost."
-                    ))
-                }
-            } else {
-                EmptyStateView(
-                    systemImage: "person.crop.circle.badge.questionmark",
-                    title: String(localized: "Not signed in"),
-                    message: String(localized: "Sign in from the main window to see your account here.")
+    @ViewBuilder
+    private var accountSection: some View {
+        if let session = environment.session {
+            HStack(spacing: 12) {
+                AvatarView(
+                    login: session.account.login,
+                    url: session.account.avatarURL,
+                    size: 46
                 )
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(session.account.login)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Theme.textStrong)
+                    Text(authDescription(session.account.authKind))
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textMuted)
+                }
+                Spacer()
+            }
+
+            Card {
+                VStack(alignment: .leading, spacing: 6) {
+                    CardTitle(String(localized: "LOCAL DATA"))
+                    Text(String(
+                        localized: "Everything Shepherd has fetched lives in a SQLite file in Application Support. Your token lives in the Keychain and nowhere else."
+                    ))
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    Text(AppConfig.databaseURL.path)
+                        .font(Theme.mono(11))
+                        .foregroundStyle(Theme.textMuted)
+                        .textSelection(.enabled)
+                        .lineLimit(2)
+                }
+            }
+
+            Button(String(localized: "Sign out & erase local data")) {
+                isConfirmingSignOut = true
+            }
+            .buttonStyle(SecondaryButtonStyle(tint: Theme.failure))
+            .confirmationDialog(
+                String(localized: "Sign out and erase everything?"),
+                isPresented: $isConfirmingSignOut
+            ) {
+                Button(String(localized: "Sign out & erase"), role: .destructive) {
+                    Task { await environment.signOutAndErase() }
+                }
+                Button(String(localized: "Cancel"), role: .cancel) {}
+            } message: {
+                Text(String(
+                    localized: "The Keychain token is deleted and the local database is emptied. Pending reviews that have not been sent are lost."
+                ))
+            }
+        } else {
+            EmptyStateView(
+                systemImage: "person.crop.circle.badge.questionmark",
+                title: String(localized: "Not signed in"),
+                message: String(localized: "Sign in from the main window to see your account here.")
+            )
+        }
+    }
+
+    // MARK: - Updates (ADR 0010)
+
+    /// The Sparkle section: the version, the opt-out toggle, and a manual check.
+    ///
+    /// The toggle is bound to Sparkle's own `automaticallyChecksForUpdates`, which Sparkle
+    /// persists itself — so this is the one preference in the app that deliberately does not go
+    /// through ``AppSettings``, because a second copy of it could only ever disagree with the one
+    /// the updater actually reads.
+    private var updatesCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 8) {
+                CardTitle(String(localized: "UPDATES"))
+                Text(versionLine)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                Toggle(String(localized: "Check for updates automatically"), isOn: autoUpdateBinding)
+                    .disabled(!environment.updates.isEnabled)
+                if let problem = environment.updates.problem {
+                    Label(problem.explanation, systemImage: "exclamationmark.triangle")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.pending)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    Text(String(
+                        localized: "Updates are downloaded from GitHub Releases and are only installed after you confirm — never in the background, so an unsent review draft can never be interrupted."
+                    ))
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+                HStack(spacing: 8) {
+                    Button(String(localized: "Check now")) {
+                        environment.updates.checkForUpdates()
+                    }
+                    .buttonStyle(SecondaryButtonStyle(height: 28))
+                    .disabled(!environment.updates.isEnabled)
+                    if let date = environment.updates.lastCheckDate {
+                        Text(String(localized: "Last checked \(RelativeDate.long(date))"))
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                }
+                if let feed = environment.updates.feedURL {
+                    Text(feed.absoluteString)
+                        .font(Theme.mono(10.5))
+                        .foregroundStyle(Theme.textMuted)
+                        .textSelection(.enabled)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
             }
         }
+    }
+
+    /// `Shepherd 0.1.0 (build 1)`, straight out of the bundle so it can never disagree with what
+    /// the updater compares against.
+    private var versionLine: String {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let short = info["CFBundleShortVersionString"] as? String ?? "—"
+        let build = info["CFBundleVersion"] as? String ?? "—"
+        return String(localized: "Shepherd \(short) (build \(build))")
+    }
+
+    private var autoUpdateBinding: Binding<Bool> {
+        Binding(
+            get: { environment.updates.checksAutomatically },
+            set: { environment.updates.checksAutomatically = $0 }
+        )
     }
 
     private func authDescription(_ kind: AuthKind) -> String {

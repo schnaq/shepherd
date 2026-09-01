@@ -8,6 +8,17 @@ options:
 packages:
   ShepherdKit:
     path: Packages/ShepherdKit
+  # Sparkle 2 for in-app updates (ADR 0010). It is a *remote* package and it belongs to the app
+  # target only: `Packages/ShepherdKit` must keep building on Linux, and the CLI target is a URL
+  # builder that has no business talking to an update feed.
+  #
+  # Pinned to an exact version on purpose. `Shepherd.xcodeproj` is generated and therefore
+  # gitignored, so `Package.resolved` is not committed — with a range, two machines (or the CI
+  # runner and the release runner) could resolve different Sparkle builds for the same commit.
+  # Bumping is one line here plus a `NOTICES.md` line; see docs/RELEASING.md.
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    exactVersion: 2.9.6
 
 targets:
   Shepherd:
@@ -33,6 +44,10 @@ targets:
         product: ShepherdPersistence
       - package: ShepherdKit
         product: ShepherdSync
+      # Distributed as a binary XCFramework, so Xcode embeds and signs it for us; no extra
+      # copy phase and nothing to re-sign by hand (ADR 0010).
+      - package: Sparkle
+        product: Sparkle
     entitlements:
       path: Shepherd/Support/Shepherd.entitlements
     info:
@@ -53,6 +68,44 @@ targets:
             CFBundleTypeRole: Viewer
             CFBundleURLSchemes:
               - shepherd
+        # ── Sparkle 2 (ADR 0010) ────────────────────────────────────────────────────────────
+        # The feed is the `appcast.xml` asset of the newest published GitHub release.
+        # `releases/latest/download/<asset>` is a permanent URL that GitHub redirects to
+        # whatever the current latest (non-prerelease) release holds, so publishing the release
+        # *is* publishing the feed: no second host, no `gh-pages` branch, no commit that has to
+        # land after the tag, and nothing to keep in step by hand. The alternative — a
+        # GitHub-Pages URL — needs a second workflow and a second place a release can be half
+        # done. See docs/RELEASING.md.
+        SUFeedURL: https://github.com/schnaq/review/releases/latest/download/appcast.xml
+        #
+        # PLACEHOLDER. The real value is the base64 public key that `generate_keys` prints once,
+        # on the maintainer's Mac (docs/RELEASING.md § Sparkle keys). Until it is replaced,
+        # `UpdateController` refuses to start the updater at all — it checks that the key
+        # base64-decodes to exactly 32 bytes — so the app runs, "Check for Updates…" is disabled
+        # with a reason, and Sparkle never gets the chance to put a misconfiguration alert in
+        # front of anyone. Never commit the *private* key; it lives in the login Keychain and in
+        # the `SPARKLE_PRIVATE_KEY` GitHub secret.
+        SUPublicEDKey: REPLACE_WITH_SUPublicEDKey_FROM_generate_keys
+        #
+        # Automatic checks are on out of the box and switchable off in Settings → Account
+        # (ADR 0010: "auto-update is opt-out"). Setting this also suppresses Sparkle's own
+        # second-launch permission prompt, which would otherwise ask a question the Settings
+        # toggle already answers.
+        SUEnableAutomaticChecks: true
+        # Once a day.
+        SUScheduledCheckInterval: 86400
+        # Never append the anonymous system profile (CPU, macOS version, language, …) to the feed
+        # request. Off is Sparkle's default, but "no telemetry, ever" is a hard line in
+        # CONTRIBUTING.md and a hard line should be stated, not inherited.
+        SUSendProfileInfo: false
+        # Sparkle may *find* an update in the background but never download-and-install one
+        # silently: unsent review drafts live in the local database (ADR 0006) and an app that
+        # replaces itself mid-review is hostile. Every update is presented and confirmed.
+        SUAllowsAutomaticUpdates: false
+        # `SUEnableInstallerLauncherService` / `SUEnableDownloaderService` are deliberately
+        # absent: they exist for sandboxed apps that need Sparkle's XPC services, and Shepherd
+        # is unsandboxed by decision (Shepherd/Support/Shepherd.entitlements). Hardened runtime
+        # is on — Sparkle 2 supports it without any extra entitlement.
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.schnaq.shepherd

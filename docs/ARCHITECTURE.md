@@ -21,7 +21,8 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
                                #   auto-delegation coordinator + ledger store (ADR 0016)
   SettingsSync/                #   encrypted settings document, envelope, SigV4, S3 client (ADR 0014)
   Intelligence/                #   IntelligenceProvider impls (FoundationModels, Anthropic)
-  Support/                     #   AppConfig, keyboard shortcuts, theming, notifications
+  Support/                     #   AppConfig, keyboard shortcuts, theming, notifications,
+                               #   Sparkle updater wrapper (ADR 0010)
     AgentCLI/                  #   agent-CLI engine: config, locator, stream parser, worktrees
   Resources/                   #   Assets.xcassets, DiffViewer/dist (built web bundle)
 Packages/ShepherdKit/          # SPM package, NO AppKit/SwiftUI imports
@@ -36,7 +37,8 @@ Packages/ShepherdKit/          # SPM package, NO AppKit/SwiftUI imports
   Tests/                       #   unit tests per target (headless, `swift test`)
 ShepherdCLI/                   # `shepherd` command-line tool: argv → shepherd:// URL (ADR 0013)
 web/diff-viewer/               # TypeScript Monaco bundle (esbuild) → dist/ (committed)
-docs/                          # this file, ADRs, research, roadmap
+Scripts/                       # release pipeline: release.sh, Homebrew cask template (ADR 0010)
+docs/                          # this file, ADRs, research, roadmap, RELEASING.md
 project.yml                    # XcodeGen spec → Shepherd.xcodeproj (generated, not committed)
 ```
 
@@ -54,7 +56,9 @@ so it has no client, no database and no Keychain access, and can reach the app o
 
 `ShepherdCore` imports Foundation only. Nothing in `Packages/` imports AppKit, SwiftUI, or
 WebKit. The app target owns all UI and all Apple-only frameworks (FoundationModels, WebKit,
-UserNotifications, Security/Keychain).
+UserNotifications, Security/Keychain). Sparkle is on the same side of that line and only
+one file imports it: `Support/UpdateController.swift` (ADR 0010). `Packages/ShepherdKit`
+must keep building on Linux, so it never gains an update dependency.
 
 ## Core domain models (`ShepherdCore`)
 
@@ -505,6 +509,34 @@ access to the user's CLI configuration, every path needing a bookmark. ADR 0010 
 the Mac App Store out for v1, so this costs nothing that was on the table; hardened runtime
 stays on.
 
+### In-app updates (ADR 0010)
+
+`Support/UpdateController.swift` is the only file that imports Sparkle. It owns a
+`SPUStandardUpdaterController`, is created by `AppEnvironment` at launch, and is reached from
+exactly two places: the "Check for Updates…" item under "About Shepherd" in the app menu
+(`ShepherdCommands`) and the UPDATES card on the Account settings tab.
+
+The one non-obvious thing it does is **refuse to start**. The controller is built with
+`startingUpdater: false`, the `Info.plist` configuration is validated first (`UpdateConfiguration`:
+`SUFeedURL` must be an absolute web URL, `SUPublicEDKey` must base64-decode to exactly 32 bytes),
+and only then is the updater started through the throwing `SPUUpdater.startUpdater()`. The reason
+is that `SPUStandardUpdaterController.startUpdater()` answers a misconfigured plist by logging and
+then showing the user an alert telling them to contact the developer — correct for a shipped app
+whose feed broke, and exactly wrong for a source build or a fork with no signing key, which is
+every build until the maintainer has run `generate_keys` once. A build without keys therefore gets
+a disabled menu item and one line in Settings; it never gets an alert, and the failure is a value
+(`UpdateProblem`) rather than a log line.
+
+The automatic-check toggle is the app's one preference that deliberately does *not* live in
+`AppSettings`: Sparkle persists `automaticallyChecksForUpdates` in the host's user defaults
+itself, so `UpdateController.checksAutomatically` mirrors that property and a second stored copy
+could only ever disagree with the one the updater reads. Sparkle may find an update in the
+background but never installs one silently (`SUAllowsAutomaticUpdates: false`) — unsent review
+drafts live in the database, and an app that replaces itself mid-review would lose them.
+
+The release side of this — feed URL, signing, notarization, appcast — is `Scripts/release.sh` and
+[docs/RELEASING.md](RELEASING.md).
+
 ### Test target
 
 `ShepherdTests` (added to `project.yml`, sources in top-level `ShepherdTests/`) covers the
@@ -524,6 +556,9 @@ encrypted settings sync (envelope round trip, wrong passphrase and AAD tampering
 error, KDF parameters — a low iteration count in the tests, the production constant asserted
 separately — SigV4 against the official AWS vectors, the three signed requests byte for byte, the
 document codec with unknown fields, and capture/apply over in-memory secret and token stores);
+the update configuration (ADR 0010: the placeholder key, a truncated key, a
+relative or non-web feed URL and an empty `Info.plist` must each end as "updates off, with a
+reason" rather than as a Sparkle alert);
 and the app-side half of deep linking (resolving `owner/repo#number` against cached rows, filter
 token → rail state). The `shepherd://` grammar itself is tested in `ShepherdCoreTests` instead, so it
 runs on the Linux runner too. The web

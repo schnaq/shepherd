@@ -57,6 +57,20 @@ npm run build   # emits ../../Shepherd/Resources/DiffViewer/dist — commit the 
 The Swift⇄web bridge protocol is a contract: change `src/bridge/protocol.ts`,
 `BridgeProtocol.swift`, the shared fixtures, and `docs/ARCHITECTURE.md` together.
 
+## Working on the release pipeline
+
+`Scripts/release.sh` is the whole thing — build, Developer-ID sign, DMG, notarize, staple,
+Sparkle-sign, appcast — and `.github/workflows/release.yml` only feeds it secrets.
+It runs without an Apple account:
+
+```sh
+ALLOW_UNSIGNED=1 ./Scripts/release.sh   # → dist/, with loud "do not publish" warnings
+```
+
+Setup and the per-release checklist are in [docs/RELEASING.md](docs/RELEASING.md). Adding or
+bumping a dependency that ships inside the app also means a line in
+[NOTICES.md](NOTICES.md) (ADR 0009).
+
 ## Rules of the road
 
 - Decisions live in [docs/adr](docs/adr). Changing a decision = new ADR, not a silent edit.
@@ -65,6 +79,11 @@ The Swift⇄web bridge protocol is a contract: change `src/bridge/protocol.ts`,
   directions of `SettingsSyncApplier` (ADR 0014), or it silently stops travelling between a user's
   Macs. The two functions are deliberately mirror images — diff them by eye — and
   `SettingsSyncTests` capture-apply-captures a document with every field non-default.
+  There is exactly one documented exception: the "check for updates automatically" toggle, which
+  is Sparkle's own `automaticallyChecksForUpdates` and which Sparkle persists itself. Shepherd
+  mirrors it rather than storing it (`UpdateController`), because a second copy in `AppSettings`
+  could only ever disagree with the one the updater actually reads. Anything else you add goes in
+  `AppSettings` and therefore into the synced document.
 - Secrets go in the Keychain, never in `UserDefaults` and never in the database. That includes
   anything new: the sync document is encrypted, but `UserDefaults` is not.
 - No telemetry, ever. The complete list of hosts Shepherd may contact:
@@ -77,7 +96,13 @@ The Swift⇄web bridge protocol is a contract: change `src/bridge/protocol.ts`,
   - only when the user enables settings sync and types one: **the S3-compatible endpoint they
     configured** (ADR 0014) — one object, `GET`/`PUT`/`HEAD`, https only, and everything that goes
     there is encrypted on this Mac first, so the endpoint sees ciphertext and never a setting or a
-    secret.
+    secret;
+  - the update feed and the update download (ADR 0010): `github.com` — already on this list — plus
+    the `*.githubusercontent.com` host GitHub redirects release-asset downloads to. Two plain
+    `GET`s, no request body, nothing identifying beyond Sparkle's user agent and the version being
+    upgraded from. Automatic checks are on by default and switchable off in Settings → Account;
+    with the toggle off, nothing is requested until the user presses "Check for Updates…", and a
+    build without a signing key never requests anything at all.
 
   Nothing else. This is a hard privacy line: adding a host means a new ADR, a settings control the
   user has to switch on, and a line here.

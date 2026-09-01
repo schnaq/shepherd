@@ -90,6 +90,20 @@ open Shepherd.xcodeproj
 Xcode 26+ is required. The `ShepherdKit` Swift package (domain logic, GitHub client, sync
 engine) is platform-independent and can be tested headlessly with `swift test`.
 
+### Releases
+
+Shepherd ships as a notarized DMG on GitHub Releases, installable with
+`brew install --cask schnaq/tap/shepherd`, and updates itself through Sparkle 2 — automatic
+checks are on by default and switchable off in Settings → Account
+([ADR 0010](docs/adr/0010-distribution-dmg-homebrew.md)). The whole pipeline is one script,
+`Scripts/release.sh`, run by `.github/workflows/release.yml` on a `v*` tag; a source build like
+the one above is unsigned and has its updater switched off, which the Settings section states.
+
+There are no published releases yet: the pipeline is committed but is waiting on the
+maintainer's Apple Developer ID and Sparkle signing key. [docs/RELEASING.md](docs/RELEASING.md)
+is the one-time setup and the per-release checklist; third-party licences that ship inside the
+app are in [NOTICES.md](NOTICES.md).
+
 ## The `shepherd` command line
 
 Shepherd registers the `shepherd://` URL scheme, and the `shepherd` binary is a thin wrapper

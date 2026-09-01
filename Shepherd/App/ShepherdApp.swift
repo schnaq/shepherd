@@ -49,6 +49,18 @@ struct ShepherdCommands: Commands {
     var body: some Commands {
         CommandGroup(replacing: .newItem) {}
 
+        // Directly under "About Shepherd" in the app menu, where every Mac user looks for it
+        // (ADR 0010). A build without an update feed and signing key shows the item disabled
+        // rather than hiding it: a missing menu item reads as a bug, a greyed-out one sends the
+        // user to Settings → Account, which says in one line why updates are off.
+        CommandGroup(after: .appInfo) {
+            Divider()
+            Button(String(localized: "Check for Updates…")) {
+                environment.updates.checkForUpdates()
+            }
+            .disabled(!environment.updates.isEnabled)
+        }
+
         CommandMenu(String(localized: "Review")) {
             Button(String(localized: "Approve")) {
                 environment.request(.approve)
