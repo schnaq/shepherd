@@ -67,13 +67,31 @@ final class WebhookCoordinator {
     /// Assembled per delivery rather than cached, so turning the toggle off takes effect on the
     /// very next event and the secret is only ever held for the length of one POST.
     var configuration: WebhookConfiguration {
+        var configuration = gateConfiguration
+        configuration.secret = storedSecret()
+        return configuration
+    }
+
+    /// Everything the delivery gate looks at, and nothing that costs anything to read.
+    ///
+    /// Split out from ``configuration`` because ``WebhookConfiguration/wantsEvent(_:)`` never
+    /// consults the secret: the decision is identical either way, and taking it from these three
+    /// `UserDefaults`-backed values keeps the Keychain out of the path of every event Shepherd
+    /// does *not* deliver.
+    private var gateConfiguration: WebhookConfiguration {
         WebhookConfiguration(
             isEnabled: settings.webhooksEnabled,
             urlText: settings.webhookURL,
-            events: settings.webhookEvents,
-            secret: ((try? secretStore.secret(for: KeychainSecretStore.Key.webhookSecret)) ?? nil)
-                ?? ""
+            events: settings.webhookEvents
         )
+    }
+
+    /// The shared secret, or an empty string when there is none or the Keychain refuses.
+    ///
+    /// An unreadable Keychain means an unsigned delivery rather than no delivery: the receiver
+    /// decides whether it accepts one, and dropping the event outright would lose it silently.
+    private func storedSecret() -> String {
+        ((try? secretStore.secret(for: KeychainSecretStore.Key.webhookSecret)) ?? nil) ?? ""
     }
 
     /// Handles a sync event.
@@ -106,13 +124,19 @@ final class WebhookCoordinator {
     // MARK: - Dispatch
 
     private func dispatch(_ plan: WebhookPlan, database: DatabaseManager?) {
-        let configuration = self.configuration
-        // Checked before spawning anything: with the feature off, an event costs one set
-        // lookup and no task at all.
+        // The gate comes first, and reads only `UserDefaults`: with the feature off — or with
+        // this event unsubscribed — an event costs a `Bool`, a URL parse and a set lookup. No
+        // Keychain round trip, no task, no database read.
+        var configuration = gateConfiguration
         guard configuration.wantsEvent(plan.kind) else { return }
+        // Only an event that is definitely going out is worth the cross-process Keychain read,
+        // and the secret is held no longer than the POST that uses it.
+        configuration.secret = storedSecret()
         // Detached on purpose. The caller is the sync engine's event loop or a delegation
-        // sheet, and neither may end up waiting on a stranger's HTTP server.
-        Task { [dispatcher] in
+        // sheet, and neither may end up waiting on a stranger's HTTP server. `configuration` is
+        // captured by value so the task carries the settings as they were when the event
+        // happened, rather than reading them again after the fact.
+        Task { [dispatcher, configuration] in
             var summary = plan.summary
             if summary == nil, let database {
                 summary = try? await database.fetchPullRequestSummary(id: plan.identity.prID)

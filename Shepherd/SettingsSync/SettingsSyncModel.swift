@@ -16,18 +16,6 @@ import ShepherdCore
 @MainActor
 @Observable
 final class SettingsSyncModel {
-    /// What the last action amounted to. Same shape as ``SettingsModel/TestState``, on purpose.
-    enum ActionState: Equatable {
-        /// Nothing run yet.
-        case idle
-        /// In flight.
-        case running
-        /// It worked, with a line to show.
-        case success(String)
-        /// It failed, with a line to show.
-        case failure(String)
-    }
-
     /// A decrypted document waiting for the user to confirm that it may overwrite this Mac.
     ///
     /// The download is split in two — fetch-and-decrypt, then apply — precisely so that the
@@ -57,7 +45,7 @@ final class SettingsSyncModel {
     /// Whether the Keychain holds a passphrase.
     private(set) var hasStoredPassphrase = false
     /// The last action's result.
-    private(set) var state: ActionState = .idle
+    private(set) var state: AsyncActionState = .idle
     /// What the last "Check remote" found, or `nil` when nothing has been checked.
     private(set) var remote: S3ObjectClient.RemoteState?
     /// Whether the last check found no object at all.
@@ -153,8 +141,8 @@ final class SettingsSyncModel {
         do {
             let client = try context.client()
             let document = await SettingsSyncApplier.capture(context: context)
-            let envelope = try SettingsSyncCrypto.seal(
-                document: document,
+            let envelope = try await SettingsSyncModel.seal(
+                document,
                 passphrase: passphraseField,
                 deviceName: context.deviceName,
                 createdAt: context.now()
@@ -188,7 +176,7 @@ final class SettingsSyncModel {
             let client = try context.client()
             let (body, _) = try await client.get()
             let envelope = try SettingsEnvelope.parse(body)
-            let document = try SettingsSyncCrypto.open(envelope, passphrase: passphraseField)
+            let document = try await SettingsSyncModel.open(envelope, passphrase: passphraseField)
             pendingDownload = PendingDownload(
                 document: document,
                 deviceName: envelope.deviceName,
@@ -221,6 +209,55 @@ final class SettingsSyncModel {
     func cancelDownload() {
         pendingDownload = nil
         state = .idle
+    }
+
+    // MARK: - Off the main actor
+
+    /// ``SettingsSyncCrypto/seal(document:passphrase:deviceName:createdAt:iterations:salt:nonce:)``,
+    /// run somewhere the window can keep painting.
+    ///
+    /// 600 000 PBKDF2 iterations (``SettingsSyncCrypto/productionIterations``) is a fraction of a
+    /// second of *uninterruptible* CPU, and on the main actor that is a fraction of a second in
+    /// which the app is frozen — on the very button press that is supposed to feel deliberate and
+    /// safe. Everything crossing the boundary is a `Sendable` value bound before the hop, so no
+    /// main-actor state is read inside the task, and the caller touches none until it returns.
+    /// - Parameters:
+    ///   - document: The captured settings.
+    ///   - passphrase: The user's passphrase.
+    ///   - deviceName: The name to stamp the envelope with.
+    ///   - createdAt: The seal timestamp.
+    /// - Returns: The sealed envelope.
+    /// - Throws: Whatever ``SettingsSyncCrypto`` throws.
+    private static func seal(
+        _ document: SyncedSettingsDocument,
+        passphrase: String,
+        deviceName: String,
+        createdAt: Date
+    ) async throws -> SettingsEnvelope {
+        try await Task.detached(priority: .userInitiated) {
+            try SettingsSyncCrypto.seal(
+                document: document,
+                passphrase: passphrase,
+                deviceName: deviceName,
+                createdAt: createdAt
+            )
+        }.value
+    }
+
+    /// ``SettingsSyncCrypto/open(_:passphrase:)`` off the main actor, for the same reason as
+    /// ``seal(_:passphrase:deviceName:createdAt:)``: a download pays the KDF too.
+    /// - Parameters:
+    ///   - envelope: The parsed envelope.
+    ///   - passphrase: The user's passphrase.
+    /// - Returns: The decrypted document.
+    /// - Throws: Whatever ``SettingsSyncCrypto`` throws.
+    private static func open(
+        _ envelope: SettingsEnvelope,
+        passphrase: String
+    ) async throws -> SyncedSettingsDocument {
+        try await Task.detached(priority: .userInitiated) {
+            try SettingsSyncCrypto.open(envelope, passphrase: passphrase)
+        }.value
     }
 
     // MARK: - Copy

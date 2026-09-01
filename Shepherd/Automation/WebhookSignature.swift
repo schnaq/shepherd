@@ -24,17 +24,7 @@ enum WebhookSignature {
             for: body,
             using: SymmetricKey(data: Data(secret.utf8))
         )
-        return "sha256=" + hex(code)
-    }
-
-    /// Lowercase hex, the encoding every HMAC verifier expects.
-    private static func hex(_ bytes: some Sequence<UInt8>) -> String {
-        let digits = Array("0123456789abcdef".utf8)
-        var characters: [UInt8] = []
-        for byte in bytes {
-            characters.append(digits[Int(byte >> 4)])
-            characters.append(digits[Int(byte & 0x0F)])
-        }
-        return String(decoding: characters, as: UTF8.self)
+        // Lowercase hex, the encoding every HMAC verifier expects.
+        return "sha256=" + HexEncoding.lowercase(code)
     }
 }

@@ -290,7 +290,7 @@ struct SigV4Signer: Sendable, Equatable {
             for: Data(stringToSign(request, at: date).utf8),
             using: key
         )
-        return SigV4Signer.hex(code)
+        return HexEncoding.lowercase(code)
     }
 
     /// The complete `Authorization` header value.
@@ -332,24 +332,14 @@ struct SigV4Signer: Sendable, Equatable {
     /// - Parameter data: The bytes.
     /// - Returns: 64 lowercase hex characters.
     static func hexSHA256(_ data: Data) -> String {
-        hex(SHA256.hash(data: data))
+        HexEncoding.lowercase(SHA256.hash(data: data))
     }
 
     /// The hash of an empty body, which every GET and HEAD carries.
     static let emptyPayloadHash =
         "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
-    /// The digits percent-escapes are written with. Uppercase, as the specification requires.
+    /// The digits percent-escapes are written with. Uppercase, as the specification requires —
+    /// SigV4's *hashes* are lowercase (``HexEncoding``), its escapes are not.
     private static let upperHexDigits: [Character] = Array("0123456789ABCDEF")
-
-    /// Lowercase hex, the only encoding SigV4 uses.
-    private static func hex(_ bytes: some Sequence<UInt8>) -> String {
-        let digits = Array("0123456789abcdef".utf8)
-        var characters: [UInt8] = []
-        for byte in bytes {
-            characters.append(digits[Int(byte >> 4)])
-            characters.append(digits[Int(byte & 0x0F)])
-        }
-        return String(decoding: characters, as: UTF8.self)
-    }
 }

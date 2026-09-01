@@ -172,19 +172,41 @@ final class IntelligenceEndpointTests: XCTestCase {
         defer { defaults.removeSuite(named: suite) }
 
         let settings = AppSettings(defaults: defaults)
+        // A fresh install has no base URL, so there is no endpoint to name.
         XCTAssertEqual(settings.openAICompatiblePreset, .custom)
 
         settings.applyEndpointPreset(.konduitEU)
         XCTAssertEqual(settings.openAICompatibleBaseURL, "https://api.konduit.eu/v1")
+        XCTAssertEqual(settings.openAICompatiblePreset, .konduitEU)
 
-        // "Custom" keeps the URL that is already there rather than clearing the field.
+        // "Custom" keeps the URL that is already there rather than clearing the field. The
+        // preset is derived from that URL, so it goes on naming the endpoint the field points
+        // at — picking "Custom" is not a way to point at Konduit while denying it.
         settings.applyEndpointPreset(.custom)
         XCTAssertEqual(settings.openAICompatibleBaseURL, "https://api.konduit.eu/v1")
+        XCTAssertEqual(settings.openAICompatiblePreset, .konduitEU)
 
         settings.applyEndpointPreset(.ollamaLocal)
         let restored = AppSettings(defaults: defaults)
-        XCTAssertEqual(restored.openAICompatiblePreset, .ollamaLocal)
+        // Only the URL is persisted; the preset comes back with it.
         XCTAssertEqual(restored.openAICompatibleBaseURL, "http://localhost:11434/v1")
+        XCTAssertEqual(restored.openAICompatiblePreset, .ollamaLocal)
+    }
+
+    @MainActor
+    func testTypingAnEndpointsURLByHandSelectsThatPreset() throws {
+        let suite = "shepherd.tests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removeSuite(named: suite) }
+
+        let settings = AppSettings(defaults: defaults)
+        settings.openAICompatibleBaseURL = " https://API.Konduit.EU/v1/ "
+        XCTAssertEqual(settings.openAICompatiblePreset, .konduitEU)
+
+        // Editing it away drops back to "Custom" in the same breath — there is no stored copy
+        // that could keep claiming the old endpoint.
+        settings.openAICompatibleBaseURL = "https://api.example.eu/v1"
+        XCTAssertEqual(settings.openAICompatiblePreset, .custom)
     }
 
     @MainActor
@@ -222,11 +244,13 @@ final class IntelligenceEndpointTests: XCTestCase {
             "an API key must never reach UserDefaults"
         )
         // The non-secret half is persisted, so Settings can restore the endpoint.
-        XCTAssertEqual(stored["intelligence.openaiCompatible.preset"] as? String, "konduitEU")
         XCTAssertEqual(
             stored["intelligence.openaiCompatible.baseURL"] as? String,
             "https://api.konduit.eu/v1"
         )
+        // The preset is not persisted at all — it is derived from the URL above, so there is no
+        // second copy that could disagree with it.
+        XCTAssertNil(stored["intelligence.openaiCompatible.preset"])
     }
 
     // MARK: - The Settings model's discovery gate

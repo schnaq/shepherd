@@ -95,11 +95,11 @@ struct InboxScreen: View {
     private func consumeDeepLinkRequests() {
         if let pending = environment.pendingInboxFilter {
             environment.clearPendingInboxFilter()
-            model.apply(pending.filter)
+            model.apply(pending.value)
         }
         if let pending = environment.pendingSettingsTab {
             environment.clearPendingSettingsTab()
-            openSettings(pending.tab)
+            openSettings(pending.value)
         }
     }
 

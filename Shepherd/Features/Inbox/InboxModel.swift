@@ -482,7 +482,19 @@ final class InboxModel {
 
     /// The ticked rows, in display order.
     var markedRows: [PullRequestSummary] {
-        visibleRows.filter { marks.contains($0.id) }
+        markedRows(in: visibleRows)
+    }
+
+    /// The ticked rows of a list the caller already has, in the order given.
+    ///
+    /// The parameter is the point of this overload. ``visibleRows`` is the whole filter → group →
+    /// sort pipeline over every cached pull request, and it is a computed property with no cache
+    /// behind it, so a caller holding the rows already hands them in rather than making the
+    /// pipeline run a second time.
+    /// - Parameter rows: The rows to filter, in display order.
+    /// - Returns: The ticked subset.
+    func markedRows(in rows: [PullRequestSummary]) -> [PullRequestSummary] {
+        rows.filter { marks.contains($0.id) }
     }
 
     /// Ticks or unticks one row.
@@ -494,14 +506,16 @@ final class InboxModel {
     /// Ticks every row between the cursor and `id`, inclusive — shift-click.
     /// - Parameter id: The row that was shift-clicked.
     func extendMarks(to id: String) {
-        marks.extend(to: id, from: selectedID, in: visibleRows.map(\.id))
+        let rows = visibleRows
+        marks.extend(to: id, from: selectedID, in: rows.map(\.id))
     }
 
     /// Ticks the green, agent-authored rows of the current view (ADR 0015).
     /// - Returns: How many rows the preselect found.
     @discardableResult
     func markGreenAgentRows() -> Int {
-        let green = BulkTriagePlan.greenAgentPullRequests(in: visibleRows)
+        let rows = visibleRows
+        let green = BulkTriagePlan.greenAgentPullRequests(in: rows)
         marks.insert(contentsOf: green.map(\.id))
         return green.count
     }
@@ -518,7 +532,8 @@ final class InboxModel {
     /// - Parameter action: The action the user asked for.
     /// - Returns: The partitioned plan.
     func bulkPlan(for action: BulkTriageAction) -> BulkTriagePlan {
-        BulkTriagePlan.make(action: action, pullRequests: markedRows)
+        let rows = visibleRows
+        return BulkTriagePlan.make(action: action, pullRequests: markedRows(in: rows))
     }
 
     // MARK: - Detail

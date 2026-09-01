@@ -71,7 +71,6 @@ enum SettingsSyncApplier {
             mode: settings.intelligenceMode,
             cloudProviderKind: settings.cloudProviderKind,
             anthropicModel: settings.anthropicModel,
-            openAICompatiblePreset: settings.openAICompatiblePreset,
             openAICompatibleBaseURL: settings.openAICompatibleBaseURL,
             openAICompatibleModel: settings.openAICompatibleModel
         )
@@ -158,9 +157,10 @@ enum SettingsSyncApplier {
         settings.intelligenceMode = document.intelligence.mode
         settings.cloudProviderKind = document.intelligence.cloudProviderKind
         settings.anthropicModel = document.intelligence.anthropicModel
+        // Writing the base URL is what selects the endpoint preset — it is derived from the URL,
+        // so there is nothing further to apply here.
         settings.openAICompatibleBaseURL = document.intelligence.openAICompatibleBaseURL
         settings.openAICompatibleModel = document.intelligence.openAICompatibleModel
-        settings.openAICompatiblePreset = document.intelligence.openAICompatiblePreset
 
         settings.agentCLI = document.delegation.agentCLI
         settings.localCheckouts = document.delegation.localCheckouts

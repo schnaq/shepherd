@@ -32,12 +32,10 @@ final class AutoDelegationStore {
     init(defaults: UserDefaults = .standard, key: String = "delegation.autoLedger") {
         self.defaults = defaults
         self.key = key
-        if let data = defaults.data(forKey: key),
-           let stored = try? JSONDecoder().decode(AutoDelegationLedger.self, from: data) {
-            self.ledger = stored
-        } else {
-            self.ledger = AutoDelegationLedger()
-        }
+        // The same tolerant Codable↔UserDefaults pair ``AppSettings`` stores its JSON blobs
+        // with: a ledger from an older or newer build falls back to an empty one instead of
+        // costing the launch.
+        self.ledger = AppSettings.readJSON(defaults, key, default: AutoDelegationLedger())
     }
 
     /// How many automatic delegations already started today.
@@ -75,7 +73,6 @@ final class AutoDelegationStore {
     }
 
     private func persist() {
-        guard let data = try? JSONEncoder().encode(ledger) else { return }
-        defaults.set(data, forKey: key)
+        AppSettings.writeJSON(defaults, ledger, key)
     }
 }

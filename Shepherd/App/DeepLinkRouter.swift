@@ -9,20 +9,23 @@ import ShepherdCore
 /// ``AppEnvironment/syncNow()`` and a pending-request slot the owning screen consumes. Nothing
 /// here reaches into a model a screen owns.
 extension AppEnvironment {
-    /// An inbox rail filter waiting for the inbox screen to apply it.
-    struct PendingInboxFilter: Equatable, Identifiable {
-        /// Makes two identical requests distinguishable, exactly as ``PendingAction`` does.
-        let id = UUID()
-        /// The filter to apply.
-        let filter: InboxDeepLinkFilter
-    }
-
-    /// A Settings tab waiting to be presented.
-    struct PendingSettingsTab: Equatable, Identifiable {
+    /// One thing a deep link asked for, waiting for the screen that owns the state to do it.
+    ///
+    /// The identity is the whole point of the wrapper: the value alone is `Equatable`, so a
+    /// second `shepherd://inbox?filter=agents` while the first is still on the slot would compare
+    /// equal to it and the screen would never notice the new request. A fresh `UUID` per request
+    /// makes two identical asks two asks — exactly as ``PendingAction`` does for shortcuts.
+    struct Pending<Value: Equatable>: Equatable, Identifiable {
         /// Makes two identical requests distinguishable.
         let id = UUID()
-        /// The tab to open on.
-        let tab: SettingsDeepLinkTab
+        /// What was asked for.
+        let value: Value
+
+        /// Wraps a request.
+        /// - Parameter value: What was asked for.
+        init(_ value: Value) {
+            self.value = value
+        }
     }
 
     // MARK: - Entry point
@@ -106,13 +109,13 @@ extension AppEnvironment {
             openPullRequest(repo: repo, number: number, in: session)
         case .inbox(let filter):
             route = .inbox
-            pendingInboxFilter = filter.map { PendingInboxFilter(filter: $0) }
+            pendingInboxFilter = filter.map { Pending($0) }
         case .sync:
             toasts.info(String(localized: "Syncing all repositories…"))
             Task { await syncNow() }
         case .settings(let tab):
             route = .inbox
-            pendingSettingsTab = PendingSettingsTab(tab: tab)
+            pendingSettingsTab = Pending(tab)
         }
     }
 

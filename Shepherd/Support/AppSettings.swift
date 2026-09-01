@@ -97,16 +97,8 @@ final class AppSettings {
         self.intelligenceMode = Self.read(defaults, Keys.intelligenceMode, default: IntelligenceMode.off)
         self.cloudProviderKind = Self.read(defaults, Keys.cloudProviderKind, default: CloudProviderKind.anthropic)
         self.anthropicModel = defaults.string(forKey: Keys.anthropicModel) ?? "claude-haiku-4-5"
-        let storedBaseURL = defaults.string(forKey: Keys.openAIBaseURL) ?? ""
-        self.openAICompatibleBaseURL = storedBaseURL
+        self.openAICompatibleBaseURL = defaults.string(forKey: Keys.openAIBaseURL) ?? ""
         self.openAICompatibleModel = defaults.string(forKey: Keys.openAIModel) ?? ""
-        // A configuration written before presets existed has no stored preset; deriving it from
-        // the base URL means such an install shows "Konduit (EU)" rather than "Custom".
-        self.openAICompatiblePreset = Self.read(
-            defaults,
-            Keys.openAIPreset,
-            default: IntelligenceEndpointPreset.matching(baseURL: storedBaseURL)
-        )
         self.groupBy = Self.read(defaults, Keys.groupBy, default: InboxFacet.provenance)
         self.sortOrder = Self.read(defaults, Keys.sortOrder, default: InboxSortOrder.priority)
         self.defaultMergeMethod = Self.read(
@@ -216,24 +208,30 @@ final class AppSettings {
         didSet { defaults.set(openAICompatibleModel, forKey: Keys.openAIModel) }
     }
 
-    /// Which known endpoint the OpenAI-compatible configuration came from.
+    /// Which known endpoint the OpenAI-compatible base URL belongs to.
     ///
-    /// Purely a UI convenience — the intelligence layer reads the base URL, never this — but it
-    /// is remembered so Settings can keep showing the endpoint's note and key link.
+    /// Derived from the URL rather than stored beside it. The base URL *is* the configuration —
+    /// the intelligence layer reads it and never reads this — so a second, separately persisted
+    /// copy of "which preset" could only ever drift out of agreement with it; this is purely the
+    /// label, note, key link and placeholders Settings shows.
+    ///
+    /// One consequence is deliberate: a base URL that happens to equal a preset's URL now shows
+    /// that preset even when the user reached it by typing rather than by picking, where the
+    /// stored version could go on claiming "Custom". Since picking the preset would have written
+    /// exactly this URL, the two configurations are identical in every way except the label, and
+    /// naming the endpoint the user is actually talking to is the better of the two answers.
     var openAICompatiblePreset: IntelligenceEndpointPreset {
-        didSet { Self.write(defaults, openAICompatiblePreset, Keys.openAIPreset) }
+        .matching(baseURL: openAICompatibleBaseURL)
     }
 
-    /// Selects an endpoint preset and fills in the base URL that belongs to it.
+    /// Selects an endpoint preset by writing the base URL that belongs to it.
     ///
-    /// ``IntelligenceEndpointPreset/custom`` keeps whatever URL is already in the field, so
-    /// switching to it never erases a hand-typed endpoint.
+    /// ``IntelligenceEndpointPreset/custom`` has no URL of its own and therefore keeps whatever
+    /// is already in the field, so switching to it never erases a hand-typed endpoint.
     /// - Parameter preset: The preset the user picked.
     func applyEndpointPreset(_ preset: IntelligenceEndpointPreset) {
-        openAICompatiblePreset = preset
-        if let baseURL = preset.baseURL {
-            openAICompatibleBaseURL = baseURL
-        }
+        guard let baseURL = preset.baseURL else { return }
+        openAICompatibleBaseURL = baseURL
     }
 
     // MARK: - Inbox
@@ -483,7 +481,6 @@ final class AppSettings {
         static let anthropicModel = "intelligence.anthropic.model"
         static let openAIBaseURL = "intelligence.openaiCompatible.baseURL"
         static let openAIModel = "intelligence.openaiCompatible.model"
-        static let openAIPreset = "intelligence.openaiCompatible.preset"
         static let groupBy = "inbox.groupBy"
         static let sortOrder = "inbox.sortOrder"
         static let defaultMergeMethod = "review.defaultMergeMethod"
@@ -510,7 +507,19 @@ final class AppSettings {
         static let syncLastDownload = "settingsSync.lastDownloadAt"
     }
 
-    private static func readJSON<Value: Decodable>(
+    /// Reads a `Codable` value stored as one JSON blob, falling back when the key is absent or
+    /// no longer decodes.
+    ///
+    /// Internal rather than private because ``AutoDelegationStore`` stores its ledger the same
+    /// way and in the same defaults suite; one pair of helpers keeps the tolerant-decoding
+    /// behaviour — a value written by an older or newer build is a fallback, never a crash — in
+    /// one place.
+    /// - Parameters:
+    ///   - defaults: The store to read from.
+    ///   - key: The defaults key.
+    ///   - fallback: What to return when nothing usable is stored.
+    /// - Returns: The stored value, or `fallback`.
+    static func readJSON<Value: Decodable>(
         _ defaults: UserDefaults,
         _ key: String,
         default fallback: Value
@@ -521,7 +530,13 @@ final class AppSettings {
         return value
     }
 
-    private static func writeJSON<Value: Encodable>(
+    /// Writes a `Codable` value as one JSON blob. A value that cannot be encoded leaves whatever
+    /// was stored before in place rather than clearing it.
+    /// - Parameters:
+    ///   - defaults: The store to write to.
+    ///   - value: The value to store.
+    ///   - key: The defaults key.
+    static func writeJSON<Value: Encodable>(
         _ defaults: UserDefaults,
         _ value: Value,
         _ key: String

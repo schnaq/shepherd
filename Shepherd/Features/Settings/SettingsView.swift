@@ -631,21 +631,8 @@ struct IntelligenceSettingsTab: View {
             : "sk-…"
     }
 
-    @ViewBuilder
     private var testResult: some View {
-        switch model.testState {
-        case .idle, .running:
-            EmptyView()
-        case .success(let message):
-            Label(message, systemImage: "checkmark.circle")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.success)
-        case .failure(let message):
-            Label(message, systemImage: "exclamationmark.triangle")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.failure)
-                .fixedSize(horizontal: false, vertical: true)
-        }
+        AsyncActionStatusLine(state: model.testState)
     }
 
     private var modeBinding: Binding<IntelligenceMode> {
@@ -679,10 +666,10 @@ struct IntelligenceSettingsTab: View {
         Binding(
             get: { environment.settings.openAICompatibleBaseURL },
             set: { url in
+                // The picker follows the field on its own — the preset is derived from the base
+                // URL — so editing by hand cannot leave it claiming an endpoint the field
+                // contradicts, and typing a preset's URL selects that preset.
                 environment.settings.openAICompatibleBaseURL = url
-                // Editing the URL by hand must not leave the picker claiming a preset the
-                // field contradicts — and typing a preset's URL selects that preset.
-                environment.settings.openAICompatiblePreset = .matching(baseURL: url)
                 model.forgetLoadedModels()
             }
         )

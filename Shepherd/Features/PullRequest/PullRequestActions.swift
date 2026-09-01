@@ -130,7 +130,9 @@ struct PullRequestActions {
     /// There is no bulk endpoint and Shepherd invents none: a plan becomes *n* ordinary outbox
     /// rows, which is what gives every one of them the retry, offline and staleness behaviour a
     /// single approval has (ADR 0006, ADR 0015). The drain runs once at the end rather than per
-    /// row, so twenty approvals cost one drain instead of twenty. Webhooks need nothing here —
+    /// row, and so does the *write*: the whole batch is one transaction
+    /// (``ShepherdPersistence/DatabaseManager/saveBulkTriage(writes:)``), so twenty approvals
+    /// cost one commit and one drain instead of forty and twenty. Webhooks need nothing here —
     /// they hang off `mutationSent`, after each row really reached GitHub (ADR 0012).
     /// - Parameters:
     ///   - plan: The confirmed plan.
@@ -148,27 +150,18 @@ struct PullRequestActions {
             mergeMethod: method.rawValue,
             existingDrafts: await existingDrafts(for: plan)
         )
-        var queued: Set<String> = []
-        var failed: Set<String> = []
-        for write in writes {
-            do {
-                // The draft goes in first, exactly as the single-pull-request path does, so a
-                // crash between the two leaves a draft the user can still see and submit.
-                if let draft = write.draft {
-                    try await session.database.saveDraft(draft)
-                }
-                try await session.database.enqueue(write.item)
-                queued.insert(write.item.prID)
-                outcome.queuedWrites += 1
-            } catch {
-                failed.insert(write.item.prID)
-            }
+        do {
+            // Every draft and every row in one transaction, each draft still written before the
+            // row that carries it. A local write failure is a broken database rather than one
+            // unlucky pull request, so the batch is all or nothing: better a run the user can
+            // retry whole than an approval queued without the merge that was meant to follow it.
+            try await session.database.saveBulkTriage(writes: writes)
+            outcome.queuedWrites = writes.count
+            outcome.queuedPullRequests = Set(writes.map(\.item.prID)).count
+        } catch {
+            // Reported in the plan's order, not a set's, so the message is reproducible.
+            outcome.failed = plan.eligible.map(\.pullRequest.slug)
         }
-        outcome.queuedPullRequests = queued.subtracting(failed).count
-        // Reported in the plan's order, not the set's, so the message is reproducible.
-        outcome.failed = plan.eligible
-            .filter { failed.contains($0.id) }
-            .map(\.pullRequest.slug)
 
         await session.drainOutbox()
         report(outcome, action: plan.action)
@@ -177,16 +170,14 @@ struct PullRequestActions {
 
     /// The drafts already on disk for the plan's eligible pull requests.
     ///
-    /// Read up front so a bulk approval reuses inline comments the user wrote earlier instead of
-    /// replacing the draft that holds them.
+    /// Read up front, and in one query, so a bulk approval reuses inline comments the user wrote
+    /// earlier instead of replacing the draft that holds them.
+    ///
+    /// A read failure yields no drafts rather than an error: the plan is still queueable, it
+    /// simply cannot reuse anything, which is what would have happened for an absent draft too.
     private func existingDrafts(for plan: BulkTriagePlan) async -> [String: ReviewDraft] {
-        var drafts: [String: ReviewDraft] = [:]
-        for entry in plan.eligible {
-            if let draft = (try? await session.database.fetchDraft(prID: entry.id)) ?? nil {
-                drafts[entry.id] = draft
-            }
-        }
-        return drafts
+        let ids = plan.eligible.map(\.id)
+        return (try? await session.database.fetchDrafts(prIDs: ids)) ?? [:]
     }
 
     private func report(_ outcome: BulkTriageOutcome, action: BulkTriageAction) {

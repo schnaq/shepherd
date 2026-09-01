@@ -127,9 +127,13 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         var cloudProviderKind: CloudProviderKind
         /// The Anthropic model id.
         var anthropicModel: String
-        /// Which known endpoint the OpenAI-compatible configuration came from.
-        var openAICompatiblePreset: IntelligenceEndpointPreset
         /// The OpenAI-compatible base URL.
+        ///
+        /// Which *preset* that URL belongs to does not travel and is not stored anywhere: it is
+        /// derived from the URL on arrival (``AppSettings/openAICompatiblePreset``), so the two
+        /// Macs cannot end up disagreeing about the name of the endpoint they both point at. An
+        /// upload from a build that still wrote the field decodes fine — the tolerant decoder
+        /// ignores keys it does not know — so the schema stays at `"v": 1`.
         var openAICompatibleBaseURL: String
         /// The model name sent to the OpenAI-compatible endpoint.
         var openAICompatibleModel: String
@@ -139,21 +143,19 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
             mode: IntelligenceMode = .off,
             cloudProviderKind: CloudProviderKind = .anthropic,
             anthropicModel: String = "",
-            openAICompatiblePreset: IntelligenceEndpointPreset = .custom,
             openAICompatibleBaseURL: String = "",
             openAICompatibleModel: String = ""
         ) {
             self.mode = mode
             self.cloudProviderKind = cloudProviderKind
             self.anthropicModel = anthropicModel
-            self.openAICompatiblePreset = openAICompatiblePreset
             self.openAICompatibleBaseURL = openAICompatibleBaseURL
             self.openAICompatibleModel = openAICompatibleModel
         }
 
         private enum CodingKeys: String, CodingKey {
             case mode, cloudProviderKind, anthropicModel
-            case openAICompatiblePreset, openAICompatibleBaseURL, openAICompatibleModel
+            case openAICompatibleBaseURL, openAICompatibleModel
         }
 
         init(from decoder: any Decoder) throws {
@@ -164,15 +166,8 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
                 default: CloudProviderKind.anthropic
             )
             anthropicModel = container.syncedValue(.anthropicModel, default: "")
-            let baseURL = container.syncedValue(.openAICompatibleBaseURL, default: "")
-            openAICompatibleBaseURL = baseURL
+            openAICompatibleBaseURL = container.syncedValue(.openAICompatibleBaseURL, default: "")
             openAICompatibleModel = container.syncedValue(.openAICompatibleModel, default: "")
-            // Same reasoning as `AppSettings.init`: a document written before presets existed
-            // should show the endpoint it actually points at rather than "Custom".
-            openAICompatiblePreset = container.syncedValue(
-                .openAICompatiblePreset,
-                default: IntelligenceEndpointPreset.matching(baseURL: baseURL)
-            )
         }
     }
 
@@ -497,22 +492,14 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
 
     // MARK: - Bytes
 
-    /// The one encoder documents are produced with.
-    ///
-    /// `sortedKeys` keeps the plaintext a pure function of the value, which is what lets the
-    /// tests pin the shape; `withoutEscapingSlashes` keeps URLs and paths readable for a user
-    /// who decrypts their own backup with a script.
-    static func canonicalEncoder() -> JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        return encoder
-    }
-
     /// The plaintext bytes to seal.
+    ///
+    /// ``CanonicalJSON`` keeps the plaintext a pure function of the value, which is what lets the
+    /// tests pin the shape, and keeps URLs readable for a user who decrypts their own backup.
     /// - Returns: The encoded document.
     /// - Throws: Whatever `JSONEncoder` throws.
     func canonicalJSON() throws -> Data {
-        try SyncedSettingsDocument.canonicalEncoder().encode(self)
+        try CanonicalJSON.encoder().encode(self)
     }
 
     /// Decodes a document from sealed-then-opened plaintext.

@@ -121,18 +121,11 @@ struct DelegationSettingsTab: View {
                     .foregroundStyle(Theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
 
-                HStack(spacing: 12) {
-                    Text(String(localized: "Max turns"))
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 74, alignment: .leading)
-                    Stepper(value: turnsBinding, in: 1...200) {
-                        Text("\(environment.settings.agentCLI.maxTurns)")
-                            .font(Theme.mono(12))
-                            .monospacedDigit()
-                            .foregroundStyle(Theme.text)
-                    }
-                }
+                LabeledStepperRow(
+                    title: String(localized: "Max turns"),
+                    value: turnsBinding,
+                    range: 1...200
+                )
 
                 HStack(spacing: 12) {
                     Text(String(localized: "Budget"))
@@ -314,30 +307,16 @@ struct DelegationSettingsTab: View {
 
     private var automaticCaps: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 12) {
-                Text(String(localized: "At once"))
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.textSecondary)
-                    .frame(width: 74, alignment: .leading)
-                Stepper(value: concurrencyBinding, in: 1...5) {
-                    Text("\(environment.settings.autoDelegation.concurrencyCap)")
-                        .font(Theme.mono(12))
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.text)
-                }
-            }
-            HStack(spacing: 12) {
-                Text(String(localized: "Per day"))
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.textSecondary)
-                    .frame(width: 74, alignment: .leading)
-                Stepper(value: dailyBinding, in: 1...50) {
-                    Text("\(environment.settings.autoDelegation.dailyCap)")
-                        .font(Theme.mono(12))
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.text)
-                }
-            }
+            LabeledStepperRow(
+                title: String(localized: "At once"),
+                value: concurrencyBinding,
+                range: 1...5
+            )
+            LabeledStepperRow(
+                title: String(localized: "Per day"),
+                value: dailyBinding,
+                range: 1...50
+            )
             Text(String(
                 localized: "\(environment.autoDelegation.startsToday) of \(environment.autoDelegation.dailyCap) used today · \(environment.autoDelegation.runningCount) running now. When a cap is reached Shepherd notifies you instead of starting anything."
             ))
@@ -515,5 +494,36 @@ struct DelegationSettingsTab: View {
             get: { environment.settings.autoDelegation.dailyCap },
             set: { environment.settings.autoDelegation.maxPerDay = max(1, $0) }
         )
+    }
+}
+
+/// One "label · stepper · monospaced number" row, as this tab's three numeric caps all are.
+///
+/// The value is read back out of the binding rather than passed separately, so the number on
+/// screen cannot drift from the one the stepper is editing.
+private struct LabeledStepperRow: View {
+    /// The row's label.
+    let title: String
+    /// The value the stepper edits and the row displays.
+    let value: Binding<Int>
+    /// The permitted range.
+    let range: ClosedRange<Int>
+
+    /// The label column width, so the three rows' steppers line up.
+    private static let labelWidth: CGFloat = 74
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.textSecondary)
+                .frame(width: LabeledStepperRow.labelWidth, alignment: .leading)
+            Stepper(value: value, in: range) {
+                Text("\(value.wrappedValue)")
+                    .font(Theme.mono(12))
+                    .monospacedDigit()
+                    .foregroundStyle(Theme.text)
+            }
+        }
     }
 }

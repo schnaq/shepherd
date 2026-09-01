@@ -53,9 +53,9 @@ final class AppEnvironment {
     ///
     /// Same mechanism as ``PendingAction``: the container raises it, the screen that owns the
     /// state consumes it, so there is one implementation of "filter the inbox" (ADR 0013).
-    var pendingInboxFilter: PendingInboxFilter?
+    var pendingInboxFilter: Pending<InboxDeepLinkFilter>?
     /// A Settings tab a deep link asked for, waiting for the inbox to present it.
-    var pendingSettingsTab: PendingSettingsTab?
+    var pendingSettingsTab: Pending<SettingsDeepLinkTab>?
 
     /// User preferences.
     let settings: AppSettings

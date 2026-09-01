@@ -166,21 +166,8 @@ struct AutomationSettingsTab: View {
         }
     }
 
-    @ViewBuilder
     private var testResult: some View {
-        switch model.webhookTestState {
-        case .idle, .running:
-            EmptyView()
-        case .success(let message):
-            Label(message, systemImage: "checkmark.circle")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.success)
-        case .failure(let message):
-            Label(message, systemImage: "exclamationmark.triangle")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.failure)
-                .fixedSize(horizontal: false, vertical: true)
-        }
+        AsyncActionStatusLine(state: model.webhookTestState)
     }
 
     // MARK: - Derived state

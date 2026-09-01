@@ -246,6 +246,38 @@ struct ProvenanceChip: View {
     }
 }
 
+// MARK: - Action status
+
+/// The one line a finished ``AsyncActionState`` shows: green with a tick, or red with a warning.
+///
+/// ``AsyncActionState/idle`` and ``AsyncActionState/running`` show nothing at all — the spinner
+/// belongs beside the button that started the run, not underneath it — which is what lets a
+/// caller drop this in unconditionally.
+struct AsyncActionStatusLine: View {
+    /// The state to describe.
+    let state: AsyncActionState
+
+    var body: some View {
+        switch state {
+        case .idle, .running:
+            EmptyView()
+        case .success(let message):
+            line(message, systemImage: "checkmark.circle", tint: Theme.success)
+        case .failure(let message):
+            line(message, systemImage: "exclamationmark.triangle", tint: Theme.failure)
+        }
+    }
+
+    private func line(_ message: String, systemImage: String, tint: Color) -> some View {
+        Label(message, systemImage: systemImage)
+            .font(.system(size: 11))
+            .foregroundStyle(tint)
+            // Wraps instead of truncating: these lines are a remote server's own words, and a
+            // failure the user cannot read in full is worth nothing.
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
 /// The section header used by the inbox list and the left rail.
 struct RailSectionHeader: View {
     /// The caption text.

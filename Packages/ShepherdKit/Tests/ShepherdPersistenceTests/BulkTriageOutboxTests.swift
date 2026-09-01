@@ -27,7 +27,8 @@ final class BulkTriageOutboxTests: XCTestCase {
         return row
     }
 
-    /// Enqueues a plan the way `PullRequestActions` does: persist the draft, enqueue the row.
+    /// Enqueues a plan the way `PullRequestActions` does: one batched transaction for every
+    /// draft and every outbox row.
     private func queue(
         _ plan: BulkTriagePlan,
         mergeMethod: String,
@@ -35,12 +36,7 @@ final class BulkTriageOutboxTests: XCTestCase {
         drafts: [String: ReviewDraft] = [:]
     ) async throws -> Int {
         let writes = plan.writes(mergeMethod: mergeMethod, existingDrafts: drafts)
-        for write in writes {
-            if let draft = write.draft {
-                try await database.saveDraft(draft)
-            }
-            try await database.enqueue(write.item)
-        }
+        try await database.saveBulkTriage(writes: writes)
         return writes.count
     }
 
@@ -145,5 +141,38 @@ final class BulkTriageOutboxTests: XCTestCase {
         XCTAssertEqual(stored?.verdict, .approve)
         XCTAssertEqual(stored?.comments.count, existing.comments.count)
         XCTAssertEqual(stored?.summaryBody, existing.summaryBody)
+    }
+
+    /// The batch is one transaction, so an empty plan writes nothing and is not an error.
+    func testQueueingAnEmptyPlanIsANoOp() async throws {
+        let database = try DatabaseManager.inMemory()
+        try await database.saveBulkTriage(writes: [])
+        XCTAssertEqual(try await database.allOutboxItems().count, 0)
+        XCTAssertEqual(try await database.pullRequestIDsWithDrafts(), [])
+    }
+
+    /// What the app reads before it builds its writes: every existing draft in one pass, with the
+    /// inline comments still attached to the right pull request and still in their own order.
+    func testFetchingDraftsInBulkReturnsOnlyTheOnesThatExistWithTheirComments() async throws {
+        let database = try DatabaseManager.inMemory()
+        let first = PersistenceFixtures.draft(prID: "PR_1", headRefOid: "head1")
+        let second = PersistenceFixtures.draft(prID: "PR_2", headRefOid: "head2")
+        try await database.saveDraft(first)
+        try await database.saveDraft(second)
+
+        let drafts = try await database.fetchDrafts(
+            // A duplicate and an id with no draft are both harmless.
+            prIDs: ["PR_1", "PR_2", "PR_2", "PR_missing"]
+        )
+
+        XCTAssertEqual(drafts.keys.sorted(), ["PR_1", "PR_2"])
+        XCTAssertEqual(drafts["PR_1"], first)
+        XCTAssertEqual(drafts["PR_2"], second)
+        // Same answer as reading them one at a time, which is what this replaced.
+        for prID in ["PR_1", "PR_2"] {
+            XCTAssertEqual(drafts[prID], try await database.fetchDraft(prID: prID))
+        }
+        XCTAssertNil(drafts["PR_missing"])
+        XCTAssertTrue(try await database.fetchDrafts(prIDs: []).isEmpty)
     }
 }

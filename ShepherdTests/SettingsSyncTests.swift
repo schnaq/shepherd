@@ -211,7 +211,6 @@ final class SettingsSyncTests: XCTestCase {
             mode: .onDeviceAndCloud,
             cloudProviderKind: .openAICompatible,
             anthropicModel: "some-model",
-            openAICompatiblePreset: .konduitEU,
             openAICompatibleBaseURL: "https://api.example.eu/v1",
             openAICompatibleModel: "some-open-model"
         )
@@ -931,8 +930,10 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertFalse(settings.notifyOnDraftConflict)
         XCTAssertEqual(settings.intelligenceMode, .onDeviceAndCloud)
         XCTAssertEqual(settings.cloudProviderKind, .openAICompatible)
-        XCTAssertEqual(settings.openAICompatiblePreset, .konduitEU)
         XCTAssertEqual(settings.openAICompatibleBaseURL, "https://api.example.eu/v1")
+        // The preset is not a field in the document: it follows from the URL that was applied,
+        // and this one is nobody's preset.
+        XCTAssertEqual(settings.openAICompatiblePreset, .custom)
         XCTAssertEqual(settings.openAICompatibleModel, "some-open-model")
         XCTAssertEqual(settings.anthropicModel, "some-model")
         XCTAssertEqual(settings.agentCLI.maxTurns, 42)

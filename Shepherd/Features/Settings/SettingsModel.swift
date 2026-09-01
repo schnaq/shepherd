@@ -6,18 +6,6 @@ import ShepherdCore
 @MainActor
 @Observable
 final class SettingsModel {
-    /// The result of the last "Test connection" run.
-    enum TestState: Equatable {
-        /// Not run yet.
-        case idle
-        /// Running.
-        case running
-        /// The endpoint answered.
-        case success(String)
-        /// The endpoint refused or could not be reached.
-        case failure(String)
-    }
-
     /// The result of the last "Load models" run against an OpenAI-compatible endpoint.
     enum ModelListState: Equatable {
         /// Not asked yet, or invalidated because the endpoint changed.
@@ -42,7 +30,7 @@ final class SettingsModel {
     /// Whether the key field holds a value that came from the Keychain.
     private(set) var hasStoredKey = false
     /// The connection-test state.
-    private(set) var testState: TestState = .idle
+    private(set) var testState: AsyncActionState = .idle
     /// The model-discovery state.
     private(set) var modelListState: ModelListState = .idle
 
@@ -53,7 +41,7 @@ final class SettingsModel {
     /// Whether the Keychain holds a webhook secret.
     private(set) var hasStoredWebhookSecret = false
     /// The result of the last "Send test event" run.
-    private(set) var webhookTestState: TestState = .idle
+    private(set) var webhookTestState: AsyncActionState = .idle
 
     /// Draft fields for a new agent-registry entry.
     var newAgentID = ""

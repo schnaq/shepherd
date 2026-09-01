@@ -218,20 +218,7 @@ struct SettingsSyncSection: View {
 
     @ViewBuilder
     private var status: some View {
-        switch model.state {
-        case .idle, .running:
-            EmptyView()
-        case .success(let message):
-            Label(message, systemImage: "checkmark.circle")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.success)
-                .fixedSize(horizontal: false, vertical: true)
-        case .failure(let message):
-            Label(message, systemImage: "exclamationmark.triangle")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.failure)
-                .fixedSize(horizontal: false, vertical: true)
-        }
+        AsyncActionStatusLine(state: model.state)
         if let line = historyLine {
             Text(line)
                 .font(.system(size: 11))

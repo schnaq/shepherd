@@ -33,12 +33,7 @@ struct MergeSheet: View {
                     .foregroundStyle(Theme.textMuted)
             }
 
-            Picker(String(localized: "Method"), selection: methodBinding) {
-                Text(String(localized: "Merge commit")).tag(MergeMethod.merge)
-                Text(String(localized: "Squash and merge")).tag(MergeMethod.squash)
-                Text(String(localized: "Rebase and merge")).tag(MergeMethod.rebase)
-            }
-            .pickerStyle(.radioGroup)
+            MergeMethodPicker(settings: settings)
 
             VStack(alignment: .leading, spacing: 4) {
                 Toggle(String(localized: "Delete the branch afterwards"), isOn: $deletesBranch)
@@ -84,15 +79,6 @@ struct MergeSheet: View {
         .padding(20)
         .frame(width: 420)
         .background(Theme.panel)
-    }
-
-    /// The picker writes straight through to the setting, so the next merge dialog — single or
-    /// bulk — opens on the method that was used last.
-    private var methodBinding: Binding<MergeMethod> {
-        Binding(
-            get: { settings.defaultMergeMethod },
-            set: { settings.defaultMergeMethod = $0 }
-        )
     }
 
     private var warning: String? {

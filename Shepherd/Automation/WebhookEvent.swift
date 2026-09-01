@@ -351,23 +351,15 @@ struct WebhookEvent: Encodable, Sendable, Equatable {
         try container.encode(details, forKey: .details)
     }
 
-    /// The one encoder webhook bodies are produced with.
-    ///
-    /// `sortedKeys` makes the bytes a pure function of the value, which is what lets the tests
-    /// pin the schema and the signature be computed over exactly what is sent. JSON objects are
-    /// unordered, so no receiver may depend on the alphabetical order it happens to see.
-    static func canonicalEncoder() -> JSONEncoder {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-        return encoder
-    }
-
     /// The exact bytes to POST — and to sign.
+    ///
+    /// ``CanonicalJSON`` is what makes the two the same bytes: the signature is computed over
+    /// this output, so the encoding has to be a pure function of the value.
     /// - Returns: The encoded envelope.
     /// - Throws: Whatever `JSONEncoder` throws; the dispatcher maps it to
     ///   ``WebhookError/malformedPayload``.
     func canonicalJSON() throws -> Data {
-        try WebhookEvent.canonicalEncoder().encode(self)
+        try CanonicalJSON.encoder().encode(self)
     }
 
     /// The envelope the "Send test event" button delivers.

@@ -25,7 +25,7 @@ struct BulkTriageSheet: View {
         VStack(alignment: .leading, spacing: 14) {
             header
             if plan.action.includesMerge {
-                methodPicker
+                MergeMethodPicker(settings: settings)
             }
             entryList
             note
@@ -48,22 +48,6 @@ struct BulkTriageSheet: View {
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-    }
-
-    private var methodPicker: some View {
-        Picker(String(localized: "Method"), selection: methodBinding) {
-            Text(String(localized: "Merge commit")).tag(MergeMethod.merge)
-            Text(String(localized: "Squash and merge")).tag(MergeMethod.squash)
-            Text(String(localized: "Rebase and merge")).tag(MergeMethod.rebase)
-        }
-        .pickerStyle(.radioGroup)
-    }
-
-    private var methodBinding: Binding<MergeMethod> {
-        Binding(
-            get: { settings.defaultMergeMethod },
-            set: { settings.defaultMergeMethod = $0 }
-        )
     }
 
     // MARK: - The partition
