@@ -90,7 +90,8 @@ enum SettingsSyncApplier {
             inboxSortOrder: settings.sortOrder,
             diffFontSize: settings.diffFontSize,
             diffWrapsLines: settings.diffWrapsLines,
-            diffUsesInlineMode: settings.diffUsesInlineMode
+            diffUsesInlineMode: settings.diffUsesInlineMode,
+            showsMenuBarExtra: settings.showsMenuBarExtra
         )
         document.triage = SyncedSettingsDocument.TriageGroup(
             defaultMergeMethod: settings.defaultMergeMethod
@@ -179,6 +180,10 @@ enum SettingsSyncApplier {
         settings.diffFontSize = document.appearance.diffFontSize
         settings.diffWrapsLines = document.appearance.diffWrapsLines
         settings.diffUsesInlineMode = document.appearance.diffUsesInlineMode
+        // Nothing to apply beyond the flag: `MenuBarExtra(isInserted:)` reads this setting
+        // directly, so the item appears or disappears as soon as the value changes — whether it
+        // changed in Settings or arrived in a document.
+        settings.showsMenuBarExtra = document.appearance.showsMenuBarExtra
 
         settings.defaultMergeMethod = document.triage.defaultMergeMethod
 

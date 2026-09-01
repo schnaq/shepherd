@@ -240,7 +240,10 @@ final class SettingsSyncTests: XCTestCase {
             inboxSortOrder: .oldestFirst,
             diffFontSize: 16,
             diffWrapsLines: true,
-            diffUsesInlineMode: true
+            diffUsesInlineMode: true,
+            // Non-default like every other field here, and non-default for this one means *off*:
+            // the menu-bar item ships inserted.
+            showsMenuBarExtra: false
         )
         document.triage = SyncedSettingsDocument.TriageGroup(defaultMergeMethod: .rebase)
         document.diagnostics = SyncedSettingsDocument.DiagnosticsGroup(isEnabled: true)
@@ -615,6 +618,9 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertEqual(document.appearance.diffFontSize, 15)
         // An unknown appearance raw value falls back rather than failing the document.
         XCTAssertEqual(document.appearance.appearance, .system)
+        // A document written before the menu-bar item existed must leave it *on*: it is the one
+        // field in the document whose default is true.
+        XCTAssertTrue(document.appearance.showsMenuBarExtra)
         // A group that is absent entirely is the local default.
         XCTAssertEqual(document.notifications, SyncedSettingsDocument.NotificationGroup())
         XCTAssertEqual(document.delegation.agentCLI, AgentCLIConfiguration())
@@ -959,6 +965,9 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertEqual(settings.diffFontSize, 16)
         XCTAssertTrue(settings.diffWrapsLines)
         XCTAssertTrue(settings.diffUsesInlineMode)
+        // A Mac that hid the menu-bar item hides it here too; the scene's `isInserted` binding
+        // reads this setting, so there is nothing else to apply.
+        XCTAssertFalse(settings.showsMenuBarExtra)
         XCTAssertEqual(settings.defaultMergeMethod, .rebase)
         // The opt-in travels; the reports themselves never do (ADR 0017).
         XCTAssertTrue(settings.diagnosticsEnabled)
@@ -1147,6 +1156,9 @@ final class SettingsSyncTests: XCTestCase {
         // Nothing opt-in is on in a captured fresh install, diagnostics included (ADR 0017).
         XCTAssertFalse(document.diagnostics.isEnabled)
         XCTAssertFalse(document.automation.webhooksEnabled)
+        // The menu-bar quick inbox is the exception: it ships on, so a fresh install carries it
+        // as on rather than as an unset opt-in.
+        XCTAssertTrue(document.appearance.showsMenuBarExtra)
     }
 
     // MARK: - The model's flow

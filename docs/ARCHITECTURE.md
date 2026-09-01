@@ -10,12 +10,14 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
   App/                         #   @main, DI container (AppEnvironment), shepherd:// routing
   Features/
     Inbox/                     #   inbox list, sections, filters, command palette actions
+    MenuBar/                   #   menu-bar quick inbox: badge label + mini-inbox window
     PullRequest/               #   PR detail: header, timeline, file list, checks
     Review/                    #   review composer, pending review UI, thread views
     DiffViewer/                #   WKWebView host + bridge (Swift side)
     Delegation/                #   delegate-to-local-agent model + sheet (ADR 0011, 0016)
     Settings/                  #   accounts (+ updates, local diagnostics), sync (+ encrypted
                                #   cross-Mac sync), agents, AI, delegation, automation, theme
+                               #   (+ the menu-bar toggle)
     Onboarding/                #   device-flow sign-in, PAT entry
   Automation/                  #   outbound webhook payload, signing, dispatcher (ADR 0012);
                                #   auto-delegation coordinator + ledger store (ADR 0016)
@@ -280,6 +282,9 @@ Within the signed-in window a second, smaller route drives the screen: `.inbox` 
 `.review(prID)`. The review screen is full-window (as in the mockups) rather than a third
 navigation column.
 
+`ShepherdApp` has three scenes: the one `WindowGroup`, the standard `Settings` window, and the
+menu-bar quick inbox (below).
+
 ### Views render from the database, never from the network
 
 The inbox carries **two** selections and they are not the same thing (ADR 0015): `selectedID` is
@@ -294,6 +299,37 @@ refresh from GitHub, so opening a pull request offline shows the last-known stat
 spinner (ADR 0006). Grouping uses `InboxGrouper`; the sort order inside a section is applied by
 the app on top of it (`priority` / `recentlyUpdated` / `oldestFirst`), with a deterministic
 `InboxModel.priorityScore` so two sweeps of the same data never reshuffle the list.
+
+### Menu-bar quick inbox
+
+`MenuBarExtra(isInserted:)` in `ShepherdApp`, bound straight to `AppSettings.showsMenuBarExtra`
+(Settings → Appearance, on by default), with `.menuBarExtraStyle(.window)` because the content is
+rows with chips rather than commands. `Features/MenuBar/` is two files: `MenuBarQuickInbox`, a pure
+value, and the two views.
+
+The data flow is the point, and it is deliberately not a new one:
+
+- The rows come from **`SignedInSession.inboxRows`**, a third `ValueObservation` beside the two
+  outbox counts. It is on the session rather than in the inbox because `InboxModel` is owned by
+  `InboxScreen` and stops observing when that screen goes away (the review screen replaces it),
+  while the badge has to stay true with no window open at all. Same source, same table, no fetch
+  and no sweep of its own; the cost is one extra local `SELECT` per inbox write.
+- The **filter, the order and the count** are the inbox's: `SmartView.needsMyReview.matches` and
+  `InboxModel.prioritySorted` (split out of the priority sort for exactly this), so the menu's
+  eight rows are the top eight of the list the window shows. `MenuBarQuickInbox` owns only the two
+  decisions that are its own — cut at `rowLimit` with an `overflow` count, and a badge that is
+  blank at zero and `"99+"` above 99 — which is what makes them unit-testable.
+- Every **action** is a call into `AppEnvironment`: a row is `openReview(prID:)`, "n more…" runs
+  the `DeepLink.inbox(filter: .needsMyReview)` route the way `shepherd://` does — the link *value*
+  as internal navigation API, no URL built — and "Sync now" is `syncNow()`.
+- **Getting the window back** is `AppEnvironment.activateMainWindow()`: AppKit, because asking a
+  `WindowGroup` to open means asking for a *second* window. It skips the extra's own `NSPanel`
+  (never main) and the Settings window (excluded by SwiftUI's identifier), and returns `false`
+  when there is nothing left to front — the one case where the view falls back to
+  `openWindow(id: ShepherdScene.mainWindow)`, which is the only reason the window group has an id.
+
+Signed out the menu shows one line and a button that brings the sign-in window forward — the item
+stays in the menu bar, because disappearing chrome reads as a bug.
 
 ### All writes go through the outbox
 
@@ -579,7 +615,9 @@ pure parts of the app: the bridge protocol against the **shared fixtures**, whic
 into the test bundle as a folder reference from `web/diff-viewer/fixtures` so both languages
 decode the same bytes; the patch reconstruction; the Markdown sanitiser; the keyboard,
 palette and inbox-ordering logic (including the bulk-triage tick selection and every
-bulk-triage label, ADR 0015); the intelligence endpoint layer (preset ↔ base-URL matching,
+bulk-triage label, ADR 0015); the menu-bar quick inbox's pure half (which rows count as waiting,
+the cut at eight rows with its "n more…" count, the deterministic order, and the badge — blank at
+zero, `"99+"` above 99); the intelligence endpoint layer (preset ↔ base-URL matching,
 `/models` parsing against fixtures, and the settings-side discovery gate through `ModelListing`);
 the delegation engine (stream-event fixtures, argv
 construction, template splitting, git command sequences, state transitions) and the app half of

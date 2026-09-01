@@ -90,6 +90,7 @@ final class AppSettings {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.appearance = Self.read(defaults, Keys.appearance, default: AppearanceSetting.system)
+        self.showsMenuBarExtra = defaults.object(forKey: Keys.showsMenuBarExtra) as? Bool ?? true
         self.sweepIntervalMinutes = defaults.object(forKey: Keys.sweepIntervalMinutes) as? Double ?? 2
         self.notifyOnReviewRequest = defaults.object(forKey: Keys.notifyReviewRequest) as? Bool ?? true
         self.notifyOnChecksFailed = defaults.object(forKey: Keys.notifyChecksFailed) as? Bool ?? true
@@ -158,6 +159,17 @@ final class AppSettings {
     /// Dark, light or follow the system.
     var appearance: AppearanceSetting {
         didSet { Self.write(defaults, appearance, Keys.appearance) }
+    }
+
+    /// Whether the quick-inbox item sits in the menu bar (`Features/MenuBar`).
+    ///
+    /// On out of the box — unlike every *opt-in* flag in this type — because the item is the
+    /// feature: a menu-bar quick inbox nobody knows to switch on is a menu-bar quick inbox
+    /// nobody has. It is read straight by the `MenuBarExtra(isInserted:)` binding in
+    /// ``ShepherdApp``, so switching it off removes the item rather than hiding it, and there is
+    /// nothing to "apply" when a settings-sync document brings a new value.
+    var showsMenuBarExtra: Bool {
+        didSet { defaults.set(showsMenuBarExtra, forKey: Keys.showsMenuBarExtra) }
     }
 
     // MARK: - Sync
@@ -485,6 +497,7 @@ final class AppSettings {
 
     private enum Keys {
         static let appearance = "appearance"
+        static let showsMenuBarExtra = "appearance.showsMenuBarExtra"
         static let sweepIntervalMinutes = "sync.sweepIntervalMinutes"
         static let notifyReviewRequest = "notify.reviewRequest"
         static let notifyChecksFailed = "notify.checksFailed"

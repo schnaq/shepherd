@@ -430,4 +430,37 @@ final class AppEnvironment {
     func closeReview() {
         route = .inbox
     }
+
+    // MARK: - Menu bar (Features/MenuBar)
+
+    /// SwiftUI's own identifier for the window the `Settings` scene puts on screen.
+    ///
+    /// Used only to *exclude* that window in ``activateMainWindow()``, so if Apple ever renames
+    /// it the effect is "Settings may come forward instead", never a crash.
+    private static let settingsWindowIdentifier = "com_apple_SwiftUI_Settings_window"
+
+    /// Brings the app's own window to the front, from a surface that is not inside it.
+    ///
+    /// The menu-bar quick inbox is its own scene, so it cannot rely on the window being active —
+    /// or even present — when a row is clicked. Existing windows are AppKit's business rather
+    /// than `openWindow`'s: asking a window *group* to open means asking for a second window, so
+    /// `openWindow(id:)` is the caller's fallback for the one case this cannot handle.
+    /// - Returns: Whether there was a window to bring forward. `false` means the user closed it
+    ///   and the caller should ask SwiftUI for a new one.
+    @discardableResult
+    func activateMainWindow() -> Bool {
+        // `activate()` rather than the deprecated `activate(ignoringOtherApps:)`: the click on the
+        // menu-bar item is the user's own activation request, which is exactly the case macOS 14's
+        // cooperative activation is for.
+        NSApplication.shared.activate()
+        // The menu-bar extra's own window is an `NSPanel`, which never becomes main, and the
+        // Settings window is excluded by identifier; what is left is the WindowGroup's window.
+        let window = NSApplication.shared.windows.first { window in
+            window.canBecomeMain
+                && window.identifier?.rawValue != Self.settingsWindowIdentifier
+        }
+        guard let window else { return false }
+        window.makeKeyAndOrderFront(nil)
+        return true
+    }
 }

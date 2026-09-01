@@ -406,13 +406,26 @@ final class InboxModel {
         case .oldestFirst:
             return Array(InboxGrouper.sorted(rows).reversed())
         case .priority:
-            return rows.sorted { lhs, rhs in
-                let left = InboxModel.priorityScore(lhs)
-                let right = InboxModel.priorityScore(rhs)
-                if left != right { return left > right }
-                if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt > rhs.updatedAt }
-                return lhs.id < rhs.id
-            }
+            return InboxModel.prioritySorted(rows)
+        }
+    }
+
+    /// The rows in the deterministic "what should I look at first" order.
+    ///
+    /// Split out of ``order(_:)`` because the menu-bar quick inbox needs the same order for its
+    /// top eight (``MenuBarQuickInbox``), and two implementations of "most urgent first" would
+    /// eventually disagree about which pull request that is.
+    /// - Parameter rows: The rows to order.
+    /// - Returns: The rows, most urgent first.
+    nonisolated static func prioritySorted(
+        _ rows: [PullRequestSummary]
+    ) -> [PullRequestSummary] {
+        rows.sorted { lhs, rhs in
+            let left = priorityScore(lhs)
+            let right = priorityScore(rhs)
+            if left != right { return left > right }
+            if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt > rhs.updatedAt }
+            return lhs.id < rhs.id
         }
     }
 

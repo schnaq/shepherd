@@ -35,10 +35,26 @@ final class SignedInSession {
     /// Kept beside the pending count because it behaves in the opposite way: pending drains by
     /// itself, conflicted does not, so it stays visible until someone acts on it.
     var conflictedOutboxCount = 0
+    /// Every inbox row the local database holds, for the surfaces that outlive a screen.
+    ///
+    /// This is the menu-bar quick inbox's source (`Features/MenuBar/`), and it is here rather
+    /// than in the inbox for one reason: `InboxModel` is owned by `InboxScreen` and stops
+    /// observing when that screen goes away — the review screen replaces it — while the menu-bar
+    /// item has to keep its badge current whether or not the inbox, or any window, is on screen.
+    /// So the observation belongs to the session, exactly like the two outbox counts above.
+    ///
+    /// It is the *same* source, not a second one: `observeInbox()` re-reads what the sync engine
+    /// wrote, the menu bar has no fetch of its own and no sync of its own, and the counting and
+    /// ordering are the inbox's (`SmartView.needsMyReview`, `InboxModel.prioritySorted`). The
+    /// price is a second `ValueObservation` on one table — one local `SELECT` per write while
+    /// the inbox is also on screen — which is cheaper than any arrangement that lets a screen's
+    /// lifetime decide whether the menu bar is telling the truth.
+    var inboxRows: [PullRequestSummary] = []
 
     private var eventTask: Task<Void, Never>?
     private var outboxTask: Task<Void, Never>?
     private var conflictTask: Task<Void, Never>?
+    private var inboxTask: Task<Void, Never>?
 
     private init(
         account: Account,
@@ -134,6 +150,13 @@ final class SignedInSession {
             }
         }
 
+        let inbox = database.observeInbox()
+        inboxTask = Task { [weak self] in
+            for await rows in inbox {
+                self?.inboxRows = rows
+            }
+        }
+
         Task { [syncEngine] in
             await syncEngine.start()
         }
@@ -161,6 +184,8 @@ final class SignedInSession {
         outboxTask = nil
         conflictTask?.cancel()
         conflictTask = nil
+        inboxTask?.cancel()
+        inboxTask = nil
         await syncEngine.shutdown()
     }
 

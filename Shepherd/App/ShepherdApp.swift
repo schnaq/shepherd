@@ -1,16 +1,26 @@
 import ShepherdCore
 import SwiftUI
 
+/// The identifiers of the app's scenes.
+enum ShepherdScene {
+    /// The one window group.
+    ///
+    /// It has an id only so a surface *outside* the window can get it back: the menu-bar quick
+    /// inbox is its own scene, and a user who closed the window still expects "Open Shepherd" to
+    /// open Shepherd (`openWindow(id:)`).
+    static let mainWindow = "shepherd.main"
+}
+
 /// Shepherd's entry point.
 ///
 /// One window group holds the whole app — onboarding, inbox and review screen are phases of
-/// the same window — plus the standard `Settings` scene.
+/// the same window — plus the standard `Settings` scene and the menu-bar quick inbox.
 @main
 struct ShepherdApp: App {
     @State private var environment = AppEnvironment()
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: ShepherdScene.mainWindow) {
             RootView()
                 .environment(environment)
                 .frame(minWidth: 1_040, minHeight: 640)
@@ -44,6 +54,31 @@ struct ShepherdApp: App {
                 .environment(environment)
                 .preferredColorScheme(environment.settings.appearance.colorScheme)
         }
+
+        // The quick inbox (`Features/MenuBar`). `isInserted` is bound straight to the Settings
+        // toggle, so switching it off *removes* the item from the menu bar instead of leaving a
+        // hidden one behind — and switching it back on needs no relaunch.
+        //
+        // `.window` rather than the default menu style because the content is a list of rows with
+        // chips and a footer, not a list of commands.
+        MenuBarExtra(isInserted: menuBarBinding) {
+            MenuBarInboxView()
+                .environment(environment)
+                .preferredColorScheme(environment.settings.appearance.colorScheme)
+        } label: {
+            // The session is passed rather than read from the environment: the label is not
+            // inside the content's view hierarchy, and the badge has to keep tracking the
+            // session's rows while every window is closed.
+            MenuBarInboxLabel(session: environment.session)
+        }
+        .menuBarExtraStyle(.window)
+    }
+
+    private var menuBarBinding: Binding<Bool> {
+        Binding(
+            get: { environment.settings.showsMenuBarExtra },
+            set: { environment.settings.showsMenuBarExtra = $0 }
+        )
     }
 }
 

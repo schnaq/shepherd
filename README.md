@@ -33,6 +33,11 @@ from every repo — without ever opening a browser tab.
   never drift apart. Each pull request is then queued individually, with the same offline, retry
   and staleness handling a single review gets. See
   [ADR 0015](docs/adr/0015-bulk-triage.md).
+- **Quick inbox in the menu bar.** The menu-bar item carries the number of pull requests waiting
+  for your review and opens a short list of them — repository and number, title, who or what wrote
+  it, CI state — where one click opens the pull request in the main window. "Sync now" and the full
+  inbox are one click away too. It reads the same local database the window does, so it costs no
+  extra GitHub call, and it can be switched off in Settings → Appearance.
 - **Review-priority file ordering.** Changed files are grouped and ranked by what deserves your
   attention first — deterministic heuristics (source vs. lockfiles vs. generated code, churn,
   path risk), optionally sharpened by on-device AI.

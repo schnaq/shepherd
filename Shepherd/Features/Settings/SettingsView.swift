@@ -919,7 +919,12 @@ struct IntelligenceSettingsTab: View {
 
 // MARK: - Appearance
 
-/// Dark, light or system.
+/// Dark, light or system, the diff viewer's chrome, and whether the menu-bar quick inbox is
+/// inserted.
+///
+/// The menu-bar toggle lives here rather than on its own tab or under Sync: it decides whether a
+/// piece of Shepherd's chrome is on screen, which is the question this tab answers — and the
+/// synced document keeps it in `appearance` for the same reason.
 struct AppearanceSettingsTab: View {
     @Environment(AppEnvironment.self) private var environment
 
@@ -937,6 +942,19 @@ struct AppearanceSettingsTab: View {
                     .labelsHidden()
                     Text(String(
                         localized: "The diff viewer follows the same setting: the theme is pushed into Monaco over the bridge."
+                    ))
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Card {
+                VStack(alignment: .leading, spacing: 8) {
+                    CardTitle(String(localized: "MENU BAR"))
+                    Toggle(String(localized: "Show in menu bar"), isOn: menuBarBinding)
+                    Text(String(
+                        localized: "On by default. The menu-bar item shows how many pull requests are waiting for your review and opens a short list of them; clicking one opens it in the main window. Switching this off removes the item — nothing else changes, and no sync of its own runs either way."
                     ))
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.textMuted)
@@ -971,6 +989,15 @@ struct AppearanceSettingsTab: View {
                 environment.settings.appearance = $0
                 environment.applyAppearance()
             }
+        )
+    }
+
+    private var menuBarBinding: Binding<Bool> {
+        Binding(
+            get: { environment.settings.showsMenuBarExtra },
+            // Nothing to apply: `MenuBarExtra(isInserted:)` in `ShepherdApp` reads this setting,
+            // so the item appears and disappears with the toggle.
+            set: { environment.settings.showsMenuBarExtra = $0 }
         )
     }
 

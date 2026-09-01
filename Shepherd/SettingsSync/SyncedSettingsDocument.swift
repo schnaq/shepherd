@@ -252,7 +252,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         }
     }
 
-    /// Theme, inbox ordering and diff-viewer chrome.
+    /// Theme, inbox ordering, diff-viewer chrome and the menu-bar item.
     struct AppearanceGroup: Codable, Sendable, Equatable {
         /// Dark, light or system.
         var appearance: AppearanceSetting
@@ -266,6 +266,12 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         var diffWrapsLines: Bool
         /// Whether the diff is shown inline.
         var diffUsesInlineMode: Bool
+        /// Whether the menu-bar quick inbox is inserted.
+        ///
+        /// The one field in this document that defaults to *true*: the item is on out of the box,
+        /// so a document written before the quick inbox existed has to leave it on. Every other
+        /// flag here is an opt-in, where an absent key correctly means "off".
+        var showsMenuBarExtra: Bool
 
         /// Creates the group.
         init(
@@ -274,7 +280,8 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
             inboxSortOrder: InboxSortOrder = .priority,
             diffFontSize: Double = 13,
             diffWrapsLines: Bool = false,
-            diffUsesInlineMode: Bool = false
+            diffUsesInlineMode: Bool = false,
+            showsMenuBarExtra: Bool = true
         ) {
             self.appearance = appearance
             self.inboxGroupBy = inboxGroupBy
@@ -282,11 +289,13 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
             self.diffFontSize = diffFontSize
             self.diffWrapsLines = diffWrapsLines
             self.diffUsesInlineMode = diffUsesInlineMode
+            self.showsMenuBarExtra = showsMenuBarExtra
         }
 
         private enum CodingKeys: String, CodingKey {
             case appearance, inboxGroupBy, inboxSortOrder
             case diffFontSize, diffWrapsLines, diffUsesInlineMode
+            case showsMenuBarExtra
         }
 
         init(from decoder: any Decoder) throws {
@@ -300,6 +309,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
             diffFontSize = container.syncedValue(.diffFontSize, default: 13)
             diffWrapsLines = container.syncedValue(.diffWrapsLines, default: false)
             diffUsesInlineMode = container.syncedValue(.diffUsesInlineMode, default: false)
+            showsMenuBarExtra = container.syncedValue(.showsMenuBarExtra, default: true)
         }
     }
 

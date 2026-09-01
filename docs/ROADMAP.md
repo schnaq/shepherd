@@ -13,6 +13,11 @@ the review path — the founder's bar is "never need to open github.com for a ro
 - [ ] CI check rollup, review decision, draft/mergeable badges on rows
 - [ ] `j`/`k` navigation, ⌘K command palette, saved filter views
 - [ ] macOS notifications: new review requests, checks failed on own PRs (polling, ADR 0005)
+- [x] Menu-bar quick inbox (pulled into v1 from v1.x): a menu-bar item with the number of pull
+      requests waiting for your review, and a small window with the top eight — repo#number,
+      title, provenance chip, CI dot — where a click opens the pull request in the main window.
+      Plus "Open Shepherd", "Sync now" and "n more…". Reads the same database observation the
+      inbox does, has no sync of its own, and can be switched off in Settings → Appearance
 
 **Review**
 - [ ] PR detail: description, timeline, commits, checks detail
@@ -88,7 +93,7 @@ the review path — the founder's bar is "never need to open github.com for a ro
 - Automatic settings sync (ADR 0014 deferred it deliberately): needs a conflict story before
   last-write-wins may touch a document that contains the GitHub token. Candidates: per-Mac objects
   plus an explicit "adopt from" step, or an `If-Match`/ETag guard with a visible conflict
-- Menu-bar quick inbox
+- ~~Menu-bar quick inbox~~ — pulled into v1, see above
 - More webhook events (thread replies, resolves, checks turning red) — additive under `"v": 1`
   (ADR 0012)
 - More auto-delegation conditions (ADR 0016 keeps the action fixed: a third *condition* is a case
