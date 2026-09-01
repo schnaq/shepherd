@@ -45,6 +45,10 @@ the review path — the founder's bar is "never need to open github.com for a ro
   needs tier 2/3)
 - Multiple GitHub accounts; GitHub Enterprise Server base-URL support
 - Menu-bar quick inbox
+- Delegate to local agent (ADR 0011): send a review finding / issue / PR back to the
+  locally installed Claude Code (headless `claude -p`, stream-json, worktree isolation,
+  turn/budget caps) — command template configurable for other agent CLIs; Shepherd never
+  touches agent auth
 - Issues as a first-class inbox section: browse/triage issues across repos, link/unlink
   issues to PRs, see which agent PRs address which issue — groundwork for "assign an issue
   to an agent" flows
