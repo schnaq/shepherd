@@ -237,6 +237,7 @@ final class SettingsSyncTests: XCTestCase {
             diffWrapsLines: true,
             diffUsesInlineMode: true
         )
+        document.triage = SyncedSettingsDocument.TriageGroup(defaultMergeMethod: .rebase)
         document.account = SyncedSettingsDocument.AccountGroup(login: "octocat", authKind: .pat)
         document.secrets = SyncedSettingsDocument.Secrets(
             githubToken: "ghp_example",
@@ -939,6 +940,7 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertEqual(settings.diffFontSize, 16)
         XCTAssertTrue(settings.diffWrapsLines)
         XCTAssertTrue(settings.diffUsesInlineMode)
+        XCTAssertEqual(settings.defaultMergeMethod, .rebase)
 
         XCTAssertEqual(
             secrets.contents[KeychainSecretStore.Key.anthropicAPIKey],

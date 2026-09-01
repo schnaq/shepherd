@@ -10,6 +10,9 @@ struct InboxScreen: View {
     @State private var model: InboxModel
     @State private var isMergeSheetPresented = false
     @State private var isSettingsPresented = false
+    /// Whether the bulk-triage confirmation is up, and what it is confirming (ADR 0015).
+    @State private var isBulkSheetPresented = false
+    @State private var bulkAction: BulkTriageAction = .approve
     /// Which tab the Settings sheet opens on — the rail opens Account, a
     /// `shepherd://settings/<tab>` link opens the tab it names (ADR 0013).
     @State private var settingsTab: SettingsDeepLinkTab = .account
@@ -67,8 +70,18 @@ struct InboxScreen: View {
         }
         .sheet(isPresented: $isMergeSheetPresented) {
             if let summary = model.selectedRow {
-                MergeSheet(summary: summary, actions: actions)
+                MergeSheet(summary: summary, actions: actions, settings: environment.settings)
             }
+        }
+        .sheet(isPresented: $isBulkSheetPresented) {
+            // Built here rather than captured when the menu was clicked: a sweep that lands
+            // while the dialog is open re-partitions it instead of confirming stale state.
+            BulkTriageSheet(
+                plan: model.bulkPlan(for: bulkAction),
+                actions: actions,
+                settings: environment.settings,
+                onQueued: { [model] in model.clearMarks() }
+            )
         }
         .sheet(isPresented: $isSettingsPresented) {
             SettingsView(initialTab: settingsTab)
@@ -110,6 +123,29 @@ struct InboxScreen: View {
 
         ToolbarItemGroup(placement: .primaryAction) {
             SyncStatusView(session: session)
+
+            Menu {
+                Button(String(localized: "Select all green agent pull requests")) {
+                    markGreenAgentRows()
+                }
+                Divider()
+                ForEach(BulkTriageAction.allCases, id: \.self) { action in
+                    Button(action.commandTitle) { presentBulkTriage(action) }
+                        .disabled(!model.hasMarks)
+                }
+                Divider()
+                Button(String(localized: "Clear the selection")) { model.clearMarks() }
+                    .disabled(!model.hasMarks)
+            } label: {
+                Label(
+                    model.hasMarks
+                        ? String(localized: "Triage \(model.markedIDs.count) selected")
+                        : String(localized: "Bulk triage"),
+                    systemImage: "checklist"
+                )
+            }
+            .help(String(localized: "Bulk triage: approve or merge the selected pull requests"))
+
             Button {
                 Task { await environment.syncNow() }
             } label: {
@@ -164,7 +200,40 @@ struct InboxScreen: View {
             }
         case .groupBy(let facet):
             environment.settings.groupBy = facet
+        case .toggleMark:
+            if let id = model.selectedID { model.toggleMark(id) }
+        case .markGreenAgentPullRequests:
+            markGreenAgentRows()
+        case .bulkTriage(let bulk):
+            presentBulkTriage(bulk)
         }
+    }
+
+    /// Ticks the green agent pull requests of the current view and says how many (ADR 0015).
+    ///
+    /// The count is the point: a preselect that silently did nothing — because everything is
+    /// still building, or nothing is green — would look like a broken menu item.
+    private func markGreenAgentRows() {
+        let count = model.markGreenAgentRows()
+        if count == 0 {
+            environment.toasts.info(
+                String(localized: "No green agent pull request in this view.")
+            )
+        } else {
+            environment.toasts.info(String(localized: "\(count) selected."))
+        }
+    }
+
+    /// Opens the one confirmation dialog for a bulk action.
+    private func presentBulkTriage(_ action: BulkTriageAction) {
+        guard model.hasMarks else {
+            environment.toasts.info(
+                String(localized: "Select pull requests first — press x, or ⌘-click rows.")
+            )
+            return
+        }
+        bulkAction = action
+        isBulkSheetPresented = true
     }
 
     private func queueReview(_ verdict: ReviewVerdict) {

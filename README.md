@@ -25,6 +25,14 @@ from every repo — without ever opening a browser tab.
   comments on lines, multi-comment pending reviews, approve / request changes / comment,
   reply to and resolve review threads, CI check status, and merge (merge / squash / rebase) —
   complete GitHub review parity, natively wrapped.
+- **Bulk triage for the agent flood.** Tick the pull requests you have looked at (`x`, ⌘-click,
+  ⇧-click for a range — or "select all green agent PRs in this view"), then approve, approve &
+  merge, or merge them behind **one** confirmation dialog. The dialog lists every pull request
+  with its checks and review state and marks the ones it will skip — red CI, conflicts, drafts,
+  changes requested, your own — with the reason, so what you selected and what gets written can
+  never drift apart. Each pull request is then queued individually, with the same offline, retry
+  and staleness handling a single review gets. See
+  [ADR 0015](docs/adr/0015-bulk-triage.md).
 - **Review-priority file ordering.** Changed files are grouped and ranked by what deserves your
   attention first — deterministic heuristics (source vs. lockfiles vs. generated code, churn,
   path risk), optionally sharpened by on-device AI.

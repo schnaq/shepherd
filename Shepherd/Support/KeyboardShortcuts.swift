@@ -27,11 +27,20 @@ enum ShortcutAction: Equatable, Sendable {
     /// Hand the selected pull request to the local agent CLI (ADR 0011). Menu/palette only —
     /// it opens a sheet, which is not something a bare keystroke should do by accident.
     case delegate
+    /// Tick or untick the pull request under the cursor for a bulk action (`x`, ADR 0015).
+    case toggleMark
+    /// Tick every green agent pull request in the current view (ADR 0015). Menu/palette only:
+    /// it changes a whole selection, so it wants a name, not a keystroke.
+    case markGreenAgentPullRequests
+    /// Open the bulk-triage confirmation for the ticked pull requests (ADR 0015). Menu/palette
+    /// only — like ``merge`` it opens a dialog rather than writing anything.
+    case bulkTriage(BulkTriageAction)
 
     /// The key hint shown in the shortcut bar and the command palette.
     var keyHint: String {
         switch self {
-        case .delegate: return ""
+        case .delegate, .markGreenAgentPullRequests, .bulkTriage: return ""
+        case .toggleMark: return "x"
         case .selectNext: return "j"
         case .selectPrevious: return "k"
         case .openSelection: return "⏎"
@@ -101,6 +110,7 @@ struct KeySequenceState: Sendable {
         case "j": return .action(.selectNext)
         case "k": return .action(.selectPrevious)
         case "m": return .action(.merge)
+        case "x": return .action(.toggleMark)
         case "r", "g":
             pendingPrefix = lowered
             pendingSince = date

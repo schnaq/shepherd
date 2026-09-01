@@ -9,7 +9,7 @@ target owns every Apple-only framework. Everything here builds and tests headles
 
 | Target | Depends on | What lives there |
 | --- | --- | --- |
-| `ShepherdCore` | Foundation only | Domain models (`PullRequestSummary`, `ReviewDraft`, `ChangedFile`, …), `AgentDetector` + the bundled `agent-registry.json`, `FilePrioritizer`, `InboxGrouper`, `PullRequestDigestBuilder`, the `ConditionalCache` and `Sleeping` protocols |
+| `ShepherdCore` | Foundation only | Domain models (`PullRequestSummary`, `ReviewDraft`, `ChangedFile`, …), `AgentDetector` + the bundled `agent-registry.json`, `FilePrioritizer`, `InboxGrouper`, `PullRequestDigestBuilder`, `BulkTriagePlan`, the `ConditionalCache` and `Sleeping` protocols |
 | `GitHubKit` | `ShepherdCore` | `GitHubClient` actor (GraphQL search sweep, REST detail/writes, GraphQL thread resolution), `DeviceFlowAuthenticator` + `TokenRefresher`, `TokenStore`, rate-limit parsing and backoff, `AsyncSemaphore`, `HTTPTransport` |
 | `ShepherdPersistence` | `ShepherdCore`, GRDB | `DatabaseManager` (migrator + v1 schema), record types, inbox/draft/outbox/etag stores, `ValueObservation` streams |
 | `ShepherdSync` | all three | `SyncEngine` actor: notifications loop + inbox sweep, delta detection, staggered detail fetches, outbox drain with staleness re-validation |

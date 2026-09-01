@@ -12,7 +12,16 @@ final class InteractionTests: XCTestCase {
         XCTAssertEqual(state.consume("j"), .action(.selectNext))
         XCTAssertEqual(state.consume("k"), .action(.selectPrevious))
         XCTAssertEqual(state.consume("m"), .action(.merge))
+        XCTAssertEqual(state.consume("x"), .action(.toggleMark))
         XCTAssertEqual(state.consume("q"), .unhandled)
+    }
+
+    func testTheSelectKeyDoesNotCollideWithTheRequestChangesSequence() {
+        var state = KeySequenceState()
+        // `r x` stays request-changes; a bare `x` ticks the row for a bulk action.
+        XCTAssertEqual(state.consume("r"), .awaitingSecondKey("r"))
+        XCTAssertEqual(state.consume("x"), .action(.requestChanges))
+        XCTAssertEqual(state.consume("x"), .action(.toggleMark))
     }
 
     func testTwoKeystrokeReviewCommands() {
@@ -138,6 +147,91 @@ final class InteractionTests: XCTestCase {
         XCTAssertTrue(ProvenanceFilter.agent(id: "claude-code").matches(row))
         XCTAssertFalse(ProvenanceFilter.agent(id: "devin").matches(row))
         XCTAssertFalse(ProvenanceFilter.humans.matches(row))
+    }
+
+    // MARK: - Bulk-triage selection (ADR 0015)
+
+    func testTickingAndUntickingOneRow() {
+        var marks = InboxMarkSelection()
+        XCTAssertTrue(marks.isEmpty)
+        marks.toggle("a")
+        XCTAssertTrue(marks.contains("a"))
+        XCTAssertEqual(marks.count, 1)
+        marks.toggle("a")
+        XCTAssertTrue(marks.isEmpty)
+    }
+
+    func testShiftClickTicksTheRangeFromTheCursorInEitherDirection() {
+        let order = ["a", "b", "c", "d"]
+        var downwards = InboxMarkSelection()
+        downwards.extend(to: "c", from: "b", in: order)
+        XCTAssertEqual(downwards.ids, ["b", "c"])
+
+        var upwards = InboxMarkSelection()
+        upwards.extend(to: "a", from: "d", in: order)
+        XCTAssertEqual(upwards.ids, ["a", "b", "c", "d"])
+    }
+
+    func testShiftClickWithoutACursorTicksTheOneRow() {
+        var marks = InboxMarkSelection()
+        marks.extend(to: "c", from: nil, in: ["a", "b", "c"])
+        XCTAssertEqual(marks.ids, ["c"])
+    }
+
+    func testShiftClickOnARowThatIsNoLongerVisibleChangesNothing() {
+        var marks = InboxMarkSelection(ids: ["a"])
+        marks.extend(to: "zzz", from: "a", in: ["a", "b"])
+        XCTAssertEqual(marks.ids, ["a"])
+    }
+
+    func testPreselectingAddsWithoutClearingWhatIsAlreadyTicked() {
+        var marks = InboxMarkSelection(ids: ["a"])
+        marks.insert(contentsOf: ["b", "c", "a"])
+        XCTAssertEqual(marks.ids, ["a", "b", "c"])
+    }
+
+    func testARowThatLeavesTheViewLosesItsTick() {
+        var marks = InboxMarkSelection(ids: ["a", "b", "c"])
+        marks.prune(to: ["a", "c"])
+        XCTAssertEqual(marks.ids, ["a", "c"])
+        marks.removeAll()
+        XCTAssertTrue(marks.isEmpty)
+    }
+
+    // MARK: - Bulk-triage labels
+
+    func testEveryBulkTriageLabelIsFilledIn() {
+        for action in BulkTriageAction.allCases {
+            XCTAssertFalse(action.commandTitle.isEmpty)
+            XCTAssertFalse(action.confirmButtonTitle.isEmpty)
+            XCTAssertFalse(action.explanation.isEmpty)
+            XCTAssertFalse(action.systemImage.isEmpty)
+            XCTAssertTrue(action.confirmationTitle(count: 3).contains("3"))
+        }
+        for reason in BulkTriageSkipReason.allCases {
+            XCTAssertTrue(reason.chipTitle.hasPrefix("skipped"))
+            XCTAssertFalse(reason.explanation.isEmpty)
+        }
+        for caveat in BulkTriageCaveat.allCases {
+            XCTAssertFalse(caveat.chipTitle.isEmpty)
+            XCTAssertFalse(caveat.explanation.isEmpty)
+        }
+    }
+
+    func testTheStepChipSaysWhatWillActuallyBeWritten() {
+        let row = summary(id: "a")
+        XCTAssertEqual(
+            BulkTriagePlan.Entry(pullRequest: row, steps: [.approve]).stepsTitle,
+            "approve"
+        )
+        XCTAssertEqual(
+            BulkTriagePlan.Entry(pullRequest: row, steps: [.merge]).stepsTitle,
+            "merge"
+        )
+        XCTAssertEqual(
+            BulkTriagePlan.Entry(pullRequest: row, steps: [.approve, .merge]).stepsTitle,
+            "approve + merge"
+        )
     }
 
     // MARK: - Relative dates

@@ -132,6 +132,80 @@ struct InboxRailSelection: Equatable {
     }
 }
 
+/// The inbox rows ticked for a bulk action (ADR 0015).
+///
+/// A pure value for the same reason ``KeySequenceState`` and ``InboxRailSelection`` are: the
+/// interesting parts — range extension from the cursor, and pruning to what is on screen —
+/// are exactly the parts that must not be discovered by hand in a window.
+struct InboxMarkSelection: Equatable, Sendable {
+    private(set) var ids: Set<String> = []
+
+    /// Creates a selection.
+    /// - Parameter ids: The initially ticked ids.
+    init(ids: Set<String> = []) {
+        self.ids = ids
+    }
+
+    /// Whether nothing is ticked.
+    var isEmpty: Bool { ids.isEmpty }
+
+    /// How many rows are ticked.
+    var count: Int { ids.count }
+
+    /// Whether one row is ticked.
+    /// - Parameter id: The pull request's node id.
+    func contains(_ id: String) -> Bool { ids.contains(id) }
+
+    /// Ticks or unticks one row.
+    /// - Parameter id: The pull request's node id.
+    mutating func toggle(_ id: String) {
+        if ids.contains(id) {
+            ids.remove(id)
+        } else {
+            ids.insert(id)
+        }
+    }
+
+    /// Ticks every row between `anchor` and `id`, inclusive.
+    ///
+    /// Without a usable anchor this ticks the one row: a shift-click with no cursor is still a
+    /// click, and doing nothing at all would read as a dead row.
+    /// - Parameters:
+    ///   - id: The row that was shift-clicked.
+    ///   - anchor: The cursor row, if there is one.
+    ///   - order: The rows in display order.
+    mutating func extend(to id: String, from anchor: String?, in order: [String]) {
+        guard let end = order.firstIndex(of: id) else { return }
+        guard let anchor, let start = order.firstIndex(of: anchor) else {
+            ids.insert(id)
+            return
+        }
+        ids.formUnion(order[min(start, end)...max(start, end)])
+    }
+
+    /// Adds rows without removing anything — the "select all green agent PRs" preselect.
+    /// - Parameter added: The ids to tick.
+    mutating func insert(contentsOf added: [String]) {
+        ids.formUnion(added)
+    }
+
+    /// Drops ticks on rows that are no longer on screen.
+    ///
+    /// Called whenever the list changes, so a bulk action can only ever act on rows the user can
+    /// actually see — a merged pull request, or one filtered away by the rail, silently
+    /// disappears from the selection instead of silently staying in it.
+    /// - Parameter visible: The ids currently displayed.
+    mutating func prune(to visible: [String]) {
+        guard !ids.isEmpty else { return }
+        ids.formIntersection(visible)
+    }
+
+    /// Unticks everything.
+    mutating func removeAll() {
+        ids.removeAll()
+    }
+}
+
 /// Drives the three-pane inbox.
 ///
 /// Everything it renders comes from the database via `ValueObservation` (ADR 0006); the sync
@@ -162,8 +236,14 @@ final class InboxModel {
     var repoFilter: RepoRef? {
         didSet { clampSelection() }
     }
-    /// The selected row's pull request id.
+    /// The selected row's pull request id — the keyboard cursor, always exactly one row.
     var selectedID: String?
+    /// The rows ticked for a bulk action (ADR 0015).
+    ///
+    /// Deliberately separate from ``selectedID``: the cursor drives `j`/`k` and the detail
+    /// panel, the ticks drive bulk triage, and conflating them would make "approve the
+    /// selection" mean two different things.
+    private(set) var marks = InboxMarkSelection()
 
     /// The detail of the selected row, from the local cache.
     private(set) var detail: PullRequestDetail?
@@ -385,8 +465,60 @@ final class InboxModel {
 
     private func clampSelection() {
         let rows = visibleRows
+        // A tick on a row that has left the view — merged, filtered out, or on another smart
+        // view — is dropped rather than carried invisibly into the next bulk action.
+        marks.prune(to: rows.map(\.id))
         if let selectedID, rows.contains(where: { $0.id == selectedID }) { return }
         select(rows.first?.id)
+    }
+
+    // MARK: - Bulk triage (ADR 0015)
+
+    /// Whether anything is ticked, which is also what makes the tick column appear.
+    var hasMarks: Bool { !marks.isEmpty }
+
+    /// The ticked pull-request ids.
+    var markedIDs: Set<String> { marks.ids }
+
+    /// The ticked rows, in display order.
+    var markedRows: [PullRequestSummary] {
+        visibleRows.filter { marks.contains($0.id) }
+    }
+
+    /// Ticks or unticks one row.
+    /// - Parameter id: The pull request's node id.
+    func toggleMark(_ id: String) {
+        marks.toggle(id)
+    }
+
+    /// Ticks every row between the cursor and `id`, inclusive — shift-click.
+    /// - Parameter id: The row that was shift-clicked.
+    func extendMarks(to id: String) {
+        marks.extend(to: id, from: selectedID, in: visibleRows.map(\.id))
+    }
+
+    /// Ticks the green, agent-authored rows of the current view (ADR 0015).
+    /// - Returns: How many rows the preselect found.
+    @discardableResult
+    func markGreenAgentRows() -> Int {
+        let green = BulkTriagePlan.greenAgentPullRequests(in: visibleRows)
+        marks.insert(contentsOf: green.map(\.id))
+        return green.count
+    }
+
+    /// Unticks everything.
+    func clearMarks() {
+        marks.removeAll()
+    }
+
+    /// The plan a bulk action amounts to for what is currently ticked.
+    ///
+    /// Rebuilt on demand from the rows the database last handed over, so a dialog that is open
+    /// while a sweep lands shows the new state instead of a stale snapshot.
+    /// - Parameter action: The action the user asked for.
+    /// - Returns: The partitioned plan.
+    func bulkPlan(for action: BulkTriageAction) -> BulkTriagePlan {
+        BulkTriagePlan.make(action: action, pullRequests: markedRows)
     }
 
     // MARK: - Detail

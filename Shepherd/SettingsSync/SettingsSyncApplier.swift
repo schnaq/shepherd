@@ -92,6 +92,9 @@ enum SettingsSyncApplier {
             diffWrapsLines: settings.diffWrapsLines,
             diffUsesInlineMode: settings.diffUsesInlineMode
         )
+        document.triage = SyncedSettingsDocument.TriageGroup(
+            defaultMergeMethod: settings.defaultMergeMethod
+        )
         document.account = SyncedSettingsDocument.AccountGroup(
             login: settings.accountLogin,
             authKind: settings.accountLogin == nil ? nil : settings.accountAuthKind
@@ -171,6 +174,8 @@ enum SettingsSyncApplier {
         settings.diffFontSize = document.appearance.diffFontSize
         settings.diffWrapsLines = document.appearance.diffWrapsLines
         settings.diffUsesInlineMode = document.appearance.diffUsesInlineMode
+
+        settings.defaultMergeMethod = document.triage.defaultMergeMethod
 
         // The registry lives in the database, not here, so it is applied only when there is one.
         let overrides = document.agents.registryOverrides

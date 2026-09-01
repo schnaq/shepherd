@@ -315,6 +315,44 @@ struct CommandPaletteView: View {
             )
         }
 
+        // Bulk triage only exists where the selection does: the inbox (ADR 0015).
+        if case .inbox = environment.route {
+            let triage = String(localized: "Triage")
+            result.append(
+                PaletteCommand(
+                    id: "mark-green-agents",
+                    section: triage,
+                    title: String(localized: "Select all green agent pull requests"),
+                    systemImage: "checklist"
+                ) {
+                    environment.request(.markGreenAgentPullRequests)
+                }
+            )
+            for action in BulkTriageAction.allCases {
+                result.append(
+                    PaletteCommand(
+                        id: "bulk-\(action.rawValue)",
+                        section: triage,
+                        title: action.commandTitle,
+                        systemImage: action.systemImage
+                    ) {
+                        environment.request(.bulkTriage(action))
+                    }
+                )
+            }
+            result.append(
+                PaletteCommand(
+                    id: "toggle-mark",
+                    section: triage,
+                    title: String(localized: "Select or deselect this pull request"),
+                    systemImage: "checkmark.square",
+                    keyHint: "x"
+                ) {
+                    environment.request(.toggleMark)
+                }
+            )
+        }
+
         let review = String(localized: "Review")
         result.append(
             PaletteCommand(

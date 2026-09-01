@@ -55,6 +55,22 @@ struct InboxListView: View {
                 .help(String(localized: "Clear filter"))
             }
 
+            if model.hasMarks {
+                ChipView(
+                    text: String(localized: "\(model.markedIDs.count) selected"),
+                    color: Theme.accent
+                )
+                Button {
+                    model.clearMarks()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textMuted)
+                }
+                .buttonStyle(.plain)
+                .help(String(localized: "Clear the selection (esc)"))
+            }
+
             Spacer(minLength: 8)
 
             Picker(String(localized: "Group"), selection: groupBinding) {
@@ -103,12 +119,28 @@ struct InboxListView: View {
                                 ForEach(section.items) { row in
                                     InboxRowView(
                                         row: row,
-                                        isSelected: model.selectedID == row.id
+                                        isSelected: model.selectedID == row.id,
+                                        showsMarkColumn: model.hasMarks,
+                                        isMarked: model.markedIDs.contains(row.id),
+                                        onToggleMark: { model.toggleMark(row.id) }
                                     )
                                     .id(row.id)
                                     .contentShape(Rectangle())
                                     .onTapGesture(count: 2) { onOpen(row.id) }
                                     .onTapGesture { model.select(row.id) }
+                                    // ⌘-click ticks one row, ⇧-click ticks the range from the
+                                    // cursor. Attached outermost so a modified click never
+                                    // falls through to plain selection (ADR 0015).
+                                    .highPriorityGesture(
+                                        TapGesture()
+                                            .modifiers(.command)
+                                            .onEnded { _ in model.toggleMark(row.id) }
+                                    )
+                                    .highPriorityGesture(
+                                        TapGesture()
+                                            .modifiers(.shift)
+                                            .onEnded { _ in model.extendMarks(to: row.id) }
+                                    )
                                     .contextMenu {
                                         rowMenu(for: row)
                                     }
@@ -132,6 +164,14 @@ struct InboxListView: View {
     @ViewBuilder
     private func rowMenu(for row: PullRequestSummary) -> some View {
         Button(String(localized: "Open review")) { onOpen(row.id) }
+        Button(
+            model.markedIDs.contains(row.id)
+                ? String(localized: "Deselect")
+                : String(localized: "Select")
+        ) {
+            model.toggleMark(row.id)
+        }
+        Divider()
         Button(String(localized: "Open on GitHub")) {
             PullRequestActions(session: model.session, toasts: environment.toasts)
                 .openOnGitHub(row)
@@ -139,6 +179,17 @@ struct InboxListView: View {
         Button(String(localized: "Copy branch name")) {
             PullRequestActions(session: model.session, toasts: environment.toasts)
                 .copyBranch(row)
+        }
+        if model.hasMarks {
+            Divider()
+            // Bulk actions act on the ticked rows, not on the row that was right-clicked —
+            // the count is in the title so that cannot be misread.
+            Text(String(localized: "\(model.markedIDs.count) selected"))
+            ForEach(BulkTriageAction.allCases, id: \.self) { action in
+                Button(action.commandTitle) {
+                    environment.request(.bulkTriage(action))
+                }
+            }
         }
     }
 
@@ -203,6 +254,8 @@ struct InboxListView: View {
         }
         if press.matches(.escape) {
             model.keySequence.reset()
+            // Escape is the way out of a selection as well as out of a half-typed command.
+            model.clearMarks()
             return .handled
         }
         guard press.modifiers.isEmpty, let character = press.characters.first else {
@@ -262,9 +315,39 @@ struct InboxRowView: View {
     let row: PullRequestSummary
     /// Whether it is the selected row.
     let isSelected: Bool
+    /// Whether the bulk-selection column is showing, i.e. whether anything is ticked at all.
+    ///
+    /// The column appears with the first tick and disappears with the last, so a list nobody is
+    /// bulk-triaging looks exactly as it did before (ADR 0015).
+    var showsMarkColumn = false
+    /// Whether this row is ticked for a bulk action.
+    var isMarked = false
+    /// Ticks or unticks this row.
+    var onToggleMark: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 12) {
+            if showsMarkColumn {
+                Button {
+                    onToggleMark?()
+                } label: {
+                    Image(systemName: isMarked ? "checkmark.square.fill" : "square")
+                        .font(.system(size: 12))
+                        .foregroundStyle(isMarked ? Theme.accent : Theme.textMuted)
+                }
+                .buttonStyle(.plain)
+                .help(
+                    isMarked
+                        ? String(localized: "Remove from the selection (x)")
+                        : String(localized: "Add to the selection (x)")
+                )
+                .accessibilityLabel(
+                    isMarked
+                        ? Text(String(localized: "Selected"))
+                        : Text(String(localized: "Not selected"))
+                )
+            }
+
             CheckDotView(state: row.checkRollup?.state)
 
             Text("\(row.repo.name) #\(row.number)")
@@ -314,7 +397,16 @@ struct InboxRowView: View {
             Rectangle().fill(Theme.hairline).frame(height: 1)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("\(row.slug): \(row.title)"))
+        .accessibilityLabel(Text(accessibilityText))
+    }
+
+    /// The row's spoken label, with the tick state in front when the column is showing.
+    private var accessibilityText: String {
+        let base = "\(row.slug): \(row.title)"
+        guard showsMarkColumn else { return base }
+        return isMarked
+            ? String(localized: "Selected. \(base)")
+            : String(localized: "Not selected. \(base)")
     }
 
     private var statusChip: (text: String, color: Color)? {
@@ -344,6 +436,7 @@ struct ShortcutBar: View {
             ShortcutHintView(keys: ["r a"], label: String(localized: "approve"))
             ShortcutHintView(keys: ["r x"], label: String(localized: "request changes"))
             ShortcutHintView(keys: ["m"], label: String(localized: "merge"))
+            ShortcutHintView(keys: ["x"], label: String(localized: "select"))
             Spacer(minLength: 0)
             ShortcutHintView(keys: ["⌘K"], label: String(localized: "commands"))
         }

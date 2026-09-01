@@ -33,16 +33,12 @@ struct PullRequestActions {
     ) async {
         do {
             let existing = try await session.database.fetchDraft(prID: summary.id)
-            var draft = existing ?? ReviewDraft(
-                prID: summary.id,
-                basedOnHeadOid: summary.headRefOid
+            let draft = ReviewDraft.verdict(
+                verdict,
+                on: summary,
+                existing: existing,
+                body: body
             )
-            draft.verdict = verdict
-            if !body.isEmpty { draft.summaryBody = body }
-            draft.updatedAt = Date()
-            if draft.basedOnHeadOid.isEmpty {
-                draft.basedOnHeadOid = summary.headRefOid
-            }
             try await session.database.saveDraft(draft)
             try await enqueue(.submitReview(draft), on: summary)
             toasts.success(confirmation(for: verdict, summary: summary))
@@ -113,6 +109,111 @@ struct PullRequestActions {
         } catch {
             toasts.failure(error, context: String(localized: "Could not queue the merge"))
         }
+    }
+
+    // MARK: - Bulk triage (ADR 0015)
+
+    /// What queueing a bulk-triage plan actually did, so the caller can say something true.
+    struct BulkTriageOutcome: Sendable, Equatable {
+        /// How many pull requests got at least one row into the outbox.
+        var queuedPullRequests = 0
+        /// How many outbox rows that amounted to (a merge behind an approval counts twice).
+        var queuedWrites = 0
+        /// How many selected pull requests the plan left out.
+        var skipped = 0
+        /// The pull requests whose rows could not be written locally, as `owner/repo#n`.
+        var failed: [String] = []
+    }
+
+    /// Queues a whole bulk-triage plan through the ordinary outbox.
+    ///
+    /// There is no bulk endpoint and Shepherd invents none: a plan becomes *n* ordinary outbox
+    /// rows, which is what gives every one of them the retry, offline and staleness behaviour a
+    /// single approval has (ADR 0006, ADR 0015). The drain runs once at the end rather than per
+    /// row, so twenty approvals cost one drain instead of twenty. Webhooks need nothing here —
+    /// they hang off `mutationSent`, after each row really reached GitHub (ADR 0012).
+    /// - Parameters:
+    ///   - plan: The confirmed plan.
+    ///   - method: The merge method for whatever the plan merges.
+    /// - Returns: What was queued, for the summary toast.
+    @discardableResult
+    func queue(_ plan: BulkTriagePlan, method: MergeMethod) async -> BulkTriageOutcome {
+        var outcome = BulkTriageOutcome(skipped: plan.skipped.count)
+        guard plan.isActionable else {
+            toasts.info(String(localized: "Nothing to queue — every selected pull request was skipped."))
+            return outcome
+        }
+
+        let writes = plan.writes(
+            mergeMethod: method.rawValue,
+            existingDrafts: await existingDrafts(for: plan)
+        )
+        var queued: Set<String> = []
+        var failed: Set<String> = []
+        for write in writes {
+            do {
+                // The draft goes in first, exactly as the single-pull-request path does, so a
+                // crash between the two leaves a draft the user can still see and submit.
+                if let draft = write.draft {
+                    try await session.database.saveDraft(draft)
+                }
+                try await session.database.enqueue(write.item)
+                queued.insert(write.item.prID)
+                outcome.queuedWrites += 1
+            } catch {
+                failed.insert(write.item.prID)
+            }
+        }
+        outcome.queuedPullRequests = queued.subtracting(failed).count
+        // Reported in the plan's order, not the set's, so the message is reproducible.
+        outcome.failed = plan.eligible
+            .filter { failed.contains($0.id) }
+            .map(\.pullRequest.slug)
+
+        await session.drainOutbox()
+        report(outcome, action: plan.action)
+        return outcome
+    }
+
+    /// The drafts already on disk for the plan's eligible pull requests.
+    ///
+    /// Read up front so a bulk approval reuses inline comments the user wrote earlier instead of
+    /// replacing the draft that holds them.
+    private func existingDrafts(for plan: BulkTriagePlan) async -> [String: ReviewDraft] {
+        var drafts: [String: ReviewDraft] = [:]
+        for entry in plan.eligible {
+            if let draft = (try? await session.database.fetchDraft(prID: entry.id)) ?? nil {
+                drafts[entry.id] = draft
+            }
+        }
+        return drafts
+    }
+
+    private func report(_ outcome: BulkTriageOutcome, action: BulkTriageAction) {
+        if outcome.queuedPullRequests > 0 {
+            let count = outcome.queuedPullRequests
+            let suffix = outcome.skipped > 0
+                ? String(localized: " · \(outcome.skipped) skipped")
+                : ""
+            switch action {
+            case .approve:
+                toasts.success(String(localized: "Queued \(count) approvals\(suffix)."))
+            case .approveAndMerge:
+                toasts.success(String(localized: "Queued \(count) approvals and merges\(suffix)."))
+            case .merge:
+                toasts.success(String(localized: "Queued \(count) merges\(suffix)."))
+            }
+        }
+        guard !outcome.failed.isEmpty else { return }
+        toasts.show(
+            Toast(
+                message: String(
+                    localized: "Could not queue \(outcome.failed.count) of them: \(outcome.failed.joined(separator: ", "))"
+                ),
+                kind: .failure,
+                duration: 8
+            )
+        )
     }
 
     /// Takes a pull request out of draft state.

@@ -27,6 +27,7 @@ Packages/ShepherdKit/          # SPM package, NO AppKit/SwiftUI imports
   Sources/
     ShepherdCore/              #   domain models, agent detection, heuristics, drafts
       Routing/                 #     shepherd:// grammar + CLI argument grammar (ADR 0013)
+      Triage/                  #     bulk-triage partition + intended writes (ADR 0015)
     GitHubKit/                 #   GraphQL+REST client, device flow, rate limiting
     ShepherdPersistence/       #   GRDB schema, DAOs, outbox
     ShepherdSync/              #   sync engine orchestrating GitHubKit ⇄ Persistence
@@ -96,6 +97,16 @@ Pure logic in `ShepherdCore` (all unit-tested):
   demotes vendored/generated (linguist-style patterns, `dist/`, `*.lock`, snapshots).
   Reasons are human-readable strings shown in the UI.
 - `InboxGrouper` — sections by facet (provenance / repo / review state) + sorting.
+- `BulkTriagePlan` (`Triage/`) — the whole of bulk triage's judgement as a value (ADR 0015):
+  `make(action:pullRequests:) -> BulkTriagePlan` partitions a selection into entries carrying
+  either the `steps` to write (`.approve` / `.merge`, in send order) or a `skipReason`, plus
+  `caveats` for an entry that goes ahead with a note. Preconditions are evaluated in a fixed
+  order so the reason shown is deterministic. `writes(mergeMethod:existingDrafts:now:)` turns the
+  plan into `BulkTriageWrite` values — an `OutboxItem` plus the `ReviewDraft` to persist beside
+  it — timestamped so an approval sorts ahead of the merge queued behind it.
+  `greenAgentPullRequests(in:)` is the "select all green agent PRs" preselect, deliberately
+  stricter than the plan (a pull request with no checks is not preselected but may still be
+  picked by hand).
 - `DeepLink` (`Routing/`) — the whole `shepherd://` grammar as a value: `parse(URL) -> DeepLink?`
   and `urlString` in the other direction, round-trip tested. Strict by construction (closed
   vocabularies, GitHub's own character rules, decoding *after* the path split), because a URL is
@@ -217,8 +228,10 @@ never auto-applied.
 
 - Linear-inspired: left rail (views/facets), center list, right detail; ⌘K command palette
   exposes every action; `j`/`k` row navigation; two-keystroke review actions
-  (`r a` approve, `r c` comment, `r x` request changes, `m` merge dialog); undo toast instead
-  of confirm dialogs wherever the action is reversible.
+  (`r a` approve, `r c` comment, `r x` request changes, `m` merge dialog); `x` ticks a row for
+  bulk triage (⌘-click / ⇧-click do the same with the mouse, ADR 0015); undo toast instead
+  of confirm dialogs wherever the action is reversible — the merge sheet and the bulk-triage
+  sheet are the two exceptions, because neither is undoable.
 - Dark & light mode from day one: semantic color tokens only (`Color.shepherd*` asset
   catalog), theme piped into Monaco via `setTheme`.
 - All strings user-visible in English for v1; localization-ready (`String(localized:)`).
@@ -253,6 +266,12 @@ navigation column.
 
 ### Views render from the database, never from the network
 
+The inbox carries **two** selections and they are not the same thing (ADR 0015): `selectedID` is
+the keyboard cursor that `j`/`k` moves and the detail panel follows, and `marks`
+(`InboxMarkSelection`, a pure value like `KeySequenceState`) is the set ticked for a bulk action.
+Marks are pruned to the visible rows on every list change, so a bulk action can only ever act on
+rows the user can see.
+
 `InboxModel` subscribes to `DatabaseManager.observeInbox()`; `ReviewModel` subscribes to
 `observeDraft(prID:)`. Detail fetches read the cached `PullRequestDetail` first and only then
 refresh from GitHub, so opening a pull request offline shows the last-known state instead of a
@@ -267,6 +286,14 @@ the app on top of it (`priority` / `recentlyUpdated` / `oldestFirst`), with a de
 sync engine to drain, so a queued approval survives a crash, a quit or an offline period. The
 app never calls a `GitHubClient` mutation directly. `SyncEvent.draftConflict` surfaces as an
 alert offering to re-open the review rather than submitting against the wrong commit.
+
+Bulk triage (ADR 0015) is the same surface used *n* times, on purpose. `PullRequestActions.queue(_:method:)`
+takes a confirmed `BulkTriagePlan`, persists each draft and enqueues each row exactly as the
+single-pull-request path does, and then drains **once** for the whole batch. There is no bulk
+GitHub call anywhere in the app: the batch is n rows, so offline, retry, the merge preflight and
+`mutationSent` (and therefore webhooks, ADR 0012) all behave per pull request. The rate limit
+needs no special handling either — the drain's batch size and GitHubKit's `Retry-After` backoff
+already throttle it.
 
 Two GitHub capabilities the UI wants are *not* modelled by the outbox, and the app does not
 pretend otherwise: deleting the head branch after a merge (the merge sheet shows the toggle
@@ -446,7 +473,8 @@ stays on.
 pure parts of the app: the bridge protocol against the **shared fixtures**, which are copied
 into the test bundle as a folder reference from `web/diff-viewer/fixtures` so both languages
 decode the same bytes; the patch reconstruction; the Markdown sanitiser; the keyboard,
-palette and inbox-ordering logic; the intelligence endpoint layer (preset ↔ base-URL matching,
+palette and inbox-ordering logic (including the bulk-triage tick selection and every
+bulk-triage label, ADR 0015); the intelligence endpoint layer (preset ↔ base-URL matching,
 `/models` parsing against fixtures, and the settings-side discovery gate through `ModelListing`);
 the delegation engine (stream-event fixtures, argv
 construction, template splitting, git command sequences, state transitions); the webhook

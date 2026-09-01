@@ -1,4 +1,5 @@
 import Foundation
+import GitHubKit
 import ShepherdCore
 
 /// Tolerant decoding helpers used by every group of ``SyncedSettingsDocument``.
@@ -294,6 +295,30 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         }
     }
 
+    /// Choices the review and bulk-triage dialogs remember (ADR 0015).
+    struct TriageGroup: Codable, Sendable, Equatable {
+        /// The merge method the merge sheet and the bulk-triage dialog open on.
+        var defaultMergeMethod: MergeMethod
+
+        /// Creates the group.
+        /// - Parameter defaultMergeMethod: The remembered merge method.
+        init(defaultMergeMethod: MergeMethod = .squash) {
+            self.defaultMergeMethod = defaultMergeMethod
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case defaultMergeMethod
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            defaultMergeMethod = container.syncedValue(
+                .defaultMergeMethod,
+                default: MergeMethod.squash
+            )
+        }
+    }
+
     /// Who the token in ``Secrets`` belongs to.
     ///
     /// The identity is *not* a secret and lives here rather than under `secrets` on purpose: a
@@ -395,6 +420,8 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
     var automation: AutomationGroup
     /// Theme, inbox ordering, diff chrome.
     var appearance: AppearanceGroup
+    /// Remembered review/merge dialog choices.
+    var triage: TriageGroup
     /// Who the GitHub token belongs to.
     var account: AccountGroup
     /// The Keychain half.
@@ -410,6 +437,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         delegation: DelegationGroup = DelegationGroup(),
         automation: AutomationGroup = AutomationGroup(),
         appearance: AppearanceGroup = AppearanceGroup(),
+        triage: TriageGroup = TriageGroup(),
         account: AccountGroup = AccountGroup(),
         secrets: Secrets = Secrets()
     ) {
@@ -421,13 +449,14 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         self.delegation = delegation
         self.automation = automation
         self.appearance = appearance
+        self.triage = triage
         self.account = account
         self.secrets = secrets
     }
 
     private enum CodingKeys: String, CodingKey {
         case v, sync, notifications, agents, intelligence, delegation, automation
-        case appearance, account, secrets
+        case appearance, triage, account, secrets
     }
 
     init(from decoder: any Decoder) throws {
@@ -448,6 +477,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         delegation = container.syncedValue(.delegation, default: DelegationGroup())
         automation = container.syncedValue(.automation, default: AutomationGroup())
         appearance = container.syncedValue(.appearance, default: AppearanceGroup())
+        triage = container.syncedValue(.triage, default: TriageGroup())
         account = container.syncedValue(.account, default: AccountGroup())
         secrets = container.syncedValue(.secrets, default: Secrets())
     }

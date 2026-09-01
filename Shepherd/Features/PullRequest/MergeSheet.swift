@@ -12,8 +12,9 @@ struct MergeSheet: View {
     let summary: PullRequestSummary
     /// The outbox-backed write actions.
     let actions: PullRequestActions
+    /// Where the remembered merge method lives, shared with the bulk-triage dialog (ADR 0015).
+    let settings: AppSettings
 
-    @State private var method: MergeMethod = .squash
     @State private var deletesBranch = false
 
     var body: some View {
@@ -32,7 +33,7 @@ struct MergeSheet: View {
                     .foregroundStyle(Theme.textMuted)
             }
 
-            Picker(String(localized: "Method"), selection: $method) {
+            Picker(String(localized: "Method"), selection: methodBinding) {
                 Text(String(localized: "Merge commit")).tag(MergeMethod.merge)
                 Text(String(localized: "Squash and merge")).tag(MergeMethod.squash)
                 Text(String(localized: "Rebase and merge")).tag(MergeMethod.rebase)
@@ -67,6 +68,7 @@ struct MergeSheet: View {
                     .buttonStyle(SecondaryButtonStyle())
                     .keyboardShortcut(.cancelAction)
                 Button {
+                    let method = settings.defaultMergeMethod
                     Task {
                         await actions.merge(summary, method: method)
                         dismiss()
@@ -82,6 +84,15 @@ struct MergeSheet: View {
         .padding(20)
         .frame(width: 420)
         .background(Theme.panel)
+    }
+
+    /// The picker writes straight through to the setting, so the next merge dialog — single or
+    /// bulk — opens on the method that was used last.
+    private var methodBinding: Binding<MergeMethod> {
+        Binding(
+            get: { settings.defaultMergeMethod },
+            set: { settings.defaultMergeMethod = $0 }
+        )
     }
 
     private var warning: String? {

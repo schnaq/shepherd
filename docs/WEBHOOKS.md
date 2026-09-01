@@ -14,7 +14,9 @@ Setup: **Settings → Automation**. Paste a URL, tick the events you want, switc
 - **Events fire when the action actually succeeded**, not when you pressed the key. Shepherd's
   writes go through a persisted outbox ([ADR 0006](adr/0006-local-first-sqlite-grdb.md)); a
   queued approval that is still waiting out a retry has approved nothing, and no event is sent
-  for it. `review.submitted` and `pr.merged` come from the outbox drain.
+  for it. `review.submitted` and `pr.merged` come from the outbox drain. That also means a bulk
+  triage run ([ADR 0015](adr/0015-bulk-triage.md)) delivers one event per pull request, as each
+  row lands, rather than one event for the batch.
 - **Delivery is best-effort.** Two attempts, two seconds apart, ten-second timeout, then
   Shepherd gives up quietly and shows one line in Settings. A failing webhook never interrupts
   a review, a merge or a sync, and never produces an alert.

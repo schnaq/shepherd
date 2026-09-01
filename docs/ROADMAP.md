@@ -24,6 +24,12 @@ the review path — the founder's bar is "never need to open github.com for a ro
       drafts survive restart/offline; staleness check before submit (ADR 0006)
 - [ ] Threads: reply, resolve/unresolve
 - [ ] Merge: merge/squash/rebase, delete-branch option, mergeability preflight
+- [x] Bulk triage (ADR 0015, pulled into v1 from v1.x): tick rows with `x` / ⌘-click / ⇧-click
+      (or "select all green agent PRs in this view"), then approve, approve & merge, or merge the
+      selection behind **one** confirmation dialog that lists every pull request with its state
+      and marks the ones it skips — red CI, conflicts, drafts, changes requested, your own —
+      with the reason. Confirming enqueues one ordinary outbox row per write, so offline, retry,
+      rate-limit throttling and the per-pull-request staleness check all apply unchanged
 - [x] Delegate to local agent (ADR 0011): send a PR or a review finding back to the locally
       installed Claude Code (headless `claude -p`, stream-json, detached-worktree isolation,
       turn/budget caps); command template configurable for other agent CLIs; Shepherd never
@@ -66,7 +72,8 @@ the review path — the founder's bar is "never need to open github.com for a ro
 ## v1.x
 
 - Authorization Code + PKCE loopback sign-in (nicer than device flow)
-- Bulk triage actions (approve/merge a selected set of green agent PRs, one confirm)
+- ~~Bulk triage actions (approve/merge a selected set of green agent PRs, one confirm)~~ —
+  pulled into v1, see above (ADR 0015)
 - Draft AI-assisted review comments & commit/PR message suggestions (explicit founder wish;
   needs tier 2/3)
 - Multiple GitHub accounts; GitHub Enterprise Server base-URL support

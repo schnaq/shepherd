@@ -101,4 +101,34 @@ public struct ReviewDraft: Sendable, Codable, Hashable, Identifiable {
         verdict == nil && comments.isEmpty
             && summaryBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
+
+    /// The draft a one-click verdict amounts to.
+    ///
+    /// An existing local draft is *reused* rather than replaced, so a verdict fired from the
+    /// inbox — or from a bulk-triage run — never throws away inline comments the user already
+    /// wrote. The head the user saw is what the draft is anchored to, which is what lets the
+    /// drain refuse a review whose pull request moved on (ADR 0006).
+    /// - Parameters:
+    ///   - verdict: The verdict to record.
+    ///   - summary: The pull request the draft belongs to.
+    ///   - existing: The draft already on disk, if any.
+    ///   - body: A summary body to set; an empty string leaves the existing one alone.
+    ///   - now: The modification timestamp.
+    /// - Returns: The draft to persist and enqueue.
+    public static func verdict(
+        _ verdict: ReviewVerdict,
+        on summary: PullRequestSummary,
+        existing: ReviewDraft? = nil,
+        body: String = "",
+        at now: Date = Date()
+    ) -> ReviewDraft {
+        var draft = existing ?? ReviewDraft(prID: summary.id, basedOnHeadOid: summary.headRefOid)
+        draft.verdict = verdict
+        if !body.isEmpty { draft.summaryBody = body }
+        draft.updatedAt = now
+        if draft.basedOnHeadOid.isEmpty {
+            draft.basedOnHeadOid = summary.headRefOid
+        }
+        return draft
+    }
 }

@@ -76,6 +76,22 @@ struct ShepherdCommands: Commands {
                 environment.request(.delegate)
             }
             .disabled(environment.session == nil)
+
+            Divider()
+
+            // Bulk triage acts on the inbox's selection, so it is disabled while the review
+            // screen is up rather than pretending to have one (ADR 0015).
+            Button(String(localized: "Select All Green Agent Pull Requests")) {
+                environment.request(.markGreenAgentPullRequests)
+            }
+            .disabled(!isTriageAvailable)
+
+            ForEach(BulkTriageAction.allCases, id: \.self) { action in
+                Button(action.commandTitle) {
+                    environment.request(.bulkTriage(action))
+                }
+                .disabled(!isTriageAvailable)
+            }
         }
 
         CommandGroup(after: .toolbar) {
@@ -107,6 +123,11 @@ struct ShepherdCommands: Commands {
                 Text(String(localized: "Review state")).tag(InboxFacet.reviewState)
             }
         }
+    }
+
+    /// Whether the inbox — the only screen that owns a bulk selection — is showing.
+    private var isTriageAvailable: Bool {
+        environment.session != nil && environment.route == .inbox
     }
 
     private var appearanceBinding: Binding<AppearanceSetting> {

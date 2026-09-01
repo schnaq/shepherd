@@ -20,6 +20,7 @@ founder interview (2026-08-31) combined with three research reports (see
 | 0012 | [Outbound webhooks (outbound only, ADR 0005 stands)](0012-outbound-webhooks.md)  | Accepted (v1.x) |
 | 0013 | [`shepherd://` URL scheme + companion CLI](0013-url-scheme-and-cli.md)     | Accepted (v1.x) |
 | 0014 | [End-to-end encrypted settings sync over the user's own S3 bucket](0014-encrypted-settings-sync.md) | Accepted (v1.x) |
+| 0015 | [Bulk triage: one confirmation, n ordinary outbox writes](0015-bulk-triage.md) | Accepted (v1.x) |
 
 Format: lightweight [MADR](https://adr.github.io/madr/)-style — Context, Decision, Consequences.
 New decisions get the next number; superseded ADRs are marked, never deleted.

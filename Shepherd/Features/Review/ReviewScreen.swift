@@ -73,7 +73,7 @@ struct ReviewScreen: View {
         }
         .sheet(isPresented: $model.isMergeSheetPresented) {
             if let summary = model.summary {
-                MergeSheet(summary: summary, actions: actions)
+                MergeSheet(summary: summary, actions: actions, settings: environment.settings)
             }
         }
         .sheet(item: $model.composerRequest) { request in
@@ -210,6 +210,11 @@ struct ReviewScreen: View {
         case .delegate:
             delegate()
         case .groupBy:
+            break
+        case .toggleMark, .markGreenAgentPullRequests, .bulkTriage:
+            // Bulk triage acts on the inbox's selection, which does not exist here (ADR 0015).
+            // The palette hides these commands while the review screen is up; a stray `x`
+            // arriving from the key handler is simply ignored.
             break
         }
     }

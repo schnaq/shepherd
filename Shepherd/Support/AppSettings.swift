@@ -1,4 +1,5 @@
 import Foundation
+import GitHubKit
 import Observation
 import ShepherdCore
 import SwiftUI
@@ -108,6 +109,11 @@ final class AppSettings {
         )
         self.groupBy = Self.read(defaults, Keys.groupBy, default: InboxFacet.provenance)
         self.sortOrder = Self.read(defaults, Keys.sortOrder, default: InboxSortOrder.priority)
+        self.defaultMergeMethod = Self.read(
+            defaults,
+            Keys.defaultMergeMethod,
+            default: MergeMethod.squash
+        )
         self.diffFontSize = defaults.object(forKey: Keys.diffFontSize) as? Double ?? 13
         self.diffWrapsLines = defaults.object(forKey: Keys.diffWraps) as? Bool ?? false
         self.diffUsesInlineMode = defaults.object(forKey: Keys.diffInline) as? Bool ?? false
@@ -235,6 +241,15 @@ final class AppSettings {
     /// How rows are ordered inside a section.
     var sortOrder: InboxSortOrder {
         didSet { Self.write(defaults, sortOrder, Keys.sortOrder) }
+    }
+
+    /// The merge method the merge sheet and the bulk-triage dialog open on.
+    ///
+    /// Written by both of them, so it is "the last method you chose" rather than a preference
+    /// buried in Settings — the choice a merge dialog needs is nearly always the previous one
+    /// (ADR 0015).
+    var defaultMergeMethod: MergeMethod {
+        didSet { Self.write(defaults, defaultMergeMethod, Keys.defaultMergeMethod) }
     }
 
     // MARK: - Diff viewer
@@ -457,6 +472,7 @@ final class AppSettings {
         static let openAIPreset = "intelligence.openaiCompatible.preset"
         static let groupBy = "inbox.groupBy"
         static let sortOrder = "inbox.sortOrder"
+        static let defaultMergeMethod = "review.defaultMergeMethod"
         static let diffFontSize = "diff.fontSize"
         static let diffWraps = "diff.wraps"
         static let diffInline = "diff.inline"
