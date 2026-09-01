@@ -150,6 +150,7 @@ final class AppSettings {
             .object(forKey: Keys.syncRemembersPassphrase) as? Bool ?? false
         self.settingsSyncLastUploadAt = defaults.object(forKey: Keys.syncLastUpload) as? Date
         self.settingsSyncLastDownloadAt = defaults.object(forKey: Keys.syncLastDownload) as? Date
+        self.diagnosticsEnabled = defaults.object(forKey: Keys.diagnosticsEnabled) as? Bool ?? false
     }
 
     // MARK: - Appearance
@@ -431,6 +432,18 @@ final class AppSettings {
         )
     }
 
+    // MARK: - Diagnostics (ADR 0017)
+
+    /// Whether Shepherd keeps MetricKit's crash and hang reports in a folder on this Mac.
+    ///
+    /// Off on a fresh install, and the only thing that registers the MetricKit subscriber at all:
+    /// with this false, `MXMetricManager` has no subscriber, so nothing is delivered and nothing
+    /// is stored — the same shape as ``webhooksEnabled`` and ``settingsSyncEnabled``. Nothing is
+    /// ever uploaded either way; there is no uploader.
+    var diagnosticsEnabled: Bool {
+        didSet { defaults.set(diagnosticsEnabled, forKey: Keys.diagnosticsEnabled) }
+    }
+
     // MARK: - Account (never the token — ADR 0004)
 
     /// The login of the signed-in account, if any.
@@ -505,6 +518,7 @@ final class AppSettings {
         static let syncRemembersPassphrase = "settingsSync.remembersPassphrase"
         static let syncLastUpload = "settingsSync.lastUploadAt"
         static let syncLastDownload = "settingsSync.lastDownloadAt"
+        static let diagnosticsEnabled = "diagnostics.enabled"
     }
 
     /// Reads a `Codable` value stored as one JSON blob, falling back when the key is absent or

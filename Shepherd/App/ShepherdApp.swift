@@ -21,6 +21,12 @@ struct ShepherdApp: App {
                 .onChange(of: environment.settings.appearance) { _, _ in
                     environment.applyAppearance()
                 }
+                // Same shape as the appearance line above, and for the same reason: the flag can
+                // change from the Settings toggle *or* from an applied settings-sync document, and
+                // both have to reach the MetricKit subscriber (ADR 0017).
+                .onChange(of: environment.settings.diagnosticsEnabled) { _, _ in
+                    environment.applyDiagnosticsSetting()
+                }
                 // `shepherd://` links: the terminal, Raycast, an n8n Execute Command node
                 // (ADR 0013). A link that arrives before the session exists is queued and
                 // replayed after sign-in.

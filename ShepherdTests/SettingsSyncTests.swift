@@ -243,6 +243,7 @@ final class SettingsSyncTests: XCTestCase {
             diffUsesInlineMode: true
         )
         document.triage = SyncedSettingsDocument.TriageGroup(defaultMergeMethod: .rebase)
+        document.diagnostics = SyncedSettingsDocument.DiagnosticsGroup(isEnabled: true)
         document.account = SyncedSettingsDocument.AccountGroup(login: "octocat", authKind: .pat)
         document.secrets = SyncedSettingsDocument.Secrets(
             githubToken: "ghp_example",
@@ -618,6 +619,9 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertEqual(document.notifications, SyncedSettingsDocument.NotificationGroup())
         XCTAssertEqual(document.delegation.agentCLI, AgentCLIConfiguration())
         XCTAssertEqual(document.delegation.autoDelegation, AutoDelegationRules())
+        // A document written before diagnostics existed leaves them off rather than on.
+        XCTAssertEqual(document.diagnostics, SyncedSettingsDocument.DiagnosticsGroup())
+        XCTAssertFalse(document.diagnostics.isEnabled)
         XCTAssertEqual(document.secrets.webhookSecret, "s3cr3tsecret")
         XCTAssertNil(document.secrets.githubToken)
         XCTAssertEqual(document.secrets.count, 1)
@@ -956,6 +960,8 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertTrue(settings.diffWrapsLines)
         XCTAssertTrue(settings.diffUsesInlineMode)
         XCTAssertEqual(settings.defaultMergeMethod, .rebase)
+        // The opt-in travels; the reports themselves never do (ADR 0017).
+        XCTAssertTrue(settings.diagnosticsEnabled)
 
         XCTAssertEqual(
             secrets.contents[KeychainSecretStore.Key.anthropicAPIKey],
@@ -1138,6 +1144,9 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertNil(document.account.authKind)
         XCTAssertTrue(document.secrets.isEmpty)
         XCTAssertEqual(document.v, SyncedSettingsDocument.schemaVersion)
+        // Nothing opt-in is on in a captured fresh install, diagnostics included (ADR 0017).
+        XCTAssertFalse(document.diagnostics.isEnabled)
+        XCTAssertFalse(document.automation.webhooksEnabled)
     }
 
     // MARK: - The model's flow

@@ -62,21 +62,38 @@ struct SettingsView: View {
 
 // MARK: - Account
 
-/// Avatar, login, sign out & erase — plus the update section (ADR 0010).
+/// Avatar, login, sign out & erase — plus the local-diagnostics section (ADR 0017) and the update
+/// section (ADR 0010).
 ///
 /// Updates live here rather than in a tab of their own: it is three controls, and "which build am
 /// I running, and where does the next one come from" is the same question as "which account am I".
-/// The section is outside the signed-in branch on purpose — the app updates itself whether or not
-/// anyone is signed in.
+/// Diagnostics join them for the same reason and one more: this tab is already where Shepherd
+/// states what it keeps on this Mac and where — the LOCAL DATA card just above names the database
+/// path — so "and here is the other folder, which stays empty unless you ask for it" belongs next
+/// to it rather than under Appearance, where it would read as a display preference.
+///
+/// Both sections sit outside the signed-in branch on purpose: the app updates itself, and crashes,
+/// whether or not anyone is signed in.
 struct AccountSettingsTab: View {
     @Environment(AppEnvironment.self) private var environment
     @State private var isConfirmingSignOut = false
+    /// How many diagnostic reports are on disk.
+    ///
+    /// Read from the folder when the tab appears and after "Delete all", rather than observed:
+    /// the number only ever changes at launch (MetricKit delivers the previous run's diagnostics
+    /// then) or because this card just emptied the folder, so there is nothing for an observation
+    /// to notice while Settings is open.
+    @State private var diagnosticsReportCount = 0
+    @State private var isConfirmingDiagnosticsDelete = false
+    @State private var diagnosticsError: String?
 
     var body: some View {
         SettingsPage {
             accountSection
+            diagnosticsCard
             updatesCard
         }
+        .task { refreshDiagnosticsCount() }
     }
 
     // MARK: - Account
@@ -142,6 +159,113 @@ struct AccountSettingsTab: View {
                 message: String(localized: "Sign in from the main window to see your account here.")
             )
         }
+    }
+
+    // MARK: - Diagnostics (ADR 0017)
+
+    /// The opt-in toggle, how many reports are stored, where they are, and the two buttons that
+    /// do the only two things anyone wants to do with them.
+    ///
+    /// The wording carries two facts the user cannot check for themselves and would otherwise
+    /// have to trust: nothing is sent anywhere, and a report only shows up at the *next* launch
+    /// after a crash — MetricKit has no other delivery moment, and a card that did not say so
+    /// would look broken immediately after the crash it is meant to record.
+    private var diagnosticsCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 8) {
+                CardTitle(String(localized: "DIAGNOSTICS"))
+                Toggle(
+                    String(localized: "Keep crash and hang reports on this Mac"),
+                    isOn: diagnosticsBinding
+                )
+                Text(String(
+                    localized: "Off by default. With this on, macOS hands Shepherd the crash, hang and CPU-exception reports of previous runs and Shepherd writes each one as a JSON file in the folder below. They are stored only on this Mac and are never sent anywhere — there is no crash service and no upload. Reports appear after the next launch following a crash, not while it happens."
+                ))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                Text(diagnosticsCountLine)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                Text(environment.diagnostics.directory.path)
+                    .font(Theme.mono(11))
+                    .foregroundStyle(Theme.textMuted)
+                    .textSelection(.enabled)
+                    .lineLimit(2)
+                HStack(spacing: 8) {
+                    Button(String(localized: "Show in Finder")) {
+                        environment.diagnostics.revealInFinder()
+                    }
+                    .buttonStyle(SecondaryButtonStyle(height: 28))
+                    Button(String(localized: "Delete all")) {
+                        isConfirmingDiagnosticsDelete = true
+                    }
+                    .buttonStyle(SecondaryButtonStyle(height: 28, tint: Theme.failure))
+                    .disabled(diagnosticsReportCount == 0)
+                }
+                .confirmationDialog(
+                    String(localized: "Delete all diagnostic reports?"),
+                    isPresented: $isConfirmingDiagnosticsDelete
+                ) {
+                    Button(String(localized: "Delete all"), role: .destructive) {
+                        deleteAllDiagnostics()
+                    }
+                    Button(String(localized: "Cancel"), role: .cancel) {}
+                } message: {
+                    Text(String(
+                        localized: "The JSON files in the folder are removed. Nothing else is touched, and no copy of them exists anywhere else."
+                    ))
+                }
+                if let diagnosticsError {
+                    Text(diagnosticsError)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.failure)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    /// "No reports stored yet." / "1 report stored." / "7 reports stored; the 30 newest are kept."
+    private var diagnosticsCountLine: String {
+        switch diagnosticsReportCount {
+        case 0:
+            return String(localized: "No reports stored yet.")
+        case 1:
+            return String(localized: "1 report stored.")
+        default:
+            return String(
+                localized: "\(diagnosticsReportCount) reports stored; the \(DiagnosticsStore.retentionLimit) newest are kept."
+            )
+        }
+    }
+
+    private var diagnosticsBinding: Binding<Bool> {
+        Binding(
+            get: { environment.settings.diagnosticsEnabled },
+            set: {
+                environment.settings.diagnosticsEnabled = $0
+                // Registers or removes the MetricKit subscriber right away, the way the appearance
+                // picker applies its choice right away rather than waiting for the main window.
+                environment.applyDiagnosticsSetting()
+            }
+        )
+    }
+
+    private func refreshDiagnosticsCount() {
+        diagnosticsReportCount = environment.diagnostics.reportCount
+    }
+
+    private func deleteAllDiagnostics() {
+        do {
+            try environment.diagnostics.deleteAllReports()
+            diagnosticsError = nil
+        } catch {
+            diagnosticsError = String(
+                localized: "Could not delete every report: \(error.localizedDescription)"
+            )
+        }
+        refreshDiagnosticsCount()
     }
 
     // MARK: - Updates (ADR 0010)

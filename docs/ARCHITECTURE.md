@@ -14,12 +14,13 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
     Review/                    #   review composer, pending review UI, thread views
     DiffViewer/                #   WKWebView host + bridge (Swift side)
     Delegation/                #   delegate-to-local-agent model + sheet (ADR 0011, 0016)
-    Settings/                  #   accounts, sync (+ encrypted cross-Mac sync), agents, AI,
-                               #   delegation, automation, theme
+    Settings/                  #   accounts (+ updates, local diagnostics), sync (+ encrypted
+                               #   cross-Mac sync), agents, AI, delegation, automation, theme
     Onboarding/                #   device-flow sign-in, PAT entry
   Automation/                  #   outbound webhook payload, signing, dispatcher (ADR 0012);
                                #   auto-delegation coordinator + ledger store (ADR 0016)
   SettingsSync/                #   encrypted settings document, envelope, SigV4, S3 client (ADR 0014)
+  Diagnostics/                 #   MetricKit subscriber + local report folder (ADR 0017)
   Intelligence/                #   IntelligenceProvider impls (FoundationModels, Anthropic)
   Support/                     #   AppConfig, keyboard shortcuts, theming, notifications,
                                #   Sparkle updater wrapper (ADR 0010)
@@ -56,9 +57,10 @@ so it has no client, no database and no Keychain access, and can reach the app o
 
 `ShepherdCore` imports Foundation only. Nothing in `Packages/` imports AppKit, SwiftUI, or
 WebKit. The app target owns all UI and all Apple-only frameworks (FoundationModels, WebKit,
-UserNotifications, Security/Keychain). Sparkle is on the same side of that line and only
-one file imports it: `Support/UpdateController.swift` (ADR 0010). `Packages/ShepherdKit`
-must keep building on Linux, so it never gains an update dependency.
+UserNotifications, MetricKit, Security/Keychain). Sparkle is on the same side of that line and only
+one file imports it: `Support/UpdateController.swift` (ADR 0010); MetricKit likewise has exactly one
+importer, `Diagnostics/DiagnosticsReporter.swift` (ADR 0017). `Packages/ShepherdKit`
+must keep building on Linux, so it never gains an update or a diagnostics dependency.
 
 ## Core domain models (`ShepherdCore`)
 
@@ -537,6 +539,39 @@ drafts live in the database, and an app that replaces itself mid-review would lo
 The release side of this — feed URL, signing, notarization, appcast — is `Scripts/release.sh` and
 [docs/RELEASING.md](RELEASING.md).
 
+### Local diagnostics (ADR 0017)
+
+`Diagnostics/DiagnosticsReporter.swift` is the only file that imports MetricKit. It is an
+`NSObject` conforming to `MXMetricManagerSubscriber`, created inert by `AppEnvironment`, and it
+subscribes to `MXMetricManager` only while `AppSettings.diagnosticsEnabled` is on. That flag is the
+whole gate: with it off, `add(_:)` was never called, so macOS delivers nothing and there is no
+filtering step to get wrong. `didReceive(_ payloads: [MXDiagnosticPayload])` writes each payload's
+`jsonRepresentation()` — verbatim, no re-encoding — into
+`~/Library/Application Support/Shepherd/Diagnostics/`. The other delivery,
+`didReceive(_ payloads: [MXMetricPayload])`, is an explicit no-op: daily performance metrics are
+precisely what this app does not keep.
+
+Three details are load-bearing:
+
+- **The split.** `MXDiagnosticPayload` has no initialiser, so the seam is one level down:
+  `DiagnosticsStore.store(jsonRepresentation:receivedAt:)`. The store owns the file name (a
+  fixed-width UTC stamp built from `DateComponents`, not a `DateFormatter`, so the name is a pure
+  function of the date), the 30-file retention trim, the count, and a "delete all" that only ever
+  removes files matching `diagnostic-*.json`. All of that is tested over a temporary directory; the
+  subscriber above it has nothing left to test.
+- **Isolation.** MetricKit does not promise a queue, so the reporter is *not* `@MainActor`: both
+  callbacks are `nonisolated` and the subscription flag is behind an `NSLock`, which also closes the
+  race between "toggle switched off" and a batch already in flight. `setSubscribed(_:)` and
+  `revealInFinder()` are `@MainActor` because `MXMetricManager` and `NSWorkspace` are reached from
+  there.
+- **One route to the subscriber.** The flag changes from the Settings toggle *or* from an applied
+  settings-sync document (ADR 0014), so both go through `AppEnvironment.applyDiagnosticsSetting()` —
+  the toggle calls it directly and `ShepherdApp` re-applies it on change, exactly as the appearance
+  preference does. `setSubscribed(_:)` is idempotent for that reason.
+
+No network code exists in this path, and none may be added without a new ADR: see the
+"Diagnostics stay local" rule in CONTRIBUTING.md.
+
 ### Test target
 
 `ShepherdTests` (added to `project.yml`, sources in top-level `ShepherdTests/`) covers the
@@ -558,7 +593,11 @@ separately — SigV4 against the official AWS vectors, the three signed requests
 document codec with unknown fields, and capture/apply over in-memory secret and token stores);
 the update configuration (ADR 0010: the placeholder key, a truncated key, a
 relative or non-web feed URL and an empty `Info.plist` must each end as "updates off, with a
-reason" rather than as a Sparkle alert);
+reason" rather than as a Sparkle alert); the local diagnostics folder (ADR 0017: the UTC file name
+as a pure function of the date, two reports in one second, the 30-file retention trim, "delete all"
+leaving a foreign file alone, and the opt-in — off on a fresh install, and switching it off really
+calling `remove(_:)`, asserted through the subscription seam so the test host never registers with
+the real MetricKit);
 and the app-side half of deep linking (resolving `owner/repo#number` against cached rows, filter
 token → rail state). The `shepherd://` grammar itself is tested in `ShepherdCoreTests` instead, so it
 runs on the Linux runner too. The web

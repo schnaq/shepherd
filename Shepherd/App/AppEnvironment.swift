@@ -78,6 +78,10 @@ final class AppEnvironment {
     let webhookCoordinator: WebhookCoordinator
     /// Sparkle 2, or an inert stand-in when the build has no update feed and key (ADR 0010).
     let updates = UpdateController()
+    /// MetricKit crash and hang reports, kept on this Mac only and only when asked for
+    /// (ADR 0017). Created inert: it subscribes to nothing until ``applyDiagnosticsSetting()``
+    /// sees the opt-in.
+    let diagnostics = DiagnosticsReporter()
     /// Remembers what automatic delegation already did, across launches (ADR 0016).
     let autoDelegationStore: AutoDelegationStore
     /// Decides whether a sweep event starts a delegation on its own (ADR 0016).
@@ -140,6 +144,10 @@ final class AppEnvironment {
     /// Restores the signed-in account, if the Keychain still has its token.
     func bootstrap() async {
         applyAppearance()
+        // Before anything else that could go wrong: MetricKit delivers the previous run's
+        // diagnostics shortly after launch, and a subscriber registered after that moment would
+        // miss the batch that describes the crash the user is here about (ADR 0017).
+        applyDiagnosticsSetting()
         guard let account = settings.account else {
             phase = .signedOut
             announceDeepLinkNeedsSignIn()
@@ -306,6 +314,15 @@ final class AppEnvironment {
     /// Applies the stored appearance preference to the whole app.
     func applyAppearance() {
         NSApplication.shared.appearance = settings.appearance.nsAppearance
+    }
+
+    /// Registers or removes the MetricKit subscriber to match the opt-in setting (ADR 0017).
+    ///
+    /// Called at launch and whenever ``AppSettings/diagnosticsEnabled`` changes — from the toggle
+    /// in Settings, or because a downloaded settings document carried the flag from another Mac.
+    /// Idempotent, so it does not matter how many of those happen.
+    func applyDiagnosticsSetting() {
+        diagnostics.setSubscribed(settings.diagnosticsEnabled)
     }
 
     /// Rebuilds the intelligence router from the current settings and Keychain.

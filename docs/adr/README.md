@@ -22,6 +22,7 @@ founder interview (2026-08-31) combined with three research reports (see
 | 0014 | [End-to-end encrypted settings sync over the user's own S3 bucket](0014-encrypted-settings-sync.md) | Accepted (v1.x) |
 | 0015 | [Bulk triage: one confirmation, n ordinary outbox writes](0015-bulk-triage.md) | Accepted (v1.x) |
 | 0016 | [Opt-in auto-delegation rules (red CI on your own PR)](0016-auto-delegation-rules.md) | Accepted (v1.x) |
+| 0017 | [Local-only crash and hang reports via MetricKit](0017-local-diagnostics-metrickit.md) | Accepted (v1.x) |
 
 Format: lightweight [MADR](https://adr.github.io/madr/)-style — Context, Decision, Consequences.
 New decisions get the next number; superseded ADRs are marked, never deleted.

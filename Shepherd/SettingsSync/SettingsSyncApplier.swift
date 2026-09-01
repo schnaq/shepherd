@@ -95,6 +95,9 @@ enum SettingsSyncApplier {
         document.triage = SyncedSettingsDocument.TriageGroup(
             defaultMergeMethod: settings.defaultMergeMethod
         )
+        document.diagnostics = SyncedSettingsDocument.DiagnosticsGroup(
+            isEnabled: settings.diagnosticsEnabled
+        )
         document.account = SyncedSettingsDocument.AccountGroup(
             login: settings.accountLogin,
             authKind: settings.accountLogin == nil ? nil : settings.accountAuthKind
@@ -178,6 +181,12 @@ enum SettingsSyncApplier {
         settings.diffUsesInlineMode = document.appearance.diffUsesInlineMode
 
         settings.defaultMergeMethod = document.triage.defaultMergeMethod
+
+        // Only the flag is applied. Registering or removing the MetricKit subscriber is the
+        // window's job, driven by `onChange(of: settings.diagnosticsEnabled)` in `ShepherdApp` —
+        // the same route the appearance change takes, so an applied document and a flipped toggle
+        // reach the subscriber through one path rather than two (ADR 0017).
+        settings.diagnosticsEnabled = document.diagnostics.isEnabled
 
         // The registry lives in the database, not here, so it is applied only when there is one.
         let overrides = document.agents.registryOverrides

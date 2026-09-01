@@ -106,6 +106,14 @@ bumping a dependency that ships inside the app also means a line in
 
   Nothing else. This is a hard privacy line: adding a host means a new ADR, a settings control the
   user has to switch on, and a line here.
+- **Diagnostics stay local.** Shepherd has no crash-reporting SDK and no crash endpoint. The opt-in
+  crash/hang reporting (ADR 0017) is MetricKit: macOS hands the app its own `MXDiagnosticPayload`s
+  on the next launch after a crash, and `Shepherd/Diagnostics/` writes each one as a JSON file in
+  `~/Library/Application Support/Shepherd/Diagnostics/`. Off by default; with the toggle off no
+  subscriber is registered, so nothing is delivered and nothing is stored. There is no uploader in
+  that folder's code path — not a disabled one, none — so the host list above is unchanged, and a
+  bug report happens only when a user opens the folder and attaches a file themselves. Anything
+  that would *send* a diagnostic is a new host and therefore a new ADR.
 - Conventional commits appreciated (`feat:`, `fix:`, `docs:` …), not enforced.
 
 ## License

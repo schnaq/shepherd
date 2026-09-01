@@ -65,6 +65,12 @@ from every repo — without ever opening a browser tab.
   Apple's Foundation Models framework when available. Optionally bring your own API key for
   deeper whole-PR analysis — Anthropic, or any OpenAI-compatible endpoint, with presets for
   EU-hosted Konduit and a local Ollama. The app is fully functional with AI switched off.
+- **Optional crash reports that never leave your Mac.** Switch on local diagnostics and macOS hands
+  Shepherd its own crash, hang and CPU-exception reports on the next launch after one happened;
+  Shepherd writes them as JSON files in Application Support, keeps the 30 newest, and shows you the
+  folder. No crash-reporting SDK, no endpoint, no uploader — if you want to help with a bug, you
+  open the folder and attach the file yourself. Off by default.
+  See [ADR 0017](docs/adr/0017-local-diagnostics-metrickit.md).
 - **Local-first.** Everything lives in a SQLite database on your Mac. GitHub is a sync target,
   not a backend. No server, no telemetry, no account other than your GitHub login — and where
   Shepherd does sync between your own machines, it does it through storage you own, encrypted

@@ -327,6 +327,34 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         }
     }
 
+    /// Whether local crash and hang reports are kept on the Mac (ADR 0017).
+    ///
+    /// The *flag* travels; the reports never do. A diagnostic report is machine-local by
+    /// definition — it describes one crash of one build on one Mac — and it is not a setting, so
+    /// it belongs in the same category as the outbox and the auto-delegation ledger: state of one
+    /// machine, deliberately left out of the document. Carrying the opt-in itself is what
+    /// CONTRIBUTING.md asks of every setting, and it is also the useful half: a user who wants
+    /// diagnostics wants them on every Mac they review from.
+    struct DiagnosticsGroup: Codable, Sendable, Equatable {
+        /// Whether the MetricKit subscriber is registered.
+        var isEnabled: Bool
+
+        /// Creates the group.
+        /// - Parameter isEnabled: Whether diagnostics are kept.
+        init(isEnabled: Bool = false) {
+            self.isEnabled = isEnabled
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case isEnabled
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            isEnabled = container.syncedValue(.isEnabled, default: false)
+        }
+    }
+
     /// Who the token in ``Secrets`` belongs to.
     ///
     /// The identity is *not* a secret and lives here rather than under `secrets` on purpose: a
@@ -430,6 +458,8 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
     var appearance: AppearanceGroup
     /// Remembered review/merge dialog choices.
     var triage: TriageGroup
+    /// Whether local crash and hang reports are kept.
+    var diagnostics: DiagnosticsGroup
     /// Who the GitHub token belongs to.
     var account: AccountGroup
     /// The Keychain half.
@@ -446,6 +476,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         automation: AutomationGroup = AutomationGroup(),
         appearance: AppearanceGroup = AppearanceGroup(),
         triage: TriageGroup = TriageGroup(),
+        diagnostics: DiagnosticsGroup = DiagnosticsGroup(),
         account: AccountGroup = AccountGroup(),
         secrets: Secrets = Secrets()
     ) {
@@ -458,13 +489,14 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         self.automation = automation
         self.appearance = appearance
         self.triage = triage
+        self.diagnostics = diagnostics
         self.account = account
         self.secrets = secrets
     }
 
     private enum CodingKeys: String, CodingKey {
         case v, sync, notifications, agents, intelligence, delegation, automation
-        case appearance, triage, account, secrets
+        case appearance, triage, diagnostics, account, secrets
     }
 
     init(from decoder: any Decoder) throws {
@@ -486,6 +518,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         automation = container.syncedValue(.automation, default: AutomationGroup())
         appearance = container.syncedValue(.appearance, default: AppearanceGroup())
         triage = container.syncedValue(.triage, default: TriageGroup())
+        diagnostics = container.syncedValue(.diagnostics, default: DiagnosticsGroup())
         account = container.syncedValue(.account, default: AccountGroup())
         secrets = container.syncedValue(.secrets, default: Secrets())
     }

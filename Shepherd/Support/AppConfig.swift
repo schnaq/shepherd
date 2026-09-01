@@ -45,6 +45,15 @@ enum AppConfig {
         applicationSupportDirectory.appendingPathComponent("Worktrees", isDirectory: true)
     }
 
+    /// `~/Library/Application Support/Shepherd/Diagnostics` — the local crash and hang reports
+    /// MetricKit hands over, when the user opted in (ADR 0017).
+    ///
+    /// Created on demand by ``DiagnosticsStore``, never uploaded, and emptied by the "Delete all"
+    /// button in Settings → Account.
+    static var diagnosticsDirectory: URL {
+        applicationSupportDirectory.appendingPathComponent("Diagnostics", isDirectory: true)
+    }
+
     /// `https://github.com`, used for "open on GitHub" links.
     static var webBaseURL: URL {
         URL(string: "https://github.com") ?? URL(fileURLWithPath: "/")
