@@ -255,4 +255,146 @@ final class ErrorMappingTests: XCTestCase {
         let waits = await sleeper.recorded
         XCTAssertEqual(waits.count, 1)
     }
+
+    // MARK: - Retries and idempotency
+
+    func testATransportFailureNeverReplaysAReviewSubmission() async throws {
+        let transport = MockTransport()
+        await transport.failNext(1, with: .transport(message: "the request timed out"))
+        await transport.route("/pulls/128/reviews", try Fixture.response("review-submitted"))
+
+        let sleeper = RecordingSleeper()
+        let client = GitHubClient.makeForTesting(transport: transport, sleeper: sleeper)
+
+        do {
+            _ = try await client.submitReview(
+                ReviewDraft(prID: "PR_1", verdict: .approve, basedOnHeadOid: "abc123"),
+                repo: RepoRef(owner: "schnaq", name: "review"),
+                number: 128
+            )
+            XCTFail("the transport failure must surface, not be papered over with a retry")
+        } catch let error as GitHubError {
+            guard case .transport = error else {
+                return XCTFail("expected .transport, got \(error)")
+            }
+        }
+
+        // A POST that timed out may well have been executed: GitHub could have created the
+        // review and lost the response. Replaying it is how one review becomes two.
+        let requests = await transport.requests
+        XCTAssertEqual(requests.count, 1, "a write is never replayed on a transport error")
+        let waits = await sleeper.recorded
+        XCTAssertTrue(waits.isEmpty)
+    }
+
+    func testATransportFailureNeverReplaysAMergeOrAReply() async throws {
+        let repo = RepoRef(owner: "schnaq", name: "review")
+        for attempt in 0..<2 {
+            let transport = MockTransport()
+            await transport.failNext(1, with: .transport(message: "connection reset"))
+            await transport.route("/merge", try Fixture.response("merge-result"))
+            await transport.route("/replies", Fixture.response(json: "{}"))
+            let client = GitHubClient.makeForTesting(transport: transport)
+
+            if attempt == 0 {
+                _ = try? await client.mergePullRequest(
+                    repo: repo,
+                    number: 128,
+                    method: .squash,
+                    expectedHeadOid: "abc123"
+                )
+            } else {
+                try? await client.replyToComment(
+                    repo: repo,
+                    number: 128,
+                    commentID: 42,
+                    body: "Thanks!"
+                )
+            }
+
+            let requests = await transport.requests
+            XCTAssertEqual(requests.count, 1, "attempt \(attempt) must not be replayed")
+        }
+    }
+
+    func testATransportFailureNeverReplaysAGraphQLMutation() async throws {
+        let transport = MockTransport()
+        await transport.failNext(1, with: .transport(message: "offline"))
+        await transport.route("resolveReviewThread", try Fixture.response("resolve-thread"))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        // GraphQL always POSTs, so the method cannot tell a query from a mutation; the call
+        // site declares it. A resolve that may already have landed is not replayed.
+        try? await client.resolveThread(id: "PRRT_1")
+
+        let requests = await transport.requests
+        XCTAssertEqual(requests.count, 1)
+    }
+
+    func testIdempotentMethodClassification() {
+        XCTAssertTrue(GitHubClient.isIdempotentMethod("GET"))
+        XCTAssertTrue(GitHubClient.isIdempotentMethod("get"))
+        XCTAssertTrue(GitHubClient.isIdempotentMethod("HEAD"))
+        XCTAssertFalse(GitHubClient.isIdempotentMethod("POST"))
+        XCTAssertFalse(GitHubClient.isIdempotentMethod("PUT"))
+        XCTAssertFalse(GitHubClient.isIdempotentMethod("PATCH"))
+        XCTAssertFalse(GitHubClient.isIdempotentMethod("DELETE"))
+    }
+
+    // MARK: - Review submission preconditions
+
+    func testAReviewThatCommentsOrRequestsChangesNeedsABody() async throws {
+        let repo = RepoRef(owner: "schnaq", name: "review")
+        for verdict in [ReviewVerdict.comment, .requestChanges] {
+            let transport = MockTransport()
+            await transport.route("/pulls/128/reviews", try Fixture.response("review-submitted"))
+            let client = GitHubClient.makeForTesting(transport: transport)
+
+            do {
+                _ = try await client.submitReview(
+                    ReviewDraft(prID: "PR_1", verdict: verdict, summaryBody: "   "),
+                    repo: repo,
+                    number: 128
+                )
+                XCTFail("\(verdict) without a body must not reach GitHub")
+            } catch let error as GitHubError {
+                guard case .validationFailed = error else {
+                    return XCTFail("expected .validationFailed, got \(error)")
+                }
+            }
+
+            let requests = await transport.requests
+            XCTAssertTrue(requests.isEmpty, "\(verdict) is rejected before the request is built")
+        }
+    }
+
+    func testAnApprovalMayBeSubmittedWithoutABody() async throws {
+        let transport = MockTransport()
+        await transport.route("/pulls/128/reviews", try Fixture.response("review-submitted"))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        _ = try await client.submitReview(
+            ReviewDraft(prID: "PR_1", verdict: .approve, summaryBody: ""),
+            repo: RepoRef(owner: "schnaq", name: "review"),
+            number: 128
+        )
+
+        let requests = await transport.requests
+        XCTAssertEqual(requests.count, 1)
+    }
+
+    func testAPendingReviewWithoutAVerdictMayHaveNoBody() async throws {
+        let transport = MockTransport()
+        await transport.route("/pulls/128/reviews", try Fixture.response("review-pending"))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        _ = try await client.submitReview(
+            ReviewDraft(prID: "PR_1", verdict: nil, summaryBody: ""),
+            repo: RepoRef(owner: "schnaq", name: "review"),
+            number: 128
+        )
+
+        let requests = await transport.requests
+        XCTAssertEqual(requests.count, 1)
+    }
 }

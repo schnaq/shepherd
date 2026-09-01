@@ -118,6 +118,15 @@ struct SubmitReviewSheet: View {
                 .foregroundStyle(Theme.textMuted)
             }
 
+            if needsSummary {
+                Text(String(
+                    localized: "GitHub requires a summary for this verdict — only an approval may be submitted without one."
+                ))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.pending)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
             Text(String(
                 localized: "The review is queued in the local outbox and sent by the sync engine, so it survives a crash or a lost connection."
             ))
@@ -143,12 +152,25 @@ struct SubmitReviewSheet: View {
                 }
                 .buttonStyle(SuccessButtonStyle())
                 .keyboardShortcut(.defaultAction)
-                .disabled(model.isSubmitting)
+                .disabled(model.isSubmitting || needsSummary)
+                .help(needsSummary
+                    ? String(localized: "Write a summary first — GitHub rejects a “request changes” or “comment” review without one.")
+                    : String(localized: "Queue the review"))
             }
         }
         .padding(20)
         .frame(width: 460)
         .background(Theme.panel)
+    }
+
+    /// Whether the verdict needs a summary the user has not written.
+    ///
+    /// `POST /pulls/{n}/reviews` documents `body` as required for `REQUEST_CHANGES` and
+    /// `COMMENT`; submitting without one is a 422, which is not retryable, so the outbox row
+    /// is parked failed and the review is lost. Only `APPROVE` may go out bare.
+    private var needsSummary: Bool {
+        model.pendingVerdict != .approve
+            && model.summaryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private var summaryBinding: Binding<String> {

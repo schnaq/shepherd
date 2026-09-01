@@ -46,6 +46,32 @@ describe('gutterHit', () => {
     expect(gutterHit({ ...base, targetType, lineNumber: 40 })).toEqual({ line: 40, side: 'right' });
   });
 
+  it('refuses lines that are not part of the diff', () => {
+    const targetType = MouseTargetType.GUTTER_LINE_NUMBERS;
+    // Lines 5 and 9 came from a hunk; 6-8 are the blank padding between hunks, which GitHub
+    // would reject — and it rejects the whole review along with them.
+    const commentable = new Set([5, 9]);
+    expect(gutterHit({ ...base, targetType, commentable })).toEqual({ line: 5, side: 'right' });
+    expect(gutterHit({ ...base, targetType, lineNumber: 9, commentable })).toEqual({ line: 9, side: 'right' });
+    expect(gutterHit({ ...base, targetType, lineNumber: 6, commentable })).toBeNull();
+    expect(gutterHit({ ...base, targetType, lineNumber: 8, commentable })).toBeNull();
+  });
+
+  it('arms every line when the payload named no commentable set', () => {
+    const targetType = MouseTargetType.GUTTER_LINE_NUMBERS;
+    expect(gutterHit({ ...base, targetType, commentable: null })).toEqual({ line: 5, side: 'right' });
+    expect(gutterHit({ ...base, targetType, commentable: undefined })).toEqual({ line: 5, side: 'right' });
+  });
+
+  it('applies the commentable set of the probed side only', () => {
+    const targetType = MouseTargetType.GUTTER_LINE_NUMBERS;
+    expect(gutterHit({ ...base, targetType, side: 'left', commentable: new Set([5]) })).toEqual({
+      line: 5,
+      side: 'left',
+    });
+    expect(gutterHit({ ...base, targetType, side: 'left', commentable: new Set([4]) })).toBeNull();
+  });
+
   it('skips the range check when the line count is unknown (-1)', () => {
     expect(gutterHit({ targetType: MouseTargetType.GUTTER_LINE_NUMBERS, lineNumber: 9999, side: 'right', lineCount: -1 })).toEqual({
       line: 9999,

@@ -37,3 +37,28 @@ export function routeInbound(message: InboundMessage, port: ViewerPort): void {
     }
   }
 }
+
+/**
+ * Dispatches a message and reports anything it throws instead of letting it escape.
+ *
+ * Inbound messages arrive through `evaluateJavaScript`, which swallows exceptions whole: a
+ * throw inside `loadFile` used to leave the viewer half-torn-down (zones unmounted, models
+ * gone) with the native side none the wiser and no way to tell the user. Failures are surfaced
+ * through the page's error banner instead.
+ *
+ * @returns `true` when the message was handled, `false` when `onError` was called.
+ */
+export function routeInboundSafely(
+  message: InboundMessage,
+  port: ViewerPort,
+  onError: (detail: string, message: InboundMessage) => void,
+): boolean {
+  try {
+    routeInbound(message, port);
+    return true;
+  } catch (error) {
+    const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    onError(detail, message);
+    return false;
+  }
+}

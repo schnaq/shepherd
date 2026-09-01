@@ -1,0 +1,14 @@
+{
+  "v": 1,
+  "type": "loadFile",
+  "path": "db/migrations/0002_add_index.sql",
+  "language": "sql",
+  "original": "CREATE TABLE etags (\n  key TEXT PRIMARY KEY\n);\n-- keyed by absolute URL\n",
+  "modified": "CREATE TABLE etags (\n  key TEXT PRIMARY KEY\n);\n-- keyed by normalised URL\nCREATE INDEX idx_etags_storedAt ON etags(storedAt);\n",
+  "mode": "sideBySide",
+  "wrap": false,
+  "commentableLines": {
+    "left": [1, 2, 3, 4],
+    "right": [1, 2, 3, 4, 5]
+  }
+}

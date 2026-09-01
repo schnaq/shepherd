@@ -55,6 +55,24 @@ public struct InboxFilter: Sendable, Hashable {
 extension DatabaseManager {
     // MARK: - Inbox rows
 
+    /// The rows a sweep may **not** prune, whatever the search returned.
+    ///
+    /// `review_drafts`, `draft_comments` and `outbox` have no foreign key onto
+    /// `pull_requests`, so pruning a row the user still has unfinished work on leaves the
+    /// draft alive with nothing to render it against — and the review screen has nothing to
+    /// show. That happens routinely: the `involves:@me` facet is capped at five pages, and a
+    /// pull request queued for approval offline disappears from the search the moment someone
+    /// else merges it.
+    ///
+    /// Terminal outbox rows (`failed`, `succeeded`) do not hold a pull request open; a
+    /// `conflicted` row does, because it is waiting for the user to decide.
+    private static let pruneGuardSQL = """
+        id NOT IN (SELECT prID FROM review_drafts)
+        AND id NOT IN (
+            SELECT prID FROM outbox WHERE state IN ('pending', 'sending', 'conflicted')
+        )
+        """
+
     /// Stores the result of one inbox sweep.
     ///
     /// Rows are upserted, keeping the detail columns (body, commits, timeline) of any pull
@@ -87,12 +105,15 @@ extension DatabaseManager {
             guard pruneMissing else { return }
             let keep = summaries.map(\.id)
             if keep.isEmpty {
-                try db.execute(sql: "DELETE FROM pull_requests")
+                try db.execute(sql: "DELETE FROM pull_requests WHERE \(DatabaseManager.pruneGuardSQL)")
             } else {
                 let placeholders = Array(repeating: "?", count: keep.count)
                     .joined(separator: ",")
                 try db.execute(
-                    sql: "DELETE FROM pull_requests WHERE id NOT IN (\(placeholders))",
+                    sql: """
+                        DELETE FROM pull_requests
+                        WHERE id NOT IN (\(placeholders)) AND \(DatabaseManager.pruneGuardSQL)
+                        """,
                     arguments: StatementArguments(keep)
                 )
             }
@@ -153,6 +174,19 @@ extension DatabaseManager {
             if detail.summary.myRelation.isEmpty, let existing {
                 record.relations = existing.relations
             }
+            if detail.checks.isEmpty, let existing {
+                // A detail fetch derives its rollup from `/commits/{sha}/check-runs`, which
+                // knows nothing about classic commit statuses. Repositories on Jenkins or
+                // Buildkite therefore report *no* check runs, and writing that through would
+                // null the rollup the GraphQL sweep computed from `statusCheckRollup` — the
+                // badge would appear after a sweep and vanish a second later. Same treatment
+                // as the body/commits/timeline columns: absent means "unknown", not "empty".
+                record.checkState = existing.checkState
+                record.checkTotal = existing.checkTotal
+                record.checkSuccess = existing.checkSuccess
+                record.checkFailure = existing.checkFailure
+                record.checkPending = existing.checkPending
+            }
             record.bodyMarkdown = detail.bodyMarkdown
             record.commitsJSON = ColumnCoding.encodeJSON(detail.commits)
             record.timelineJSON = ColumnCoding.encodeJSON(detail.timeline)
@@ -187,6 +221,9 @@ extension DatabaseManager {
                 }
             }
 
+            // Same reasoning as the check columns above: an empty listing means "this fetch
+            // learned nothing about the checks", so the stored rows are left alone.
+            guard !detail.checks.isEmpty else { return }
             try db.execute(sql: "DELETE FROM check_runs WHERE prID = ?", arguments: [detail.id])
             for (index, run) in detail.checks.enumerated() {
                 try CheckRunRecord(prID: detail.id, run: run, sortIndex: index).save(db)

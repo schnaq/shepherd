@@ -59,7 +59,10 @@ extension DatabaseManager {
     public func observePendingOutboxCount() -> AsyncStream<Int> {
         let writer = self.writer
         let observation = ValueObservation.tracking { db -> Int in
-            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM outbox WHERE state = 'pending'") ?? 0
+            try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM outbox WHERE state IN ('pending', 'sending')"
+            ) ?? 0
         }
         return AsyncStream { continuation in
             let queue = DispatchQueue(label: "com.schnaq.shepherd.observation.outbox")

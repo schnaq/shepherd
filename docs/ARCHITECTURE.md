@@ -129,7 +129,14 @@ versioned with `"v": 1`, defined in `web/diff-viewer/src/bridge/protocol.ts` (Ty
 both sides have decode tests over shared fixture JSON in `web/diff-viewer/fixtures/`.
 
 Swift → web (`postMessage` via `evaluateJavaScript("shepherd.receive(…)")`):
-- `loadFile` `{path, language, original, modified, mode: "sideBySide"|"inline", wrap}`
+- `loadFile` `{path, language, original, modified, mode: "sideBySide"|"inline", wrap, commentableLines?}`
+  - `commentableLines` is `{left: [Int], right: [Int]}` — the 1-based lines of each document
+    that came from the patch. Swift reconstructs both sides from GitHub's unified diff and
+    pads the gaps between hunks with blank lines so absolute line numbers still match
+    GitHub's; those fillers are indistinguishable from real content in the model, and GitHub
+    rejects an *entire* review when one `comments[].line` is not part of the diff. The viewer
+    therefore arms the gutter “+” only on the listed lines of the hovered side.
+  - The field is **optional and additive** — omitting it means "every line" — so `v` stays 1.
 - `setTheme` `{theme: "light"|"dark", fontSize}`
 - `setThreads` `{threads: [{id, line, side, resolved, outdated, comments:[{author, bodyHTML, createdAt, isAgent}]}]}`
 - `setDraftComments` `{comments: [{localID, line, side, body}]}`

@@ -99,7 +99,8 @@ public actor GitHubClient {
             let data: SearchPullRequestsData = try await graphQL(
                 document: GraphQLDocuments.searchPullRequests,
                 variables: variables,
-                resource: "search"
+                resource: "search",
+                isIdempotent: true
             )
             let nodes = (data.search?.nodes ?? []).compactMap { $0 }
             for node in nodes {
@@ -331,7 +332,8 @@ public actor GitHubClient {
             let data: ReviewThreadsData = try await graphQL(
                 document: GraphQLDocuments.reviewThreads,
                 variables: variables,
-                resource: "\(repo.fullName)#\(number) threads"
+                resource: "\(repo.fullName)#\(number) threads",
+                isIdempotent: true
             )
             let connection = data.repository?.pullRequest?.reviewThreads
             let nodes = (connection?.nodes ?? []).compactMap { $0 }
@@ -364,7 +366,8 @@ public actor GitHubClient {
                 "name": .string(repo.name),
                 "number": .int(number),
             ],
-            resource: "\(repo.fullName)#\(number) head"
+            resource: "\(repo.fullName)#\(number) head",
+            isIdempotent: true
         )
         guard let oid = data.repository?.pullRequest?.headRefOid else {
             throw GitHubError.notFound(resource: "\(repo.fullName)#\(number)")
@@ -390,6 +393,16 @@ public actor GitHubClient {
         repo: RepoRef,
         number: Int
     ) async throws -> SubmittedReview {
+        // GitHub documents `body` as required when `event` is `REQUEST_CHANGES` or `COMMENT`
+        // and answers 422 otherwise, which is not retryable — the whole review, inline
+        // comments included, is lost. The UI already refuses to compose one, but a queued
+        // outbox row from an older build can still arrive here, so this is the last gate.
+        if let verdict = draft.verdict, verdict != .approve,
+           draft.summaryBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw GitHubError.validationFailed(
+                message: "GitHub requires a summary when a review comments or requests changes."
+            )
+        }
         let body = ReviewSubmissionBody(
             commitId: draft.basedOnHeadOid.isEmpty ? nil : draft.basedOnHeadOid,
             body: draft.summaryBody.isEmpty ? nil : draft.summaryBody,
@@ -455,7 +468,8 @@ public actor GitHubClient {
         let _: ResolveThreadData = try await graphQL(
             document: GraphQLDocuments.resolveReviewThread,
             variables: ["threadId": .string(id)],
-            resource: "resolve thread"
+            resource: "resolve thread",
+            isIdempotent: false
         )
     }
 
@@ -465,7 +479,8 @@ public actor GitHubClient {
         let _: ResolveThreadData = try await graphQL(
             document: GraphQLDocuments.unresolveReviewThread,
             variables: ["threadId": .string(id)],
-            resource: "unresolve thread"
+            resource: "unresolve thread",
+            isIdempotent: false
         )
     }
 
@@ -475,7 +490,8 @@ public actor GitHubClient {
         let _: MarkReadyData = try await graphQL(
             document: GraphQLDocuments.markPullRequestReadyForReview,
             variables: ["pullRequestId": .string(pullRequestID)],
-            resource: "mark ready for review"
+            resource: "mark ready for review",
+            isIdempotent: false
         )
     }
 
@@ -561,7 +577,11 @@ public actor GitHubClient {
         let pollInterval = response.header("x-poll-interval").flatMap { TimeInterval($0) }
         let newLastModified = response.header("last-modified") ?? lastModified
 
-        if response.statusCode == 304 && response.body.isEmpty {
+        // The status code alone decides. `perform` substitutes the cached body into a `304`
+        // so ordinary callers can keep parsing, but for this endpoint that body is *last*
+        // poll's threads: returning them as if they had just arrived pulls a full sweep
+        // forward on every single poll.
+        if response.statusCode == 304 {
             return NotificationsPage(
                 items: [],
                 pollInterval: pollInterval,
@@ -574,16 +594,21 @@ public actor GitHubClient {
             items: dtos.compactMap(ResponseMapping.notification(from:)),
             pollInterval: pollInterval,
             lastModified: newLastModified,
-            notModified: response.statusCode == 304
+            notModified: false
         )
     }
 
     // MARK: - GraphQL plumbing
 
+    /// Runs one GraphQL document.
+    /// - Parameter isIdempotent: `true` for queries, `false` for mutations. GraphQL always
+    ///   travels by `POST`, so the HTTP method cannot answer this: only the caller knows
+    ///   whether replaying the document after a dropped connection is safe.
     private func graphQL<Payload: Decodable>(
         document: String,
         variables: [String: GraphQLValue],
-        resource: String
+        resource: String,
+        isIdempotent: Bool
     ) async throws -> Payload {
         let body = try RESTJSON.encodeGraphQL(
             GraphQLRequestBody(query: document, variables: variables)
@@ -595,7 +620,8 @@ public actor GitHubClient {
             accept: "application/json",
             useCache: false,
             resource: resource,
-            extraHeaders: [:]
+            extraHeaders: [:],
+            isIdempotent: isIdempotent
         )
         let envelope: GraphQLEnvelope<Payload> = try RESTJSON.decodeGraphQL(response.body)
         if let errors = envelope.errors, !errors.isEmpty {
@@ -642,8 +668,42 @@ public actor GitHubClient {
             accept: "application/vnd.github+json",
             useCache: useCache,
             resource: resource,
-            extraHeaders: extraHeaders
+            extraHeaders: extraHeaders,
+            isIdempotent: Self.isIdempotentMethod(method)
         )
+    }
+
+    /// Whether replaying a request after a dropped connection is safe.
+    ///
+    /// Only `GET`/`HEAD`. A `POST` that timed out may well have been executed — GitHub could
+    /// have created the review and lost the response — so replaying it duplicates the write.
+    static func isIdempotentMethod(_ method: String) -> Bool {
+        let upper = method.uppercased()
+        return upper == "GET" || upper == "HEAD"
+    }
+
+    /// The conditional-request cache key for a request, or `nil` when the response must not
+    /// be cached at all.
+    ///
+    /// Two endpoints need special handling, because the cache has no eviction cheap enough to
+    /// clean up after them:
+    ///
+    /// - `/notifications` carries a `since` that is rewritten on every poll. Keying on the
+    ///   full URL mints a brand-new row — holding the whole payload — roughly every minute,
+    ///   and the stored `ETag` can never be replayed because the next request has a different
+    ///   URL. Keying on the path alone makes the validators actually work.
+    /// - `/commits/{sha}/check-runs` is keyed by an immutable SHA, so every push leaves one
+    ///   more permanently unreachable row behind. Not worth caching.
+    static func cacheKey(for url: URL) -> String? {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return url.absoluteString
+        }
+        if components.path.hasSuffix("/check-runs") { return nil }
+        if components.path.hasSuffix("/notifications") {
+            components.queryItems = nil
+            return components.url?.absoluteString ?? url.absoluteString
+        }
+        return url.absoluteString
     }
 
     /// The one place a request leaves this process.
@@ -658,9 +718,10 @@ public actor GitHubClient {
         accept: String,
         useCache: Bool,
         resource: String,
-        extraHeaders: [String: String]
+        extraHeaders: [String: String],
+        isIdempotent: Bool
     ) async throws -> HTTPResponse {
-        let cacheKey = url.absoluteString
+        let cacheKey = Self.cacheKey(for: url)
         var attempt = 0
 
         while true {
@@ -679,7 +740,7 @@ public actor GitHubClient {
             }
 
             var cached: ConditionalCacheEntry? = nil
-            if useCache {
+            if useCache, let cacheKey {
                 cached = await cache.entry(for: cacheKey)
                 if let etag = cached?.etag {
                     headers["If-None-Match"] = etag
@@ -708,7 +769,12 @@ public actor GitHubClient {
                         startedAt: startedAt
                     )
                 )
-                guard mapped.isRetryable, attempt < configuration.maxRetries else { throw mapped }
+                // A connection that dropped mid-request says nothing about whether the server
+                // ran it. Replaying is only safe for reads; a retried `POST /reviews` after a
+                // 30 s timeout is exactly how one review becomes two.
+                guard mapped.isRetryable, isIdempotent, attempt < configuration.maxRetries else {
+                    throw mapped
+                }
                 attempt += 1
                 try await sleeper.sleep(for: .seconds(min(configuration.maxBackoff, 2)))
                 continue
@@ -742,7 +808,7 @@ public actor GitHubClient {
             }
 
             if response.isSuccess {
-                if useCache {
+                if useCache, let cacheKey {
                     let etag = response.header("etag")
                     let lastModified = response.header("last-modified")
                     if etag != nil || lastModified != nil {

@@ -29,6 +29,7 @@ public final class DatabaseManager: Sendable {
         let pool = try DatabasePool(path: url.path, configuration: configuration)
         self.writer = pool
         try DatabaseManager.migrator.migrate(pool)
+        try DatabaseManager.prepareForUse(pool)
     }
 
     /// Creates an in-memory database. Used by tests and previews.
@@ -45,6 +46,7 @@ public final class DatabaseManager: Sendable {
     public init(writer: any DatabaseWriter) throws {
         self.writer = writer
         try DatabaseManager.migrator.migrate(writer)
+        try DatabaseManager.prepareForUse(writer)
     }
 
     /// The append-only schema history.
@@ -54,7 +56,60 @@ public final class DatabaseManager: Sendable {
     public static var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
         migrator.registerMigration("v1", migrate: DatabaseSchema.createV1)
+        migrator.registerMigration("v2", migrate: DatabaseSchema.addV2)
         return migrator
+    }
+
+    /// How long a conditional-request entry may sit unused before it is swept.
+    ///
+    /// A week is long enough that a returning user still gets free `304`s and short enough
+    /// that the table cannot accumulate response bodies for pull requests that are long gone.
+    static let etagMaximumAge: TimeInterval = 7 * 24 * 60 * 60
+    /// A hard ceiling on the number of cached responses, enforced oldest-first.
+    static let etagMaximumRows = 2_000
+
+    /// One-time housekeeping run every time the database is opened.
+    ///
+    /// Two jobs, both of which have to happen before anything else touches the file:
+    /// mutations a crashed run left claimed are handed back to the queue, and the
+    /// conditional-request cache is trimmed so it cannot grow without bound.
+    /// - Parameter writer: The freshly migrated writer.
+    static func prepareForUse(_ writer: any DatabaseWriter) throws {
+        try writer.write { db in
+            try resetInFlightOutboxItems(db)
+            try trimConditionalCache(
+                db,
+                olderThan: Date().addingTimeInterval(-etagMaximumAge),
+                maximumRows: etagMaximumRows
+            )
+        }
+    }
+
+    /// Deletes stale and surplus conditional-cache rows.
+    ///
+    /// The cache stores whole response bodies so a `304` can be answered locally; without a
+    /// TTL and a cap, one row per polled URL accumulates forever.
+    /// - Parameters:
+    ///   - db: The database.
+    ///   - cutoff: Entries stored before this moment are deleted.
+    ///   - maximumRows: The ceiling; the oldest rows above it are deleted.
+    static func trimConditionalCache(
+        _ db: Database,
+        olderThan cutoff: Date,
+        maximumRows: Int
+    ) throws {
+        try db.execute(
+            sql: "DELETE FROM etags WHERE storedAt < ?",
+            arguments: [cutoff.timeIntervalSince1970]
+        )
+        try db.execute(
+            sql: """
+                DELETE FROM etags WHERE key IN (
+                    SELECT key FROM etags ORDER BY storedAt DESC LIMIT -1 OFFSET ?
+                )
+                """,
+            arguments: [max(0, maximumRows)]
+        )
     }
 
     /// Deletes every row of every table, leaving the schema in place.
@@ -291,5 +346,20 @@ enum DatabaseSchema {
                 isEnabled INTEGER NOT NULL DEFAULT 1
             )
             """)
+    }
+
+    /// The v2 additions.
+    ///
+    /// Append-only, as ``DatabaseManager`` requires: `createV1` is never edited.
+    ///
+    /// - `etags(storedAt)` gives the age-based sweep and the row cap in
+    ///   ``DatabaseManager/trimConditionalCache(_:olderThan:maximumRows:)`` an index to work
+    ///   against instead of a full scan on every launch.
+    /// - `review_threads.originalLine` carries the line an outdated thread *used* to hang on.
+    ///   It exists only so the conversation view can say where the thread came from; `line`
+    ///   stays `NULL` when GitHub says the anchor is gone.
+    static func addV2(_ db: Database) throws {
+        try db.execute(sql: "CREATE INDEX idx_etags_storedAt ON etags(storedAt)")
+        try db.execute(sql: "ALTER TABLE review_threads ADD COLUMN originalLine INTEGER")
     }
 }

@@ -25,6 +25,21 @@ enum PatchReconstructor {
         var modified: String
         /// The 1-based line the first change lands on in the modified document, for scrolling.
         var firstChangedLine: Int?
+        /// The lines of ``original`` that came from the patch rather than from the padding.
+        ///
+        /// Only these may carry a comment. The inter-hunk filler is indistinguishable from
+        /// real content once it is in the document, and GitHub rejects the *whole* review —
+        /// summary and every valid inline comment with it — when one `comments[].line` is not
+        /// part of the diff.
+        var commentableOriginalLines: Set<Int>
+        /// The lines of ``modified`` that came from the patch rather than from the padding.
+        var commentableModifiedLines: Set<Int>
+
+        /// The commentable lines for one side of the diff.
+        /// - Parameter side: Which document to ask about.
+        func commentableLines(on side: DiffSide) -> Set<Int> {
+            side == .left ? commentableOriginalLines : commentableModifiedLines
+        }
     }
 
     /// One `@@ -a,b +c,d @@` hunk.
@@ -52,6 +67,8 @@ enum PatchReconstructor {
         var original: [String] = []
         var modified: [String] = []
         var firstChangedLine: Int?
+        var commentableOriginal: Set<Int> = []
+        var commentableModified: Set<Int> = []
 
         for hunk in hunks(in: patch) {
             while original.count < max(0, hunk.originalStart - 1) { original.append("") }
@@ -62,15 +79,19 @@ enum PatchReconstructor {
                     // A completely empty line inside a hunk is an unchanged empty line.
                     original.append("")
                     modified.append("")
+                    commentableOriginal.insert(original.count)
+                    commentableModified.insert(modified.count)
                     continue
                 }
                 let content = String(line.dropFirst())
                 switch marker {
                 case "+":
                     modified.append(content)
+                    commentableModified.insert(modified.count)
                     if firstChangedLine == nil { firstChangedLine = modified.count }
                 case "-":
                     original.append(content)
+                    commentableOriginal.insert(original.count)
                     if firstChangedLine == nil { firstChangedLine = max(1, modified.count + 1) }
                 case "\\":
                     // "\ No newline at end of file" — metadata, not content.
@@ -80,6 +101,8 @@ enum PatchReconstructor {
                     // safe failure mode: the line shows up unchanged on both sides.
                     original.append(content)
                     modified.append(content)
+                    commentableOriginal.insert(original.count)
+                    commentableModified.insert(modified.count)
                 }
             }
         }
@@ -87,7 +110,9 @@ enum PatchReconstructor {
         return Reconstruction(
             original: original.joined(separator: "\n"),
             modified: modified.joined(separator: "\n"),
-            firstChangedLine: firstChangedLine
+            firstChangedLine: firstChangedLine,
+            commentableOriginalLines: commentableOriginal,
+            commentableModifiedLines: commentableModified
         )
     }
 
@@ -106,10 +131,12 @@ enum PatchReconstructor {
                 }
                 continue
             }
-            if rawLine.hasPrefix("diff --git") || rawLine.hasPrefix("index ")
-                || rawLine.hasPrefix("--- ") || rawLine.hasPrefix("+++ ") {
-                continue
-            }
+            // Only `@@` is structural. GitHub's `files[].patch` starts at the first hunk
+            // header and never carries `diff --git` / `index` / `---` / `+++` lines, so
+            // filtering for them here only ever eats real content: a deleted `-- SQL comment`
+            // serialises as `--- SQL comment`, and dropping it shifts every following
+            // original-side line number by one. Anything before the first `@@` is ignored
+            // anyway, because `current` is still nil.
             current?.lines.append(rawLine)
         }
         if let current { result.append(current) }

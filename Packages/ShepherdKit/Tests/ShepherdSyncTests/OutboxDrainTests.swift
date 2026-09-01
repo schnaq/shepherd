@@ -265,6 +265,92 @@ final class OutboxDrainTests: XCTestCase {
         XCTAssertEqual(stored.count, 1)
     }
 
+    // MARK: - Concurrent drains
+
+    /// Waits until `count` scripted calls are parked on the mock's gate.
+    private func waitForGate(_ github: MockGitHub, count: Int) async throws {
+        for _ in 0..<10_000 {
+            if await github.gateWaiterCount >= count { return }
+            await Task.yield()
+        }
+        XCTFail("the scripted call never reached the gate")
+    }
+
+    func testASecondDrainDuringAnInFlightSubmitDoesNotResubmit() async throws {
+        let github = MockGitHub()
+        await github.setHeadOid("head-1", repo: repo, number: 1)
+        let store = try DatabaseManager.inMemory()
+        let pending = draft(headOid: "head-1")
+        try await store.saveDraft(pending)
+        _ = try await enqueue(.submitReview(pending), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        // Drain #1 parks inside `submitReview`, exactly where the network would.
+        await github.closeGate()
+        let first = Task { await engine.drainOutbox() }
+        try await waitForGate(github, count: 1)
+
+        // This is the real scenario: the user hits `r a` on a second pull request, which
+        // enqueues and drains again while the first submission is still in flight.
+        await engine.drainOutbox()
+
+        await github.openGate()
+        await first.value
+
+        let submitted = await github.submittedDrafts
+        XCTAssertEqual(submitted.count, 1, "the same review must never be POSTed twice")
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testWorkEnqueuedDuringADrainIsPickedUpByTheSameDrain() async throws {
+        let github = MockGitHub()
+        await github.setHeadOid("head-1", repo: repo, number: 1)
+        let store = try DatabaseManager.inMemory()
+        let pending = draft(headOid: "head-1")
+        try await store.saveDraft(pending)
+        _ = try await enqueue(.submitReview(pending), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        await github.closeGate()
+        let first = Task { await engine.drainOutbox() }
+        try await waitForGate(github, count: 1)
+
+        // A second mutation lands while the first drain is suspended. The coalesced re-drain
+        // has to pick it up, or it would sit in the queue until the next sweep.
+        _ = try await enqueue(.resolveThread(threadID: "PRRT_LATE"), in: store)
+        await engine.drainOutbox()
+
+        await github.openGate()
+        await first.value
+
+        let resolved = await github.resolvedThreads
+        XCTAssertEqual(resolved, ["PRRT_LATE"])
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testFourConcurrentDrainsSendEachMutationOnce() async throws {
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        for index in 0..<6 {
+            _ = try await enqueue(.resolveThread(threadID: "PRRT_\(index)"), in: store)
+        }
+        let engine = makeEngine(github: github, store: store)
+
+        await withTaskGroup(of: Void.self) { group in
+            for _ in 0..<4 {
+                group.addTask { await engine.drainOutbox() }
+            }
+        }
+
+        let resolved = await github.resolvedThreads
+        XCTAssertEqual(resolved.count, 6)
+        XCTAssertEqual(Set(resolved).count, 6, "no thread is resolved twice")
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
     func testADraftWithoutABaseCommitSkipsTheStalenessProbe() async throws {
         let github = MockGitHub()
         let store = try DatabaseManager.inMemory()

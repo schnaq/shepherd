@@ -54,6 +54,12 @@ struct ReviewScreen: View {
             model.intelligence = environment.intelligence
             model.start()
             isFileListFocused = true
+            // `r x` / `r c` from the inbox (or the command palette) land here: the verdict
+            // needs a summary, so the composer opens rather than a review going out blind.
+            if let verdict = environment.consumePendingReviewVerdict() {
+                model.pendingVerdict = verdict
+                model.isSubmitSheetPresented = true
+            }
         }
         .onDisappear { model.stop() }
         .onChange(of: environment.pendingAction) { _, pending in
@@ -110,7 +116,9 @@ struct ReviewScreen: View {
 
     @ViewBuilder
     private var diffOrPlaceholder: some View {
-        if model.detail == nil {
+        if model.isMissingFromInbox {
+            missingFromInbox
+        } else if model.detail == nil {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if model.detail?.files.isEmpty == true {
             EmptyStateView(
@@ -138,6 +146,42 @@ struct ReviewScreen: View {
                 message: String(localized: "Files are ordered by review priority, riskiest first.")
             )
         }
+    }
+
+    /// Shown when the sweep pruned this pull request — it was merged, closed, or fell past the
+    /// search's page cap. Any pending review is preserved and can be discarded from here.
+    @ViewBuilder
+    private var missingFromInbox: some View {
+        VStack(spacing: 14) {
+            EmptyStateView(
+                systemImage: "tray",
+                title: String(localized: "This pull request is no longer in your inbox"),
+                message: model.pendingCommentCount > 0 || model.draft != nil
+                    ? String(localized: "It was merged, closed, or dropped out of the sweep. Your pending review is still saved locally.")
+                    : String(localized: "It was merged, closed, or dropped out of the sweep.")
+            )
+            HStack(spacing: 8) {
+                Button(String(localized: "Back to the inbox")) { environment.closeReview() }
+                    .buttonStyle(SecondaryButtonStyle())
+                if model.draft != nil {
+                    Button(String(localized: "Discard pending review")) {
+                        Task {
+                            do {
+                                try await model.discardDraft()
+                            } catch {
+                                environment.toasts.failure(
+                                    error,
+                                    context: String(localized: "Could not discard the review")
+                                )
+                            }
+                        }
+                    }
+                    .buttonStyle(SecondaryButtonStyle(tint: Theme.failure))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Theme.background)
     }
 
     // MARK: - Actions

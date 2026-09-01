@@ -40,6 +40,13 @@ public enum OutboxAction: Sendable, Codable, Hashable {
 public enum OutboxState: String, Sendable, Codable, Hashable, CaseIterable {
     /// Waiting to be sent, or waiting out a backoff.
     case pending
+    /// Claimed by a drain and currently in flight.
+    ///
+    /// The claim is what makes the drain safe to call from several places at once: a row is
+    /// moved out of ``pending`` inside the same write transaction that selects it, so a second
+    /// drain overlapping the first can never pick the same row up and send it twice. Rows left
+    /// in this state by a crash are reset to ``pending`` when the database is next opened.
+    case sending
     /// Given up on: it failed in a way retrying cannot fix.
     case failed
     /// Not sent because the pull request moved on underneath it; needs the user to decide.

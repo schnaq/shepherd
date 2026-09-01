@@ -12,6 +12,8 @@ struct DiffViewerContent: Hashable, Sendable {
     var original: String
     /// The right-hand document.
     var modified: String
+    /// Which lines came from the patch, and may therefore carry a comment.
+    var commentableLines: BridgeCommentableLines?
 }
 
 /// Hosts the bundled Monaco diff editor in a `WKWebView` (ADR 0003).
@@ -186,7 +188,8 @@ struct DiffViewerView: NSViewRepresentable {
                         original: content.original,
                         modified: content.modified,
                         mode: mode,
-                        wrap: wrap
+                        wrap: wrap,
+                        commentableLines: content.commentableLines
                     )
                 ))
             }

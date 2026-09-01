@@ -118,38 +118,75 @@ extension URLSessionTransport: HTTPTransport {
             urlRequest.setValue(value, forHTTPHeaderField: name)
         }
 
-        return try await withCheckedThrowingContinuation { continuation in
-            let task = session.dataTask(with: urlRequest) { data, response, error in
-                if let error {
-                    continuation.resume(
-                        throwing: GitHubError.transport(message: String(describing: error))
-                    )
-                    return
-                }
-                guard let http = response as? HTTPURLResponse else {
-                    continuation.resume(
-                        throwing: GitHubError.transport(message: "Response was not an HTTP response")
-                    )
-                    return
-                }
-                var headers: [String: String] = [:]
-                for (key, value) in http.allHeaderFields {
-                    guard let name = key as? String else { continue }
-                    if let string = value as? String {
-                        headers[name] = string
-                    } else {
-                        headers[name] = String(describing: value)
+        // The session task is cancelled when the surrounding Swift task is. Without this the
+        // request runs to completion after `Task.cancel()`, which is how a sweep stopped by
+        // "Sign out & erase" still managed to write pull-request data back to disk.
+        let box = URLSessionTaskBox()
+        return try await withTaskCancellationHandler {
+            try Task.checkCancellation()
+            return try await withCheckedThrowingContinuation { continuation in
+                let task = session.dataTask(with: urlRequest) { data, response, error in
+                    if let error {
+                        continuation.resume(
+                            throwing: GitHubError.transport(message: String(describing: error))
+                        )
+                        return
                     }
-                }
-                continuation.resume(
-                    returning: HTTPResponse(
-                        statusCode: http.statusCode,
-                        headers: headers,
-                        body: data ?? Data()
+                    guard let http = response as? HTTPURLResponse else {
+                        continuation.resume(
+                            throwing: GitHubError.transport(message: "Response was not an HTTP response")
+                        )
+                        return
+                    }
+                    var headers: [String: String] = [:]
+                    for (key, value) in http.allHeaderFields {
+                        guard let name = key as? String else { continue }
+                        if let string = value as? String {
+                            headers[name] = string
+                        } else {
+                            headers[name] = String(describing: value)
+                        }
+                    }
+                    continuation.resume(
+                        returning: HTTPResponse(
+                            statusCode: http.statusCode,
+                            headers: headers,
+                            body: data ?? Data()
+                        )
                     )
-                )
+                }
+                box.adopt(task)
+                task.resume()
             }
-            task.resume()
+        } onCancel: {
+            box.cancel()
         }
+    }
+}
+
+/// Hands the in-flight `URLSessionTask` to the cancellation handler, which runs on an
+/// arbitrary thread and therefore needs the handoff to be synchronised.
+private final class URLSessionTaskBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var task: URLSessionTask?
+    private var isCancelled = false
+
+    /// Stores the task, cancelling it immediately if cancellation already arrived.
+    func adopt(_ task: URLSessionTask) {
+        lock.lock()
+        let cancelNow = isCancelled
+        if !cancelNow { self.task = task }
+        lock.unlock()
+        if cancelNow { task.cancel() }
+    }
+
+    /// Cancels the task, or arranges for it to be cancelled as soon as it is adopted.
+    func cancel() {
+        lock.lock()
+        isCancelled = true
+        let task = self.task
+        self.task = nil
+        lock.unlock()
+        task?.cancel()
     }
 }

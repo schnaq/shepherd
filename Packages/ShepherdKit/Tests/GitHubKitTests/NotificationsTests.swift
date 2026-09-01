@@ -106,14 +106,86 @@ final class NotificationsTests: XCTestCase {
         let cachedCount = await cache.count
         XCTAssertEqual(cachedCount, 1, "the response validators are cached")
 
-        // The second poll is answered from cache and still yields the same items.
+        // The second poll is a free 304. The cached body is *not* replayed as fresh items:
+        // the sync loop treats every returned item as new, so handing back last poll's page
+        // would force a full sweep on every single poll.
         let secondPage = try await client.notifications()
         XCTAssertTrue(secondPage.notModified)
-        XCTAssertEqual(secondPage.items.count, 3, "a 304 replays the cached body")
+        XCTAssertTrue(secondPage.items.isEmpty, "a 304 means nothing changed, not 'these again'")
 
         let requests = await transport.requests
         XCTAssertEqual(requests.count, 2)
         XCTAssertEqual(requests[1].headers["If-None-Match"], "W/\"abc123\"")
+    }
+
+    func testTheNotificationsCacheKeyIgnoresTheVolatileSinceParameter() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "/notifications",
+            try Fixture.response("notifications", headers: ["ETag": "W/\"abc123\""])
+        )
+        await transport.route("/notifications", Fixture.empty(status: 304))
+
+        let cache = InMemoryConditionalCache()
+        let client = GitHubClient.makeForTesting(transport: transport, cache: cache)
+
+        _ = try await client.notifications(since: Date(timeIntervalSince1970: 1_788_162_000))
+        // A later poll rewrites `since`, so the URL differs. Keying on the full URL would mint
+        // a second permanent row holding the whole payload — one per poll, forever — and the
+        // stored ETag could never be replayed.
+        _ = try await client.notifications(since: Date(timeIntervalSince1970: 1_788_165_600))
+
+        let cachedCount = await cache.count
+        XCTAssertEqual(cachedCount, 1, "one row per endpoint, not one per poll")
+
+        let requests = await transport.requests
+        XCTAssertEqual(requests.count, 2)
+        XCTAssertEqual(
+            requests[1].headers["If-None-Match"],
+            "W/\"abc123\"",
+            "the validator is replayed even though `since` moved"
+        )
+    }
+
+    func testPerCommitCheckRunsAreNotCached() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "/check-runs",
+            try Fixture.response("check-runs", headers: ["ETag": "W/\"checks\""])
+        )
+        let cache = InMemoryConditionalCache()
+        let client = GitHubClient.makeForTesting(transport: transport, cache: cache)
+
+        _ = try await client.checkRuns(
+            repo: RepoRef(owner: "schnaq", name: "review"),
+            ref: "abc123"
+        )
+
+        // Keyed by an immutable SHA: every push would leave one more permanently unreachable
+        // row behind, holding a full response body.
+        let cachedCount = await cache.count
+        XCTAssertEqual(cachedCount, 0)
+    }
+
+    func testCacheKeyNormalisation() throws {
+        let notifications = try XCTUnwrap(
+            URL(string: "https://api.github.com/notifications?participating=true&since=2026-08-31T07:41:12Z")
+        )
+        XCTAssertEqual(
+            GitHubClient.cacheKey(for: notifications),
+            "https://api.github.com/notifications"
+        )
+
+        let checks = try XCTUnwrap(
+            URL(string: "https://api.github.com/repos/schnaq/review/commits/abc/check-runs?page=1")
+        )
+        XCTAssertNil(GitHubClient.cacheKey(for: checks))
+
+        let pull = try XCTUnwrap(URL(string: "https://api.github.com/repos/schnaq/review/pulls/128"))
+        XCTAssertEqual(
+            GitHubClient.cacheKey(for: pull),
+            "https://api.github.com/repos/schnaq/review/pulls/128"
+        )
     }
 
     func testNotificationReasonMapping() {

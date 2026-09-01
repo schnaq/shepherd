@@ -310,10 +310,15 @@ public enum ResponseMapping {
                     pendingLocalID: nil
                 )
             }
+        // `line` is deliberately *not* backfilled from `originalLine`. GraphQL nulls `line`
+        // precisely when the thread no longer maps onto the current diff; `originalLine`
+        // points into an older commit's diff, so falling back to it anchors the thread to a
+        // line that today holds unrelated code. It is carried separately, for display only.
         return ReviewThread(
             id: id,
             path: dto.path,
-            line: dto.line ?? dto.originalLine,
+            line: dto.line,
+            originalLine: dto.originalLine,
             side: diffSide(dto.diffSide),
             isResolved: dto.isResolved ?? false,
             isOutdated: dto.isOutdated ?? false,

@@ -15,31 +15,102 @@ extension DatabaseManager {
         }
     }
 
-    /// Reads the mutations that are due to be attempted.
+    /// Claims the mutations that are due to be attempted, moving them out of the queue.
+    ///
+    /// Selecting and claiming happen in **one** write transaction: the rows come back already
+    /// in ``ShepherdCore/OutboxState/sending``, so a second drain running concurrently — and
+    /// there are three callers that can overlap: the sweep loop, `syncNow()`, and the enqueue
+    /// path in the UI — cannot pick the same row up and submit it a second time. A plain
+    /// `SELECT … WHERE state = 'pending'` would hand the same review to both.
+    ///
+    /// The attempt is counted here rather than on failure so that a mutation which kills the
+    /// process mid-flight still walks its backoff instead of retrying forever.
     /// - Parameters:
     ///   - now: The current time; rows whose backoff has not elapsed are skipped.
-    ///   - limit: Maximum number of rows to return.
-    /// - Returns: Due rows, oldest first.
-    public func dequeueReadyOutboxItems(
+    ///   - limit: Maximum number of rows to claim.
+    /// - Returns: The claimed rows, oldest first.
+    public func claimReadyOutboxItems(
         now: Date = Date(),
         limit: Int = 20
     ) async throws -> [OutboxItem] {
         let cutoff = now.timeIntervalSince1970
-        let records = try await writer.read { db in
-            try OutboxRecord.fetchAll(
+        let records = try await writer.write { db -> [OutboxRecord] in
+            let ids = try String.fetchAll(
                 db,
                 sql: """
-                    SELECT * FROM outbox
+                    SELECT id FROM outbox
                     WHERE state = 'pending' AND nextAttemptAt <= ?
                     ORDER BY createdAt ASC
                     LIMIT ?
                     """,
                 arguments: [cutoff, limit]
             )
+            guard !ids.isEmpty else { return [] }
+            let placeholders = Array(repeating: "?", count: ids.count).joined(separator: ",")
+            try db.execute(
+                sql: """
+                    UPDATE outbox
+                    SET state = ?, attemptCount = attemptCount + 1
+                    WHERE id IN (\(placeholders))
+                    """,
+                arguments: StatementArguments([OutboxState.sending.rawValue] + ids)
+            )
+            return try OutboxRecord.fetchAll(
+                db,
+                sql: """
+                    SELECT * FROM outbox
+                    WHERE id IN (\(placeholders))
+                    ORDER BY createdAt ASC
+                    """,
+                arguments: StatementArguments(ids)
+            )
         }
         // A row whose payload no longer decodes (schema drift, corrupt file) is skipped
         // rather than allowed to poison the queue forever.
         return records.compactMap { try? $0.outboxItem() }
+    }
+
+    /// Hands claimed rows back to the queue without counting a failure.
+    ///
+    /// Used when a drain stops early — the app is quitting, or the sweep task was cancelled —
+    /// so that rows claimed but never attempted are not stranded in
+    /// ``ShepherdCore/OutboxState/sending`` until the next launch.
+    /// - Parameter ids: The rows to release. Rows that already moved on are left alone.
+    public func releaseOutboxItems(ids: [UUID]) async throws {
+        guard !ids.isEmpty else { return }
+        let strings = ids.map(\.uuidString)
+        try await writer.write { db in
+            let placeholders = Array(repeating: "?", count: strings.count).joined(separator: ",")
+            try db.execute(
+                sql: """
+                    UPDATE outbox
+                    SET state = ?, attemptCount = MAX(0, attemptCount - 1)
+                    WHERE state = ? AND id IN (\(placeholders))
+                    """,
+                arguments: StatementArguments(
+                    [OutboxState.pending.rawValue, OutboxState.sending.rawValue] + strings
+                )
+            )
+        }
+    }
+
+    /// Resets rows a previous run left in flight.
+    ///
+    /// Called when the database is opened: a process that died between the claim and the
+    /// response would otherwise leave its mutations stuck in
+    /// ``ShepherdCore/OutboxState/sending`` forever.
+    public func resetInFlightOutboxItems() async throws {
+        try await writer.write { db in
+            try DatabaseManager.resetInFlightOutboxItems(db)
+        }
+    }
+
+    /// The synchronous body of ``resetInFlightOutboxItems()``, so `init` can run it too.
+    static func resetInFlightOutboxItems(_ db: Database) throws {
+        try db.execute(
+            sql: "UPDATE outbox SET state = ? WHERE state = ?",
+            arguments: [OutboxState.pending.rawValue, OutboxState.sending.rawValue]
+        )
     }
 
     /// Marks a mutation as sent and removes it from the queue.
@@ -69,7 +140,16 @@ extension DatabaseManager {
                 sql: "SELECT attemptCount FROM outbox WHERE id = ?",
                 arguments: [id.uuidString]
             ) ?? 0
-            let nextAttempt = attempts + 1
+            let state = try String.fetchOne(
+                db,
+                sql: "SELECT state FROM outbox WHERE id = ?",
+                arguments: [id.uuidString]
+            )
+            // ``claimReadyOutboxItems(now:limit:)`` already counted this attempt when it moved
+            // the row to `sending`; a caller that never claimed the row counts it here.
+            let nextAttempt = state == OutboxState.sending.rawValue
+                ? max(1, attempts)
+                : attempts + 1
             let delay = OutboxBackoff.delay(forAttempt: nextAttempt)
             try db.execute(
                 sql: """
@@ -113,11 +193,14 @@ extension DatabaseManager {
     }
 
     /// How many mutations are waiting to be sent.
+    ///
+    /// A row that is currently in flight still counts: from the user's point of view it has
+    /// not landed yet.
     public func pendingOutboxCount() async throws -> Int {
         try await writer.read { db in
             try Int.fetchOne(
                 db,
-                sql: "SELECT COUNT(*) FROM outbox WHERE state = 'pending'"
+                sql: "SELECT COUNT(*) FROM outbox WHERE state IN ('pending', 'sending')"
             ) ?? 0
         }
     }

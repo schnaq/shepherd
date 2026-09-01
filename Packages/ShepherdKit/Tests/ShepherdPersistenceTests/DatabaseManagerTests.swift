@@ -26,7 +26,26 @@ final class MigrationTests: XCTestCase {
         let count = try await queue.read { db in
             try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM grdb_migrations") ?? 0
         }
-        XCTAssertEqual(count, 1)
+        XCTAssertEqual(count, DatabaseManager.migrator.migrations.count)
+    }
+
+    func testTheSchemaIsAppendOnly() async throws {
+        // v1 is frozen; every change is a new migration. Locking the *order* here means an
+        // edit to `createV1` — which would silently skip on existing installs — fails CI.
+        XCTAssertEqual(DatabaseManager.migrator.migrations, ["v1", "v2"])
+    }
+
+    func testV2AddsTheETagIndexAndTheOriginalLineColumn() async throws {
+        let database = try DatabaseManager.inMemory()
+        try await database.writer.read { db in
+            let indexes = try String.fetchAll(
+                db,
+                sql: "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'etags'"
+            )
+            XCTAssertTrue(indexes.contains("idx_etags_storedAt"))
+            let columns = try db.columns(in: "review_threads").map(\.name)
+            XCTAssertTrue(columns.contains("originalLine"))
+        }
     }
 
     func testDatabaseCanBeOpenedFromAURL() throws {
@@ -125,6 +144,81 @@ final class InboxStoreTests: XCTestCase {
         XCTAssertTrue(inbox.isEmpty)
     }
 
+    func testPruningKeepsAPullRequestTheUserHasADraftFor() async throws {
+        let database = try makeDatabase()
+        try await database.savePullRequestSummaries([
+            PersistenceFixtures.summary(id: "PR_1", number: 1),
+            PersistenceFixtures.summary(id: "PR_2", number: 2),
+        ])
+        try await database.savePullRequestDetail(
+            PersistenceFixtures.detail(
+                summary: PersistenceFixtures.summary(id: "PR_1", number: 1)
+            )
+        )
+        try await database.saveDraft(PersistenceFixtures.draft(prID: "PR_1"))
+
+        // PR_1 fell out of the search — merged, or past the five-page cap.
+        try await database.savePullRequestSummaries([
+            PersistenceFixtures.summary(id: "PR_2", number: 2)
+        ])
+
+        let inbox = try await database.fetchInbox()
+        XCTAssertEqual(Set(inbox.map(\.id)), ["PR_1", "PR_2"], "a drafted PR is not pruned")
+        let detail = try await database.fetchPullRequestDetail(id: "PR_1")
+        XCTAssertNotNil(detail, "its files must survive too, or the draft has nothing to anchor to")
+        XCTAssertNotNil(try await database.fetchDraft(prID: "PR_1"))
+    }
+
+    func testPruningKeepsAPullRequestWithANonTerminalOutboxRow() async throws {
+        let database = try makeDatabase()
+        try await database.savePullRequestSummaries([
+            PersistenceFixtures.summary(id: "PR_1", number: 1),
+            PersistenceFixtures.summary(id: "PR_2", number: 2),
+            PersistenceFixtures.summary(id: "PR_3", number: 3),
+        ])
+        let queued = OutboxItem(
+            prID: "PR_1",
+            repo: PersistenceFixtures.repo,
+            number: 1,
+            action: .resolveThread(threadID: "PRRT_1")
+        )
+        try await database.enqueue(queued)
+        let settled = OutboxItem(
+            prID: "PR_3",
+            repo: PersistenceFixtures.repo,
+            number: 3,
+            action: .resolveThread(threadID: "PRRT_3")
+        )
+        try await database.enqueue(settled)
+        try await database.markOutboxItemFailed(
+            id: settled.id,
+            error: "422",
+            now: Date(),
+            retriable: false
+        )
+
+        try await database.savePullRequestSummaries([
+            PersistenceFixtures.summary(id: "PR_2", number: 2)
+        ])
+
+        let inbox = try await database.fetchInbox()
+        XCTAssertEqual(
+            Set(inbox.map(\.id)),
+            ["PR_1", "PR_2"],
+            "a queued mutation holds its PR open; a failed one does not"
+        )
+    }
+
+    func testAnEmptySweepStillKeepsDraftedPullRequests() async throws {
+        let database = try makeDatabase()
+        try await database.savePullRequestSummaries([PersistenceFixtures.summary(id: "PR_1")])
+        try await database.saveDraft(PersistenceFixtures.draft(prID: "PR_1"))
+
+        try await database.savePullRequestSummaries([])
+
+        XCTAssertEqual(try await database.fetchInbox().map(\.id), ["PR_1"])
+    }
+
     func testInboxIsOrderedMostRecentlyUpdatedFirst() async throws {
         let database = try makeDatabase()
         try await database.savePullRequestSummaries([
@@ -196,13 +290,78 @@ final class InboxStoreTests: XCTestCase {
 
         detail.files = [detail.files[0]]
         detail.threads = [detail.threads[0]]
-        detail.checks = []
+        detail.checks = [detail.checks[0]]
         try await database.savePullRequestDetail(detail)
 
         let loaded = try await database.fetchPullRequestDetail(id: detail.id)
         XCTAssertEqual(loaded?.files.count, 1)
         XCTAssertEqual(loaded?.threads.count, 1)
-        XCTAssertEqual(loaded?.checks.count, 0)
+        XCTAssertEqual(loaded?.checks.count, 1)
+    }
+
+    func testADetailWithoutChecksKeepsTheRollupTheSweepComputed() async throws {
+        let database = try makeDatabase()
+        // The sweep's GraphQL `statusCheckRollup` includes classic commit statuses…
+        try await database.savePullRequestSummaries([
+            PersistenceFixtures.summary(
+                checkRollup: CheckRollup(
+                    state: .failure,
+                    total: 2,
+                    successCount: 1,
+                    failureCount: 1,
+                    pendingCount: 0
+                )
+            )
+        ])
+
+        // …but `/commits/{sha}/check-runs` does not, so a repo on Jenkins reports none.
+        var detail = PersistenceFixtures.detail()
+        detail.summary.checkRollup = nil
+        detail.checks = []
+        try await database.savePullRequestDetail(detail)
+
+        let loaded = try await database.fetchPullRequestSummary(id: detail.id)
+        XCTAssertEqual(loaded?.checkRollup?.state, .failure, "the badge must not blink out")
+        XCTAssertEqual(loaded?.checkRollup?.total, 2)
+        XCTAssertEqual(loaded?.checkRollup?.failureCount, 1)
+
+        let stored = try await database.fetchPullRequestDetail(id: detail.id)
+        XCTAssertEqual(stored?.checks.count, 2, "the previously fetched runs are kept too")
+    }
+
+    func testADetailWithChecksReplacesTheRollup() async throws {
+        let database = try makeDatabase()
+        try await database.savePullRequestSummaries([PersistenceFixtures.summary()])
+
+        var detail = PersistenceFixtures.detail()
+        detail.summary.checkRollup = CheckRollup(state: .success, total: 2, successCount: 2)
+        try await database.savePullRequestDetail(detail)
+
+        let loaded = try await database.fetchPullRequestSummary(id: detail.id)
+        XCTAssertEqual(loaded?.checkRollup?.state, .success)
+        XCTAssertEqual(loaded?.checkRollup?.successCount, 2)
+    }
+
+    func testOutdatedThreadsKeepTheirOriginalLineAcrossAReload() async throws {
+        let database = try makeDatabase()
+        var detail = PersistenceFixtures.detail()
+        detail.threads = [
+            ReviewThread(
+                id: "PRRT_9",
+                path: "Sources/Auth/TokenStore.swift",
+                line: nil,
+                originalLine: 42,
+                side: .right,
+                isResolved: false,
+                isOutdated: true
+            )
+        ]
+        try await database.savePullRequestDetail(detail)
+
+        let loaded = try await database.fetchPullRequestDetail(id: detail.id)
+        XCTAssertNil(loaded?.threads.first?.line, "a lost anchor stays lost")
+        XCTAssertEqual(loaded?.threads.first?.originalLine, 42)
+        XCTAssertEqual(loaded?.threads.first?.isAnchoredInCurrentDiff, false)
     }
 
     func testDetailSavePreservesRelationsFromTheSweep() async throws {

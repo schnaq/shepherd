@@ -120,6 +120,47 @@ final class BridgeProtocolTests: XCTestCase {
         XCTAssertTrue(payload.wrap)
     }
 
+    func testLoadFileCommentableLinesAreOptionalAndAdditive() throws {
+        // A payload without the field still decodes: the field is additive, which is why the
+        // protocol version stays 1 and the older fixtures keep working on both sides.
+        let without = """
+            {"v":1,"type":"loadFile","path":"a.sql","language":"sql",
+             "original":"x","modified":"y","mode":"inline","wrap":false}
+            """
+        let message = try JSONDecoder().decode(DiffViewerCommand.self, from: Data(without.utf8))
+        guard case .loadFile(let bare) = message else {
+            return XCTFail("Expected a loadFile message")
+        }
+        XCTAssertNil(bare.commentableLines)
+        let reencoded = String(decoding: try JSONEncoder().encode(message), as: UTF8.self)
+        XCTAssertFalse(reencoded.contains("commentableLines"), "nil is omitted, not sent as null")
+
+        let with = """
+            {"v":1,"type":"loadFile","path":"a.sql","language":"sql",
+             "original":"x","modified":"y","mode":"inline","wrap":false,
+             "commentableLines":{"left":[1,2],"right":[1,2,3]}}
+            """
+        let full = try JSONDecoder().decode(DiffViewerCommand.self, from: Data(with.utf8))
+        guard case .loadFile(let payload) = full else {
+            return XCTFail("Expected a loadFile message")
+        }
+        XCTAssertEqual(payload.commentableLines?.left, [1, 2])
+        XCTAssertEqual(payload.commentableLines?.right, [1, 2, 3])
+    }
+
+    func testCommentableLinesMustBeOneBased() {
+        let json = """
+            {"v":1,"type":"loadFile","path":"a.sql","language":"sql",
+             "original":"x","modified":"y","mode":"inline","wrap":false,
+             "commentableLines":{"left":[0],"right":[1]}}
+            """
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(DiffViewerCommand.self, from: Data(json.utf8))
+        ) { error in
+            XCTAssertEqual(error as? BridgeProtocolError, .invalidLineNumber(0))
+        }
+    }
+
     func testWrongProtocolVersionIsRejected() {
         let json = #"{"v":2,"type":"ready"}"#
         XCTAssertThrowsError(

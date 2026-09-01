@@ -271,6 +271,93 @@ final class DeviceFlowTests: XCTestCase {
         XCTAssertEqual(stored?.accessToken, "ghu_16C7e42F292c6912E7710c838347Ae178B4a")
     }
 
+    func testConcurrentCallersShareOneRefresh() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "/login/oauth/access_token",
+            try Fixture.response("device-token-success")
+        )
+
+        let store = InMemoryTokenStore()
+        try await store.setToken(
+            TokenSet(
+                accessToken: "stale",
+                refreshToken: "ghr_old",
+                expiresAt: Date(timeIntervalSince1970: 10)
+            ),
+            for: "octocat"
+        )
+
+        let provider = RefreshingTokenProvider(
+            login: "octocat",
+            store: store,
+            refresher: TokenRefresher(
+                clientID: clientID,
+                transport: transport,
+                now: { Date(timeIntervalSince1970: 100) }
+            ),
+            now: { Date(timeIntervalSince1970: 100) }
+        )
+
+        // A sweep fires five detail fetches at once, each asking for a token.
+        let tokens = try await withThrowingTaskGroup(of: String.self) { group in
+            for _ in 0..<5 {
+                group.addTask { try await provider.accessToken() }
+            }
+            var collected: [String] = []
+            for try await token in group { collected.append(token) }
+            return collected
+        }
+
+        XCTAssertEqual(tokens.count, 5)
+        XCTAssertEqual(
+            Set(tokens),
+            ["ghu_16C7e42F292c6912E7710c838347Ae178B4a"],
+            "every caller gets the winner's token"
+        )
+
+        // GitHub App refresh tokens are single-use and rotate: a second POST with the same
+        // token fails, and its loser could overwrite the winner's fresh pair in the store.
+        let requests = await transport.requests
+        XCTAssertEqual(requests.count, 1, "five callers, exactly one refresh")
+
+        let stored = try await store.token(for: "octocat")
+        XCTAssertEqual(stored?.accessToken, "ghu_16C7e42F292c6912E7710c838347Ae178B4a")
+    }
+
+    func testAFreshTokenIsReturnedWithoutRefreshingAgain() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "/login/oauth/access_token",
+            try Fixture.response("device-token-success")
+        )
+        let store = InMemoryTokenStore()
+        try await store.setToken(
+            TokenSet(
+                accessToken: "stale",
+                refreshToken: "ghr_old",
+                expiresAt: Date(timeIntervalSince1970: 10)
+            ),
+            for: "octocat"
+        )
+        let provider = RefreshingTokenProvider(
+            login: "octocat",
+            store: store,
+            refresher: TokenRefresher(
+                clientID: clientID,
+                transport: transport,
+                now: { Date(timeIntervalSince1970: 100) }
+            ),
+            now: { Date(timeIntervalSince1970: 100) }
+        )
+
+        _ = try await provider.accessToken()
+        _ = try await provider.accessToken()
+
+        let requests = await transport.requests
+        XCTAssertEqual(requests.count, 1, "the second call reads the renewed token from the store")
+    }
+
     func testRefreshingProviderReportsAMissingToken() async {
         let provider = RefreshingTokenProvider(login: "nobody", store: InMemoryTokenStore())
         do {

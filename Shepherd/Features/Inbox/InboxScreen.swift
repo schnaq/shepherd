@@ -116,11 +116,14 @@ struct InboxScreen: View {
         case .openSelection:
             if let id = model.selectedID { open(id) }
         case .approve:
+            // An approval is the one verdict GitHub accepts without a summary body.
             queueReview(.approve)
         case .requestChanges:
-            queueReview(.requestChanges)
+            // `REQUEST_CHANGES` and `COMMENT` require a body, so these open the review
+            // screen's composer instead of firing a review GitHub would answer 422 to.
+            compose(.requestChanges)
         case .comment:
-            if let id = model.selectedID { open(id) }
+            compose(.comment)
         case .merge:
             if model.selectedRow != nil { isMergeSheetPresented = true }
         case .groupBy(let facet):
@@ -133,6 +136,12 @@ struct InboxScreen: View {
         Task {
             await actions.submitReview(on: summary, verdict: verdict)
         }
+    }
+
+    /// Opens the review screen with its submit composer already showing the verdict.
+    private func compose(_ verdict: ReviewVerdict) {
+        guard let id = model.selectedID else { return }
+        environment.openReview(prID: id, composing: verdict)
     }
 }
 

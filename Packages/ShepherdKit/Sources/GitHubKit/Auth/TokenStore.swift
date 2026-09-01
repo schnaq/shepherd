@@ -143,6 +143,15 @@ public actor RefreshingTokenProvider: AccessTokenProviding {
     private let refresher: TokenRefresher?
     private let now: @Sendable () -> Date
 
+    /// The renewal currently in flight, if any.
+    ///
+    /// GitHub App refresh tokens are **single-use and rotate**: the first refresh invalidates
+    /// the token it was called with. Five concurrent detail fetches all noticing the same
+    /// expiry used to POST the same refresh token five times — one winner, four
+    /// `tokenRefreshFailed`, and a store that could end up holding the loser's stale pair.
+    /// Everyone now waits on the same task.
+    private var refreshTask: Task<TokenSet, Error>?
+
     /// Creates a provider.
     /// - Parameters:
     ///   - login: The GitHub login whose credential to use.
@@ -169,13 +178,41 @@ public actor RefreshingTokenProvider: AccessTokenProviding {
         guard let stored = try await store.token(for: login) else {
             throw GitHubError.missingToken(login: login)
         }
-        guard stored.isExpired(at: now()), let refreshToken = stored.refreshToken,
-              let refresher
-        else {
+        guard stored.isExpired(at: now()), stored.refreshToken != nil, let refresher else {
             return stored.accessToken
         }
-        let refreshed = try await refresher.refresh(refreshToken: refreshToken)
-        try await store.setToken(refreshed, for: login)
-        return refreshed.accessToken
+        return try await refreshedToken(using: refresher).accessToken
+    }
+
+    /// Renews the credential, at most once no matter how many callers ask at the same time.
+    private func refreshedToken(using refresher: TokenRefresher) async throws -> TokenSet {
+        while true {
+            if let inFlight = refreshTask {
+                return try await inFlight.value
+            }
+
+            // Re-read: this call may have been suspended on its *first* store read while
+            // another one refreshed and stored a perfectly good token.
+            guard let current = try await store.token(for: login) else {
+                throw GitHubError.missingToken(login: login)
+            }
+
+            // Nothing below this line suspends before `refreshTask` is assigned, so no second
+            // caller can slip past the check above and start a competing refresh.
+            if refreshTask != nil { continue }
+            guard current.isExpired(at: now()), let refreshToken = current.refreshToken else {
+                return current
+            }
+            let login = self.login
+            let store = self.store
+            let task = Task<TokenSet, Error> {
+                let refreshed = try await refresher.refresh(refreshToken: refreshToken)
+                try await store.setToken(refreshed, for: login)
+                return refreshed
+            }
+            refreshTask = task
+            defer { refreshTask = nil }
+            return try await task.value
+        }
     }
 }

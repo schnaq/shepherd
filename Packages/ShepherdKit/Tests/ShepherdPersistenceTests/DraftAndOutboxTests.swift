@@ -142,7 +142,7 @@ final class OutboxStoreTests: XCTestCase {
             try await database.enqueue(queued)
         }
 
-        let ready = try await database.dequeueReadyOutboxItems(now: now, limit: 50)
+        let ready = try await database.claimReadyOutboxItems(now: now, limit: 50)
         XCTAssertEqual(ready.count, actions.count)
         XCTAssertEqual(ready.map(\.action), actions, "actions must round-trip exactly")
         XCTAssertTrue(ready.allSatisfy { $0.repo == PersistenceFixtures.repo })
@@ -156,7 +156,7 @@ final class OutboxStoreTests: XCTestCase {
         try await database.enqueue(due)
         try await database.enqueue(notDue)
 
-        let ready = try await database.dequeueReadyOutboxItems(now: now, limit: 50)
+        let ready = try await database.claimReadyOutboxItems(now: now, limit: 50)
         XCTAssertEqual(ready.map(\.id), [due.id])
     }
 
@@ -212,7 +212,7 @@ final class OutboxStoreTests: XCTestCase {
         let stored = try await database.allOutboxItems()
         XCTAssertEqual(stored.first?.state, .failed)
 
-        let ready = try await database.dequeueReadyOutboxItems(
+        let ready = try await database.claimReadyOutboxItems(
             now: now.addingTimeInterval(86_400),
             limit: 50
         )
@@ -229,7 +229,7 @@ final class OutboxStoreTests: XCTestCase {
         XCTAssertEqual(stored.first?.state, .conflicted)
         XCTAssertEqual(stored.first?.lastError, "head moved")
 
-        let ready = try await database.dequeueReadyOutboxItems(
+        let ready = try await database.claimReadyOutboxItems(
             now: now.addingTimeInterval(86_400),
             limit: 50
         )
@@ -253,9 +253,112 @@ final class OutboxStoreTests: XCTestCase {
             queued.createdAt = Date(timeIntervalSince1970: 1_788_160_000 + Double(index))
             try await database.enqueue(queued)
         }
-        let ready = try await database.dequeueReadyOutboxItems(now: now, limit: 3)
+        let ready = try await database.claimReadyOutboxItems(now: now, limit: 3)
         XCTAssertEqual(ready.count, 3)
         XCTAssertEqual(ready.map(\.createdAt), ready.map(\.createdAt).sorted())
+    }
+
+    // MARK: - Claiming
+
+    func testClaimingMovesRowsOutOfPendingSoASecondClaimSeesNothing() async throws {
+        let database = try DatabaseManager.inMemory()
+        let queued = item()
+        try await database.enqueue(queued)
+
+        let first = try await database.claimReadyOutboxItems(now: now, limit: 50)
+        let second = try await database.claimReadyOutboxItems(now: now, limit: 50)
+
+        XCTAssertEqual(first.map(\.id), [queued.id])
+        XCTAssertTrue(second.isEmpty, "a claimed row must never be handed out twice")
+        XCTAssertEqual(first.first?.state, .sending)
+        XCTAssertEqual(first.first?.attemptCount, 1, "the claim counts the attempt")
+
+        let stored = try await database.allOutboxItems()
+        XCTAssertEqual(stored.first?.state, .sending)
+    }
+
+    func testConcurrentClaimsSplitTheQueueWithoutOverlap() async throws {
+        let database = try DatabaseManager.inMemory()
+        var expected: Set<UUID> = []
+        for index in 0..<10 {
+            var queued = item()
+            queued.createdAt = Date(timeIntervalSince1970: 1_788_160_000 + Double(index))
+            expected.insert(queued.id)
+            try await database.enqueue(queued)
+        }
+
+        let claimed = try await withThrowingTaskGroup(of: [OutboxItem].self) { group in
+            for _ in 0..<4 {
+                group.addTask { try await database.claimReadyOutboxItems(now: self.now, limit: 10) }
+            }
+            var all: [OutboxItem] = []
+            for try await batch in group { all.append(contentsOf: batch) }
+            return all
+        }
+
+        XCTAssertEqual(claimed.count, 10, "every row is claimed exactly once")
+        XCTAssertEqual(Set(claimed.map(\.id)), expected)
+    }
+
+    func testInFlightRowsAreResetWhenTheDatabaseIsReopened() async throws {
+        let path = FileManager.default.temporaryDirectory
+            .appendingPathComponent("shepherd-outbox-\(UUID().uuidString).sqlite")
+        defer { try? FileManager.default.removeItem(at: path) }
+
+        let queued = item()
+        do {
+            let database = try DatabaseManager(url: path)
+            try await database.enqueue(queued)
+            let claimed = try await database.claimReadyOutboxItems(now: now, limit: 50)
+            XCTAssertEqual(claimed.first?.state, .sending)
+        }
+
+        // A crash between the claim and the response looks exactly like this.
+        let reopened = try DatabaseManager(url: path)
+        let stored = try await reopened.allOutboxItems()
+        XCTAssertEqual(stored.first?.state, .pending, "a stranded row is retried, not lost")
+        let ready = try await reopened.claimReadyOutboxItems(now: now, limit: 50)
+        XCTAssertEqual(ready.map(\.id), [queued.id])
+    }
+
+    func testReleasingHandsAClaimedRowBack() async throws {
+        let database = try DatabaseManager.inMemory()
+        let queued = item()
+        try await database.enqueue(queued)
+        _ = try await database.claimReadyOutboxItems(now: now, limit: 50)
+
+        try await database.releaseOutboxItems(ids: [queued.id])
+
+        let stored = try await database.allOutboxItems()
+        XCTAssertEqual(stored.first?.state, .pending)
+        XCTAssertEqual(stored.first?.attemptCount, 0, "an unattempted claim does not count")
+    }
+
+    func testFailingAClaimedRowDoesNotDoubleCountTheAttempt() async throws {
+        let database = try DatabaseManager.inMemory()
+        let queued = item()
+        try await database.enqueue(queued)
+        _ = try await database.claimReadyOutboxItems(now: now, limit: 50)
+
+        try await database.markOutboxItemFailed(id: queued.id, error: "offline", now: now)
+
+        let stored = try await database.allOutboxItems()
+        XCTAssertEqual(stored.first?.attemptCount, 1)
+        XCTAssertEqual(stored.first?.state, .pending)
+        XCTAssertEqual(
+            stored.first?.nextAttemptAt.timeIntervalSince1970 ?? 0,
+            now.addingTimeInterval(5).timeIntervalSince1970,
+            accuracy: 0.001
+        )
+    }
+
+    func testInFlightRowsStillCountAsPendingForTheBadge() async throws {
+        let database = try DatabaseManager.inMemory()
+        try await database.enqueue(item())
+        _ = try await database.claimReadyOutboxItems(now: now, limit: 50)
+
+        let pending = try await database.pendingOutboxCount()
+        XCTAssertEqual(pending, 1, "a mutation in flight has not landed yet")
     }
 }
 
@@ -310,6 +413,56 @@ final class ConditionalCacheStoreTests: XCTestCase {
         let cache = DatabaseConditionalCache(database: database)
         let loaded = await cache.entry(for: "never-stored")
         XCTAssertNil(loaded)
+    }
+
+    func testTrimmingDropsStaleEntries() async throws {
+        let database = try DatabaseManager.inMemory()
+        let cache = DatabaseConditionalCache(database: database)
+        let now = Date(timeIntervalSince1970: 1_788_162_000)
+        await cache.store(
+            ConditionalCacheEntry(etag: "old", storedAt: now.addingTimeInterval(-8 * 86_400)),
+            for: "stale"
+        )
+        await cache.store(ConditionalCacheEntry(etag: "new", storedAt: now), for: "fresh")
+
+        try await database.writer.write { db in
+            try DatabaseManager.trimConditionalCache(
+                db,
+                olderThan: now.addingTimeInterval(-7 * 86_400),
+                maximumRows: 100
+            )
+        }
+
+        XCTAssertNil(await cache.entry(for: "stale"))
+        XCTAssertNotNil(await cache.entry(for: "fresh"))
+    }
+
+    func testTrimmingEnforcesARowCapOldestFirst() async throws {
+        let database = try DatabaseManager.inMemory()
+        let cache = DatabaseConditionalCache(database: database)
+        let now = Date(timeIntervalSince1970: 1_788_162_000)
+        for index in 0..<5 {
+            await cache.store(
+                ConditionalCacheEntry(
+                    etag: "e\(index)",
+                    storedAt: now.addingTimeInterval(Double(index))
+                ),
+                for: "key-\(index)"
+            )
+        }
+
+        try await database.writer.write { db in
+            try DatabaseManager.trimConditionalCache(
+                db,
+                olderThan: now.addingTimeInterval(-86_400),
+                maximumRows: 2
+            )
+        }
+
+        let remaining = try await database.writer.read { db in
+            try String.fetchAll(db, sql: "SELECT key FROM etags ORDER BY key")
+        }
+        XCTAssertEqual(remaining, ["key-3", "key-4"], "the newest entries survive the cap")
     }
 }
 

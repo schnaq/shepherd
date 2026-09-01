@@ -30,6 +30,22 @@ export type ThemeName = 'light' | 'dark';
 // Swift → web
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * The 1-based lines of each document that came from the patch, and may therefore carry a
+ * comment.
+ *
+ * Swift rebuilds both sides of the diff from GitHub's unified patch and pads the gaps between
+ * hunks with blank lines so absolute line numbers still match GitHub's. Those fillers are
+ * indistinguishable from real content once they are in the model, and GitHub rejects the
+ * *entire* review — summary and every valid inline comment with it — when one comment lands on
+ * a line that is not part of the diff. So the native side says which lines are real and the
+ * gutter “+” only arms on those.
+ */
+export interface CommentableLines {
+  readonly left: readonly number[];
+  readonly right: readonly number[];
+}
+
 export interface LoadFileMessage {
   readonly v: ProtocolVersion;
   readonly type: 'loadFile';
@@ -40,6 +56,11 @@ export interface LoadFileMessage {
   readonly modified: string;
   readonly mode: DiffMode;
   readonly wrap: boolean;
+  /**
+   * Optional, and additive — a payload without it means "every line is commentable", which is
+   * what this viewer did before the field existed. That is why `v` stays 1.
+   */
+  readonly commentableLines?: CommentableLines;
 }
 
 export interface SetThemeMessage {
@@ -265,6 +286,26 @@ function envelope(value: unknown, path: string): ParseResult<Rec> {
   return ok(value);
 }
 
+function parseLineList(value: unknown, path: string): ParseResult<number[]> {
+  if (!Array.isArray(value)) return fail(`${path}: expected array`);
+  const lines: number[] = [];
+  for (let i = 0; i < value.length; i += 1) {
+    const line: unknown = value[i];
+    if (!isLineNumber(line)) return fail(`${path}[${i}]: expected a 1-based line number`);
+    lines.push(line);
+  }
+  return ok(lines);
+}
+
+function parseCommentableLines(value: unknown, path: string): ParseResult<CommentableLines> {
+  if (!isRecord(value)) return fail(`${path}: expected an object`);
+  const left = parseLineList(value['left'], `${path}.left`);
+  if (!left.ok) return fail(left.error);
+  const right = parseLineList(value['right'], `${path}.right`);
+  if (!right.ok) return fail(right.error);
+  return ok({ left: left.value, right: right.value });
+}
+
 function parseThreadComment(value: unknown, path: string): ParseResult<ThreadComment> {
   if (!isRecord(value)) return fail(`${path}: expected an object`);
   if (!isString(value['author'])) return fail(`${path}.author: expected string`);
@@ -335,7 +376,7 @@ export function parseInbound(value: unknown): ParseResult<InboundMessage> {
       if (!isString(msg['modified'])) return fail('loadFile.modified: expected string');
       if (!isDiffMode(msg['mode'])) return fail('loadFile.mode: expected "sideBySide" | "inline"');
       if (!isBoolean(msg['wrap'])) return fail('loadFile.wrap: expected boolean');
-      return ok({
+      const base = {
         v: PROTOCOL_VERSION,
         type: 'loadFile',
         path: msg['path'],
@@ -344,7 +385,12 @@ export function parseInbound(value: unknown): ParseResult<InboundMessage> {
         modified: msg['modified'],
         mode: msg['mode'],
         wrap: msg['wrap'],
-      });
+      } as const;
+      const rawCommentable = msg['commentableLines'];
+      if (rawCommentable === undefined || rawCommentable === null) return ok(base);
+      const commentableLines = parseCommentableLines(rawCommentable, 'loadFile.commentableLines');
+      if (!commentableLines.ok) return fail(commentableLines.error);
+      return ok({ ...base, commentableLines: commentableLines.value });
     }
     case 'setTheme': {
       if (!isThemeName(msg['theme'])) return fail('setTheme.theme: expected "light" | "dark"');

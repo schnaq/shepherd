@@ -37,6 +37,16 @@ export interface GutterProbe {
   readonly side: Side;
   /** Line count of that pane's model — guards stale targets past the end of the file. */
   readonly lineCount: number;
+  /**
+   * The lines of this side that are actually part of the diff, from `loadFile`'s
+   * `commentableLines`; `null`/`undefined` means the native side did not say, and every line
+   * is armable (the pre-`commentableLines` behaviour).
+   *
+   * The reconstruction pads the gaps between hunks with blank lines so line numbers match
+   * GitHub's. Arming the “+” on one of those produces a comment GitHub refuses, and it
+   * refuses the whole review with it — so a padding line must never arm.
+   */
+  readonly commentable?: ReadonlySet<number> | null | undefined;
 }
 
 export interface GutterHit {
@@ -50,6 +60,9 @@ export function gutterHit(probe: GutterProbe): GutterHit | null {
   const line = probe.lineNumber;
   if (typeof line !== 'number' || !Number.isInteger(line) || line < 1) return null;
   if (probe.lineCount >= 0 && line > probe.lineCount) return null;
+  if (probe.commentable !== undefined && probe.commentable !== null && !probe.commentable.has(line)) {
+    return null;
+  }
   return { line, side: probe.side };
 }
 

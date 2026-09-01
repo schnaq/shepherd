@@ -71,6 +71,12 @@ export class MonacoDiffViewer implements ViewerPort {
   private mode: 'sideBySide' | 'inline' = 'sideBySide';
   private fontSize = 13;
 
+  /**
+   * Which lines of each side are part of the diff, from the last `loadFile`. `null` means the
+   * payload did not say, so every line stays armable.
+   */
+  private commentable: Record<Side, ReadonlySet<number> | null> = { left: null, right: null };
+
   constructor(options: ViewerOptions) {
     this.container = options.container;
     this.post = options.post;
@@ -140,25 +146,40 @@ export class MonacoDiffViewer implements ViewerPort {
     this.unmountAll();
     this.threadStore.clear();
     this.draftStore.clear();
+    this.arm(null);
 
     const language = resolveLanguage(message.language);
+
+    // Swift re-sends `loadFile` for the *same* path whenever the mode or wrap setting
+    // changes. Model URIs are derived from the path, and `createModel` throws
+    // "Cannot add model because it already exists!" on a duplicate URI — so the previous
+    // models are detached and disposed *first*, freeing the URIs. Creating first and
+    // disposing afterwards meant every wrap/inline toggle threw, silently (the exception
+    // dies inside `evaluateJavaScript`) and after `unmountAll` had already run.
     const previousOriginal = this.originalModel;
     const previousModified = this.modifiedModel;
+    this.originalModel = null;
+    this.modifiedModel = null;
+    this.diffEditor.setModel(null);
+    previousOriginal?.dispose();
+    previousModified?.dispose();
 
-    this.originalModel = monaco.editor.createModel(message.original, language, this.modelURI('original', message.path));
-    this.modifiedModel = monaco.editor.createModel(message.modified, language, this.modelURI('modified', message.path));
-
+    // Applied before the models so that a failure later cannot leave `mode` disagreeing with
+    // the editor — zones would then mount on the wrong pane.
     this.mode = message.mode;
+    this.commentable = {
+      left: message.commentableLines ? new Set(message.commentableLines.left) : null,
+      right: message.commentableLines ? new Set(message.commentableLines.right) : null,
+    };
     this.diffEditor.updateOptions({
       renderSideBySide: message.mode === 'sideBySide',
       wordWrap: message.wrap ? 'on' : 'off',
       diffWordWrap: message.wrap ? 'on' : 'off',
     });
 
+    this.originalModel = monaco.editor.createModel(message.original, language, this.modelURI('original', message.path));
+    this.modifiedModel = monaco.editor.createModel(message.modified, language, this.modelURI('modified', message.path));
     this.diffEditor.setModel({ original: this.originalModel, modified: this.modifiedModel });
-
-    previousOriginal?.dispose();
-    previousModified?.dispose();
   }
 
   setTheme(message: SetThemeMessage): void {
@@ -227,6 +248,7 @@ export class MonacoDiffViewer implements ViewerPort {
         lineNumber: event.target.position?.lineNumber ?? null,
         side,
         lineCount: editor.getModel()?.getLineCount() ?? -1,
+        commentable: this.commentable[side],
       });
       this.arm(hit);
     });
@@ -241,6 +263,7 @@ export class MonacoDiffViewer implements ViewerPort {
         lineNumber: event.target.position?.lineNumber ?? null,
         side,
         lineCount: editor.getModel()?.getLineCount() ?? -1,
+        commentable: this.commentable[side],
       });
       if (hit === null) return;
       const target = addCommentTarget(hit);

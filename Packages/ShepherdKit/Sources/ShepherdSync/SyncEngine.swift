@@ -78,6 +78,16 @@ public actor SyncEngine {
     private var sweepTask: Task<Void, Never>?
     private var notificationsTask: Task<Void, Never>?
 
+    /// Whether a sweep is in flight. The engine is an actor but ``performSweep()`` awaits, so
+    /// it is fully re-entrant without this.
+    private var isSweeping = false
+    /// Set when a sweep was asked for while one was already running; the running sweep picks
+    /// it up when it finishes, so a burst of requests costs at most one extra pass.
+    private var sweepRequested = false
+    /// The same guard for the outbox drain, which has three callers that routinely overlap.
+    private var isDraining = false
+    private var drainRequested = false
+
     /// Whether the loops are running.
     public private(set) var isRunning = false
 
@@ -121,18 +131,27 @@ public actor SyncEngine {
         }
     }
 
-    /// Stops both loops. The event stream stays open so the engine can be started again.
-    public func stop() {
-        sweepTask?.cancel()
+    /// Stops both loops and **waits for them to finish**. The event stream stays open so the
+    /// engine can be started again.
+    ///
+    /// Awaiting matters: "Sign out & erase" stops the engine and then empties the tables, and
+    /// a loop that was merely asked to cancel would still be mid-sweep and would write the
+    /// pull requests — and their patches — straight back onto disk after the erase.
+    public func stop() async {
+        let sweep = sweepTask
+        let notifications = notificationsTask
         sweepTask = nil
-        notificationsTask?.cancel()
         notificationsTask = nil
         isRunning = false
+        sweep?.cancel()
+        notifications?.cancel()
+        if let sweep { await sweep.value }
+        if let notifications { await notifications.value }
     }
 
     /// Stops the loops and closes the event stream for good.
-    public func shutdown() {
-        stop()
+    public func shutdown() async {
+        await stop()
         continuation.finish()
     }
 
@@ -195,15 +214,24 @@ public actor SyncEngine {
                         forKey: StateKey.notificationsLastModified
                     )
                 }
-                let pollTime = now()
-                if Self.warrantsSweep(page.items) {
-                    try await performSweep()
+                // A `304` means "nothing changed". The transport may still hand back the
+                // previous page's body from the conditional-request cache, and treating those
+                // stale items as new would force a full sweep on every single poll.
+                if !page.notModified {
+                    if Self.warrantsSweep(page.items) {
+                        try await performSweep()
+                    }
+                    // `since` comes from the newest thread GitHub actually returned, not from
+                    // the local clock: a clock running fast would silently skip notifications.
+                    let newest = page.items.map(\.updatedAt).max()
+                    if let newest, newest > (since ?? .distantPast) {
+                        since = newest
+                        try? await store.setSyncState(
+                            String(newest.timeIntervalSince1970),
+                            forKey: StateKey.notificationsSince
+                        )
+                    }
                 }
-                since = pollTime
-                try? await store.setSyncState(
-                    String(pollTime.timeIntervalSince1970),
-                    forKey: StateKey.notificationsSince
-                )
             } catch is CancellationError {
                 return
             } catch {
@@ -236,7 +264,27 @@ public actor SyncEngine {
 
     // MARK: - Sweep
 
+    /// Runs a sweep, unless one is already running.
+    ///
+    /// There are three callers — the sweep loop, `syncNow()`, and the notifications loop when
+    /// something interesting arrives — and every launch used to fire at least two of them at
+    /// once: twice the search calls, twice the detail fetches, and two concurrent
+    /// `savePullRequestSummaries(pruneMissing: true)` racing each other. Overlapping requests
+    /// are coalesced into a single follow-up pass instead.
     private func performSweep() async throws {
+        if isSweeping {
+            sweepRequested = true
+            return
+        }
+        isSweeping = true
+        defer { isSweeping = false }
+        repeat {
+            sweepRequested = false
+            try await runSweep()
+        } while sweepRequested && !Task.isCancelled
+    }
+
+    private func runSweep() async throws {
         let previous = try await store.fetchInbox(filter: InboxFilter())
         var previousByID: [String: PullRequestSummary] = [:]
         previousByID.reserveCapacity(previous.count)
@@ -272,12 +320,22 @@ public actor SyncEngine {
             }
         }
 
-        for old in previous where !currentIDs.contains(old.id) {
+        // Every write is preceded by a cancellation check: a sweep that was stopped because the
+        // user signed out must not repopulate tables the erase has already emptied.
+        try Task.checkCancellation()
+        try await store.savePullRequestSummaries(current, pruneMissing: true)
+
+        // "Left the inbox" is decided by what the prune actually removed, not by what the
+        // search returned: a pull request the user still has a draft or a queued mutation for
+        // is deliberately kept, and re-announcing it as merged on every sweep would be a
+        // notification every two minutes for as long as the draft lives.
+        let remaining = Set(try await store.fetchInbox(filter: InboxFilter()).map(\.id))
+        for old in previous where !currentIDs.contains(old.id) && !remaining.contains(old.id) {
             emit(.prMerged(old))
         }
 
-        try await store.savePullRequestSummaries(current, pruneMissing: true)
-        await fetchDetails(for: needsDetail)
+        try await fetchDetails(for: needsDetail)
+        try Task.checkCancellation()
         try? await store.setSyncState(
             String(now().timeIntervalSince1970),
             forKey: StateKey.lastSweepAt
@@ -289,7 +347,7 @@ public actor SyncEngine {
     /// Chunking rather than one big task group is the staggering ADR 0005 asks for: at most
     /// ``SyncConfiguration/maxConcurrentDetailFetches`` requests are ever in flight, and a
     /// slow pull request delays only its own chunk.
-    private func fetchDetails(for summaries: [PullRequestSummary]) async {
+    private func fetchDetails(for summaries: [PullRequestSummary]) async throws {
         guard !summaries.isEmpty else { return }
         let github = self.github
         let store = self.store
@@ -297,7 +355,7 @@ public actor SyncEngine {
 
         var index = 0
         while index < summaries.count {
-            if Task.isCancelled { return }
+            try Task.checkCancellation()
             let upperBound = min(index + chunkSize, summaries.count)
             let chunk = Array(summaries[index..<upperBound])
             index = upperBound
@@ -313,7 +371,12 @@ public actor SyncEngine {
                                 repo: summary.repo,
                                 number: summary.number
                             )
+                            // The fetch may have been in flight across a sign-out; do not
+                            // write its patches back into a database that was just erased.
+                            try Task.checkCancellation()
                             try await store.savePullRequestDetail(detail)
+                            return nil
+                        } catch is CancellationError {
                             return nil
                         } catch {
                             return SyncFailure(
@@ -353,9 +416,24 @@ public actor SyncEngine {
     /// the row is parked as conflicted and a ``SyncEvent/draftConflict(_:)`` is emitted
     /// (ADR 0006).
     public func drainOutbox() async {
+        if isDraining {
+            // Somebody enqueued while a drain was in flight. Do not start a second one — let
+            // the running drain take another lap when it is done.
+            drainRequested = true
+            return
+        }
+        isDraining = true
+        defer { isDraining = false }
+        repeat {
+            drainRequested = false
+            await performDrain()
+        } while drainRequested && !Task.isCancelled
+    }
+
+    private func performDrain() async {
         let items: [OutboxItem]
         do {
-            items = try await store.dequeueReadyOutboxItems(
+            items = try await store.claimReadyOutboxItems(
                 now: now(),
                 limit: configuration.outboxBatchSize
             )
@@ -364,8 +442,11 @@ public actor SyncEngine {
             return
         }
 
-        for item in items {
-            if Task.isCancelled { return }
+        var index = 0
+        while index < items.count {
+            if Task.isCancelled { break }
+            let item = items[index]
+            index += 1
             do {
                 switch try await execute(item) {
                 case .sent:
@@ -388,6 +469,12 @@ public actor SyncEngine {
                 )
                 emit(.syncFailed(SyncFailure(stage: .outbox, message: describe(error))))
             }
+        }
+
+        // Rows claimed but never attempted — the app is quitting, or the loop was cancelled —
+        // go straight back into the queue rather than sitting in `sending` until relaunch.
+        if index < items.count {
+            try? await store.releaseOutboxItems(ids: items[index...].map(\.id))
         }
     }
 

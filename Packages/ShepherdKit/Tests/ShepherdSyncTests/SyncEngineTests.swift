@@ -264,6 +264,36 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertEqual(inbox.map(\.id), ["PR_2"])
     }
 
+    func testAPullRequestKeptForItsDraftIsNotAnnouncedAsMerged() async throws {
+        let github = MockGitHub()
+        await github.setSearchResults([
+            [
+                SyncFixtures.summary(id: "PR_1", number: 1),
+                SyncFixtures.summary(id: "PR_2", number: 2),
+            ],
+            [SyncFixtures.summary(id: "PR_2", number: 2)],
+        ])
+        let store = try DatabaseManager.inMemory()
+        try await store.saveDraft(ReviewDraft(prID: "PR_1", verdict: .approve))
+        let engine = makeEngine(github: github, store: store)
+
+        let emitted = try await events(from: engine) {
+            try await engine.syncNow()
+            try await engine.syncNow()
+            try await engine.syncNow()
+        }
+
+        let merged = emitted.compactMap { event -> PullRequestSummary? in
+            if case .prMerged(let summary) = event { return summary }
+            return nil
+        }
+        // The prune keeps PR_1 because a draft points at it, so it never left the inbox —
+        // announcing it as merged once per sweep would be a notification every two minutes.
+        XCTAssertTrue(merged.isEmpty, "a retained pull request is not a merged one")
+        let inbox = try await store.fetchInbox()
+        XCTAssertEqual(Set(inbox.map(\.id)), ["PR_1", "PR_2"])
+    }
+
     func testUpdatedPullRequestsEmitAnUpdateEvent() async throws {
         let github = MockGitHub()
         await github.setSearchResults([
@@ -308,5 +338,66 @@ final class SyncEngineTests: XCTestCase {
         _ = await task.value
         let emitted = await collector.events
         XCTAssertTrue(emitted.isEmpty, "syncNow throws rather than emitting")
+    }
+
+    // MARK: - Sweep re-entrancy
+
+    /// Waits until `count` scripted calls are parked on the mock's gate.
+    private func waitForGate(_ github: MockGitHub, count: Int) async throws {
+        for _ in 0..<10_000 {
+            if await github.gateWaiterCount >= count { return }
+            await Task.yield()
+        }
+        XCTFail("the scripted search never reached the gate")
+    }
+
+    func testASweepRequestedWhileOneIsRunningIsCoalescedIntoOneFollowUp() async throws {
+        let github = MockGitHub()
+        await github.setSearchResults([[SyncFixtures.summary(id: "PR_1", number: 1)]])
+        let store = try DatabaseManager.inMemory()
+        let engine = makeEngine(github: github, store: store)
+
+        // Sweep #1 parks inside the GraphQL search.
+        await github.closeGate()
+        let first = Task { try await engine.syncNow() }
+        try await waitForGate(github, count: 1)
+
+        // Three more requests arrive while it is suspended — the ⌘R the user pressed, the
+        // sweep loop's tick, and the notifications loop. They must collapse into one re-sweep.
+        async let second: Void = engine.syncNow()
+        async let third: Void = engine.syncNow()
+        async let fourth: Void = engine.syncNow()
+        _ = try await (second, third, fourth)
+
+        await github.openGate()
+        try await first.value
+
+        let calls = await github.searchCallCount
+        XCTAssertEqual(calls, 2, "one running sweep plus at most one queued follow-up")
+        await engine.shutdown()
+    }
+
+    func testConcurrentSyncNowCallsDoNotDoubleFetchDetails() async throws {
+        let github = MockGitHub()
+        await github.setSearchResults([[
+            SyncFixtures.summary(id: "PR_1", number: 1),
+            SyncFixtures.summary(id: "PR_2", number: 2),
+        ]])
+        let store = try DatabaseManager.inMemory()
+        let engine = makeEngine(github: github, store: store)
+
+        await github.closeGate()
+        let first = Task { try await engine.syncNow() }
+        try await waitForGate(github, count: 1)
+        try await engine.syncNow()
+        await github.openGate()
+        try await first.value
+
+        // The follow-up sweep sees the rows it just stored, so nothing changed and no detail
+        // is refetched: two details in total, not four.
+        let details = await github.detailRequests
+        XCTAssertEqual(details.count, 2)
+        XCTAssertEqual(Set(details), ["schnaq/review#1", "schnaq/review#2"])
+        await engine.shutdown()
     }
 }

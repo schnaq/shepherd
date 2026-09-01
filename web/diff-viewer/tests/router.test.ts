@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { DraftComment, InboundMessage, LoadFileMessage, SetThemeMessage, Side, Thread } from '../src/bridge/protocol.js';
-import { routeInbound, type ViewerPort } from '../src/viewer/router.js';
+import { routeInbound, routeInboundSafely, type ViewerPort } from '../src/viewer/router.js';
 
 interface Call {
   readonly name: string;
@@ -72,5 +72,48 @@ describe('routeInbound', () => {
     const { port } = fakePort();
     const bogus = { v: 1, type: 'nope' } as unknown as InboundMessage;
     expect(() => routeInbound(bogus, port)).toThrow(/unhandled inbound message/);
+  });
+});
+
+describe('routeInboundSafely', () => {
+  const loadFile: InboundMessage = {
+    v: 1,
+    type: 'loadFile',
+    path: 'a.ts',
+    language: 'typescript',
+    original: '',
+    modified: '',
+    mode: 'inline',
+    wrap: true,
+  };
+
+  it('reports a throwing port instead of letting the error escape', () => {
+    const { port } = fakePort();
+    const failing: ViewerPort = { ...port, loadFile: () => { throw new Error('boom'); } };
+    const seen: string[] = [];
+
+    const handled = routeInboundSafely(loadFile, failing, (detail) => seen.push(detail));
+
+    expect(handled).toBe(false);
+    expect(seen).toEqual(['Error: boom']);
+  });
+
+  it('passes the offending message to the reporter', () => {
+    const { port } = fakePort();
+    const failing: ViewerPort = { ...port, loadFile: () => { throw new Error('boom'); } };
+    let reported: InboundMessage | null = null;
+
+    routeInboundSafely(loadFile, failing, (_detail, message) => { reported = message; });
+
+    expect(reported).toBe(loadFile);
+  });
+
+  it('dispatches normally and reports nothing when the port is happy', () => {
+    const { port, calls } = fakePort();
+    const seen: string[] = [];
+
+    expect(routeInboundSafely(loadFile, port, (detail) => seen.push(detail))).toBe(true);
+    expect(calls.map((c) => c.name)).toEqual(['loadFile']);
+    expect(seen).toEqual([]);
   });
 });

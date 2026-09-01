@@ -99,6 +99,28 @@ describe('parseInbound: loadFile', () => {
   ])('rejects a bad %s', (field, badValue) => {
     expectFail(parseInbound({ ...valid, [field]: badValue }), `loadFile.${field}`);
   });
+
+  it('omits commentableLines when the payload has none (additive field, v stays 1)', () => {
+    const result = parseInbound(valid);
+    expect(result.ok && 'commentableLines' in result.value).toBe(false);
+    expect(parseInbound({ ...valid, commentableLines: null }).ok).toBe(true);
+  });
+
+  it('keeps commentableLines when present', () => {
+    const commentableLines = { left: [1, 2], right: [1, 2, 3] };
+    const result = parseInbound({ ...valid, commentableLines });
+    expect(result.ok && result.value).toEqual({ ...valid, commentableLines });
+  });
+
+  it.each([
+    ['not an object', 7],
+    ['a missing side', { left: [1] }],
+    ['a non-array side', { left: [1], right: 3 }],
+    ['a zero line', { left: [0], right: [1] }],
+    ['a fractional line', { left: [1], right: [2.5] }],
+  ])('rejects commentableLines with %s', (_why, commentableLines) => {
+    expectFail(parseInbound({ ...valid, commentableLines }), 'loadFile.commentableLines');
+  });
 });
 
 describe('parseInbound: setTheme', () => {

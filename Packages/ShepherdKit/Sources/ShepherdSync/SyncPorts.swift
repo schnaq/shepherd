@@ -62,8 +62,11 @@ public protocol SyncStoring: Sendable {
     func fetchDraft(prID: String) async throws -> ReviewDraft?
     /// Deletes a review draft after it has been submitted.
     func deleteDraft(prID: String) async throws
-    /// Reads the outbox rows that are due.
-    func dequeueReadyOutboxItems(now: Date, limit: Int) async throws -> [OutboxItem]
+    /// Claims the outbox rows that are due, moving them out of `pending` in the same
+    /// transaction so two overlapping drains cannot send the same mutation twice.
+    func claimReadyOutboxItems(now: Date, limit: Int) async throws -> [OutboxItem]
+    /// Hands back rows that were claimed but never attempted.
+    func releaseOutboxItems(ids: [UUID]) async throws
     /// Removes a sent outbox row.
     func markOutboxItemSucceeded(id: UUID) async throws
     /// Records a failed attempt and schedules a retry.

@@ -197,6 +197,42 @@ struct BridgeDraftComment: Codable, Hashable, Sendable, Identifiable {
 
 // MARK: - Swift → web
 
+/// The lines of a reconstructed diff a comment may be anchored to, per side.
+///
+/// Shepherd rebuilds both documents from GitHub's unified patch and pads the gaps between
+/// hunks with blank lines so that absolute line numbers still match GitHub's. Those filler
+/// lines are not part of the diff, and GitHub rejects the entire review when a comment lands
+/// on one, so the viewer is told exactly which lines it may arm the “+” on.
+///
+/// Omitting the field means "no restriction", which is what a viewer built against an older
+/// payload sees — the field is additive, so the protocol version stays 1.
+struct BridgeCommentableLines: Codable, Hashable, Sendable {
+    /// Commentable 1-based lines of the original (left) document.
+    var left: [Int]
+    /// Commentable 1-based lines of the modified (right) document.
+    var right: [Int]
+
+    /// Creates a payload.
+    init(left: [Int], right: [Int]) {
+        self.left = left
+        self.right = right
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case left, right
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let left = try container.decode([Int].self, forKey: .left)
+        let right = try container.decode([Int].self, forKey: .right)
+        if let bad = (left + right).first(where: { $0 < 1 }) {
+            throw BridgeProtocolError.invalidLineNumber(bad)
+        }
+        self.init(left: left, right: right)
+    }
+}
+
 /// A message Shepherd sends into the viewer (`InboundMessage` in `protocol.ts`).
 enum DiffViewerCommand: Hashable, Sendable, Codable {
     /// The payload of ``loadFile(_:)``.
@@ -213,6 +249,8 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
         var mode: BridgeDiffMode
         /// Whether long lines wrap.
         var wrap: Bool
+        /// Which lines may carry a comment, or `nil` for "every line".
+        var commentableLines: BridgeCommentableLines?
 
         /// Creates a payload.
         init(
@@ -221,7 +259,8 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
             original: String,
             modified: String,
             mode: BridgeDiffMode,
-            wrap: Bool
+            wrap: Bool,
+            commentableLines: BridgeCommentableLines? = nil
         ) {
             self.path = path
             self.language = language
@@ -229,6 +268,7 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
             self.modified = modified
             self.mode = mode
             self.wrap = wrap
+            self.commentableLines = commentableLines
         }
     }
 
@@ -256,7 +296,7 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
 
     private enum CodingKeys: String, CodingKey {
         case v, type
-        case path, language, original, modified, mode, wrap
+        case path, language, original, modified, mode, wrap, commentableLines
         case theme, fontSize
         case threads, comments
         case line, side
@@ -278,7 +318,11 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
                     original: try container.decode(String.self, forKey: .original),
                     modified: try container.decode(String.self, forKey: .modified),
                     mode: try container.decode(BridgeDiffMode.self, forKey: .mode),
-                    wrap: try container.decode(Bool.self, forKey: .wrap)
+                    wrap: try container.decode(Bool.self, forKey: .wrap),
+                    commentableLines: try container.decodeIfPresent(
+                        BridgeCommentableLines.self,
+                        forKey: .commentableLines
+                    )
                 )
             )
         case "setTheme":
@@ -320,6 +364,7 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
             try container.encode(payload.modified, forKey: .modified)
             try container.encode(payload.mode, forKey: .mode)
             try container.encode(payload.wrap, forKey: .wrap)
+            try container.encodeIfPresent(payload.commentableLines, forKey: .commentableLines)
         case .setTheme(let theme, let fontSize):
             try container.encode(theme, forKey: .theme)
             try container.encode(fontSize, forKey: .fontSize)

@@ -37,7 +37,37 @@ actor MockGitHub: PullRequestFetching {
 
     private var lastSummaries: [PullRequestSummary] = []
 
+    /// A latch the scripted calls can be parked on, so a test can hold one call suspended and
+    /// drive a second one into the engine while the first is still in flight.
+    private var gateIsClosed = false
+    private var gateWaiters: [CheckedContinuation<Void, Never>] = []
+
     init() {}
+
+    // MARK: - Gate
+
+    /// Makes the next gated call suspend until ``openGate()``.
+    func closeGate() {
+        gateIsClosed = true
+    }
+
+    /// Releases everything parked on the gate and lets later calls through.
+    func openGate() {
+        gateIsClosed = false
+        let waiters = gateWaiters
+        gateWaiters.removeAll()
+        for waiter in waiters { waiter.resume() }
+    }
+
+    /// How many calls are currently parked. Tests poll this instead of sleeping.
+    var gateWaiterCount: Int { gateWaiters.count }
+
+    private func passGate() async {
+        guard gateIsClosed else { return }
+        await withCheckedContinuation { continuation in
+            gateWaiters.append(continuation)
+        }
+    }
 
     // MARK: - Scripting
 
@@ -73,6 +103,7 @@ actor MockGitHub: PullRequestFetching {
 
     func searchOpenPullRequests(queries: [InboxQuery]) async throws -> [PullRequestSummary] {
         searchCallCount += 1
+        await passGate()
         if let searchError { throw searchError }
         if searchResults.isEmpty { return lastSummaries }
         let result = searchResults.count > 1 ? searchResults.removeFirst() : searchResults[0]
@@ -115,6 +146,7 @@ actor MockGitHub: PullRequestFetching {
         repo: RepoRef,
         number: Int
     ) async throws -> SubmittedReview {
+        await passGate()
         if let submitError { throw submitError }
         submittedDrafts.append(draft)
         return SubmittedReview(id: 1, nodeId: "PRR_1", state: "APPROVED", commitID: nil)

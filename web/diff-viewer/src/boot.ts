@@ -7,7 +7,7 @@ import { makeReady } from './bridge/protocol.js';
 import type { OutboundSink } from './bridge/transport.js';
 import { installBridge, type Bridge } from './bridge/transport.js';
 import { MonacoDiffViewer } from './viewer/monacoViewer.js';
-import { routeInbound } from './viewer/router.js';
+import { routeInboundSafely } from './viewer/router.js';
 
 export const CONTAINER_ID = 'shepherd-diff';
 export const ERROR_ID = 'shepherd-error';
@@ -47,7 +47,10 @@ export function boot(options: BootOptions = {}): BootResult {
     sink: options.sink,
     onMessage: (message) => {
       if (viewer === null) return;
-      routeInbound(message, viewer);
+      routeInboundSafely(message, viewer, (detail, failed) => {
+        console.error('[shepherd] failed to handle message:', detail, failed);
+        showError(`Could not handle “${failed.type}”.\n${detail}`);
+      });
     },
     onError: (error, raw) => {
       console.error('[shepherd] rejected message:', error, raw);

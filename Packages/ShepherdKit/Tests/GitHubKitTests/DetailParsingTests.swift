@@ -92,9 +92,11 @@ final class DetailParsingTests: XCTestCase {
         XCTAssertEqual(first.id, "PRRT_kwDOThreadOne")
         XCTAssertEqual(first.path, "Sources/Auth/TokenStore.swift")
         XCTAssertEqual(first.line, 42)
+        XCTAssertEqual(first.originalLine, 40)
         XCTAssertEqual(first.side, .right)
         XCTAssertFalse(first.isResolved)
         XCTAssertFalse(first.isOutdated)
+        XCTAssertTrue(first.isAnchoredInCurrentDiff)
         XCTAssertEqual(first.comments.count, 2)
         XCTAssertEqual(first.comments[0].databaseID, 987_654_321)
         XCTAssertEqual(first.comments[0].author.kind, .human)
@@ -104,7 +106,12 @@ final class DetailParsingTests: XCTestCase {
         XCTAssertTrue(second.isResolved)
         XCTAssertTrue(second.isOutdated)
         XCTAssertEqual(second.side, .left)
-        XCTAssertEqual(second.line, 12, "falls back to originalLine when line is null")
+        // GraphQL nulls `line` precisely when the thread no longer maps onto the current diff.
+        // Backfilling it from `originalLine` — which points into an older commit's diff —
+        // would park the conversation on whatever code happens to be at line 12 today.
+        XCTAssertNil(second.line, "a lost anchor stays lost")
+        XCTAssertEqual(second.originalLine, 12, "kept for display only")
+        XCTAssertFalse(second.isAnchoredInCurrentDiff)
     }
 
     func testCheckRunsAndRollup() async throws {

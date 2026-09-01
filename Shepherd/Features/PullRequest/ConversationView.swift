@@ -145,9 +145,13 @@ struct ConversationView: View {
         if !list.isEmpty {
             Card {
                 VStack(alignment: .leading, spacing: 12) {
-                    CardTitle(String(localized: "CONVERSATIONS WITHOUT A LINE ANCHOR"))
+                    // Pull-request-level threads, threads whose anchor GitHub reports as lost,
+                    // and outdated ones — an outdated thread's line points into an older
+                    // commit's diff, so it cannot be drawn on the current one.
+                    CardTitle(String(localized: "CONVERSATIONS NOT ON THE CURRENT DIFF"))
                     ForEach(list) { thread in
                         VStack(alignment: .leading, spacing: 8) {
+                            threadAnchorLabel(thread)
                             ForEach(thread.comments) { comment in
                                 ThreadCommentView(comment: comment)
                             }
@@ -172,6 +176,33 @@ struct ConversationView: View {
                     }
                 }
             }
+        }
+    }
+
+    /// Where a thread that cannot be drawn on the diff used to point.
+    ///
+    /// Outdated threads keep an `originalLine` from the commit they were written against. It
+    /// is shown, never used to position anything: the current diff no longer has that line.
+    @ViewBuilder
+    private func threadAnchorLabel(_ thread: ReviewThread) -> some View {
+        if let path = thread.path {
+            HStack(spacing: 6) {
+                Text(path)
+                    .font(Theme.mono(11))
+                    .lineLimit(1)
+                    .truncationMode(.head)
+                if let original = thread.originalLine {
+                    Text(String(localized: "· was line \(original)"))
+                        .font(.system(size: 11))
+                }
+                if thread.isOutdated {
+                    ChipView(text: String(localized: "outdated"), color: Theme.pending, size: 10)
+                }
+                if thread.isResolved {
+                    ChipView(text: String(localized: "resolved"), color: Theme.success, size: 10)
+                }
+            }
+            .foregroundStyle(Theme.textMuted)
         }
     }
 

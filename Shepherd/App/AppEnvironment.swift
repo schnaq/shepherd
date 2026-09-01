@@ -142,18 +142,13 @@ final class AppEnvironment {
             sweepInterval: settings.sweepIntervalMinutes * 60
         )
         phase = .signedIn(session)
+        // `start` spawns the sweep loop, whose first iteration sweeps immediately — an extra
+        // `syncNow()` here only bought a second concurrent sweep on every launch.
         session.start(
             settings: settings,
             notifications: notifications
         ) { [weak self] event in
             self?.handle(event)
-        }
-        Task { [weak self] in
-            do {
-                try await session.syncNow()
-            } catch {
-                self?.toasts.failure(error, context: String(localized: "Sync failed"))
-            }
         }
     }
 
@@ -223,10 +218,27 @@ final class AppEnvironment {
         pendingAction = nil
     }
 
+    /// A verdict the review screen should open its composer on, set by an inbox shortcut.
+    ///
+    /// Transient routing state that is read once, imperatively, when the review screen
+    /// appears — no view observes it, so it stays out of the observation graph.
+    @ObservationIgnored private var pendingReviewVerdict: ReviewVerdict?
+
     /// Opens the full-window review screen.
-    /// - Parameter prID: The pull request's node id.
-    func openReview(prID: String) {
+    /// - Parameters:
+    ///   - prID: The pull request's node id.
+    ///   - verdict: When given, the review screen opens its submit composer on this verdict
+    ///     instead of the caller queueing a review blind. `r x` and `r c` need a summary body,
+    ///     which only the composer can collect.
+    func openReview(prID: String, composing verdict: ReviewVerdict? = nil) {
+        pendingReviewVerdict = verdict
         route = .review(prID: prID)
+    }
+
+    /// Reads and clears the verdict the review screen should open its composer on.
+    func consumePendingReviewVerdict() -> ReviewVerdict? {
+        defer { pendingReviewVerdict = nil }
+        return pendingReviewVerdict
     }
 
     /// Returns to the inbox.

@@ -12,6 +12,24 @@ import ShepherdPersistence
 @MainActor
 @Observable
 final class ReviewModel {
+    /// Everything the review screen can refuse to do, with a reason the user can act on.
+    enum Failure: LocalizedError, Equatable {
+        /// The comment was anchored to a line that is not part of the diff.
+        case lineNotInDiff(line: Int, side: DiffSide)
+
+        var errorDescription: String? {
+            switch self {
+            case .lineNotInDiff(let line, let side):
+                let sideName = side == .left
+                    ? String(localized: "base")
+                    : String(localized: "head")
+                return String(
+                    localized: "Line \(line) of the \(sideName) side is not part of this diff. GitHub only accepts comments on lines the patch actually contains."
+                )
+            }
+        }
+    }
+
     /// A request to open the native comment composer on a diff line.
     struct ComposerRequest: Identifiable, Hashable {
         /// Identity for `sheet(item:)`.
@@ -65,6 +83,12 @@ final class ReviewModel {
     private(set) var isRefreshing = false
     /// Whether a submit is in flight.
     private(set) var isSubmitting = false
+    /// Set when the pull request is not (or no longer) in the local inbox.
+    ///
+    /// A sweep prunes everything its search did not return — a merged pull request, or one
+    /// past the search's page cap — and the detail rows cascade away with it. Without this the
+    /// screen sat on a `ProgressView` forever.
+    private(set) var isMissingFromInbox = false
 
     /// The file being shown in the diff viewer.
     var selectedPath: String?
@@ -139,9 +163,14 @@ final class ReviewModel {
             }
             self.isRefreshing = true
             defer { self.isRefreshing = false }
-            // The row is always in the inbox table even when no detail has been fetched yet.
+            // The row is normally in the inbox table even when no detail has been fetched yet.
+            // When it is not, the sweep pruned it: say so instead of spinning forever.
             guard let row = try? await self.session.database.fetchPullRequestSummary(id: self.prID)
-            else { return }
+            else {
+                self.isMissingFromInbox = self.detail == nil
+                return
+            }
+            self.isMissingFromInbox = false
             if let fresh = try? await self.session.github.pullRequestDetail(
                 repo: row.repo,
                 number: row.number
@@ -211,31 +240,47 @@ final class ReviewModel {
         return detail?.files.first { $0.path == selectedPath }
     }
 
+    /// The reconstruction of the selected file's patch, or `nil` when GitHub sent no patch.
+    var selectedReconstruction: PatchReconstructor.Reconstruction? {
+        guard let file = selectedFile else { return nil }
+        return PatchReconstructor.reconstruct(file)
+    }
+
     /// The reconstructed left/right documents for the selected file.
     var selectedContent: DiffViewerContent? {
         guard let file = selectedFile,
-              let reconstruction = PatchReconstructor.reconstruct(file)
+              let reconstruction = selectedReconstruction
         else { return nil }
         return DiffViewerContent(
             path: file.path,
             language: MonacoLanguage.id(for: file),
             original: reconstruction.original,
-            modified: reconstruction.modified
+            modified: reconstruction.modified,
+            commentableLines: BridgeCommentableLines(
+                left: reconstruction.commentableOriginalLines.sorted(),
+                right: reconstruction.commentableModifiedLines.sorted()
+            )
         )
     }
 
     /// How many inline comments are waiting in the draft.
     var pendingCommentCount: Int { draft?.comments.count ?? 0 }
 
-    /// The published threads anchored in the selected file.
+    /// The published threads that still anchor into the selected file's current diff.
     var threadsForSelectedFile: [ReviewThread] {
         guard let selectedPath, let detail else { return [] }
-        return detail.threads.filter { $0.path == selectedPath && $0.line != nil }
+        return detail.threads.filter {
+            $0.path == selectedPath && $0.isAnchoredInCurrentDiff
+        }
     }
 
-    /// Threads that lost their anchor (or are pull-request level), shown in the conversation tab.
+    /// Threads that cannot be drawn on the diff, shown in the conversation tab instead.
+    ///
+    /// Pull-request-level conversations, threads whose anchor GitHub reports as lost, and
+    /// outdated threads — an outdated thread's `line` refers to an older commit, so mounting
+    /// it as a view zone would park the conversation on unrelated code.
     var unanchoredThreads: [ReviewThread] {
-        (detail?.threads ?? []).filter { $0.path == nil || $0.line == nil }
+        (detail?.threads ?? []).filter { !$0.isAnchoredInCurrentDiff }
     }
 
     /// The thread the popover is showing.
@@ -340,6 +385,7 @@ final class ReviewModel {
         guard let summary else { return }
         let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        try validateAnchor(of: request)
         let existing = draft?.comments.first {
             $0.path == request.path && $0.line == request.line && $0.side == request.side
         }
@@ -361,10 +407,42 @@ final class ReviewModel {
         )
     }
 
+    /// Rejects a comment anchored to a line the patch does not contain.
+    ///
+    /// The reconstruction pads the gaps between hunks so that line numbers match GitHub's;
+    /// those blank fillers look exactly like real lines once they are in the document. GitHub
+    /// answers a review containing one with a 422 and drops the *whole* submission — summary
+    /// and every other inline comment included — so it is caught here, before the draft is
+    /// written, while the user still has the composer open.
+    /// - Parameter request: The anchor to check.
+    /// - Throws: ``Failure/lineNotInDiff(line:side:)``.
+    func validateAnchor(of request: ComposerRequest) throws {
+        // Only the selected file has a reconstruction to check against; a request for any
+        // other path cannot be produced by the viewer.
+        guard request.path == selectedPath,
+              let commentable = selectedReconstruction?.commentableLines(on: request.side)
+        else { return }
+        for line in [request.startLine, request.line].compactMap({ $0 }) {
+            guard commentable.contains(line) else {
+                throw Failure.lineNotInDiff(line: line, side: request.side)
+            }
+        }
+    }
+
     /// Deletes an inline draft comment.
     /// - Parameter localID: The comment's local identity.
     func deleteDraftComment(localID: UUID) async throws {
         try await session.database.deleteDraftComment(localID: localID)
+    }
+
+    /// Throws away the pending review for a pull request that left the inbox.
+    ///
+    /// The draft outlives the pull-request row it was written against (no foreign key), so
+    /// the user needs a way to let go of one they can no longer act on.
+    func discardDraft() async throws {
+        try await session.database.deleteDraft(prID: prID)
+        draft = nil
+        summaryText = ""
     }
 
     /// Toggles a file's viewed state.

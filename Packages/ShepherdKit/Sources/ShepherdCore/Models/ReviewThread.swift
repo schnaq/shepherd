@@ -51,7 +51,16 @@ public struct ReviewThread: Sendable, Codable, Hashable, Identifiable {
     /// The file the thread is anchored to, or `nil` for a pull-request-level conversation.
     public var path: String?
     /// The line the thread is anchored to, or `nil` when the anchor was lost.
+    ///
+    /// GraphQL reports `nil` precisely when the thread no longer maps onto the current diff.
+    /// That `nil` is load-bearing and must never be papered over with ``originalLine``: a
+    /// thread rendered at a stale line points at unrelated code.
     public var line: Int?
+    /// The line the thread was anchored to in the commit it was written against.
+    ///
+    /// Only useful for display ("was line 42"): it refers to an older diff, so it must not be
+    /// used to position anything in the current one.
+    public var originalLine: Int?
     /// Which side of the diff the thread is anchored to.
     public var side: DiffSide
     /// Whether the thread has been resolved.
@@ -66,6 +75,7 @@ public struct ReviewThread: Sendable, Codable, Hashable, Identifiable {
         id: String,
         path: String? = nil,
         line: Int? = nil,
+        originalLine: Int? = nil,
         side: DiffSide = .right,
         isResolved: Bool = false,
         isOutdated: Bool = false,
@@ -74,6 +84,7 @@ public struct ReviewThread: Sendable, Codable, Hashable, Identifiable {
         self.id = id
         self.path = path
         self.line = line
+        self.originalLine = originalLine
         self.side = side
         self.isResolved = isResolved
         self.isOutdated = isOutdated
@@ -82,4 +93,13 @@ public struct ReviewThread: Sendable, Codable, Hashable, Identifiable {
 
     /// The first comment of the thread, which carries its subject.
     public var rootComment: ReviewComment? { comments.first }
+
+    /// Whether the thread still maps onto the *current* diff.
+    ///
+    /// Only such a thread may be drawn as a view zone in the diff viewer; everything else —
+    /// pull-request-level conversations, threads that lost their anchor, and outdated threads
+    /// whose line refers to an older commit — belongs in the conversation view.
+    public var isAnchoredInCurrentDiff: Bool {
+        path != nil && line != nil && !isOutdated
+    }
 }

@@ -287,6 +287,7 @@ struct ReviewThreadRecord: Codable, FetchableRecord, PersistableRecord {
     var prID: String
     var path: String?
     var line: Int?
+    var originalLine: Int?
     var side: String
     var isResolved: Bool
     var isOutdated: Bool
@@ -297,6 +298,7 @@ struct ReviewThreadRecord: Codable, FetchableRecord, PersistableRecord {
         self.prID = prID
         self.path = thread.path
         self.line = thread.line
+        self.originalLine = thread.originalLine
         self.side = thread.side.rawValue
         self.isResolved = thread.isResolved
         self.isOutdated = thread.isOutdated
@@ -309,6 +311,7 @@ struct ReviewThreadRecord: Codable, FetchableRecord, PersistableRecord {
             id: id,
             path: path,
             line: line,
+            originalLine: originalLine,
             side: DiffSide(rawValue: side) ?? .right,
             isResolved: isResolved,
             isOutdated: isOutdated,
