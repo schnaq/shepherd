@@ -1,7 +1,7 @@
 # Roadmap
 
 Scope decisions from the founder interviews (2026-08-31, plus the 2026-09-01 follow-up that
-prioritised saved replies). v1 is deliberately full-featured on
+prioritised saved replies and the focus review session). v1 is deliberately full-featured on
 the review path — the founder's bar is "never need to open github.com for a routine review".
 
 ## v0.x → v1.0 (current work)
@@ -36,6 +36,17 @@ the review path — the founder's bar is "never need to open github.com for a ro
       and marks the ones it skips — red CI, conflicts, drafts, changes requested, your own —
       with the reason. Confirming enqueues one ordinary outbox row per write, so offline, retry,
       rate-limit throttling and the per-pull-request staleness check all apply unchanged
+- [x] Focus review session (founder interview 2026-09-01): "Start review session" (⇧⌘⏎, `r f`, ⌘K,
+      Review menu, or a button in the inbox header) walks through every pull request waiting for
+      your review on the ordinary review screen — no second review UI — with a thin bar showing
+      "3 of 12", the pull request's title, and `d` done & next / `n` next / `esc` end. Approve,
+      request changes and merge advance the queue themselves, at the moment the write reaches the
+      outbox rather than when it reaches GitHub. The queue is a **snapshot** taken at start
+      (`SmartView.needsMyReview` + `InboxModel.prioritySorted`), so pull requests arriving mid-run
+      wait in the inbox instead of moving the goalposts; one that was merged or closed in the
+      meantime is skipped with a note when it is reached. Ends with
+      "Session complete — 9 reviewed, 3 skipped" plus the duration, and asks first if pull requests
+      are still in the queue. No new setting and nothing persisted — a session is a sitting
 - [x] Saved replies & review templates (pulled into v1 from v1.x, founder interview 2026-09-01):
       named, reusable Markdown snippets insertable into every comment field — inline comment
       composer, review summary, thread reply — from a `text.badge.plus` menu on the field itself

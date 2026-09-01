@@ -12,6 +12,8 @@ struct ReviewScreen: View {
     let prID: String
 
     @State private var model: ReviewModel
+    /// Whether "end the session with pull requests still in it?" is being asked.
+    @State private var isEndSessionConfirmationPresented = false
     @FocusState private var isFileListFocused: Bool
 
     /// Creates the screen.
@@ -31,7 +33,7 @@ struct ReviewScreen: View {
         VStack(spacing: 0) {
             ReviewHeaderView(
                 model: model,
-                onBack: { environment.closeReview() },
+                onBack: leaveReview,
                 onMerge: { model.isMergeSheetPresented = true },
                 onReview: { model.isSubmitSheetPresented = true },
                 onDelegate: delegate
@@ -51,6 +53,18 @@ struct ReviewScreen: View {
             }
         }
         .background(Theme.background)
+        // The session bar sits above the review screen rather than inside it: the screen below is
+        // the ordinary review screen, unchanged, and a session adds a strip of chrome to it.
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if let running = environment.reviewSession {
+                ReviewSessionBar(
+                    session: running,
+                    onNext: { environment.skipCurrentReviewSessionItem() },
+                    onDoneAndNext: { environment.completeCurrentReviewSessionItem() },
+                    onEnd: leaveReview
+                )
+            }
+        }
         .task {
             model.intelligence = environment.intelligence
             model.start()
@@ -78,6 +92,23 @@ struct ReviewScreen: View {
         }
         .sheet(item: $model.composerRequest) { request in
             InlineCommentComposer(model: model, request: request)
+        }
+        // Escape is "back to the inbox" everywhere else in the app, so during a session it is
+        // asked about once: the queue is the work, and dropping it by reflex on the key that
+        // usually closes a panel would be the one destructive keystroke in the app.
+        .alert(
+            String(localized: "End the review session?"),
+            isPresented: $isEndSessionConfirmationPresented,
+            presenting: environment.reviewSession
+        ) { _ in
+            Button(String(localized: "End session"), role: .destructive) {
+                environment.endReviewSession()
+            }
+            Button(String(localized: "Keep reviewing"), role: .cancel) {}
+        } message: { running in
+            Text(String(
+                localized: "\(running.remaining) of \(running.total) pull requests are still in the queue. Nothing you already queued is affected."
+            ))
         }
     }
 
@@ -162,6 +193,15 @@ struct ReviewScreen: View {
                     : String(localized: "It was merged, closed, or dropped out of the sweep.")
             )
             HStack(spacing: 8) {
+                // A session lands here when the pull request under the cursor was merged or
+                // closed while the user was looking at it — the advance's own vanished check
+                // only fires on a move — so the way on is offered rather than only the way out.
+                if environment.reviewSession != nil {
+                    Button(String(localized: "Next in session")) {
+                        environment.skipCurrentReviewSessionItem()
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                }
                 Button(String(localized: "Back to the inbox")) { environment.closeReview() }
                     .buttonStyle(SecondaryButtonStyle())
                 if model.draft != nil {
@@ -187,8 +227,29 @@ struct ReviewScreen: View {
 
     // MARK: - Actions
 
+    /// The write helper, with the focus session's advance hooked to the enqueue.
+    ///
+    /// The callback is attached here and only here: this is the screen a session walks through,
+    /// so a verdict or a merge queued from it is the user finishing with the pull request under
+    /// the cursor. `AppEnvironment` still checks the id, so a review submitted for anything else
+    /// cannot move the queue.
     private var actions: PullRequestActions {
-        PullRequestActions(session: session, toasts: environment.toasts)
+        PullRequestActions(
+            session: session,
+            toasts: environment.toasts,
+            onDidQueueVerdict: { queuedID in
+                environment.reviewSessionDidQueueVerdict(on: queuedID)
+            }
+        )
+    }
+
+    /// Leaves the review screen — and asks first when a session would be thrown away.
+    private func leaveReview() {
+        if environment.reviewSession != nil {
+            isEndSessionConfirmationPresented = true
+            return
+        }
+        environment.closeReview()
     }
 
     private func perform(_ action: ShortcutAction) {
@@ -207,6 +268,11 @@ struct ReviewScreen: View {
             submit(.comment)
         case .merge:
             model.isMergeSheetPresented = true
+        case .startReviewSession:
+            // Re-freezing the queue while a session is running would restart the count the user
+            // is halfway through, so an already-running session simply stays as it is.
+            guard environment.reviewSession == nil else { return }
+            environment.startReviewSession()
         case .delegate:
             delegate()
         case .groupBy:
@@ -240,7 +306,7 @@ struct ReviewScreen: View {
             return .handled
         }
         if press.matches(.escape) {
-            environment.closeReview()
+            leaveReview()
             return .handled
         }
         guard press.modifiers.isEmpty, let character = press.characters.first else {
@@ -249,6 +315,21 @@ struct ReviewScreen: View {
         if character == "v", let path = model.selectedPath {
             Task { await model.toggleViewed(path: path, actions: actions) }
             return .handled
+        }
+        // The session's own two keys, handled before the two-keystroke machine and only while a
+        // session is running: `n` and `d` mean nothing outside one, so they are not registered as
+        // global commands and cannot collide with anything in the inbox.
+        if environment.reviewSession != nil {
+            switch character {
+            case "n":
+                environment.skipCurrentReviewSessionItem()
+                return .handled
+            case "d":
+                environment.completeCurrentReviewSessionItem()
+                return .handled
+            default:
+                break
+            }
         }
         switch model.keySequenceResult(for: character) {
         case .action(let action):

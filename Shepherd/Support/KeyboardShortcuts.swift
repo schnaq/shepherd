@@ -5,8 +5,8 @@ import SwiftUI
 /// Every keyboard-driven action the inbox and review screens expose.
 ///
 /// `docs/ARCHITECTURE.md` ("UI conventions") makes the two-keystroke review actions normative:
-/// `r a` approve, `r c` comment, `r x` request changes, `m` merge; `g` prefixes the grouping
-/// commands. Single keys navigate.
+/// `r a` approve, `r c` comment, `r x` request changes, `r f` start a focus review session,
+/// `m` merge; `g` prefixes the grouping commands. Single keys navigate.
 enum ShortcutAction: Equatable, Sendable {
     /// Move the selection one row down (`j` / ↓).
     case selectNext
@@ -22,6 +22,11 @@ enum ShortcutAction: Equatable, Sendable {
     case comment
     /// Open the merge dialog (`m`).
     case merge
+    /// Start the guided pass over every pull request waiting for review (`r f`, ⇧⌘⏎).
+    ///
+    /// Under the `r` prefix because it is a review command, not a grouping one, and `f` for
+    /// *focus*: the session is the app's one screen with nothing else on it.
+    case startReviewSession
     /// Re-group the inbox (`g a` / `g r` / `g s`).
     case groupBy(InboxFacet)
     /// Hand the selected pull request to the local agent CLI (ADR 0011). Menu/palette only —
@@ -47,6 +52,7 @@ enum ShortcutAction: Equatable, Sendable {
         case .approve: return "r a"
         case .requestChanges: return "r x"
         case .comment: return "r c"
+        case .startReviewSession: return "r f"
         case .merge: return "m"
         case .groupBy(.provenance): return "g a"
         case .groupBy(.repository): return "g r"
@@ -55,7 +61,7 @@ enum ShortcutAction: Equatable, Sendable {
     }
 }
 
-/// The two-keystroke state machine behind `r a`, `r x`, `r c` and `g a/r/s`.
+/// The two-keystroke state machine behind `r a`, `r x`, `r c`, `r f` and `g a/r/s`.
 ///
 /// Kept as a value type with an injected clock so it can be unit-tested without a window: a
 /// prefix that is not completed within ``timeout`` is forgotten, so a stray `r` never swallows
@@ -131,6 +137,7 @@ struct KeySequenceState: Sendable {
         case ("r", "a"): return .approve
         case ("r", "x"): return .requestChanges
         case ("r", "c"): return .comment
+        case ("r", "f"): return .startReviewSession
         case ("g", "a"): return .groupBy(.provenance)
         case ("g", "r"): return .groupBy(.repository)
         case ("g", "s"): return .groupBy(.reviewState)

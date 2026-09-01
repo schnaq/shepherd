@@ -184,6 +184,10 @@ final class AppEnvironment {
     /// Signs out and deletes both the credential and the local cache (ADR 0006).
     func signOutAndErase() async {
         let current = session
+        // Dropped before the route changes and without the closing toast: the queue named pull
+        // requests of the account that is leaving, and there is nothing to report about a
+        // session the user did not end.
+        reviewSession = nil
         route = .inbox
         phase = .signedOut
         // A queued deep link belongs to the account that was signed in.
@@ -416,6 +420,14 @@ final class AppEnvironment {
     ///     instead of the caller queueing a review blind. `r x` and `r c` need a summary body,
     ///     which only the composer can collect.
     func openReview(prID: String, composing verdict: ReviewVerdict? = nil) {
+        // Opening a pull request that is *not* the one under a running session's cursor means the
+        // user left the queue — a parked-review alert's "Re-review", a menu-bar row, a
+        // `shepherd://` link. The session ends instead of leaving a bar on screen that names a
+        // different pull request than the screen below it. The session's own advance sets its
+        // cursor first, so it never trips this.
+        if let running = reviewSession, running.current?.id != prID {
+            endReviewSession()
+        }
         pendingReviewVerdict = verdict
         route = .review(prID: prID)
     }
@@ -427,8 +439,119 @@ final class AppEnvironment {
     }
 
     /// Returns to the inbox.
+    ///
+    /// A running focus session ends here too. The session *is* "work through these, one after
+    /// another", so leaving the review screen by any route — the back chevron, Escape, the
+    /// palette's "Back to the inbox" — ends it rather than leaving an invisible queue behind
+    /// that the next `openReview` would silently rejoin.
     func closeReview() {
+        if reviewSession != nil {
+            endReviewSession()
+            return
+        }
         route = .inbox
+    }
+
+    // MARK: - Focus review session
+
+    /// The guided pass over the pending reviews, when one is running.
+    ///
+    /// One optional, held here rather than on a screen for the same reason the delegation sheets
+    /// are: the session outlives every individual review screen it walks through, because
+    /// changing ``route`` is exactly how it moves on.
+    ///
+    /// Deliberately transient — see ``ReviewSession`` — and therefore not in ``AppSettings`` and
+    /// not in the encrypted settings document (ADR 0014).
+    private(set) var reviewSession: ReviewSession?
+
+    /// Starts a session over the pull requests currently waiting for the user's review.
+    ///
+    /// The queue is frozen from ``SignedInSession/inboxRows`` — the session-level observation the
+    /// menu-bar badge already reads — so it does not matter which screen asked, and a session
+    /// started from ⌘K on the review screen sees the same list as one started from the inbox
+    /// header.
+    func startReviewSession() {
+        guard let session else { return }
+        guard var started = ReviewSession.make(from: session.inboxRows) else {
+            toasts.info(String(localized: "Nothing needs your review right now."))
+            return
+        }
+        // Settled before anyone sees it, so the first entry is governed by exactly the rule every
+        // later one is: the frozen queue and the "still in the inbox" set are two separate reads.
+        let advance = started.settle(present: presentPullRequestIDs)
+        guard advance.next != nil else {
+            // Everything in the queue had already left the inbox. No session and no closing
+            // toast — there is nothing to report about a sitting that never started.
+            toasts.info(String(localized: "Nothing needs your review right now."))
+            return
+        }
+        apply(started, advance: advance)
+    }
+
+    /// Advances the session past the pull request the user just acted on.
+    ///
+    /// Wired to ``PullRequestActions/onDidQueueVerdict`` by the review screen, so `r a`, `r x`,
+    /// `r c` and `m` all move the queue without a second "next" keystroke.
+    /// - Parameter prID: The pull request whose verdict or merge was queued.
+    func reviewSessionDidQueueVerdict(on prID: String) {
+        guard let running = reviewSession, running.current?.id == prID else { return }
+        // The sheet that submitted is still on screen and dismisses itself as soon as this
+        // returns, so the route underneath it is changed one main-actor turn later: the next
+        // pull request must never be pushed in under a sheet that is still closing.
+        Task { [weak self] in
+            self?.completeCurrentReviewSessionItem()
+        }
+    }
+
+    /// Counts the current pull request as reviewed and moves on ("Done & next", `d`).
+    func completeCurrentReviewSessionItem() {
+        guard var running = reviewSession else { return }
+        let advance = running.completeCurrent(present: presentPullRequestIDs)
+        apply(running, advance: advance)
+    }
+
+    /// Leaves the current pull request for later and moves on ("Next", `n`).
+    func skipCurrentReviewSessionItem() {
+        guard var running = reviewSession else { return }
+        let advance = running.skipCurrent(present: presentPullRequestIDs)
+        apply(running, advance: advance)
+    }
+
+    /// Ends the session, says what it did, and returns to the inbox.
+    ///
+    /// The one exit: the queue running out, "End session", a confirmed Escape and
+    /// ``closeReview()`` all come through here, so there is one place that can leave
+    /// ``reviewSession`` set.
+    func endReviewSession() {
+        guard let running = reviewSession else { return }
+        // Cleared first: `route = .inbox` below goes through nothing that could re-enter, but
+        // `closeReview()` calls this method, and a session still set would recurse.
+        reviewSession = nil
+        route = .inbox
+        toasts.show(
+            Toast(message: running.summary().message, kind: .success, duration: 7)
+        )
+    }
+
+    /// The pull requests the local inbox still holds — what "has not vanished" means.
+    ///
+    /// Every cached row rather than the "Needs my review" subset: a pull request someone else
+    /// approved is still a pull request the user can look at, while one the sweep pruned is
+    /// merged, closed, or past the search's page cap and there is nothing left to review.
+    private var presentPullRequestIDs: Set<String> {
+        Set((session?.inboxRows ?? []).map(\.id))
+    }
+
+    private func apply(_ running: ReviewSession, advance: ReviewSession.Advance) {
+        reviewSession = running
+        if let message = advance.vanishedMessage {
+            toasts.info(message)
+        }
+        guard let next = advance.next else {
+            endReviewSession()
+            return
+        }
+        openReview(prID: next.id)
     }
 
     // MARK: - Menu bar (Features/MenuBar)

@@ -103,6 +103,18 @@ struct ShepherdCommands: Commands {
         }
 
         CommandMenu(String(localized: "Review")) {
+            // ⇧⌘⏎ rather than a bare ⏎-with-modifiers: the inbox's plain ⏎ opens the row under
+            // the cursor, and the main menu resolves its key equivalents before the key ever
+            // reaches the list, so the two cannot be confused. `r f` does the same thing from
+            // the keyboard-only path.
+            Button(String(localized: "Start Review Session")) {
+                environment.request(.startReviewSession)
+            }
+            .keyboardShortcut(.return, modifiers: [.command, .shift])
+            .disabled(environment.session == nil)
+
+            Divider()
+
             Button(String(localized: "Approve")) {
                 environment.request(.approve)
             }

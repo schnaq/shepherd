@@ -33,6 +33,14 @@ from every repo — without ever opening a browser tab.
   never drift apart. Each pull request is then queued individually, with the same offline, retry
   and staleness handling a single review gets. See
   [ADR 0015](docs/adr/0015-bulk-triage.md).
+- **Focus review session.** Press ⇧⌘⏎ (or `r f`) and Shepherd walks you through every pull
+  request waiting for your review, one after another, keyboard only: a thin bar shows "3 of 12",
+  `d` marks one done and moves on, `n` leaves it for later, `esc` ends the run. Approving,
+  requesting changes or merging advances on its own, so a queue of twenty agent PRs is twenty
+  keystrokes and no mouse. The queue is frozen the moment you start it — pull requests that land
+  while you work wait in the inbox instead of pushing your progress bar backwards — and anything
+  that gets merged or closed in the meantime is skipped with a note when you reach it. It finishes
+  with "Session complete — 9 reviewed, 3 skipped" and how long it took.
 - **Quick inbox in the menu bar.** The menu-bar item carries the number of pull requests waiting
   for your review and opens a short list of them — repository and number, title, who or what wrote
   it, CI state — where one click opens the pull request in the main window. "Sync now" and the full
@@ -88,7 +96,8 @@ from every repo — without ever opening a browser tab.
   Shepherd does sync between your own machines, it does it through storage you own, encrypted
   before it leaves the Mac.
 - **Linear-grade feel.** Command palette (⌘K), `j`/`k` navigation, two-keystroke review
-  actions, dark & light mode, native performance.
+  actions, a keyboard-only focus session over your review queue, dark & light mode, native
+  performance.
 
 ## Requirements
 

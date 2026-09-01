@@ -73,6 +73,24 @@ struct InboxListView: View {
 
             Spacer(minLength: 8)
 
+            // Only when there is something to work through: an entry point that starts an empty
+            // session, or explains why it cannot, is worse than no entry point.
+            if pendingReviewCount > 0 {
+                Button {
+                    environment.request(.startReviewSession)
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "play.circle").font(.system(size: 11))
+                        Text(String(localized: "Session · \(pendingReviewCount)"))
+                    }
+                }
+                .buttonStyle(SecondaryButtonStyle(height: 26, tint: Theme.accentText))
+                .help(String(
+                    localized: "Work through the \(pendingReviewCount) pull requests waiting for your review, one at a time (r f)"
+                ))
+                .layoutPriority(1)
+            }
+
             Picker(String(localized: "Group"), selection: groupBinding) {
                 Text(String(localized: "Agent")).tag(InboxFacet.provenance)
                 Text(String(localized: "Repository")).tag(InboxFacet.repository)
@@ -209,6 +227,15 @@ struct InboxListView: View {
         )
     }
 
+    /// How many pull requests a focus session would have in its queue.
+    ///
+    /// The rail's count for "Needs my review", not the filtered list: the session ignores the
+    /// facets on purpose (``ReviewSession/make(from:startedAt:)``), so the button has to promise
+    /// the same number the session will actually show.
+    private var pendingReviewCount: Int {
+        model.count(for: .needsMyReview)
+    }
+
     private var activeFilterLabel: String? {
         if let repo = model.repoFilter { return repo.fullName }
         switch model.provenanceFilter {
@@ -237,7 +264,9 @@ struct InboxListView: View {
     }
 
     private func handle(_ press: KeyPress) -> KeyPress.Result {
-        if press.matches(.return) {
+        // ⌘ is excluded so ⇧⌘⏎ — "Start Review Session" in the Review menu — cannot also read as
+        // "open the row under the cursor" if it ever reaches the list instead of the main menu.
+        if press.matches(.return), !press.modifiers.contains(.command) {
             if let id = model.selectedID {
                 onOpen(id)
                 return .handled
@@ -437,6 +466,7 @@ struct ShortcutBar: View {
             ShortcutHintView(keys: ["r x"], label: String(localized: "request changes"))
             ShortcutHintView(keys: ["m"], label: String(localized: "merge"))
             ShortcutHintView(keys: ["x"], label: String(localized: "select"))
+            ShortcutHintView(keys: ["r f"], label: String(localized: "session"))
             Spacer(minLength: 0)
             ShortcutHintView(keys: ["⌘K"], label: String(localized: "commands"))
         }

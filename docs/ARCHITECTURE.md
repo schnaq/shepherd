@@ -12,7 +12,8 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
     Inbox/                     #   inbox list, sections, filters, command palette actions
     MenuBar/                   #   menu-bar quick inbox: badge label + mini-inbox window
     PullRequest/               #   PR detail: header, timeline, file list, checks
-    Review/                    #   review composer, pending review UI, thread views
+    Review/                    #   review composer, pending review UI, thread views,
+                               #   focus review session (frozen queue + session bar)
     DiffViewer/                #   WKWebView host + bridge (Swift side)
     Delegation/                #   delegate-to-local-agent model + sheet (ADR 0011, 0016)
     Settings/                  #   accounts (+ updates, local diagnostics), sync (+ encrypted
@@ -261,10 +262,13 @@ never auto-applied.
 
 - Linear-inspired: left rail (views/facets), center list, right detail; ⌘K command palette
   exposes every action; `j`/`k` row navigation; two-keystroke review actions
-  (`r a` approve, `r c` comment, `r x` request changes, `m` merge dialog); `x` ticks a row for
-  bulk triage (⌘-click / ⇧-click do the same with the mouse, ADR 0015); undo toast instead
-  of confirm dialogs wherever the action is reversible — the merge sheet and the bulk-triage
-  sheet are the two exceptions, because neither is undoable.
+  (`r a` approve, `r c` comment, `r x` request changes, `r f` focus review session, `m` merge
+  dialog); `x` ticks a row for bulk triage (⌘-click / ⇧-click do the same with the mouse,
+  ADR 0015); undo toast instead of confirm dialogs wherever the action is reversible — the merge
+  sheet, the bulk-triage sheet and "end a session with pull requests still in it" are the three
+  exceptions, because none of them is undoable.
+- Inside a focus review session two more single keys are live, and only there: `n` next,
+  `d` done & next (below).
 - Dark & light mode from day one: semantic color tokens only (`Color.shepherd*` asset
   catalog), theme piped into Monaco via `setTheme`.
 - All strings user-visible in English for v1; localization-ready (`String(localized:)`).
@@ -345,6 +349,57 @@ The data flow is the point, and it is deliberately not a new one:
 
 Signed out the menu shows one line and a button that brings the sign-in window forward — the item
 stays in the menu bar, because disappearing chrome reads as a bug.
+
+### Focus review session (the queue over pending reviews)
+
+"Start review session" (⇧⌘⏎, `r f`, ⌘K, the Review menu, and a button in the inbox header while
+anything is waiting) walks the user through every pull request that needs their review, one after
+another, on the **existing** review screen. There is no second review UI, and that is the whole
+design: a session is a way of *moving between* reviews.
+
+`Features/Review/ReviewSession.swift` is a pure value and holds every decision:
+
+- The queue is **frozen at start** and never grows. A session whose list absorbed each sweep's
+  imports would turn "3 of 12" into a number that rises while you work; pull requests that arrive
+  during a session wait in the inbox. Its contents are
+  `SmartView.needsMyReview.matches` + `InboxModel.prioritySorted` over
+  `SignedInSession.inboxRows` — the same filter, order and observation the menu-bar quick inbox
+  uses, so the session and the window can never disagree about what is waiting or in which order.
+  The rail's *facet* filters are deliberately ignored: "start a session" means everything waiting
+  for you, and the header button therefore promises the rail count, not the filtered count.
+- The queue entry copies the slug and title in, so the bar can still name a pull request that has
+  since left the inbox.
+- Every cursor move is a transition returning a `ReviewSession.Advance`: what was walked past and
+  what is now current. An entry that left the local inbox between freezing and being reached is
+  walked past **when it is reached**, with a toast, and counted apart from the ones the user
+  skipped on purpose — "3 skipped" means "you moved on", not "GitHub moved on".
+- An empty queue produces **no** session (failable initializer); the caller says "nothing needs
+  your review right now" instead of putting up a bar reading "0 of 0".
+- Session state is **not persisted**: no `AppSettings` key, nothing in the encrypted settings
+  document (ADR 0014). A session is a sitting, not a document — restoring one would mean restoring
+  a snapshot of an inbox that has moved on.
+
+The app half is three touch points:
+
+- **State**: one optional on `AppEnvironment` (`reviewSession`). It is there rather than on a
+  screen because changing `route` is exactly how the session moves on, so it outlives every
+  review screen it walks through. `closeReview()` ends a running session, and `openReview(prID:)`
+  ends one when the id is *not* the entry under the cursor (a parked-review alert's "Re-review", a
+  menu-bar row, a `shepherd://` link), so no route into or out of the review screen can leave a
+  bar on screen that names a different pull request than the screen below it.
+- **Chrome**: `ReviewSessionBar` as a `safeAreaInset(edge: .top)` on `ReviewScreen` — progress
+  "n of m" with a fill track, the pull request's slug and title, and *Done & next* (`d`),
+  *Next* (`n`), *End* (`esc`). Escape asks before throwing a queue away; ending reports
+  "Session complete — 9 reviewed, 3 skipped · 4 m 12 s" as a toast and returns to the inbox.
+- **Auto-advance**: `PullRequestActions.onDidQueueVerdict`, called beside the success toast the
+  moment a verdict or a merge is written to the outbox, and wired up only by `ReviewScreen`. So
+  `r a` / `r x` / `r c` / `m` move the queue on their own. The hook is at the **enqueue**, not at
+  the drain: a session that waited for GitHub would stall on a slow network, and one driven by
+  `mutationSent` would move again on every retry — including hours later, when the app comes back
+  online and nobody is reviewing anything (ADR 0006). `AppEnvironment` checks the id, so a review
+  submitted for anything but the pull request under the cursor cannot move the queue, and the
+  route change is deferred by one main-actor turn so the next pull request is never pushed in
+  under the submit sheet that is still closing.
 
 ### Saved replies and review templates
 
@@ -522,7 +577,7 @@ scheme (`xcodebuild -scheme ShepherdCLI`) so the app scheme's Run action stays t
 ### Keyboard model
 
 `KeySequenceState` is a pure value type implementing the two-keystroke commands (`r a`, `r x`,
-`r c`, `g a/r/s`) with a 1.5 s prefix timeout; views feed it characters from
+`r c`, `r f`, `g a/r/s`) with a 1.5 s prefix timeout; views feed it characters from
 `onKeyPress(phases:)`. Menu commands and the ⌘K palette do not act directly — they raise an
 `AppEnvironment.PendingAction`, which the screen that owns the selection consumes. That keeps
 one implementation of "approve" for the menu bar, the palette, the shortcut and the button.
@@ -656,9 +711,13 @@ pure parts of the app: the bridge protocol against the **shared fixtures**, whic
 into the test bundle as a folder reference from `web/diff-viewer/fixtures` so both languages
 decode the same bytes; the patch reconstruction; the Markdown sanitiser; the keyboard,
 palette and inbox-ordering logic (including the bulk-triage tick selection and every
-bulk-triage label, ADR 0015); the menu-bar quick inbox's pure half (which rows count as waiting,
+bulk-triage label, ADR 0015; the full key-assignment table, so a new sequence cannot quietly take
+a key another command owns); the menu-bar quick inbox's pure half (which rows count as waiting,
 the cut at eight rows with its "n more…" count, the deterministic order, and the badge — blank at
-zero, `"99+"` above 99); the intelligence endpoint layer (preset ↔ base-URL matching,
+zero, `"99+"` above 99); the focus review session (the frozen queue's contents and order, that a
+pull request arriving mid-session does not join it, every cursor transition including skipping the
+last entry and completing the last entry, an entry that left the inbox being walked past when it
+is reached, an empty queue producing no session at all, and both shapes of the closing summary); the intelligence endpoint layer (preset ↔ base-URL matching,
 `/models` parsing against fixtures, and the settings-side discovery gate through `ModelListing`);
 the delegation engine (stream-event fixtures, argv
 construction, template splitting, git command sequences, state transitions) and the app half of

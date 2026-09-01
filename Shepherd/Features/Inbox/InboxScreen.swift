@@ -192,6 +192,10 @@ struct InboxScreen: View {
             compose(.comment)
         case .merge:
             if model.selectedRow != nil { isMergeSheetPresented = true }
+        case .startReviewSession:
+            // The queue is frozen from the session's own inbox observation, not from this
+            // screen's filtered list, so nothing about the rail's current facets is passed in.
+            environment.startReviewSession()
         case .delegate:
             // The inbox has no file priorities yet, so the prompt is built from the row alone;
             // the review screen adds the focus reasons (ADR 0011).

@@ -354,6 +354,33 @@ struct CommandPaletteView: View {
         }
 
         let review = String(localized: "Review")
+        // First in its section: it is the one command that starts a *flow* rather than acting on
+        // whatever happens to be selected.
+        if environment.reviewSession == nil {
+            result.append(
+                PaletteCommand(
+                    id: "start-review-session",
+                    section: review,
+                    title: String(localized: "Start review session"),
+                    systemImage: "play.circle",
+                    keyHint: "r f"
+                ) {
+                    environment.request(.startReviewSession)
+                }
+            )
+        } else {
+            result.append(
+                PaletteCommand(
+                    id: "end-review-session",
+                    section: review,
+                    title: String(localized: "End review session"),
+                    systemImage: "stop.circle",
+                    keyHint: "esc"
+                ) {
+                    environment.endReviewSession()
+                }
+            )
+        }
         result.append(
             PaletteCommand(
                 id: "approve",

@@ -15,6 +15,33 @@ struct PullRequestActions {
     let session: SignedInSession
     /// Where failures are surfaced.
     let toasts: ToastCenter
+    /// Called with a pull request's node id the moment a *verdict* or a *merge* the user asked
+    /// for has been written to the outbox — never for a reply, a thread toggle, or a viewed flag.
+    ///
+    /// This is the seam the focus review session advances on (``ReviewSession``), and it is
+    /// deliberately here, beside the success toast, rather than in the drain: the session
+    /// follows the *user's* action. Waiting for GitHub would stall the queue on a slow network,
+    /// and a session driven by `mutationSent` would move again on every retry — including hours
+    /// later, when the app has come back online and nobody is reviewing anything.
+    ///
+    /// `nil` for every caller that is not inside a session-capable screen, which is why adding
+    /// it changed no existing call site.
+    var onDidQueueVerdict: (@MainActor (String) -> Void)?
+
+    /// Creates the write helper.
+    /// - Parameters:
+    ///   - session: The signed-in session.
+    ///   - toasts: Where failures are surfaced.
+    ///   - onDidQueueVerdict: Called after a verdict or a merge reaches the outbox.
+    init(
+        session: SignedInSession,
+        toasts: ToastCenter,
+        onDidQueueVerdict: (@MainActor (String) -> Void)? = nil
+    ) {
+        self.session = session
+        self.toasts = toasts
+        self.onDidQueueVerdict = onDidQueueVerdict
+    }
 
     // MARK: - Reviews
 
@@ -42,6 +69,7 @@ struct PullRequestActions {
             try await session.database.saveDraft(draft)
             try await enqueue(.submitReview(draft), on: summary)
             toasts.success(confirmation(for: verdict, summary: summary))
+            onDidQueueVerdict?(summary.id)
         } catch {
             toasts.failure(error, context: String(localized: "Could not queue the review"))
         }
@@ -106,6 +134,7 @@ struct PullRequestActions {
                 on: summary
             )
             toasts.success(String(localized: "Merge queued for \(summary.slug)."))
+            onDidQueueVerdict?(summary.id)
         } catch {
             toasts.failure(error, context: String(localized: "Could not queue the merge"))
         }

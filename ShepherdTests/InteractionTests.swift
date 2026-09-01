@@ -35,6 +35,71 @@ final class InteractionTests: XCTestCase {
         XCTAssertEqual(state.consume("c"), .action(.comment))
     }
 
+    func testTheFocusSessionSequenceSitsUnderTheReviewPrefixWithoutDisturbingTheVerdicts() {
+        var state = KeySequenceState()
+        XCTAssertEqual(state.consume("r"), .awaitingSecondKey("r"))
+        XCTAssertEqual(state.consume("f"), .action(.startReviewSession))
+        // `f` alone is still nothing, and the three verdicts under the same prefix are untouched.
+        XCTAssertEqual(state.consume("f"), .unhandled)
+        XCTAssertEqual(state.consume("r"), .awaitingSecondKey("r"))
+        XCTAssertEqual(state.consume("a"), .action(.approve))
+    }
+
+    /// Every registered sequence, in one place, so a new one cannot quietly take a key another
+    /// command already owns.
+    func testTheRegisteredKeyAssignmentsAreExactlyTheDocumentedOnes() {
+        let single: [Character: ShortcutAction] = [
+            "j": .selectNext,
+            "k": .selectPrevious,
+            "m": .merge,
+            "x": .toggleMark,
+        ]
+        for (key, action) in single {
+            var state = KeySequenceState()
+            XCTAssertEqual(state.consume(key), .action(action), "single key \(key)")
+        }
+
+        let sequences: [(Character, Character, ShortcutAction)] = [
+            ("r", "a", .approve),
+            ("r", "x", .requestChanges),
+            ("r", "c", .comment),
+            ("r", "f", .startReviewSession),
+            ("g", "a", .groupBy(.provenance)),
+            ("g", "r", .groupBy(.repository)),
+            ("g", "s", .groupBy(.reviewState)),
+        ]
+        for (prefix, second, action) in sequences {
+            var state = KeySequenceState()
+            XCTAssertEqual(state.consume(prefix), .awaitingSecondKey(prefix))
+            XCTAssertEqual(state.consume(second), .action(action), "\(prefix) \(second)")
+        }
+
+        // The session's own keys are handled by the review screen only while a session is
+        // running, so they must stay unclaimed here.
+        for key: Character in ["n", "d", "f", "v"] {
+            var state = KeySequenceState()
+            XCTAssertEqual(state.consume(key), .unhandled, "bare \(key)")
+        }
+    }
+
+    func testEveryKeyHintIsEitherAKeyOrDeliberatelyEmpty() {
+        let actions: [ShortcutAction] = [
+            .selectNext, .selectPrevious, .openSelection, .approve, .requestChanges, .comment,
+            .merge, .startReviewSession, .groupBy(.provenance), .groupBy(.repository),
+            .groupBy(.reviewState), .delegate, .toggleMark, .markGreenAgentPullRequests,
+            .bulkTriage(.approve),
+        ]
+        for action in actions {
+            switch action {
+            case .delegate, .markGreenAgentPullRequests, .bulkTriage:
+                XCTAssertTrue(action.keyHint.isEmpty)
+            default:
+                XCTAssertFalse(action.keyHint.isEmpty, "\(action) needs a key hint")
+            }
+        }
+        XCTAssertEqual(ShortcutAction.startReviewSession.keyHint, "r f")
+    }
+
     func testGroupingCommands() {
         var state = KeySequenceState()
         XCTAssertEqual(state.consume("g"), .awaitingSecondKey("g"))
