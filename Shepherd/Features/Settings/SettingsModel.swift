@@ -18,6 +18,18 @@ final class SettingsModel {
         case failure(String)
     }
 
+    /// The result of the last "Load models" run against an OpenAI-compatible endpoint.
+    enum ModelListState: Equatable {
+        /// Not asked yet, or invalidated because the endpoint changed.
+        case idle
+        /// Fetching.
+        case loading
+        /// The endpoint listed these model ids.
+        case loaded([String])
+        /// The list could not be fetched; the free-text model field stays in charge.
+        case failed(String)
+    }
+
     /// The bundled, read-only agent registry (ADR 0008).
     private(set) var bundledAgents: [AgentRegistryEntry] = []
     /// The user's registry extensions, stored in `agent_registry_overrides`.
@@ -31,6 +43,8 @@ final class SettingsModel {
     private(set) var hasStoredKey = false
     /// The connection-test state.
     private(set) var testState: TestState = .idle
+    /// The model-discovery state.
+    private(set) var modelListState: ModelListState = .idle
 
     /// Draft fields for a new agent-registry entry.
     var newAgentID = ""
@@ -120,6 +134,7 @@ final class SettingsModel {
         hasStoredKey = !(stored ?? "").isEmpty
         apiKeyField = stored ?? ""
         testState = .idle
+        modelListState = .idle
     }
 
     /// Writes the editor's key to the Keychain (or removes it when empty).
@@ -177,5 +192,90 @@ final class SettingsModel {
                 (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             )
         }
+    }
+
+    // MARK: - Model discovery
+
+    /// Whether `GET {base}/models` can be attempted with what is in the fields right now.
+    /// - Parameter settings: The current preferences.
+    /// - Returns: `true` when the endpoint is OpenAI-compatible, its base URL is usable, and a
+    ///   key is either present or not expected by the selected preset.
+    func canLoadModels(settings: AppSettings) -> Bool {
+        guard settings.cloudProviderKind == .openAICompatible,
+              OpenAICompatibleProvider.modelsURL(base: settings.openAICompatibleBaseURL) != nil
+        else { return false }
+        return !apiKeyField.isEmpty || settings.openAICompatiblePreset.allowsKeylessDiscovery
+    }
+
+    /// Fetches the endpoint's model list so the model field can become a picker.
+    ///
+    /// The key in the editor is used rather than the stored one, so a freshly pasted key works
+    /// before it is saved. A failure is not fatal anywhere: the free-text model field remains.
+    /// - Parameter settings: The current preferences.
+    func loadModels(settings: AppSettings) async {
+        await loadModels(
+            settings: settings,
+            from: OpenAICompatibleProvider(
+                baseURL: settings.openAICompatibleBaseURL,
+                model: settings.openAICompatibleModel,
+                apiKey: apiKeyField
+            )
+        )
+    }
+
+    /// The half of discovery that does not care where the list came from.
+    /// - Parameters:
+    ///   - settings: The current preferences.
+    ///   - lister: The endpoint to ask; the tests pass a stub instead of a network call.
+    func loadModels(settings: AppSettings, from lister: any ModelListing) async {
+        guard settings.cloudProviderKind == .openAICompatible else { return }
+        modelListState = .loading
+        do {
+            let models = try await lister.availableModels()
+            modelListState = .loaded(models)
+            // Only ever *offer* a model; an existing choice is never overwritten.
+            let configured = settings.openAICompatibleModel
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if configured.isEmpty, let first = models.first {
+                settings.openAICompatibleModel = first
+            }
+        } catch {
+            modelListState = .failed(
+                (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            )
+        }
+    }
+
+    /// Loads the model list on its own for a configuration that is already complete.
+    ///
+    /// Deliberately narrow: it only fires when a key came out of the Keychain (or the preset
+    /// needs none), so opening Settings never sends a request for a half-typed endpoint.
+    /// - Parameter settings: The current preferences.
+    func loadModelsIfConfigured(settings: AppSettings) async {
+        guard settings.intelligenceMode == .onDeviceAndCloud,
+              modelListState == .idle,
+              canLoadModels(settings: settings),
+              hasStoredKey || settings.openAICompatiblePreset.allowsKeylessDiscovery
+        else { return }
+        await loadModels(settings: settings)
+    }
+
+    /// Drops a loaded list, returning the model field to free text.
+    ///
+    /// Called when the endpoint changes — a list from the previous endpoint would offer models
+    /// the new one does not have.
+    func forgetLoadedModels() {
+        modelListState = .idle
+    }
+
+    /// The model ids to offer in the picker.
+    /// - Parameter selected: The model currently configured.
+    /// - Returns: The loaded ids, with `selected` prepended when the endpoint did not list it;
+    ///   an empty array when the free-text field should be shown instead.
+    func modelOptions(selected: String) -> [String] {
+        guard case .loaded(let models) = modelListState, !models.isEmpty else { return [] }
+        let trimmed = selected.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !models.contains(trimmed) else { return models }
+        return [trimmed] + models
     }
 }

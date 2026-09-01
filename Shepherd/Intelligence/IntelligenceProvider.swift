@@ -79,6 +79,8 @@ enum IntelligenceError: Error, LocalizedError, Equatable {
     case http(status: Int, message: String)
     /// The answer could not be understood.
     case malformedResponse
+    /// The endpoint's model list was well-formed but empty.
+    case noModelsListed
     /// The digest did not fit the provider's context window.
     case digestTooLarge(tokens: Int, limit: Int)
 
@@ -92,6 +94,8 @@ enum IntelligenceError: Error, LocalizedError, Equatable {
             return String(localized: "The model endpoint returned \(status): \(message)")
         case .malformedResponse:
             return String(localized: "The model returned something Shepherd could not read.")
+        case .noModelsListed:
+            return String(localized: "The endpoint did not list any models. Type the model name instead.")
         case .digestTooLarge(let tokens, let limit):
             return String(localized: "This pull request needs ~\(tokens) tokens, over the \(limit) token budget.")
         }

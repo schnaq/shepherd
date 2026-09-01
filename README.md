@@ -31,8 +31,9 @@ from every repo — without ever opening a browser tab.
 - **Delegate back to a local coding agent (Claude Code first-class)** — runs in an isolated
   worktree with turn/budget caps; you review and push.
 - **On-device intelligence, cloud optional.** PR summaries and triage hints run locally via
-  Apple's Foundation Models framework when available. Optionally bring your own Anthropic API
-  key for deeper whole-PR analysis. The app is fully functional with AI switched off.
+  Apple's Foundation Models framework when available. Optionally bring your own API key for
+  deeper whole-PR analysis — Anthropic, or any OpenAI-compatible endpoint, with presets for
+  EU-hosted Konduit and a local Ollama. The app is fully functional with AI switched off.
 - **Local-first.** Everything lives in a SQLite database on your Mac. GitHub is a sync target,
   not a backend. No server, no telemetry, no account other than your GitHub login.
 - **Linear-grade feel.** Command palette (⌘K), `j`/`k` navigation, two-keystroke review

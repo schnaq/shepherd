@@ -49,8 +49,9 @@ The Swift⇄web bridge protocol is a contract: change `src/bridge/protocol.ts`,
 
 - Decisions live in [docs/adr](docs/adr). Changing a decision = new ADR, not a silent edit.
 - UI strings: English, `String(localized:)`. Colors: semantic tokens only (dark/light!).
-- No telemetry, no network calls beyond api.github.com / github.com (and api.anthropic.com
-  when the user configures a key). This is a hard privacy line.
+- No telemetry, no network calls beyond api.github.com / github.com (and, only when the user
+  configures a key, api.anthropic.com or the OpenAI-compatible endpoint they chose themselves —
+  a preset's base URL is still their choice). This is a hard privacy line.
 - Conventional commits appreciated (`feat:`, `fix:`, `docs:` …), not enforced.
 
 ## License

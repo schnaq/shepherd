@@ -1,12 +1,24 @@
 import Foundation
 import ShepherdCore
 
+/// An endpoint that can name the models it serves.
+///
+/// The seam exists so the Settings flow around model discovery — gate, preselection, fallback to
+/// the free-text field — is unit-testable without a network; the only production conformance is
+/// ``OpenAICompatibleProvider``.
+protocol ModelListing: Sendable {
+    /// The model ids the endpoint offers, in its own order.
+    /// - Returns: The offered model ids, never empty.
+    /// - Throws: ``IntelligenceError`` when the list cannot be obtained.
+    func availableModels() async throws -> [String]
+}
+
 /// Tier 3b: any endpoint that speaks the OpenAI chat-completions shape (ADR 0007).
 ///
 /// This is the escape hatch for data residency and local models: EU-hosted providers, an
 /// on-prem gateway, Ollama or LM Studio on `localhost`. Shepherd only needs a base URL, a
 /// model name and a key.
-struct OpenAICompatibleProvider: IntelligenceProvider {
+struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
     /// The token budget digests are built with for this tier.
     static let budget = TokenBudget.cloud
 
@@ -53,17 +65,70 @@ struct OpenAICompatibleProvider: IntelligenceProvider {
         return IntelligenceJSON.hints(from: text).filter { knownPaths.contains($0.file) }
     }
 
+    /// Cleans up a configured base URL: surrounding whitespace and trailing slashes go, and
+    /// anything that is not an absolute `http(s)` URL is rejected.
+    ///
+    /// One place, because both the completions and the models endpoint are built from it and a
+    /// base URL that is good enough for one must be good enough for the other.
+    /// - Parameter base: The configured base URL, as stored or typed.
+    /// - Returns: The normalised base, or `nil` when it is not usable.
+    static func normalizedBase(_ base: String) -> String? {
+        var trimmed = base.trimmingCharacters(in: .whitespacesAndNewlines)
+        while trimmed.hasSuffix("/") { trimmed.removeLast() }
+        guard !trimmed.isEmpty,
+              trimmed.hasPrefix("https://") || trimmed.hasPrefix("http://")
+        else { return nil }
+        return trimmed
+    }
+
     /// Builds `{base}/chat/completions`, tolerating a trailing slash.
     /// - Parameter base: The configured base URL.
     /// - Returns: The endpoint URL, or `nil` when the base is not a usable absolute URL.
     static func completionsURL(base: String) -> URL? {
-        var trimmed = base.trimmingCharacters(in: .whitespacesAndNewlines)
-        while trimmed.hasSuffix("/") { trimmed.removeLast() }
-        guard !trimmed.isEmpty,
-              trimmed.hasPrefix("https://") || trimmed.hasPrefix("http://"),
-              let url = URL(string: trimmed + "/chat/completions")
+        guard let normalized = normalizedBase(base),
+              let url = URL(string: normalized + "/chat/completions")
         else { return nil }
         return url
+    }
+
+    /// Builds `{base}/models`, the OpenAI-shaped model list.
+    /// - Parameter base: The configured base URL.
+    /// - Returns: The endpoint URL, or `nil` when the base is not a usable absolute URL.
+    static func modelsURL(base: String) -> URL? {
+        guard let normalized = normalizedBase(base),
+              let url = URL(string: normalized + "/models")
+        else { return nil }
+        return url
+    }
+
+    /// Asks the endpoint which models it offers.
+    ///
+    /// Discovery is best-effort and never required: Settings falls back to the free-text model
+    /// field whenever this throws, so an endpoint without a `/models` route stays usable.
+    /// - Returns: The offered model ids, in the endpoint's own order.
+    /// - Throws: ``IntelligenceError`` when the endpoint is unreachable, refuses the key, or
+    ///   answers with something other than the documented list shape.
+    func availableModels() async throws -> [String] {
+        guard let url = OpenAICompatibleProvider.modelsURL(base: baseURL) else {
+            throw IntelligenceError.notConfigured("base URL")
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "accept")
+        if !apiKey.isEmpty {
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "authorization")
+        }
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        guard (200..<300).contains(status) else {
+            throw IntelligenceError.http(
+                status: status,
+                message: OpenAICompatibleProvider.errorMessage(in: data)
+            )
+        }
+        return try OpenAIModelsResponse.modelIDs(in: data)
     }
 
     /// Sends one non-streaming chat-completions request.

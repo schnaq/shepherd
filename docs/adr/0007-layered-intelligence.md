@@ -35,6 +35,32 @@ Three tiers, strictly layered; each tier degrades gracefully to the one below:
 A single `IntelligenceProvider` protocol abstracts tiers 2–3; the UI treats AI output as
 *hints* (never auto-submits reviews). The app is fully functional with tiers 2–3 unavailable.
 
+## Amendment (2026-09-01): endpoint presets and model discovery for tier 3b
+
+Additive, inside the decision above — the tier, the protocol and the privacy line are unchanged,
+so this is a note rather than a new ADR.
+
+Typing a base URL from memory was the only way into tier 3b, which made the "any
+OpenAI-compatible endpoint" escape hatch harder to use than the Anthropic default it exists to
+balance. Two small additions:
+
+- **Endpoint presets** (`IntelligenceEndpointPreset`): `Konduit (EU)`
+  (`https://api.konduit.eu/v1`, EU-hosted open models, keys from `console.konduit.eu`),
+  `Ollama (local)` (`http://localhost:11434/v1`) and `Custom` (the previous behaviour, a
+  free-form URL). A preset only *fills in the base URL* the provider already takes — there is no
+  per-provider code path, no per-provider request shape, and the router and connection test are
+  untouched. The selected preset is remembered in `UserDefaults` (non-secret, like the base URL
+  and the model name); keys stay Keychain-only. Editing the URL by hand re-derives the preset, so
+  the picker can never contradict the field.
+- **Model discovery**: `GET {base}/models` (`{"data":[{"id":…}]}`) turns the model field into a
+  picker. It is best-effort and never required — an endpoint without that route, an error, or an
+  empty list all fall back to the free-text field, and a model the endpoint did not list stays
+  selectable. Parsing lives in `OpenAIModelsResponse`, a pure type with fixture tests.
+
+Consequence: adding a further preset is a case in one enum plus a line in the roadmap. A preset
+must not grow endpoint-specific request behaviour; anything that cannot be expressed as "a base
+URL for the OpenAI shape" needs its own provider and its own ADR.
+
 ## Consequences
 
 - No feature may hard-depend on an LLM; every AI surface needs a heuristic-only fallback state.

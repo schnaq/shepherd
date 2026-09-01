@@ -390,16 +390,14 @@ struct IntelligenceSettingsTab: View {
                         .labelsHidden()
 
                         if environment.settings.cloudProviderKind == .openAICompatible {
+                            endpointPresetPicker
                             LabeledField(
                                 label: String(localized: "Base URL"),
                                 placeholder: "https://api.example.eu/v1",
                                 text: baseURLBinding
                             )
-                            LabeledField(
-                                label: String(localized: "Model"),
-                                placeholder: "gpt-4o-mini",
-                                text: openAIModelBinding
-                            )
+                            modelField
+                            endpointNote
                         } else {
                             LabeledField(
                                 label: String(localized: "Model"),
@@ -413,7 +411,7 @@ struct IntelligenceSettingsTab: View {
                                 .font(.system(size: 12))
                                 .foregroundStyle(Theme.textSecondary)
                                 .frame(width: 74, alignment: .leading)
-                            SecureField(String(localized: "sk-…"), text: keyBinding)
+                            SecureField(apiKeyPlaceholder, text: keyBinding)
                                 .textFieldStyle(.roundedBorder)
                         }
 
@@ -434,17 +432,29 @@ struct IntelligenceSettingsTab: View {
                             }
                             .buttonStyle(SecondaryButtonStyle(height: 28))
 
+                            if environment.settings.cloudProviderKind == .openAICompatible {
+                                Button(String(localized: "Load models")) {
+                                    Task { await model.loadModels(settings: environment.settings) }
+                                }
+                                .buttonStyle(SecondaryButtonStyle(height: 28))
+                                .disabled(
+                                    model.modelListState == .loading
+                                        || !model.canLoadModels(settings: environment.settings)
+                                )
+                            }
+
                             Button(String(localized: "Test connection")) {
                                 Task { await model.testConnection(settings: environment.settings) }
                             }
                             .buttonStyle(SecondaryButtonStyle(height: 28))
                             .disabled(model.testState == .running)
 
-                            if model.testState == .running {
+                            if model.testState == .running || model.modelListState == .loading {
                                 ProgressView().controlSize(.small)
                             }
                         }
 
+                        modelListResult
                         testResult
                         if let saveError {
                             Text(saveError)
@@ -472,6 +482,7 @@ struct IntelligenceSettingsTab: View {
                 kind: environment.settings.cloudProviderKind,
                 store: environment.secretStore
             )
+            await model.loadModelsIfConfigured(settings: environment.settings)
         }
         .onChange(of: environment.settings.cloudProviderKind) { _, kind in
             model.loadKey(kind: kind, store: environment.secretStore)
@@ -480,6 +491,106 @@ struct IntelligenceSettingsTab: View {
         .onChange(of: environment.settings.intelligenceMode) { _, _ in
             environment.refreshIntelligence()
         }
+    }
+
+    // MARK: - OpenAI-compatible endpoint (ADR 0007, tier 3b)
+
+    /// The preset picker. Selecting a preset fills in its base URL; "Custom" keeps the typed one.
+    private var endpointPresetPicker: some View {
+        HStack(spacing: 8) {
+            Text(String(localized: "Endpoint"))
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.textSecondary)
+                .frame(width: 74, alignment: .leading)
+            Picker(String(localized: "Endpoint"), selection: presetBinding) {
+                ForEach(IntelligenceEndpointPreset.allCases) { option in
+                    Text(option.title).tag(option)
+                }
+            }
+            .labelsHidden()
+        }
+    }
+
+    /// The endpoint's note plus, where the endpoint issues keys, a link to its console.
+    @ViewBuilder
+    private var endpointNote: some View {
+        if let note = preset.note {
+            Text(note)
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        if let url = preset.consoleURL, let title = preset.consoleLinkTitle {
+            Link(title, destination: url)
+                .font(.system(size: 11))
+        }
+    }
+
+    /// The model row: a picker once the endpoint's list is loaded, the free-text field otherwise.
+    @ViewBuilder
+    private var modelField: some View {
+        if modelOptions.isEmpty {
+            LabeledField(
+                label: String(localized: "Model"),
+                placeholder: preset.modelPlaceholder,
+                text: openAIModelBinding
+            )
+        } else {
+            HStack(spacing: 8) {
+                Text(String(localized: "Model"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .frame(width: 74, alignment: .leading)
+                Picker(String(localized: "Model"), selection: openAIModelBinding) {
+                    ForEach(modelOptions, id: \.self) { option in
+                        Text(option).tag(option)
+                    }
+                }
+                .labelsHidden()
+                Button(String(localized: "Type a name")) { model.forgetLoadedModels() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.accentText)
+            }
+        }
+    }
+
+    /// What the last model-discovery run produced.
+    @ViewBuilder
+    private var modelListResult: some View {
+        switch model.modelListState {
+        case .idle, .loading:
+            EmptyView()
+        case .loaded(let models):
+            Text(String(localized: "\(models.count) models offered by this endpoint."))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+        case .failed(let message):
+            Label(
+                String(localized: "Could not load models: \(message)"),
+                systemImage: "exclamationmark.triangle"
+            )
+            .font(.system(size: 11))
+            .foregroundStyle(Theme.pending)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// The model ids the picker should offer, empty when the free-text field is in charge.
+    private var modelOptions: [String] {
+        model.modelOptions(selected: environment.settings.openAICompatibleModel)
+    }
+
+    /// The endpoint preset currently selected.
+    private var preset: IntelligenceEndpointPreset {
+        environment.settings.openAICompatiblePreset
+    }
+
+    /// The placeholder of the key field, which differs per endpoint.
+    private var apiKeyPlaceholder: String {
+        environment.settings.cloudProviderKind == .openAICompatible
+            ? preset.apiKeyPlaceholder
+            : "sk-…"
     }
 
     @ViewBuilder
@@ -513,10 +624,29 @@ struct IntelligenceSettingsTab: View {
         )
     }
 
+    private var presetBinding: Binding<IntelligenceEndpointPreset> {
+        Binding(
+            get: { environment.settings.openAICompatiblePreset },
+            set: { selection in
+                environment.settings.applyEndpointPreset(selection)
+                // A list loaded from the previous endpoint would offer models the new one does
+                // not serve, so it is dropped rather than shown for the wrong host.
+                model.forgetLoadedModels()
+                environment.refreshIntelligence()
+            }
+        )
+    }
+
     private var baseURLBinding: Binding<String> {
         Binding(
             get: { environment.settings.openAICompatibleBaseURL },
-            set: { environment.settings.openAICompatibleBaseURL = $0 }
+            set: { url in
+                environment.settings.openAICompatibleBaseURL = url
+                // Editing the URL by hand must not leave the picker claiming a preset the
+                // field contradicts — and typing a preset's URL selects that preset.
+                environment.settings.openAICompatiblePreset = .matching(baseURL: url)
+                model.forgetLoadedModels()
+            }
         )
     }
 

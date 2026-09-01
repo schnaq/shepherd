@@ -169,8 +169,19 @@ protocol IntelligenceProvider: Sendable {
 Three provider implementations: `OnDeviceProvider` (Foundation Models),
 `AnthropicProvider` (BYOK, `claude-haiku-4-5` default), and `OpenAICompatibleProvider`
 (user-configured base URL + key + model — chat-completions shape; covers EU-hosted
-providers such as konduit.eu and local servers like Ollama). API keys and custom base
-URLs live in the Keychain alongside GitHub tokens.
+providers such as konduit.eu and local servers like Ollama). API keys live in the Keychain
+alongside GitHub tokens; the non-secret half of the configuration (mode, provider kind,
+endpoint preset, base URL, model name) lives in `AppSettings`/`UserDefaults`.
+
+The OpenAI-compatible tier has two conveniences on top of the free-form configuration, both
+additive and both without an endpoint-specific code path (ADR 0007 amendment):
+`IntelligenceEndpointPreset` (`konduitEU` / `ollamaLocal` / `custom`) only prefills the base URL
+and supplies the settings copy — note, key-console link, placeholders — and
+`OpenAICompatibleProvider.availableModels()` fetches `GET {base}/models`, parsed by the pure
+`OpenAIModelsResponse`, to turn the model field into a picker. Discovery is best-effort: any
+failure, an unknown shape or an empty list falls back to the free-text model field, and a model
+the endpoint did not list stays selectable. `ModelListing` is the seam the settings tests drive
+instead of a network.
 
 `PullRequestDigest` is built by tier-1 heuristics in `ShepherdCore` (per-file stats, top
 hunks, title/body) with an explicit token budget parameter — the on-device provider requests
@@ -314,6 +325,8 @@ stays on.
 pure parts of the app: the bridge protocol against the **shared fixtures**, which are copied
 into the test bundle as a folder reference from `web/diff-viewer/fixtures` so both languages
 decode the same bytes; the patch reconstruction; the Markdown sanitiser; the keyboard,
-palette and inbox-ordering logic; and the delegation engine (stream-event fixtures, argv
+palette and inbox-ordering logic; the intelligence endpoint layer (preset ↔ base-URL matching,
+`/models` parsing against fixtures, and the settings-side discovery gate through `ModelListing`);
+and the delegation engine (stream-event fixtures, argv
 construction, template splitting, git command sequences, state transitions). The web bundle is likewise added to the app target as a
 folder reference (`Shepherd/Resources/DiffViewer`) so `index.html` keeps its relative links.

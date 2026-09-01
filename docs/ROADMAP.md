@@ -33,8 +33,10 @@ the review path — the founder's bar is "never need to open github.com for a ro
 - [ ] Tier 1 heuristics: file prioritization, risk hints — always on
 - [ ] Tier 2 on-device PR summaries via Foundation Models (availability-gated)
 - [ ] Tier 3 BYOK: whole-PR summary & review-focus hints — Anthropic, plus any
-      OpenAI-compatible endpoint (custom base URL, e.g. EU-hosted providers like konduit.eu,
-      or local Ollama)
+      OpenAI-compatible endpoint with one-click endpoint presets (Konduit (EU) — EU-hosted open
+      models, with a link to the console for the key; Ollama on localhost; or a custom base URL),
+      model discovery via `GET {base}/models` with the free-text model field as the fallback, and
+      a connection test (ADR 0007 amendment)
 
 **Foundation**
 - [ ] Local-first SQLite cache + outbox (ADR 0006)

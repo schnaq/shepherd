@@ -96,8 +96,16 @@ final class AppSettings {
         self.intelligenceMode = Self.read(defaults, Keys.intelligenceMode, default: IntelligenceMode.off)
         self.cloudProviderKind = Self.read(defaults, Keys.cloudProviderKind, default: CloudProviderKind.anthropic)
         self.anthropicModel = defaults.string(forKey: Keys.anthropicModel) ?? "claude-haiku-4-5"
-        self.openAICompatibleBaseURL = defaults.string(forKey: Keys.openAIBaseURL) ?? ""
+        let storedBaseURL = defaults.string(forKey: Keys.openAIBaseURL) ?? ""
+        self.openAICompatibleBaseURL = storedBaseURL
         self.openAICompatibleModel = defaults.string(forKey: Keys.openAIModel) ?? ""
+        // A configuration written before presets existed has no stored preset; deriving it from
+        // the base URL means such an install shows "Konduit (EU)" rather than "Custom".
+        self.openAICompatiblePreset = Self.read(
+            defaults,
+            Keys.openAIPreset,
+            default: IntelligenceEndpointPreset.matching(baseURL: storedBaseURL)
+        )
         self.groupBy = Self.read(defaults, Keys.groupBy, default: InboxFacet.provenance)
         self.sortOrder = Self.read(defaults, Keys.sortOrder, default: InboxSortOrder.priority)
         self.diffFontSize = defaults.object(forKey: Keys.diffFontSize) as? Double ?? 13
@@ -169,6 +177,26 @@ final class AppSettings {
     /// The model name to send to the OpenAI-compatible endpoint.
     var openAICompatibleModel: String {
         didSet { defaults.set(openAICompatibleModel, forKey: Keys.openAIModel) }
+    }
+
+    /// Which known endpoint the OpenAI-compatible configuration came from.
+    ///
+    /// Purely a UI convenience — the intelligence layer reads the base URL, never this — but it
+    /// is remembered so Settings can keep showing the endpoint's note and key link.
+    var openAICompatiblePreset: IntelligenceEndpointPreset {
+        didSet { Self.write(defaults, openAICompatiblePreset, Keys.openAIPreset) }
+    }
+
+    /// Selects an endpoint preset and fills in the base URL that belongs to it.
+    ///
+    /// ``IntelligenceEndpointPreset/custom`` keeps whatever URL is already in the field, so
+    /// switching to it never erases a hand-typed endpoint.
+    /// - Parameter preset: The preset the user picked.
+    func applyEndpointPreset(_ preset: IntelligenceEndpointPreset) {
+        openAICompatiblePreset = preset
+        if let baseURL = preset.baseURL {
+            openAICompatibleBaseURL = baseURL
+        }
     }
 
     // MARK: - Inbox
@@ -293,6 +321,7 @@ final class AppSettings {
         static let anthropicModel = "intelligence.anthropic.model"
         static let openAIBaseURL = "intelligence.openaiCompatible.baseURL"
         static let openAIModel = "intelligence.openaiCompatible.model"
+        static let openAIPreset = "intelligence.openaiCompatible.preset"
         static let groupBy = "inbox.groupBy"
         static let sortOrder = "inbox.sortOrder"
         static let diffFontSize = "diff.fontSize"
