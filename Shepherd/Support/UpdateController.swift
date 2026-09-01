@@ -87,13 +87,13 @@ struct UpdateConfiguration: Equatable, Sendable {
 /// Two things this wrapper exists for:
 ///
 /// 1. **It refuses to start an updater that cannot work.** `SPUStandardUpdaterController`'s own
-///    `startUpdater()` reports a misconfigured `Info.plist` by logging and then putting an alert
+///    `start()` reports a misconfigured `Info.plist` by logging and then putting an alert
 ///    in front of the user a few seconds after launch, telling them to contact the developer.
 ///    That is the right behaviour for a shipped app whose feed broke and exactly the wrong one
 ///    for a source build or a fork that has no signing key yet — which is every build until
 ///    `generate_keys` has been run once. So the controller is created with
 ///    `startingUpdater: false`, the configuration is validated here, and the updater is started
-///    through the throwing `SPUUpdater.startUpdater()` only when it can succeed. A build without
+///    through the throwing `SPUUpdater.start()` only when it can succeed. A build without
 ///    keys gets a disabled menu item and one explanatory line in Settings; it never gets an
 ///    alert and it never crashes.
 /// 2. **It makes Sparkle's state observable.** `automaticallyChecksForUpdates` is a KVO property
@@ -156,7 +156,7 @@ final class UpdateController {
         self.controller = controller
         self.checksAutomatically = controller.updater.automaticallyChecksForUpdates
         do {
-            try controller.updater.startUpdater()
+            try controller.updater.start()
         } catch {
             // Reachable even with a valid feed and key — a damaged bundle, or an updater Sparkle
             // will not run for this host. Nothing is shown to the user beyond the Settings line:
