@@ -60,6 +60,10 @@ jobs:
         run: |
           xcodebuild -project Shepherd.xcodeproj -scheme Shepherd -configuration Debug \
             -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO build
+      - name: Build the shepherd CLI
+        run: |
+          xcodebuild -project Shepherd.xcodeproj -scheme ShepherdCLI -configuration Debug \
+            -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO build
       - name: Run app unit tests
         run: |
           xcodebuild -project Shepherd.xcodeproj -scheme Shepherd -configuration Debug \

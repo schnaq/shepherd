@@ -10,6 +10,9 @@ struct InboxScreen: View {
     @State private var model: InboxModel
     @State private var isMergeSheetPresented = false
     @State private var isSettingsPresented = false
+    /// Which tab the Settings sheet opens on — the rail opens Account, a
+    /// `shepherd://settings/<tab>` link opens the tab it names (ADR 0013).
+    @State private var settingsTab: SettingsDeepLinkTab = .account
 
     /// Creates the screen for a session.
     /// - Parameters:
@@ -22,7 +25,7 @@ struct InboxScreen: View {
 
     var body: some View {
         NavigationSplitView {
-            InboxSidebar(model: model, onOpenSettings: { isSettingsPresented = true })
+            InboxSidebar(model: model, onOpenSettings: { openSettings(.account) })
                 .navigationSplitViewColumnWidth(min: 200, ideal: 232, max: 300)
         } content: {
             InboxListView(model: model, onOpen: open)
@@ -41,6 +44,9 @@ struct InboxScreen: View {
         .task {
             model.intelligence = environment.intelligence
             model.startObserving()
+            // A deep link raised while the review screen was showing routes here first; the
+            // request is waiting in the container by the time this screen appears.
+            consumeDeepLinkRequests()
         }
         .onChange(of: environment.intelligence.configuration) { _, _ in
             model.intelligence = environment.intelligence
@@ -53,16 +59,40 @@ struct InboxScreen: View {
             environment.clearPendingAction()
             perform(pending.action)
         }
+        .onChange(of: environment.pendingInboxFilter) { _, _ in
+            consumeDeepLinkRequests()
+        }
+        .onChange(of: environment.pendingSettingsTab) { _, _ in
+            consumeDeepLinkRequests()
+        }
         .sheet(isPresented: $isMergeSheetPresented) {
             if let summary = model.selectedRow {
                 MergeSheet(summary: summary, actions: actions)
             }
         }
         .sheet(isPresented: $isSettingsPresented) {
-            SettingsView()
+            SettingsView(initialTab: settingsTab)
                 .environment(environment)
                 .frame(width: 620, height: 460)
+                .id(settingsTab)
         }
+    }
+
+    /// Applies whatever a `shepherd://` link asked the inbox for (ADR 0013).
+    private func consumeDeepLinkRequests() {
+        if let pending = environment.pendingInboxFilter {
+            environment.clearPendingInboxFilter()
+            model.apply(pending.filter)
+        }
+        if let pending = environment.pendingSettingsTab {
+            environment.clearPendingSettingsTab()
+            openSettings(pending.tab)
+        }
+    }
+
+    private func openSettings(_ tab: SettingsDeepLinkTab) {
+        settingsTab = tab
+        isSettingsPresented = true
     }
 
     // MARK: - Toolbar

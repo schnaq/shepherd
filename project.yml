@@ -44,9 +44,42 @@ targets:
         LSMinimumSystemVersion: "26.0"
         LSApplicationCategoryType: public.app-category.developer-tools
         NSHumanReadableCopyright: "MIT licensed — The Shepherd contributors"
+        # The `shepherd://` deep-link scheme (ADR 0013). This is what makes `open
+        # shepherd://sync`, Raycast, and the companion `shepherd` CLI work; the app parses
+        # every incoming URL with `DeepLink.parse` and does nothing else with it.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.schnaq.shepherd.deeplink
+            CFBundleTypeRole: Viewer
+            CFBundleURLSchemes:
+              - shepherd
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.schnaq.shepherd
+        SWIFT_VERSION: "6.0"
+        MACOSX_DEPLOYMENT_TARGET: "26.0"
+        ARCHS: arm64
+        ENABLE_HARDENED_RUNTIME: true
+        CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_IDENTITY: "-"
+        GENERATE_INFOPLIST_FILE: false
+        SWIFT_STRICT_CONCURRENCY: complete
+
+  # The companion CLI (ADR 0013): a thin URL builder that talks to the app only through the
+  # `shepherd://` scheme. It links ShepherdCore for the shared grammar and nothing else — no
+  # GitHubKit, no persistence — which is the security boundary, expressed as a dependency list.
+  ShepherdCLI:
+    type: tool
+    platform: macOS
+    sources:
+      - path: ShepherdCLI
+    dependencies:
+      - package: ShepherdKit
+        product: ShepherdCore
+    settings:
+      base:
+        # The product is `shepherd`, lowercase, because that is what users type.
+        PRODUCT_NAME: shepherd
+        PRODUCT_BUNDLE_IDENTIFIER: com.schnaq.shepherd.cli
         SWIFT_VERSION: "6.0"
         MACOSX_DEPLOYMENT_TARGET: "26.0"
         ARCHS: arm64
@@ -90,3 +123,14 @@ schemes:
       config: Debug
       targets:
         - ShepherdTests
+
+  # The CLI gets its own scheme rather than joining the app's: the app scheme's Run action
+  # should stay the app, and CI builds this one separately (ADR 0013). The scheme is named
+  # after the target, not after the product — `shepherd.xcscheme` and `Shepherd.xcscheme`
+  # would be the same file on a case-insensitive volume.
+  ShepherdCLI:
+    build:
+      targets:
+        ShepherdCLI: all
+    run:
+      config: Debug

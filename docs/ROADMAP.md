@@ -36,6 +36,11 @@ the review path — the founder's bar is "never need to open github.com for a ro
       terminal state), optional HMAC-SHA256 signature with a Keychain-stored secret, and a
       failing webhook can never interrupt a review, a merge or a sync. Outbound only —
       inbound webhooks stay excluded (ADR 0005). Schema: [docs/WEBHOOKS.md](WEBHOOKS.md)
+- [x] `shepherd://` deep links + companion `shepherd` CLI (ADR 0013): open a pull request, the
+      inbox (optionally filtered), a Settings tab, or trigger a sweep — from the terminal,
+      Raycast, Shortcuts or an n8n Execute Command node, which together with outbound webhooks
+      closes the automation loop without Shepherd ever listening on a port. The CLI links
+      ShepherdCore only: it builds URLs, it never talks to GitHub and never sees a token
 
 **Intelligence (ADR 0007)**
 - [ ] Tier 1 heuristics: file prioritization, risk hints — always on
@@ -61,6 +66,9 @@ the review path — the founder's bar is "never need to open github.com for a ro
 - Menu-bar quick inbox
 - More webhook events (thread replies, resolves, checks turning red) — additive under `"v": 1`
   (ADR 0012)
+- More `shepherd://` commands (additive by design, ADR 0013). Anything that must *return* data
+  (`shepherd status`, "how many need my review?") is not a URL-scheme feature and needs the XPC
+  or AppleScript decision ADR 0013 deferred
 - Issues as a first-class inbox section: browse/triage issues across repos, link/unlink
   issues to PRs, see which agent PRs address which issue — groundwork for "assign an issue
   to an agent" flows

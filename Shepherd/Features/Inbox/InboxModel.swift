@@ -77,6 +77,61 @@ enum ProvenanceFilter: Hashable, Sendable {
     }
 }
 
+/// The rail state one `shepherd://inbox?filter=…` token asks for (ADR 0013).
+///
+/// A pure value so the mapping is testable without a session: the model only assigns it.
+struct InboxRailSelection: Equatable {
+    /// The smart view to select.
+    var smartView: SmartView
+    /// The provenance facet, if the token names one.
+    var provenanceFilter: ProvenanceFilter?
+    /// The repository facet, if the token names one.
+    var repoFilter: RepoRef?
+
+    /// Maps a deep-link filter onto rail state.
+    ///
+    /// A *view* token replaces the whole selection. A *facet* token (provenance or repository)
+    /// additionally widens the smart view to "Involved", because `filter=agent:claude-code`
+    /// means "everything that agent sent me" — keeping whichever smart view happened to be
+    /// selected would answer a different question, and an empty list looks like a broken link.
+    /// - Parameter filter: The filter from the link.
+    init(_ filter: InboxDeepLinkFilter) {
+        switch filter {
+        case .needsMyReview:
+            self.init(smartView: .needsMyReview)
+        case .myPullRequests:
+            self.init(smartView: .myPullRequests)
+        case .involved:
+            self.init(smartView: .involved)
+        case .approvedByMe:
+            self.init(smartView: .approvedByMe)
+        case .humans:
+            self.init(smartView: .involved, provenanceFilter: .humans)
+        case .bots:
+            self.init(smartView: .involved, provenanceFilter: .bots)
+        case .agent(let id):
+            self.init(smartView: .involved, provenanceFilter: .agent(id: id))
+        case .repository(let repo):
+            self.init(smartView: .involved, repoFilter: repo)
+        }
+    }
+
+    /// Creates a selection.
+    /// - Parameters:
+    ///   - smartView: The smart view.
+    ///   - provenanceFilter: The provenance facet, if any.
+    ///   - repoFilter: The repository facet, if any.
+    init(
+        smartView: SmartView,
+        provenanceFilter: ProvenanceFilter? = nil,
+        repoFilter: RepoRef? = nil
+    ) {
+        self.smartView = smartView
+        self.provenanceFilter = provenanceFilter
+        self.repoFilter = repoFilter
+    }
+}
+
 /// Drives the three-pane inbox.
 ///
 /// Everything it renders comes from the database via `ValueObservation` (ADR 0006); the sync
@@ -170,7 +225,9 @@ final class InboxModel {
         allRows.filter { row in
             guard smartView.matches(row) else { return false }
             if let provenanceFilter, !provenanceFilter.matches(row) { return false }
-            if let repoFilter, row.repo != repoFilter { return false }
+            // Case-insensitive: the rail always sets this from a row it is showing, but a
+            // `shepherd://inbox?filter=repo:…` link carries whatever casing was typed.
+            if let repoFilter, !row.repo.isSameRepository(as: repoFilter) { return false }
             return true
         }
     }
@@ -285,6 +342,19 @@ final class InboxModel {
         if row.isDraft { score -= 40 }
         if row.reviewDecision == .approved { score -= 30 }
         return score
+    }
+
+    // MARK: - Deep links
+
+    /// Applies a rail filter that arrived from a `shepherd://inbox?filter=…` link (ADR 0013).
+    ///
+    /// The mapping itself is ``InboxRailSelection``, so it can be tested without a session.
+    /// - Parameter filter: The filter from the link.
+    func apply(_ filter: InboxDeepLinkFilter) {
+        let selection = InboxRailSelection(filter)
+        smartView = selection.smartView
+        provenanceFilter = selection.provenanceFilter
+        repoFilter = selection.repoFilter
     }
 
     // MARK: - Selection

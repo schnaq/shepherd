@@ -42,6 +42,21 @@ final class AppEnvironment {
     /// A draft that could not be submitted because the pull request moved on (ADR 0006).
     var draftConflict: DraftConflict?
 
+    /// A `shepherd://` link that arrived before there was a session to run it (ADR 0013).
+    ///
+    /// One slot, last link wins: a deep link is a *navigation*, and replaying a queue of them
+    /// after sign-in would leave the user on whichever one happened to be last anyway. No view
+    /// observes it — it is read once, imperatively, by ``runPendingDeepLink()`` — so like
+    /// `pendingReviewVerdict` it stays out of the observation graph.
+    @ObservationIgnored var pendingDeepLink: DeepLink?
+    /// An inbox rail filter raised by a deep link, waiting for the inbox to apply it.
+    ///
+    /// Same mechanism as ``PendingAction``: the container raises it, the screen that owns the
+    /// state consumes it, so there is one implementation of "filter the inbox" (ADR 0013).
+    var pendingInboxFilter: PendingInboxFilter?
+    /// A Settings tab a deep link asked for, waiting for the inbox to present it.
+    var pendingSettingsTab: PendingSettingsTab?
+
     /// User preferences.
     let settings: AppSettings
     /// GitHub credentials (Keychain only, ADR 0004).
@@ -98,12 +113,14 @@ final class AppEnvironment {
         applyAppearance()
         guard let account = settings.account else {
             phase = .signedOut
+            announceDeepLinkNeedsSignIn()
             return
         }
         do {
             guard try await tokenStore.token(for: account.login) != nil else {
                 settings.clearAccount()
                 phase = .signedOut
+                announceDeepLinkNeedsSignIn()
                 return
             }
             try await startSession(for: account)
@@ -132,6 +149,8 @@ final class AppEnvironment {
         let current = session
         route = .inbox
         phase = .signedOut
+        // A queued deep link belongs to the account that was signed in.
+        clearPendingDeepLink()
         if let current {
             await current.shutdown()
             do {
@@ -163,6 +182,9 @@ final class AppEnvironment {
         ) { [weak self] event in
             self?.handle(event)
         }
+        // A `shepherd://` link may have arrived while the app was still launching or signed
+        // out; this is the first moment it can do anything (ADR 0013).
+        runPendingDeepLink()
     }
 
     private func handle(_ event: SyncEvent) {

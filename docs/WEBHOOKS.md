@@ -207,6 +207,17 @@ Self-hosted n8n on the same Mac works with `http://localhost:5678/webhook/shephe
 use `http://host.docker.internal:5678/…` if n8n reaches Shepherd's host that way. Any other
 host must be `https`.
 
+## The other direction
+
+Webhooks are Shepherd talking to your automation. For your automation talking to Shepherd there
+is the `shepherd://` URL scheme and the `shepherd` CLI
+([ADR 0013](adr/0013-url-scheme-and-cli.md)): an n8n **Execute Command** node running
+`shepherd open owner/repo#123` puts that pull request on the reviewer's review screen, and
+`shepherd sync` triggers a sweep. That closes the loop — GitHub → n8n → Shepherd → webhook →
+n8n — without Shepherd ever listening on a port. The node has to run on the same Mac as
+Shepherd (a URL scheme is local by nature), so this is for a locally installed n8n, not a
+server-side one.
+
 ## Troubleshooting
 
 | Symptom | Cause |

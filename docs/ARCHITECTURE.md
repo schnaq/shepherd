@@ -7,7 +7,7 @@ disagree, fix one of them in the same PR. Decisions behind this design: [docs/ad
 
 ```
 Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
-  App/                         #   @main, AppDelegate glue, DI container (AppEnvironment)
+  App/                         #   @main, DI container (AppEnvironment), shepherd:// routing
   Features/
     Inbox/                     #   inbox list, sections, filters, command palette actions
     PullRequest/               #   PR detail: header, timeline, file list, checks
@@ -24,10 +24,12 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
 Packages/ShepherdKit/          # SPM package, NO AppKit/SwiftUI imports
   Sources/
     ShepherdCore/              #   domain models, agent detection, heuristics, drafts
+      Routing/                 #     shepherd:// grammar + CLI argument grammar (ADR 0013)
     GitHubKit/                 #   GraphQL+REST client, device flow, rate limiting
     ShepherdPersistence/       #   GRDB schema, DAOs, outbox
     ShepherdSync/              #   sync engine orchestrating GitHubKit ⇄ Persistence
   Tests/                       #   unit tests per target (headless, `swift test`)
+ShepherdCLI/                   # `shepherd` command-line tool: argv → shepherd:// URL (ADR 0013)
 web/diff-viewer/               # TypeScript Monaco bundle (esbuild) → dist/ (committed)
 docs/                          # this file, ADRs, research, roadmap
 project.yml                    # XcodeGen spec → Shepherd.xcodeproj (generated, not committed)
@@ -38,7 +40,12 @@ Dependency rule (arrows = "may import"):
 ```
 Shepherd.app → ShepherdSync → GitHubKit → ShepherdCore
             ↘ ShepherdPersistence ─────↗
+shepherd (CLI) ──────────────────────→ ShepherdCore
 ```
+
+The CLI's short arrow is a decision, not an accident: it links `ShepherdCore` and nothing else,
+so it has no client, no database and no Keychain access, and can reach the app only through the
+`shepherd://` scheme (ADR 0013).
 
 `ShepherdCore` imports Foundation only. Nothing in `Packages/` imports AppKit, SwiftUI, or
 WebKit. The app target owns all UI and all Apple-only frameworks (FoundationModels, WebKit,
@@ -87,6 +94,12 @@ Pure logic in `ShepherdCore` (all unit-tested):
   demotes vendored/generated (linguist-style patterns, `dist/`, `*.lock`, snapshots).
   Reasons are human-readable strings shown in the UI.
 - `InboxGrouper` — sections by facet (provenance / repo / review state) + sorting.
+- `DeepLink` (`Routing/`) — the whole `shepherd://` grammar as a value: `parse(URL) -> DeepLink?`
+  and `urlString` in the other direction, round-trip tested. Strict by construction (closed
+  vocabularies, GitHub's own character rules, decoding *after* the path split), because a URL is
+  untrusted input. Companion: `ShepherdCommandLine`, the `shepherd` CLI's argv grammar, kept in
+  the same folder so the grammar the CLI writes and the grammar the app reads cannot drift
+  (ADR 0013).
 
 ## GitHubKit
 
@@ -313,6 +326,32 @@ types plus one seam:
   run); `inbox.new_review_request` from the sweep's discovery. `SyncEvent.prMerged` maps to
   *nothing* — an open-PR sweep cannot tell a merge from a close.
 
+### Deep links and the `shepherd` CLI (ADR 0013)
+
+`onOpenURL` in `ShepherdApp` is the only entry point, and it hands the URL straight to
+`AppEnvironment.open(deepLinkURL:)` (`App/DeepLinkRouter.swift`). Everything interesting about the
+parsing is in `ShepherdCore`; the app layer only routes, and it routes through the surfaces that
+already exist: `.pullRequest` → `openReview(prID:)`, `.sync` → `syncNow()`, `.inbox`/`.settings`
+→ `route` plus a pending request the inbox screen consumes — the same "raise it, let the screen
+that owns the state run it" mechanism as `PendingAction`. `InboxRailSelection` is the pure value
+that maps a filter token onto rail state, so the mapping is testable without a session.
+
+Two behaviours are worth knowing because they are the robust rather than the obvious choice:
+
+- **A link that arrives before there is a session is queued**, in one slot, and replayed at the
+  end of `startSession`. Opening the app is how a link launches it, so the first deep link of a
+  session usually *does* arrive during `launching`; dropping it would look broken. Signing out
+  clears the slot.
+- **A pull request that is not in the local cache is fetched individually** and stored, then
+  opened. The sweep searches `involves:@me`, so a link from a colleague is routinely absent from
+  the inbox — a sweep would be slow *and* still miss it.
+
+`shepherd` (`ShepherdCLI/`, target `ShepherdCLI`, product name `shepherd`) is a thin URL builder:
+`ShepherdCommandLine.parse` → `DeepLink` → `NSWorkspace.shared.open`. It links `ShepherdCore`
+only. That is deliberate and is the security boundary — no token, no database, no network, so it
+grants nothing the app does not already expose to every process on the Mac. It has its own
+scheme (`xcodebuild -scheme ShepherdCLI`) so the app scheme's Run action stays the app.
+
 ### Keyboard model
 
 `KeySequenceState` is a pure value type implementing the two-keystroke commands (`r a`, `r x`,
@@ -365,8 +404,11 @@ decode the same bytes; the patch reconstruction; the Markdown sanitiser; the key
 palette and inbox-ordering logic; the intelligence endpoint layer (preset ↔ base-URL matching,
 `/models` parsing against fixtures, and the settings-side discovery gate through `ModelListing`);
 the delegation engine (stream-event fixtures, argv
-construction, template splitting, git command sequences, state transitions); and the webhook
+construction, template splitting, git command sequences, state transitions); the webhook
 layer (payload schema against decoded JSON, the HMAC against the RFC 4231 vector, URL
-validation, the retry policy through the `WebhookPosting` seam, and the event mapping). The web
+validation, the retry policy through the `WebhookPosting` seam, and the event mapping); and the
+app-side half of deep linking (resolving `owner/repo#number` against cached rows, filter token →
+rail state). The `shepherd://` grammar itself is tested in `ShepherdCoreTests` instead, so it
+runs on the Linux runner too. The web
 bundle is likewise added to the app target as a
 folder reference (`Shepherd/Resources/DiffViewer`) so `index.html` keeps its relative links.

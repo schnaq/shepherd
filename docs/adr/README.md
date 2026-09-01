@@ -18,6 +18,7 @@ founder interview (2026-08-31) combined with three research reports (see
 | 0010 | [Distribution via DMG + Homebrew, Sparkle updates](0010-distribution-dmg-homebrew.md) | Accepted |
 | 0011 | [Delegate coding tasks to a local agent CLI](0011-delegate-to-local-agent-cli.md) | Accepted (v1.x) |
 | 0012 | [Outbound webhooks (outbound only, ADR 0005 stands)](0012-outbound-webhooks.md)  | Accepted (v1.x) |
+| 0013 | [`shepherd://` URL scheme + companion CLI](0013-url-scheme-and-cli.md)     | Accepted (v1.x) |
 
 Format: lightweight [MADR](https://adr.github.io/madr/)-style — Context, Decision, Consequences.
 New decisions get the next number; superseded ADRs are marked, never deleted.

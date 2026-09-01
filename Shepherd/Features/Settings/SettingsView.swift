@@ -10,17 +10,31 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppEnvironment.self) private var environment
     @State private var model = SettingsModel()
+    /// Which tab is showing. Every tab is tagged with its ``SettingsDeepLinkTab``, which is
+    /// what lets `shepherd://settings/<tab>` land on one (ADR 0013).
+    @State private var selection: SettingsDeepLinkTab
+
+    /// Creates the Settings window or sheet.
+    /// - Parameter initialTab: The tab to open on. Defaults to Account, which is what the
+    ///   ⌘, window and the rail button want.
+    init(initialTab: SettingsDeepLinkTab = .account) {
+        _selection = State(initialValue: initialTab)
+    }
 
     var body: some View {
-        TabView {
+        TabView(selection: $selection) {
             AccountSettingsTab()
                 .tabItem { Label(String(localized: "Account"), systemImage: "person.crop.circle") }
+                .tag(SettingsDeepLinkTab.account)
             SyncSettingsTab()
                 .tabItem { Label(String(localized: "Sync"), systemImage: "arrow.clockwise") }
+                .tag(SettingsDeepLinkTab.sync)
             AgentSettingsTab(model: model)
                 .tabItem { Label(String(localized: "Agents"), systemImage: "cpu") }
+                .tag(SettingsDeepLinkTab.agents)
             IntelligenceSettingsTab(model: model)
                 .tabItem { Label(String(localized: "Intelligence"), systemImage: "sparkles") }
+                .tag(SettingsDeepLinkTab.intelligence)
             DelegationSettingsTab()
                 .tabItem {
                     Label(
@@ -28,12 +42,15 @@ struct SettingsView: View {
                         systemImage: "arrow.uturn.backward.badge.clock"
                     )
                 }
+                .tag(SettingsDeepLinkTab.delegation)
             AutomationSettingsTab(model: model)
                 .tabItem {
                     Label(String(localized: "Automation"), systemImage: "bolt.horizontal")
                 }
+                .tag(SettingsDeepLinkTab.automation)
             AppearanceSettingsTab()
                 .tabItem { Label(String(localized: "Appearance"), systemImage: "paintbrush") }
+                .tag(SettingsDeepLinkTab.appearance)
         }
         .frame(width: 620, height: 460)
         .background(Theme.background)

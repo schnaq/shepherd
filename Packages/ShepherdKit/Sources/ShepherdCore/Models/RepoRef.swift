@@ -25,6 +25,19 @@ public struct RepoRef: Sendable, Codable, Hashable, Identifiable {
     /// `RepoRef` is identified by its ``fullName``.
     public var id: String { fullName }
 
+    /// Whether two references point at the same repository, ignoring case.
+    ///
+    /// GitHub treats owner and repository names case-insensitively while preserving the casing
+    /// it was given, so `Schnaq/Review` and `schnaq/review` are one repository. ``Hashable``
+    /// conformance stays exact — it is a persistence key — which is why comparing identity
+    /// needs its own operation: a reference that came from outside the app (a `shepherd://`
+    /// deep link, a URL the user pasted) carries whatever casing was typed.
+    /// - Parameter other: The reference to compare with.
+    public func isSameRepository(as other: RepoRef) -> Bool {
+        owner.lowercased() == other.owner.lowercased()
+            && name.lowercased() == other.name.lowercased()
+    }
+
     /// Parses an `owner/name` string.
     /// - Parameter fullName: A string of the form `owner/name`.
     /// - Returns: The parsed reference, or `nil` if the string is not exactly two path components.

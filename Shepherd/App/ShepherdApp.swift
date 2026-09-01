@@ -21,6 +21,12 @@ struct ShepherdApp: App {
                 .onChange(of: environment.settings.appearance) { _, _ in
                     environment.applyAppearance()
                 }
+                // `shepherd://` links: the terminal, Raycast, an n8n Execute Command node
+                // (ADR 0013). A link that arrives before the session exists is queued and
+                // replayed after sign-in.
+                .onOpenURL { url in
+                    environment.open(deepLinkURL: url)
+                }
         }
         .defaultSize(width: 1_440, height: 900)
         .commands {

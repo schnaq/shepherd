@@ -32,6 +32,18 @@ this is enforced by CI on both macOS and Linux. GRDB supports Linux via SwiftPM 
 so the persistence tests run on both runners; on Linux you need `libsqlite3-dev` installed
 (`sudo apt-get install libsqlite3-dev`), which CI does for you.
 
+## Working on the `shepherd` CLI
+
+```sh
+xcodebuild -project Shepherd.xcodeproj -scheme ShepherdCLI -configuration Debug build
+```
+
+The CLI is a URL builder and must stay one (ADR 0013): it links `ShepherdCore` only — no
+GitHubKit, no persistence, no Keychain, no network code. Its argument grammar and the
+`shepherd://` grammar both live in `Packages/ShepherdKit/Sources/ShepherdCore/Routing/` and are
+tested with `swift test`, so most CLI work needs no Xcode either. Console output is English and
+unlocalised; the `String(localized:)` rule is for the app's UI.
+
 ## Working on the diff viewer
 
 ```sh

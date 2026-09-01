@@ -35,6 +35,11 @@ from every repo — without ever opening a browser tab.
   a delegation finishes, or a review request lands — signed with your own HMAC secret if you
   want. Events fire only after the action really succeeded, and only to the one URL you typed.
   See [docs/WEBHOOKS.md](docs/WEBHOOKS.md).
+- **Drivable from anywhere: `shepherd://` links and a tiny CLI.** `shepherd open owner/repo#123`
+  jumps straight to the review screen; `shepherd inbox needs-my-review` and `shepherd sync` do
+  what they say. Works from the terminal, Raycast, Shortcuts, a browser bookmark or an n8n
+  *Execute Command* node — so an incoming GitHub event can put the right pull request on your
+  screen. The CLI only opens URLs: it never talks to GitHub and never sees your token.
 - **On-device intelligence, cloud optional.** PR summaries and triage hints run locally via
   Apple's Foundation Models framework when available. Optionally bring your own API key for
   deeper whole-PR analysis — Anthropic, or any OpenAI-compatible endpoint, with presets for
@@ -61,6 +66,41 @@ open Shepherd.xcodeproj
 
 Xcode 26+ is required. The `ShepherdKit` Swift package (domain logic, GitHub client, sync
 engine) is platform-independent and can be tested headlessly with `swift test`.
+
+## The `shepherd` command line
+
+Shepherd registers the `shepherd://` URL scheme, and the `shepherd` binary is a thin wrapper
+around it — it builds a URL and opens it. There is no network code and no token in the CLI: it
+can only ask the app to do things the app already lets any process ask for
+([ADR 0013](docs/adr/0013-url-scheme-and-cli.md)).
+
+```sh
+xcodebuild -project Shepherd.xcodeproj -scheme ShepherdCLI -configuration Release \
+  -derivedDataPath .build/cli build
+cp .build/cli/Build/Products/Release/shepherd /usr/local/bin/
+```
+
+```sh
+shepherd open schnaq/review#42                       # …/review/42 and a github.com PR URL work too
+shepherd inbox                                       # bring the inbox forward
+shepherd inbox needs-my-review                       # mine · involved · approved-by-me
+shepherd inbox --filter agent:claude-code            # humans · bots · agent:<id> · repo:<owner>/<name>
+shepherd sync                                        # sweep every repository now
+shepherd settings automation                         # jump to a Settings tab
+shepherd --help
+```
+
+The URLs behind those, usable from Raycast, Shortcuts, a bookmark or `open(1)` directly:
+
+| URL | Effect |
+| --- | --- |
+| `shepherd://pr/<owner>/<repo>/<number>` | Open that pull request's review screen |
+| `shepherd://inbox` · `shepherd://inbox?filter=<token>` | Inbox, optionally filtered |
+| `shepherd://sync` | Run one sweep now |
+| `shepherd://settings` · `shepherd://settings/<tab>` | Open Settings, optionally on a tab |
+
+A pull request that is not in your inbox yet is fetched on demand, so a link from a colleague
+works. A link that arrives while you are signed out is remembered and opens right after sign-in.
 
 ## Architecture at a glance
 
