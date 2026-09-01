@@ -160,6 +160,7 @@ final class WebhookTests: XCTestCase {
             [
                 "delegation.finished",
                 "inbox.new_review_request",
+                "pr.auto_merge_queued",
                 "pr.merged",
                 "review.submitted",
                 "shepherd.test",
@@ -167,7 +168,7 @@ final class WebhookTests: XCTestCase {
         )
         // The test event is delivered by a button, never subscribed to.
         XCTAssertFalse(WebhookEventKind.userSelectable.contains(.test))
-        XCTAssertEqual(WebhookEventKind.userSelectable.count, 4)
+        XCTAssertEqual(WebhookEventKind.userSelectable.count, 5)
         for kind in WebhookEventKind.allCases {
             XCTAssertFalse(kind.title.isEmpty)
             XCTAssertFalse(kind.explanation.isEmpty)
@@ -742,6 +743,7 @@ final class WebhookTests: XCTestCase {
         settings.webhookURL = destination
         settings.setWebhookEvent(.newReviewRequest, isOn: false)
         settings.setWebhookEvent(.delegationFinished, isOn: false)
+        settings.setWebhookEvent(.autoMergeQueued, isOn: false)
 
         let restored = AppSettings(defaults: defaults)
         XCTAssertTrue(restored.webhooksEnabled)

@@ -88,6 +88,9 @@ enum SettingsSyncApplier {
             webhookURL: settings.webhookURL,
             webhookEvents: settings.webhookEvents.map(\.rawValue).sorted()
         )
+        // The rules only. The ledger — which is also the audit log — is device state for the same
+        // reason `AutoDelegationLedger` is: it records what *this* Mac already queued (ADR 0018).
+        document.autoMerge = SyncedSettingsDocument.AutoMergeGroup(rules: settings.autoMerge)
         document.appearance = SyncedSettingsDocument.AppearanceGroup(
             appearance: settings.appearance,
             inboxGroupBy: settings.groupBy,
@@ -187,6 +190,12 @@ enum SettingsSyncApplier {
         settings.webhooksEnabled = document.automation.webhooksEnabled
         settings.webhookURL = document.automation.webhookURL
         settings.webhookEvents = document.automation.knownEvents
+
+        // Only the rules are applied. Nothing else has to happen: the next inbox observation
+        // re-considers every row against whatever the rules now say, so a document that switches
+        // automatic merging on takes effect on the next sweep — and one that switches it off
+        // stops the very next pass (ADR 0018).
+        settings.autoMerge = document.autoMerge.rules
 
         settings.appearance = document.appearance.appearance
         settings.groupBy = document.appearance.inboxGroupBy

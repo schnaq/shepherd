@@ -22,7 +22,8 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
                                #   agents, AI, delegation, automation, theme (+ menu-bar toggle)
     Onboarding/                #   device-flow sign-in, PAT entry
   Automation/                  #   outbound webhook payload, signing, dispatcher (ADR 0012);
-                               #   auto-delegation coordinator + ledger store (ADR 0016)
+                               #   auto-delegation coordinator + ledger store (ADR 0016);
+                               #   auto-merge coordinator + ledger/audit store (ADR 0018)
   SettingsSync/                #   encrypted settings document, envelope, SigV4, S3 client (ADR 0014)
   Diagnostics/                 #   MetricKit subscriber + local report folder (ADR 0017)
   Intelligence/                #   IntelligenceProvider impls (FoundationModels, Anthropic)
@@ -36,7 +37,8 @@ Packages/ShepherdKit/          # SPM package, NO AppKit/SwiftUI imports
       Review/                  #     saved replies, per-repo review templates + matching rule
       Routing/                 #     shepherd:// grammar + CLI argument grammar (ADR 0013)
       Triage/                  #     bulk-triage partition + intended writes (ADR 0015)
-      Automation/              #     auto-delegation rules, ledger and policy (ADR 0016)
+      Automation/              #     auto-delegation rules, ledger and policy (ADR 0016);
+                               #     auto-merge rules, ledger/audit log and policy (ADR 0018)
       Digest/                  #     morning-digest report + delivery schedule
     GitHubKit/                 #   GraphQL+REST client, device flow, rate limiting
     ShepherdPersistence/       #   GRDB schema, DAOs, outbox
@@ -127,6 +129,16 @@ Pure logic in `ShepherdCore` (all unit-tested):
   `greenAgentPullRequests(in:)` is the "select all green agent PRs" preselect, deliberately
   stricter than the plan (a pull request with no checks is not preselected but may still be
   picked by hand).
+- `AutoMergePolicy` / `AutoMergeRules` / `AutoMergeLedger` (`Automation/`) — the whole of "may
+  Shepherd merge this by itself" as a value (ADR 0018).
+  `decide(pullRequest:rules:ledger:existingOutbox:)` returns `.merge(expectedHeadOid:)` or
+  `.skip(reason)` with an exhaustive `AutoMergeSkipReason`, evaluated in a fixed order so the
+  reason shown is deterministic. The conditions the founder named — agent-authored, rollup
+  `success` with at least one check, `approved`, not a draft, `mergeable` — are *not* fields: the
+  rule set carries only the master switch and two narrowings (a repository allow-list matched with
+  `GlobPattern`, and labels that must all be present), so no setting and no corrupt document can
+  widen it. `AutoMergeLedger` is the deduplication key set *and* the audit log in one list — one
+  queued merge per `(prID, headRefOid)`, ever — which is why the two cannot drift apart.
 - `SavedReply.inserting(_:into:)` (`Review/`) — how a saved reply reaches a comment field:
   appended after exactly one blank line, never at a caret. `TextEditor`/`TextField` expose no
   selection, so an at-cursor insert would mean replacing every review text field with an
@@ -524,6 +536,11 @@ GitHub call anywhere in the app: the batch is n rows, so offline, retry, the mer
 needs no special handling either — the drain's batch size and GitHubKit's `Retry-After` backoff
 already throttle it.
 
+Automatic merging (ADR 0018) is the same surface again, called by a rule instead of a button:
+`AutoMergeCoordinator` reaches `PullRequestActions.merge(_:method:)` through a seam, so an
+unattended merge is one ordinary outbox row with the ordinary preflight, retry and `mutationSent`
+behaviour. Nothing in `Automation/` can reach `GitHubClient`.
+
 Two GitHub capabilities the UI wants are *not* modelled by the outbox, and the app does not
 pretend otherwise: deleting the head branch after a merge (the merge sheet shows the toggle
 disabled with an explanation), and dismissing an existing review.
@@ -727,6 +744,46 @@ access to the user's CLI configuration, every path needing a bookmark. ADR 0010 
 the Mac App Store out for v1, so this costs nothing that was on the table; hardened runtime
 stays on.
 
+### Automatic merging (opt-in, ADR 0018)
+
+Auto-delegation's sibling, and the only automation that *writes to GitHub*: when a pull request an
+agent opened is green, approved, not a draft and mergeable, Shepherd queues the merge itself. Off by
+default, edited in Settings → Automation. `ShepherdCore/Automation/AutoMergePolicy.swift` holds
+every decision (above); `Automation/AutoMergeCoordinator.swift` and `AutoMergeStore.swift` are the
+app half and hold none.
+
+Four things about it are decisions rather than mechanics:
+
+- **It runs on the rows a sweep wrote, not on a `SyncEvent`.** GitHub does not bump a pull
+  request's `updatedAt` when a check run finishes, so `prUpdated` is never emitted for the one
+  transition this feature is about — the last check turning green. `SignedInSession.start`
+  therefore takes an `onInboxRows` callback beside `onEvent`, fed by the same `observeInbox()`
+  observation the menu-bar badge and the focus session read. A pass is consequently *repeated and
+  idempotent*: the ledger's `(prID, headRefOid)` key and "skip anything with an unsent outbox row"
+  are what make that safe, and with the switch off a pass is one `Bool` read. It therefore fires
+  on a **state**, where auto-delegation deliberately fires only on an edge — the pull requests
+  already waiting are exactly what the user switched it on for, so the first pass after the toggle
+  can queue several merges, and the notification says how many.
+- **The write is the merge sheet's write.** The coordinator calls
+  `PullRequestActions.merge(_:method:)` through an injected seam (`AutoMergeWriting`, the
+  `WebhookPosting` pattern), so the row is an ordinary `.merge(method:, expectedHeadOid:)` pinned
+  to the head the decision was made on. Retry, offline, the drain's head-commit preflight and
+  `mutationSent` therefore behave exactly as they do for a merge somebody pressed a button for —
+  there is no second write path and no new GitHub call (ADR 0006, ADR 0015).
+- **The method is the app's one remembered merge method** (`AppSettings.defaultMergeMethod`, via
+  `autoMergeMethod`), shared with the merge sheet and the bulk-triage dialog and edited with the
+  same `MergeMethodPicker`. A second copy could only ever disagree with the one the user sees.
+- **Everything it does is visible**: one notification per *pass* (not per merge, and worded
+  "queued" because the outbox has not sent anything yet), an audit log in Settings → Automation
+  with a *Clear* button, and a `pr.auto_merge_queued` webhook event — the single event in ADR 0012's
+  set that fires on an intent, because the fact being reported is that Shepherd decided something
+  unattended. `pr.merged` still reports the send.
+
+Device state versus setting is the usual split: the rules travel in the encrypted settings document
+(`autoMerge` group, both directions of `SettingsSyncApplier`), the ledger deliberately does not —
+the argument `AutoDelegationLedger` makes, unchanged — and it is cleared in `signOutAndErase`
+because an audit log naming the previous account's pull requests has no business staying on screen.
+
 ### In-app updates (ADR 0010)
 
 `Support/UpdateController.swift` is the only file that imports Sparkle. It owns a
@@ -811,7 +868,11 @@ rules);
 the delegation engine (stream-event fixtures, argv
 construction, template splitting, git command sequences, state transitions) and the app half of
 auto-delegation (event → signal mapping, ledger persistence across a relaunch, cap notices —
-ADR 0016; the decision itself is tested in `ShepherdCoreTests`); the webhook
+ADR 0016; the decision itself is tested in `ShepherdCoreTests`); the app half of auto-merge
+(one write request per eligible row and none for the others, the audit entry's contents, a second
+pass over the same commit asking for nothing, a new head asking again, the ledger surviving a
+relaunch, one banner for a batch, and the webhook plan — ADR 0018; the decision itself, again, in
+`ShepherdCoreTests`); the webhook
 layer (payload schema against decoded JSON, the HMAC against the RFC 4231 vector, URL
 validation, the retry policy through the `WebhookPosting` seam, and the event mapping); the
 encrypted settings sync (envelope round trip, wrong passphrase and AAD tampering as one defined

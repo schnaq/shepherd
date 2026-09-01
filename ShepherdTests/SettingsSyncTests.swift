@@ -252,6 +252,14 @@ final class SettingsSyncTests: XCTestCase {
             webhookURL: "https://n8n.example.com/webhook/shepherd",
             webhookEvents: ["pr.merged", "review.submitted"]
         )
+        // The rules travel; the ledger that is also the audit log does not (ADR 0018).
+        document.autoMerge = SyncedSettingsDocument.AutoMergeGroup(
+            rules: AutoMergeRules(
+                isEnabled: true,
+                allowedRepositories: ["schnaq/*"],
+                requiredLabels: ["automerge"]
+            )
+        )
         document.appearance = SyncedSettingsDocument.AppearanceGroup(
             appearance: .dark,
             inboxGroupBy: .repository,
@@ -664,6 +672,12 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertEqual(document.composer, SyncedSettingsDocument.ComposerGroup())
         XCTAssertTrue(document.composer.savedReplies.isEmpty)
         XCTAssertTrue(document.composer.reviewTemplates.isEmpty)
+        // A document written before automatic merging existed must leave it off — and, just as
+        // importantly, must not arrive with an empty allow-list that reads as "every repository"
+        // for a feature that is not even on (ADR 0018).
+        XCTAssertEqual(document.autoMerge, SyncedSettingsDocument.AutoMergeGroup())
+        XCTAssertFalse(document.autoMerge.rules.isEnabled)
+        XCTAssertTrue(document.autoMerge.rules.allowedRepositories.isEmpty)
         // A document written before diagnostics existed leaves them off rather than on.
         XCTAssertEqual(document.diagnostics, SyncedSettingsDocument.DiagnosticsGroup())
         XCTAssertFalse(document.diagnostics.isEnabled)
@@ -1030,6 +1044,11 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertTrue(settings.webhooksEnabled)
         XCTAssertEqual(settings.webhookURL, "https://n8n.example.com/webhook/shepherd")
         XCTAssertEqual(settings.webhookEvents, [.reviewSubmitted, .pullRequestMerged])
+        // The auto-merge rules travel too; the audit log they are deduplicated against does not —
+        // it is this Mac's record of what it already queued (ADR 0018).
+        XCTAssertTrue(settings.autoMerge.isEnabled)
+        XCTAssertEqual(settings.autoMerge.allowedRepositories, ["schnaq/*"])
+        XCTAssertEqual(settings.autoMerge.requiredLabels, ["automerge"])
         XCTAssertEqual(settings.appearance, .dark)
         XCTAssertEqual(settings.groupBy, .repository)
         XCTAssertEqual(settings.sortOrder, .oldestFirst)
@@ -1234,6 +1253,7 @@ final class SettingsSyncTests: XCTestCase {
         // Nothing opt-in is on in a captured fresh install, diagnostics included (ADR 0017).
         XCTAssertFalse(document.diagnostics.isEnabled)
         XCTAssertFalse(document.automation.webhooksEnabled)
+        XCTAssertFalse(document.autoMerge.rules.isEnabled)
         // The menu-bar quick inbox is the exception: it ships on, so a fresh install carries it
         // as on rather than as an unset opt-in.
         XCTAssertTrue(document.appearance.showsMenuBarExtra)

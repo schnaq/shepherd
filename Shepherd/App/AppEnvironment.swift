@@ -86,6 +86,10 @@ final class AppEnvironment {
     let autoDelegationStore: AutoDelegationStore
     /// Decides whether a sweep event starts a delegation on its own (ADR 0016).
     let autoDelegation: AutoDelegationCoordinator
+    /// Remembers — and shows — every merge a rule queued, across launches (ADR 0018).
+    let autoMergeStore: AutoMergeStore
+    /// Decides whether the rows a sweep wrote contain anything to merge on its own (ADR 0018).
+    let autoMerge: AutoMergeCoordinator
     /// Delivers the opt-in morning digest: a notification when it is due, a card in the inbox
     /// while the day lasts. Created inert — it does nothing until ``bootstrap()`` starts its check,
     /// and that check does nothing until the user switches the digest on.
@@ -143,6 +147,19 @@ final class AppEnvironment {
             notify: { payload in
                 // Detached like the webhook dispatch: asking for notification authorisation
                 // must not sit in the middle of the sync's event loop.
+                Task { [notifications] in
+                    await notifications.present(payload)
+                }
+            }
+        )
+        let autoMergeStore = AutoMergeStore()
+        self.autoMergeStore = autoMergeStore
+        self.autoMerge = AutoMergeCoordinator(
+            settings: settings,
+            store: autoMergeStore,
+            notify: { payload in
+                // Detached like the auto-delegation notice, and for the same reason: asking for
+                // notification authorisation must not sit inside the inbox observation's loop.
                 Task { [notifications] in
                     await notifications.present(payload)
                 }
@@ -240,6 +257,10 @@ final class AppEnvironment {
         // The ledger names pull requests of the account that just signed out, and keeping it
         // would let a rule refuse to fire for a pull request the next account re-imports.
         autoDelegation.reset()
+        // The same argument, and one more: the auto-merge ledger is also the audit log, and a log
+        // naming the previous account's pull requests has no business being on screen after a
+        // sign-out (ADR 0018).
+        autoMerge.reset()
         // Same argument for the digest's device state: the card names the leaving account's pull
         // requests, and "already delivered today" belongs to that account's morning.
         digest.reset()
@@ -256,10 +277,14 @@ final class AppEnvironment {
         // `syncNow()` here only bought a second concurrent sweep on every launch.
         session.start(
             settings: settings,
-            notifications: notifications
-        ) { [weak self] event in
-            self?.handle(event)
-        }
+            notifications: notifications,
+            onEvent: { [weak self] event in
+                self?.handle(event)
+            },
+            onInboxRows: { [weak self] rows in
+                self?.considerAutoMerge(rows: rows)
+            }
+        )
         // A `shepherd://` link may have arrived while the app was still launching or signed
         // out; this is the first moment it can do anything (ADR 0013).
         runPendingDeepLink()
@@ -281,6 +306,46 @@ final class AppEnvironment {
                 task: plan.task,
                 automatic: true
             )
+        }
+    }
+
+    // MARK: - Automatic merging (ADR 0018)
+
+    /// Considers the rows a sweep just wrote for automatic merging.
+    ///
+    /// Opt-in and off by default; with no rule armed this is one `Bool` read before anything
+    /// asynchronous is started, which matters because the inbox observation speaks on every inbox
+    /// write. Everything that decides anything is the pure
+    /// ``ShepherdCore/AutoMergePolicy``; the write goes through the *same*
+    /// ``PullRequestActions/merge(_:method:)`` the merge sheet's button calls, so the outbox, the
+    /// retry, the head-commit preflight and the `pr.merged` webhook all behave exactly as they do
+    /// for a merge the user asked for (ADR 0006, ADR 0015's "n ordinary outbox writes").
+    /// - Parameter rows: Every inbox row the local database now holds.
+    private func considerAutoMerge(rows: [PullRequestSummary]) {
+        guard settings.autoMerge.isEnabled, let session else { return }
+        Task { [weak self] in
+            // Read before the pass rather than per row: one query for the whole batch, and the
+            // coordinator adds its own queued ids as it goes.
+            let queuedWrites = await session.pullRequestIDsWithQueuedWrites()
+            guard let self else { return }
+            // `announcesSuccess: false` — the pass announces itself once, as a notification, and
+            // records every merge in the audit log; a toast per row would be a dozen banners for
+            // something nobody was watching. A *failure* still toasts.
+            let actions = PullRequestActions(
+                session: session,
+                toasts: self.toasts,
+                announcesSuccess: false
+            )
+            let queued = await self.autoMerge.run(
+                rows: rows,
+                existingOutbox: queuedWrites,
+                write: { summary, method in
+                    await actions.merge(summary, method: method)
+                }
+            )
+            for write in queued {
+                self.webhookCoordinator.handle(write, database: session.database)
+            }
         }
     }
 

@@ -280,6 +280,34 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         }
     }
 
+    /// The rules that let Shepherd merge a pull request on its own (ADR 0018).
+    ///
+    /// A group of its own rather than a field of ``AutomationGroup``: that group is the webhook's
+    /// non-secret configuration, and a reader should not have to know that "automation" happens to
+    /// hold two unrelated features. The *rules* travel, exactly as auto-delegation's do; the
+    /// ledger — which is also the audit log — does not, because "this Mac already queued that
+    /// merge" is one machine's automation state and a shared copy would let one Mac silence the
+    /// other's deduplication (ADR 0014, ADR 0016).
+    struct AutoMergeGroup: Codable, Sendable, Equatable {
+        /// The opt-in rule set.
+        var rules: AutoMergeRules
+
+        /// Creates the group.
+        /// - Parameter rules: The rule set.
+        init(rules: AutoMergeRules = AutoMergeRules()) {
+            self.rules = rules
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case rules
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            rules = container.syncedValue(.rules, default: AutoMergeRules())
+        }
+    }
+
     /// Theme, inbox ordering, diff-viewer chrome and the menu-bar item.
     struct AppearanceGroup: Codable, Sendable, Equatable {
         /// Dark, light or system.
@@ -531,6 +559,8 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
     var delegation: DelegationGroup
     /// Webhook configuration, without the signing secret.
     var automation: AutomationGroup
+    /// The opt-in automatic-merge rules.
+    var autoMerge: AutoMergeGroup
     /// Theme, inbox ordering, diff chrome.
     var appearance: AppearanceGroup
     /// Remembered review/merge dialog choices.
@@ -554,6 +584,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         intelligence: IntelligenceGroup = IntelligenceGroup(),
         delegation: DelegationGroup = DelegationGroup(),
         automation: AutomationGroup = AutomationGroup(),
+        autoMerge: AutoMergeGroup = AutoMergeGroup(),
         appearance: AppearanceGroup = AppearanceGroup(),
         triage: TriageGroup = TriageGroup(),
         composer: ComposerGroup = ComposerGroup(),
@@ -569,6 +600,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         self.intelligence = intelligence
         self.delegation = delegation
         self.automation = automation
+        self.autoMerge = autoMerge
         self.appearance = appearance
         self.triage = triage
         self.composer = composer
@@ -579,6 +611,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case v, sync, notifications, digest, agents, intelligence, delegation, automation
+        case autoMerge
         case appearance, triage, composer, diagnostics, account, secrets
     }
 
@@ -600,6 +633,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         intelligence = container.syncedValue(.intelligence, default: IntelligenceGroup())
         delegation = container.syncedValue(.delegation, default: DelegationGroup())
         automation = container.syncedValue(.automation, default: AutomationGroup())
+        autoMerge = container.syncedValue(.autoMerge, default: AutoMergeGroup())
         appearance = container.syncedValue(.appearance, default: AppearanceGroup())
         triage = container.syncedValue(.triage, default: TriageGroup())
         composer = container.syncedValue(.composer, default: ComposerGroup())

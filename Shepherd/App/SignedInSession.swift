@@ -126,10 +126,17 @@ final class SignedInSession {
     ///   - settings: Used to decide which events become notifications.
     ///   - notifications: The notification manager.
     ///   - onEvent: Called on the main actor for every sync event, after notification mapping.
+    ///   - onInboxRows: Called on the main actor every time the inbox observation speaks, with the
+    ///     rows it just wrote to ``inboxRows``. This is the trigger automatic merging runs on
+    ///     (ADR 0018): the one transition that feature cares about — the last check turning
+    ///     green — does not change a pull request's `updatedAt`, so no ``ShepherdSync/SyncEvent``
+    ///     reports it and the rows the sweep persisted are the honest source. It fires for every
+    ///     inbox write, and the consumer is required to be idempotent.
     func start(
         settings: AppSettings,
         notifications: NotificationManager,
-        onEvent: @escaping @MainActor (SyncEvent) -> Void
+        onEvent: @escaping @MainActor (SyncEvent) -> Void,
+        onInboxRows: @escaping @MainActor ([PullRequestSummary]) -> Void = { _ in }
     ) {
         guard eventTask == nil else { return }
 
@@ -160,8 +167,10 @@ final class SignedInSession {
         let inbox = database.observeInbox()
         inboxTask = Task { [weak self] in
             for await rows in inbox {
-                self?.inboxRows = rows
-                self?.hasLoadedInbox = true
+                guard let self else { return }
+                self.inboxRows = rows
+                self.hasLoadedInbox = true
+                onInboxRows(rows)
             }
         }
 
@@ -182,6 +191,18 @@ final class SignedInSession {
     /// Pushes the outbox without running a full sweep.
     func drainOutbox() async {
         await syncEngine.drainOutbox()
+    }
+
+    /// The pull requests the outbox still holds a write for — pending, in flight or parked.
+    ///
+    /// Read as a set of node ids rather than as rows because that is all the one caller needs:
+    /// automatic merging refuses a pull request that already has an unsent write (ADR 0018), so
+    /// it can neither queue a second merge behind a parked one nor race its own previous pass.
+    /// A read failure answers "nothing is queued", which is the same answer an empty outbox
+    /// gives — and the policy's other guard, the ledger, is the one that must not be lost.
+    func pullRequestIDsWithQueuedWrites() async -> Set<String> {
+        let items = (try? await database.allOutboxItems()) ?? []
+        return Set(items.map(\.prID))
     }
 
     /// Stops the loops and observers. Called on sign-out and on quit.

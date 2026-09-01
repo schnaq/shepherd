@@ -99,8 +99,18 @@ routine review".
       notification saying it did. Off by default; only on the *transition*, never on the state;
       at most one run per pull request and per head commit (deduplicated across restarts); global
       caps for simultaneous and daily runs, with a notification instead of a start when one bites.
-      Still no auto-push, no auto-approve, no auto-merge — the result waits in the Delegation
-      Center marked as automatic
+      Still no auto-push and no auto-approve — the result waits in the Delegation Center marked as
+      automatic. Merging is the one action a rule may now perform, under the much narrower
+      conditions of ADR 0018 below
+- [x] Opt-in auto-merge rules (ADR 0018): when an agent's pull request is green, **approved**, not
+      a draft and mergeable, Shepherd queues the merge itself — through the ordinary outbox, with
+      the head commit the decision was made on as the precondition, so a push in between parks it
+      instead of merging something nobody judged. Off by default; the conditions are not
+      checkboxes (only a repository allow-list and required labels can narrow them further), the
+      merge method is the app's one remembered method, and each pull request is queued at most once
+      per commit. Every merge is recorded in an audit log in Settings → Automation, announced once
+      per pass as a notification, and reported as the additive `pr.auto_merge_queued` webhook
+      event. Auto-approve stays a non-goal: this only ever records a decision a human already made
 
 **Intelligence (ADR 0007)**
 - [ ] Tier 1 heuristics: file prioritization, risk hints — always on
@@ -152,7 +162,13 @@ routine review".
   (ADR 0012)
 - More auto-delegation conditions (ADR 0016 keeps the action fixed: a third *condition* is a case
   in one enum plus a checkbox; a third *action* needs a new ADR). A shared, synced ledger so two
-  Macs cannot both start a run for the same pull request is the open question there
+  Macs cannot both start a run for the same pull request is the open question there — and it is the
+  same open question for auto-merge (ADR 0018), where a second Mac's duplicate merge is refused by
+  GitHub rather than duplicating work
+- More auto-merge *narrowings* — "only pull requests I approved myself" is the obvious one, and it
+  is parked because `PullRequestSummary` carries GitHub's aggregate review decision rather than the
+  list of approvers, so it would mean a new call on the unattended path (ADR 0018). Anything that
+  would *widen* the rule instead of narrowing it is a new ADR, not a checkbox
 - More `shepherd://` commands (additive by design, ADR 0013). Anything that must *return* data
   (`shepherd status`, "how many need my review?") is not a URL-scheme feature and needs the XPC
   or AppleScript decision ADR 0013 deferred
@@ -179,6 +195,7 @@ routine review".
 
 - Windows/Linux builds (ADR 0001), Mac App Store for v1 (ADR 0010), running/hosting coding
   agents (Shepherd reviews their output; it doesn't orchestrate them — an opt-in rule may *start*
-  a local delegation on your own machine, ADR 0016, but nothing is hosted and nothing is written to
-  GitHub by it), auto-submitting AI-generated reviews (AI output is always a suggestion a human
-  confirms).
+  a local delegation on your own machine, ADR 0016, but nothing is hosted), auto-submitting
+  AI-generated reviews (AI output is always a suggestion a human confirms), and **auto-approving
+  anything**. The one write a rule may perform unattended is the merge of a pull request a human
+  has already approved (ADR 0018) — Shepherd never forms a verdict by itself.

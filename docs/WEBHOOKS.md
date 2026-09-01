@@ -16,7 +16,9 @@ Setup: **Settings → Automation**. Paste a URL, tick the events you want, switc
   queued approval that is still waiting out a retry has approved nothing, and no event is sent
   for it. `review.submitted` and `pr.merged` come from the outbox drain. That also means a bulk
   triage run ([ADR 0015](adr/0015-bulk-triage.md)) delivers one event per pull request, as each
-  row lands, rather than one event for the batch.
+  row lands, rather than one event for the batch. The single exception is
+  `pr.auto_merge_queued`, which reports a *decision* Shepherd made unattended and is documented
+  as such below.
 - **Delivery is best-effort.** Two attempts, two seconds apart, ten-second timeout, then
   Shepherd gives up quietly and shows one line in Settings. A failing webhook never interrupts
   a review, a merge or a sync, and never produces an alert.
@@ -175,6 +177,28 @@ A sweep found a pull request waiting for your review. Fires once per pull reques
 | `relations` | Sorted subset of `reviewRequested`, `author`, `mentioned`, `assigned`. |
 | `reviewDecision` | `"approved"` · `"changesRequested"` · `"reviewRequired"` · `null` |
 | `checks` | `"success"` · `"failure"` · `"pending"` · `"none"` · `null` (no checks reported) |
+
+### `pr.auto_merge_queued`
+
+An auto-merge rule queued a merge on its own ([ADR 0018](adr/0018-auto-merge-rules.md)). Off by
+default, like the rule itself.
+
+```json
+{ "mergeMethod": "squash", "checkCount": 7, "matchedLabels": ["automerge"] }
+```
+
+| Key | Values |
+| --- | --- |
+| `mergeMethod` | `"merge"` · `"squash"` · `"rebase"` — what the outbox row asks GitHub for. |
+| `checkCount` | int — how many checks were green on the head commit the merge is pinned to (`pullRequest.headSha`). |
+| `matchedLabels` | The required labels the pull request carried, in the order they are configured. Empty when the rule requires none. |
+
+This is the **one event that fires on an intent** rather than on a success, and the exception is
+deliberate: what is worth reporting is that Shepherd decided something *unattended*, which is a
+fact the moment the row is written. The outcome is reported separately — `pr.merged` fires from the
+outbox drain once the merge really reached GitHub — so an automatic merge produces **two** events,
+and a merge that was parked because somebody pushed in between produces only this one. Correlate
+them on `pullRequest.nodeId` plus `pullRequest.headSha`, not on `id`, which is per delivery.
 
 ### `shepherd.test`
 

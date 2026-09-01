@@ -127,6 +127,11 @@ final class AppSettings {
             Keys.autoDelegation,
             default: AutoDelegationRules()
         )
+        self.autoMerge = Self.readJSON(
+            defaults,
+            Keys.autoMerge,
+            default: AutoMergeRules()
+        )
         self.savedReplies = Self.readJSON(defaults, Keys.savedReplies, default: [SavedReply]())
         self.reviewTemplates = Self.readJSON(
             defaults,
@@ -371,6 +376,31 @@ final class AppSettings {
         }
         localCheckouts = updated
     }
+
+    // MARK: - Automatic merging (ADR 0018)
+
+    /// The opt-in rules that let Shepherd queue a merge without being asked (ADR 0018).
+    ///
+    /// Stored as one JSON blob for the reason ``autoDelegation`` is: the rule set is edited as a
+    /// whole on one Settings card, and a single key keeps the tolerant-decoding story in one
+    /// place. Off on a fresh install — ``ShepherdCore/AutoMergeRules/isEnabled`` is what lets any
+    /// of it run, and with it false a sweep costs one `Bool` read.
+    ///
+    /// It is edited on the *Automation* tab rather than beside ``autoDelegation`` because the two
+    /// are siblings rather than variants: this one writes to GitHub and never touches an agent
+    /// CLI, which also makes it the one automation the webhook layer reports on.
+    var autoMerge: AutoMergeRules {
+        didSet { Self.writeJSON(defaults, autoMerge, Keys.autoMerge) }
+    }
+
+    /// The merge method automatic merging uses, shared with the merge sheet and the bulk-triage
+    /// dialog (``defaultMergeMethod``).
+    ///
+    /// Deliberately *not* a setting of its own. "The method you last merged with" is the answer
+    /// every merge dialog in the app already opens on (ADR 0015), and a second copy for the
+    /// automatic path could only ever disagree with what the user sees when they merge by hand —
+    /// the same argument ``UpdateController/checksAutomatically`` makes about Sparkle's flag.
+    var autoMergeMethod: MergeMethod { defaultMergeMethod }
 
     // MARK: - Saved replies & review templates
 
@@ -649,6 +679,7 @@ final class AppSettings {
         static let agentCLI = "delegation.agentCLI"
         static let localCheckouts = "delegation.localCheckouts"
         static let autoDelegation = "delegation.autoRules"
+        static let autoMerge = "automation.autoMergeRules"
         static let savedReplies = "review.savedReplies"
         static let reviewTemplates = "review.templates"
         static let webhookEnabled = "automation.webhook.enabled"

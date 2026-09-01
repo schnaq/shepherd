@@ -128,6 +128,15 @@ bumping a dependency that ships inside the app also means a line in
   so if a digest is ever to gain a generated sentence it may only use the **on-device** tier, and
   wiring it up means a request type only that tier answers — never a method the two cloud providers
   also implement.
+- **Shepherd never forms a verdict unattended.** Two rules may act without a human in the loop:
+  auto-delegation (ADR 0016) starts a local agent, and auto-merge (ADR 0018) queues a merge. The
+  second one is only acceptable because it *records* a decision a human already made — the
+  approval — which is why its conditions (agent-authored, checks green with at least one check,
+  `reviewDecision == .approved`, not a draft, mergeable) are enforced by
+  `ShepherdCore/Automation/AutoMergePolicy.swift` and are **not** fields of `AutoMergeRules`. The
+  two fields that exist can only narrow them. Anything that would let a rule merge without an
+  approval, approve, submit a review or push is a non-goal (ROADMAP) and needs its own ADR — and
+  no rule may write to GitHub except through the ordinary outbox (ADR 0006).
 - Conventional commits appreciated (`feat:`, `fix:`, `docs:` …), not enforced.
 
 ## License

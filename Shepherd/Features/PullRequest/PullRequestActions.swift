@@ -27,20 +27,31 @@ struct PullRequestActions {
     /// `nil` for every caller that is not inside a session-capable screen, which is why adding
     /// it changed no existing call site.
     var onDidQueueVerdict: (@MainActor (String) -> Void)?
+    /// Whether a *successful* enqueue puts a toast on screen. Failures always do.
+    ///
+    /// True for everything a human asked for — the toast is the confirmation of their keystroke.
+    /// False for automatic merging (ADR 0018), which announces a whole pass in one notification
+    /// and records every merge in its audit log: one toast per row would put a dozen banners on
+    /// screen for a pass nobody was watching, which is the sibling of the argument
+    /// ``PullRequestActions/queue(_:method:)`` makes about draining once for a batch.
+    var announcesSuccess = true
 
     /// Creates the write helper.
     /// - Parameters:
     ///   - session: The signed-in session.
     ///   - toasts: Where failures are surfaced.
     ///   - onDidQueueVerdict: Called after a verdict or a merge reaches the outbox.
+    ///   - announcesSuccess: Whether a successful enqueue toasts. Failures always do.
     init(
         session: SignedInSession,
         toasts: ToastCenter,
-        onDidQueueVerdict: (@MainActor (String) -> Void)? = nil
+        onDidQueueVerdict: (@MainActor (String) -> Void)? = nil,
+        announcesSuccess: Bool = true
     ) {
         self.session = session
         self.toasts = toasts
         self.onDidQueueVerdict = onDidQueueVerdict
+        self.announcesSuccess = announcesSuccess
     }
 
     // MARK: - Reviews
@@ -133,7 +144,9 @@ struct PullRequestActions {
                 .merge(method: method.rawValue, expectedHeadOid: summary.headRefOid),
                 on: summary
             )
-            toasts.success(String(localized: "Merge queued for \(summary.slug)."))
+            if announcesSuccess {
+                toasts.success(String(localized: "Merge queued for \(summary.slug)."))
+            }
             onDidQueueVerdict?(summary.id)
         } catch {
             toasts.failure(error, context: String(localized: "Could not queue the merge"))

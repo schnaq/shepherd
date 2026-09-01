@@ -37,6 +37,9 @@ struct WebhookPlan: Sendable, Equatable {
 /// - `delegation.finished` comes from ``DelegationModel``'s terminal state, once per run, and
 ///   says whether a rule started it (`details.automatic`, additive under `"v": 1` — ADR 0016).
 /// - `inbox.new_review_request` comes from the sweep's own once-per-pull-request discovery.
+/// - `pr.auto_merge_queued` is the single, deliberate exception (ADR 0018): it reports that
+///   Shepherd *decided* to merge something unattended, which is a fact at the enqueue. The merge
+///   reaching GitHub is still reported separately, by `pr.merged` from the drain.
 ///
 /// Everything else — thread replies, resolves, "ready for review", CI failures, sync
 /// failures, generic updates — is not an event this version promises, and mapping it later is
@@ -101,6 +104,15 @@ final class WebhookCoordinator {
     func handle(_ event: SyncEvent, database: DatabaseManager?) {
         guard let plan = WebhookCoordinator.plan(for: event) else { return }
         dispatch(plan, database: database)
+    }
+
+    /// Handles a merge an auto-merge rule just queued (ADR 0018).
+    /// - Parameters:
+    ///   - queued: What was queued, with the audit line that justified it.
+    ///   - database: Unused for this event — the plan already carries the pull request — and taken
+    ///     only so every `handle` on this type reads the same way.
+    func handle(_ queued: AutoMergeQueuedWrite, database: DatabaseManager?) {
+        dispatch(WebhookCoordinator.plan(for: queued), database: database)
     }
 
     /// Handles a finished delegation (ADR 0011).
@@ -217,6 +229,35 @@ final class WebhookCoordinator {
              .draftConflict, .syncFailed:
             return nil
         }
+    }
+
+    /// The outbound event a queued automatic merge amounts to (ADR 0018).
+    ///
+    /// The one mapping in this file that does *not* come from a success. It is built from the
+    /// audit line rather than from a sync event, because the fact being reported — Shepherd
+    /// decided to merge something on its own — happens at the enqueue and has no later moment
+    /// that could report it as honestly. `pr.merged` still fires from `mutationSent` when the
+    /// drain sends the row, so a receiver sees the decision and the outcome as two events.
+    /// - Parameter queued: What the coordinator queued.
+    nonisolated static func plan(for queued: AutoMergeQueuedWrite) -> WebhookPlan {
+        let summary = queued.pullRequest
+        return WebhookPlan(
+            kind: .autoMergeQueued,
+            details: .autoMergeQueued(
+                mergeMethod: queued.entry.mergeMethod,
+                checkCount: queued.entry.checkCount,
+                matchedLabels: queued.entry.matchedLabels
+            ),
+            identity: WebhookPullRequest.Identity(
+                prID: summary.id,
+                repo: summary.repo,
+                number: summary.number
+            ),
+            // Carried rather than looked up: the merge is about to leave the inbox, and the row
+            // may well be gone by the time the POST is attempted.
+            summary: summary,
+            occurredAt: queued.entry.queuedAt
+        )
     }
 
     /// The outbound event a finished delegation amounts to.

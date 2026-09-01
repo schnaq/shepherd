@@ -232,6 +232,42 @@ final class NotificationManager {
         )
     }
 
+    // MARK: - Automatic merging (ADR 0018)
+
+    /// The notice posted when automatic merging queued one or more merges.
+    ///
+    /// One notice per *pass*, not per merge: a Monday-morning sweep can queue a dozen, and a dozen
+    /// banners would make the automation more disruptive than the dozen clicks it replaced. Not
+    /// gated by a notification preference, for ADR 0016's reason — this is the app writing to
+    /// GitHub unattended, which must always be visible, and the way to switch it off is to switch
+    /// the rule off.
+    ///
+    /// The wording says **queued**, because that is what happened: the outbox sends the merge, and
+    /// a head commit that moved in between parks it instead (ADR 0006). Claiming "merged" here
+    /// would be the one lie in the whole feature.
+    ///
+    /// The identifier is keyed on the first entry's `(pull request, head commit)` pair, so a pass
+    /// repeated for the same commit — a second sweep, a relaunch — collapses into the one banner
+    /// instead of stacking.
+    /// - Parameter entries: The audit lines just recorded, in the order they were queued.
+    static func payload(forAutoMerged entries: [AutoMergeAuditEntry]) -> NotificationPayload? {
+        guard let first = entries.first else { return nil }
+        let identifier = "auto-merge-\(first.prID)-\(first.headRefOid)"
+        guard entries.count > 1 else {
+            return NotificationPayload(
+                identifier: identifier,
+                title: String(localized: "Auto-merge queued · \(first.slug)"),
+                body: String(localized: "\(first.title) · green, approved, agent-authored. Shepherd queued a \(first.mergeMethod) merge.")
+            )
+        }
+        let slugs = entries.map(\.slug).joined(separator: ", ")
+        return NotificationPayload(
+            identifier: identifier,
+            title: String(localized: "Auto-merge queued · \(entries.count) pull requests"),
+            body: slugs
+        )
+    }
+
     // MARK: - Morning digest
 
     /// The notice the morning digest posts, or `nil` when there is nothing to report.

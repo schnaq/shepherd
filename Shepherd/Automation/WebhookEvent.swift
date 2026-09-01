@@ -15,6 +15,14 @@ enum WebhookEventKind: String, CaseIterable, Sendable, Codable, Hashable, Identi
     case delegationFinished = "delegation.finished"
     /// The sweep discovered a pull request that is waiting for the user's review.
     case newReviewRequest = "inbox.new_review_request"
+    /// A rule queued a merge on its own (ADR 0018).
+    ///
+    /// The one event that fires on an *intent* rather than on a success, and the exception is
+    /// deliberate: what is worth reporting here is that **Shepherd decided something unattended**,
+    /// which is a fact the moment the row is written. The write's success is still reported, by
+    /// ``pullRequestMerged``, once the drain has sent it — so an automatic merge produces two
+    /// events, and a merge that was parked because the head moved produces only the first.
+    case autoMergeQueued = "pr.auto_merge_queued"
     /// The "Send test event" button in Settings. Never emitted on its own.
     case test = "shepherd.test"
 
@@ -35,6 +43,7 @@ enum WebhookEventKind: String, CaseIterable, Sendable, Codable, Hashable, Identi
         case .pullRequestMerged: return String(localized: "A pull request was merged")
         case .delegationFinished: return String(localized: "A delegation finished")
         case .newReviewRequest: return String(localized: "A new review was requested from me")
+        case .autoMergeQueued: return String(localized: "An automatic merge was queued")
         case .test: return String(localized: "Test event")
         }
     }
@@ -50,6 +59,8 @@ enum WebhookEventKind: String, CaseIterable, Sendable, Codable, Hashable, Identi
             return String(localized: "Fires when a local agent run ends: finished, failed or cancelled — including runs an automatic rule started.")
         case .newReviewRequest:
             return String(localized: "Fires when a sweep finds a pull request waiting for your review.")
+        case .autoMergeQueued:
+            return String(localized: "Fires when an auto-merge rule queued a merge — at the moment Shepherd decided, not when GitHub confirmed. The merge itself still sends \"A pull request was merged\".")
         case .test:
             return String(localized: "Sent only when you press the button below.")
         }
@@ -244,6 +255,13 @@ enum WebhookEventDetails: Encodable, Sendable, Equatable {
     )
     /// ``WebhookEventKind/newReviewRequest``.
     case newReviewRequest(relations: [String], reviewDecision: String?, checks: String?)
+    /// ``WebhookEventKind/autoMergeQueued`` (ADR 0018).
+    ///
+    /// The three facts that justified the decision, and nothing else: which method the row asks
+    /// for, how many checks were green, and which required labels the pull request carried (empty
+    /// when the rule required none). The head commit the merge is pinned to is already in the
+    /// envelope's `pullRequest.headSha`.
+    case autoMergeQueued(mergeMethod: String, checkCount: Int, matchedLabels: [String])
     /// ``WebhookEventKind/test``.
     case test(note: String)
 
@@ -252,6 +270,7 @@ enum WebhookEventDetails: Encodable, Sendable, Equatable {
         case mergeMethod
         case status, agent, durationSeconds, changedFileCount, message, automatic
         case relations, reviewDecision, checks
+        case checkCount, matchedLabels
         case note
     }
 
@@ -274,6 +293,10 @@ enum WebhookEventDetails: Encodable, Sendable, Equatable {
             try container.encode(relations, forKey: .relations)
             try container.encode(reviewDecision, forKey: .reviewDecision)
             try container.encode(checks, forKey: .checks)
+        case .autoMergeQueued(let method, let checkCount, let matchedLabels):
+            try container.encode(method, forKey: .mergeMethod)
+            try container.encode(checkCount, forKey: .checkCount)
+            try container.encode(matchedLabels, forKey: .matchedLabels)
         case .test(let note):
             try container.encode(note, forKey: .note)
         }
