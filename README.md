@@ -50,7 +50,10 @@ than a guess.
 <tr><th colspan="2" align="left">Automate</th></tr>
 <tr>
 <td>🛠️ <b>Delegate to a local agent</b><br>Hand a PR or a single finding back to Claude Code in an isolated worktree with turn and budget caps. Optionally started for you when CI turns red.</td>
-<td>🔗 <b>Webhooks, deep links, CLI</b><br>Signed outbound events into n8n, <code>shepherd://</code> links, and a <code>shepherd</code> binary that drives the app from a terminal, Raycast or Shortcuts.</td>
+<td>🚦 <b>Auto-merge rules</b><br>Opt in, and an agent PR that is green, approved and mergeable gets its merge queued for you — narrowable by repo and label, never approving anything, every decision in a local audit log.</td>
+</tr>
+<tr>
+<td colspan="2">🔗 <b>Webhooks, deep links, CLI</b><br>Signed outbound events into n8n, <code>shepherd://</code> links, and a <code>shepherd</code> binary that drives the app from a terminal, Raycast or Shortcuts.</td>
 </tr>
 <tr><th colspan="2" align="left">Intelligence</th></tr>
 <tr>
@@ -121,7 +124,8 @@ bookmark, `open(1)`, an n8n *Execute Command* node — can drive Shepherd
 
 **Outbound webhooks** (Settings → Automation) POST a versioned JSON event to the one URL you type —
 `review.submitted`, `pr.merged`, `delegation.finished`, `inbox.new_review_request` — after the
-action really reached GitHub. With a signing secret each request carries
+action really reached GitHub, plus `pr.auto_merge_queued` the moment a rule decides something
+unattended. With a signing secret each request carries
 `X-Shepherd-Signature: sha256=<hex HMAC of the raw body>`, deliberately the same shape as GitHub's
 `X-Hub-Signature-256`, so an n8n Crypto node you already have works unchanged. Schema, guarantees
 and a three-minute n8n recipe: [docs/WEBHOOKS.md](docs/WEBHOOKS.md).

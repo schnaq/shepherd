@@ -131,11 +131,27 @@ Off by default, and it still never pushes, approves or merges anything: the fini
 you in the Delegation Center, marked as automatic
 ([ADR 0016](adr/0016-auto-delegation-rules.md)).
 
+### Optional: merge what a human already approved
+
+An agent opens a dependency bump, CI goes green, you approve it — and then it sits there until
+somebody remembers to press merge. Switch on auto-merge and Shepherd queues that merge for you the
+next time a sweep sees an agent-authored pull request that is **green, approved, mergeable and not a
+draft**. Those conditions are the feature, not checkboxes: the only knobs are narrowings — a
+repository allow-list and a set of labels the pull request must carry — so no configuration can
+turn a rule that *records* a human's decision into one that *makes* it. Shepherd never approves.
+
+Each merge is one ordinary outbox row, pinned to the head commit the decision was made on and
+merged with the method you last merged with by hand, so it gets the same offline, retry and
+staleness handling as a click. One queued merge per pull request and head, ever, kept in a local
+audit log (Settings → Automation, last ten shown) that explains every skip as well as every merge.
+One notification per sweep says how many were queued, and a `pr.auto_merge_queued` webhook fires
+for each. Off by default ([ADR 0018](adr/0018-auto-merge-rules.md)).
+
 ### Outbound webhooks for your own automation
 
 Point Shepherd at an n8n Webhook node (or any JSON endpoint) and get a versioned event when a
-review is submitted, a pull request is merged, a delegation finishes, or a review request lands —
-signed with your own HMAC secret if you want. Events fire only after the action really succeeded,
+review is submitted, a pull request is merged, a delegation finishes, a review request lands, or an
+auto-merge rule queues a merge — signed with your own HMAC secret if you want. Events fire only after the action really succeeded,
 and only to the one URL you typed. The payload says what happened, never what was written: no
 review text, no comment bodies, no diffs, no agent output. Full schema, guarantees and an n8n
 walkthrough: [WEBHOOKS.md](WEBHOOKS.md), decision: [ADR 0012](adr/0012-outbound-webhooks.md).
