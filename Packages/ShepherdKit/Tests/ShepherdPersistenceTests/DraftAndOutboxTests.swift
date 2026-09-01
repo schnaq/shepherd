@@ -287,9 +287,10 @@ final class OutboxStoreTests: XCTestCase {
             try await database.enqueue(queued)
         }
 
+        let claimTime = now
         let claimed = try await withThrowingTaskGroup(of: [OutboxItem].self) { group in
             for _ in 0..<4 {
-                group.addTask { try await database.claimReadyOutboxItems(now: self.now, limit: 10) }
+                group.addTask { try await database.claimReadyOutboxItems(now: claimTime, limit: 10) }
             }
             var all: [OutboxItem] = []
             for try await batch in group { all.append(contentsOf: batch) }
