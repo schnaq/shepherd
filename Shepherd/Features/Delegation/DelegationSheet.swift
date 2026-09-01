@@ -37,6 +37,18 @@ struct DelegationSheet: View {
                         .foregroundStyle(Theme.textMuted)
                     ChipView(text: model.context.headRefName, color: Theme.accentText, size: 10.5)
                     ChipView(text: model.agentName, color: Theme.agent, size: 10.5)
+                    if model.isAutomatic {
+                        // A run nobody pressed a button for has to say so wherever it shows up
+                        // (ADR 0016).
+                        ChipView(
+                            text: String(localized: "Automatic"),
+                            color: Theme.priority,
+                            size: 10.5
+                        )
+                        .help(String(
+                            localized: "Started by an automatic delegation rule. Nothing is pushed — you still review and push the diff."
+                        ))
+                    }
                     if case .reviewFinding(let path, _) = model.context.origin {
                         ChipView(text: path, color: Theme.priority, size: 10.5)
                     }

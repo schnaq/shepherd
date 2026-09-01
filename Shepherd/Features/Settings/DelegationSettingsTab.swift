@@ -25,6 +25,7 @@ struct DelegationSettingsTab: View {
             agentCard
             guardrailCard
             checkoutCard
+            automaticCard
             policyCard
         }
     }
@@ -230,6 +231,122 @@ struct DelegationSettingsTab: View {
         }
     }
 
+    // MARK: - Automatic delegation (ADR 0016)
+
+    private var automaticCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                automaticSwitch
+                Divider().overlay(Theme.hairline)
+                automaticConditions
+                Divider().overlay(Theme.hairline)
+                automaticTemplate
+                Divider().overlay(Theme.hairline)
+                automaticCaps
+            }
+        }
+    }
+
+    private var automaticSwitch: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            CardTitle(String(localized: "AUTOMATIC DELEGATION"))
+            Toggle(
+                String(localized: "Start a delegation on its own when a rule matches"),
+                isOn: autoEnabledBinding
+            )
+            Text(String(
+                localized: "Off by default. A rule only ever starts the delegation you could have started yourself: it runs in an isolated worktree with the guardrails above, and it never pushes, approves or merges anything."
+            ))
+            .font(.system(size: 11))
+            .foregroundStyle(Theme.textMuted)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var automaticConditions: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(String(localized: "Run when, on a pull request of mine:"))
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.textSecondary)
+            Toggle(String(localized: "CI turns red"), isOn: triggerBinding(.checksFailed))
+                .toggleStyle(.checkbox)
+            Toggle(
+                String(localized: "a reviewer requests changes"),
+                isOn: triggerBinding(.changesRequested)
+            )
+            .toggleStyle(.checkbox)
+            Text(String(
+                localized: "\"Turns\" is meant literally: Shepherd has to have seen the change happen. A pull request that was already red when Shepherd first saw it never starts anything, and each pull request starts at most one run per commit."
+            ))
+            .font(.system(size: 11))
+            .foregroundStyle(Theme.textMuted)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var automaticTemplate: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(String(localized: "Task for the agent"))
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.textSecondary)
+            TextEditor(text: promptTemplateBinding)
+                .font(Theme.mono(11.5))
+                .scrollContentBackground(.hidden)
+                .padding(8)
+                .frame(minHeight: 84, maxHeight: 120)
+                .background(
+                    Theme.control,
+                    in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                )
+            Text(String(
+                localized: "Placeholders: \(AutoDelegationPrompt.placeholders.joined(separator: " ")). Shepherd's own instructions — detached worktree, do not push, keep the change small — are prepended as usual."
+            ))
+            .font(.system(size: 11))
+            .foregroundStyle(Theme.textMuted)
+            .fixedSize(horizontal: false, vertical: true)
+            Button(String(localized: "Reset to the default task")) {
+                environment.settings.autoDelegation.promptTemplate =
+                    AutoDelegationRules.defaultPromptTemplate
+            }
+            .buttonStyle(SecondaryButtonStyle(height: 26))
+        }
+    }
+
+    private var automaticCaps: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Text(String(localized: "At once"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .frame(width: 74, alignment: .leading)
+                Stepper(value: concurrencyBinding, in: 1...5) {
+                    Text("\(environment.settings.autoDelegation.concurrencyCap)")
+                        .font(Theme.mono(12))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.text)
+                }
+            }
+            HStack(spacing: 12) {
+                Text(String(localized: "Per day"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .frame(width: 74, alignment: .leading)
+                Stepper(value: dailyBinding, in: 1...50) {
+                    Text("\(environment.settings.autoDelegation.dailyCap)")
+                        .font(Theme.mono(12))
+                        .monospacedDigit()
+                        .foregroundStyle(Theme.text)
+                }
+            }
+            Text(String(
+                localized: "\(environment.autoDelegation.startsToday) of \(environment.autoDelegation.dailyCap) used today · \(environment.autoDelegation.runningCount) running now. When a cap is reached Shepherd notifies you instead of starting anything."
+            ))
+            .font(.system(size: 11))
+            .foregroundStyle(Theme.textMuted)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     private var policyCard: some View {
         Card {
             VStack(alignment: .leading, spacing: 6) {
@@ -354,6 +471,49 @@ struct DelegationSettingsTab: View {
         Binding(
             get: { environment.settings.agentCLI.allowedTools },
             set: { environment.settings.agentCLI.allowedTools = $0 }
+        )
+    }
+
+    private var autoEnabledBinding: Binding<Bool> {
+        Binding(
+            get: { environment.settings.autoDelegation.isEnabled },
+            set: { environment.settings.autoDelegation.isEnabled = $0 }
+        )
+    }
+
+    private func triggerBinding(_ trigger: AutoDelegationTrigger) -> Binding<Bool> {
+        Binding(
+            get: { environment.settings.autoDelegation.triggers.contains(trigger) },
+            set: { isOn in
+                var triggers = environment.settings.autoDelegation.triggers
+                if isOn {
+                    triggers.insert(trigger)
+                } else {
+                    triggers.remove(trigger)
+                }
+                environment.settings.autoDelegation.triggers = triggers
+            }
+        )
+    }
+
+    private var promptTemplateBinding: Binding<String> {
+        Binding(
+            get: { environment.settings.autoDelegation.promptTemplate },
+            set: { environment.settings.autoDelegation.promptTemplate = $0 }
+        )
+    }
+
+    private var concurrencyBinding: Binding<Int> {
+        Binding(
+            get: { environment.settings.autoDelegation.concurrencyCap },
+            set: { environment.settings.autoDelegation.maxConcurrent = max(1, $0) }
+        )
+    }
+
+    private var dailyBinding: Binding<Int> {
+        Binding(
+            get: { environment.settings.autoDelegation.dailyCap },
+            set: { environment.settings.autoDelegation.maxPerDay = max(1, $0) }
         )
     }
 }

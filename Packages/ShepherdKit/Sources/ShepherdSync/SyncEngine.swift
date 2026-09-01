@@ -313,10 +313,33 @@ public actor SyncEngine {
                 emit(.prUpdated(summary))
             }
 
-            if summary.myRelation.contains(.author),
-               summary.checkRollup?.state == .failure,
+            // Both of these are *edges*, not states: the guard compares against what the
+            // previous sweep saw, and the event carries that comparison along so a consumer can
+            // tell a watched change from a first sighting (ADR 0016).
+            if AutoDelegationPolicy.isOwn(summary), summary.checkRollup?.state == .failure,
                old?.checkRollup?.state != .failure {
-                emit(.checksFailedOnOwnPR(summary))
+                emit(
+                    .checksFailedOnOwnPR(
+                        ChecksFailure(
+                            summary: summary,
+                            previousState: old?.checkRollup?.state,
+                            wasTracked: old != nil
+                        )
+                    )
+                )
+            }
+
+            if AutoDelegationPolicy.isOwn(summary), summary.reviewDecision == .changesRequested,
+               old?.reviewDecision != .changesRequested {
+                emit(
+                    .changesRequestedOnOwnPR(
+                        ChangesRequested(
+                            summary: summary,
+                            previousDecision: old?.reviewDecision,
+                            wasTracked: old != nil
+                        )
+                    )
+                )
             }
         }
 

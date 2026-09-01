@@ -13,11 +13,12 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
     PullRequest/               #   PR detail: header, timeline, file list, checks
     Review/                    #   review composer, pending review UI, thread views
     DiffViewer/                #   WKWebView host + bridge (Swift side)
-    Delegation/                #   delegate-to-local-agent model + sheet (ADR 0011)
+    Delegation/                #   delegate-to-local-agent model + sheet (ADR 0011, 0016)
     Settings/                  #   accounts, sync (+ encrypted cross-Mac sync), agents, AI,
                                #   delegation, automation, theme
     Onboarding/                #   device-flow sign-in, PAT entry
-  Automation/                  #   outbound webhook payload, signing, dispatcher (ADR 0012)
+  Automation/                  #   outbound webhook payload, signing, dispatcher (ADR 0012);
+                               #   auto-delegation coordinator + ledger store (ADR 0016)
   SettingsSync/                #   encrypted settings document, envelope, SigV4, S3 client (ADR 0014)
   Intelligence/                #   IntelligenceProvider impls (FoundationModels, Anthropic)
   Support/                     #   AppConfig, keyboard shortcuts, theming, notifications
@@ -28,6 +29,7 @@ Packages/ShepherdKit/          # SPM package, NO AppKit/SwiftUI imports
     ShepherdCore/              #   domain models, agent detection, heuristics, drafts
       Routing/                 #     shepherd:// grammar + CLI argument grammar (ADR 0013)
       Triage/                  #     bulk-triage partition + intended writes (ADR 0015)
+      Automation/              #     auto-delegation rules, ledger and policy (ADR 0016)
     GitHubKit/                 #   GraphQL+REST client, device flow, rate limiting
     ShepherdPersistence/       #   GRDB schema, DAOs, outbox
     ShepherdSync/              #   sync engine orchestrating GitHubKit ⇄ Persistence
@@ -157,6 +159,14 @@ outbound webhooks (ADR 0012) — hangs off it rather than off the enqueue. Like 
 `DraftConflict` it is flattened to values (pull-request identity plus what was sent), because
 the engine does not spend a fetch to describe an event; a consumer that wants the title reads
 the row from the database it is already reading from.
+
+Two events are about *the user's own* pull requests — `.checksFailedOnOwnPR(ChecksFailure)` and
+`.changesRequestedOnOwnPR(ChangesRequested)` — and both carry the state the previous sweep saw
+alongside the new one. The engine has always emitted them on a change rather than on a state; what
+the payload adds is the ability for a consumer to tell a *watched* change from a first sighting,
+which is what makes an automatic action safe (ADR 0016). "Own" comes from one shared definition,
+`AutoDelegationPolicy.isOwn`: the user authored it, or a recognised agent authored it and it is
+assigned to them — never `mentions:`/`involves:` alone.
 
 ## Diff viewer bridge (Swift ⇄ Monaco)
 
@@ -461,6 +471,32 @@ credential field anywhere in the Delegation settings tab; **nothing is ever push
 automatically** — the agent works in a detached worktree and "Commit & push" is a button, using
 the user's own git credentials rather than Shepherd's GitHub token.
 
+#### Automatic delegation (ADR 0016)
+
+The same engine, started by a rule instead of a button, and the split is the same one as
+everywhere else: the *decision* is a pure function in `ShepherdCore/Automation/`
+(`AutoDelegationPolicy.decide(signal, context) -> .start(plan) | .skip(reason)`), and the app layer
+only supplies the inputs and performs the start.
+
+- The trigger is an **edge, not a state**. `SyncEvent.checksFailedOnOwnPR` carries a
+  `ChecksFailure` (and the new `changesRequestedOnOwnPR` a `ChangesRequested`) with the state the
+  *previous* sweep saw, so a rule can distinguish "Shepherd watched this turn red" from "Shepherd
+  saw this red for the first time" — the second one is a notification but never a run, or a fresh
+  install would delegate the whole backlog at once.
+- `AutoDelegationLedger` (`UserDefaults`, via `Automation/AutoDelegationStore.swift`) is the
+  persistence: one start per `(prID, headRefOid)` for ever, plus a `yyyy-MM-dd` day counter for the
+  daily cap. It is written *before* the run starts, cleared on sign-out, and deliberately **not**
+  part of the settings document — the rules travel between Macs, the machine's automation state
+  does not (ADR 0014).
+- `AutoDelegationCoordinator` (`@MainActor`) maps events onto signals, records the ledger, posts the
+  notification through an injected closure (which is what lets the tests assert notices without a
+  notification centre) and returns the plan. `AppEnvironment` starts it through the *same*
+  `startDelegation` a button press uses, so `DelegationCenter`'s one-run-per-pull-request rule, the
+  worktree isolation and "never push" are literally the same code. `DelegationCenter.startAutomatically`
+  differs from `open` in exactly two ways: no sheet is presented, and the model is marked
+  `isAutomatic` — which drives the badge and `details.automatic` in the `delegation.finished`
+  webhook.
+
 The **App Sandbox is off** for this build (`Shepherd/Support/Shepherd.entitlements`, with the
 reasoning inline): a sandboxed child process cannot usefully be a coding agent — no network, no
 access to the user's CLI configuration, every path needing a bookmark. ADR 0010 already rules
@@ -477,7 +513,9 @@ palette and inbox-ordering logic (including the bulk-triage tick selection and e
 bulk-triage label, ADR 0015); the intelligence endpoint layer (preset ↔ base-URL matching,
 `/models` parsing against fixtures, and the settings-side discovery gate through `ModelListing`);
 the delegation engine (stream-event fixtures, argv
-construction, template splitting, git command sequences, state transitions); the webhook
+construction, template splitting, git command sequences, state transitions) and the app half of
+auto-delegation (event → signal mapping, ledger persistence across a relaunch, cap notices —
+ADR 0016; the decision itself is tested in `ShepherdCoreTests`); the webhook
 layer (payload schema against decoded JSON, the HMAC against the RFC 4231 vector, URL
 validation, the retry policy through the `WebhookPosting` seam, and the event mapping); the
 encrypted settings sync (envelope round trip, wrong passphrase and AAD tampering as one defined

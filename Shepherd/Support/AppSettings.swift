@@ -127,6 +127,11 @@ final class AppSettings {
         )
         self.localCheckouts = defaults.dictionary(forKey: Keys.localCheckouts) as? [String: String]
             ?? [:]
+        self.autoDelegation = Self.readJSON(
+            defaults,
+            Keys.autoDelegation,
+            default: AutoDelegationRules()
+        )
         self.webhooksEnabled = defaults.object(forKey: Keys.webhookEnabled) as? Bool ?? false
         self.webhookURL = defaults.string(forKey: Keys.webhookURL) ?? ""
         // A fresh install subscribes to everything, because the enable toggle is what actually
@@ -285,6 +290,15 @@ final class AppSettings {
     /// points at this setting.
     var localCheckouts: [String: String] {
         didSet { defaults.set(localCheckouts, forKey: Keys.localCheckouts) }
+    }
+
+    /// The opt-in rules that may start a delegation without being asked (ADR 0016).
+    ///
+    /// Stored as one JSON blob, like ``agentCLI``: the rule set is edited as a whole on one
+    /// Settings card, and a single key keeps the tolerant-decoding story in one place. Off on a
+    /// fresh install — ``AutoDelegationRules/isEnabled`` is what lets any of this run at all.
+    var autoDelegation: AutoDelegationRules {
+        didSet { Self.writeJSON(defaults, autoDelegation, Keys.autoDelegation) }
     }
 
     /// The local clone configured for a repository, if any.
@@ -481,6 +495,7 @@ final class AppSettings {
         static let accountAuthKind = "account.authKind"
         static let agentCLI = "delegation.agentCLI"
         static let localCheckouts = "delegation.localCheckouts"
+        static let autoDelegation = "delegation.autoRules"
         static let webhookEnabled = "automation.webhook.enabled"
         static let webhookURL = "automation.webhook.url"
         static let webhookEvents = "automation.webhook.events"

@@ -153,7 +153,8 @@ final class SignedInSession {
         switch event {
         case .syncFailed(let failure):
             lastSyncError = failure.message
-        case .newReviewRequest, .checksFailedOnOwnPR, .prMerged, .prUpdated, .mutationSent:
+        case .newReviewRequest, .checksFailedOnOwnPR, .changesRequestedOnOwnPR, .prMerged,
+             .prUpdated, .mutationSent:
             lastSyncedAt = Date()
             lastSyncError = nil
         case .draftConflict:

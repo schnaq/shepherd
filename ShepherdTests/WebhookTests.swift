@@ -302,20 +302,23 @@ final class WebhookTests: XCTestCase {
                 agent: "Claude Code",
                 durationSeconds: 72,
                 changedFileCount: 3,
-                message: nil
+                message: nil,
+                automatic: false
             )
         )
         let json = try nested(try object(subject), "details")
 
         XCTAssertEqual(
             json.keys.sorted(),
-            ["agent", "changedFileCount", "durationSeconds", "message", "status"]
+            ["agent", "automatic", "changedFileCount", "durationSeconds", "message", "status"]
         )
         XCTAssertEqual(json["status"] as? String, "finished")
         XCTAssertEqual(json["agent"] as? String, "Claude Code")
         XCTAssertEqual(json["durationSeconds"] as? Int, 72)
         XCTAssertEqual(json["changedFileCount"] as? Int, 3)
         XCTAssertTrue(json["message"] is NSNull)
+        // Additive under `"v": 1` (ADR 0016): always present, `false` for a run the user started.
+        XCTAssertEqual(json["automatic"] as? Bool, false)
     }
 
     func testReviewRequestDetailsCarryTheTriageState() throws {
@@ -665,7 +668,12 @@ final class WebhookTests: XCTestCase {
             // deliberately not `pr.merged`.
             .prMerged(summary),
             .prUpdated(summary),
-            .checksFailedOnOwnPR(summary),
+            .checksFailedOnOwnPR(
+                ChecksFailure(summary: summary, previousState: .success, wasTracked: true)
+            ),
+            .changesRequestedOnOwnPR(
+                ChangesRequested(summary: summary, previousDecision: nil, wasTracked: true)
+            ),
             .draftConflict(
                 DraftConflict(
                     prID: "PR_1",
@@ -697,6 +705,7 @@ final class WebhookTests: XCTestCase {
             durationSeconds: 91,
             changedFileCount: 0,
             message: "error_max_turns",
+            wasAutomatic: true,
             at: occurredAt
         )
         let plan = WebhookCoordinator.plan(for: outcome)
@@ -708,7 +717,9 @@ final class WebhookTests: XCTestCase {
                 agent: "Claude Code",
                 durationSeconds: 91,
                 changedFileCount: 0,
-                message: "error_max_turns"
+                message: "error_max_turns",
+                // The run was started by a rule, and the payload says so (ADR 0016).
+                automatic: true
             )
         )
         XCTAssertEqual(plan.occurredAt, occurredAt)

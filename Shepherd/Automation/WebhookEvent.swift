@@ -47,7 +47,7 @@ enum WebhookEventKind: String, CaseIterable, Sendable, Codable, Hashable, Identi
         case .pullRequestMerged:
             return String(localized: "Fires when GitHub confirmed the merge, with the method used.")
         case .delegationFinished:
-            return String(localized: "Fires when a local agent run ends: finished, failed or cancelled.")
+            return String(localized: "Fires when a local agent run ends: finished, failed or cancelled — including runs an automatic rule started.")
         case .newReviewRequest:
             return String(localized: "Fires when a sweep finds a pull request waiting for your review.")
         case .test:
@@ -230,12 +230,17 @@ enum WebhookEventDetails: Encodable, Sendable, Equatable {
     /// ``WebhookEventKind/pullRequestMerged``.
     case merged(method: String)
     /// ``WebhookEventKind/delegationFinished``.
+    ///
+    /// `automatic` was added with the auto-delegation rules (ADR 0016). It is additive under
+    /// `"v": 1`: a receiver that never looks at it keeps working, and one that does can tell a
+    /// run the user started from one a rule started.
     case delegation(
         status: String,
         agent: String,
         durationSeconds: Int,
         changedFileCount: Int,
-        message: String?
+        message: String?,
+        automatic: Bool
     )
     /// ``WebhookEventKind/newReviewRequest``.
     case newReviewRequest(relations: [String], reviewDecision: String?, checks: String?)
@@ -245,7 +250,7 @@ enum WebhookEventDetails: Encodable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case verdict, inlineCommentCount
         case mergeMethod
-        case status, agent, durationSeconds, changedFileCount, message
+        case status, agent, durationSeconds, changedFileCount, message, automatic
         case relations, reviewDecision, checks
         case note
     }
@@ -258,12 +263,13 @@ enum WebhookEventDetails: Encodable, Sendable, Equatable {
             try container.encode(inlineCommentCount, forKey: .inlineCommentCount)
         case .merged(let method):
             try container.encode(method, forKey: .mergeMethod)
-        case .delegation(let status, let agent, let seconds, let files, let message):
+        case .delegation(let status, let agent, let seconds, let files, let message, let automatic):
             try container.encode(status, forKey: .status)
             try container.encode(agent, forKey: .agent)
             try container.encode(seconds, forKey: .durationSeconds)
             try container.encode(files, forKey: .changedFileCount)
             try container.encode(message, forKey: .message)
+            try container.encode(automatic, forKey: .automatic)
         case .newReviewRequest(let relations, let reviewDecision, let checks):
             try container.encode(relations, forKey: .relations)
             try container.encode(reviewDecision, forKey: .reviewDecision)

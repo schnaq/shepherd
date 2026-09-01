@@ -139,6 +139,7 @@ final class DelegationModelTests: XCTestCase {
         git: RecordingProcessRunner = RecordingProcessRunner(),
         worktree: Bool = true,
         readiness: DelegationModel.Readiness = .ready,
+        isAutomatic: Bool = false,
         onDidPush: (@MainActor () async -> Void)? = nil,
         onDidFinish: (@MainActor (DelegationOutcome) -> Void)? = nil
     ) -> DelegationModel {
@@ -157,6 +158,7 @@ final class DelegationModelTests: XCTestCase {
             readiness: readiness,
             runner: runner,
             worktree: tree,
+            isAutomatic: isAutomatic,
             toasts: nil,
             onDidPush: onDidPush,
             onDidFinish: onDidFinish
@@ -469,6 +471,43 @@ final class DelegationModelTests: XCTestCase {
         XCTAssertNil(collector.outcomes.first?.message)
     }
 
+    func testAnAutomaticRunSaysSoInItsOutcome() async throws {
+        let collector = OutcomeCollector()
+        let model = makeModel(
+            runner: ScriptedAgentRunner(
+                events: [.result(AgentRunResult(isError: false, subtype: "success"))]
+            ),
+            git: gitRunnerWithDiffStat(),
+            isAutomatic: true,
+            onDidFinish: { collector.outcomes.append($0) }
+        )
+        XCTAssertTrue(model.isAutomatic)
+
+        model.start()
+        await model.runTask?.value
+
+        // The flag is what the badge and the webhook payload read (ADR 0016).
+        XCTAssertEqual(collector.outcomes.map(\.wasAutomatic), [true])
+        XCTAssertEqual(collector.outcomes.map(\.status), [.finished])
+    }
+
+    func testAManualRunIsNotMarkedAutomatic() async throws {
+        let collector = OutcomeCollector()
+        let model = makeModel(
+            runner: ScriptedAgentRunner(
+                events: [.result(AgentRunResult(isError: false, subtype: "success"))]
+            ),
+            git: gitRunnerWithDiffStat(),
+            onDidFinish: { collector.outcomes.append($0) }
+        )
+        XCTAssertFalse(model.isAutomatic)
+
+        model.start()
+        await model.runTask?.value
+
+        XCTAssertEqual(collector.outcomes.map(\.wasAutomatic), [false])
+    }
+
     // MARK: - Publishing
 
     func testCommitAndPushRunsTheExpectedGitCommandsAndRefreshes() async throws {
@@ -584,5 +623,24 @@ final class DelegationModelTests: XCTestCase {
 
         center.dismiss()
         XCTAssertNil(center.presented)
+    }
+
+    func testAnAutomaticStartRefusesWhenTheDelegationCouldNotRunAndPresentsNothing() throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "shepherd.tests.\(UUID().uuidString)"))
+        let settings = AppSettings(defaults: defaults)
+        let center = DelegationCenter()
+
+        // No local checkout is configured, so there is nothing to build a worktree from.
+        let started = center.startAutomatically(
+            context: context,
+            task: "fix the CI",
+            settings: settings,
+            toasts: ToastCenter()
+        )
+
+        XCTAssertNil(started)
+        XCTAssertTrue(center.models.isEmpty, "a run that cannot start leaves nothing behind")
+        XCTAssertNil(center.presented, "an automatic start never puts a sheet on screen")
+        XCTAssertEqual(center.runningAutomaticCount, 0)
     }
 }

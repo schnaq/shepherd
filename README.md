@@ -38,6 +38,12 @@ from every repo — without ever opening a browser tab.
   path risk), optionally sharpened by on-device AI.
 - **Delegate back to a local coding agent (Claude Code first-class)** — runs in an isolated
   worktree with turn/budget caps; you review and push.
+- **Optional: let it start itself when CI goes red.** Switch on an auto-delegation rule and the
+  moment CI *turns* red on one of your pull requests, Shepherd sends the agent after it and
+  notifies you — same worktree isolation, same caps, at most one run per pull request and per
+  commit, with a daily budget you set. Off by default, and it still never pushes, approves or
+  merges anything: the finished diff waits for you, marked as automatic.
+  See [ADR 0016](docs/adr/0016-auto-delegation-rules.md).
 - **Outbound webhooks for your own automation.** Point Shepherd at an n8n Webhook node (or any
   JSON endpoint) and get a versioned event when a review is submitted, a pull request is merged,
   a delegation finishes, or a review request lands — signed with your own HMAC secret if you

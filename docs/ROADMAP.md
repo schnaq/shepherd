@@ -35,7 +35,7 @@ the review path — the founder's bar is "never need to open github.com for a ro
       turn/budget caps); command template configurable for other agent CLIs; Shepherd never
       touches agent auth and never auto-pushes
 
-**Automation (ADR 0012)**
+**Automation (ADR 0012, 0016)**
 - [x] Outbound webhooks: POST a versioned JSON event to one user-configured URL (n8n-compatible)
       for `review.submitted`, `pr.merged`, `delegation.finished`, `inbox.new_review_request`;
       events fire only after the outbox actually sent the mutation (or a delegation reached a
@@ -54,6 +54,14 @@ the review path — the founder's bar is "never need to open github.com for a ro
       with the envelope metadata as AAD; SigV4 signed by hand for `GET`/`PUT`/`HEAD` on that one
       object, no AWS SDK. Manual upload/download with a confirmation dialog, no background sync in
       v1, no recovery if the passphrase is lost — by design
+- [x] Opt-in auto-delegation rules (ADR 0016): when CI turns red on a pull request of yours — or,
+      as a second opt-in, when a reviewer requests changes — Shepherd can start the ADR 0011
+      delegation for you, in an isolated worktree, with the same turn/budget caps, and with a
+      notification saying it did. Off by default; only on the *transition*, never on the state;
+      at most one run per pull request and per head commit (deduplicated across restarts); global
+      caps for simultaneous and daily runs, with a notification instead of a start when one bites.
+      Still no auto-push, no auto-approve, no auto-merge — the result waits in the Delegation
+      Center marked as automatic
 
 **Intelligence (ADR 0007)**
 - [ ] Tier 1 heuristics: file prioritization, risk hints — always on
@@ -83,6 +91,9 @@ the review path — the founder's bar is "never need to open github.com for a ro
 - Menu-bar quick inbox
 - More webhook events (thread replies, resolves, checks turning red) — additive under `"v": 1`
   (ADR 0012)
+- More auto-delegation conditions (ADR 0016 keeps the action fixed: a third *condition* is a case
+  in one enum plus a checkbox; a third *action* needs a new ADR). A shared, synced ledger so two
+  Macs cannot both start a run for the same pull request is the open question there
 - More `shepherd://` commands (additive by design, ADR 0013). Anything that must *return* data
   (`shepherd status`, "how many need my review?") is not a URL-scheme feature and needs the XPC
   or AppleScript decision ADR 0013 deferred
@@ -100,5 +111,7 @@ the review path — the founder's bar is "never need to open github.com for a ro
 ## Non-goals
 
 - Windows/Linux builds (ADR 0001), Mac App Store for v1 (ADR 0010), running/hosting coding
-  agents (Shepherd reviews their output; it doesn't orchestrate them), auto-submitting
-  AI-generated reviews (AI output is always a suggestion a human confirms).
+  agents (Shepherd reviews their output; it doesn't orchestrate them — an opt-in rule may *start*
+  a local delegation on your own machine, ADR 0016, but nothing is hosted and nothing is written to
+  GitHub by it), auto-submitting AI-generated reviews (AI output is always a suggestion a human
+  confirms).

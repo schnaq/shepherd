@@ -230,11 +230,133 @@ final class SyncEngineTests: XCTestCase {
             try await engine.syncNow()
         }
 
-        let failures = emitted.filter { event in
-            if case .checksFailedOnOwnPR = event { return true }
-            return false
+        let failures = emitted.compactMap { event -> ChecksFailure? in
+            if case .checksFailedOnOwnPR(let failure) = event { return failure }
+            return nil
         }
         XCTAssertEqual(failures.count, 1, "the event fires on the green-to-red transition only")
+        // The event carries what the previous sweep saw, so a consumer can tell a watched
+        // change from a first sighting (ADR 0016).
+        let failure = try XCTUnwrap(failures.first)
+        XCTAssertEqual(failure.previousState, .pending)
+        XCTAssertTrue(failure.wasTracked)
+        XCTAssertTrue(failure.isTransition)
+    }
+
+    func testChecksFailingOnAPullRequestSeenForTheFirstTimeIsNotATransition() async throws {
+        let github = MockGitHub()
+        await github.setSearchResults([[
+            SyncFixtures.summary(
+                id: "PR_1",
+                number: 1,
+                relations: [.author],
+                checkState: .failure
+            )
+        ]])
+        let store = try DatabaseManager.inMemory()
+        let engine = makeEngine(github: github, store: store)
+
+        let emitted = try await events(from: engine) {
+            try await engine.syncNow()
+        }
+
+        let failures = emitted.compactMap { event -> ChecksFailure? in
+            if case .checksFailedOnOwnPR(let failure) = event { return failure }
+            return nil
+        }
+        // Still notification-worthy — the pull request *is* red — but not an edge Shepherd
+        // watched happen, so no rule may act on it (ADR 0016).
+        let failure = try XCTUnwrap(failures.first)
+        XCTAssertFalse(failure.wasTracked)
+        XCTAssertFalse(failure.isTransition)
+        XCTAssertNil(failure.previousState)
+    }
+
+    func testChangesRequestedOnAnOwnPullRequestIsEmittedOnTheTransitionOnly() async throws {
+        let github = MockGitHub()
+        await github.setSearchResults([
+            [
+                SyncFixtures.summary(
+                    id: "PR_1",
+                    number: 1,
+                    relations: [.author],
+                    reviewDecision: .reviewRequired
+                )
+            ],
+            [
+                SyncFixtures.summary(
+                    id: "PR_1",
+                    number: 1,
+                    updatedAt: 600,
+                    relations: [.author],
+                    reviewDecision: .changesRequested
+                )
+            ],
+            [
+                SyncFixtures.summary(
+                    id: "PR_1",
+                    number: 1,
+                    updatedAt: 1_200,
+                    relations: [.author],
+                    reviewDecision: .changesRequested
+                )
+            ],
+        ])
+        let store = try DatabaseManager.inMemory()
+        let engine = makeEngine(github: github, store: store)
+
+        let emitted = try await events(from: engine) {
+            try await engine.syncNow()
+            try await engine.syncNow()
+            try await engine.syncNow()
+        }
+
+        let requested = emitted.compactMap { event -> ChangesRequested? in
+            if case .changesRequestedOnOwnPR(let value) = event { return value }
+            return nil
+        }
+        XCTAssertEqual(requested.count, 1, "the decision changed exactly once")
+        let change = try XCTUnwrap(requested.first)
+        XCTAssertEqual(change.previousDecision, .reviewRequired)
+        XCTAssertTrue(change.isTransition)
+    }
+
+    func testChangesRequestedOnSomebodyElsesPullRequestIsNotEmitted() async throws {
+        let github = MockGitHub()
+        await github.setSearchResults([
+            [
+                SyncFixtures.summary(
+                    id: "PR_1",
+                    number: 1,
+                    relations: [.reviewRequested],
+                    reviewDecision: nil
+                )
+            ],
+            [
+                SyncFixtures.summary(
+                    id: "PR_1",
+                    number: 1,
+                    updatedAt: 600,
+                    relations: [.reviewRequested],
+                    reviewDecision: .changesRequested
+                )
+            ],
+        ])
+        let store = try DatabaseManager.inMemory()
+        let engine = makeEngine(github: github, store: store)
+
+        let emitted = try await events(from: engine) {
+            try await engine.syncNow()
+            try await engine.syncNow()
+        }
+
+        XCTAssertFalse(
+            emitted.contains { event in
+                if case .changesRequestedOnOwnPR = event { return true }
+                return false
+            },
+            "a review on a pull request the user only reviews is not their own business to fix"
+        )
     }
 
     func testDisappearingPullRequestsAreReportedAsMerged() async throws {

@@ -6,7 +6,9 @@ import ShepherdCore
 ///
 /// The "one per pull request" rule is the reason this exists at all. Two delegations for the
 /// same pull request would race for the same worktree directory, so a second request while one
-/// is running simply reveals the running one instead of starting anything (ADR 0011).
+/// is running simply reveals the running one instead of starting anything (ADR 0011). An
+/// automatic start (ADR 0016) goes through the same rule and the same models — it only differs
+/// in not putting a sheet on screen and in being marked as automatic.
 @MainActor
 @Observable
 final class DelegationCenter {
@@ -24,6 +26,15 @@ final class DelegationCenter {
     /// - Parameter prID: The pull request's node id.
     func isRunning(prID: String) -> Bool {
         models[prID]?.isBusy ?? false
+    }
+
+    /// How many delegations that a rule started are running right now.
+    ///
+    /// This is the number the concurrency cap is checked against, and it deliberately counts
+    /// only automatic runs: a user who starts three delegations by hand has not used up the
+    /// automation's budget (ADR 0016).
+    var runningAutomaticCount: Int {
+        models.values.filter { $0.isAutomatic && $0.isBusy }.count
     }
 
     /// Opens (or re-opens) the sheet for a delegation.
@@ -50,6 +61,77 @@ final class DelegationCenter {
             return existing
         }
 
+        let model = make(
+            context: context,
+            settings: settings,
+            toasts: toasts,
+            isAutomatic: false,
+            onDidPush: onDidPush,
+            onDidFinish: onDidFinish
+        )
+        models[context.prID] = model
+        presented = model
+        return model
+    }
+
+    /// Starts a delegation the user did not ask for (ADR 0016).
+    ///
+    /// Two differences from ``open(context:settings:toasts:onDidPush:onDidFinish:)``, and nothing
+    /// else: no sheet is presented — an unexpected modal in front of whatever the user is doing
+    /// would be worse than the notification that announces the start — and the model is marked
+    /// automatic, which is what the badge and the webhook payload read.
+    /// - Parameters:
+    ///   - context: What the delegation is about.
+    ///   - task: The rendered task text; replaces the prefilled default.
+    ///   - settings: Where the CLI configuration and the checkout mapping live.
+    ///   - toasts: Where failures are surfaced.
+    ///   - onDidPush: Called after a successful push so the caller can re-sync.
+    ///   - onDidFinish: Called once when the run reaches a terminal state (ADR 0012).
+    /// - Returns: The model that was started, or `nil` when one was already running for this
+    ///   pull request or the run could not be started at all.
+    @discardableResult
+    func startAutomatically(
+        context: DelegationContext,
+        task: String,
+        settings: AppSettings,
+        toasts: ToastCenter,
+        onDidPush: (@MainActor () async -> Void)? = nil,
+        onDidFinish: (@MainActor (DelegationOutcome) -> Void)? = nil
+    ) -> DelegationModel? {
+        // The one-per-pull-request rule, again from the one place that owns it.
+        if let existing = models[context.prID], existing.isBusy { return nil }
+
+        let model = make(
+            context: context,
+            settings: settings,
+            toasts: toasts,
+            isAutomatic: true,
+            onDidPush: onDidPush,
+            onDidFinish: onDidFinish
+        )
+        model.task = task
+        // Nothing is remembered unless it actually runs: a model parked in "no checkout" that
+        // nobody asked for would show up later as a stale sheet for a delegation that never was.
+        guard model.canStart else { return nil }
+        models[context.prID] = model
+        model.start()
+        return model
+    }
+
+    /// Closes the sheet. A run keeps going in the background; re-opening shows it again.
+    func dismiss() {
+        presented = nil
+    }
+
+    /// Builds a model for a context, resolving the CLI and the worktree from settings.
+    private func make(
+        context: DelegationContext,
+        settings: AppSettings,
+        toasts: ToastCenter,
+        isAutomatic: Bool,
+        onDidPush: (@MainActor () async -> Void)?,
+        onDidFinish: (@MainActor (DelegationOutcome) -> Void)?
+    ) -> DelegationModel {
         let configuration = settings.agentCLI
         let executable = AgentCLILocator.locate(configuration: configuration)
         let checkout = settings.localCheckoutURL(for: context.repo)
@@ -70,23 +152,16 @@ final class DelegationCenter {
             )
         }
 
-        let model = DelegationModel(
+        return DelegationModel(
             context: context,
             configuration: configuration,
             readiness: readiness,
             runner: AgentCLIRunner(configuration: configuration, executable: executable),
             worktree: worktree,
+            isAutomatic: isAutomatic,
             toasts: toasts,
             onDidPush: onDidPush,
             onDidFinish: onDidFinish
         )
-        models[context.prID] = model
-        presented = model
-        return model
-    }
-
-    /// Closes the sheet. A run keeps going in the background; re-opening shows it again.
-    func dismiss() {
-        presented = nil
     }
 }

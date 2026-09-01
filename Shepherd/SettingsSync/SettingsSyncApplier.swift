@@ -77,7 +77,8 @@ enum SettingsSyncApplier {
         )
         document.delegation = SyncedSettingsDocument.DelegationGroup(
             agentCLI: settings.agentCLI,
-            localCheckouts: settings.localCheckouts
+            localCheckouts: settings.localCheckouts,
+            autoDelegation: settings.autoDelegation
         )
         document.automation = SyncedSettingsDocument.AutomationGroup(
             webhooksEnabled: settings.webhooksEnabled,
@@ -163,6 +164,7 @@ enum SettingsSyncApplier {
 
         settings.agentCLI = document.delegation.agentCLI
         settings.localCheckouts = document.delegation.localCheckouts
+        settings.autoDelegation = document.delegation.autoDelegation
 
         settings.webhooksEnabled = document.automation.webhooksEnabled
         settings.webhookURL = document.automation.webhookURL

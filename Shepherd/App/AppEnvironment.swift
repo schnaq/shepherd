@@ -66,13 +66,17 @@ final class AppEnvironment {
     /// The window's toast queue; errors are surfaced here, never printed.
     let toasts = ToastCenter()
     /// Maps sync events to macOS notifications.
-    let notifications = NotificationManager()
+    let notifications: NotificationManager
     /// The delegation sheets: one per pull request, at most one on screen (ADR 0011).
-    let delegation = DelegationCenter()
+    let delegation: DelegationCenter
     /// Posts events to the user's own webhook URL, when they configured one (ADR 0012).
     let webhooks: WebhookDispatcher
     /// Maps Shepherd's events onto webhook deliveries.
     let webhookCoordinator: WebhookCoordinator
+    /// Remembers what automatic delegation already did, across launches (ADR 0016).
+    let autoDelegationStore: AutoDelegationStore
+    /// Decides whether a sweep event starts a delegation on its own (ADR 0016).
+    let autoDelegation: AutoDelegationCoordinator
 
     /// The provider router, rebuilt whenever the intelligence settings change.
     private(set) var intelligence: IntelligenceRouter = .disabled
@@ -96,12 +100,32 @@ final class AppEnvironment {
         self.settings = settings
         self.tokenStore = tokenStore
         self.secretStore = secretStore
+        // Assigned from locals rather than from property defaults, because the coordinators
+        // built further down need them *during* initialisation.
+        let notifications = NotificationManager()
+        self.notifications = notifications
+        let delegation = DelegationCenter()
+        self.delegation = delegation
         let webhooks = WebhookDispatcher()
         self.webhooks = webhooks
         self.webhookCoordinator = WebhookCoordinator(
             dispatcher: webhooks,
             settings: settings,
             secretStore: secretStore
+        )
+        let autoDelegationStore = AutoDelegationStore()
+        self.autoDelegationStore = autoDelegationStore
+        self.autoDelegation = AutoDelegationCoordinator(
+            settings: settings,
+            delegation: delegation,
+            store: autoDelegationStore,
+            notify: { payload in
+                // Detached like the webhook dispatch: asking for notification authorisation
+                // must not sit in the middle of the sync's event loop.
+                Task { [notifications] in
+                    await notifications.present(payload)
+                }
+            }
         )
         refreshIntelligence()
     }
@@ -165,6 +189,9 @@ final class AppEnvironment {
             }
         }
         settings.clearAccount()
+        // The ledger names pull requests of the account that just signed out, and keeping it
+        // would let a rule refuse to fire for a pull request the next account re-imports.
+        autoDelegation.reset()
     }
 
     private func startSession(for account: Account) async throws {
@@ -194,6 +221,16 @@ final class AppEnvironment {
         // Fire-and-forget by construction: the coordinator spawns its own task and swallows
         // every failure, so a broken webhook cannot slow down or break the sync (ADR 0012).
         webhookCoordinator.handle(event, database: session?.database)
+        // Opt-in and off by default; with no rule armed this is one Bool read (ADR 0016). The
+        // coordinator decides and reserves the slot, the start goes through the same
+        // `startDelegation` a button press uses.
+        if let plan = autoDelegation.plan(for: event) {
+            startDelegation(
+                .pullRequest(plan.pullRequest),
+                task: plan.task,
+                automatic: true
+            )
+        }
     }
 
     // MARK: - Actions
@@ -212,22 +249,51 @@ final class AppEnvironment {
     ///
     /// A delegation already running for the same pull request is revealed rather than
     /// replaced — one worktree per pull request, one run at a time.
-    /// - Parameter context: What the delegation is about.
-    func startDelegation(_ context: DelegationContext) {
-        delegation.open(
+    ///
+    /// An automatic start (ADR 0016) takes the same path with `automatic: true`: it runs without
+    /// a sheet, is marked as automatic wherever it shows up, and is otherwise identical — same
+    /// worktree isolation, same guardrails, same "Shepherd never pushes".
+    /// - Parameters:
+    ///   - context: What the delegation is about.
+    ///   - task: A prefilled task text, replacing the default. Used by automatic starts.
+    ///   - automatic: Whether a rule asked for this rather than the user.
+    func startDelegation(
+        _ context: DelegationContext,
+        task: String? = nil,
+        automatic: Bool = false
+    ) {
+        let onDidPush: @MainActor () async -> Void = { [weak self] in
+            // The agent's commits are on the pull request now; refresh so the review screen
+            // shows the new head instead of the one the user delegated from.
+            await self?.syncNow()
+        }
+        let onDidFinish: @MainActor (DelegationOutcome) -> Void = { [weak self] outcome in
+            guard let self else { return }
+            self.webhookCoordinator.handle(outcome, database: self.session?.database)
+        }
+
+        if automatic {
+            delegation.startAutomatically(
+                context: context,
+                task: task ?? DelegationPrompt.defaultTask(for: context),
+                settings: settings,
+                toasts: toasts,
+                onDidPush: onDidPush,
+                onDidFinish: onDidFinish
+            )
+            return
+        }
+
+        let model = delegation.open(
             context: context,
             settings: settings,
             toasts: toasts,
-            onDidPush: { [weak self] in
-                // The agent's commits are on the pull request now; refresh so the review screen
-                // shows the new head instead of the one the user delegated from.
-                await self?.syncNow()
-            },
-            onDidFinish: { [weak self] outcome in
-                guard let self else { return }
-                self.webhookCoordinator.handle(outcome, database: self.session?.database)
-            }
+            onDidPush: onDidPush,
+            onDidFinish: onDidFinish
         )
+        if let task, !model.isBusy {
+            model.task = task
+        }
     }
 
     /// Applies the stored appearance preference to the whole app.

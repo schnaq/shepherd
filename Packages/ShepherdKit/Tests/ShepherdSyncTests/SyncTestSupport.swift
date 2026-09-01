@@ -242,7 +242,8 @@ enum SyncFixtures {
         updatedAt: TimeInterval = 0,
         headRefOid: String = "head-1",
         relations: Set<Relation> = [.reviewRequested],
-        checkState: CheckRollup.State? = nil
+        checkState: CheckRollup.State? = nil,
+        reviewDecision: ReviewDecision? = nil
     ) -> PullRequestSummary {
         PullRequestSummary(
             id: id,
@@ -259,7 +260,7 @@ enum SyncFixtures {
             headRefName: "claude/branch-\(number)",
             headRefOid: headRefOid,
             baseRefName: "main",
-            reviewDecision: nil,
+            reviewDecision: reviewDecision,
             checkRollup: checkState.map { CheckRollup(state: $0, total: 1) },
             myRelation: relations,
             labels: [],

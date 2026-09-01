@@ -39,6 +39,10 @@ struct DelegationOutcome: Sendable, Equatable {
     var changedFileCount: Int
     /// A short machine-readable reason, when there is one.
     var message: String?
+    /// Whether a rule started this run rather than the user (ADR 0016).
+    ///
+    /// Defaults to `false`: a delegation is the user's unless something says otherwise.
+    var wasAutomatic: Bool = false
     /// When the run ended.
     var at: Date
 }
@@ -106,6 +110,12 @@ final class DelegationModel: Identifiable {
     let agentName: String
     /// The guardrails, shown above the Start button.
     let configuration: AgentCLIConfiguration
+    /// Whether a rule started this delegation rather than the user (ADR 0016).
+    ///
+    /// Only ever set at construction: what started a run is a fact about it, and re-running it
+    /// from the sheet does not turn an automatic delegation into a manual one — the badge keeps
+    /// saying where it came from.
+    let isAutomatic: Bool
 
     /// The editable task text. Shepherd's preamble is prepended when the run starts.
     var task: String
@@ -154,6 +164,7 @@ final class DelegationModel: Identifiable {
     ///   - readiness: Whether it can run at all.
     ///   - runner: The agent CLI seam.
     ///   - worktree: The worktree seam; `nil` when no checkout is configured.
+    ///   - isAutomatic: Whether a rule started this delegation (ADR 0016).
     ///   - toasts: Where failures are surfaced.
     ///   - onDidPush: Called after a successful push, so the app can re-sync the pull request.
     ///   - onDidFinish: Called once when the run reaches a terminal state (ADR 0012).
@@ -163,6 +174,7 @@ final class DelegationModel: Identifiable {
         readiness: Readiness,
         runner: any AgentRunning,
         worktree: GitWorktree?,
+        isAutomatic: Bool = false,
         toasts: ToastCenter? = nil,
         onDidPush: (@MainActor () async -> Void)? = nil,
         onDidFinish: (@MainActor (DelegationOutcome) -> Void)? = nil
@@ -173,6 +185,7 @@ final class DelegationModel: Identifiable {
         self.agentName = configuration.kind.displayName
         self.runner = runner
         self.worktree = worktree
+        self.isAutomatic = isAutomatic
         self.toasts = toasts
         self.onDidPush = onDidPush
         self.onDidFinish = onDidFinish
@@ -255,6 +268,14 @@ final class DelegationModel: Identifiable {
             self.session = session
             self.state = .running
             self.append(.note, String(localized: "Running \(self.agentName) in \(worktree.directory.lastPathComponent)"))
+            if self.isAutomatic {
+                // A run nobody pressed a button for says so in its own transcript, not only in
+                // the header badge and the notification (ADR 0016).
+                self.append(
+                    .note,
+                    String(localized: "Started automatically by a delegation rule. Nothing is pushed.")
+                )
+            }
 
             for await event in session.events {
                 self.apply(event)
@@ -362,6 +383,7 @@ final class DelegationModel: Identifiable {
                 durationSeconds: Int(elapsed.rounded()),
                 changedFileCount: worktreeStatus?.changedPaths.count ?? 0,
                 message: message,
+                wasAutomatic: isAutomatic,
                 at: Date()
             )
         )

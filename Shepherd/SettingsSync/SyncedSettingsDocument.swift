@@ -176,30 +176,43 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         }
     }
 
-    /// How the local agent CLI is invoked, and where the clones are (ADR 0011).
+    /// How the local agent CLI is invoked, where the clones are (ADR 0011), and which rules may
+    /// start a delegation unattended (ADR 0016).
     struct DelegationGroup: Codable, Sendable, Equatable {
         /// The command shape and its guardrails. Carries no credential by construction.
         var agentCLI: AgentCLIConfiguration
         /// Repository full name → local clone path.
         var localCheckouts: [String: String]
+        /// The opt-in automatic-delegation rules.
+        ///
+        /// The *rules* travel; the ledger of what a rule already did does not — that is one
+        /// machine's automation state, and sharing a day counter between two Macs would make one
+        /// silently cap the other (ADR 0016).
+        var autoDelegation: AutoDelegationRules
 
         /// Creates the group.
         init(
             agentCLI: AgentCLIConfiguration = AgentCLIConfiguration(),
-            localCheckouts: [String: String] = [:]
+            localCheckouts: [String: String] = [:],
+            autoDelegation: AutoDelegationRules = AutoDelegationRules()
         ) {
             self.agentCLI = agentCLI
             self.localCheckouts = localCheckouts
+            self.autoDelegation = autoDelegation
         }
 
         private enum CodingKeys: String, CodingKey {
-            case agentCLI, localCheckouts
+            case agentCLI, localCheckouts, autoDelegation
         }
 
         init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             agentCLI = container.syncedValue(.agentCLI, default: AgentCLIConfiguration())
             localCheckouts = container.syncedValue(.localCheckouts, default: [:])
+            autoDelegation = container.syncedValue(
+                .autoDelegation,
+                default: AutoDelegationRules()
+            )
         }
     }
 

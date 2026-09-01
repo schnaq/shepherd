@@ -34,7 +34,8 @@ struct WebhookPlan: Sendable, Equatable {
 ///   ``ShepherdSync/SyncEvent/prMerged(_:)`` is not mapped even though the name matches: a
 ///   sweep of *open* pull requests cannot tell a merge from a close, and an automation that
 ///   reacts to "merged" must not be handed a pull request somebody abandoned.
-/// - `delegation.finished` comes from ``DelegationModel``'s terminal state, once per run.
+/// - `delegation.finished` comes from ``DelegationModel``'s terminal state, once per run, and
+///   says whether a rule started it (`details.automatic`, additive under `"v": 1` — ADR 0016).
 /// - `inbox.new_review_request` comes from the sweep's own once-per-pull-request discovery.
 ///
 /// Everything else — thread replies, resolves, "ready for review", CI failures, sync
@@ -188,7 +189,8 @@ final class WebhookCoordinator {
                 return nil
             }
 
-        case .prMerged, .prUpdated, .checksFailedOnOwnPR, .draftConflict, .syncFailed:
+        case .prMerged, .prUpdated, .checksFailedOnOwnPR, .changesRequestedOnOwnPR,
+             .draftConflict, .syncFailed:
             return nil
         }
     }
@@ -203,7 +205,8 @@ final class WebhookCoordinator {
                 agent: outcome.agent,
                 durationSeconds: outcome.durationSeconds,
                 changedFileCount: outcome.changedFileCount,
-                message: outcome.message
+                message: outcome.message,
+                automatic: outcome.wasAutomatic
             ),
             identity: WebhookPullRequest.Identity(
                 prID: outcome.prID,

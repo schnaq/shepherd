@@ -118,6 +118,77 @@ public struct SentMutation: Sendable, Hashable, Codable {
     }
 }
 
+/// CI went red on a pull request the user owns, with what the previous sweep saw.
+///
+/// The "before" half is the whole point. A notification only needs "it is red now", but an
+/// automation needs to know whether Shepherd *watched it turn* red: a first sweep after a fresh
+/// install finds every long-broken pull request in the account at once, and treating those as
+/// news would fire a rule for each of them (ADR 0016).
+///
+/// Flattened to values like ``SyncFailure`` and ``SentMutation``, so ``SyncEvent`` stays
+/// `Hashable` and a test can assert on one directly.
+public struct ChecksFailure: Sendable, Hashable, Codable {
+    /// The pull request, as the sweep knows it.
+    public var summary: PullRequestSummary
+    /// The rolled-up state the previous sweep saw. `nil` means it reported no checks at all —
+    /// or, when ``wasTracked`` is `false`, that there was no previous sweep to ask.
+    public var previousState: CheckRollup.State?
+    /// Whether the previous sweep had this pull request in the inbox at all.
+    public var wasTracked: Bool
+
+    /// Creates a failure notice.
+    /// - Parameters:
+    ///   - summary: The pull request.
+    ///   - previousState: The rolled-up state the previous sweep saw.
+    ///   - wasTracked: Whether the previous sweep had this pull request.
+    public init(
+        summary: PullRequestSummary,
+        previousState: CheckRollup.State?,
+        wasTracked: Bool
+    ) {
+        self.summary = summary
+        self.previousState = previousState
+        self.wasTracked = wasTracked
+    }
+
+    /// Whether Shepherd saw the state *change*, rather than finding it already failing.
+    ///
+    /// The engine only emits on a change of the rolled-up state, so this is exactly "the
+    /// previous sweep knew this pull request".
+    public var isTransition: Bool { wasTracked && previousState != .failure }
+}
+
+/// A reviewer asked for changes on a pull request the user owns, with the decision before.
+///
+/// The same shape and the same reason as ``ChecksFailure``: an automation may act on the edge,
+/// never on the state (ADR 0016).
+public struct ChangesRequested: Sendable, Hashable, Codable {
+    /// The pull request, as the sweep knows it.
+    public var summary: PullRequestSummary
+    /// The review decision the previous sweep saw, if any.
+    public var previousDecision: ReviewDecision?
+    /// Whether the previous sweep had this pull request in the inbox at all.
+    public var wasTracked: Bool
+
+    /// Creates a notice.
+    /// - Parameters:
+    ///   - summary: The pull request.
+    ///   - previousDecision: The review decision the previous sweep saw.
+    ///   - wasTracked: Whether the previous sweep had this pull request.
+    public init(
+        summary: PullRequestSummary,
+        previousDecision: ReviewDecision?,
+        wasTracked: Bool
+    ) {
+        self.summary = summary
+        self.previousDecision = previousDecision
+        self.wasTracked = wasTracked
+    }
+
+    /// Whether Shepherd saw the decision *change*, rather than finding it already so.
+    public var isTransition: Bool { wasTracked && previousDecision != .changesRequested }
+}
+
 /// Something the sync engine noticed that the app may want to tell the user about.
 ///
 /// The app maps these onto macOS notifications; the engine itself has no opinion about
@@ -125,8 +196,14 @@ public struct SentMutation: Sendable, Hashable, Codable {
 public enum SyncEvent: Sendable, Hashable {
     /// A pull request appeared that is waiting for the user's review.
     case newReviewRequest(PullRequestSummary)
-    /// CI turned red on a pull request the user authored.
-    case checksFailedOnOwnPR(PullRequestSummary)
+    /// CI turned red on a pull request the user owns.
+    case checksFailedOnOwnPR(ChecksFailure)
+    /// A reviewer asked for changes on a pull request the user owns.
+    ///
+    /// Emitted on the change of GitHub's aggregate review decision, which is why it is not just
+    /// ``prUpdated(_:)``: "somebody wants something from me" is a different fact from "this row
+    /// moved".
+    case changesRequestedOnOwnPR(ChangesRequested)
     /// A pull request the inbox was tracking is no longer open.
     ///
     /// An open-pull-request sweep cannot distinguish "merged" from "closed"; the app confirms

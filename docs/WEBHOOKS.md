@@ -144,7 +144,8 @@ A local-agent run ended ([ADR 0011](adr/0011-delegate-to-local-agent-cli.md)).
   "agent": "Claude Code",
   "durationSeconds": 72,
   "changedFileCount": 3,
-  "message": null
+  "message": null,
+  "automatic": false
 }
 ```
 
@@ -155,6 +156,7 @@ A local-agent run ended ([ADR 0011](adr/0011-delegate-to-local-agent-cli.md)).
 | `durationSeconds` | int. |
 | `changedFileCount` | Files left changed in the worktree. Shepherd never pushes them for you. |
 | `message` | string \| null — a short reason: Shepherd's own error, or the CLI's result subtype such as `"error_max_turns"`. **Never** the agent's output. |
+| `automatic` | bool — `true` when an auto-delegation rule started the run rather than you ([ADR 0016](adr/0016-auto-delegation-rules.md)). Added later and additive under `"v": 1`: always present, `false` for a run you started. |
 
 ### `inbox.new_review_request`
 

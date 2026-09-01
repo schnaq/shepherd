@@ -222,7 +222,14 @@ final class SettingsSyncTests: XCTestCase {
         cli.permissionMode = .plan
         document.delegation = SyncedSettingsDocument.DelegationGroup(
             agentCLI: cli,
-            localCheckouts: ["schnaq/review": "/Users/someone/code/review"]
+            localCheckouts: ["schnaq/review": "/Users/someone/code/review"],
+            autoDelegation: AutoDelegationRules(
+                isEnabled: true,
+                triggers: [.checksFailed, .changesRequested],
+                promptTemplate: "fix #{number}",
+                maxConcurrent: 2,
+                maxPerDay: 9
+            )
         )
         document.automation = SyncedSettingsDocument.AutomationGroup(
             webhooksEnabled: true,
@@ -612,6 +619,7 @@ final class SettingsSyncTests: XCTestCase {
         // A group that is absent entirely is the local default.
         XCTAssertEqual(document.notifications, SyncedSettingsDocument.NotificationGroup())
         XCTAssertEqual(document.delegation.agentCLI, AgentCLIConfiguration())
+        XCTAssertEqual(document.delegation.autoDelegation, AutoDelegationRules())
         XCTAssertEqual(document.secrets.webhookSecret, "s3cr3tsecret")
         XCTAssertNil(document.secrets.githubToken)
         XCTAssertEqual(document.secrets.count, 1)
@@ -931,6 +939,13 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertNil(settings.agentCLI.maxBudgetUSD)
         XCTAssertEqual(settings.agentCLI.permissionMode, .plan)
         XCTAssertEqual(settings.localCheckouts["schnaq/review"], "/Users/someone/code/review")
+        // The rules travel (ADR 0016); the ledger of what a rule already did deliberately does
+        // not — it is one Mac's automation state.
+        XCTAssertTrue(settings.autoDelegation.isEnabled)
+        XCTAssertEqual(settings.autoDelegation.triggers, [.checksFailed, .changesRequested])
+        XCTAssertEqual(settings.autoDelegation.promptTemplate, "fix #{number}")
+        XCTAssertEqual(settings.autoDelegation.maxConcurrent, 2)
+        XCTAssertEqual(settings.autoDelegation.maxPerDay, 9)
         XCTAssertTrue(settings.webhooksEnabled)
         XCTAssertEqual(settings.webhookURL, "https://n8n.example.com/webhook/shepherd")
         XCTAssertEqual(settings.webhookEvents, [.reviewSubmitted, .pullRequestMerged])
