@@ -49,9 +49,16 @@ The Swift⇄web bridge protocol is a contract: change `src/bridge/protocol.ts`,
 
 - Decisions live in [docs/adr](docs/adr). Changing a decision = new ADR, not a silent edit.
 - UI strings: English, `String(localized:)`. Colors: semantic tokens only (dark/light!).
-- No telemetry, no network calls beyond api.github.com / github.com (and, only when the user
-  configures a key, api.anthropic.com or the OpenAI-compatible endpoint they chose themselves —
-  a preset's base URL is still their choice). This is a hard privacy line.
+- No telemetry, ever. The complete list of hosts Shepherd may contact:
+  - api.github.com / github.com;
+  - only when the user configures a key: api.anthropic.com, or the OpenAI-compatible endpoint
+    they chose themselves (a preset's base URL is still their choice);
+  - only when the user enables webhooks and types a URL: **that URL** (ADR 0012). Outbound only,
+    one destination, off by default, and the payload never carries review text, comment bodies,
+    diffs or agent output.
+
+  Nothing else. This is a hard privacy line: adding a host means a new ADR, a settings control the
+  user has to switch on, and a line here.
 - Conventional commits appreciated (`feat:`, `fix:`, `docs:` …), not enforced.
 
 ## License

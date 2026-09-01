@@ -139,7 +139,8 @@ final class DelegationModelTests: XCTestCase {
         git: RecordingProcessRunner = RecordingProcessRunner(),
         worktree: Bool = true,
         readiness: DelegationModel.Readiness = .ready,
-        onDidPush: (@MainActor () async -> Void)? = nil
+        onDidPush: (@MainActor () async -> Void)? = nil,
+        onDidFinish: (@MainActor (DelegationOutcome) -> Void)? = nil
     ) -> DelegationModel {
         let tree = worktree
             ? GitWorktree(
@@ -157,7 +158,8 @@ final class DelegationModelTests: XCTestCase {
             runner: runner,
             worktree: tree,
             toasts: nil,
-            onDidPush: onDidPush
+            onDidPush: onDidPush,
+            onDidFinish: onDidFinish
         )
     }
 
@@ -371,6 +373,100 @@ final class DelegationModelTests: XCTestCase {
 
         XCTAssertTrue(runner.didCancel)
         XCTAssertEqual(model.state, .cancelled)
+    }
+
+    // MARK: - Outcome announcement (ADR 0012)
+
+    /// A collector for `onDidFinish`, so the tests can assert the announcement fires once and
+    /// carries what an automation needs — and nothing the agent wrote.
+    private final class OutcomeCollector {
+        var outcomes: [DelegationOutcome] = []
+    }
+
+    func testAFinishedRunAnnouncesItselfOnceWithTheAgentAndTheFileCount() async throws {
+        let collector = OutcomeCollector()
+        let runner = ScriptedAgentRunner(
+            events: [
+                .assistantText("Patched it."),
+                .result(AgentRunResult(isError: false, resultText: "Fixed it.", subtype: "success")),
+            ]
+        )
+        let model = makeModel(
+            runner: runner,
+            git: gitRunnerWithDiffStat(),
+            onDidFinish: { collector.outcomes.append($0) }
+        )
+
+        model.start()
+        await model.runTask?.value
+
+        XCTAssertEqual(collector.outcomes.count, 1)
+        let outcome = try XCTUnwrap(collector.outcomes.first)
+        XCTAssertEqual(outcome.status, .finished)
+        XCTAssertEqual(outcome.prID, "PR_kwDO")
+        XCTAssertEqual(outcome.number, 42)
+        XCTAssertEqual(outcome.repo, RepoRef(owner: "schnaq", name: "review"))
+        XCTAssertEqual(outcome.agent, AgentCLIConfiguration().kind.displayName)
+        XCTAssertEqual(outcome.changedFileCount, 1)
+        // The CLI's machine-readable subtype, never its closing message.
+        XCTAssertEqual(outcome.message, "success")
+        XCTAssertNotEqual(outcome.message, "Fixed it.")
+    }
+
+    func testAnAgentThatReportedAnErrorIsAnnouncedAsFailed() async throws {
+        let collector = OutcomeCollector()
+        let model = makeModel(
+            runner: ScriptedAgentRunner(
+                events: [.result(AgentRunResult(isError: true, subtype: "error_max_turns"))],
+                exitCode: 1
+            ),
+            git: gitRunnerWithDiffStat(),
+            onDidFinish: { collector.outcomes.append($0) }
+        )
+
+        model.start()
+        await model.runTask?.value
+
+        // The sheet still calls this state `finished`; an automation is told `failed`, because
+        // what it wants to know is whether the work got done.
+        XCTAssertEqual(collector.outcomes.map(\.status), [.failed])
+        XCTAssertEqual(collector.outcomes.first?.message, "error_max_turns")
+    }
+
+    func testADelegationShepherdCouldNotRunIsAnnouncedAsFailedWithItsOwnReason() async throws {
+        let collector = OutcomeCollector()
+        let git = RecordingProcessRunner { _ in
+            ProcessResult(status: 128, standardOutput: "", standardError: "fatal: no remote")
+        }
+        let model = makeModel(
+            runner: ScriptedAgentRunner(),
+            git: git,
+            onDidFinish: { collector.outcomes.append($0) }
+        )
+
+        model.start()
+        await model.runTask?.value
+
+        XCTAssertEqual(collector.outcomes.map(\.status), [.failed])
+        XCTAssertEqual(collector.outcomes.first?.message?.contains("no remote"), true)
+        XCTAssertEqual(collector.outcomes.first?.changedFileCount, 0)
+    }
+
+    func testACancelledRunIsAnnouncedAsCancelled() async throws {
+        let collector = OutcomeCollector()
+        let runner = HangingAgentRunner()
+        let model = makeModel(
+            runner: runner,
+            onDidFinish: { collector.outcomes.append($0) }
+        )
+        model.start()
+        await waitUntil { model.state == .running }
+
+        model.cancel()
+        await model.runTask?.value
+
+        XCTAssertEqual(collector.outcomes.map(\.status), [.cancelled])
+        XCTAssertNil(collector.outcomes.first?.message)
     }
 
     // MARK: - Publishing

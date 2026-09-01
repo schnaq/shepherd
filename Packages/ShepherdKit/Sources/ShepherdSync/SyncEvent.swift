@@ -62,6 +62,62 @@ public struct DraftConflict: Sendable, Hashable, Codable {
     }
 }
 
+/// A queued mutation that has now actually reached GitHub.
+///
+/// The outbox is the only write path (ADR 0006), which makes "the drain sent this row" the one
+/// moment where an action is *definitely* done rather than merely intended. Anything that must
+/// only happen after a real success — an outbound webhook, for instance (ADR 0012) — hangs off
+/// this event instead of off the enqueue.
+///
+/// Flattened to values, like ``SyncFailure`` and ``DraftConflict``, so ``SyncEvent`` stays
+/// `Hashable` and a test can assert on one directly. It deliberately carries only the pull
+/// request's identity: the engine does not spend a fetch to describe an event, and a consumer
+/// that wants the title looks the row up in the database it is already reading from.
+public struct SentMutation: Sendable, Hashable, Codable {
+    /// Which mutation was sent.
+    public enum Kind: Sendable, Hashable, Codable {
+        /// A review was submitted. A `nil` verdict means it was parked as a GitHub pending
+        /// review; the count is how many inline comments went with it.
+        case reviewSubmitted(verdict: ReviewVerdict?, inlineCommentCount: Int)
+        /// A reply was posted to an existing review comment.
+        case replyPosted
+        /// A review thread was resolved.
+        case threadResolved
+        /// A review thread was reopened.
+        case threadUnresolved
+        /// The pull request was merged, with the method GitHub was asked for.
+        case merged(method: String)
+        /// The pull request was taken out of draft state.
+        case markedReadyForReview
+    }
+
+    /// The pull request's node id.
+    public var prID: String
+    /// The repository.
+    public var repo: RepoRef
+    /// The pull request number.
+    public var number: Int
+    /// What was sent.
+    public var kind: Kind
+    /// When the drain sent it.
+    public var sentAt: Date
+
+    /// Creates a record of a sent mutation.
+    /// - Parameters:
+    ///   - prID: The pull request's node id.
+    ///   - repo: The repository.
+    ///   - number: The pull request number.
+    ///   - kind: What was sent.
+    ///   - sentAt: When the drain sent it.
+    public init(prID: String, repo: RepoRef, number: Int, kind: Kind, sentAt: Date) {
+        self.prID = prID
+        self.repo = repo
+        self.number = number
+        self.kind = kind
+        self.sentAt = sentAt
+    }
+}
+
 /// Something the sync engine noticed that the app may want to tell the user about.
 ///
 /// The app maps these onto macOS notifications; the engine itself has no opinion about
@@ -80,6 +136,8 @@ public enum SyncEvent: Sendable, Hashable {
     case prUpdated(PullRequestSummary)
     /// A queued review could not be submitted; the user has to decide what to do.
     case draftConflict(DraftConflict)
+    /// An outbox row reached GitHub. The one point where a write is known to have succeeded.
+    case mutationSent(SentMutation)
     /// A sync step failed.
     case syncFailed(SyncFailure)
 }

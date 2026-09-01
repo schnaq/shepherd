@@ -64,6 +64,8 @@ struct KeychainSecretStore: Sendable {
         static let anthropicAPIKey = "intelligence.anthropic.apiKey"
         /// The API key of the user-configured OpenAI-compatible endpoint.
         static let openAICompatibleAPIKey = "intelligence.openaiCompatible.apiKey"
+        /// The shared secret webhook bodies are signed with (ADR 0012).
+        static let webhookSecret = "automation.webhook.secret"
     }
 
     private let service: String

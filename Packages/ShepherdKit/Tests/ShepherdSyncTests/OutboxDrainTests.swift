@@ -143,6 +143,103 @@ final class OutboxDrainTests: XCTestCase {
         XCTAssertEqual(headChecks, ["schnaq/review#1"])
     }
 
+    // MARK: - Announcing what actually reached GitHub (ADR 0012)
+
+    func testEverySentMutationMapsToAKind() {
+        XCTAssertEqual(
+            SyncEngine.sentKind(for: .submitReview(draft(headOid: "head-1"))),
+            .reviewSubmitted(verdict: .approve, inlineCommentCount: 1)
+        )
+        XCTAssertEqual(
+            SyncEngine.sentKind(
+                for: .submitReview(ReviewDraft(prID: "PR_1", basedOnHeadOid: ""))
+            ),
+            .reviewSubmitted(verdict: nil, inlineCommentCount: 0),
+            "a draft parked as pending still reports what it carried"
+        )
+        XCTAssertEqual(
+            SyncEngine.sentKind(for: .replyToComment(commentDatabaseID: 1, body: "hi")),
+            .replyPosted
+        )
+        XCTAssertEqual(SyncEngine.sentKind(for: .resolveThread(threadID: "T")), .threadResolved)
+        XCTAssertEqual(
+            SyncEngine.sentKind(for: .unresolveThread(threadID: "T")),
+            .threadUnresolved
+        )
+        XCTAssertEqual(
+            SyncEngine.sentKind(for: .merge(method: "rebase", expectedHeadOid: nil)),
+            .merged(method: "rebase")
+        )
+        XCTAssertEqual(SyncEngine.sentKind(for: .markReadyForReview), .markedReadyForReview)
+    }
+
+    func testASubmittedReviewIsAnnouncedWithItsVerdictAndCommentCount() async throws {
+        let github = MockGitHub()
+        await github.setHeadOid("head-1", repo: repo, number: 1)
+        let store = try DatabaseManager.inMemory()
+        let pending = draft(headOid: "head-1")
+        try await store.saveDraft(pending)
+        _ = try await enqueue(.submitReview(pending), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        let sent = sentMutations(in: await drainCollectingEvents(engine))
+
+        XCTAssertEqual(sent.count, 1)
+        XCTAssertEqual(sent.first?.prID, "PR_1")
+        XCTAssertEqual(sent.first?.repo, repo)
+        XCTAssertEqual(sent.first?.number, 1)
+        XCTAssertEqual(
+            sent.first?.kind,
+            .reviewSubmitted(verdict: .approve, inlineCommentCount: 1)
+        )
+        XCTAssertEqual(sent.first?.sentAt, now)
+    }
+
+    func testAMergeIsAnnouncedWithTheMethodItUsed() async throws {
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(.merge(method: "squash", expectedHeadOid: "head-1"), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        let sent = sentMutations(in: await drainCollectingEvents(engine))
+
+        XCTAssertEqual(sent.map(\.kind), [.merged(method: "squash")])
+    }
+
+    func testNothingIsAnnouncedWhenTheMutationDidNotReachGitHub() async throws {
+        // A moved head: the row is parked, so the review never happened and nothing may claim
+        // it did. This is the whole reason the announcement lives in the drain and not at the
+        // point the user pressed the key.
+        let conflicting = MockGitHub()
+        await conflicting.setHeadOid("head-2", repo: repo, number: 1)
+        let conflictStore = try DatabaseManager.inMemory()
+        let pending = draft(headOid: "head-1")
+        try await conflictStore.saveDraft(pending)
+        _ = try await enqueue(.submitReview(pending), in: conflictStore)
+        let conflictEngine = makeEngine(github: conflicting, store: conflictStore)
+
+        let afterConflict = sentMutations(in: await drainCollectingEvents(conflictEngine))
+        XCTAssertTrue(afterConflict.isEmpty)
+
+        // A retryable server error: the row is still queued, so still nothing happened.
+        let failing = MockGitHub()
+        await failing.setHeadOid("head-1", repo: repo, number: 1)
+        await failing.setSubmitError(.server(status: 502, message: "bad gateway"))
+        let failStore = try DatabaseManager.inMemory()
+        _ = try await enqueue(.submitReview(draft(headOid: "head-1")), in: failStore)
+        let failEngine = makeEngine(github: failing, store: failStore)
+
+        let afterFailure = sentMutations(in: await drainCollectingEvents(failEngine))
+        XCTAssertTrue(afterFailure.isEmpty)
+    }
+
+    private func sentMutations(in events: [SyncEvent]) -> [SentMutation] {
+        events.compactMap { event in
+            if case .mutationSent(let mutation) = event { return mutation }
+            return nil
+        }
+    }
+
     // MARK: - Conflict path
 
     func testAMovedHeadBlocksTheSubmitAndSurfacesAConflict() async throws {

@@ -46,6 +46,15 @@ final class SettingsModel {
     /// The model-discovery state.
     private(set) var modelListState: ModelListState = .idle
 
+    /// The webhook signing secret currently in the editor (ADR 0012).
+    ///
+    /// Like ``apiKeyField``, it exists only here and in the Keychain — never in `UserDefaults`.
+    var webhookSecretField = ""
+    /// Whether the Keychain holds a webhook secret.
+    private(set) var hasStoredWebhookSecret = false
+    /// The result of the last "Send test event" run.
+    private(set) var webhookTestState: TestState = .idle
+
     /// Draft fields for a new agent-registry entry.
     var newAgentID = ""
     /// The new entry's display name.
@@ -158,6 +167,48 @@ final class SettingsModel {
         switch kind {
         case .anthropic: return KeychainSecretStore.Key.anthropicAPIKey
         case .openAICompatible: return KeychainSecretStore.Key.openAICompatibleAPIKey
+        }
+    }
+
+    // MARK: - Webhook secret and test delivery (ADR 0012)
+
+    /// Loads the stored webhook secret into the editor.
+    /// - Parameter store: The Keychain secret store.
+    func loadWebhookSecret(store: KeychainSecretStore) {
+        let stored = (try? store.secret(for: KeychainSecretStore.Key.webhookSecret)) ?? nil
+        hasStoredWebhookSecret = !(stored ?? "").isEmpty
+        webhookSecretField = stored ?? ""
+        webhookTestState = .idle
+    }
+
+    /// Writes the editor's webhook secret to the Keychain (or removes it when empty).
+    /// - Parameter store: The Keychain secret store.
+    /// - Returns: An error message on failure.
+    @discardableResult
+    func saveWebhookSecret(store: KeychainSecretStore) -> String? {
+        do {
+            try store.setSecret(webhookSecretField, for: KeychainSecretStore.Key.webhookSecret)
+            hasStoredWebhookSecret = !webhookSecretField.isEmpty
+            return nil
+        } catch {
+            return (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        }
+    }
+
+    /// Posts one test event to the configured URL and reports what came back.
+    ///
+    /// The secret in the editor is used rather than the stored one, so a freshly pasted secret
+    /// can be verified before it is saved — the same courtesy the model picker extends to keys.
+    /// - Parameter coordinator: The webhook coordinator.
+    func sendTestWebhook(coordinator: WebhookCoordinator) async {
+        webhookTestState = .running
+        do {
+            try await coordinator.sendTestEvent(secret: webhookSecretField)
+            webhookTestState = .success(String(localized: "The webhook accepted the test event."))
+        } catch {
+            webhookTestState = .failure(
+                (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            )
         }
     }
 

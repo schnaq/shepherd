@@ -1,7 +1,12 @@
 import ShepherdCore
 import SwiftUI
 
-/// The Settings window: Account, Sync, Agents, Intelligence, Delegation, Appearance.
+/// The Settings window: Account, Sync, Agents, Intelligence, Delegation, Automation,
+/// Appearance.
+///
+/// Webhooks get their own tab rather than a section under Sync: Sync is about keeping the local
+/// cache in step with GitHub, while Automation is about what Shepherd tells the outside world —
+/// a different direction, a different failure mode, and the place the next integration will go.
 struct SettingsView: View {
     @Environment(AppEnvironment.self) private var environment
     @State private var model = SettingsModel()
@@ -22,6 +27,10 @@ struct SettingsView: View {
                         String(localized: "Delegation"),
                         systemImage: "arrow.uturn.backward.badge.clock"
                     )
+                }
+            AutomationSettingsTab(model: model)
+                .tabItem {
+                    Label(String(localized: "Automation"), systemImage: "bolt.horizontal")
                 }
             AppearanceSettingsTab()
                 .tabItem { Label(String(localized: "Appearance"), systemImage: "paintbrush") }

@@ -121,6 +121,17 @@ final class AppSettings {
         )
         self.localCheckouts = defaults.dictionary(forKey: Keys.localCheckouts) as? [String: String]
             ?? [:]
+        self.webhooksEnabled = defaults.object(forKey: Keys.webhookEnabled) as? Bool ?? false
+        self.webhookURL = defaults.string(forKey: Keys.webhookURL) ?? ""
+        // A fresh install subscribes to everything, because the enable toggle is what actually
+        // gates delivery — an install that switches webhooks on should not then have to tick
+        // four boxes before anything arrives.
+        if let stored = defaults.array(forKey: Keys.webhookEvents) as? [String] {
+            self.webhookEvents = Set(stored.compactMap(WebhookEventKind.init(rawValue:)))
+                .intersection(WebhookEventKind.userSelectable)
+        } else {
+            self.webhookEvents = Set(WebhookEventKind.userSelectable)
+        }
     }
 
     // MARK: - Appearance
@@ -271,6 +282,48 @@ final class AppSettings {
         localCheckouts = updated
     }
 
+    // MARK: - Automation (ADR 0012)
+
+    /// Whether Shepherd posts events to the configured webhook URL.
+    ///
+    /// Off on a fresh install, and the only thing that lets any outbound request happen: with
+    /// this false, no event ever leaves the Mac.
+    var webhooksEnabled: Bool {
+        didSet { defaults.set(webhooksEnabled, forKey: Keys.webhookEnabled) }
+    }
+
+    /// The webhook URL, e.g. an n8n Webhook node's production URL.
+    ///
+    /// Stored as typed; ``WebhookConfiguration/destination(_:)`` is what decides whether it is
+    /// usable. No secret lives here — the signing secret is Keychain-only.
+    var webhookURL: String {
+        didSet { defaults.set(webhookURL, forKey: Keys.webhookURL) }
+    }
+
+    /// Which events are subscribed to.
+    var webhookEvents: Set<WebhookEventKind> {
+        didSet {
+            defaults.set(
+                webhookEvents.map(\.rawValue).sorted(),
+                forKey: Keys.webhookEvents
+            )
+        }
+    }
+
+    /// Subscribes to (or unsubscribes from) one event kind.
+    /// - Parameters:
+    ///   - kind: The event kind.
+    ///   - isOn: Whether it should be delivered.
+    func setWebhookEvent(_ kind: WebhookEventKind, isOn: Bool) {
+        var updated = webhookEvents
+        if isOn {
+            updated.insert(kind)
+        } else {
+            updated.remove(kind)
+        }
+        webhookEvents = updated
+    }
+
     // MARK: - Account (never the token — ADR 0004)
 
     /// The login of the signed-in account, if any.
@@ -332,6 +385,9 @@ final class AppSettings {
         static let accountAuthKind = "account.authKind"
         static let agentCLI = "delegation.agentCLI"
         static let localCheckouts = "delegation.localCheckouts"
+        static let webhookEnabled = "automation.webhook.enabled"
+        static let webhookURL = "automation.webhook.url"
+        static let webhookEvents = "automation.webhook.events"
     }
 
     private static func readJSON<Value: Decodable>(

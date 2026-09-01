@@ -29,6 +29,14 @@ the review path — the founder's bar is "never need to open github.com for a ro
       turn/budget caps); command template configurable for other agent CLIs; Shepherd never
       touches agent auth and never auto-pushes
 
+**Automation (ADR 0012)**
+- [x] Outbound webhooks: POST a versioned JSON event to one user-configured URL (n8n-compatible)
+      for `review.submitted`, `pr.merged`, `delegation.finished`, `inbox.new_review_request`;
+      events fire only after the outbox actually sent the mutation (or a delegation reached a
+      terminal state), optional HMAC-SHA256 signature with a Keychain-stored secret, and a
+      failing webhook can never interrupt a review, a merge or a sync. Outbound only —
+      inbound webhooks stay excluded (ADR 0005). Schema: [docs/WEBHOOKS.md](WEBHOOKS.md)
+
 **Intelligence (ADR 0007)**
 - [ ] Tier 1 heuristics: file prioritization, risk hints — always on
 - [ ] Tier 2 on-device PR summaries via Foundation Models (availability-gated)
@@ -51,6 +59,8 @@ the review path — the founder's bar is "never need to open github.com for a ro
   needs tier 2/3)
 - Multiple GitHub accounts; GitHub Enterprise Server base-URL support
 - Menu-bar quick inbox
+- More webhook events (thread replies, resolves, checks turning red) — additive under `"v": 1`
+  (ADR 0012)
 - Issues as a first-class inbox section: browse/triage issues across repos, link/unlink
   issues to PRs, see which agent PRs address which issue — groundwork for "assign an issue
   to an agent" flows

@@ -35,13 +35,15 @@ final class DelegationCenter {
     ///   - settings: Where the CLI configuration and the checkout mapping live.
     ///   - toasts: Where failures are surfaced.
     ///   - onDidPush: Called after a successful push so the caller can re-sync.
+    ///   - onDidFinish: Called once when the run reaches a terminal state (ADR 0012).
     /// - Returns: The model now on screen.
     @discardableResult
     func open(
         context: DelegationContext,
         settings: AppSettings,
         toasts: ToastCenter,
-        onDidPush: (@MainActor () async -> Void)? = nil
+        onDidPush: (@MainActor () async -> Void)? = nil,
+        onDidFinish: (@MainActor (DelegationOutcome) -> Void)? = nil
     ) -> DelegationModel {
         if let existing = models[context.prID], existing.isBusy {
             presented = existing
@@ -75,7 +77,8 @@ final class DelegationCenter {
             runner: AgentCLIRunner(configuration: configuration, executable: executable),
             worktree: worktree,
             toasts: toasts,
-            onDidPush: onDidPush
+            onDidPush: onDidPush,
+            onDidFinish: onDidFinish
         )
         models[context.prID] = model
         presented = model

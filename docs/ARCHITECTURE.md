@@ -14,8 +14,9 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
     Review/                    #   review composer, pending review UI, thread views
     DiffViewer/                #   WKWebView host + bridge (Swift side)
     Delegation/                #   delegate-to-local-agent model + sheet (ADR 0011)
-    Settings/                  #   accounts, agent registry, AI, delegation, appearance
+    Settings/                  #   accounts, agent registry, AI, delegation, automation, theme
     Onboarding/                #   device-flow sign-in, PAT entry
+  Automation/                  #   outbound webhook payload, signing, dispatcher (ADR 0012)
   Intelligence/                #   IntelligenceProvider impls (FoundationModels, Anthropic)
   Support/                     #   AppConfig, keyboard shortcuts, theming, notifications
     AgentCLI/                  #   agent-CLI engine: config, locator, stream parser, worktrees
@@ -122,6 +123,14 @@ only when `updatedAt`/`headRefOid` changed or the user opens it. Emits `SyncEven
 (`.newReviewRequest`, `.checksFailedOnOwnPR`, `.prMerged`, …) that the app maps to macOS
 notifications. Also drains the outbox with staleness re-validation (draft's `basedOnHeadOid`
 vs current head → surface conflict instead of blind submit).
+
+One `SyncEvent` is not about telling the user anything: `.mutationSent(SentMutation)` is yielded
+by the drain **after** a row is recorded as sent, and it is the only place in the system where
+"this write really reached GitHub" is observable. Anything that must not fire on a mere intent —
+outbound webhooks (ADR 0012) — hangs off it rather than off the enqueue. Like `SyncFailure` and
+`DraftConflict` it is flattened to values (pull-request identity plus what was sent), because
+the engine does not spend a fetch to describe an event; a consumer that wants the title reads
+the row from the database it is already reading from.
 
 ## Diff viewer bridge (Swift ⇄ Monaco)
 
@@ -276,6 +285,34 @@ confined to `Intelligence/OnDeviceProvider.swift`, guarded by
 `SystemLanguageModel.default.availability`, and file paths a model invents are dropped before
 they reach the UI.
 
+### Outbound webhooks (app target, ADR 0012)
+
+`Automation/` is one URL the user typed and nothing else: no listener, no port, no inbound half
+(ADR 0005's exclusion is unchanged). It splits the way the delegation feature does — pure value
+types plus one seam:
+
+- `WebhookEvent` / `WebhookPullRequest` / `WebhookEventDetails` are the wire contract, encoded by
+  a single `canonicalEncoder()` (`sortedKeys`, `withoutEscapingSlashes`) so the bytes are a pure
+  function of the value — which is what lets tests pin the schema and lets the signature be
+  computed over exactly what is sent. Optionals are written with `encode` rather than
+  `encodeIfPresent`, so an absent value is an explicit `null` (the same choice
+  `AgentCLIConfiguration` makes). Schema: [docs/WEBHOOKS.md](WEBHOOKS.md).
+- `WebhookSignature` is HMAC-SHA256 over the body via CryptoKit, emitted as
+  `X-Shepherd-Signature: sha256=<hex>` — GitHub's `X-Hub-Signature-256` shape on purpose. The
+  secret is Keychain-only. **CryptoKit is why the whole feature lives in the app target rather
+  than ShepherdKit**, which must keep building on Linux.
+- `WebhookDispatcher` (`@MainActor @Observable`) owns the policy: two attempts, one two-second
+  backoff, ten-second timeout, retries only for 408/429/5xx and transport errors, and a body that
+  is built once so the retry carries the same bytes, signature and delivery id. `deliver` cannot
+  throw — its caller is the sync engine's event loop — and the only trace of a failure is
+  `lastDelivery`, rendered as one line in Settings. `WebhookPosting` is the transport seam, the
+  same pattern as `ModelListing` and `AgentRunning`.
+- `WebhookCoordinator` holds the one interesting decision as a pure function:
+  `plan(for:) -> WebhookPlan?`. `review.submitted`/`pr.merged` map from `.mutationSent`;
+  `delegation.finished` from `DelegationModel`'s terminal state (via `DelegationOutcome`, once per
+  run); `inbox.new_review_request` from the sweep's discovery. `SyncEvent.prMerged` maps to
+  *nothing* — an open-PR sweep cannot tell a merge from a close.
+
 ### Keyboard model
 
 `KeySequenceState` is a pure value type implementing the two-keystroke commands (`r a`, `r x`,
@@ -327,6 +364,9 @@ into the test bundle as a folder reference from `web/diff-viewer/fixtures` so bo
 decode the same bytes; the patch reconstruction; the Markdown sanitiser; the keyboard,
 palette and inbox-ordering logic; the intelligence endpoint layer (preset ↔ base-URL matching,
 `/models` parsing against fixtures, and the settings-side discovery gate through `ModelListing`);
-and the delegation engine (stream-event fixtures, argv
-construction, template splitting, git command sequences, state transitions). The web bundle is likewise added to the app target as a
+the delegation engine (stream-event fixtures, argv
+construction, template splitting, git command sequences, state transitions); and the webhook
+layer (payload schema against decoded JSON, the HMAC against the RFC 4231 vector, URL
+validation, the retry policy through the `WebhookPosting` seam, and the event mapping). The web
+bundle is likewise added to the app target as a
 folder reference (`Shepherd/Resources/DiffViewer`) so `index.html` keeps its relative links.

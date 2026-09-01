@@ -54,6 +54,10 @@ final class AppEnvironment {
     let notifications = NotificationManager()
     /// The delegation sheets: one per pull request, at most one on screen (ADR 0011).
     let delegation = DelegationCenter()
+    /// Posts events to the user's own webhook URL, when they configured one (ADR 0012).
+    let webhooks: WebhookDispatcher
+    /// Maps Shepherd's events onto webhook deliveries.
+    let webhookCoordinator: WebhookCoordinator
 
     /// The provider router, rebuilt whenever the intelligence settings change.
     private(set) var intelligence: IntelligenceRouter = .disabled
@@ -77,6 +81,13 @@ final class AppEnvironment {
         self.settings = settings
         self.tokenStore = tokenStore
         self.secretStore = secretStore
+        let webhooks = WebhookDispatcher()
+        self.webhooks = webhooks
+        self.webhookCoordinator = WebhookCoordinator(
+            dispatcher: webhooks,
+            settings: settings,
+            secretStore: secretStore
+        )
         refreshIntelligence()
     }
 
@@ -158,6 +169,9 @@ final class AppEnvironment {
         if case .draftConflict(let conflict) = event {
             draftConflict = conflict
         }
+        // Fire-and-forget by construction: the coordinator spawns its own task and swallows
+        // every failure, so a broken webhook cannot slow down or break the sync (ADR 0012).
+        webhookCoordinator.handle(event, database: session?.database)
     }
 
     // MARK: - Actions
@@ -181,12 +195,17 @@ final class AppEnvironment {
         delegation.open(
             context: context,
             settings: settings,
-            toasts: toasts
-        ) { [weak self] in
-            // The agent's commits are on the pull request now; refresh so the review screen
-            // shows the new head instead of the one the user delegated from.
-            await self?.syncNow()
-        }
+            toasts: toasts,
+            onDidPush: { [weak self] in
+                // The agent's commits are on the pull request now; refresh so the review screen
+                // shows the new head instead of the one the user delegated from.
+                await self?.syncNow()
+            },
+            onDidFinish: { [weak self] outcome in
+                guard let self else { return }
+                self.webhookCoordinator.handle(outcome, database: self.session?.database)
+            }
+        )
     }
 
     /// Applies the stored appearance preference to the whole app.

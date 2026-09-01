@@ -87,7 +87,9 @@ final class NotificationManager {
                 String(localized: "Review not sent · \(conflict.repo.fullName)#\(conflict.number)"),
                 String(localized: "The pull request got new commits. Re-review before submitting.")
             )
-        case .prMerged, .prUpdated, .syncFailed:
+        case .prMerged, .prUpdated, .mutationSent, .syncFailed:
+            // A mutation the user just triggered themselves needs no notification — the toast
+            // already said so, and the webhook dispatcher takes it from here (ADR 0012).
             return nil
         }
     }

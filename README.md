@@ -30,6 +30,11 @@ from every repo — without ever opening a browser tab.
   path risk), optionally sharpened by on-device AI.
 - **Delegate back to a local coding agent (Claude Code first-class)** — runs in an isolated
   worktree with turn/budget caps; you review and push.
+- **Outbound webhooks for your own automation.** Point Shepherd at an n8n Webhook node (or any
+  JSON endpoint) and get a versioned event when a review is submitted, a pull request is merged,
+  a delegation finishes, or a review request lands — signed with your own HMAC secret if you
+  want. Events fire only after the action really succeeded, and only to the one URL you typed.
+  See [docs/WEBHOOKS.md](docs/WEBHOOKS.md).
 - **On-device intelligence, cloud optional.** PR summaries and triage hints run locally via
   Apple's Foundation Models framework when available. Optionally bring your own API key for
   deeper whole-PR analysis — Anthropic, or any OpenAI-compatible endpoint, with presets for

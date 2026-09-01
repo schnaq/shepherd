@@ -3,6 +3,46 @@ import Foundation
 import Observation
 import ShepherdCore
 
+/// How a delegation ended, flattened to values.
+///
+/// Announced exactly once per run, when ``DelegationModel`` reaches a terminal state — which is
+/// the delegation counterpart to "the outbox actually sent it": the point at which something
+/// really happened rather than was merely started. ``WebhookCoordinator`` is the only consumer
+/// so far (ADR 0012).
+///
+/// It carries no agent output. ``message`` is Shepherd's own reason (a git failure) or the
+/// CLI's machine-readable result subtype (`error_max_turns`), never anything the model wrote.
+struct DelegationOutcome: Sendable, Equatable {
+    /// The three ways a run can end.
+    enum Status: String, Sendable, Equatable, CaseIterable {
+        /// The agent ran to completion without reporting an error.
+        case finished
+        /// The agent reported an error, or Shepherd could not run it at all.
+        case failed
+        /// The user stopped it.
+        case cancelled
+    }
+
+    /// The pull request's node id.
+    var prID: String
+    /// The repository.
+    var repo: RepoRef
+    /// The pull request number.
+    var number: Int
+    /// How it ended.
+    var status: Status
+    /// The agent CLI's display name.
+    var agent: String
+    /// How long the run took, in whole seconds.
+    var durationSeconds: Int
+    /// How many files the agent left changed in the worktree.
+    var changedFileCount: Int
+    /// A short machine-readable reason, when there is one.
+    var message: String?
+    /// When the run ended.
+    var at: Date
+}
+
 /// Drives one delegation: prepare a worktree, run the agent, show what it did, let the user
 /// decide what happens to the result.
 ///
@@ -88,6 +128,7 @@ final class DelegationModel: Identifiable {
     private let runner: any AgentRunning
     private let toasts: ToastCenter?
     private let onDidPush: (@MainActor () async -> Void)?
+    private let onDidFinish: (@MainActor (DelegationOutcome) -> Void)?
 
     /// The run task, so tests (and `deinit`-time cleanup) can await it.
     private(set) var runTask: Task<Void, Never>?
@@ -99,6 +140,9 @@ final class DelegationModel: Identifiable {
     private var lastResult: AgentRunResult?
     private var didCancel = false
     private var startedAt: Date?
+    /// Guards ``onDidFinish`` against firing twice for one run: `cancel()` during the worktree
+    /// step and the run task's own unwinding can both land on the same terminal state.
+    private var didAnnounceOutcome = false
 
     /// One sheet per pull request.
     nonisolated var id: String { context.id }
@@ -112,6 +156,7 @@ final class DelegationModel: Identifiable {
     ///   - worktree: The worktree seam; `nil` when no checkout is configured.
     ///   - toasts: Where failures are surfaced.
     ///   - onDidPush: Called after a successful push, so the app can re-sync the pull request.
+    ///   - onDidFinish: Called once when the run reaches a terminal state (ADR 0012).
     init(
         context: DelegationContext,
         configuration: AgentCLIConfiguration,
@@ -119,7 +164,8 @@ final class DelegationModel: Identifiable {
         runner: any AgentRunning,
         worktree: GitWorktree?,
         toasts: ToastCenter? = nil,
-        onDidPush: (@MainActor () async -> Void)? = nil
+        onDidPush: (@MainActor () async -> Void)? = nil,
+        onDidFinish: (@MainActor (DelegationOutcome) -> Void)? = nil
     ) {
         self.context = context
         self.configuration = configuration
@@ -129,6 +175,7 @@ final class DelegationModel: Identifiable {
         self.worktree = worktree
         self.toasts = toasts
         self.onDidPush = onDidPush
+        self.onDidFinish = onDidFinish
         self.task = DelegationPrompt.defaultTask(for: context)
     }
 
@@ -174,6 +221,7 @@ final class DelegationModel: Identifiable {
     func start() {
         guard canStart, let worktree else { return }
         didCancel = false
+        didAnnounceOutcome = false
         lastResult = nil
         worktreeStatus = nil
         hasPushed = false
@@ -223,6 +271,7 @@ final class DelegationModel: Identifiable {
                 runTask?.cancel()
                 stopTimer()
                 state = .cancelled
+                announce(.cancelled, message: nil)
             }
             return
         }
@@ -255,6 +304,7 @@ final class DelegationModel: Identifiable {
             state = .cancelled
             append(.note, String(localized: "Cancelled. The worktree is left in place."))
             await refreshWorktreeStatus()
+            announce(.cancelled, message: nil)
             return
         }
         // A CLI that does not speak stream-json never sends a result event; the exit code is
@@ -276,6 +326,10 @@ final class DelegationModel: Identifiable {
                 ? String(localized: "The agent stopped with an error.")
                 : String(localized: "The agent finished.")
         )
+        // An agent that reported an error is a *failed* delegation to anything listening, even
+        // though the sheet's state machine calls the state `finished` — the run is over either
+        // way, and what an automation wants to know is whether the work got done.
+        announce(result.isError ? .failed : .finished, message: result.subtype)
     }
 
     private func refreshWorktreeStatus() async {
@@ -288,6 +342,29 @@ final class DelegationModel: Identifiable {
         let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         state = .failed(message: message)
         append(.note, message)
+        announce(.failed, message: message)
+    }
+
+    /// Hands the finished run to whoever asked to be told, exactly once.
+    /// - Parameters:
+    ///   - status: How the run ended.
+    ///   - message: A short reason, when there is one.
+    private func announce(_ status: DelegationOutcome.Status, message: String?) {
+        guard !didAnnounceOutcome, let onDidFinish else { return }
+        didAnnounceOutcome = true
+        onDidFinish(
+            DelegationOutcome(
+                prID: context.prID,
+                repo: context.repo,
+                number: context.number,
+                status: status,
+                agent: agentName,
+                durationSeconds: Int(elapsed.rounded()),
+                changedFileCount: worktreeStatus?.changedPaths.count ?? 0,
+                message: message,
+                at: Date()
+            )
+        )
     }
 
     private func append(_ kind: TranscriptEntry.Kind, _ text: String) {

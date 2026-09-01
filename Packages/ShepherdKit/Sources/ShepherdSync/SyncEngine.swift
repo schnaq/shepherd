@@ -451,6 +451,20 @@ public actor SyncEngine {
                 switch try await execute(item) {
                 case .sent:
                     try await store.markOutboxItemSucceeded(id: item.id)
+                    // Announced only here, after the row is gone: this is the single moment at
+                    // which the mutation is known to have reached GitHub rather than merely
+                    // been queued.
+                    emit(
+                        .mutationSent(
+                            SentMutation(
+                                prID: item.prID,
+                                repo: item.repo,
+                                number: item.number,
+                                kind: Self.sentKind(for: item.action),
+                                sentAt: now()
+                            )
+                        )
+                    )
                 case .conflict(let conflict):
                     try await store.markOutboxItemConflicted(
                         id: item.id,
@@ -558,6 +572,24 @@ public actor SyncEngine {
     }
 
     // MARK: - Helpers
+
+    /// The ``SentMutation/Kind`` an outbox action amounts to once it has been sent.
+    ///
+    /// Pure and `static` so the mapping is covered by the drain tests without an engine.
+    static func sentKind(for action: OutboxAction) -> SentMutation.Kind {
+        switch action {
+        case .submitReview(let draft):
+            return .reviewSubmitted(
+                verdict: draft.verdict,
+                inlineCommentCount: draft.comments.count
+            )
+        case .replyToComment: return .replyPosted
+        case .resolveThread: return .threadResolved
+        case .unresolveThread: return .threadUnresolved
+        case .merge(let method, _): return .merged(method: method)
+        case .markReadyForReview: return .markedReadyForReview
+        }
+    }
 
     private func emit(_ event: SyncEvent) {
         continuation.yield(event)
