@@ -66,6 +66,9 @@ public enum BulkTriageCaveat: String, Sendable, Codable, Hashable, CaseIterable 
     case noChecksConfigured
     /// GitHub has not finished computing mergeability; the merge may still be refused.
     case mergeabilityUnknown
+    /// A local draft carries inline comments anchored to an older commit, so the approval queued
+    /// for this pull request will be parked as a conflict instead of sent.
+    case staleDraftComments
 }
 
 /// One outbox write a plan amounts to, plus the draft that has to be on disk beside it.
@@ -144,7 +147,9 @@ public struct BulkTriagePlan: Sendable, Equatable {
         ///   - mergeMethod: The merge method as GitHub's raw value (`"merge"`, `"squash"`,
         ///     `"rebase"`).
         ///   - existingDraft: The draft already on disk for this pull request, so a queued
-        ///     approval never throws away inline comments the user wrote earlier.
+        ///     approval never throws away inline comments the user wrote earlier. A draft with
+        ///     no comments is re-anchored to this pull request's head; one with comments keeps
+        ///     its anchor and is flagged by ``BulkTriageCaveat/staleDraftComments``.
         ///   - now: The timestamp of the first write.
         /// - Returns: The writes, or an empty array for a skipped entry.
         public func writes(
@@ -217,14 +222,19 @@ public struct BulkTriagePlan: Sendable, Equatable {
     /// - Parameters:
     ///   - action: What the user asked for.
     ///   - pullRequests: The selected rows, in display order.
+    ///   - existingDrafts: Drafts already on disk, keyed by pull-request id. Only used for the
+    ///     ``BulkTriageCaveat/staleDraftComments`` note, so passing none simply omits it.
     /// - Returns: The plan.
     public static func make(
         action: BulkTriageAction,
-        pullRequests: [PullRequestSummary]
+        pullRequests: [PullRequestSummary],
+        existingDrafts: [String: ReviewDraft] = [:]
     ) -> BulkTriagePlan {
         BulkTriagePlan(
             action: action,
-            entries: pullRequests.map { entry(for: $0, action: action) }
+            entries: pullRequests.map {
+                entry(for: $0, action: action, existingDraft: existingDrafts[$0.id])
+            }
         )
     }
 
@@ -297,7 +307,8 @@ public struct BulkTriagePlan: Sendable, Equatable {
 
     private static func entry(
         for pullRequest: PullRequestSummary,
-        action: BulkTriageAction
+        action: BulkTriageAction,
+        existingDraft: ReviewDraft? = nil
     ) -> Entry {
         var steps: [BulkTriageStep] = []
         // An approval GitHub already reports is not worth a second write; "approve & merge"
@@ -315,7 +326,7 @@ public struct BulkTriagePlan: Sendable, Equatable {
         return Entry(
             pullRequest: pullRequest,
             steps: steps,
-            caveats: caveats(for: pullRequest, steps: steps)
+            caveats: caveats(for: pullRequest, steps: steps, existingDraft: existingDraft)
         )
     }
 
@@ -344,7 +355,8 @@ public struct BulkTriagePlan: Sendable, Equatable {
 
     private static func caveats(
         for pullRequest: PullRequestSummary,
-        steps: [BulkTriageStep]
+        steps: [BulkTriageStep],
+        existingDraft: ReviewDraft?
     ) -> [BulkTriageCaveat] {
         var result: [BulkTriageCaveat] = []
         let rollup = pullRequest.checkRollup
@@ -353,6 +365,16 @@ public struct BulkTriagePlan: Sendable, Equatable {
         }
         if steps.contains(.merge), pullRequest.mergeable != .mergeable {
             result.append(.mergeabilityUnknown)
+        }
+        // A comment-free draft is re-anchored to the current head when the verdict is recorded
+        // (``ReviewDraft/verdict(_:on:existing:body:at:)``), so only a draft with comments can
+        // still go out stale — and then the drain parks it. Saying so here is the difference
+        // between the user knowing before the confirm and finding out from an alert afterwards.
+        if steps.contains(.approve),
+           let existingDraft,
+           !existingDraft.comments.isEmpty,
+           existingDraft.isStale(against: pullRequest.headRefOid) {
+            result.append(.staleDraftComments)
         }
         return result
     }

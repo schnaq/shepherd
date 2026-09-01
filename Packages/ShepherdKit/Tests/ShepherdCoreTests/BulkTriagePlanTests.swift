@@ -209,6 +209,93 @@ final class BulkTriagePlanTests: XCTestCase {
         XCTAssertEqual(enqueued, draft)
     }
 
+    func testACommentFreeDraftIsReanchoredToTheHeadTheUserActedOn() throws {
+        // The scenario that used to lose the approval: a bare verdict was drafted on an older
+        // commit, the pull request was pushed to, and it is green again. The draft hangs off no
+        // particular line, so the queued approval is anchored to the head in the dialog —
+        // otherwise the drain would park it as a conflict and nothing would ever be sent.
+        let row = green()
+        let existing = ReviewDraft(
+            prID: row.id,
+            verdict: nil,
+            summaryBody: "Looks fine.",
+            comments: [],
+            basedOnHeadOid: "old000"
+        )
+        let plan = BulkTriagePlan.make(
+            action: .approve,
+            pullRequests: [row],
+            existingDrafts: [row.id: existing]
+        )
+        XCTAssertTrue(try entry(plan, row.id).caveats.isEmpty)
+
+        let writes = plan.writes(mergeMethod: "squash", existingDrafts: [row.id: existing])
+        let draft = try XCTUnwrap(writes.first?.draft)
+        XCTAssertEqual(draft.basedOnHeadOid, row.headRefOid)
+        XCTAssertEqual(draft.summaryBody, "Looks fine.")
+        XCTAssertEqual(draft.verdict, .approve)
+        XCTAssertFalse(draft.isStale(against: row.headRefOid))
+    }
+
+    func testADraftWithCommentsKeepsItsAnchorAndSaysSoBeforeTheConfirm() throws {
+        // The mirror image: inline comments reference lines of the commit they were written on,
+        // so the anchor stays and the drain's staleness check keeps them off the wrong lines.
+        // What changes is that the dialog says it will happen instead of letting the user find
+        // out from an alert afterwards.
+        let row = green()
+        let existing = ReviewDraft(
+            prID: row.id,
+            verdict: nil,
+            summaryBody: "Two nits.",
+            comments: [DraftComment(path: "App.swift", line: 12, body: "Rename this.")],
+            basedOnHeadOid: "old000"
+        )
+        let plan = BulkTriagePlan.make(
+            action: .approve,
+            pullRequests: [row],
+            existingDrafts: [row.id: existing]
+        )
+        let entry = try entry(plan, row.id)
+        XCTAssertEqual(entry.caveats, [.staleDraftComments])
+        // A caveat is a note, not a refusal: the entry still goes ahead.
+        XCTAssertTrue(entry.isEligible)
+
+        let writes = plan.writes(mergeMethod: "squash", existingDrafts: [row.id: existing])
+        let draft = try XCTUnwrap(writes.first?.draft)
+        XCTAssertEqual(draft.basedOnHeadOid, "old000")
+        XCTAssertEqual(draft.comments.count, 1)
+        XCTAssertTrue(draft.isStale(against: row.headRefOid))
+    }
+
+    func testADraftOnTheCurrentHeadIsNotFlaggedAsStale() throws {
+        let row = green()
+        let existing = ReviewDraft(
+            prID: row.id,
+            verdict: nil,
+            comments: [DraftComment(path: "App.swift", line: 12, body: "Rename this.")],
+            basedOnHeadOid: row.headRefOid
+        )
+        let plan = BulkTriagePlan.make(
+            action: .approve,
+            pullRequests: [row],
+            existingDrafts: [row.id: existing]
+        )
+        XCTAssertTrue(try entry(plan, row.id).caveats.isEmpty)
+        // A merge-only run writes no review, so a stale draft is not its problem.
+        let mergeOnly = BulkTriagePlan.make(
+            action: .merge,
+            pullRequests: [green(id: "PR_approved", reviewDecision: .approved)],
+            existingDrafts: [
+                "PR_approved": ReviewDraft(
+                    prID: "PR_approved",
+                    comments: [DraftComment(path: "App.swift", line: 3, body: "…")],
+                    basedOnHeadOid: "old000"
+                ),
+            ]
+        )
+        XCTAssertTrue(try entry(mergeOnly, "PR_approved").caveats.isEmpty)
+    }
+
     func testWritesOfSeveralPullRequestsStayInSelectionOrder() {
         let rows = (1...3).map { green(id: "PR_\($0)", number: $0) }
         let writes = BulkTriagePlan

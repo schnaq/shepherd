@@ -144,6 +144,34 @@ final class BulkTriageOutboxTests: XCTestCase {
         XCTAssertEqual(stored?.summaryBody, existing.summaryBody)
     }
 
+    func testACommentFreeDraftOnAnOlderHeadIsQueuedAgainstTheCurrentOne() async throws {
+        // End to end through the real write path: without the re-anchor this row went into the
+        // outbox pointing at "old000", and the drain parked the approval instead of sending it.
+        let database = try DatabaseManager.inMemory()
+        let row = greenRow(id: "PR_1", number: 1)
+        let existing = ReviewDraft(
+            prID: row.id,
+            summaryBody: "Fine by me.",
+            comments: [],
+            basedOnHeadOid: "old000"
+        )
+        try await database.saveDraft(existing)
+
+        let plan = BulkTriagePlan.make(action: .approve, pullRequests: [row])
+        _ = try await queue(plan, mergeMethod: "squash", into: database, drafts: [row.id: existing])
+
+        let items = try await database.allOutboxItems()
+        let enqueued = try XCTUnwrap(items.first)
+        guard case .submitReview(let queued) = enqueued.action else {
+            XCTFail("expected a review submission")
+            return
+        }
+        XCTAssertEqual(queued.basedOnHeadOid, row.headRefOid)
+        XCTAssertEqual(queued.summaryBody, "Fine by me.")
+        let stored = try await database.fetchDraft(prID: row.id)
+        XCTAssertEqual(stored?.basedOnHeadOid, row.headRefOid)
+    }
+
     /// The batch is one transaction, so an empty plan writes nothing and is not an error.
     func testQueueingAnEmptyPlanIsANoOp() async throws {
         let database = try DatabaseManager.inMemory()

@@ -233,7 +233,14 @@ struct InboxScreen: View {
             return
         }
         bulkAction = action
-        isBulkSheetPresented = true
+        // The drafts of the ticked rows are read *before* the dialog comes up: one of the notes
+        // it shows is "this pull request has draft comments on an older commit", and a note that
+        // arrived after the confirm button would be no warning at all (ADR 0015). One local
+        // query on the rows the user ticked.
+        Task {
+            await model.loadMarkedDrafts()
+            isBulkSheetPresented = true
+        }
     }
 
     private func queueReview(_ verdict: ReviewVerdict) {
@@ -272,6 +279,15 @@ struct SyncStatusView: View {
                 }
             } else {
                 Text(String(localized: "Not synced yet"))
+            }
+            // Parked mutations do not drain by themselves (ADR 0006), so the title bar says so
+            // for as long as they sit there — the conflict alert is only shown once.
+            if session.conflictedOutboxCount > 0 {
+                Text(String(localized: "· \(session.conflictedOutboxCount) not sent"))
+                    .foregroundStyle(Theme.pending)
+                    .help(String(
+                        localized: "Queued reviews that were parked because the pull request moved on. Settings → Sync has the count; open the pull request to check your draft."
+                    ))
             }
         }
         .font(.system(size: 11))

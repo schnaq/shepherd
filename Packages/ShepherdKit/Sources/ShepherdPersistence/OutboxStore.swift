@@ -205,6 +205,21 @@ extension DatabaseManager {
         }
     }
 
+    /// How many mutations are parked because the pull request moved on underneath them.
+    ///
+    /// These are *not* retried on their own (ADR 0006), so unlike the pending count this number
+    /// does not go down by itself: it needs the user. That is what makes it worth showing
+    /// permanently rather than only in the alert the conflict raised once (ADR 0015).
+    public func conflictedOutboxCount() async throws -> Int {
+        try await writer.read { db in
+            try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM outbox WHERE state = ?",
+                arguments: [OutboxState.conflicted.rawValue]
+            ) ?? 0
+        }
+    }
+
     /// Deletes a row outright — the user discarding a conflicted mutation.
     /// - Parameter id: The row's identity.
     public func deleteOutboxItem(id: UUID) async throws {

@@ -108,6 +108,15 @@ public struct ReviewDraft: Sendable, Codable, Hashable, Identifiable {
     /// inbox — or from a bulk-triage run — never throws away inline comments the user already
     /// wrote. The head the user saw is what the draft is anchored to, which is what lets the
     /// drain refuse a review whose pull request moved on (ADR 0006).
+    ///
+    /// A reused draft that carries **no** inline comments is re-anchored to the head this
+    /// verdict is being recorded against: a bare verdict hangs off no particular line, and the
+    /// head the user just acted on is precisely the state they judged. Keeping the older anchor
+    /// meant a pull request that had a comment-free draft and was then pushed to would have its
+    /// approval parked as a conflict on the way out — the review the user asked for never
+    /// reached GitHub. A draft **with** comments keeps its anchor: those comments reference lines
+    /// of the commit they were written on, so the drain's staleness check is the guard that stops
+    /// them landing in the wrong place.
     /// - Parameters:
     ///   - verdict: The verdict to record.
     ///   - summary: The pull request the draft belongs to.
@@ -126,9 +135,20 @@ public struct ReviewDraft: Sendable, Codable, Hashable, Identifiable {
         draft.verdict = verdict
         if !body.isEmpty { draft.summaryBody = body }
         draft.updatedAt = now
-        if draft.basedOnHeadOid.isEmpty {
+        if draft.comments.isEmpty || draft.basedOnHeadOid.isEmpty {
             draft.basedOnHeadOid = summary.headRefOid
         }
         return draft
+    }
+
+    /// Whether submitting this draft would be refused because the pull request moved on.
+    ///
+    /// The same comparison the drain makes before it sends a review, so a caller can *say so*
+    /// before the user commits to a write instead of leaving them to find out from a conflict
+    /// alert (ADR 0006, ADR 0015).
+    /// - Parameter headRefOid: The head the pull request is on now.
+    /// - Returns: `true` when the draft is anchored to a different, non-empty head.
+    public func isStale(against headRefOid: String) -> Bool {
+        !basedOnHeadOid.isEmpty && basedOnHeadOid != headRefOid
     }
 }

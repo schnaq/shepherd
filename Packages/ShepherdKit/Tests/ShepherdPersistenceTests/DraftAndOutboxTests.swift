@@ -236,6 +236,30 @@ final class OutboxStoreTests: XCTestCase {
         XCTAssertTrue(ready.isEmpty, "a conflict needs a human, not a retry")
     }
 
+    func testConflictedRowsAreCountedSeparatelyFromPendingOnes() async throws {
+        // The two counts answer different questions: pending drains by itself, conflicted needs
+        // the user — which is why the UI shows the second one permanently (ADR 0006, ADR 0015).
+        let database = try DatabaseManager.inMemory()
+        let parked = item(action: .submitReview(PersistenceFixtures.draft()))
+        var waiting = item()
+        waiting.createdAt = now.addingTimeInterval(1)
+        try await database.enqueue(parked)
+        try await database.enqueue(waiting)
+        let beforeConflict = try await database.conflictedOutboxCount()
+        XCTAssertEqual(beforeConflict, 0)
+
+        try await database.markOutboxItemConflicted(id: parked.id, reason: "head moved")
+
+        let conflicted = try await database.conflictedOutboxCount()
+        let pending = try await database.pendingOutboxCount()
+        XCTAssertEqual(conflicted, 1)
+        XCTAssertEqual(pending, 1, "a parked row is not waiting to be sent any more")
+
+        try await database.deleteOutboxItem(id: parked.id)
+        let afterDiscard = try await database.conflictedOutboxCount()
+        XCTAssertEqual(afterDiscard, 0)
+    }
+
     func testDiscardingAConflictDeletesIt() async throws {
         let database = try DatabaseManager.inMemory()
         let queued = item()
@@ -510,5 +534,25 @@ final class ObservationTests: XCTestCase {
         var iterator = database.observePendingOutboxCount().makeAsyncIterator()
         let first = await iterator.next()
         XCTAssertEqual(first, 1)
+    }
+
+    func testObserveConflictedOutboxCount() async throws {
+        let database = try DatabaseManager.inMemory()
+        let parked = OutboxItem(
+            prID: "PR_1",
+            repo: PersistenceFixtures.repo,
+            number: 128,
+            action: .resolveThread(threadID: "PRRT_1")
+        )
+        try await database.enqueue(parked)
+        try await database.markOutboxItemConflicted(id: parked.id, reason: "head moved")
+
+        var iterator = database.observeConflictedOutboxCount().makeAsyncIterator()
+        let first = await iterator.next()
+        XCTAssertEqual(first, 1)
+        // Pending and conflicted are disjoint: a parked row is no longer waiting to be sent.
+        var pending = database.observePendingOutboxCount().makeAsyncIterator()
+        let stillPending = await pending.next()
+        XCTAssertEqual(stillPending, 0)
     }
 }

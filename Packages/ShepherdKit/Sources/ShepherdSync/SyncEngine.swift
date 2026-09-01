@@ -545,7 +545,9 @@ public actor SyncEngine {
         case .submitReview(let draft):
             if !draft.basedOnHeadOid.isEmpty {
                 let head = try await github.headRefOid(repo: item.repo, number: item.number)
-                if head != draft.basedOnHeadOid {
+                // The same comparison the bulk-triage dialog warns with, so what the user was
+                // told before the confirm is what actually happens here (ADR 0015).
+                if draft.isStale(against: head) {
                     return .conflict(
                         DraftConflict(
                             prID: item.prID,

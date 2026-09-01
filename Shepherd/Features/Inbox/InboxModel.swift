@@ -244,6 +244,13 @@ final class InboxModel {
     /// panel, the ticks drive bulk triage, and conflating them would make "approve the
     /// selection" mean two different things.
     private(set) var marks = InboxMarkSelection()
+    /// The local drafts of the ticked rows, read when a bulk dialog is about to open.
+    ///
+    /// Only the dialog's notes need them — a draft whose inline comments hang off an older
+    /// commit would be parked instead of sent, and the user is owed that *before* the confirm
+    /// (ADR 0015). The actual writes read the drafts again in `PullRequestActions`, which is the
+    /// read that matters: this one is allowed to be a little behind.
+    private(set) var markedDrafts: [String: ReviewDraft] = [:]
 
     /// The detail of the selected row, from the local cache.
     private(set) var detail: PullRequestDetail?
@@ -523,6 +530,20 @@ final class InboxModel {
     /// Unticks everything.
     func clearMarks() {
         marks.removeAll()
+        markedDrafts = [:]
+    }
+
+    /// Reads the local drafts of the ticked rows, in one query, for the dialog's notes.
+    ///
+    /// A read failure yields no drafts rather than an error, exactly as the write path does: the
+    /// run is still queueable, it simply cannot warn about a stale draft.
+    func loadMarkedDrafts() async {
+        let ids = Array(marks.ids)
+        guard !ids.isEmpty else {
+            markedDrafts = [:]
+            return
+        }
+        markedDrafts = (try? await session.database.fetchDrafts(prIDs: ids)) ?? [:]
     }
 
     /// The plan a bulk action amounts to for what is currently ticked.
@@ -533,7 +554,11 @@ final class InboxModel {
     /// - Returns: The partitioned plan.
     func bulkPlan(for action: BulkTriageAction) -> BulkTriagePlan {
         let rows = visibleRows
-        return BulkTriagePlan.make(action: action, pullRequests: markedRows(in: rows))
+        return BulkTriagePlan.make(
+            action: action,
+            pullRequests: markedRows(in: rows),
+            existingDrafts: markedDrafts
+        )
     }
 
     // MARK: - Detail

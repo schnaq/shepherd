@@ -57,15 +57,31 @@ extension DatabaseManager {
     /// Streams the number of mutations waiting in the outbox.
     /// - Returns: A stream of pending counts.
     public func observePendingOutboxCount() -> AsyncStream<Int> {
+        observeOutboxCount(
+            matching: "state IN ('pending', 'sending')",
+            label: "com.schnaq.shepherd.observation.outbox"
+        )
+    }
+
+    /// Streams the number of mutations parked as conflicted.
+    ///
+    /// A parked mutation never leaves that state on its own (ADR 0006), so this is the number
+    /// that needs the user rather than time.
+    /// - Returns: A stream of conflicted counts.
+    public func observeConflictedOutboxCount() -> AsyncStream<Int> {
+        observeOutboxCount(
+            matching: "state = 'conflicted'",
+            label: "com.schnaq.shepherd.observation.outbox.conflicted"
+        )
+    }
+
+    private func observeOutboxCount(matching predicate: String, label: String) -> AsyncStream<Int> {
         let writer = self.writer
         let observation = ValueObservation.tracking { db -> Int in
-            try Int.fetchOne(
-                db,
-                sql: "SELECT COUNT(*) FROM outbox WHERE state IN ('pending', 'sending')"
-            ) ?? 0
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM outbox WHERE \(predicate)") ?? 0
         }
         return AsyncStream { continuation in
-            let queue = DispatchQueue(label: "com.schnaq.shepherd.observation.outbox")
+            let queue = DispatchQueue(label: label)
             let cancellable = observation.start(
                 in: writer,
                 scheduling: .async(onQueue: queue),

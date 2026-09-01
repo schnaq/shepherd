@@ -82,8 +82,8 @@ retry, no staleness check, and no `mutationSent` event, which is what webhooks h
   that trips GitHub's abuse detection. Nothing had to be added for that; it is what queueing
   through the outbox buys.
 - Per-pull-request failures stay per-pull-request. One 422 does not roll back the other eleven;
-  the row is marked failed or conflicted in the outbox, the existing conflict alert and the
-  pending-count line in Settings surface it, and a stale head parks that one merge instead of
+  the row is marked failed or conflicted in the outbox, the conflict alert and the outbox lines in
+  Settings surface it (see the amendment below), and a stale head parks that one merge instead of
   merging the wrong commit.
 - The plan is the seam that makes the feature reviewable: "which pull requests does this touch"
   is answered by a tested function, and the dialog is a rendering of that function's output.
@@ -95,3 +95,35 @@ retry, no staleness check, and no `mutationSent` event, which is what webhooks h
   (the review screen ignores them: the selection lives in the inbox). `AppSettings` gained the
   remembered merge method, which therefore also travels in `SyncedSettingsDocument` (ADR 0014's
   standing obligation).
+
+## Amendment (2026-09-01): a bulk approval must not be able to disappear
+
+Additive, inside the decision above — the partition, the confirmation dialog and the "n ordinary
+outbox writes" rule are unchanged. Two things the first version got wrong about the *combination*
+of bulk triage and local drafts.
+
+**A comment-free draft is re-anchored to the head the user acted on.** A one-click verdict reuses
+an existing draft so it never throws away inline comments (`ReviewDraft.verdict(_:on:existing:…)`).
+That reuse also kept the draft's old `basedOnHeadOid`, which produced a silent loss: a pull request
+with a bare local draft written on head A, pushed to (head B) and green again, would be bulk-
+approved with the row still anchored to A — and the drain would park the review as a conflict
+without ever sending it. A draft with no inline comments hangs off no particular line, so it is
+now re-anchored to the head shown in the dialog, which is the state the user actually judged. A
+draft **with** comments keeps its anchor: those comments reference lines of the commit they were
+written on, and the staleness check is protection there, not a bug.
+
+**And where the anchor is kept, the dialog says so.** Such an entry carries a new caveat,
+`staleDraftComments` ("draft comments on an older commit"), beside `no checks` and
+`mergeability unknown` — a note, not a refusal, shown *before* the confirm. `BulkTriagePlan.make`
+therefore takes the drafts already on disk, and the inbox reads them for the ticked rows just
+before the dialog opens.
+
+**Parked conflicts are visible after the fact, too.** The sentence above previously claimed "the
+existing conflict alert … surfaces it". It did not, twice over: `AppEnvironment` held exactly one
+`DraftConflict`, so a drain that parked several reviews — which is precisely what a bulk run can
+do — overwrote all but the last, and the pending-count line in Settings counts only `pending` and
+`sending`, never `conflicted`. Both are fixed: the conflicts are queued (`DraftConflictQueue`) and
+shown one alert at a time, in arrival order, with the alert naming how many are still behind it;
+and `conflictedOutboxCount()` backs a standing "n conflicted — needs your attention" line in
+Settings → Sync plus a "n not sent" marker in the title bar. A pending row drains by itself, a
+parked one needs the user, so the second number stays on screen until someone acts on it.

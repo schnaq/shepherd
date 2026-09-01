@@ -30,9 +30,15 @@ final class SignedInSession {
     var lastSyncError: String?
     /// How many mutations are waiting in the outbox.
     var pendingOutboxCount = 0
+    /// How many mutations are parked as conflicted and need the user (ADR 0006).
+    ///
+    /// Kept beside the pending count because it behaves in the opposite way: pending drains by
+    /// itself, conflicted does not, so it stays visible until someone acts on it.
+    var conflictedOutboxCount = 0
 
     private var eventTask: Task<Void, Never>?
     private var outboxTask: Task<Void, Never>?
+    private var conflictTask: Task<Void, Never>?
 
     private init(
         account: Account,
@@ -121,6 +127,13 @@ final class SignedInSession {
             }
         }
 
+        let conflicts = database.observeConflictedOutboxCount()
+        conflictTask = Task { [weak self] in
+            for await count in conflicts {
+                self?.conflictedOutboxCount = count
+            }
+        }
+
         Task { [syncEngine] in
             await syncEngine.start()
         }
@@ -146,6 +159,8 @@ final class SignedInSession {
         eventTask = nil
         outboxTask?.cancel()
         outboxTask = nil
+        conflictTask?.cancel()
+        conflictTask = nil
         await syncEngine.shutdown()
     }
 

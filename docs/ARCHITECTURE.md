@@ -295,7 +295,9 @@ the app on top of it (`priority` / `recentlyUpdated` / `oldestFirst`), with a de
 `merge`, `markReadyForReview`). Every one of them enqueues an `OutboxItem` and then asks the
 sync engine to drain, so a queued approval survives a crash, a quit or an offline period. The
 app never calls a `GitHubClient` mutation directly. `SyncEvent.draftConflict` surfaces as an
-alert offering to re-open the review rather than submitting against the wrong commit.
+alert offering to re-open the review rather than submitting against the wrong commit — one alert
+per parked review, queued in `DraftConflictQueue` so a drain that parks several shows all of them,
+with `conflictedOutboxCount()` behind the standing count in Settings → Sync and the title bar.
 
 Bulk triage (ADR 0015) is the same surface used *n* times, on purpose. `PullRequestActions.queue(_:method:)`
 takes a confirmed `BulkTriagePlan`, persists each draft and enqueues each row exactly as the

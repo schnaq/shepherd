@@ -1,4 +1,5 @@
 import ShepherdCore
+import ShepherdSync
 import XCTest
 
 @testable import Shepherd
@@ -232,6 +233,71 @@ final class InteractionTests: XCTestCase {
             BulkTriagePlan.Entry(pullRequest: row, steps: [.approve, .merge]).stepsTitle,
             "approve + merge"
         )
+    }
+
+    // MARK: - Parked conflicts (ADR 0006, ADR 0015)
+
+    private func conflict(prID: String, number: Int) -> DraftConflict {
+        DraftConflict(
+            prID: prID,
+            repo: RepoRef(owner: "schnaq", name: "review"),
+            number: number,
+            expectedHeadOid: "old000",
+            actualHeadOid: "new111"
+        )
+    }
+
+    @MainActor
+    func testEveryParkedReviewIsShownInTurnInsteadOfOverwritingTheLastOne() async throws {
+        let queue = DraftConflictQueue(gap: .zero)
+        queue.raise(conflict(prID: "PR_1", number: 1))
+        queue.raise(conflict(prID: "PR_2", number: 2))
+
+        // A single slot used to keep only the last one, so a bulk run that parked two reviews
+        // told the user about one of them.
+        XCTAssertEqual(queue.current?.prID, "PR_1")
+        XCTAssertEqual(queue.waiting.map(\.prID), ["PR_2"])
+        XCTAssertEqual(queue.count, 2)
+
+        queue.dismiss()
+        // The alert has to actually close before the next one can open, so the next conflict is
+        // raised a beat later rather than swapped in behind the user's back.
+        XCTAssertNil(queue.current)
+        try await waitForCurrent(of: queue, toBe: "PR_2")
+        XCTAssertTrue(queue.waiting.isEmpty)
+
+        queue.dismiss()
+        XCTAssertNil(queue.current)
+        XCTAssertEqual(queue.count, 0)
+    }
+
+    @MainActor
+    func testASecondConflictForTheSamePullRequestIsNotAskedAboutTwice() {
+        // "Approve & merge" parks two rows for one pull request; the alert would say the same
+        // thing about both.
+        let queue = DraftConflictQueue(gap: .zero)
+        queue.raise(conflict(prID: "PR_1", number: 1))
+        queue.raise(conflict(prID: "PR_1", number: 1))
+        queue.raise(conflict(prID: "PR_2", number: 2))
+        queue.raise(conflict(prID: "PR_2", number: 2))
+        XCTAssertEqual(queue.count, 2)
+
+        queue.removeAll()
+        XCTAssertNil(queue.current)
+        XCTAssertEqual(queue.count, 0)
+    }
+
+    /// Waits for the queue to raise the next conflict, without pinning the test to a delay.
+    @MainActor
+    private func waitForCurrent(
+        of queue: DraftConflictQueue,
+        toBe prID: String
+    ) async throws {
+        for _ in 0..<200 {
+            if queue.current?.prID == prID { return }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTFail("the next parked review was never raised")
     }
 
     // MARK: - Relative dates

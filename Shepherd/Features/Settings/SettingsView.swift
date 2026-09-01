@@ -196,6 +196,22 @@ struct SyncSettingsTab: View {
                             : String(localized: "\(session.pendingOutboxCount) mutations waiting to be sent."))
                             .font(.system(size: 12))
                             .foregroundStyle(Theme.textSecondary)
+                        // A parked mutation is never retried on its own (ADR 0006), so it stays
+                        // on screen until someone acts on it — the alert it raised was a moment,
+                        // this is the standing reminder.
+                        if session.conflictedOutboxCount > 0 {
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                Text(String(
+                                    localized: "\(session.conflictedOutboxCount) conflicted — needs your attention."
+                                ))
+                            }
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Theme.pending)
+                            .help(String(
+                                localized: "These pull requests got new commits after the review was queued, so nothing was sent. Open each one and check your draft against the new commit."
+                            ))
+                        }
                         Button(String(localized: "Sync now")) {
                             Task { await environment.syncNow() }
                         }

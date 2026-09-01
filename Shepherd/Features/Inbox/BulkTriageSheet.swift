@@ -286,6 +286,7 @@ extension BulkTriageCaveat {
         switch self {
         case .noChecksConfigured: return String(localized: "no checks")
         case .mergeabilityUnknown: return String(localized: "mergeability unknown")
+        case .staleDraftComments: return String(localized: "draft comments on an older commit")
         }
     }
 
@@ -296,6 +297,8 @@ extension BulkTriageCaveat {
             return String(localized: "The head commit has no checks at all, so there is nothing green to rely on.")
         case .mergeabilityUnknown:
             return String(localized: "GitHub has not finished computing mergeability. The merge may be refused and will then be retried.")
+        case .staleDraftComments:
+            return String(localized: "You have a local draft whose inline comments were written on an older commit. The approval keeps that draft, so it will be parked as a conflict rather than sent — open the pull request to check the comments against the new commit.")
         }
     }
 }

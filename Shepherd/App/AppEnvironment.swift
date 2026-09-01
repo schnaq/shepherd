@@ -39,8 +39,11 @@ final class AppEnvironment {
     var route: Route = .inbox
     /// Whether the ⌘K palette is up.
     var isCommandPaletteVisible = false
-    /// A draft that could not be submitted because the pull request moved on (ADR 0006).
-    var draftConflict: DraftConflict?
+    /// The drafts that could not be submitted because the pull request moved on (ADR 0006).
+    ///
+    /// A queue rather than a single slot: one bulk-triage drain can park several reviews, and
+    /// the user has to see each of them (ADR 0015).
+    let draftConflicts = DraftConflictQueue()
 
     /// A `shepherd://` link that arrived before there was a session to run it (ADR 0013).
     ///
@@ -175,6 +178,8 @@ final class AppEnvironment {
         phase = .signedOut
         // A queued deep link belongs to the account that was signed in.
         clearPendingDeepLink()
+        // So do parked conflicts: they name pull requests of the account that is leaving.
+        draftConflicts.removeAll()
         if let current {
             await current.shutdown()
             do {
@@ -216,7 +221,7 @@ final class AppEnvironment {
 
     private func handle(_ event: SyncEvent) {
         if case .draftConflict(let conflict) = event {
-            draftConflict = conflict
+            draftConflicts.raise(conflict)
         }
         // Fire-and-forget by construction: the coordinator spawns its own task and swallows
         // every failure, so a broken webhook cannot slow down or break the sync (ADR 0012).
