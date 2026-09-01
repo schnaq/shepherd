@@ -40,12 +40,21 @@ from every repo — without ever opening a browser tab.
   what they say. Works from the terminal, Raycast, Shortcuts, a browser bookmark or an n8n
   *Execute Command* node — so an incoming GitHub event can put the right pull request on your
   screen. The CLI only opens URLs: it never talks to GitHub and never sees your token.
+- **Encrypted settings sync across your Macs — your bucket, your passphrase.** Point Shepherd at
+  an S3-compatible bucket you own (STACKIT Object Storage, MinIO, anything) and it stores one
+  object holding *all* of your settings **and** your secrets — GitHub token, AI keys, webhook
+  secret — encrypted on your Mac with AES-256-GCM under a passphrase-derived key (PBKDF2, 600 000
+  iterations). A new Mac with bucket access and the passphrase is fully set up; the bucket operator
+  sees ciphertext and nothing else. No Shepherd account, no server — and no recovery if you lose
+  the passphrase, deliberately. See [ADR 0014](docs/adr/0014-encrypted-settings-sync.md).
 - **On-device intelligence, cloud optional.** PR summaries and triage hints run locally via
   Apple's Foundation Models framework when available. Optionally bring your own API key for
   deeper whole-PR analysis — Anthropic, or any OpenAI-compatible endpoint, with presets for
   EU-hosted Konduit and a local Ollama. The app is fully functional with AI switched off.
 - **Local-first.** Everything lives in a SQLite database on your Mac. GitHub is a sync target,
-  not a backend. No server, no telemetry, no account other than your GitHub login.
+  not a backend. No server, no telemetry, no account other than your GitHub login — and where
+  Shepherd does sync between your own machines, it does it through storage you own, encrypted
+  before it leaves the Mac.
 - **Linear-grade feel.** Command palette (⌘K), `j`/`k` navigation, two-keystroke review
   actions, dark & light mode, native performance.
 

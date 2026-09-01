@@ -66,6 +66,16 @@ struct KeychainSecretStore: Sendable {
         static let openAICompatibleAPIKey = "intelligence.openaiCompatible.apiKey"
         /// The shared secret webhook bodies are signed with (ADR 0012).
         static let webhookSecret = "automation.webhook.secret"
+        /// The access key id of the settings-sync bucket (ADR 0014).
+        static let settingsSyncAccessKeyID = "settingsSync.accessKeyId"
+        /// The secret access key of the settings-sync bucket (ADR 0014).
+        static let settingsSyncSecretAccessKey = "settingsSync.secretAccessKey"
+        /// The sync passphrase, stored **only** when the user opts in (ADR 0014).
+        ///
+        /// It is the one secret in this list that Shepherd would rather not hold at all: it is
+        /// the key to every other secret in the bucket, so remembering it is a checkbox that is
+        /// off by default and clearing the checkbox deletes the item.
+        static let settingsSyncPassphrase = "settingsSync.passphrase"
     }
 
     private let service: String

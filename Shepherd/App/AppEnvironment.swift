@@ -253,6 +253,41 @@ final class AppEnvironment {
         intelligence = IntelligenceRouter(configuration: configuration)
     }
 
+    /// Assembles the surfaces encrypted settings sync needs (ADR 0014).
+    ///
+    /// Built fresh per action rather than held: the agent-registry half only exists while an
+    /// account is signed in, and a context captured at launch would still be pointing at a
+    /// database that has since been erased.
+    /// - Returns: The context to hand ``SettingsSyncModel``.
+    func settingsSyncContext() -> SettingsSyncContext {
+        var reader: (@Sendable () async -> [AgentRegistryEntry])?
+        var writer: (@Sendable ([AgentRegistryEntry]) async -> Void)?
+        if let database = session?.database {
+            reader = { (try? await database.agentRegistryOverrides()) ?? [] }
+            writer = { entries in
+                // A download *replaces* the registry extensions rather than merging into them,
+                // matching what the confirmation dialog promises about the rest of the document:
+                // ids the incoming document does not mention are removed.
+                let existing = (try? await database.agentRegistryOverrides()) ?? []
+                let incoming = Set(entries.map(\.id))
+                for entry in existing where !incoming.contains(entry.id) {
+                    try? await database.deleteAgentRegistryOverride(id: entry.id)
+                }
+                for entry in entries {
+                    try? await database.saveAgentRegistryOverride(entry)
+                }
+            }
+        }
+        return SettingsSyncContext(
+            settings: settings,
+            secrets: secretStore,
+            tokens: tokenStore,
+            signedInLogin: session?.account.login,
+            readAgentOverrides: reader,
+            writeAgentOverrides: writer
+        )
+    }
+
     // MARK: - Menu / palette commands
 
     /// A command raised by the menu bar or the command palette, waiting for the screen that

@@ -14,9 +14,11 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
     Review/                    #   review composer, pending review UI, thread views
     DiffViewer/                #   WKWebView host + bridge (Swift side)
     Delegation/                #   delegate-to-local-agent model + sheet (ADR 0011)
-    Settings/                  #   accounts, agent registry, AI, delegation, automation, theme
+    Settings/                  #   accounts, sync (+ encrypted cross-Mac sync), agents, AI,
+                               #   delegation, automation, theme
     Onboarding/                #   device-flow sign-in, PAT entry
   Automation/                  #   outbound webhook payload, signing, dispatcher (ADR 0012)
+  SettingsSync/                #   encrypted settings document, envelope, SigV4, S3 client (ADR 0014)
   Intelligence/                #   IntelligenceProvider impls (FoundationModels, Anthropic)
   Support/                     #   AppConfig, keyboard shortcuts, theming, notifications
     AgentCLI/                  #   agent-CLI engine: config, locator, stream parser, worktrees
@@ -326,6 +328,49 @@ types plus one seam:
   run); `inbox.new_review_request` from the sweep's discovery. `SyncEvent.prMerged` maps to
   *nothing* — an open-PR sweep cannot tell a merge from a close.
 
+### Encrypted settings sync (app target, ADR 0014)
+
+`SettingsSync/` is the second feature that talks to a host the user typed, and the first that
+sends anything the user would mind losing. It splits the same way `Automation/` does — pure values
+plus one transport seam — and for the same reason: CryptoKit and CommonCrypto are why it is in the
+app target rather than ShepherdKit.
+
+- `SyncedSettingsDocument` is the plaintext: a versioned JSON document with one explicit group per
+  settings area plus `secrets` (GitHub token, the two AI keys, the webhook secret). Decoding is
+  tolerant by construction — unknown fields ignored, absent fields defaulted — so a document
+  written by a newer Shepherd costs an older one only the fields it never had. `v` is the single
+  field that is *not* tolerated.
+- `SettingsEnvelope` is what is uploaded: `{v, kdf{algo,salt,iterations}, cipher{algo,nonce},
+  createdAt, deviceName, payload}`. Its `authenticatedData` is a fixed, hand-specified
+  newline-separated byte string over every field **except** the payload, fed to the AEAD as AAD —
+  so editing the iteration count or the device name in the bucket breaks decryption rather than
+  weakening it. Hand-specified rather than `JSONEncoder` output on purpose: the bytes must be
+  reproducible by a third-party script and across OS versions.
+- `SettingsSyncCrypto` is the whole cryptographic surface: PBKDF2-HMAC-SHA256 (600 000 iterations,
+  32-byte salt) via `CCKeyDerivationPBKDF`, AES-256-GCM via CryptoKit, fresh nonce per upload.
+  Every authentication failure — wrong passphrase, edited metadata, one flipped bit — is the same
+  error, and no plaintext is produced in any of them.
+- `SigV4Signer` is AWS Signature Version 4 as a pure value: it takes a request description and
+  returns strings. It is pinned to the official `aws-sig-v4-test-suite` vectors, which is the
+  point — canonicalisation is where SigV4 goes wrong, and every mistake produces a well-formed
+  signature the server rejects with no explanation.
+- `S3ObjectClient` is `GET`/`PUT`/`HEAD` on **one** object and nothing else: no list, no delete, no
+  multipart. `S3Transporting` is the transport seam (the `WebhookPosting` pattern), so the three
+  requests' signatures are asserted byte for byte without a bucket. `S3ObjectLocation` validates
+  endpoint/bucket/region/prefix into a host and a path; path-style is the default and `https` is
+  the only scheme, with no localhost exception because the object carries the GitHub token.
+- `SettingsSyncApplier` holds capture and apply as deliberate mirror images, so a field that is
+  captured but never applied is visible in review. Applying replaces rather than merges, except
+  that an **absent** secret leaves this Mac's alone. `SettingsSyncContext` gathers the four places
+  the feature reaches into (`UserDefaults`, the secret Keychain items, the GitHub credential, the
+  agent-registry table) so all of it is drivable from tests; the registry half is optional because
+  it only exists while an account is signed in.
+- `SettingsSyncModel` (`@MainActor @Observable`) is the four user-initiated actions and a status
+  line. There is no timer anywhere in the folder: v1 is manual, and a download decrypts *first*
+  and then asks for confirmation, naming the source Mac and the number of secrets. A GitHub token
+  for a login other than the signed-in one is stored but not activated — Settings says a sign-in
+  restart is needed rather than half-swapping the session.
+
 ### Deep links and the `shepherd` CLI (ADR 0013)
 
 `onOpenURL` in `ShepherdApp` is the only entry point, and it hands the URL straight to
@@ -406,9 +451,13 @@ palette and inbox-ordering logic; the intelligence endpoint layer (preset ↔ ba
 the delegation engine (stream-event fixtures, argv
 construction, template splitting, git command sequences, state transitions); the webhook
 layer (payload schema against decoded JSON, the HMAC against the RFC 4231 vector, URL
-validation, the retry policy through the `WebhookPosting` seam, and the event mapping); and the
-app-side half of deep linking (resolving `owner/repo#number` against cached rows, filter token →
-rail state). The `shepherd://` grammar itself is tested in `ShepherdCoreTests` instead, so it
+validation, the retry policy through the `WebhookPosting` seam, and the event mapping); the
+encrypted settings sync (envelope round trip, wrong passphrase and AAD tampering as one defined
+error, KDF parameters — a low iteration count in the tests, the production constant asserted
+separately — SigV4 against the official AWS vectors, the three signed requests byte for byte, the
+document codec with unknown fields, and capture/apply over in-memory secret and token stores);
+and the app-side half of deep linking (resolving `owner/repo#number` against cached rows, filter
+token → rail state). The `shepherd://` grammar itself is tested in `ShepherdCoreTests` instead, so it
 runs on the Linux runner too. The web
 bundle is likewise added to the app target as a
 folder reference (`Shepherd/Resources/DiffViewer`) so `index.html` keeps its relative links.

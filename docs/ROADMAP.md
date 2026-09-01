@@ -41,6 +41,13 @@ the review path — the founder's bar is "never need to open github.com for a ro
       Raycast, Shortcuts or an n8n Execute Command node, which together with outbound webhooks
       closes the automation loop without Shepherd ever listening on a port. The CLI links
       ShepherdCore only: it builds URLs, it never talks to GitHub and never sees a token
+- [x] End-to-end encrypted settings sync across Macs (ADR 0014): one object in a bucket the user
+      owns (STACKIT Object Storage, MinIO, any S3-compatible endpoint), holding every setting
+      *and* every secret — GitHub token, AI keys, webhook secret — so a new Mac with bucket access
+      and the passphrase is fully set up. PBKDF2-HMAC-SHA256 (600 000 iterations) + AES-256-GCM
+      with the envelope metadata as AAD; SigV4 signed by hand for `GET`/`PUT`/`HEAD` on that one
+      object, no AWS SDK. Manual upload/download with a confirmation dialog, no background sync in
+      v1, no recovery if the passphrase is lost — by design
 
 **Intelligence (ADR 0007)**
 - [ ] Tier 1 heuristics: file prioritization, risk hints — always on
@@ -63,6 +70,9 @@ the review path — the founder's bar is "never need to open github.com for a ro
 - Draft AI-assisted review comments & commit/PR message suggestions (explicit founder wish;
   needs tier 2/3)
 - Multiple GitHub accounts; GitHub Enterprise Server base-URL support
+- Automatic settings sync (ADR 0014 deferred it deliberately): needs a conflict story before
+  last-write-wins may touch a document that contains the GitHub token. Candidates: per-Mac objects
+  plus an explicit "adopt from" step, or an `If-Match`/ETag guard with a visible conflict
 - Menu-bar quick inbox
 - More webhook events (thread replies, resolves, checks turning red) — additive under `"v": 1`
   (ADR 0012)

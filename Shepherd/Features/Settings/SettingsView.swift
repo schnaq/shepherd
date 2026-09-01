@@ -10,6 +10,9 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(AppEnvironment.self) private var environment
     @State private var model = SettingsModel()
+    /// The encrypted settings-sync model (ADR 0014). Owned here rather than by the section so
+    /// the passphrase and key fields survive a tab switch within one Settings window.
+    @State private var syncModel = SettingsSyncModel()
     /// Which tab is showing. Every tab is tagged with its ``SettingsDeepLinkTab``, which is
     /// what lets `shepherd://settings/<tab>` land on one (ADR 0013).
     @State private var selection: SettingsDeepLinkTab
@@ -26,7 +29,7 @@ struct SettingsView: View {
             AccountSettingsTab()
                 .tabItem { Label(String(localized: "Account"), systemImage: "person.crop.circle") }
                 .tag(SettingsDeepLinkTab.account)
-            SyncSettingsTab()
+            SyncSettingsTab(syncModel: syncModel)
                 .tabItem { Label(String(localized: "Sync"), systemImage: "arrow.clockwise") }
                 .tag(SettingsDeepLinkTab.sync)
             AgentSettingsTab(model: model)
@@ -138,9 +141,16 @@ struct AccountSettingsTab: View {
 
 // MARK: - Sync
 
-/// Sweep interval and notification toggles.
+/// Sweep interval, notification toggles, and settings sync across Macs (ADR 0014).
+///
+/// The encrypted sync belongs here rather than in its own tab because it is the same subject as
+/// the rest of the page — keeping things in step — just with a different peer: the sweep keeps
+/// this Mac in step with GitHub, the section at the bottom keeps it in step with the user's other
+/// Macs.
 struct SyncSettingsTab: View {
     @Environment(AppEnvironment.self) private var environment
+    /// The encrypted settings-sync model, owned by ``SettingsView``.
+    let syncModel: SettingsSyncModel
 
     var body: some View {
         SettingsPage {
@@ -193,6 +203,8 @@ struct SyncSettingsTab: View {
                     }
                 }
             }
+
+            SettingsSyncSection(model: syncModel)
         }
     }
 

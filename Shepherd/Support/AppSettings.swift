@@ -132,6 +132,21 @@ final class AppSettings {
         } else {
             self.webhookEvents = Set(WebhookEventKind.userSelectable)
         }
+        self.settingsSyncEnabled = defaults.object(forKey: Keys.syncEnabled) as? Bool ?? false
+        self.settingsSyncEndpoint = defaults.string(forKey: Keys.syncEndpoint) ?? ""
+        self.settingsSyncBucket = defaults.string(forKey: Keys.syncBucket) ?? ""
+        self.settingsSyncRegion = defaults.string(forKey: Keys.syncRegion) ?? ""
+        self.settingsSyncKeyPrefix = defaults.string(forKey: Keys.syncPrefix)
+            ?? S3ObjectLocation.defaultPrefix
+        self.settingsSyncAddressing = Self.read(
+            defaults,
+            Keys.syncAddressing,
+            default: S3AddressingStyle.path
+        )
+        self.settingsSyncRemembersPassphrase = defaults
+            .object(forKey: Keys.syncRemembersPassphrase) as? Bool ?? false
+        self.settingsSyncLastUploadAt = defaults.object(forKey: Keys.syncLastUpload) as? Date
+        self.settingsSyncLastDownloadAt = defaults.object(forKey: Keys.syncLastDownload) as? Date
     }
 
     // MARK: - Appearance
@@ -324,6 +339,71 @@ final class AppSettings {
         webhookEvents = updated
     }
 
+    // MARK: - Encrypted settings sync (ADR 0014)
+
+    /// Whether the encrypted settings-sync section is in use.
+    ///
+    /// Off on a fresh install, and the only thing that lets the app talk to a bucket at all:
+    /// with this false, no request is ever built, exactly as ``webhooksEnabled`` gates webhooks.
+    var settingsSyncEnabled: Bool {
+        didSet { defaults.set(settingsSyncEnabled, forKey: Keys.syncEnabled) }
+    }
+
+    /// The S3-compatible endpoint, e.g. `https://object.storage.eu01.onstackit.cloud`.
+    var settingsSyncEndpoint: String {
+        didSet { defaults.set(settingsSyncEndpoint, forKey: Keys.syncEndpoint) }
+    }
+
+    /// The bucket the settings object lives in.
+    var settingsSyncBucket: String {
+        didSet { defaults.set(settingsSyncBucket, forKey: Keys.syncBucket) }
+    }
+
+    /// The signing region, e.g. `eu01`.
+    var settingsSyncRegion: String {
+        didSet { defaults.set(settingsSyncRegion, forKey: Keys.syncRegion) }
+    }
+
+    /// The key prefix the object is stored under; the object itself is always
+    /// ``S3ObjectLocation/objectName``.
+    var settingsSyncKeyPrefix: String {
+        didSet { defaults.set(settingsSyncKeyPrefix, forKey: Keys.syncPrefix) }
+    }
+
+    /// Whether the bucket is addressed path-style or virtual-hosted-style.
+    var settingsSyncAddressing: S3AddressingStyle {
+        didSet { Self.write(defaults, settingsSyncAddressing, Keys.syncAddressing) }
+    }
+
+    /// Whether the passphrase may be kept in the Keychain on this Mac.
+    ///
+    /// Opt-in, and the passphrase itself is *never* written here — only this flag is. Turning it
+    /// off deletes the stored passphrase (``SettingsSyncModel/savePassphrase(context:)``).
+    var settingsSyncRemembersPassphrase: Bool {
+        didSet { defaults.set(settingsSyncRemembersPassphrase, forKey: Keys.syncRemembersPassphrase) }
+    }
+
+    /// When this Mac last uploaded, for the status line.
+    var settingsSyncLastUploadAt: Date? {
+        didSet { defaults.set(settingsSyncLastUploadAt, forKey: Keys.syncLastUpload) }
+    }
+
+    /// When this Mac last applied a download, for the status line.
+    var settingsSyncLastDownloadAt: Date? {
+        didSet { defaults.set(settingsSyncLastDownloadAt, forKey: Keys.syncLastDownload) }
+    }
+
+    /// The validated object location, or `nil` while the fields are incomplete.
+    var settingsSyncLocation: S3ObjectLocation? {
+        try? S3ObjectLocation.resolve(
+            endpointText: settingsSyncEndpoint,
+            bucket: settingsSyncBucket,
+            region: settingsSyncRegion,
+            prefix: settingsSyncKeyPrefix,
+            addressing: settingsSyncAddressing
+        )
+    }
+
     // MARK: - Account (never the token — ADR 0004)
 
     /// The login of the signed-in account, if any.
@@ -388,6 +468,15 @@ final class AppSettings {
         static let webhookEnabled = "automation.webhook.enabled"
         static let webhookURL = "automation.webhook.url"
         static let webhookEvents = "automation.webhook.events"
+        static let syncEnabled = "settingsSync.enabled"
+        static let syncEndpoint = "settingsSync.endpoint"
+        static let syncBucket = "settingsSync.bucket"
+        static let syncRegion = "settingsSync.region"
+        static let syncPrefix = "settingsSync.keyPrefix"
+        static let syncAddressing = "settingsSync.addressing"
+        static let syncRemembersPassphrase = "settingsSync.remembersPassphrase"
+        static let syncLastUpload = "settingsSync.lastUploadAt"
+        static let syncLastDownload = "settingsSync.lastDownloadAt"
     }
 
     private static func readJSON<Value: Decodable>(
