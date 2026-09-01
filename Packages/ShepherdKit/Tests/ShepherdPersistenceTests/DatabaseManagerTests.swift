@@ -166,7 +166,8 @@ final class InboxStoreTests: XCTestCase {
         XCTAssertEqual(Set(inbox.map(\.id)), ["PR_1", "PR_2"], "a drafted PR is not pruned")
         let detail = try await database.fetchPullRequestDetail(id: "PR_1")
         XCTAssertNotNil(detail, "its files must survive too, or the draft has nothing to anchor to")
-        XCTAssertNotNil(try await database.fetchDraft(prID: "PR_1"))
+        let survivingDraft = try await database.fetchDraft(prID: "PR_1")
+        XCTAssertNotNil(survivingDraft)
     }
 
     func testPruningKeepsAPullRequestWithANonTerminalOutboxRow() async throws {
@@ -216,7 +217,8 @@ final class InboxStoreTests: XCTestCase {
 
         try await database.savePullRequestSummaries([])
 
-        XCTAssertEqual(try await database.fetchInbox().map(\.id), ["PR_1"])
+        let remainingIDs = try await database.fetchInbox().map(\.id)
+        XCTAssertEqual(remainingIDs, ["PR_1"])
     }
 
     func testInboxIsOrderedMostRecentlyUpdatedFirst() async throws {

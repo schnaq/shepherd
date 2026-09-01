@@ -433,8 +433,10 @@ final class ConditionalCacheStoreTests: XCTestCase {
             )
         }
 
-        XCTAssertNil(await cache.entry(for: "stale"))
-        XCTAssertNotNil(await cache.entry(for: "fresh"))
+        let staleEntry = await cache.entry(for: "stale")
+        let freshEntry = await cache.entry(for: "fresh")
+        XCTAssertNil(staleEntry)
+        XCTAssertNotNil(freshEntry)
     }
 
     func testTrimmingEnforcesARowCapOldestFirst() async throws {

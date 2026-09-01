@@ -352,7 +352,7 @@ final class ErrorMappingTests: XCTestCase {
 
             do {
                 _ = try await client.submitReview(
-                    ReviewDraft(prID: "PR_1", verdict: verdict, summaryBody: "   "),
+                    ReviewDraft(prID: "PR_1", verdict: verdict, summaryBody: "   ", basedOnHeadOid: "abc123"),
                     repo: repo,
                     number: 128
                 )
@@ -374,7 +374,7 @@ final class ErrorMappingTests: XCTestCase {
         let client = GitHubClient.makeForTesting(transport: transport)
 
         _ = try await client.submitReview(
-            ReviewDraft(prID: "PR_1", verdict: .approve, summaryBody: ""),
+            ReviewDraft(prID: "PR_1", verdict: .approve, summaryBody: "", basedOnHeadOid: "abc123"),
             repo: RepoRef(owner: "schnaq", name: "review"),
             number: 128
         )
@@ -389,7 +389,7 @@ final class ErrorMappingTests: XCTestCase {
         let client = GitHubClient.makeForTesting(transport: transport)
 
         _ = try await client.submitReview(
-            ReviewDraft(prID: "PR_1", verdict: nil, summaryBody: ""),
+            ReviewDraft(prID: "PR_1", verdict: nil, summaryBody: "", basedOnHeadOid: "abc123"),
             repo: RepoRef(owner: "schnaq", name: "review"),
             number: 128
         )

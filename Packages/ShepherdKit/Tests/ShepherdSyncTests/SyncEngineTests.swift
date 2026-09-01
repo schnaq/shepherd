@@ -274,7 +274,7 @@ final class SyncEngineTests: XCTestCase {
             [SyncFixtures.summary(id: "PR_2", number: 2)],
         ])
         let store = try DatabaseManager.inMemory()
-        try await store.saveDraft(ReviewDraft(prID: "PR_1", verdict: .approve))
+        try await store.saveDraft(ReviewDraft(prID: "PR_1", verdict: .approve, basedOnHeadOid: "sha-1"))
         let engine = makeEngine(github: github, store: store)
 
         let emitted = try await events(from: engine) {
