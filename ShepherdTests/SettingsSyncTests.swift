@@ -101,17 +101,16 @@ final class RecordingS3Transport: S3Transporting, @unchecked Sendable {
     }
 
     func perform(_ request: S3ObjectRequest) async throws -> S3ObjectResponse {
-        lock.lock()
-        recorded.append(request)
-        let answer: S3ObjectResponse
-        if answers.isEmpty {
-            answer = S3ObjectResponse(status: 200, headers: [:], body: Data())
-        } else if answers.count > 1 {
-            answer = answers.removeFirst()
-        } else {
-            answer = answers[0]
+        let answer = lock.withLock { () -> S3ObjectResponse in
+            recorded.append(request)
+            if answers.isEmpty {
+                return S3ObjectResponse(status: 200, headers: [:], body: Data())
+            } else if answers.count > 1 {
+                return answers.removeFirst()
+            } else {
+                return answers[0]
+            }
         }
-        lock.unlock()
         if let failure { throw failure }
         return answer
     }

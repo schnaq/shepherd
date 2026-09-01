@@ -185,13 +185,16 @@ enum PersistenceFixtures {
     }
 
     static func draft(prID: String = "PR_1", headRefOid: String = "abc123") -> ReviewDraft {
+        // `draft_comments.localID` is the table's primary key, so two drafts sharing fixed
+        // ids would silently steal each other's rows on save. Fresh ids per call keep drafts
+        // for different pull requests independent, the way production comments are.
         ReviewDraft(
             prID: prID,
             verdict: .requestChanges,
             summaryBody: "Please fix the token handling.",
             comments: [
                 DraftComment(
-                    localID: UUID(uuidString: "11111111-1111-1111-1111-111111111111") ?? UUID(),
+                    localID: UUID(),
                     path: "Sources/Auth/TokenStore.swift",
                     line: 42,
                     side: .right,
@@ -199,7 +202,7 @@ enum PersistenceFixtures {
                     body: "Nit: rename this."
                 ),
                 DraftComment(
-                    localID: UUID(uuidString: "22222222-2222-2222-2222-222222222222") ?? UUID(),
+                    localID: UUID(),
                     path: "Sources/Auth/KeychainTokenStore.swift",
                     line: 20,
                     side: .left,
