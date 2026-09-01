@@ -316,8 +316,20 @@ final class InboxStoreTests: XCTestCase {
             )
         ])
 
-        // …but `/commits/{sha}/check-runs` does not, so a repo on Jenkins reports none.
+        // An earlier detail fetch stored some check runs alongside that rollup.
         var detail = PersistenceFixtures.detail()
+        detail.summary.checkRollup = CheckRollup(
+            state: .failure,
+            total: 2,
+            successCount: 1,
+            failureCount: 1,
+            pendingCount: 0
+        )
+        let previouslyFetchedRuns = detail.checks.count
+        try await database.savePullRequestDetail(detail)
+
+        // …but `/commits/{sha}/check-runs` does not include commit statuses, so a repo
+        // on Jenkins reports none on the next detail fetch.
         detail.summary.checkRollup = nil
         detail.checks = []
         try await database.savePullRequestDetail(detail)
@@ -328,7 +340,11 @@ final class InboxStoreTests: XCTestCase {
         XCTAssertEqual(loaded?.checkRollup?.failureCount, 1)
 
         let stored = try await database.fetchPullRequestDetail(id: detail.id)
-        XCTAssertEqual(stored?.checks.count, 2, "the previously fetched runs are kept too")
+        XCTAssertEqual(
+            stored?.checks.count,
+            previouslyFetchedRuns,
+            "the previously fetched runs are kept too"
+        )
     }
 
     func testADetailWithChecksReplacesTheRollup() async throws {
