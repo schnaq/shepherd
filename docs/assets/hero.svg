@@ -1,0 +1,238 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-label="Shepherd inbox: pull requests from coding agents across every repository, grouped by author, with CI state and review state on every row">
+<defs>
+<linearGradient id="page" x1="0" y1="0" x2="0.6" y2="1"><stop offset="0" stop-color="#0b0c11"/><stop offset="1" stop-color="#15161e"/></linearGradient>
+<linearGradient id="glow" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6e9df2" stop-opacity="0.20"/><stop offset="0.55" stop-color="#8b74d9" stop-opacity="0.09"/><stop offset="1" stop-color="#6e9df2" stop-opacity="0.02"/></linearGradient>
+<clipPath id="win"><rect x="20" y="18" width="1160" height="684" rx="13"/></clipPath>
+</defs>
+<g font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif">
+<rect x="0.0" y="0.0" width="1200.0" height="720.0" fill="url(#page)"/>
+<rect x="16.0" y="15.0" width="1168.0" height="692.0" rx="16" fill="url(#glow)"/>
+<g clip-path="url(#win)">
+<rect x="20.0" y="18.0" width="1160.0" height="684.0" fill="#101116"/>
+<rect x="20.0" y="18.0" width="1160.0" height="40.0" fill="#14161d"/>
+<circle cx="44" cy="38" r="6" fill="#ff5f57"/>
+<circle cx="64" cy="38" r="6" fill="#febc2e"/>
+<circle cx="84" cy="38" r="6" fill="#28c840"/>
+<text x="600.0" y="42.0" font-size="12" fill="#9aa1b2" font-weight="500" text-anchor="middle">Shepherd</text>
+<text x="1138.0" y="42.0" font-size="11" fill="#636b7e" text-anchor="end">Synced 1m ago</text>
+<circle cx="1158" cy="38" r="9" fill="#6e9df2" fill-opacity="0.20"/>
+<text x="1158.0" y="42.0" font-size="10" fill="#8fb3f5" font-weight="600" text-anchor="middle">C</text>
+<path d="M20.0 58.0H1180.0" stroke="#262a35" stroke-width="1"/>
+<rect x="20.0" y="58.0" width="232.0" height="644.0" fill="#14161d"/>
+<path d="M252 58V702" stroke="#262a35" stroke-width="1"/>
+<rect x="32.0" y="70.0" width="208.0" height="32.0" rx="7" fill="#6e9df2" fill-opacity="0.13"/>
+<path d="M44 81.0v4l3-3M44 85.0l-3-3" stroke="#8fb3f5" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+<path d="M39 88.0h10v3.5h-10z" stroke="#8fb3f5" stroke-width="1.4" fill="none"/>
+<text x="58.0" y="90.0" font-size="12.5" fill="#eceef4" font-weight="500">Needs my review</text>
+<text x="232.0" y="90.0" font-size="11.5" fill="#8fb3f5" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">10</text>
+<path d="M40 114.0v8M40 117.0h5a3 3 0 0 0 3-3" stroke="#636b7e" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+<circle cx="40" cy="123.0" r="1.8" fill="#636b7e"/><circle cx="48" cy="113.0" r="1.8" fill="#636b7e"/>
+<text x="58.0" y="122.0" font-size="12.5" fill="#9aa1b2">My pull requests</text>
+<text x="232.0" y="122.0" font-size="11.5" fill="#636b7e" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">4</text>
+<circle cx="44" cy="150.0" r="5.5" stroke="#636b7e" stroke-width="1.4" fill="none"/>
+<path d="M44 147.0v3.5h2.5" stroke="#636b7e" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+<text x="58.0" y="154.0" font-size="12.5" fill="#9aa1b2">Involved</text>
+<text x="232.0" y="154.0" font-size="11.5" fill="#636b7e" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">27</text>
+<path d="M39 182.0l3.5 3.5L49.5 178.0" stroke="#636b7e" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="58.0" y="186.0" font-size="12.5" fill="#9aa1b2">Approved by me</text>
+<text x="232.0" y="186.0" font-size="11.5" fill="#636b7e" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">6</text>
+<text x="44.0" y="227.0" font-size="9.5" fill="#636b7e" font-weight="600" letter-spacing="0.9">AGENTS</text>
+<circle cx="45" cy="250.0" r="3.5" fill="#d9a13c"/>
+<text x="58.0" y="254.0" font-size="12" fill="#9aa1b2">Claude Code</text>
+<text x="232.0" y="254.0" font-size="11.5" fill="#636b7e" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">6</text>
+<circle cx="45" cy="278.0" r="3.5" fill="#7bb8f0"/>
+<text x="58.0" y="282.0" font-size="12" fill="#9aa1b2">GitHub Copilot</text>
+<text x="232.0" y="282.0" font-size="11.5" fill="#636b7e" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">2</text>
+<circle cx="45" cy="306.0" r="3.5" fill="#8b74d9"/>
+<text x="58.0" y="310.0" font-size="12" fill="#9aa1b2">Cursor</text>
+<text x="232.0" y="310.0" font-size="11.5" fill="#636b7e" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">1</text>
+<circle cx="45" cy="334.0" r="3.5" fill="#58c2a9"/>
+<text x="58.0" y="338.0" font-size="12" fill="#9aa1b2">Dependabot</text>
+<text x="232.0" y="338.0" font-size="11.5" fill="#636b7e" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">3</text>
+<text x="44.0" y="377.0" font-size="9.5" fill="#636b7e" font-weight="600" letter-spacing="0.9">REPOSITORIES</text>
+<text x="58.0" y="404.0" font-size="12" fill="#9aa1b2" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace">schnaq/review</text>
+<text x="232.0" y="404.0" font-size="11.5" fill="#636b7e" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">7</text>
+<text x="58.0" y="432.0" font-size="12" fill="#9aa1b2" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace">schnaq/api</text>
+<text x="232.0" y="432.0" font-size="11.5" fill="#636b7e" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">3</text>
+<text x="58.0" y="460.0" font-size="12" fill="#9aa1b2" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace">schnaq/web</text>
+<text x="232.0" y="460.0" font-size="11.5" fill="#636b7e" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">2</text>
+<text x="58.0" y="488.0" font-size="11.5" fill="#636b7e">2 more…</text>
+<circle cx="45" cy="671" r="5.5" stroke="#636b7e" stroke-width="1.4" fill="none"/>
+<circle cx="45" cy="671" r="1.6" fill="#636b7e"/>
+<text x="58.0" y="675.0" font-size="12" fill="#9aa1b2">Settings</text>
+<rect x="253.0" y="58.0" width="927.0" height="54.0" fill="#14161d"/>
+<path d="M252.0 112.0H1180.0" stroke="#262a35" stroke-width="1"/>
+<text x="276.0" y="84.0" font-size="15" fill="#eceef4" font-weight="600">Needs my review</text>
+<text x="276.0" y="101.0" font-size="11" fill="#636b7e">10 pull requests</text>
+<rect x="376.4" y="88.0" width="71.4" height="18.0" rx="5" fill="#6e9df2" fill-opacity="0.13"/>
+<text x="384.4" y="100.6" font-size="10" fill="#6e9df2" font-weight="500">2 selected</text>
+<rect x="1072.0" y="73.0" width="92.0" height="26.0" rx="6" fill="#232733" stroke="#2c3140"/>
+<text x="1083.0" y="90.0" font-size="11" fill="#9aa1b2">Priority</text>
+<path d="M1142 84l3.5 3.5 3.5-3.5" stroke="#636b7e" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<rect x="844.0" y="73.0" width="216.0" height="26.0" rx="6" fill="#232733" stroke="#2c3140"/>
+<rect x="846.0" y="75.0" width="68.0" height="22.0" rx="5" fill="#101116"/>
+<text x="880.0" y="90.0" font-size="10.5" fill="#eceef4" font-weight="500" text-anchor="middle">Agent</text>
+<text x="952.0" y="90.0" font-size="10.5" fill="#636b7e" text-anchor="middle">Repository</text>
+<text x="1024.0" y="90.0" font-size="10.5" fill="#636b7e" text-anchor="middle">Review state</text>
+<rect x="708.0" y="73.0" width="124.0" height="26.0" rx="6" fill="#232733" stroke="#2c3140"/>
+<path d="M721 81.5l7 4.5-7 4.5z" fill="#6e9df2"/>
+<text x="734.0" y="90.0" font-size="11.5" fill="#9aa1b2" font-weight="500">Session · 10</text>
+<text x="276.0" y="129.0" font-size="9.5" fill="#636b7e" font-weight="600" letter-spacing="0.9">CLAUDE CODE</text>
+<text x="371.9" y="129.0" font-size="9.5" fill="#4a5162">· 6 shown</text>
+<rect x="253.0" y="138.0" width="927.0" height="46.0" fill="#6e9df2" fill-opacity="0.11"/>
+<rect x="253.0" y="138.0" width="2.0" height="46.0" fill="#6e9df2"/>
+<rect x="268.0" y="155.0" width="12.0" height="12.0" rx="3" fill="none" stroke="#2c3140"/>
+<circle cx="296" cy="161.0" r="4" fill="#4cc38a"/>
+<text x="312.0" y="165.0" font-size="12" fill="#636b7e" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace">review #128</text>
+<text x="405.8" y="165.5" font-size="13" fill="#eceef4" font-weight="500">Cache the GraphQL sweep between launches</text>
+<rect x="784.0" y="152.0" width="85.9" height="18.0" rx="5" fill="#d9a13c" fill-opacity="0.13"/>
+<text x="792.0" y="164.8" font-size="10.5" fill="#d9a13c" font-weight="500">Claude Code</text>
+<text x="1164.0" y="165.0" font-size="12" fill="#636b7e" text-anchor="end">4m</text>
+<text x="1118.0" y="165.0" font-size="11.5" fill="#f2555a" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">−18</text>
+<text x="1088.6" y="165.0" font-size="11.5" fill="#4cc38a" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">+142</text>
+<rect x="929.3" y="152.0" width="118.8" height="18.0" rx="5" fill="#8fb3f5" fill-opacity="0.13"/>
+<text x="937.3" y="164.8" font-size="10.5" fill="#8fb3f5" font-weight="500">Review requested</text>
+<path d="M252.0 184.0H1180.0" stroke="#191c24" stroke-width="1"/>
+<rect x="268.0" y="201.0" width="12.0" height="12.0" rx="3" fill="none" stroke="#2c3140"/>
+<circle cx="296" cy="207.0" r="4" fill="#f2555a"/>
+<text x="312.0" y="211.0" font-size="12" fill="#636b7e" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace">api #311</text>
+<text x="383.5" y="211.5" font-size="13" fill="#e8eaf0">Split the rate limiter out of GitHubKit</text>
+<rect x="784.0" y="198.0" width="85.9" height="18.0" rx="5" fill="#d9a13c" fill-opacity="0.13"/>
+<text x="792.0" y="210.8" font-size="10.5" fill="#d9a13c" font-weight="500">Claude Code</text>
+<text x="1164.0" y="211.0" font-size="12" fill="#636b7e" text-anchor="end">22m</text>
+<text x="1118.0" y="211.0" font-size="11.5" fill="#f2555a" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">−96</text>
+<text x="1088.6" y="211.0" font-size="11.5" fill="#4cc38a" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">+231</text>
+<rect x="942.6" y="198.0" width="105.5" height="18.0" rx="5" fill="#f2555a" fill-opacity="0.13"/>
+<text x="950.6" y="210.8" font-size="10.5" fill="#f2555a" font-weight="500">2 checks failing</text>
+<path d="M252.0 230.0H1180.0" stroke="#191c24" stroke-width="1"/>
+<rect x="268.0" y="247.0" width="12.0" height="12.0" rx="3" fill="#6e9df2"/>
+<path d="M271 253.0l2.6 2.6 4.2-4.6" stroke="#101116" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="296" cy="253.0" r="4" fill="#4cc38a"/>
+<text x="312.0" y="257.0" font-size="12" fill="#636b7e" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace">review #126</text>
+<text x="405.8" y="257.5" font-size="13" fill="#e8eaf0">Persist the outbox across relaunches</text>
+<rect x="784.0" y="244.0" width="85.9" height="18.0" rx="5" fill="#d9a13c" fill-opacity="0.13"/>
+<text x="792.0" y="256.8" font-size="10.5" fill="#d9a13c" font-weight="500">Claude Code</text>
+<text x="1164.0" y="257.0" font-size="12" fill="#636b7e" text-anchor="end">41m</text>
+<text x="1118.0" y="257.0" font-size="11.5" fill="#f2555a" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">−12</text>
+<text x="1088.6" y="257.0" font-size="11.5" fill="#4cc38a" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">+88</text>
+<rect x="936.5" y="244.0" width="118.8" height="18.0" rx="5" fill="#8fb3f5" fill-opacity="0.13"/>
+<text x="944.5" y="256.8" font-size="10.5" fill="#8fb3f5" font-weight="500">Review requested</text>
+<path d="M252.0 276.0H1180.0" stroke="#191c24" stroke-width="1"/>
+<rect x="268.0" y="293.0" width="12.0" height="12.0" rx="3" fill="none" stroke="#2c3140"/>
+<circle cx="296" cy="299.0" r="4" fill="#f0b429"/>
+<text x="312.0" y="303.0" font-size="12" fill="#636b7e" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace">web #88</text>
+<text x="376.1" y="303.5" font-size="13" fill="#e8eaf0">Dark-mode tokens for the digest card</text>
+<rect x="784.0" y="290.0" width="85.9" height="18.0" rx="5" fill="#d9a13c" fill-opacity="0.13"/>
+<text x="792.0" y="302.8" font-size="10.5" fill="#d9a13c" font-weight="500">Claude Code</text>
+<text x="1164.0" y="303.0" font-size="12" fill="#636b7e" text-anchor="end">1h</text>
+<text x="1118.0" y="303.0" font-size="11.5" fill="#f2555a" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">−7</text>
+<text x="1095.7" y="303.0" font-size="11.5" fill="#4cc38a" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">+58</text>
+<rect x="987.1" y="290.0" width="75.2" height="18.0" rx="5" fill="#f0b429" fill-opacity="0.13"/>
+<text x="995.1" y="302.8" font-size="10.5" fill="#f0b429" font-weight="500">CI running</text>
+<path d="M252.0 322.0H1180.0" stroke="#191c24" stroke-width="1"/>
+<rect x="268.0" y="339.0" width="12.0" height="12.0" rx="3" fill="#6e9df2"/>
+<path d="M271 345.0l2.6 2.6 4.2-4.6" stroke="#101116" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="296" cy="345.0" r="4" fill="#4cc38a"/>
+<text x="312.0" y="349.0" font-size="12" fill="#636b7e" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace">api #309</text>
+<text x="383.5" y="349.5" font-size="13" fill="#e8eaf0">Retry the outbox drain with jitter</text>
+<rect x="784.0" y="336.0" width="85.9" height="18.0" rx="5" fill="#d9a13c" fill-opacity="0.13"/>
+<text x="792.0" y="348.8" font-size="10.5" fill="#d9a13c" font-weight="500">Claude Code</text>
+<text x="1164.0" y="349.0" font-size="12" fill="#636b7e" text-anchor="end">2h</text>
+<text x="1118.0" y="349.0" font-size="11.5" fill="#f2555a" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">−40</text>
+<text x="1088.6" y="349.0" font-size="11.5" fill="#4cc38a" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">+77</text>
+<rect x="984.9" y="336.0" width="70.4" height="18.0" rx="5" fill="#4cc38a" fill-opacity="0.13"/>
+<text x="992.9" y="348.8" font-size="10.5" fill="#4cc38a" font-weight="500">Approved</text>
+<path d="M252.0 368.0H1180.0" stroke="#191c24" stroke-width="1"/>
+<rect x="268.0" y="385.0" width="12.0" height="12.0" rx="3" fill="none" stroke="#2c3140"/>
+<circle cx="296" cy="391.0" r="4" fill="#3a4152"/>
+<text x="312.0" y="395.0" font-size="12" fill="#636b7e" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace">review #124</text>
+<text x="405.8" y="395.5" font-size="13" fill="#e8eaf0">Split the review composer into three views</text>
+<rect x="784.0" y="382.0" width="85.9" height="18.0" rx="5" fill="#d9a13c" fill-opacity="0.13"/>
+<text x="792.0" y="394.8" font-size="10.5" fill="#d9a13c" font-weight="500">Claude Code</text>
+<rect x="875.9" y="382.0" width="45.2" height="18.0" rx="5" fill="#636b7e" fill-opacity="0.13"/>
+<text x="883.9" y="394.8" font-size="10.5" fill="#636b7e" font-weight="500">Draft</text>
+<text x="1164.0" y="395.0" font-size="12" fill="#636b7e" text-anchor="end">3h</text>
+<text x="1118.0" y="395.0" font-size="11.5" fill="#f2555a" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">−120</text>
+<text x="1081.5" y="395.0" font-size="11.5" fill="#4cc38a" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">+301</text>
+<text x="276.0" y="431.0" font-size="9.5" fill="#636b7e" font-weight="600" letter-spacing="0.9">GITHUB COPILOT</text>
+<text x="389.1" y="431.0" font-size="9.5" fill="#4a5162">· 2 shown</text>
+<rect x="268.0" y="457.0" width="12.0" height="12.0" rx="3" fill="none" stroke="#2c3140"/>
+<circle cx="296" cy="463.0" r="4" fill="#4cc38a"/>
+<text x="312.0" y="467.0" font-size="12" fill="#636b7e" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace">review #123</text>
+<text x="405.8" y="467.5" font-size="13" fill="#e8eaf0">Re-run the bridge tests against Monaco 0.54</text>
+<rect x="784.0" y="454.0" width="96.6" height="18.0" rx="5" fill="#7bb8f0" fill-opacity="0.13"/>
+<text x="792.0" y="466.8" font-size="10.5" fill="#7bb8f0" font-weight="500">GitHub Copilot</text>
+<text x="1164.0" y="467.0" font-size="12" fill="#636b7e" text-anchor="end">5h</text>
+<text x="1118.0" y="467.0" font-size="11.5" fill="#f2555a" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">−12</text>
+<text x="1088.6" y="467.0" font-size="11.5" fill="#4cc38a" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">+64</text>
+<rect x="936.5" y="454.0" width="118.8" height="18.0" rx="5" fill="#8fb3f5" fill-opacity="0.13"/>
+<text x="944.5" y="466.8" font-size="10.5" fill="#8fb3f5" font-weight="500">Review requested</text>
+<path d="M252.0 486.0H1180.0" stroke="#191c24" stroke-width="1"/>
+<rect x="268.0" y="503.0" width="12.0" height="12.0" rx="3" fill="none" stroke="#2c3140"/>
+<circle cx="296" cy="509.0" r="4" fill="#4cc38a"/>
+<text x="312.0" y="513.0" font-size="12" fill="#636b7e" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace">infra #45</text>
+<text x="391.0" y="513.5" font-size="13" fill="#e8eaf0">Pin the Linux SQLite headers in CI</text>
+<rect x="784.0" y="500.0" width="96.6" height="18.0" rx="5" fill="#7bb8f0" fill-opacity="0.13"/>
+<text x="792.0" y="512.8" font-size="10.5" fill="#7bb8f0" font-weight="500">GitHub Copilot</text>
+<text x="1164.0" y="513.0" font-size="12" fill="#636b7e" text-anchor="end">8h</text>
+<text x="1118.0" y="513.0" font-size="11.5" fill="#f2555a" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">−3</text>
+<text x="1095.7" y="513.0" font-size="11.5" fill="#4cc38a" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">+12</text>
+<rect x="992.0" y="500.0" width="70.4" height="18.0" rx="5" fill="#4cc38a" fill-opacity="0.13"/>
+<text x="1000.0" y="512.8" font-size="10.5" fill="#4cc38a" font-weight="500">Approved</text>
+<text x="276.0" y="549.0" font-size="9.5" fill="#636b7e" font-weight="600" letter-spacing="0.9">PEOPLE</text>
+<text x="335.1" y="549.0" font-size="9.5" fill="#4a5162">· 2 shown</text>
+<rect x="268.0" y="575.0" width="12.0" height="12.0" rx="3" fill="none" stroke="#2c3140"/>
+<circle cx="296" cy="581.0" r="4" fill="#4cc38a"/>
+<text x="312.0" y="585.0" font-size="12" fill="#636b7e" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace">api #305</text>
+<text x="383.5" y="585.5" font-size="13" fill="#e8eaf0">Rewrite the SigV4 signer without the AWS SDK</text>
+<rect x="784.0" y="572.0" width="67.6" height="18.0" rx="5" fill="#6e9df2" fill-opacity="0.13"/>
+<text x="792.0" y="584.8" font-size="10.5" fill="#6e9df2" font-weight="500">christian</text>
+<text x="1164.0" y="585.0" font-size="12" fill="#636b7e" text-anchor="end">1d</text>
+<text x="1118.0" y="585.0" font-size="11.5" fill="#f2555a" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">−88</text>
+<text x="1088.6" y="585.0" font-size="11.5" fill="#4cc38a" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">+196</text>
+<rect x="923.9" y="572.0" width="124.2" height="18.0" rx="5" fill="#f2555a" fill-opacity="0.13"/>
+<text x="931.9" y="584.8" font-size="10.5" fill="#f2555a" font-weight="500">Changes requested</text>
+<path d="M252.0 604.0H1180.0" stroke="#191c24" stroke-width="1"/>
+<rect x="268.0" y="621.0" width="12.0" height="12.0" rx="3" fill="none" stroke="#2c3140"/>
+<circle cx="296" cy="627.0" r="4" fill="#4cc38a"/>
+<text x="312.0" y="631.0" font-size="12" fill="#636b7e" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace">web #84</text>
+<text x="376.1" y="631.5" font-size="13" fill="#e8eaf0">Landing copy for the encrypted sync section</text>
+<rect x="784.0" y="618.0" width="43.7" height="18.0" rx="5" fill="#6e9df2" fill-opacity="0.13"/>
+<text x="792.0" y="630.8" font-size="10.5" fill="#6e9df2" font-weight="500">mira</text>
+<text x="1164.0" y="631.0" font-size="12" fill="#636b7e" text-anchor="end">1d</text>
+<text x="1118.0" y="631.0" font-size="11.5" fill="#f2555a" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">−9</text>
+<text x="1095.7" y="631.0" font-size="11.5" fill="#4cc38a" font-family="ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace" text-anchor="end">+31</text>
+<rect x="943.6" y="618.0" width="118.8" height="18.0" rx="5" fill="#8fb3f5" fill-opacity="0.13"/>
+<text x="951.6" y="630.8" font-size="10.5" fill="#8fb3f5" font-weight="500">Review requested</text>
+<rect x="253.0" y="668.0" width="927.0" height="34.0" fill="#14161d"/>
+<path d="M252.0 668.0H1180.0" stroke="#262a35" stroke-width="1"/>
+<rect x="268.0" y="676.0" width="16.0" height="18.0" rx="4" fill="none" stroke="#2c3140"/>
+<text x="276.0" y="689.0" font-size="11" fill="#9aa1b2" text-anchor="middle">j</text>
+<rect x="288.0" y="676.0" width="18.6" height="18.0" rx="4" fill="none" stroke="#2c3140"/>
+<text x="297.3" y="689.0" font-size="11" fill="#9aa1b2" text-anchor="middle">k</text>
+<text x="312.6" y="689.0" font-size="11" fill="#636b7e">navigate</text>
+<rect x="374.1" y="676.0" width="18.6" height="18.0" rx="4" fill="none" stroke="#2c3140"/>
+<text x="383.4" y="689.0" font-size="11" fill="#9aa1b2" text-anchor="middle">⏎</text>
+<text x="398.7" y="689.0" font-size="11" fill="#636b7e">open review</text>
+<rect x="483.4" y="676.0" width="28.7" height="18.0" rx="4" fill="none" stroke="#2c3140"/>
+<text x="497.8" y="689.0" font-size="11" fill="#9aa1b2" text-anchor="middle">r a</text>
+<text x="518.1" y="689.0" font-size="11" fill="#636b7e">approve</text>
+<rect x="578.3" y="676.0" width="28.7" height="18.0" rx="4" fill="none" stroke="#2c3140"/>
+<text x="592.7" y="689.0" font-size="11" fill="#9aa1b2" text-anchor="middle">r x</text>
+<text x="613.0" y="689.0" font-size="11" fill="#636b7e">request changes</text>
+<rect x="720.3" y="676.0" width="22.4" height="18.0" rx="4" fill="none" stroke="#2c3140"/>
+<text x="731.6" y="689.0" font-size="11" fill="#9aa1b2" text-anchor="middle">m</text>
+<text x="748.8" y="689.0" font-size="11" fill="#636b7e">merge</text>
+<rect x="799.6" y="676.0" width="18.6" height="18.0" rx="4" fill="none" stroke="#2c3140"/>
+<text x="808.9" y="689.0" font-size="11" fill="#9aa1b2" text-anchor="middle">x</text>
+<text x="824.2" y="689.0" font-size="11" fill="#636b7e">select</text>
+<rect x="872.5" y="676.0" width="26.1" height="18.0" rx="4" fill="none" stroke="#2c3140"/>
+<text x="885.6" y="689.0" font-size="11" fill="#9aa1b2" text-anchor="middle">r f</text>
+<text x="904.6" y="689.0" font-size="11" fill="#636b7e">session</text>
+<rect x="1070.9" y="676.0" width="26.6" height="18.0" rx="4" fill="none" stroke="#2c3140"/>
+<text x="1084.2" y="689.0" font-size="11" fill="#9aa1b2" text-anchor="middle">⌘K</text>
+<text x="1103.5" y="689.0" font-size="11" fill="#636b7e">commands</text>
+</g>
+<rect x="20.5" y="18.5" width="1159.0" height="683.0" rx="13" fill="none" stroke="#262a35"/>
+</g>
+</svg>
