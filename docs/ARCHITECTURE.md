@@ -16,8 +16,8 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
     DiffViewer/                #   WKWebView host + bridge (Swift side)
     Delegation/                #   delegate-to-local-agent model + sheet (ADR 0011, 0016)
     Settings/                  #   accounts (+ updates, local diagnostics), sync (+ encrypted
-                               #   cross-Mac sync), agents, AI, delegation, automation, theme
-                               #   (+ the menu-bar toggle)
+                               #   cross-Mac sync), replies (saved replies + review templates),
+                               #   agents, AI, delegation, automation, theme (+ menu-bar toggle)
     Onboarding/                #   device-flow sign-in, PAT entry
   Automation/                  #   outbound webhook payload, signing, dispatcher (ADR 0012);
                                #   auto-delegation coordinator + ledger store (ADR 0016)
@@ -31,6 +31,7 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
 Packages/ShepherdKit/          # SPM package, NO AppKit/SwiftUI imports
   Sources/
     ShepherdCore/              #   domain models, agent detection, heuristics, drafts
+      Review/                  #     saved replies, per-repo review templates + matching rule
       Routing/                 #     shepherd:// grammar + CLI argument grammar (ADR 0013)
       Triage/                  #     bulk-triage partition + intended writes (ADR 0015)
       Automation/              #     auto-delegation rules, ledger and policy (ADR 0016)
@@ -92,6 +93,9 @@ Names are normative; fields listed are the required minimum.
 - `ReviewDraft` — local pending review: `prID`, `verdict?` (`.approve/.requestChanges/.comment`),
   `summaryBody`, `comments: [DraftComment]`, `basedOnHeadOid` (staleness check)
 - `DraftComment` — `localID` (UUID), `path`, `line`, `side`, `startLine?`, `body`
+- `SavedReply` (`Review/`) — reusable comment text: `id` (UUID), `name`, `body` (Markdown source)
+- `ReviewTemplate` (`Review/`) — per-repo summary starter: `id` (UUID), `pattern`
+  (`owner/name`, `*`/`?` wildcards), `body`
 - `FilePriority` — `file: ChangedFile`, `score: Double`, `bucket: PriorityBucket`, `reasons: [String]`
 - `PriorityBucket` — `.reviewFirst` | `.standard` | `.skim` | `.generated`
 
@@ -117,6 +121,17 @@ Pure logic in `ShepherdCore` (all unit-tested):
   `greenAgentPullRequests(in:)` is the "select all green agent PRs" preselect, deliberately
   stricter than the plan (a pull request with no checks is not preselected but may still be
   picked by hand).
+- `SavedReply.inserting(_:into:)` (`Review/`) — how a saved reply reaches a comment field:
+  appended after exactly one blank line, never at a caret. `TextEditor`/`TextField` expose no
+  selection, so an at-cursor insert would mean replacing every review text field with an
+  `NSTextView` wrapper; appending is lossless and predictable instead.
+- `ReviewTemplate.matching(_:repo:)` / `.prefill(templates:repo:draft:summaryText:)` (`Review/`) —
+  which template a repository gets and whether it may be used. Matching: exact pattern beats
+  wildcard, then more literal characters (`specificity`) beats fewer, then the user's list order,
+  first wins; all case-insensitive, like every other `RepoRef` comparison. Prefilling requires
+  *all three* of: a blank summary field, no draft or an entirely empty one (`ReviewDraft.isEmpty`),
+  and a matching template with a body — so a template can only ever fill a new review and can
+  never overwrite review work (ADR 0006).
 - `DeepLink` (`Routing/`) — the whole `shepherd://` grammar as a value: `parse(URL) -> DeepLink?`
   and `urlString` in the other direction, round-trip tested. Strict by construction (closed
   vocabularies, GitHub's own character rules, decoding *after* the path split), because a URL is
@@ -331,6 +346,30 @@ The data flow is the point, and it is deliberately not a new one:
 Signed out the menu shows one line and a button that brings the sign-in window forward — the item
 stays in the menu bar, because disappearing chrome reads as a bug.
 
+### Saved replies and review templates
+
+Two settings-shaped features on the review path, both edited in Settings → Replies
+(`Features/Settings/RepliesSettingsTab.swift`, with an editor sheet each) and both stored as one
+JSON blob in `AppSettings` (`review.savedReplies`, `review.templates`) and carried in the
+document's `composer` group. All the judgement is pure and lives in `ShepherdCore/Review/`; the app
+layer is only placement.
+
+- **Insertion is per-field, not global.** `SavedReplyMenu` (`Features/Review/`) is a
+  `text.badge.plus` `Menu` attached to each of the three comment fields — the inline comment
+  composer, the review summary in the submit sheet, and the thread-reply bar — and it writes into
+  *that* field's binding through `SavedReply.inserting(_:into:)`. It is deliberately **not** a ⌘K
+  command: the palette is a focus-stealing overlay with its own search field, so a palette row
+  would have to guess which composer to insert into, and the composers are sheets and popovers the
+  palette does not sit above. The menu cannot pick the wrong field, and it is visible while typing.
+- **Templates fill only new drafts.** `ReviewModel.applyReviewTemplateIfNeeded()` is called from the
+  two places that complete the picture — the draft `ValueObservation` and the arrival of the
+  pull-request detail (which is where `RepoRef` comes from) — because either can win the race. It
+  waits for the draft observation to have spoken once (`hasObservedDraft`): writing a template into
+  `summaryText` while "is there a draft?" is still unknown would also block the arriving draft's own
+  summary, which the observation only writes into an empty field. It then asks once per opened
+  review (`hasOfferedTemplate`), so a background refresh cannot put a checklist back that the user
+  deleted.
+
 ### All writes go through the outbox
 
 `PullRequestActions` is the single write surface (`submitReview`, `reply`, `setThread`,
@@ -420,7 +459,9 @@ app target rather than ShepherdKit.
   settings area plus `secrets` (GitHub token, the two AI keys, the webhook secret). Decoding is
   tolerant by construction — unknown fields ignored, absent fields defaulted — so a document
   written by a newer Shepherd costs an older one only the fields it never had. `v` is the single
-  field that is *not* tolerated.
+  field that is *not* tolerated. The `composer` group is the one carrying *authored* content —
+  the saved replies and review templates, as arrays, so their order (which is also the template
+  tie-breaker) travels with them; an unreadable list falls back to empty and costs nothing else.
 - `SettingsEnvelope` is what is uploaded: `{v, kdf{algo,salt,iterations}, cipher{algo,nonce},
   createdAt, deviceName, payload}`. Its `authenticatedData` is a fixed, hand-specified
   newline-separated byte string over every field **except** the payload, fed to the AEAD as AAD —
@@ -629,6 +670,9 @@ encrypted settings sync (envelope round trip, wrong passphrase and AAD tampering
 error, KDF parameters — a low iteration count in the tests, the production constant asserted
 separately — SigV4 against the official AWS vectors, the three signed requests byte for byte, the
 document codec with unknown fields, and capture/apply over in-memory secret and token stores);
+the saved-reply and review-template store (order surviving a relaunch, editing in place, the
+reorder clamped at both ends, and which replies the insert menu is allowed to offer — the matching
+and prefill rules themselves are tested in `ShepherdCoreTests`);
 the update configuration (ADR 0010: the placeholder key, a truncated key, a
 relative or non-web feed URL and an empty `Info.plist` must each end as "updates off, with a
 reason" rather than as a Sparkle alert); the local diagnostics folder (ADR 0017: the UTC file name

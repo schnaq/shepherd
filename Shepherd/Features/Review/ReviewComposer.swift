@@ -90,17 +90,14 @@ struct SubmitReviewSheet: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                CardTitle(String(localized: "SUMMARY"))
-                TextEditor(text: summaryBinding)
-                    .font(.system(size: 12))
-                    .scrollContentBackground(.hidden)
-                    .padding(6)
-                    .frame(height: 130)
-                    .background(Theme.control, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .stroke(Theme.controlBorder, lineWidth: 1)
-                    )
+                HStack(spacing: 8) {
+                    CardTitle(String(localized: "SUMMARY"))
+                    Spacer(minLength: 4)
+                    SavedReplyMenu(replies: model.settings.usableSavedReplies) { snippet in
+                        model.summaryText = SavedReply.inserting(snippet, into: model.summaryText)
+                    }
+                }
+                ComposerTextEditor(text: summaryBinding, height: 130)
             }
 
             Picker(String(localized: "Verdict"), selection: verdictBinding) {
@@ -197,27 +194,24 @@ struct InlineCommentComposer: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(String(localized: "Comment on line \(request.line)"))
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Theme.textStrong)
-                Text(anchorDescription)
-                    .font(Theme.mono(11))
-                    .foregroundStyle(Theme.textMuted)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+            HStack(alignment: .top, spacing: 8) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(String(localized: "Comment on line \(request.line)"))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Theme.textStrong)
+                    Text(anchorDescription)
+                        .font(Theme.mono(11))
+                        .foregroundStyle(Theme.textMuted)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Spacer(minLength: 4)
+                SavedReplyMenu(replies: model.settings.usableSavedReplies) { snippet in
+                    commentText = SavedReply.inserting(snippet, into: commentText)
+                }
             }
 
-            TextEditor(text: $commentText)
-                .font(.system(size: 12))
-                .scrollContentBackground(.hidden)
-                .padding(6)
-                .frame(height: 120)
-                .background(Theme.control, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .stroke(Theme.controlBorder, lineWidth: 1)
-                )
+            ComposerTextEditor(text: $commentText, height: 120)
 
             Text(String(localized: "Saved to your pending review — nothing is sent until you submit."))
                 .font(.system(size: 11))
@@ -348,12 +342,24 @@ struct ThreadPopover: View {
 
     private var replyBar: some View {
         VStack(spacing: 8) {
-            TextField(String(localized: "Reply…"), text: $replyText, axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(.system(size: 12))
-                .lineLimit(1...4)
-                .padding(8)
-                .background(Theme.control, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            HStack(alignment: .bottom, spacing: 6) {
+                TextField(String(localized: "Reply…"), text: $replyText, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12))
+                    .lineLimit(1...4)
+                    .padding(8)
+                    .background(
+                        Theme.control,
+                        in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    )
+                SavedReplyMenu(
+                    replies: environment.settings.usableSavedReplies,
+                    onInsert: { snippet in
+                        replyText = SavedReply.inserting(snippet, into: replyText)
+                    },
+                    height: 30
+                )
+            }
 
             HStack(spacing: 8) {
                 Button {

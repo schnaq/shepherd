@@ -26,6 +26,14 @@ private let syncTestSealedAt = Date(timeIntervalSince1970: 1_788_257_700)
 /// The same moment as ``GitHubKit/GitHubTimestamp`` writes it.
 private let syncTestSealedAtISO = "2026-09-01T10:15:00Z"
 
+/// Fixed identities for the saved replies and the review template in ``fullDocument()``.
+///
+/// Fixed rather than freshly generated because the capture-apply-capture test compares two whole
+/// documents for equality: a random `UUID()` per call would make the fixture differ from itself.
+private let syncTestReplyID = UUID(uuidString: "11111111-1111-4111-8111-111111111111")!
+private let syncTestSecondReplyID = UUID(uuidString: "22222222-2222-4222-8222-222222222222")!
+private let syncTestTemplateID = UUID(uuidString: "33333333-3333-4333-8333-333333333333")!
+
 /// An in-memory ``SettingsSecretStoring``, so nothing here prompts for Keychain access.
 ///
 /// Locked rather than an actor so the assertions read straight through, the same shape
@@ -246,6 +254,19 @@ final class SettingsSyncTests: XCTestCase {
             showsMenuBarExtra: false
         )
         document.triage = SyncedSettingsDocument.TriageGroup(defaultMergeMethod: .rebase)
+        document.composer = SyncedSettingsDocument.ComposerGroup(
+            savedReplies: [
+                SavedReply(id: syncTestReplyID, name: "Needs a test", body: "Please add a test."),
+                SavedReply(id: syncTestSecondReplyID, name: "Nit", body: "Naming nit."),
+            ],
+            reviewTemplates: [
+                ReviewTemplate(
+                    id: syncTestTemplateID,
+                    pattern: "schnaq/*",
+                    body: "## Checklist\n- [ ] tests"
+                ),
+            ]
+        )
         document.diagnostics = SyncedSettingsDocument.DiagnosticsGroup(isEnabled: true)
         document.account = SyncedSettingsDocument.AccountGroup(login: "octocat", authKind: .pat)
         document.secrets = SyncedSettingsDocument.Secrets(
@@ -315,6 +336,9 @@ final class SettingsSyncTests: XCTestCase {
             "ghp_example", "sk-ant-example", "sk-example", "hunter2hunter2",
             syncTestPassphrase,
             "n8n.example.com", "api.example.eu", "octocat",
+            // Saved replies and templates are the user's own words about their colleagues' code.
+            // Not a credential, but nothing the bucket operator gets to read either.
+            "Please add a test.", "Naming nit.", "## Checklist",
         ] {
             XCTAssertFalse(text.contains(secret), "\(secret) leaked into the envelope")
         }
@@ -625,6 +649,11 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertEqual(document.notifications, SyncedSettingsDocument.NotificationGroup())
         XCTAssertEqual(document.delegation.agentCLI, AgentCLIConfiguration())
         XCTAssertEqual(document.delegation.autoDelegation, AutoDelegationRules())
+        // A document written before saved replies existed carries neither list, and an absent list
+        // is empty rather than a decoding failure.
+        XCTAssertEqual(document.composer, SyncedSettingsDocument.ComposerGroup())
+        XCTAssertTrue(document.composer.savedReplies.isEmpty)
+        XCTAssertTrue(document.composer.reviewTemplates.isEmpty)
         // A document written before diagnostics existed leaves them off rather than on.
         XCTAssertEqual(document.diagnostics, SyncedSettingsDocument.DiagnosticsGroup())
         XCTAssertFalse(document.diagnostics.isEnabled)
@@ -659,6 +688,27 @@ final class SettingsSyncTests: XCTestCase {
         )
         // `shepherd.test` is not user-selectable, and the third does not exist in this build.
         XCTAssertEqual(group.knownEvents, [.reviewSubmitted])
+    }
+
+    func testAnUnreadableSavedReplyListCostsOnlyThatListAndNotTheDocument() throws {
+        let json = """
+            {
+              "v": 1,
+              "composer": {
+                "savedReplies": "not an array",
+                "reviewTemplates": [
+                  {
+                    "id": "33333333-3333-4333-8333-333333333333",
+                    "pattern": "schnaq/*",
+                    "body": "## Checklist"
+                  }
+                ]
+              }
+            }
+            """
+        let document = try SyncedSettingsDocument.decode(from: Data(json.utf8))
+        XCTAssertTrue(document.composer.savedReplies.isEmpty)
+        XCTAssertEqual(document.composer.reviewTemplates.map(\.pattern), ["schnaq/*"])
     }
 
     // MARK: - Object location
@@ -969,6 +1019,13 @@ final class SettingsSyncTests: XCTestCase {
         // reads this setting, so there is nothing else to apply.
         XCTAssertFalse(settings.showsMenuBarExtra)
         XCTAssertEqual(settings.defaultMergeMethod, .rebase)
+        // Saved replies and templates travel in their own order — it is the order of the insert
+        // menu and the last tie-breaker of the template match.
+        XCTAssertEqual(settings.savedReplies.map(\.name), ["Needs a test", "Nit"])
+        XCTAssertEqual(settings.savedReplies.first?.id, syncTestReplyID)
+        XCTAssertEqual(settings.savedReplies.first?.body, "Please add a test.")
+        XCTAssertEqual(settings.reviewTemplates.map(\.pattern), ["schnaq/*"])
+        XCTAssertEqual(settings.reviewTemplates.first?.body, "## Checklist\n- [ ] tests")
         // The opt-in travels; the reports themselves never do (ADR 0017).
         XCTAssertTrue(settings.diagnosticsEnabled)
 

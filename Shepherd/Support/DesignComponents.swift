@@ -78,6 +78,33 @@ struct EmptyStateView: View {
     }
 }
 
+/// The bordered, control-coloured `TextEditor` every Markdown field in the app uses.
+///
+/// Extracted because the review summary, the inline comment composer and the two Settings editors
+/// for saved replies and templates are the same control, and a comment field that looks different
+/// depending on which sheet it is in reads as two different features.
+struct ComposerTextEditor: View {
+    /// The edited text.
+    let text: Binding<String>
+    /// The field's fixed height.
+    var height: CGFloat = 130
+    /// The font size.
+    var size: CGFloat = 12
+
+    var body: some View {
+        TextEditor(text: text)
+            .font(.system(size: size))
+            .scrollContentBackground(.hidden)
+            .padding(6)
+            .frame(height: height)
+            .background(Theme.control, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(Theme.controlBorder, lineWidth: 1)
+            )
+    }
+}
+
 // MARK: - Buttons
 
 /// The filled accent button.

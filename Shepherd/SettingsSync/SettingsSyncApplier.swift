@@ -96,6 +96,10 @@ enum SettingsSyncApplier {
         document.triage = SyncedSettingsDocument.TriageGroup(
             defaultMergeMethod: settings.defaultMergeMethod
         )
+        document.composer = SyncedSettingsDocument.ComposerGroup(
+            savedReplies: settings.savedReplies,
+            reviewTemplates: settings.reviewTemplates
+        )
         document.diagnostics = SyncedSettingsDocument.DiagnosticsGroup(
             isEnabled: settings.diagnosticsEnabled
         )
@@ -186,6 +190,13 @@ enum SettingsSyncApplier {
         settings.showsMenuBarExtra = document.appearance.showsMenuBarExtra
 
         settings.defaultMergeMethod = document.triage.defaultMergeMethod
+
+        // Replaced wholesale rather than merged, like every other setting: two lists of authored
+        // text have no conflict resolution a machine could guess, and the confirmation dialog in
+        // Settings is what makes that honest. Nothing else has to be applied — the insert menu and
+        // the template lookup read these arrays on every use.
+        settings.savedReplies = document.composer.savedReplies
+        settings.reviewTemplates = document.composer.reviewTemplates
 
         // Only the flag is applied. Registering or removing the MetricKit subscriber is the
         // window's job, driven by `onChange(of: settings.diagnosticsEnabled)` in `ShepherdApp` —

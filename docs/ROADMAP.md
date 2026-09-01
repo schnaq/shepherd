@@ -1,6 +1,7 @@
 # Roadmap
 
-Scope decisions from the founder interview (2026-08-31). v1 is deliberately full-featured on
+Scope decisions from the founder interviews (2026-08-31, plus the 2026-09-01 follow-up that
+prioritised saved replies). v1 is deliberately full-featured on
 the review path — the founder's bar is "never need to open github.com for a routine review".
 
 ## v0.x → v1.0 (current work)
@@ -35,6 +36,15 @@ the review path — the founder's bar is "never need to open github.com for a ro
       and marks the ones it skips — red CI, conflicts, drafts, changes requested, your own —
       with the reason. Confirming enqueues one ordinary outbox row per write, so offline, retry,
       rate-limit throttling and the per-pull-request staleness check all apply unchanged
+- [x] Saved replies & review templates (pulled into v1 from v1.x, founder interview 2026-09-01):
+      named, reusable Markdown snippets insertable into every comment field — inline comment
+      composer, review summary, thread reply — from a `text.badge.plus` menu on the field itself
+      (not ⌘K: the palette would have to guess which composer to write into). Plus an optional
+      per-repository summary template matched by pattern (`owner/repo` exactly or `owner/*`; exact
+      beats wildcard, longer wildcard beats shorter, then list order), used **only** to prefill a
+      new, entirely empty draft — a review with a comment, a summary or a verdict is never
+      overwritten. Managed in Settings → Replies; both lists travel in the encrypted settings
+      document (ADR 0014)
 - [x] Delegate to local agent (ADR 0011): send a PR or a review finding back to the locally
       installed Claude Code (headless `claude -p`, stream-json, detached-worktree isolation,
       turn/budget caps); command template configurable for other agent CLIs; Shepherd never
@@ -94,6 +104,11 @@ the review path — the founder's bar is "never need to open github.com for a ro
   last-write-wins may touch a document that contains the GitHub token. Candidates: per-Mac objects
   plus an explicit "adopt from" step, or an `If-Match`/ETag guard with a visible conflict
 - ~~Menu-bar quick inbox~~ — pulled into v1, see above
+- ~~Saved replies & per-repo review templates~~ — prioritised in the founder interview of
+  2026-09-01 and pulled into v1, see above. Still open on top of it: template placeholders
+  (`{repo}`, `{number}`) the way auto-delegation's task template has them, and inserting a snippet
+  at the caret rather than appending — the latter needs an `NSTextView`-backed comment field, which
+  is a bigger change than the feature was worth
 - More webhook events (thread replies, resolves, checks turning red) — additive under `"v": 1`
   (ADR 0012)
 - More auto-delegation conditions (ADR 0016 keeps the action fixed: a third *condition* is a case

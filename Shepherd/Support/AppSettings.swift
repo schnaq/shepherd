@@ -125,6 +125,12 @@ final class AppSettings {
             Keys.autoDelegation,
             default: AutoDelegationRules()
         )
+        self.savedReplies = Self.readJSON(defaults, Keys.savedReplies, default: [SavedReply]())
+        self.reviewTemplates = Self.readJSON(
+            defaults,
+            Keys.reviewTemplates,
+            default: [ReviewTemplate]()
+        )
         self.webhooksEnabled = defaults.object(forKey: Keys.webhookEnabled) as? Bool ?? false
         self.webhookURL = defaults.string(forKey: Keys.webhookURL) ?? ""
         // A fresh install subscribes to everything, because the enable toggle is what actually
@@ -337,6 +343,99 @@ final class AppSettings {
         localCheckouts = updated
     }
 
+    // MARK: - Saved replies & review templates
+
+    /// The user's named, reusable comment bodies, in the order they chose.
+    ///
+    /// Stored as one JSON blob, like ``agentCLI`` and ``autoDelegation``: the list is edited as a
+    /// whole on one Settings card, and the order is part of the data — it is the order of the insert
+    /// menu, so the reply someone uses twenty times a day belongs at the top.
+    var savedReplies: [SavedReply] {
+        didSet { Self.writeJSON(defaults, savedReplies, Keys.savedReplies) }
+    }
+
+    /// The per-repository summary templates, in the order they chose.
+    ///
+    /// The order is load-bearing here too, but for a different reason: it is the last tie-breaker
+    /// of ``ShepherdCore/ReviewTemplate/matching(_:repo:)`` when two patterns are equally specific.
+    var reviewTemplates: [ReviewTemplate] {
+        didSet { Self.writeJSON(defaults, reviewTemplates, Keys.reviewTemplates) }
+    }
+
+    /// The saved replies worth putting in a menu: named, and with something to insert.
+    var usableSavedReplies: [SavedReply] {
+        savedReplies.filter(\.isUsable)
+    }
+
+    /// Adds a saved reply, or replaces the one with the same identity.
+    /// - Parameter reply: The reply to store.
+    func upsert(savedReply reply: SavedReply) {
+        var updated = savedReplies
+        if let index = updated.firstIndex(where: { $0.id == reply.id }) {
+            updated[index] = reply
+        } else {
+            updated.append(reply)
+        }
+        savedReplies = updated
+    }
+
+    /// Deletes a saved reply.
+    /// - Parameter id: The reply's identity.
+    func deleteSavedReply(id: UUID) {
+        savedReplies.removeAll { $0.id == id }
+    }
+
+    /// Moves a saved reply one place up or down. Out-of-range moves are ignored.
+    /// - Parameters:
+    ///   - id: The reply's identity.
+    ///   - offset: `-1` for up, `+1` for down.
+    func moveSavedReply(id: UUID, by offset: Int) {
+        savedReplies = Self.moving(savedReplies, id: id, by: offset)
+    }
+
+    /// Adds a review template, or replaces the one with the same identity.
+    /// - Parameter template: The template to store.
+    func upsert(reviewTemplate template: ReviewTemplate) {
+        var updated = reviewTemplates
+        if let index = updated.firstIndex(where: { $0.id == template.id }) {
+            updated[index] = template
+        } else {
+            updated.append(template)
+        }
+        reviewTemplates = updated
+    }
+
+    /// Deletes a review template.
+    /// - Parameter id: The template's identity.
+    func deleteReviewTemplate(id: UUID) {
+        reviewTemplates.removeAll { $0.id == id }
+    }
+
+    /// Moves a review template one place up or down. Out-of-range moves are ignored.
+    /// - Parameters:
+    ///   - id: The template's identity.
+    ///   - offset: `-1` for up, `+1` for down.
+    func moveReviewTemplate(id: UUID, by offset: Int) {
+        reviewTemplates = Self.moving(reviewTemplates, id: id, by: offset)
+    }
+
+    /// One-place reordering shared by both lists.
+    ///
+    /// A swap rather than a remove-and-insert: for a single step they are the same result, and a
+    /// swap cannot renumber the rest of the list if the index arithmetic is ever wrong.
+    private static func moving<Element: Identifiable>(
+        _ list: [Element],
+        id: Element.ID,
+        by offset: Int
+    ) -> [Element] {
+        guard let index = list.firstIndex(where: { $0.id == id }) else { return list }
+        let target = index + offset
+        guard target >= 0, target < list.count else { return list }
+        var updated = list
+        updated.swapAt(index, target)
+        return updated
+    }
+
     // MARK: - Automation (ADR 0012)
 
     /// Whether Shepherd posts events to the configured webhook URL.
@@ -519,6 +618,8 @@ final class AppSettings {
         static let agentCLI = "delegation.agentCLI"
         static let localCheckouts = "delegation.localCheckouts"
         static let autoDelegation = "delegation.autoRules"
+        static let savedReplies = "review.savedReplies"
+        static let reviewTemplates = "review.templates"
         static let webhookEnabled = "automation.webhook.enabled"
         static let webhookURL = "automation.webhook.url"
         static let webhookEvents = "automation.webhook.events"

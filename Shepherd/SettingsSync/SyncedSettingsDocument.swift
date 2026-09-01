@@ -337,6 +337,43 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         }
     }
 
+    /// The reusable review text the composer offers: saved replies and per-repo templates.
+    ///
+    /// A settings group of its own rather than a corner of ``TriageGroup``, which holds *remembered
+    /// choices* (the last merge method). These are authored content: the user wrote them, they can
+    /// be long, and they are exactly the sort of thing that is painful to retype on a second Mac —
+    /// which makes them one of the better arguments for the whole sync feature.
+    ///
+    /// Both lists travel as arrays, so their order travels with them: it is the order of the insert
+    /// menu, and for templates it is also the last tie-breaker of
+    /// ``ShepherdCore/ReviewTemplate/matching(_:repo:)``. A list that arrives unreadable — a newer
+    /// build changed the element shape — falls back to empty rather than costing the document.
+    struct ComposerGroup: Codable, Sendable, Equatable {
+        /// The named, reusable comment bodies.
+        var savedReplies: [SavedReply]
+        /// The per-repository summary templates.
+        var reviewTemplates: [ReviewTemplate]
+
+        /// Creates the group.
+        /// - Parameters:
+        ///   - savedReplies: The saved replies, in the user's order.
+        ///   - reviewTemplates: The templates, in the user's order.
+        init(savedReplies: [SavedReply] = [], reviewTemplates: [ReviewTemplate] = []) {
+            self.savedReplies = savedReplies
+            self.reviewTemplates = reviewTemplates
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case savedReplies, reviewTemplates
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            savedReplies = container.syncedValue(.savedReplies, default: [])
+            reviewTemplates = container.syncedValue(.reviewTemplates, default: [])
+        }
+    }
+
     /// Whether local crash and hang reports are kept on the Mac (ADR 0017).
     ///
     /// The *flag* travels; the reports never do. A diagnostic report is machine-local by
@@ -468,6 +505,8 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
     var appearance: AppearanceGroup
     /// Remembered review/merge dialog choices.
     var triage: TriageGroup
+    /// Saved replies and per-repository review templates.
+    var composer: ComposerGroup
     /// Whether local crash and hang reports are kept.
     var diagnostics: DiagnosticsGroup
     /// Who the GitHub token belongs to.
@@ -486,6 +525,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         automation: AutomationGroup = AutomationGroup(),
         appearance: AppearanceGroup = AppearanceGroup(),
         triage: TriageGroup = TriageGroup(),
+        composer: ComposerGroup = ComposerGroup(),
         diagnostics: DiagnosticsGroup = DiagnosticsGroup(),
         account: AccountGroup = AccountGroup(),
         secrets: Secrets = Secrets()
@@ -499,6 +539,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         self.automation = automation
         self.appearance = appearance
         self.triage = triage
+        self.composer = composer
         self.diagnostics = diagnostics
         self.account = account
         self.secrets = secrets
@@ -506,7 +547,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case v, sync, notifications, agents, intelligence, delegation, automation
-        case appearance, triage, diagnostics, account, secrets
+        case appearance, triage, composer, diagnostics, account, secrets
     }
 
     init(from decoder: any Decoder) throws {
@@ -528,6 +569,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         automation = container.syncedValue(.automation, default: AutomationGroup())
         appearance = container.syncedValue(.appearance, default: AppearanceGroup())
         triage = container.syncedValue(.triage, default: TriageGroup())
+        composer = container.syncedValue(.composer, default: ComposerGroup())
         diagnostics = container.syncedValue(.diagnostics, default: DiagnosticsGroup())
         account = container.syncedValue(.account, default: AccountGroup())
         secrets = container.syncedValue(.secrets, default: Secrets())

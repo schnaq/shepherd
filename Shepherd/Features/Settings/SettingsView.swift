@@ -1,8 +1,12 @@
 import ShepherdCore
 import SwiftUI
 
-/// The Settings window: Account, Sync, Agents, Intelligence, Delegation, Automation,
+/// The Settings window: Account, Sync, Replies, Agents, Intelligence, Delegation, Automation,
 /// Appearance.
+///
+/// Replies (saved replies + per-repository review templates) sits between Sync and the AI cluster
+/// because it is the one tab about the *review path* itself, and because it is the only tab where
+/// the user authors content rather than configuring a connection.
 ///
 /// Webhooks get their own tab rather than a section under Sync: Sync is about keeping the local
 /// cache in step with GitHub, while Automation is about what Shepherd tells the outside world —
@@ -32,6 +36,11 @@ struct SettingsView: View {
             SyncSettingsTab(syncModel: syncModel)
                 .tabItem { Label(String(localized: "Sync"), systemImage: "arrow.clockwise") }
                 .tag(SettingsDeepLinkTab.sync)
+            RepliesSettingsTab()
+                .tabItem {
+                    Label(String(localized: "Replies"), systemImage: "text.badge.plus")
+                }
+                .tag(SettingsDeepLinkTab.replies)
             AgentSettingsTab(model: model)
                 .tabItem { Label(String(localized: "Agents"), systemImage: "cpu") }
                 .tag(SettingsDeepLinkTab.agents)

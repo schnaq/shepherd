@@ -120,6 +120,20 @@ final class ReviewModel {
         keySequence.consume(character)
     }
 
+    /// Whether the draft observation has delivered at least one value.
+    ///
+    /// The template must not be applied before this: the observation is what tells the model
+    /// whether a draft exists at all, and a template written into ``summaryText`` while the answer
+    /// is still unknown would *also* stop the arriving draft's own summary from being shown (the
+    /// observation only fills an empty field). So "no draft yet" is treated as "not known yet"
+    /// until the stream has spoken once.
+    private var hasObservedDraft = false
+    /// Whether the per-repository template has already been offered on this screen.
+    ///
+    /// One shot per opened review. Without it, every refresh of the detail would re-fill a summary
+    /// the user had deliberately cleared.
+    private var hasOfferedTemplate = false
+
     private var draftTask: Task<Void, Never>?
     private var loadTask: Task<Void, Never>?
     private var intelligenceTask: Task<Void, Never>?
@@ -189,11 +203,35 @@ final class ReviewModel {
             for await value in stream {
                 guard let self else { return }
                 self.draft = value
+                self.hasObservedDraft = true
                 if self.summaryText.isEmpty, let body = value?.summaryBody, !body.isEmpty {
                     self.summaryText = body
                 }
+                self.applyReviewTemplateIfNeeded()
             }
         }
+    }
+
+    /// Fills the summary from the repository's review template, if the rules allow it.
+    ///
+    /// Called from the two places that can complete the picture — the draft observation and the
+    /// arrival of the pull-request detail (which is where the repository comes from) — because
+    /// either can win the race. The decision itself is
+    /// ``ShepherdCore/ReviewTemplate/prefill(templates:repo:draft:summaryText:)``: a pure function,
+    /// so the "never overwrite a draft" rule is unit-tested rather than inferred from task ordering.
+    private func applyReviewTemplateIfNeeded() {
+        guard !hasOfferedTemplate, hasObservedDraft, let repo = summary?.repo else { return }
+        // Asked and answered, whatever the answer is: the template is a *starting point*, so it is
+        // offered when the review opens and never again while it stays open. Anything else would
+        // let a background refresh put the checklist back after the user deleted it.
+        hasOfferedTemplate = true
+        guard let body = ReviewTemplate.prefill(
+            templates: settings.reviewTemplates,
+            repo: repo,
+            draft: draft,
+            summaryText: summaryText
+        ) else { return }
+        summaryText = body
     }
 
     private func apply(_ detail: PullRequestDetail) {
@@ -207,6 +245,8 @@ final class ReviewModel {
             selectedPath = priorities.first?.file.path
         }
         requestFocusHints(for: detail)
+        // The repository only becomes known here, and the draft observation may already have run.
+        applyReviewTemplateIfNeeded()
     }
 
     private func requestFocusHints(for detail: PullRequestDetail) {

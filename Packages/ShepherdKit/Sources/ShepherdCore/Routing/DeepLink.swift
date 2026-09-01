@@ -251,6 +251,8 @@ public enum SettingsDeepLinkTab: String, Hashable, Sendable, CaseIterable {
     case account
     /// Sweep interval and notifications.
     case sync
+    /// Saved replies and per-repository review templates.
+    case replies
     /// The agent registry.
     case agents
     /// Intelligence tiers, endpoints and keys.

@@ -38,6 +38,13 @@ from every repo — without ever opening a browser tab.
   it, CI state — where one click opens the pull request in the main window. "Sync now" and the full
   inbox are one click away too. It reads the same local database the window does, so it costs no
   extra GitHub call, and it can be switched off in Settings → Appearance.
+- **Saved replies and per-repo review templates.** The same three sentences go out twenty times a
+  week — "please add a test for this branch", "this is generated, keep it out of the diff" — so save
+  them once and drop them into any comment field with one click: inline comments, the review
+  summary, thread replies. And a repository (or a whole owner, `schnaq/*`) can carry a summary
+  template, so a new review opens with your team's checklist already in it. It only ever fills an
+  *empty* review: a pull request you have written anything on is never touched. Both live in
+  Settings → Replies and travel with encrypted settings sync.
 - **Review-priority file ordering.** Changed files are grouped and ranked by what deserves your
   attention first — deterministic heuristics (source vs. lockfiles vs. generated code, churn,
   path risk), optionally sharpened by on-device AI.
