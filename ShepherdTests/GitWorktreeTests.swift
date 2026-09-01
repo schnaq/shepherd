@@ -33,13 +33,16 @@ final class RecordingProcessRunner: ProcessRunning, @unchecked Sendable {
 
     /// Everything that was run, in order.
     var invocations: [Invocation] {
-        lock.lock()
-        defer { lock.unlock() }
-        return recorded
+        lock.withLock { recorded }
     }
 
     /// argv of every call, for compact assertions.
     var arguments: [[String]] { invocations.map(\.arguments) }
+
+    // Synchronous on purpose: `lock`/`unlock` are unavailable from async contexts.
+    private func record(_ invocation: Invocation) {
+        lock.withLock { recorded.append(invocation) }
+    }
 
     func run(
         executable: URL,
@@ -51,9 +54,7 @@ final class RecordingProcessRunner: ProcessRunning, @unchecked Sendable {
             arguments: arguments,
             currentDirectory: currentDirectory?.path
         )
-        lock.lock()
-        recorded.append(invocation)
-        lock.unlock()
+        record(invocation)
         return handler(invocation)
     }
 }
