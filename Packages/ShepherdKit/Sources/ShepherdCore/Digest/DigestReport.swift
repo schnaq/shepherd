@@ -115,7 +115,13 @@ public struct DigestReport: Sendable, Equatable {
         public var id: String { kind.rawValue }
 
         /// How many the section counts beyond the ones it names.
-        public var overflow: Int { max(0, count - items.count) }
+        ///
+        /// Zero for a section that names nothing at all — ``DigestSectionKind/parkedReviews`` is a
+        /// bare count, and "3 parked reviews, and 3 more" would count the same rows twice.
+        public var overflow: Int {
+            guard !items.isEmpty else { return 0 }
+            return max(0, count - items.count)
+        }
     }
 
     /// How many pull requests a section names before it starts counting the rest.

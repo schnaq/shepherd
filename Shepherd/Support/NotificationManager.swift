@@ -268,8 +268,11 @@ final class NotificationManager {
 /// clicking it brings the app forward — because a review request that yanked the app to a different
 /// screen while somebody was mid-review would be hostile.
 ///
-/// The `async` form of the delegate callback is implemented rather than the completion-handler one,
-/// so the hop onto the main actor is the language's job instead of a captured closure's.
+/// The completion-handler form of the delegate callback is implemented, `nonisolated`, rather than
+/// the `async` one: the centre calls its delegate off the main thread with a response that is not
+/// `Sendable`, so an `async` witness on a main-actor class would have to ship that response across
+/// an isolation boundary — which Swift 6 rightly refuses. Instead the one fact the router needs, the
+/// category, is read where the response is, and only the decision hops onto the main actor.
 @MainActor
 final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate {
     private let onDigestClicked: @MainActor () -> Void
@@ -285,13 +288,20 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate {
     /// - Parameters:
     ///   - center: The notification centre.
     ///   - response: What the user did.
-    func userNotificationCenter(
+    ///   - completionHandler: Told straight away — the centre only wants to know the click was
+    ///     seen, and the navigation is not its business.
+    nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse
-    ) async {
-        guard response.notification.request.content.categoryIdentifier
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        let isDigest = response.notification.request.content.categoryIdentifier
             == NotificationCategory.digest
-        else { return }
-        onDigestClicked()
+        completionHandler()
+        guard isDigest else { return }
+        let onDigestClicked = self.onDigestClicked
+        Task { @MainActor in
+            onDigestClicked()
+        }
     }
 }
