@@ -1,7 +1,7 @@
 import ShepherdCore
 import SwiftUI
 
-/// The Settings window: Account, Sync, Agents, Intelligence, Appearance.
+/// The Settings window: Account, Sync, Agents, Intelligence, Delegation, Appearance.
 struct SettingsView: View {
     @Environment(AppEnvironment.self) private var environment
     @State private var model = SettingsModel()
@@ -16,6 +16,13 @@ struct SettingsView: View {
                 .tabItem { Label(String(localized: "Agents"), systemImage: "cpu") }
             IntelligenceSettingsTab(model: model)
                 .tabItem { Label(String(localized: "Intelligence"), systemImage: "sparkles") }
+            DelegationSettingsTab()
+                .tabItem {
+                    Label(
+                        String(localized: "Delegation"),
+                        systemImage: "arrow.uturn.backward.badge.clock"
+                    )
+                }
             AppearanceSettingsTab()
                 .tabItem { Label(String(localized: "Appearance"), systemImage: "paintbrush") }
         }

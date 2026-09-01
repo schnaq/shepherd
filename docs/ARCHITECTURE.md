@@ -13,10 +13,12 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
     PullRequest/               #   PR detail: header, timeline, file list, checks
     Review/                    #   review composer, pending review UI, thread views
     DiffViewer/                #   WKWebView host + bridge (Swift side)
-    Settings/                  #   accounts, agent registry, AI, appearance
+    Delegation/                #   delegate-to-local-agent model + sheet (ADR 0011)
+    Settings/                  #   accounts, agent registry, AI, delegation, appearance
     Onboarding/                #   device-flow sign-in, PAT entry
   Intelligence/                #   IntelligenceProvider impls (FoundationModels, Anthropic)
   Support/                     #   AppConfig, keyboard shortcuts, theming, notifications
+    AgentCLI/                  #   agent-CLI engine: config, locator, stream parser, worktrees
   Resources/                   #   Assets.xcassets, DiffViewer/dist (built web bundle)
 Packages/ShepherdKit/          # SPM package, NO AppKit/SwiftUI imports
   Sources/
@@ -271,11 +273,47 @@ they reach the UI.
 `AppEnvironment.PendingAction`, which the screen that owns the selection consumes. That keeps
 one implementation of "approve" for the menu bar, the palette, the shortcut and the button.
 
+### Delegation to a local agent (ADR 0011)
+
+The feature is split in two, and the split is what makes it testable. `Support/AgentCLI/` is the
+**engine** and imports no SwiftUI: `AgentCLIConfiguration` (the command shape and the
+guardrails — permission mode, `--allowedTools`, `--max-turns`, `--max-budget-usd`; Claude Code
+first-class, any other CLI via a `{prompt}`/`{worktree}` template), `AgentCLILocator`,
+`AgentStreamEvent` (a tolerant decoder for the newline-delimited JSON — unknown event types,
+unknown content blocks and non-JSON lines are skipped, never fatal), `AgentCLIRunner` (spawns
+`Process`, a dedicated queue drains stdout line by line into an `AsyncStream`, `cancel()` sends
+`SIGTERM` then `SIGKILL`), and `GitWorktree`. `Features/Delegation/` is the **UI**:
+`DelegationModel` (the `idle → preparingWorktree → running → finished/failed/cancelled` state
+machine), `DelegationCenter` (one delegation per pull request; a second request while one is
+running reveals it instead of starting another) and `DelegationSheet`.
+
+Two seams carry the tests. `ProcessRunning` (`run(executable:arguments:currentDirectory:)`) is
+the only way `GitWorktree` reaches git, so the unit tests assert the **exact argv** of every
+command — fetch, `worktree add --detach`, status, diff-stat, commit, `push origin HEAD:<branch>`,
+`worktree remove --force` — without a repository on disk, including the refusal to delete
+anything outside `~/Library/Application Support/Shepherd/Worktrees`. `AgentRunning` is the seam
+for the CLI, so the state machine is driven by scripted event lists.
+
+Three rules are not negotiable and are enforced in code, not by convention: **no shell, ever** —
+the prompt is one element of an argv array and command templates are split by `ShellWords`, so a
+prompt cannot become a second command; **Shepherd never touches agent authentication** — the
+child inherits the environment verbatim, nothing added, nothing removed, and there is no
+credential field anywhere in the Delegation settings tab; **nothing is ever pushed
+automatically** — the agent works in a detached worktree and "Commit & push" is a button, using
+the user's own git credentials rather than Shepherd's GitHub token.
+
+The **App Sandbox is off** for this build (`Shepherd/Support/Shepherd.entitlements`, with the
+reasoning inline): a sandboxed child process cannot usefully be a coding agent — no network, no
+access to the user's CLI configuration, every path needing a bookmark. ADR 0010 already rules
+the Mac App Store out for v1, so this costs nothing that was on the table; hardened runtime
+stays on.
+
 ### Test target
 
 `ShepherdTests` (added to `project.yml`, sources in top-level `ShepherdTests/`) covers the
 pure parts of the app: the bridge protocol against the **shared fixtures**, which are copied
 into the test bundle as a folder reference from `web/diff-viewer/fixtures` so both languages
-decode the same bytes; the patch reconstruction; the Markdown sanitiser; and the keyboard,
-palette and inbox-ordering logic. The web bundle is likewise added to the app target as a
+decode the same bytes; the patch reconstruction; the Markdown sanitiser; the keyboard,
+palette and inbox-ordering logic; and the delegation engine (stream-event fixtures, argv
+construction, template splitting, git command sequences, state transitions). The web bundle is likewise added to the app target as a
 folder reference (`Shepherd/Resources/DiffViewer`) so `index.html` keeps its relative links.

@@ -57,6 +57,19 @@ struct SignedInRootView: View {
             }
         }
         .animation(.easeOut(duration: 0.12), value: environment.isCommandPaletteVisible)
+        // The delegation sheet lives here rather than on a screen: a run started from the
+        // review screen must survive going back to the inbox (ADR 0011).
+        .sheet(
+            isPresented: Binding(
+                get: { environment.delegation.presented != nil },
+                set: { if !$0 { environment.delegation.dismiss() } }
+            )
+        ) {
+            if let model = environment.delegation.presented {
+                DelegationSheet(model: model)
+                    .environment(environment)
+            }
+        }
         .alert(
             String(localized: "This review was not sent"),
             isPresented: Binding(

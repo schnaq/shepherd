@@ -52,6 +52,8 @@ final class AppEnvironment {
     let toasts = ToastCenter()
     /// Maps sync events to macOS notifications.
     let notifications = NotificationManager()
+    /// The delegation sheets: one per pull request, at most one on screen (ADR 0011).
+    let delegation = DelegationCenter()
 
     /// The provider router, rebuilt whenever the intelligence settings change.
     private(set) var intelligence: IntelligenceRouter = .disabled
@@ -167,6 +169,23 @@ final class AppEnvironment {
             try await session.syncNow()
         } catch {
             toasts.failure(error, context: String(localized: "Sync failed"))
+        }
+    }
+
+    /// Opens the delegation sheet for a pull request or a review finding (ADR 0011).
+    ///
+    /// A delegation already running for the same pull request is revealed rather than
+    /// replaced — one worktree per pull request, one run at a time.
+    /// - Parameter context: What the delegation is about.
+    func startDelegation(_ context: DelegationContext) {
+        delegation.open(
+            context: context,
+            settings: settings,
+            toasts: toasts
+        ) { [weak self] in
+            // The agent's commits are on the pull request now; refresh so the review screen
+            // shows the new head instead of the one the user delegated from.
+            await self?.syncNow()
         }
     }
 

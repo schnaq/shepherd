@@ -3,6 +3,7 @@ import SwiftUI
 
 /// The review screen's second tab: description, commits, checks and unanchored threads.
 struct ConversationView: View {
+    @Environment(AppEnvironment.self) private var environment
     /// The review model.
     let model: ReviewModel
     /// The write actions.
@@ -156,20 +157,29 @@ struct ConversationView: View {
                                 ThreadCommentView(comment: comment)
                             }
                             if let summary = model.summary {
-                                Button(
-                                    thread.isResolved
-                                        ? String(localized: "Unresolve")
-                                        : String(localized: "Resolve")
-                                ) {
-                                    Task {
-                                        await actions.setThread(
-                                            on: summary,
-                                            threadID: thread.id,
-                                            resolved: !thread.isResolved
+                                HStack(spacing: 8) {
+                                    Button(
+                                        thread.isResolved
+                                            ? String(localized: "Unresolve")
+                                            : String(localized: "Resolve")
+                                    ) {
+                                        Task {
+                                            await actions.setThread(
+                                                on: summary,
+                                                threadID: thread.id,
+                                                resolved: !thread.isResolved
+                                            )
+                                        }
+                                    }
+                                    .buttonStyle(SecondaryButtonStyle(height: 26))
+
+                                    Button(String(localized: "Delegate this finding…")) {
+                                        environment.startDelegation(
+                                            .reviewFinding(summary, thread: thread)
                                         )
                                     }
+                                    .buttonStyle(SecondaryButtonStyle(height: 26, tint: Theme.agent))
                                 }
-                                .buttonStyle(SecondaryButtonStyle(height: 26))
                             }
                         }
                         Divider().overlay(Theme.hairline)

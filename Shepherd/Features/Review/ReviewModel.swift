@@ -335,6 +335,23 @@ final class ReviewModel {
         focusOutcome.output?.value.first { $0.file == path }?.reason
     }
 
+    /// The riskiest files with the reasons the prioritiser gave, as prompt-ready lines.
+    ///
+    /// This is what makes "Delegate to agent…" from the review screen worth more than a bare
+    /// pull-request link: the agent starts with the same focus list the reviewer sees.
+    var delegationFocusReasons: [String] {
+        priorities
+            .filter { !$0.reasons.isEmpty }
+            .prefix(6)
+            .map { "\($0.file.path) — \($0.reasons.joined(separator: ", "))" }
+    }
+
+    /// The delegation context for the whole pull request, when it has loaded.
+    var delegationContext: DelegationContext? {
+        guard let summary else { return nil }
+        return .pullRequest(summary, focusReasons: delegationFocusReasons)
+    }
+
     /// Whether every file has been marked viewed.
     var isFullyReviewed: Bool {
         guard let detail, !detail.files.isEmpty else { return false }

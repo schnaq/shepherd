@@ -106,6 +106,13 @@ final class AppSettings {
         self.accountLogin = defaults.string(forKey: Keys.accountLogin)
         self.accountAvatarURL = defaults.url(forKey: Keys.accountAvatar)
         self.accountAuthKind = Self.read(defaults, Keys.accountAuthKind, default: AuthKind.pat)
+        self.agentCLI = Self.readJSON(
+            defaults,
+            Keys.agentCLI,
+            default: AgentCLIConfiguration()
+        )
+        self.localCheckouts = defaults.dictionary(forKey: Keys.localCheckouts) as? [String: String]
+            ?? [:]
     }
 
     // MARK: - Appearance
@@ -193,6 +200,49 @@ final class AppSettings {
         didSet { defaults.set(diffUsesInlineMode, forKey: Keys.diffInline) }
     }
 
+    // MARK: - Delegation (ADR 0011)
+
+    /// How the local agent CLI is invoked.
+    ///
+    /// No secret lives here: the CLI carries its own authentication and Shepherd never
+    /// collects, stores or injects any (ADR 0011).
+    var agentCLI: AgentCLIConfiguration {
+        didSet { Self.writeJSON(defaults, agentCLI, Keys.agentCLI) }
+    }
+
+    /// Repository full name (`owner/name`) → the path of the user's local clone.
+    ///
+    /// Delegation needs a checkout to build a worktree from; without one the sheet refuses and
+    /// points at this setting.
+    var localCheckouts: [String: String] {
+        didSet { defaults.set(localCheckouts, forKey: Keys.localCheckouts) }
+    }
+
+    /// The local clone configured for a repository, if any.
+    /// - Parameter repo: The repository.
+    /// - Returns: The checkout directory, or `nil` when none is configured.
+    func localCheckoutURL(for repo: RepoRef) -> URL? {
+        guard let path = localCheckouts[repo.fullName]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+            !path.isEmpty
+        else { return nil }
+        return URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
+    }
+
+    /// Sets (or clears) the local clone for a repository.
+    /// - Parameters:
+    ///   - url: The checkout directory, or `nil` to forget it.
+    ///   - fullName: The repository's `owner/name`.
+    func setLocalCheckout(_ url: URL?, forRepoNamed fullName: String) {
+        var updated = localCheckouts
+        if let url {
+            updated[fullName] = url.path
+        } else {
+            updated.removeValue(forKey: fullName)
+        }
+        localCheckouts = updated
+    }
+
     // MARK: - Account (never the token — ADR 0004)
 
     /// The login of the signed-in account, if any.
@@ -251,6 +301,28 @@ final class AppSettings {
         static let accountLogin = "account.login"
         static let accountAvatar = "account.avatarURL"
         static let accountAuthKind = "account.authKind"
+        static let agentCLI = "delegation.agentCLI"
+        static let localCheckouts = "delegation.localCheckouts"
+    }
+
+    private static func readJSON<Value: Decodable>(
+        _ defaults: UserDefaults,
+        _ key: String,
+        default fallback: Value
+    ) -> Value {
+        guard let data = defaults.data(forKey: key),
+              let value = try? JSONDecoder().decode(Value.self, from: data)
+        else { return fallback }
+        return value
+    }
+
+    private static func writeJSON<Value: Encodable>(
+        _ defaults: UserDefaults,
+        _ value: Value,
+        _ key: String
+    ) {
+        guard let data = try? JSONEncoder().encode(value) else { return }
+        defaults.set(data, forKey: key)
     }
 
     private static func read<Value: RawRepresentable>(

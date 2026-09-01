@@ -65,6 +65,11 @@ struct ShepherdCommands: Commands {
                 environment.request(.merge)
             }
             .disabled(environment.session == nil)
+
+            Button(String(localized: "Delegate to Agent…")) {
+                environment.request(.delegate)
+            }
+            .disabled(environment.session == nil)
         }
 
         CommandGroup(after: .toolbar) {

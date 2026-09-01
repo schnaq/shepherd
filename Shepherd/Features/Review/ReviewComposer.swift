@@ -290,6 +290,7 @@ struct InlineCommentComposer: View {
 
 /// The native thread panel opened by clicking a comment card in the diff.
 struct ThreadPopover: View {
+    @Environment(AppEnvironment.self) private var environment
     /// The thread being shown.
     let thread: ReviewThread
     /// The pull request the thread belongs to.
@@ -374,6 +375,21 @@ struct ThreadPopover: View {
                     }
                 }
                 .buttonStyle(SecondaryButtonStyle(height: 28))
+
+                Button {
+                    environment.startDelegation(
+                        .reviewFinding(summary, thread: thread)
+                    )
+                    onClose()
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "arrow.uturn.backward.badge.clock")
+                            .font(.system(size: 10, weight: .bold))
+                        Text(String(localized: "Delegate…"))
+                    }
+                }
+                .buttonStyle(SecondaryButtonStyle(height: 28, tint: Theme.agent))
+                .help(String(localized: "Hand this finding to your local coding agent"))
 
                 Spacer()
 

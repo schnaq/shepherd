@@ -33,7 +33,8 @@ struct ReviewScreen: View {
                 model: model,
                 onBack: { environment.closeReview() },
                 onMerge: { model.isMergeSheetPresented = true },
-                onReview: { model.isSubmitSheetPresented = true }
+                onReview: { model.isSubmitSheetPresented = true },
+                onDelegate: delegate
             )
             Divider().overlay(Theme.border)
             HStack(spacing: 0) {
@@ -206,9 +207,17 @@ struct ReviewScreen: View {
             submit(.comment)
         case .merge:
             model.isMergeSheetPresented = true
+        case .delegate:
+            delegate()
         case .groupBy:
             break
         }
+    }
+
+    /// Hands the whole pull request to the local agent CLI (ADR 0011).
+    private func delegate() {
+        guard let context = model.delegationContext else { return }
+        environment.startDelegation(context)
     }
 
     private func submit(_ verdict: ReviewVerdict) {
@@ -258,6 +267,8 @@ struct ReviewHeaderView: View {
     var onMerge: () -> Void
     /// Opens the submit sheet.
     var onReview: () -> Void
+    /// Opens the delegation sheet.
+    var onDelegate: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -306,6 +317,17 @@ struct ReviewHeaderView: View {
             if let checks = model.detail?.checks, !checks.isEmpty {
                 ChecksSummaryView(checks: checks)
             }
+
+            Button(action: onDelegate) {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.uturn.backward.badge.clock")
+                        .font(.system(size: 11))
+                    Text(String(localized: "Delegate…"))
+                }
+            }
+            .buttonStyle(SecondaryButtonStyle(height: 30, tint: Theme.agent))
+            .disabled(model.summary == nil)
+            .help(String(localized: "Hand this pull request to your local coding agent"))
 
             Button(action: onReview) {
                 HStack(spacing: 6) {

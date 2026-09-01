@@ -24,10 +24,14 @@ enum ShortcutAction: Equatable, Sendable {
     case merge
     /// Re-group the inbox (`g a` / `g r` / `g s`).
     case groupBy(InboxFacet)
+    /// Hand the selected pull request to the local agent CLI (ADR 0011). Menu/palette only —
+    /// it opens a sheet, which is not something a bare keystroke should do by accident.
+    case delegate
 
     /// The key hint shown in the shortcut bar and the command palette.
     var keyHint: String {
         switch self {
+        case .delegate: return ""
         case .selectNext: return "j"
         case .selectPrevious: return "k"
         case .openSelection: return "⏎"

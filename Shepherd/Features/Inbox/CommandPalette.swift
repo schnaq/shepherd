@@ -362,6 +362,16 @@ struct CommandPaletteView: View {
         )
         result.append(
             PaletteCommand(
+                id: "delegate",
+                section: review,
+                title: String(localized: "Delegate to agent"),
+                systemImage: "arrow.uturn.backward.badge.clock"
+            ) {
+                environment.request(.delegate)
+            }
+        )
+        result.append(
+            PaletteCommand(
                 id: "open-selection",
                 section: review,
                 title: String(localized: "Open full review"),

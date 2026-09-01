@@ -126,6 +126,12 @@ struct InboxScreen: View {
             compose(.comment)
         case .merge:
             if model.selectedRow != nil { isMergeSheetPresented = true }
+        case .delegate:
+            // The inbox has no file priorities yet, so the prompt is built from the row alone;
+            // the review screen adds the focus reasons (ADR 0011).
+            if let summary = model.selectedRow {
+                environment.startDelegation(.pullRequest(summary))
+            }
         case .groupBy(let facet):
             environment.settings.groupBy = facet
         }

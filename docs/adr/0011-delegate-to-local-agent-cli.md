@@ -46,4 +46,4 @@ Verified facts (docs.claude.com / code.claude.com, 2026-09):
   a setup hint otherwise.
 - Policy risk is contained: if Anthropic's third-party auth rules shift, Shepherd is
   unaffected because it never brokered auth in the first place.
-- Scheduled for v1.x (after the v1 review core has proven itself in daily use).
+- Pulled into v1 (2026-09-01) at the founder's request.

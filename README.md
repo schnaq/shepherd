@@ -28,6 +28,8 @@ from every repo — without ever opening a browser tab.
 - **Review-priority file ordering.** Changed files are grouped and ranked by what deserves your
   attention first — deterministic heuristics (source vs. lockfiles vs. generated code, churn,
   path risk), optionally sharpened by on-device AI.
+- **Delegate back to a local coding agent (Claude Code first-class)** — runs in an isolated
+  worktree with turn/budget caps; you review and push.
 - **On-device intelligence, cloud optional.** PR summaries and triage hints run locally via
   Apple's Foundation Models framework when available. Optionally bring your own Anthropic API
   key for deeper whole-PR analysis. The app is fully functional with AI switched off.

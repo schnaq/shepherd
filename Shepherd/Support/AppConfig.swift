@@ -38,6 +38,13 @@ enum AppConfig {
         applicationSupportDirectory.appendingPathComponent(databaseFileName, isDirectory: false)
     }
 
+    /// `~/Library/Application Support/Shepherd/Worktrees` — every delegation worktree lives
+    /// here and nowhere else (ADR 0011). `GitWorktree.remove()` refuses to delete anything
+    /// outside this directory.
+    static var worktreesDirectory: URL {
+        applicationSupportDirectory.appendingPathComponent("Worktrees", isDirectory: true)
+    }
+
     /// `https://github.com`, used for "open on GitHub" links.
     static var webBaseURL: URL {
         URL(string: "https://github.com") ?? URL(fileURLWithPath: "/")
