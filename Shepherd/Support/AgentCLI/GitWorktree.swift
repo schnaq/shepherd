@@ -169,7 +169,11 @@ struct GitWorktree: Sendable {
     /// `git status --porcelain` inside the worktree.
     func status() async throws -> Snapshot {
         let result = try await run(["status", "--porcelain"], in: directory, label: "status")
-        return Snapshot(porcelain: result.trimmedOutput)
+        // Trim only line breaks: porcelain lines carry meaning in their first two columns,
+        // and an unstaged entry (" M path") starts with a space that must survive.
+        return Snapshot(
+            porcelain: result.standardOutput.trimmingCharacters(in: .newlines)
+        )
     }
 
     /// `git diff --stat HEAD` inside the worktree — what the reviewer reads before pushing.

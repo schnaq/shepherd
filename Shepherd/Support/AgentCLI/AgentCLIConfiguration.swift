@@ -188,6 +188,20 @@ struct AgentCLIConfiguration: Codable, Sendable, Equatable {
         }
     }
 
+    /// Encodes `maxBudgetUSD` as an explicit `null` when it is "no cap" — the synthesized
+    /// encoder would omit the key, and the decoder above reads an absent key as "field did
+    /// not exist yet", falling back to the default cap.
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(executablePath, forKey: .executablePath)
+        try container.encode(extraArguments, forKey: .extraArguments)
+        try container.encode(permissionMode, forKey: .permissionMode)
+        try container.encode(allowedTools, forKey: .allowedTools)
+        try container.encode(maxTurns, forKey: .maxTurns)
+        try container.encode(maxBudgetUSD, forKey: .maxBudgetUSD)
+    }
+
     // MARK: - Invocation
 
     /// Why an invocation could not be built.
