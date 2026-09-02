@@ -67,6 +67,11 @@ struct ReviewScreen: View {
         }
         .task {
             model.intelligence = environment.intelligence
+            // Set before `start()`, which is what kicks off the detail fetch this hooks (ADR 0019).
+            let container = environment
+            model.onDidLoadDetail = { prID in
+                container.searchIndexDidLoadDetail(prID: prID)
+            }
             model.start()
             isFileListFocused = true
             // `r x` / `r c` from the inbox (or the command palette) land here: the verdict

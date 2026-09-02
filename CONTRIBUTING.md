@@ -128,6 +128,18 @@ bumping a dependency that ships inside the app also means a line in
   so if a digest is ever to gain a generated sentence it may only use the **on-device** tier, and
   wiring it up means a request type only that tier answers — never a method the two cloud providers
   also implement.
+- **⌘K search stays on the device.** The semantic search index (ADR 0019) is built from rows the
+  sweep and the review screen already wrote — `ShepherdCore/Search/`, `Features/Search/` — and its
+  embeddings come from Apple's on-device `NLEmbedding` and nowhere else. The BYOK endpoint is
+  **never** used for it, even when the user has configured one and switched the AI tiers on, and
+  that is a rule rather than a default: search runs on every keystroke and over every pull request
+  in the inbox, so a provider-backed embedding would ship the whole inbox — titles, descriptions,
+  diffs — to a third party as a side effect of typing, which is the opposite of the "somebody
+  clicked and can see the result" argument that makes the tiers above acceptable. Nothing in
+  `Features/Search/` takes an `IntelligenceRouter`, a base URL or a key, so the impossibility is
+  structural; keep it that way. The lexical ranker in `ShepherdCore` is the fallback and is always
+  on, which is why no search surface may hard-depend on a model being present (ADR 0007's rule,
+  unchanged).
 - **Shepherd never forms a verdict unattended.** Two rules may act without a human in the loop:
   auto-delegation (ADR 0016) starts a local agent, and auto-merge (ADR 0018) queues a merge. The
   second one is only acceptable because it *records* a decision a human already made — the

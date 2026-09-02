@@ -72,6 +72,12 @@ struct CommandPaletteView: View {
 
     @State private var query = ""
     @State private var selectionIndex = 0
+    /// The best-matching pull requests for the current query (ADR 0019).
+    ///
+    /// Held here rather than on the coordinator because it is *this* palette's view state: the
+    /// coordinator owns the corpus and answers questions, and a second palette (or the same one
+    /// reopened) starts from an empty query with nothing to show.
+    @State private var pullRequestResults: [PullRequestSearchResult] = []
     @FocusState private var isFieldFocused: Bool
 
     var body: some View {
@@ -135,13 +141,23 @@ struct CommandPaletteView: View {
         .padding(.horizontal, 16)
         .frame(height: 46)
         .onAppear { isFieldFocused = true }
+        // `task(id:)` is the debounce: a keystroke cancels the previous ranking and starts a new
+        // one. Everything it does is local — the corpus and the vectors are already in memory,
+        // and the query's own embedding is an on-device call — so there is nothing to throttle
+        // and nothing that could reach the network (ADR 0019).
+        .task(id: query) {
+            pullRequestResults = await environment.search.results(
+                for: query,
+                limit: CommandPaletteView.pullRequestResultLimit
+            )
+        }
     }
 
     @ViewBuilder
     private var results: some View {
-        let groups = groupedCommands
+        let groups = sections
         if groups.isEmpty {
-            Text(String(localized: "No command matches “\(query)”."))
+            Text(String(localized: "Nothing matches “\(query)”."))
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textMuted)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -150,8 +166,8 @@ struct CommandPaletteView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 1) {
-                        ForEach(groups, id: \.section) { group in
-                            Text(group.section.uppercased())
+                        ForEach(groups) { group in
+                            Text(group.title.uppercased())
                                 .font(.system(size: 10.5, weight: .semibold))
                                 .kerning(0.7)
                                 .foregroundStyle(Theme.textMuted)
@@ -160,7 +176,7 @@ struct CommandPaletteView: View {
                                 .padding(.bottom, 4)
                             ForEach(group.rows) { row in
                                 paletteRow(row)
-                                    .id(row.command.id)
+                                    .id(row.id)
                             }
                         }
                     }
@@ -169,17 +185,42 @@ struct CommandPaletteView: View {
                 }
                 .frame(maxHeight: 330)
                 .onChange(of: selectionIndex) { _, index in
-                    guard index < flatRows.count else { return }
-                    proxy.scrollTo(flatRows[index].command.id, anchor: .center)
+                    let rows = flatRows
+                    guard index >= 0, index < rows.count else { return }
+                    proxy.scrollTo(rows[index].id, anchor: .center)
                 }
             }
         }
     }
 
-    private func paletteRow(_ row: MatchedCommand) -> some View {
-        let isSelected = flatRows.firstIndex(where: { $0.command.id == row.command.id })
-            == selectionIndex
-        return Button {
+    @ViewBuilder
+    private func paletteRow(_ row: PaletteRow) -> some View {
+        switch row {
+        case .command(let matched):
+            commandRow(matched, isSelected: isSelected(row))
+        case .pullRequest(let result):
+            Button {
+                open(result)
+            } label: {
+                SearchResultRowView(result: result, isSelected: isSelected(row))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    /// Whether the keyboard cursor is on a row.
+    ///
+    /// By identity rather than by index arithmetic, because the two sections can swap places
+    /// between one keystroke and the next (a prose query moves the pull requests above the
+    /// commands) and an index computed in the row would then be one section out of date.
+    private func isSelected(_ row: PaletteRow) -> Bool {
+        let rows = flatRows
+        guard selectionIndex >= 0, selectionIndex < rows.count else { return false }
+        return rows[selectionIndex].id == row.id
+    }
+
+    private func commandRow(_ row: MatchedCommand, isSelected: Bool) -> some View {
+        Button {
             row.command.run()
             close()
         } label: {
@@ -239,6 +280,40 @@ struct CommandPaletteView: View {
 
         var id: String { command.id }
     }
+
+    /// One selectable row of the palette.
+    ///
+    /// The palette gained a second *kind* of answer with ADR 0019, and the keyboard is the reason
+    /// this is one enum rather than two lists: arrows, ⏎ and the scroll-to-selection all work on
+    /// a single ordered list, and a second list would mean a second cursor and a rule for moving
+    /// between them.
+    enum PaletteRow: Identifiable {
+        /// A command, matched by the fuzzy filter.
+        case command(MatchedCommand)
+        /// A pull request, ranked by ``ShepherdCore/SearchRanker``.
+        case pullRequest(PullRequestSearchResult)
+
+        /// A stable identifier, namespaced so a command and a pull request cannot collide.
+        var id: String {
+            switch self {
+            case .command(let matched): return "command:\(matched.command.id)"
+            case .pullRequest(let result): return "pr:\(result.id)"
+            }
+        }
+    }
+
+    /// A titled group of rows.
+    struct PaletteSection: Identifiable {
+        /// The section header.
+        let title: String
+        /// Its rows, in order.
+        let rows: [PaletteRow]
+
+        var id: String { title }
+    }
+
+    /// How many pull requests the palette has room for beside the commands.
+    static let pullRequestResultLimit = 6
 
     private var commands: [PaletteCommand] {
         var result: [PaletteCommand] = []
@@ -449,7 +524,7 @@ struct CommandPaletteView: View {
         return result
     }
 
-    private var flatRows: [MatchedCommand] {
+    private var matchedCommands: [MatchedCommand] {
         let rows = commands.map { command -> MatchedCommand in
             if let indices = FuzzyMatch.match(query: query, in: command.title) {
                 return MatchedCommand(command: command, indices: indices, isMatch: true)
@@ -462,20 +537,45 @@ struct CommandPaletteView: View {
         return rows.filter(\.isMatch) + rows.filter { !$0.isMatch }
     }
 
-    private var groupedCommands: [(section: String, rows: [MatchedCommand])] {
+    private var commandSections: [PaletteSection] {
         var order: [String] = []
-        var buckets: [String: [MatchedCommand]] = [:]
-        for row in flatRows {
+        var buckets: [String: [PaletteRow]] = [:]
+        for row in matchedCommands {
             if buckets[row.command.section] == nil {
                 order.append(row.command.section)
                 buckets[row.command.section] = []
             }
-            buckets[row.command.section]?.append(row)
+            buckets[row.command.section]?.append(.command(row))
         }
         return order.compactMap { section in
             guard let rows = buckets[section] else { return nil }
-            return (section, rows)
+            return PaletteSection(title: section, rows: rows)
         }
+    }
+
+    /// The palette's sections, in the order they are shown — and therefore in the order the
+    /// arrow keys walk them.
+    ///
+    /// Where the pull requests go is the one layout decision the feature makes (ADR 0019). They
+    /// sit **below** the commands for a short query, because a word or two is usually somebody
+    /// reaching for a command name and the palette's first job is still to be a command palette.
+    /// They move **above** them when the query reads like a search instead — two or more words,
+    /// or an explicit `owner/repo#123` — and when no command matched at all, because in both of
+    /// those cases the commands underneath are only ever the dimmed non-matches.
+    private var sections: [PaletteSection] {
+        let commandGroups = commandSections
+        guard !pullRequestResults.isEmpty else { return commandGroups }
+        let group = PaletteSection(
+            title: String(localized: "Pull requests"),
+            rows: pullRequestResults.map { PaletteRow.pullRequest($0) }
+        )
+        let hasCommandMatch = matchedCommands.contains(where: \.isMatch)
+        let leadsWithSearch = SearchQuery(text: query).looksLikeProse || !hasCommandMatch
+        return leadsWithSearch ? [group] + commandGroups : commandGroups + [group]
+    }
+
+    private var flatRows: [PaletteRow] {
+        sections.flatMap(\.rows)
     }
 
     // MARK: - Behaviour
@@ -483,7 +583,22 @@ struct CommandPaletteView: View {
     private func runSelected() {
         let rows = flatRows
         guard selectionIndex >= 0, selectionIndex < rows.count else { return }
-        rows[selectionIndex].command.run()
+        switch rows[selectionIndex] {
+        case .command(let matched):
+            matched.command.run()
+            close()
+        case .pullRequest(let result):
+            open(result)
+        }
+    }
+
+    /// Opens a pull request the same way every other surface does.
+    ///
+    /// ``AppEnvironment/openReview(prID:composing:)`` and nothing else — the argument the
+    /// menu-bar quick inbox makes: a fifth way to open a review would be a fifth place for the
+    /// focus session's "did the user leave the queue" rule to be forgotten.
+    private func open(_ result: PullRequestSearchResult) {
+        environment.openReview(prID: result.summary.id)
         close()
     }
 

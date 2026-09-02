@@ -47,6 +47,9 @@ than a guess.
 <td>☀️ <b>Morning digest</b><br>An opt-in daily summary built from the local database alone: new requests, green PRs one keystroke from done, your red CI, reviews still parked.</td>
 <td>📊 <b>Menu-bar quick inbox</b><br>The number of pull requests waiting on your review, and the top ones one click away — off the same local data, so it costs no extra API call.</td>
 </tr>
+<tr>
+<td colspan="2">🔎 <b>Semantic ⌘K search</b><br>Type what a pull request was <i>about</i> — “flaky login test” finds “Retry the auth suite” — over titles, labels, branches, descriptions and the diffs you have opened. On-device embeddings, stored in your own SQLite, never sent to an AI endpoint; <code>owner/repo#128</code> still wins outright.</td>
+</tr>
 <tr><th colspan="2" align="left">Automate</th></tr>
 <tr>
 <td>🛠️ <b>Delegate to a local agent</b><br>Hand a PR or a single finding back to Claude Code in an isolated worktree with turn and budget caps. Optionally started for you when CI turns red.</td>
@@ -82,7 +85,9 @@ The long form — every feature, with the decisions behind it — is in
 - **Sync is end-to-end encrypted and self-hosted.** Your bucket, your passphrase, ciphertext on the
   wire ([ADR 0014](docs/adr/0014-encrypted-settings-sync.md)).
 - **AI runs only when you ask.** Off by default, on-device where possible, and the unattended
-  morning digest may never call an endpoint at all.
+  morning digest may never call an endpoint at all. ⌘K search is the other side of the same rule:
+  it runs on every keystroke, so it is on-device *only* and has no code path to a provider
+  ([ADR 0019](docs/adr/0019-semantic-search-on-device-embeddings.md)).
 - **Crash reports stay on disk.** Opt-in MetricKit JSON in Application Support, no uploader in the
   code path ([ADR 0017](docs/adr/0017-local-diagnostics-metrickit.md)).
 
@@ -94,7 +99,7 @@ The long form — every feature, with the decisions behind it — is in
 | `⏎` | Open the selected pull request | | `r x` | Request changes |
 | `x` | Tick a row for bulk triage | | `r c` | Comment |
 | `g a` `g r` `g s` | Group by agent / repo / review state | | `m` | Merge… |
-| `⌘K` | Command palette | | `r f` · `⇧⌘⏎` | Start a focus review session |
+| `⌘K` | Command palette &amp; pull-request search | | `r f` · `⇧⌘⏎` | Start a focus review session |
 | `⌘R` | Sync now | | `d` `n` `esc` | In a session: done & next · next · end |
 | `⌘⏎` | Submit the pending review | | | |
 

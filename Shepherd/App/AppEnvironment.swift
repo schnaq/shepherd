@@ -90,6 +90,11 @@ final class AppEnvironment {
     let autoMergeStore: AutoMergeStore
     /// Decides whether the rows a sweep wrote contain anything to merge on its own (ADR 0018).
     let autoMerge: AutoMergeCoordinator
+    /// Keeps the on-device ⌘K search index current and answers the palette's queries (ADR 0019).
+    ///
+    /// Created inert: it holds no corpus and loads no model until the first inbox observation
+    /// hands it rows, and with the setting off it never reads a diff or spends an embedding.
+    let search: SearchIndexCoordinator
     /// Delivers the opt-in morning digest: a notification when it is due, a card in the inbox
     /// while the day lasts. Created inert — it does nothing until ``bootstrap()`` starts its check,
     /// and that check does nothing until the user switches the digest on.
@@ -165,6 +170,7 @@ final class AppEnvironment {
                 }
             }
         )
+        self.search = SearchIndexCoordinator(settings: settings)
         self.digest = DigestCoordinator(
             settings: settings,
             notify: { payload in
@@ -264,6 +270,10 @@ final class AppEnvironment {
         // Same argument for the digest's device state: the card names the leaving account's pull
         // requests, and "already delivered today" belongs to that account's morning.
         digest.reset()
+        // And the search corpus, which is the leaving account's titles and diffs held in memory.
+        // Its table went with `eraseAllData()` above — the index is local cache in exactly the
+        // sense ADR 0006 means.
+        search.reset()
     }
 
     private func startSession(for account: Account) async throws {
@@ -282,7 +292,15 @@ final class AppEnvironment {
                 self?.handle(event)
             },
             onInboxRows: { [weak self] rows in
-                self?.considerAutoMerge(rows: rows)
+                guard let self else { return }
+                self.considerAutoMerge(rows: rows)
+                // The same rows, the same moment, for the same reason: the inbox observation is
+                // the one place that reports a change to what is *in* the inbox — including the
+                // one nothing else announces, a detail fetch storing a diff (ADR 0019). The
+                // database comes from `self.session` rather than from the local above: the
+                // session holds this closure, so capturing it here would be a retain cycle.
+                guard let database = self.session?.database else { return }
+                self.search.considerIndexing(rows: rows, database: database)
             }
         )
         // A `shepherd://` link may have arrived while the app was still launching or signed
@@ -415,6 +433,54 @@ final class AppEnvironment {
     /// Applies the stored appearance preference to the whole app.
     func applyAppearance() {
         NSApplication.shared.appearance = settings.appearance.nsAppearance
+    }
+
+    /// Builds or drops the semantic search index to match the setting (ADR 0019).
+    ///
+    /// Called at launch and whenever ``AppSettings/semanticSearchEnabled`` changes — from the
+    /// toggle in Settings, or because a downloaded settings document carried the flag from another
+    /// Mac (ADR 0014). One route for both, exactly as ``applyDiagnosticsSetting()`` is.
+    ///
+    /// Switching it off empties the table rather than keeping it warm: a switch named after an
+    /// index that left a megabyte of vectors on disk would be lying about the one thing it is
+    /// named after. Re-enabling costs one local indexing pass.
+    func applySemanticSearchSetting() {
+        guard let session else {
+            search.reset()
+            return
+        }
+        if settings.semanticSearchEnabled {
+            search.considerIndexing(rows: session.inboxRows, database: session.database)
+            return
+        }
+        // The clear is a write, so it is awaited in a task of its own; only the database — which
+        // is `Sendable` — crosses into it.
+        let database = session.database
+        Task { [weak self] in
+            guard let self else { return }
+            await self.search.disable(database: database)
+        }
+    }
+
+    /// Re-indexes one pull request because the review screen just stored its diff (ADR 0019).
+    ///
+    /// Promptness only: the stored `detailFetchedAt` moves, so the next ordinary pass would pick
+    /// the pull request up regardless. The screen announcing it just means the diff is searchable
+    /// before the next sweep rather than after it.
+    /// - Parameter prID: The pull request whose detail arrived.
+    func searchIndexDidLoadDetail(prID: String) {
+        guard let session else { return }
+        search.indexAfterDetailLoad(prID: prID, database: session.database)
+    }
+
+    /// Throws the search index away and builds it again — the *Rebuild index* button.
+    func rebuildSearchIndex() {
+        guard let session else { return }
+        let database = session.database
+        Task { [weak self] in
+            guard let self else { return }
+            await self.search.rebuild(database: database)
+        }
     }
 
     /// Registers or removes the MetricKit subscriber to match the opt-in setting (ADR 0017).

@@ -148,6 +148,14 @@ final class ReviewModel {
     ///   - session: The signed-in session.
     ///   - settings: The preference store.
     ///   - prID: The pull request's node id.
+    /// Called after a detail fetch has been stored, with the pull request's node id.
+    ///
+    /// Exists for one consumer, the search index (ADR 0019): storing a detail is the moment a
+    /// pull request's description and diff become searchable, and the coordinator would otherwise
+    /// learn about it only on the next sweep. Imperative and read by nothing, so it stays out of
+    /// the observation graph — the same treatment `AppEnvironment`'s routing closures get.
+    @ObservationIgnored var onDidLoadDetail: (@MainActor (String) -> Void)?
+
     init(session: SignedInSession, settings: AppSettings, prID: String) {
         self.session = session
         self.settings = settings
@@ -197,6 +205,7 @@ final class ReviewModel {
                 try? await self.session.database.savePullRequestDetail(fresh)
                 guard !Task.isCancelled else { return }
                 self.apply(fresh)
+                self.onDidLoadDetail?(self.prID)
             }
         }
     }

@@ -40,6 +40,34 @@ opens the pull request in the main window. "Sync now" and the full inbox are one
 It reads the same local database the window does, so it costs no extra GitHub call, and it can be
 switched off in Settings → Appearance.
 
+### Find a pull request by what it is about
+
+⌘K has always been the command palette. It is now also the search box: type two or three words and
+the pull requests in your inbox that are *about* that come up beside the commands — repository and
+number, title, who wrote it, CI state, and one line saying why it matched (the label, the changed
+file, the line of the diff). ⏎ opens it, exactly as ⏎ on an inbox row does.
+
+It matches meaning, not just words: *flaky login test* finds "Retry the auth suite" even though
+they share no word. And it is still precise where precision is what you want — `schnaq/review#128`
+or `#128` puts that pull request first whatever else is open, and a query that matches nothing
+comes back empty instead of offering you the six least-unrelated pull requests in the inbox.
+
+What is searched is the title, the repository and number, the labels, the branch and the author for
+**every** pull request, plus the description, the changed-file paths and the added lines of the diff
+for anything you have opened for review. Nothing extra is downloaded to build that: it is the same
+rows the inbox and the review screen already store ([ADR 0006](adr/0006-local-first-sqlite-grdb.md)).
+
+**The ranking happens on your Mac and cannot happen anywhere else.** The embeddings are Apple's
+on-device model, stored in the local SQLite database; a configured AI endpoint is never used for
+search, even when you have one, because search runs on every keystroke over every pull request and
+that is not a thing to send to a third party
+([ADR 0019](adr/0019-semantic-search-on-device-embeddings.md)). On a Mac without the on-device model
+⌘K keeps working on words alone, and Settings says so in one line.
+
+The index is on by default — it is built from data you already have and costs nothing but a little
+CPU — and Settings → Intelligence shows what it holds, with a *Rebuild index* button and a switch.
+Switching it off empties it.
+
 ### A morning digest, built on your Mac
 
 Switch it on and once a day — nine o'clock by default, weekdays only if you like — Shepherd tells

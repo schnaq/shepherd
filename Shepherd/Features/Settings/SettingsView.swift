@@ -843,6 +843,8 @@ struct IntelligenceSettingsTab: View {
                 }
             }
 
+            semanticSearchCard
+
             Card {
                 VStack(alignment: .leading, spacing: 6) {
                     CardTitle(String(localized: "WHAT AI NEVER DOES"))
@@ -869,6 +871,96 @@ struct IntelligenceSettingsTab: View {
         .onChange(of: environment.settings.intelligenceMode) { _, _ in
             environment.refreshIntelligence()
         }
+    }
+
+    // MARK: - Semantic ⌘K search (ADR 0019)
+
+    /// The one toggle, one status line and one button the search index needs.
+    ///
+    /// It sits on the Intelligence tab because that is where a user looks for "how does Shepherd
+    /// understand my pull requests", and it sits *below* the provider card with its own copy
+    /// because the answer for this feature is different from the answer for every other one on the
+    /// tab: it never uses a provider. The two sentences below are the whole privacy story, and they
+    /// are in the UI rather than only in the ADR because "does typing in ⌘K send my diffs
+    /// somewhere" is a question a user is entitled to have answered where they are standing.
+    ///
+    /// On by default, which no other intelligence-shaped setting is (ADR 0019 argues it).
+    private var semanticSearchCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 8) {
+                CardTitle(String(localized: "SEMANTIC SEARCH"))
+                Toggle(
+                    String(localized: "Semantic search index"),
+                    isOn: semanticSearchBinding
+                )
+                Text(String(
+                    localized: "⌘K searches your pull requests by what they are about — the title, the description, the labels, the branch, the changed files and the diff of anything you have opened — not just by exact words. The index is built on this Mac from what Shepherd already downloaded, with Apple's on-device embeddings, and it is stored in the local database."
+                ))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                Text(String(
+                    localized: "It never uses an AI endpoint, even when you have configured one: search runs on every keystroke and over every pull request, so it stays on this Mac. Switching it off leaves ⌘K searching titles, labels, repositories, branches and authors, and empties the index."
+                ))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                Text(searchIndexStatusLine)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    Button(String(localized: "Rebuild index")) {
+                        environment.rebuildSearchIndex()
+                    }
+                    .buttonStyle(SecondaryButtonStyle(height: 28))
+                    .disabled(
+                        !environment.settings.semanticSearchEnabled
+                            || environment.session == nil
+                    )
+                    if environment.search.status.isIndexing {
+                        ProgressView().controlSize(.small)
+                    }
+                }
+            }
+        }
+    }
+
+    /// "412 pull requests indexed · 806 KB · last updated 4 minutes ago", and the honest variants.
+    ///
+    /// Assembled from ``SearchIndexStatus`` rather than from the database directly, so the line
+    /// says what the *running* index holds. The two states worth naming are switched-off and
+    /// "no model on this Mac": both leave search working on words, and a card that showed a size
+    /// of zero without saying why would read as a bug.
+    private var searchIndexStatusLine: String {
+        let status = environment.search.status
+        guard environment.settings.semanticSearchEnabled else {
+            return String(localized: "Off — ⌘K matches words only, and nothing is stored.")
+        }
+        if let reason = status.embeddingUnavailabilityReason {
+            return reason
+        }
+        let sizeText = ByteCountFormatter.string(
+            fromByteCount: Int64(status.vectorByteCount),
+            countStyle: .file
+        )
+        guard let last = status.lastIndexedAt else {
+            guard status.isIndexing else { return String(localized: "Nothing indexed yet.") }
+            return String(localized: "Indexing \(status.documentCount) pull requests…")
+        }
+        return String(
+            localized: "\(status.embeddedCount) of \(status.documentCount) pull requests indexed · \(sizeText) · last updated \(RelativeDate.long(last))."
+        )
+    }
+
+    private var semanticSearchBinding: Binding<Bool> {
+        Binding(
+            get: { environment.settings.semanticSearchEnabled },
+            // Nothing is applied here: `ShepherdApp` watches the flag and calls
+            // `applySemanticSearchSetting()`, so the toggle and an arriving settings document
+            // reach the coordinator through one route (ADR 0017's rule, ADR 0019's feature).
+            set: { environment.settings.semanticSearchEnabled = $0 }
+        )
     }
 
     // MARK: - OpenAI-compatible endpoint (ADR 0007, tier 3b)

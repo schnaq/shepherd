@@ -260,6 +260,9 @@ final class SettingsSyncTests: XCTestCase {
                 requiredLabels: ["automerge"]
             )
         )
+        // Non-default means *off* here: the index ships on, because it is on-device and costs
+        // nothing but CPU (ADR 0019).
+        document.search = SyncedSettingsDocument.SearchGroup(isSemanticIndexEnabled: false)
         document.appearance = SyncedSettingsDocument.AppearanceGroup(
             appearance: .dark,
             inboxGroupBy: .repository,
@@ -678,6 +681,10 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertEqual(document.autoMerge, SyncedSettingsDocument.AutoMergeGroup())
         XCTAssertFalse(document.autoMerge.rules.isEnabled)
         XCTAssertTrue(document.autoMerge.rules.allowedRepositories.isEmpty)
+        // The search index is the other field whose default is *true*: a document written before
+        // ADR 0019 must not read as "this user switched the index off".
+        XCTAssertEqual(document.search, SyncedSettingsDocument.SearchGroup())
+        XCTAssertTrue(document.search.isSemanticIndexEnabled)
         // A document written before diagnostics existed leaves them off rather than on.
         XCTAssertEqual(document.diagnostics, SyncedSettingsDocument.DiagnosticsGroup())
         XCTAssertFalse(document.diagnostics.isEnabled)
@@ -1066,6 +1073,9 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertEqual(settings.savedReplies.first?.body, "Please add a test.")
         XCTAssertEqual(settings.reviewTemplates.map(\.pattern), ["schnaq/*"])
         XCTAssertEqual(settings.reviewTemplates.first?.body, "## Checklist\n- [ ] tests")
+        // The switch travels; the vectors it produces never do — they are rebuildable device
+        // state (ADR 0019).
+        XCTAssertFalse(settings.semanticSearchEnabled)
         // The opt-in travels; the reports themselves never do (ADR 0017).
         XCTAssertTrue(settings.diagnosticsEnabled)
 
@@ -1255,8 +1265,10 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertFalse(document.automation.webhooksEnabled)
         XCTAssertFalse(document.autoMerge.rules.isEnabled)
         // The menu-bar quick inbox is the exception: it ships on, so a fresh install carries it
-        // as on rather than as an unset opt-in.
+        // as on rather than as an unset opt-in. So does the search index, for the reason ADR 0019
+        // argues — it is on-device and costs nothing but CPU.
         XCTAssertTrue(document.appearance.showsMenuBarExtra)
+        XCTAssertTrue(document.search.isSemanticIndexEnabled)
     }
 
     // MARK: - The model's flow

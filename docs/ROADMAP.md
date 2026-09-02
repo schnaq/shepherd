@@ -1,7 +1,8 @@
 # Roadmap
 
-Scope decisions from the founder interviews (2026-08-31, plus the 2026-09-01 follow-up that
-prioritised saved replies, the focus review session and the morning digest). v1 is deliberately
+Scope decisions from the founder interviews (2026-08-31, the 2026-09-01 follow-up that
+prioritised saved replies, the focus review session and the morning digest, and the 2026-09-02 one
+that added semantic ⌘K search). v1 is deliberately
 full-featured on the review path — the founder's bar is "never need to open github.com for a
 routine review".
 
@@ -27,6 +28,21 @@ routine review".
       when it wakes — once, and only on the same day. Off by default, with a time and a
       weekdays-only switch in Settings → Sync; the schedule travels in the encrypted settings
       document (ADR 0014) while "when this Mac last delivered one" deliberately stays put
+- [x] Semantic ⌘K search (founder interview 2026-09-02, ADR 0019): ⌘K searches the pull requests
+      in the inbox by what they are *about*, not by exact title words — a **Pull requests** section
+      beside the commands, each row with repo#number, title, provenance chip, CI dot and a one-line
+      "why it matched" (the label, the file path, the diff line). Ranked by a blend of BM25 over a
+      per-pull-request search document (title, identity, labels, author, branch, description,
+      changed-file paths and the *added* diff lines of anything you have opened, each against an
+      explicit byte budget) and the cosine of Apple's **on-device** sentence embeddings, stored as
+      `Float32` blobs in the local SQLite. An exact `owner/repo#123` or `#123` always wins; a query
+      that matches nothing returns nothing. **Never an AI endpoint**, even when one is configured —
+      search runs on every keystroke over every pull request, so it stays on this Mac, and the
+      lexical half is a pure function in `ShepherdCore` that keeps working with no model at all.
+      Indexed opportunistically from rows the sweep and the review screen already stored: no extra
+      GitHub call anywhere. On by default, with the index size and a *Rebuild index* button in
+      Settings → Intelligence; the switch travels in the encrypted settings document, the index
+      does not
 - [x] Menu-bar quick inbox (pulled into v1 from v1.x): a menu-bar item with the number of pull
       requests waiting for your review, and a small window with the top eight — repo#number,
       title, provenance chip, CI dot — where a click opens the pull request in the main window.
@@ -169,6 +185,15 @@ routine review".
   is parked because `PullRequestSummary` carries GitHub's aggregate review decision rather than the
   list of approvers, so it would mean a new call on the unattended path (ADR 0018). Anything that
   would *widen* the rule instead of narrowing it is a new ADR, not a checkbox
+- `shepherd://inbox?q=…` and `shepherd inbox --search "…"` (ADR 0019 left them out deliberately):
+  a query parameter is not an additive URL change — `DeepLink.inbox(filter:)` would gain a payload,
+  touching the grammar, the round trip, the CLI's argument grammar and the README's URL table — for
+  a feature whose value is interactive ranking as you type. The CLI half has ADR 0013's other
+  problem too: it cannot show results
+- `NLContextualEmbedding` instead of the sentence embedding (ADR 0019): stronger on long documents,
+  but its models are downloadable *assets*, and a search box that quietly starts a multi-megabyte
+  download is not something Shepherd may do. It costs one new model identifier, which invalidates
+  the index by itself
 - More `shepherd://` commands (additive by design, ADR 0013). Anything that must *return* data
   (`shepherd status`, "how many need my review?") is not a URL-scheme feature and needs the XPC
   or AppleScript decision ADR 0013 deferred

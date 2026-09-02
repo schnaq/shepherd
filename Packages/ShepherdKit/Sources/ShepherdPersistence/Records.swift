@@ -592,3 +592,50 @@ struct AgentOverrideRecord: Codable, FetchableRecord, PersistableRecord {
         )
     }
 }
+
+/// A row of `search_index` (ADR 0019).
+///
+/// The vector travels as a `Data` property, which GRDB stores as a BLOB — the same treatment
+/// ``OutboxRecord``'s payload gets. `dimensions` is stored alongside it even though it is
+/// derivable from the blob's length: a row whose blob was truncated by a half-written transaction
+/// is then detectable rather than silently decoding as a shorter vector that would still produce
+/// a plausible cosine.
+struct SearchIndexRecord: Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = "search_index"
+
+    var prID: String
+    var documentHash: String
+    var modelIdentifier: String
+    var dimensions: Int
+    var vector: Data?
+    var indexedAt: Double
+
+    init(entry: SearchIndexEntry) {
+        self.prID = entry.prID
+        self.documentHash = entry.documentHash
+        self.modelIdentifier = entry.modelIdentifier
+        self.dimensions = entry.vector?.dimensions ?? 0
+        self.vector = entry.vector?.data
+        self.indexedAt = entry.indexedAt.timeIntervalSince1970
+    }
+
+    /// Rebuilds the entry.
+    ///
+    /// A blob that does not decode, or decodes to a different number of dimensions than the row
+    /// claims, yields an entry with **no** vector rather than a failed fetch: the index is a
+    /// cache, so the honest response is to rank that pull request lexically and re-embed it on
+    /// the next pass.
+    var entry: SearchIndexEntry {
+        var decoded: SearchVector?
+        if let vector, let candidate = SearchVector(data: vector), candidate.dimensions == dimensions {
+            decoded = candidate
+        }
+        return SearchIndexEntry(
+            prID: prID,
+            documentHash: documentHash,
+            modelIdentifier: modelIdentifier,
+            vector: decoded,
+            indexedAt: Date(timeIntervalSince1970: indexedAt)
+        )
+    }
+}

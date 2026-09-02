@@ -57,6 +57,7 @@ public final class DatabaseManager: Sendable {
         var migrator = DatabaseMigrator()
         migrator.registerMigration("v1", migrate: DatabaseSchema.createV1)
         migrator.registerMigration("v2", migrate: DatabaseSchema.addV2)
+        migrator.registerMigration("v3", migrate: DatabaseSchema.addV3)
         return migrator
     }
 
@@ -145,6 +146,7 @@ enum DatabaseSchema {
         "outbox",
         "etags",
         "agent_registry_overrides",
+        "search_index",
     ]
 
     static func createV1(_ db: Database) throws {
@@ -361,5 +363,40 @@ enum DatabaseSchema {
     static func addV2(_ db: Database) throws {
         try db.execute(sql: "CREATE INDEX idx_etags_storedAt ON etags(storedAt)")
         try db.execute(sql: "ALTER TABLE review_threads ADD COLUMN originalLine INTEGER")
+    }
+
+    /// The v3 addition: the on-device semantic search index (ADR 0019).
+    ///
+    /// Append-only again — `createV1` and `addV2` are never edited.
+    ///
+    /// One row per pull request, holding the two hashes that decide whether work has to be
+    /// redone, the identifier of the model that produced the vector, and the vector itself as a
+    /// `Float32` BLOB. Four decisions are in the DDL rather than in code:
+    ///
+    /// - **The foreign key onto `pull_requests` with `ON DELETE CASCADE` *is* the pruning.** A
+    ///   pull request that leaves the inbox — merged, closed, or past the search's page cap —
+    ///   takes its index row with it, in the same transaction as the sweep's `DELETE`, with
+    ///   nothing to remember and no second sweep to schedule. `foreignKeysEnabled` is on for
+    ///   every connection Shepherd opens, so the cascade is not optional.
+    /// - **`prID` is the primary key**, so re-indexing is an upsert and the table cannot grow a
+    ///   second opinion about one pull request.
+    /// - **`vector` is nullable.** A Mac whose embedding model is unavailable still gets a row:
+    ///   the hashes are what stop the lexical corpus being rebuilt from every stored diff on
+    ///   every sweep, and they are worth keeping on their own.
+    /// - **No index on anything else.** The similarity search is brute force in Swift over a few
+    ///   hundred vectors (ADR 0019); there is no vector extension, no ANN structure, and nothing
+    ///   here that a query planner could help with.
+    static func addV3(_ db: Database) throws {
+        try db.execute(sql: """
+            CREATE TABLE search_index (
+                prID TEXT PRIMARY KEY NOT NULL
+                    REFERENCES pull_requests(id) ON DELETE CASCADE,
+                documentHash TEXT NOT NULL,
+                modelIdentifier TEXT NOT NULL DEFAULT '',
+                dimensions INTEGER NOT NULL DEFAULT 0,
+                vector BLOB,
+                indexedAt REAL NOT NULL
+            )
+            """)
     }
 }

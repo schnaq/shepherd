@@ -91,6 +91,11 @@ enum SettingsSyncApplier {
         // The rules only. The ledger — which is also the audit log — is device state for the same
         // reason `AutoDelegationLedger` is: it records what *this* Mac already queued (ADR 0018).
         document.autoMerge = SyncedSettingsDocument.AutoMergeGroup(rules: settings.autoMerge)
+        // The switch, never the index: the vectors are device state that a local pass rebuilds
+        // from local rows (ADR 0019).
+        document.search = SyncedSettingsDocument.SearchGroup(
+            isSemanticIndexEnabled: settings.semanticSearchEnabled
+        )
         document.appearance = SyncedSettingsDocument.AppearanceGroup(
             appearance: settings.appearance,
             inboxGroupBy: settings.groupBy,
@@ -196,6 +201,12 @@ enum SettingsSyncApplier {
         // automatic merging on takes effect on the next sweep — and one that switches it off
         // stops the very next pass (ADR 0018).
         settings.autoMerge = document.autoMerge.rules
+
+        // Only the flag is applied. Building or dropping the index is the window's job, driven by
+        // `onChange(of: settings.semanticSearchEnabled)` in `ShepherdApp` — the same one route the
+        // diagnostics opt-in takes (ADR 0017), so a flipped toggle and an applied document reach
+        // the coordinator through one path rather than two.
+        settings.semanticSearchEnabled = document.search.isSemanticIndexEnabled
 
         settings.appearance = document.appearance.appearance
         settings.groupBy = document.appearance.inboxGroupBy

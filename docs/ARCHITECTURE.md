@@ -17,6 +17,8 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
                                #   focus review session (frozen queue + session bar)
     DiffViewer/                #   WKWebView host + bridge (Swift side)
     Delegation/                #   delegate-to-local-agent model + sheet (ADR 0011, 0016)
+    Search/                    #   ⌘K semantic search: on-device embedder, index coordinator,
+                               #   result row (ADR 0019)
     Settings/                  #   accounts (+ updates, local diagnostics), sync (+ encrypted
                                #   cross-Mac sync), replies (saved replies + review templates),
                                #   agents, AI, delegation, automation, theme (+ menu-bar toggle)
@@ -40,6 +42,7 @@ Packages/ShepherdKit/          # SPM package, NO AppKit/SwiftUI imports
       Automation/              #     auto-delegation rules, ledger and policy (ADR 0016);
                                #     auto-merge rules, ledger/audit log and policy (ADR 0018)
       Digest/                  #     morning-digest report + delivery schedule
+      Search/                  #     search document, lexical ranker, vector value (ADR 0019)
     GitHubKit/                 #   GraphQL+REST client, device flow, rate limiting
     ShepherdPersistence/       #   GRDB schema, DAOs, outbox
     ShepherdSync/              #   sync engine orchestrating GitHubKit ⇄ Persistence
@@ -64,11 +67,14 @@ so it has no client, no database and no Keychain access, and can reach the app o
 `shepherd://` scheme (ADR 0013).
 
 `ShepherdCore` imports Foundation only. Nothing in `Packages/` imports AppKit, SwiftUI, or
-WebKit. The app target owns all UI and all Apple-only frameworks (FoundationModels, WebKit,
-UserNotifications, MetricKit, Security/Keychain). Sparkle is on the same side of that line and only
-one file imports it: `Support/UpdateController.swift` (ADR 0010); MetricKit likewise has exactly one
-importer, `Diagnostics/DiagnosticsReporter.swift` (ADR 0017). `Packages/ShepherdKit`
-must keep building on Linux, so it never gains an update or a diagnostics dependency.
+WebKit. The app target owns all UI and all Apple-only frameworks (FoundationModels, NaturalLanguage,
+WebKit, UserNotifications, MetricKit, Security/Keychain). Sparkle is on the same side of that line
+and only one file imports it: `Support/UpdateController.swift` (ADR 0010); MetricKit likewise has
+exactly one importer, `Diagnostics/DiagnosticsReporter.swift` (ADR 0017), and NaturalLanguage one,
+`Features/Search/EmbeddingProvider.swift` (ADR 0019). `Packages/ShepherdKit`
+must keep building on Linux, so it never gains an update, a diagnostics or an embedding
+dependency — which is why the search *ranker* is in `ShepherdCore` and only the thing that
+produces a vector is not.
 
 ## Core domain models (`ShepherdCore`)
 
@@ -161,6 +167,18 @@ Pure logic in `ShepherdCore` (all unit-tested):
   quiet on the second morning. `DigestSchedule.window(now:lastDeliveredAt:calendar:)` is the whole
   due rule — off/not-yet/weekend/already-delivered, in that fixed order — and returns the span to
   report on: the previous delivery, a 16 h look-back on the first run, capped at seven days.
+- `SearchDocument` / `SearchRanker` / `SearchVector` (`Search/`) — the whole of ⌘K search's
+  judgement as three pure values (ADR 0019). `SearchDocument.make(source:budget:)` composes one
+  pull request's searchable text out of what the sweep and the review screen already stored —
+  title, identity, labels, author, branch, then description, changed-file paths and the *added*
+  diff lines, each against an explicit byte budget — and carries its own weighted term counts plus
+  two staleness hashes (`documentHash`, the persisted re-embed gate; `sourceFingerprint`, the
+  in-memory "does the diff have to be read at all" gate, both FNV-1a so they survive a relaunch).
+  `SearchRanker.rank(query:documents:vectors:)` is BM25 over those counts blended half-and-half
+  with a cosine, with an exact `owner/repo#n` or `#n` always first, a similarity floor so a query
+  that matches nothing returns nothing, and a total order. `SearchVector` is the `Float32` value —
+  cosine, mean-pooling, alignment-safe BLOB coding — and the *only* embedding-shaped thing in the
+  package: what produces one is Apple-only and therefore lives in the app target.
 - `DeepLink` (`Routing/`) — the whole `shepherd://` grammar as a value: `parse(URL) -> DeepLink?`
   and `urlString` in the other direction, round-trip tested. Strict by construction (closed
   vocabularies, GitHub's own character rules, decoding *after* the path split), because a URL is
@@ -191,7 +209,10 @@ Pure logic in `ShepherdCore` (all unit-tested):
 
 Tables mirror core models (`repos`, `pull_requests`, `changed_files`, `review_threads`,
 `review_comments`, `review_drafts`, `draft_comments`, `check_runs`, `sync_state`, `outbox`,
-`etags`, `viewed_files`, `agent_registry_overrides`). Append-only migrator. `ValueObservation`
+`etags`, `viewed_files`, `agent_registry_overrides`, `search_index`). Append-only migrator —
+currently `v1`, `v2` and `v3` (the search index, ADR 0019: one row per pull request holding the
+document hash, the model identifier and a `Float32` vector, pruned by an `ON DELETE CASCADE` onto
+`pull_requests` rather than by a sweep of its own). `ValueObservation`
 publishers feed the UI. The **outbox** stores every outbound mutation (submit review, reply,
 resolve, merge) as a row with retry/backoff state so writes survive crash/offline.
 
@@ -302,7 +323,8 @@ label on the first keystroke).
 ## UI conventions
 
 - Linear-inspired: left rail (views/facets), center list, right detail; ⌘K command palette
-  exposes every action; `j`/`k` row navigation; two-keystroke review actions
+  exposes every action *and* searches the pull requests in the inbox by content (ADR 0019);
+  `j`/`k` row navigation; two-keystroke review actions
   (`r a` approve, `r c` comment, `r x` request changes, `r f` focus review session, `m` merge
   dialog); `x` ticks a row for bulk triage (⌘-click / ⇧-click do the same with the mouse,
   ADR 0015); undo toast instead of confirm dialogs wherever the action is reversible — the merge
@@ -784,6 +806,42 @@ Device state versus setting is the usual split: the rules travel in the encrypte
 the argument `AutoDelegationLedger` makes, unchanged — and it is cleared in `signOutAndErase`
 because an audit log naming the previous account's pull requests has no business staying on screen.
 
+### Semantic ⌘K search (on-device, ADR 0019)
+
+⌘K answers a second kind of question: not "which command" but "which pull request was about the
+token refresh". Everything about it is local — `Features/Search/` holds no client, no URL and no
+key — and everything it decides is the pure `ShepherdCore/Search/` trio above.
+
+- **`EmbeddingProviding`** is the seam, and `NaturalLanguageEmbedder` is its one production
+  implementation: an `actor` (because `NLEmbedding` is not `Sendable`, and because the
+  per-keystroke query embedding then happens off the main actor) wrapping
+  `NLEmbedding.sentenceEmbedding(for: .english)`, chunking long documents at word boundaries and
+  mean-pooling the chunks. **There is deliberately no cloud implementation and there may not be
+  one**: search runs on every keystroke over every pull request, so a provider-backed embedding
+  would ship the whole inbox to a third party as a side effect of typing. The BYOK endpoint is not
+  merely unused here, it is unreachable — nothing in the folder takes an `IntelligenceRouter`.
+- **`SearchIndexCoordinator`** (`@MainActor`) holds the corpus and runs the passes. Its trigger is
+  the same `onInboxRows` callback automatic merging uses, because the inbox observation is the one
+  place that reports a change to the *content* of the inbox — including the one nothing else
+  announces, a detail fetch storing a diff, which arrives as a moved `detailFetchedAt`. A pass is
+  low-priority, batched at twenty pull requests, composes documents in a detached task and yields
+  between batches; the two hashes mean an unchanged sweep reads one small column and stops, and a
+  changed row costs an embedding only when its *text* changed. `ReviewModel.onDidLoadDetail` is a
+  promptness hook on top, not a correctness one.
+- **The palette** keeps one ordered list (`CommandPaletteView.PaletteRow`, a command or a pull
+  request), so arrows, ⏎ and Escape are unchanged; a `.task(id: query)` is the debounce, because
+  cancelling a local ranking is free. Pull requests lead when the query reads like a search — two
+  or more words, or an explicit `owner/repo#123` — or when no command matched; otherwise the
+  commands stay on top. A row opens through `AppEnvironment.openReview(prID:)`, the same call the
+  inbox row and the menu-bar row make.
+- **Settings → Intelligence** carries the toggle, the size/last-indexed line and *Rebuild index*.
+  It is **on by default**, the only intelligence-shaped setting that is, because the reasons for
+  off-by-default (something is sent somewhere; it costs money) do not apply — see ADR 0019.
+  Switching it off empties the table and leaves the lexical ranker answering.
+- Device state versus setting, once more: the switch travels in the encrypted settings document
+  (`search` group, both applier directions), the index does not — it is rebuildable from local
+  rows, and it is dropped with the rest of the local data on sign-out.
+
 ### In-app updates (ADR 0010)
 
 `Support/UpdateController.swift` is the only file that imports Sparkle. It owns a
@@ -896,6 +954,14 @@ as a pure function of the date, two reports in one second, the 30-file retention
 leaving a foreign file alone, and the opt-in — off on a fresh install, and switching it off really
 calling `remove(_:)`, asserted through the subscription seam so the test host never registers with
 the real MetricKit);
+the app half of semantic search
+(ADR 0019: one embedding per pull request and none for a second pass over unchanged rows, a new
+title costing exactly one, a row that only moved its `updatedAt` keeping its vector, a pruned pull
+request leaving both the corpus and the table, a diff stored for review becoming searchable, the
+exact-slug shortcut, an embedding finding a pull request the words do not, the two degraded states —
+no model, and the toggle off — both still answering, and the chunker's boundaries; the document
+composition and the ranker are tested in `ShepherdCoreTests`, the table in
+`ShepherdPersistenceTests`, so both run on the Linux runner);
 and the app-side half of deep linking (resolving `owner/repo#number` against cached rows, filter
 token → rail state). The `shepherd://` grammar itself is tested in `ShepherdCoreTests` instead, so it
 runs on the Linux runner too. The web

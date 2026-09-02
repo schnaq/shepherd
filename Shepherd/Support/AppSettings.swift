@@ -132,6 +132,8 @@ final class AppSettings {
             Keys.autoMerge,
             default: AutoMergeRules()
         )
+        self.semanticSearchEnabled = defaults
+            .object(forKey: Keys.semanticSearch) as? Bool ?? true
         self.savedReplies = Self.readJSON(defaults, Keys.savedReplies, default: [SavedReply]())
         self.reviewTemplates = Self.readJSON(
             defaults,
@@ -401,6 +403,24 @@ final class AppSettings {
     /// automatic path could only ever disagree with what the user sees when they merge by hand —
     /// the same argument ``UpdateController/checksAutomatically`` makes about Sparkle's flag.
     var autoMergeMethod: MergeMethod { defaultMergeMethod }
+
+    // MARK: - Semantic ⌘K search (ADR 0019)
+
+    /// Whether Shepherd keeps an on-device semantic index of the pull requests in the inbox.
+    ///
+    /// **On on a fresh install**, which makes it the only intelligence-shaped setting in the app
+    /// that is. The reasoning is in ADR 0019 and comes down to what the toggle can cost: the index
+    /// is built from rows the sweep already wrote, the embeddings are Apple's on-device model, and
+    /// there is no code path from here to any endpoint — so the whole bill is some CPU in a
+    /// low-priority task and a few hundred kilobytes of SQLite. The tiers that are off by default
+    /// (ADR 0007) are off because they *send something somewhere* or cost money; neither applies.
+    ///
+    /// With it off, ⌘K still searches — the lexical ranker in `ShepherdCore` needs no model and
+    /// keeps matching titles, labels, repositories, branches and authors — and the index table is
+    /// emptied, because a switch named after an index that left one on disk would be a lie.
+    var semanticSearchEnabled: Bool {
+        didSet { defaults.set(semanticSearchEnabled, forKey: Keys.semanticSearch) }
+    }
 
     // MARK: - Saved replies & review templates
 
@@ -680,6 +700,7 @@ final class AppSettings {
         static let localCheckouts = "delegation.localCheckouts"
         static let autoDelegation = "delegation.autoRules"
         static let autoMerge = "automation.autoMergeRules"
+        static let semanticSearch = "search.semanticIndexEnabled"
         static let savedReplies = "review.savedReplies"
         static let reviewTemplates = "review.templates"
         static let webhookEnabled = "automation.webhook.enabled"

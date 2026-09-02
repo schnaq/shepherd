@@ -37,6 +37,12 @@ struct ShepherdApp: App {
                 .onChange(of: environment.settings.diagnosticsEnabled) { _, _ in
                     environment.applyDiagnosticsSetting()
                 }
+                // And once more for the search index (ADR 0019): the toggle in Settings and an
+                // applied settings document both land here, so there is one route from "the flag
+                // changed" to "the index exists or does not".
+                .onChange(of: environment.settings.semanticSearchEnabled) { _, _ in
+                    environment.applySemanticSearchSetting()
+                }
                 // `shepherd://` links: the terminal, Raycast, an n8n Execute Command node
                 // (ADR 0013). A link that arrives before the session exists is queued and
                 // replayed after sign-in.

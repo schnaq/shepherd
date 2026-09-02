@@ -308,6 +308,40 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         }
     }
 
+    /// Whether the on-device ⌘K search index is kept (ADR 0019).
+    ///
+    /// A group of its own rather than a field of ``IntelligenceGroup``, and the reason is the one
+    /// ADR 0019 fixes in place: this feature never talks to a provider. `intelligence` carries a
+    /// mode, a provider kind, an endpoint and a model — none of which this switch has or may ever
+    /// have — and putting a purely on-device toggle inside the group that decides *where requests
+    /// go* would invite exactly the confusion the ADR exists to prevent.
+    ///
+    /// The **switch** travels, because "I do not want an index" is a preference and belongs on
+    /// both Macs. The **index** does not, for the same reason the auto-merge ledger does not
+    /// (ADR 0018): it is device state, it is rebuildable from local rows in seconds, and a bucket
+    /// object carrying a megabyte of embeddings per Mac would be absurd.
+    struct SearchGroup: Codable, Sendable, Equatable {
+        /// Whether the semantic index is kept on this Mac.
+        var isSemanticIndexEnabled: Bool
+
+        /// Creates the group.
+        /// - Parameter isSemanticIndexEnabled: The opt-out flag.
+        init(isSemanticIndexEnabled: Bool = true) {
+            self.isSemanticIndexEnabled = isSemanticIndexEnabled
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case isSemanticIndexEnabled
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            // Defaults to `true`, matching ``AppSettings/semanticSearchEnabled``: a document from
+            // a build that predates this field must not read as "the user switched it off".
+            isSemanticIndexEnabled = container.syncedValue(.isSemanticIndexEnabled, default: true)
+        }
+    }
+
     /// Theme, inbox ordering, diff-viewer chrome and the menu-bar item.
     struct AppearanceGroup: Codable, Sendable, Equatable {
         /// Dark, light or system.
@@ -561,6 +595,8 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
     var automation: AutomationGroup
     /// The opt-in automatic-merge rules.
     var autoMerge: AutoMergeGroup
+    /// Whether the on-device search index is kept.
+    var search: SearchGroup
     /// Theme, inbox ordering, diff chrome.
     var appearance: AppearanceGroup
     /// Remembered review/merge dialog choices.
@@ -585,6 +621,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         delegation: DelegationGroup = DelegationGroup(),
         automation: AutomationGroup = AutomationGroup(),
         autoMerge: AutoMergeGroup = AutoMergeGroup(),
+        search: SearchGroup = SearchGroup(),
         appearance: AppearanceGroup = AppearanceGroup(),
         triage: TriageGroup = TriageGroup(),
         composer: ComposerGroup = ComposerGroup(),
@@ -601,6 +638,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         self.delegation = delegation
         self.automation = automation
         self.autoMerge = autoMerge
+        self.search = search
         self.appearance = appearance
         self.triage = triage
         self.composer = composer
@@ -612,6 +650,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case v, sync, notifications, digest, agents, intelligence, delegation, automation
         case autoMerge
+        case search
         case appearance, triage, composer, diagnostics, account, secrets
     }
 
@@ -634,6 +673,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         delegation = container.syncedValue(.delegation, default: DelegationGroup())
         automation = container.syncedValue(.automation, default: AutomationGroup())
         autoMerge = container.syncedValue(.autoMerge, default: AutoMergeGroup())
+        search = container.syncedValue(.search, default: SearchGroup())
         appearance = container.syncedValue(.appearance, default: AppearanceGroup())
         triage = container.syncedValue(.triage, default: TriageGroup())
         composer = container.syncedValue(.composer, default: ComposerGroup())
