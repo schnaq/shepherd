@@ -45,9 +45,9 @@ struct TranslatableMarkdownText: View {
     @State private var configuration: TranslationSession.Configuration?
 
     var body: some View {
-        // Both are read once, here, so the concurrent closure below captures two `Sendable`
-        // locals — a value type and a `@MainActor` reference — instead of capturing `self` and
-        // dragging the view's `@State` across an isolation boundary.
+        // Both are read once, here, so the job below carries two `Sendable` values — a value type
+        // and a `@MainActor` reference — instead of capturing `self` and dragging the view's
+        // `@State` across an isolation boundary.
         let requested = key
         let store = translations
 
@@ -59,9 +59,23 @@ struct TranslatableMarkdownText: View {
         .task(id: markdown) {
             eligibility = await TranslationOffer.eligibility(for: markdown, target: target)
         }
-        .translationTask(configuration) { session in
-            // `TranslationSession` is not `Sendable` and never leaves this closure: the only thing
-            // that crosses back to the main actor is the translated `String`.
+        .translationTask(configuration, action: TranslationJob(requested: requested, store: store).run)
+    }
+
+    /// The work a `TranslationSession` does for one request, kept off the main actor on purpose.
+    ///
+    /// A closure literal written inline in `body` would inherit the view's `@MainActor` isolation,
+    /// and `TranslationSession.translate(_:)` is a nonisolated `async` call on a non-`Sendable`
+    /// object — Swift 6 rejects that as "sending 'session' risks causing data races", because the
+    /// session would cross from the main actor to the generic executor. A nonisolated method on a
+    /// `Sendable` value has no isolation to leave: the session is handed in by the framework, is
+    /// used here, and never leaves. The only things that travel back to the main actor are two
+    /// `Sendable` values — the key and the translated (or error) `String`.
+    private struct TranslationJob: Sendable {
+        let requested: TranslationKey
+        let store: TranslationCoordinator
+
+        nonisolated func run(_ session: TranslationSession) async {
             do {
                 let response = try await session.translate(requested.text)
                 let translated = response.targetText

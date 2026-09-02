@@ -32,7 +32,7 @@ final class MigrationTests: XCTestCase {
     func testTheSchemaIsAppendOnly() async throws {
         // v1 is frozen; every change is a new migration. Locking the *order* here means an
         // edit to `createV1` — which would silently skip on existing installs — fails CI.
-        XCTAssertEqual(DatabaseManager.migrator.migrations, ["v1", "v2"])
+        XCTAssertEqual(DatabaseManager.migrator.migrations, ["v1", "v2", "v3"])
     }
 
     func testV2AddsTheETagIndexAndTheOriginalLineColumn() async throws {
