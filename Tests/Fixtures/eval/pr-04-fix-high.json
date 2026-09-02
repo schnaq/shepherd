@@ -1,0 +1,34 @@
+{
+  "body": "Two concurrent sweeps could both consume the single-use refresh token; the loser was signed out. Serialises refresh behind the store's actor and retries the loser once.\n\nAlso relaxes the assertion in the sweep test that assumed a single refresh per pass.",
+  "expected": {
+    "kind": "fix",
+    "risk": "high"
+  },
+  "files": [
+    {
+      "additions": 96,
+      "deletions": 42,
+      "path": "app/Auth/TokenStore.swift",
+      "status": "modified"
+    },
+    {
+      "additions": 34,
+      "deletions": 12,
+      "path": "app/Sync/SweepEngine.swift",
+      "status": "modified"
+    },
+    {
+      "additions": 18,
+      "deletions": 46,
+      "path": "tests/SweepEngineTests.swift",
+      "status": "modified"
+    }
+  ],
+  "id": "PR_eval_04",
+  "riskHints": [
+    "touches auth code",
+    "concurrency change",
+    "weakens an existing assertion"
+  ],
+  "title": "Fix the token refresh race that signed users out mid-sweep"
+}

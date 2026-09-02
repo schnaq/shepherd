@@ -1,0 +1,39 @@
+{
+  "body": "Nobody is on a v1 database any more. Removes the migration, its fixtures and the compatibility branch in the loader.\n\nThe schema version stays where it is; this only deletes a path that can no longer be reached.",
+  "expected": {
+    "kind": "chore",
+    "risk": "medium"
+  },
+  "files": [
+    {
+      "additions": 0,
+      "deletions": 212,
+      "path": "core/Sources/Persistence/MigrationV1.swift",
+      "status": "removed"
+    },
+    {
+      "additions": 6,
+      "deletions": 58,
+      "path": "core/Sources/Persistence/SchemaLoader.swift",
+      "status": "modified"
+    },
+    {
+      "additions": 0,
+      "deletions": 340,
+      "path": "tests/Fixtures/v1-database.json",
+      "status": "removed"
+    },
+    {
+      "additions": 0,
+      "deletions": 164,
+      "path": "tests/MigrationV1Tests.swift",
+      "status": "removed"
+    }
+  ],
+  "id": "PR_eval_06",
+  "riskHints": [
+    "deletes tests",
+    "touches the schema loader"
+  ],
+  "title": "Drop the pre-v2 migration path and its fixtures"
+}

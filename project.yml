@@ -172,6 +172,16 @@ targets:
       - path: web/diff-viewer/fixtures
         type: folder
         buildPhase: resources
+      # The intelligence evaluation corpus (docs/plans/apple-intelligence-v2.md §0.4): anonymised
+      # pull requests with an expected verdict, and CI log tails with an expected diagnosis. A
+      # folder reference for the same two reasons as the corpus above — a fixture added by hand
+      # needs no change here, and `IntelligenceEvalTests` walks the directory rather than a list.
+      # It rides along in every build of the test bundle; what is gated is the *harness*, which
+      # skips itself unless `SHEPHERD_EVAL=1` is set, so CI copies a few kilobytes of JSON and
+      # runs none of it.
+      - path: Tests/Fixtures/eval
+        type: folder
+        buildPhase: resources
     dependencies:
       - target: Shepherd
     settings:

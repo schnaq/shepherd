@@ -1,0 +1,20 @@
+{
+  "body": "Adds the shortcut table and fixes two stale screenshots' captions.",
+  "expected": {
+    "kind": "docs",
+    "risk": "low"
+  },
+  "files": [
+    {
+      "additions": 38,
+      "deletions": 4,
+      "path": "README.md",
+      "status": "modified"
+    }
+  ],
+  "id": "PR_eval_09",
+  "riskHints": [
+    "documentation only"
+  ],
+  "title": "Document the review keyboard shortcuts in the README"
+}

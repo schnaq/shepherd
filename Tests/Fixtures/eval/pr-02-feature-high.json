@@ -1,0 +1,46 @@
+{
+  "body": "Adds an SSO path beside the existing device flow. Touches the token store, the refresh loop and the middleware that decides whether a request is authenticated.\n\nOne existing test for the refresh race is removed because the flow it covered no longer exists.",
+  "expected": {
+    "kind": "feature",
+    "risk": "high"
+  },
+  "files": [
+    {
+      "additions": 210,
+      "deletions": 48,
+      "path": "app/Auth/AuthMiddleware.swift",
+      "status": "modified"
+    },
+    {
+      "additions": 88,
+      "deletions": 31,
+      "path": "app/Auth/TokenStore.swift",
+      "status": "modified"
+    },
+    {
+      "additions": 264,
+      "deletions": 0,
+      "path": "app/Auth/SSOSession.swift",
+      "status": "added"
+    },
+    {
+      "additions": 19,
+      "deletions": 3,
+      "path": "core/Sources/Domain/Account.swift",
+      "status": "modified"
+    },
+    {
+      "additions": 0,
+      "deletions": 118,
+      "path": "tests/TokenRefreshRaceTests.swift",
+      "status": "removed"
+    }
+  ],
+  "id": "PR_eval_02",
+  "riskHints": [
+    "touches auth middleware",
+    "changes the token store",
+    "deletes tests"
+  ],
+  "title": "Sign in with the organisation's SSO provider"
+}

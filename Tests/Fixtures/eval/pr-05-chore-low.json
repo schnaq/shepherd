@@ -1,0 +1,20 @@
+{
+  "body": "The workflow tracked a rolling image tag, which moved under us twice last month.",
+  "expected": {
+    "kind": "chore",
+    "risk": "low"
+  },
+  "files": [
+    {
+      "additions": 4,
+      "deletions": 4,
+      "path": ".github/workflows/ci.yml",
+      "status": "modified"
+    }
+  ],
+  "id": "PR_eval_05",
+  "riskHints": [
+    "CI workflow change"
+  ],
+  "title": "Pin the CI runner image to a released tag"
+}

@@ -1,0 +1,39 @@
+{
+  "body": "Adds a menu of reusable comment bodies to the inline composer, editable in Settings.\n\nThe list is stored as one JSON blob so its order is part of the data. No API changes.",
+  "expected": {
+    "kind": "feature",
+    "risk": "medium"
+  },
+  "files": [
+    {
+      "additions": 74,
+      "deletions": 6,
+      "path": "app/Features/Review/ComposerToolbar.swift",
+      "status": "modified"
+    },
+    {
+      "additions": 132,
+      "deletions": 4,
+      "path": "app/Features/Settings/RepliesSettingsTab.swift",
+      "status": "modified"
+    },
+    {
+      "additions": 41,
+      "deletions": 0,
+      "path": "core/Sources/Domain/SavedReply.swift",
+      "status": "added"
+    },
+    {
+      "additions": 96,
+      "deletions": 0,
+      "path": "tests/SavedReplyTests.swift",
+      "status": "added"
+    }
+  ],
+  "id": "PR_eval_01",
+  "riskHints": [
+    "adds a settings surface",
+    "new persisted value"
+  ],
+  "title": "Add saved replies to the review composer"
+}

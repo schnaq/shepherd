@@ -1,0 +1,41 @@
+{
+  "checkName": "ShepherdKit tests (Linux)",
+  "expected": {
+    "failingTest": "SearchRankerTests.testBlendedRankingKeepsExactMatchesFirst",
+    "file": "Packages/ShepherdKit/Tests/ShepherdCoreTests/SearchRankerTests.swift",
+    "line": 212
+  },
+  "logTail": [
+    "Fetching https://github.com/groue/GRDB.swift from cache",
+    "Computing version for https://github.com/groue/GRDB.swift",
+    "[1/1] Compiling ShepherdCore SearchRanker.swift",
+    "[2/2] Compiling ShepherdCoreTests SearchRankerTests.swift",
+    "Build complete! (18.42s)",
+    "Test Suite 'All tests' started at 2026-09-02 09:22:04.881",
+    "Test Suite 'ShepherdCorePackageTests.xctest' started at 2026-09-02 09:22:04.883",
+    "Test Suite 'AgentDetectorTests' started at 2026-09-02 09:22:04.883",
+    "Test Case 'AgentDetectorTests.testBotFromAPIWins' passed (0.001 seconds).",
+    "Test Case 'AgentDetectorTests.testRegistryPromotesToAgent' passed (0.001 seconds).",
+    "Test Suite 'AgentDetectorTests' passed at 2026-09-02 09:22:04.886",
+    "\t Executed 2 tests, with 0 failures (0 unexpected) in 0.002 (0.003) seconds",
+    "Test Suite 'SearchRankerTests' started at 2026-09-02 09:22:04.886",
+    "Test Case 'SearchRankerTests.testLexicalRankingPrefersTitleMatches' passed (0.004 seconds).",
+    "Test Case 'SearchRankerTests.testBlendedRankingKeepsExactMatchesFirst' started.",
+    "/home/runner/work/review/Packages/ShepherdKit/Tests/ShepherdCoreTests/SearchRankerTests.swift:212: error: -[ShepherdCoreTests.SearchRankerTests testBlendedRankingKeepsExactMatchesFirst] : XCTAssertEqual failed: (\"[\"pr-3\", \"pr-1\"]\") is not equal to (\"[\"pr-1\", \"pr-3\"]\")",
+    "Test Case 'SearchRankerTests.testBlendedRankingKeepsExactMatchesFirst' failed (0.006 seconds).",
+    "Test Case 'SearchRankerTests.testVectorOnlyRankingFallsBackToLexical' passed (0.003 seconds).",
+    "Test Suite 'SearchRankerTests' failed at 2026-09-02 09:22:04.901",
+    "\t Executed 3 tests, with 1 failure (0 unexpected) in 0.013 (0.014) seconds",
+    "Test Suite 'FilePrioritizerTests' started at 2026-09-02 09:22:04.901",
+    "Test Case 'FilePrioritizerTests.testLockfilesAreDemoted' passed (0.002 seconds).",
+    "Test Case 'FilePrioritizerTests.testDeletedTestsAreBoosted' passed (0.002 seconds).",
+    "Test Suite 'FilePrioritizerTests' passed at 2026-09-02 09:22:04.906",
+    "\t Executed 2 tests, with 0 failures (0 unexpected) in 0.004 (0.005) seconds",
+    "Test Suite 'ShepherdCorePackageTests.xctest' failed at 2026-09-02 09:22:04.907",
+    "\t Executed 7 tests, with 1 failure (0 unexpected) in 0.019 (0.024) seconds",
+    "Test Suite 'All tests' failed at 2026-09-02 09:22:04.907",
+    "\t Executed 7 tests, with 1 failure (0 unexpected) in 0.019 (0.025) seconds",
+    "error: fatalError",
+    "Error: Process completed with exit code 1."
+  ]
+}

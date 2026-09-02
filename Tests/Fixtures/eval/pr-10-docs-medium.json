@@ -1,0 +1,33 @@
+{
+  "body": "The host list gained an endpoint last week and the ADR never said so. This is documentation only, but it is the documentation that *is* the privacy contract, so it needs reading rather than skimming.",
+  "expected": {
+    "kind": "docs",
+    "risk": "medium"
+  },
+  "files": [
+    {
+      "additions": 46,
+      "deletions": 18,
+      "path": "CONTRIBUTING.md",
+      "status": "modified"
+    },
+    {
+      "additions": 92,
+      "deletions": 0,
+      "path": "docs/adr/0031-log-reads.md",
+      "status": "added"
+    },
+    {
+      "additions": 14,
+      "deletions": 6,
+      "path": "docs/ARCHITECTURE.md",
+      "status": "modified"
+    }
+  ],
+  "id": "PR_eval_10",
+  "riskHints": [
+    "documentation only",
+    "changes the stated privacy contract"
+  ],
+  "title": "Rewrite the privacy section and record the new endpoint in the ADR"
+}

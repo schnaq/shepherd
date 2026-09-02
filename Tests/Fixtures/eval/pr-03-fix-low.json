@@ -1,0 +1,26 @@
+{
+  "body": "The chip clipped its text at narrow window widths. One layout constant and a snapshot update.",
+  "expected": {
+    "kind": "fix",
+    "risk": "low"
+  },
+  "files": [
+    {
+      "additions": 3,
+      "deletions": 3,
+      "path": "app/Features/Inbox/FilterChip.swift",
+      "status": "modified"
+    },
+    {
+      "additions": 12,
+      "deletions": 12,
+      "path": "tests/Snapshots/FilterChip.json",
+      "status": "modified"
+    }
+  ],
+  "id": "PR_eval_03",
+  "riskHints": [
+    "single-file layout change"
+  ],
+  "title": "Fix the truncated label on the inbox filter chip"
+}

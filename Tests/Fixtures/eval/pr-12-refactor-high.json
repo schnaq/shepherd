@@ -1,0 +1,46 @@
+{
+  "body": "Replaces the three ad-hoc dispatch paths with one serial queue and a retry ledger. Ordering guarantees change: a queued merge now always follows the approval it belongs to.\n\nThe two flaky ordering tests are deleted rather than fixed; the new ledger test covers the property they were reaching for.",
+  "expected": {
+    "kind": "refactor",
+    "risk": "high"
+  },
+  "files": [
+    {
+      "additions": 232,
+      "deletions": 188,
+      "path": "core/Sources/Persistence/Outbox.swift",
+      "status": "modified"
+    },
+    {
+      "additions": 176,
+      "deletions": 210,
+      "path": "app/Sync/OutboxDispatcher.swift",
+      "status": "modified"
+    },
+    {
+      "additions": 128,
+      "deletions": 0,
+      "path": "core/Sources/Persistence/RetryLedger.swift",
+      "status": "added"
+    },
+    {
+      "additions": 0,
+      "deletions": 204,
+      "path": "tests/OutboxOrderingTests.swift",
+      "status": "removed"
+    },
+    {
+      "additions": 142,
+      "deletions": 0,
+      "path": "tests/RetryLedgerTests.swift",
+      "status": "added"
+    }
+  ],
+  "id": "PR_eval_12",
+  "riskHints": [
+    "changes ordering guarantees",
+    "deletes tests",
+    "touches the outbox"
+  ],
+  "title": "Rework the outbox scheduler around a single serial queue"
+}

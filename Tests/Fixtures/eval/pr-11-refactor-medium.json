@@ -1,0 +1,33 @@
+{
+  "body": "Moves the ranking out of the view model into a value with tests. Same ordering: the existing ranking tests were moved, not rewritten.",
+  "expected": {
+    "kind": "refactor",
+    "risk": "medium"
+  },
+  "files": [
+    {
+      "additions": 186,
+      "deletions": 0,
+      "path": "core/Sources/Heuristics/InboxRanker.swift",
+      "status": "added"
+    },
+    {
+      "additions": 22,
+      "deletions": 148,
+      "path": "app/Features/Inbox/InboxModel.swift",
+      "status": "modified"
+    },
+    {
+      "additions": 12,
+      "deletions": 4,
+      "path": "tests/InboxRankerTests.swift",
+      "status": "renamed"
+    }
+  ],
+  "id": "PR_eval_11",
+  "riskHints": [
+    "behaviour-preserving move",
+    "tests moved with the code"
+  ],
+  "title": "Extract the inbox ranking into a pure type"
+}

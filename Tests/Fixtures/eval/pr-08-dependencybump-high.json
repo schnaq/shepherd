@@ -1,0 +1,46 @@
+{
+  "body": "Major version. The observation API changed shape, so every DAO that observed a query had to be rewritten, and two migrations needed a new value-conversion hook.\n\nRelease notes list a behaviour change in how transactions are grouped.",
+  "expected": {
+    "kind": "dependencyBump",
+    "risk": "high"
+  },
+  "files": [
+    {
+      "additions": 2,
+      "deletions": 2,
+      "path": "core/Package.swift",
+      "status": "modified"
+    },
+    {
+      "additions": 148,
+      "deletions": 96,
+      "path": "core/Sources/Persistence/DatabaseManager.swift",
+      "status": "modified"
+    },
+    {
+      "additions": 210,
+      "deletions": 174,
+      "path": "core/Sources/Persistence/PullRequestDAO.swift",
+      "status": "modified"
+    },
+    {
+      "additions": 88,
+      "deletions": 64,
+      "path": "core/Sources/Persistence/OutboxDAO.swift",
+      "status": "modified"
+    },
+    {
+      "additions": 54,
+      "deletions": 12,
+      "path": "core/Sources/Persistence/Migrations.swift",
+      "status": "modified"
+    }
+  ],
+  "id": "PR_eval_08",
+  "riskHints": [
+    "major version bump",
+    "touches migrations",
+    "rewrites persistence"
+  ],
+  "title": "Upgrade the database library to 7.0 and adopt its new observation API"
+}

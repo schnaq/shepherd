@@ -1,0 +1,27 @@
+{
+  "body": "Patch release. Lockfile only.",
+  "expected": {
+    "kind": "dependencyBump",
+    "risk": "low"
+  },
+  "files": [
+    {
+      "additions": 1,
+      "deletions": 1,
+      "path": "web/viewer/package.json",
+      "status": "modified"
+    },
+    {
+      "additions": 42,
+      "deletions": 42,
+      "path": "web/viewer/package-lock.json",
+      "status": "modified"
+    }
+  ],
+  "id": "PR_eval_07",
+  "riskHints": [
+    "lockfile only",
+    "generated file"
+  ],
+  "title": "Bump the bundler from 0.21.4 to 0.21.5"
+}
