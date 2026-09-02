@@ -85,12 +85,7 @@ final class LocalizationTests: XCTestCase {
         XCTAssertEqual(smartView, "Needs my review")
 
         let line = 42
-        let composed = String(
-            localized: "Comment on line \(line)",
-            table: nil,
-            bundle: .main,
-            locale: english
-        )
+        let composed = String(localized: "Comment on line \(line)", bundle: Bundle(for: Self.self))
         XCTAssertEqual(composed, "Comment on line 42")
     }
 }
