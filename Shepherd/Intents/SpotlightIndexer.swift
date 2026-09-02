@@ -105,6 +105,12 @@ struct SpotlightExportStatus: Equatable, Sendable {
     var isExporting = false
     /// How many pull requests are currently in the system index.
     var itemCount = 0
+    /// Whether a domain deletion Shepherd asked for has not been confirmed by the framework yet.
+    ///
+    /// "Off means gone" is a promise about the *system* index, and the only evidence that it was
+    /// kept is `deleteSearchableItems(withDomainIdentifiers:)` answering without an error. Until it
+    /// does, the Settings card says so instead of "Off", and every sweep asks again.
+    var domainDeletionPending = false
 }
 
 /// Keeps the `pullRequests` Spotlight domain in step with the inbox (ADR 0021).
@@ -168,11 +174,14 @@ final class SpotlightIndexer {
     /// Rows that arrived while a pass was running. One slot, last write wins — an intermediate
     /// state of the inbox is of no interest once a newer one is known.
     private var pendingRows: [PullRequestSummary]?
-    /// The domain deletion ``reset()`` started, if one is in flight.
+    /// The domain deletion in flight, if one is.
     ///
-    /// Held for the same reason ``passTask`` is — a test awaits it rather than polling — and for
-    /// no other: nothing in the app reads it, because nothing in the app has anything to do until
-    /// the next account's first sweep, which is seconds away at the earliest.
+    /// Held for two reasons. A test awaits it rather than polling, as with ``passTask``. And an
+    /// export must not start while it runs: the domain is one identifier shared by every item, so a
+    /// deletion that lands *after* a fresh batch was written would wipe that batch — the toggle
+    /// flipped off and on again, or a sign-out followed by the next account's first sweep. Rows that
+    /// arrive meanwhile wait in ``pendingRows`` and are exported by the deletion task itself, once
+    /// the framework has confirmed the domain is empty.
     private(set) var domainDeletionTask: Task<Void, Never>?
 
     /// Creates an exporter.
@@ -193,8 +202,14 @@ final class SpotlightIndexer {
     /// - Parameter rows: Every inbox row the local database now holds.
     func considerExporting(rows: [PullRequestSummary]) {
         status.isEnabled = settings.spotlightExportEnabled
+        // A deletion the framework has not confirmed is asked for again on every sweep, whether the
+        // export is on or off: the items of the previous state are in the system index either way,
+        // and the sweep is the one heartbeat this coordinator has.
+        if status.domainDeletionPending, domainDeletionTask == nil {
+            requestDomainDeletion()
+        }
         guard settings.spotlightExportEnabled else { return }
-        guard passTask == nil else {
+        guard passTask == nil, domainDeletionTask == nil else {
             pendingRows = rows
             return
         }
@@ -213,30 +228,59 @@ final class SpotlightIndexer {
     /// ``AppEnvironment/applySpotlightSetting()`` — one route, exactly as the diagnostics opt-in
     /// (ADR 0017) and the search index (ADR 0019) have one.
     func disable() async {
-        passTask?.cancel()
-        passTask = nil
-        pendingRows = nil
-        exported = [:]
+        forgetExport()
         status.isEnabled = false
-        status.isExporting = false
-        status.itemCount = 0
-        _ = await index.deleteDomain()
+        requestDomainDeletion()
+        // Awaited so that the caller's task ends with the framework's answer, not before it; the
+        // status is already on screen, so nothing visible waits on this.
+        if let task = domainDeletionTask {
+            await task.value
+        }
     }
 
     /// Drops everything. Called from "Sign out & erase local data".
     ///
-    /// The domain deletion is fire-and-forget: `signOutAndErase()` is not going to hold the UI
-    /// while the system index catches up, and there is no state left in the app that depends on the
-    /// deletion having finished — `exported` is empty either way, so the next account's first pass
-    /// re-writes everything it wants regardless.
+    /// The domain deletion is not awaited: `signOutAndErase()` is not going to hold the UI while
+    /// the system index catches up. What it *is* is ordered before the next export — see
+    /// ``domainDeletionTask`` — so the next account's first sweep cannot race the previous
+    /// account's removal.
     func reset() {
+        forgetExport()
+        status = SpotlightExportStatus(isEnabled: settings.spotlightExportEnabled)
+        requestDomainDeletion()
+    }
+
+    /// Stops the pass and drops the baseline, without touching the system index.
+    private func forgetExport() {
         passTask?.cancel()
         passTask = nil
         pendingRows = nil
         exported = [:]
-        status = SpotlightExportStatus(isEnabled: settings.spotlightExportEnabled)
-        domainDeletionTask = Task(priority: .low) { [index] in
-            _ = await index.deleteDomain()
+        status.isExporting = false
+        status.itemCount = 0
+    }
+
+    /// Asks the framework to delete the whole domain, once, and remembers whether it agreed.
+    ///
+    /// The result is not discarded — that was the gap: a transient framework error on the one call
+    /// that keeps "off means gone" true would have left the previous account's titles in a
+    /// system-wide index with nothing ever asking again, because the baseline had already been
+    /// cleared and no later export touches identifiers that departed. Now the pending flag stays up
+    /// until a deletion is confirmed, ``considerExporting(rows:)`` retries it on every sweep, and
+    /// the Settings card says what is going on. When it succeeds and rows arrived in the meantime —
+    /// the toggle went back on, or a new account signed in — they are exported here, after the
+    /// deletion, which is the ordering the whole arrangement exists for.
+    private func requestDomainDeletion() {
+        status.domainDeletionPending = true
+        guard domainDeletionTask == nil else { return }
+        domainDeletionTask = Task(priority: .low) { [weak self] in
+            guard let self else { return }
+            let didDelete = await self.index.deleteDomain()
+            self.status.domainDeletionPending = !didDelete
+            self.domainDeletionTask = nil
+            guard didDelete, let rows = self.pendingRows else { return }
+            self.pendingRows = nil
+            self.considerExporting(rows: rows)
         }
     }
 

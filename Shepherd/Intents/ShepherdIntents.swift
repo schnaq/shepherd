@@ -215,7 +215,7 @@ struct StartFocusSessionIntent: AppIntent {
     init() {}
 
     @MainActor
-    func perform() async throws -> some IntentResult {
+    func perform() async throws -> some IntentResult & ProvidesDialog {
         let (environment, _) = try IntentBridge.requireSession()
         // The one exception to "route through `DeepLink`", and it is a deliberate one: the focus
         // session has no `shepherd://` command. The grammar is a public interface that the CLI's
@@ -225,9 +225,14 @@ struct StartFocusSessionIntent: AppIntent {
         // single implementation: `startReviewSession()` is the method the Review menu, `r f`, the
         // ⌘K palette and the inbox header's button all reach through a `PendingAction`, and it
         // freezes its queue from the session's own rows, so it does not care which surface asked.
-        environment.startReviewSession()
+        let started = environment.startReviewSession()
         environment.revealWindow()
-        return .result()
+        // Spoken, because Siri is the one caller with nothing to look at: the toast that says
+        // "nothing needs your review" is on a screen the person asking may not be facing.
+        let dialog: IntentDialog = started
+            ? "Review session started."
+            : "Nothing needs your review right now."
+        return .result(dialog: dialog)
     }
 }
 

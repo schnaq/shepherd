@@ -69,7 +69,8 @@ extension AppEnvironment {
 /// be heard: each one names the state and the fix, because an intent's error is frequently the
 /// only feedback a voice request gets.
 enum IntentFailure: Error, CustomLocalizedStringResourceConvertible {
-    /// The app is not running and could not be started, so there is no container.
+    /// No running app has registered its environment — the intent ran before launch finished, or
+    /// the system chose not to open the app — so there is nothing to act on.
     case appNotRunning
     /// No GitHub account is signed in on this Mac.
     case notSignedIn

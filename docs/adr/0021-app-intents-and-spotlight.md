@@ -72,7 +72,10 @@ Every one of the first four builds a `DeepLink` and hands it to `AppEnvironment.
 same call `onOpenURL` makes for a URL from the terminal, from Raycast or from an n8n *Execute
 Command* node. So the cache lookup, the single-pull-request fetch, the queue-until-signed-in slot
 and the failure toast have exactly one implementation, and an intent is a *type* over the grammar
-rather than a second client of the app. The two parameter enums mirror `InboxDeepLinkFilter` and
+rather than a second client of the app. One caveat: `OpenPullRequestIntent` needs the signed-in
+session *before* it can form its link, because the entity carries GitHub's node id and only the
+inbox rows can turn that into `owner/repo#number`; signed out, it fails with "not signed in" instead
+of reaching the queue-until-signed-in slot, which the other three do reach. The two parameter enums mirror `InboxDeepLinkFilter` and
 `SettingsDeepLinkTab` **by token**: each case's raw value is the string the URL grammar uses and the
 conversion is `init(token:)`, so there is no second table to keep in step, and a test asserts the
 two vocabularies are the same set.

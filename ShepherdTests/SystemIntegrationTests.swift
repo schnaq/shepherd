@@ -51,9 +51,16 @@ final class SystemIntegrationTests: XCTestCase {
         private(set) var domainDeletions = 0
 
         private let accepts: Bool
+        /// Overrides `accepts` for domain deletions only, so a test can fail the one call that
+        /// keeps "off means gone" true while batches still succeed.
+        private var domainDeletionAccepts: Bool?
 
         init(accepts: Bool = true) {
             self.accepts = accepts
+        }
+
+        func setDomainDeletionAccepts(_ value: Bool) {
+            domainDeletionAccepts = value
         }
 
         /// Every identifier written, in the order the batches were written.
@@ -73,7 +80,7 @@ final class SystemIntegrationTests: XCTestCase {
 
         func deleteDomain() async -> Bool {
             domainDeletions += 1
-            return accepts
+            return domainDeletionAccepts ?? accepts
         }
     }
 
@@ -358,6 +365,62 @@ final class SystemIntegrationTests: XCTestCase {
         // The baseline is gone with it, so the next account's first sweep re-writes everything
         // rather than believing the previous account's export.
         await export(indexer, rows: rows)
+        let identifiers = await index.indexedIdentifiers
+        XCTAssertEqual(identifiers, ["PR_1", "PR_2", "PR_3", "PR_1", "PR_2", "PR_3"])
+    }
+
+    func testAFailedDomainDeletionIsRetriedOnTheNextSweepAndBlocksTheExportUntilItSucceeds() async {
+        let index = FakeSpotlightIndex()
+        let settings = makeSettings()
+        let indexer = SpotlightIndexer(settings: settings, index: index)
+        await export(indexer, rows: rows)
+
+        await index.setDomainDeletionAccepts(false)
+        settings.spotlightExportEnabled = false
+        await indexer.disable()
+        XCTAssertTrue(indexer.status.domainDeletionPending, "the framework said no, and that is remembered")
+
+        // Back on before the removal ever succeeded. The rows must wait: exporting into a domain
+        // that is about to be deleted would lose them, and exporting into one that still holds the
+        // old items would not be the fresh start the toggle promises either.
+        await index.setDomainDeletionAccepts(true)
+        settings.spotlightExportEnabled = true
+        indexer.considerExporting(rows: rows)
+        XCTAssertNil(indexer.passTask, "no export while the deletion is unconfirmed")
+        if let task = indexer.domainDeletionTask {
+            await task.value
+        }
+        if let task = indexer.passTask {
+            await task.value
+        }
+
+        let domainDeletions = await index.domainDeletions
+        XCTAssertEqual(domainDeletions, 2, "asked once by the toggle, once more by the sweep")
+        XCTAssertFalse(indexer.status.domainDeletionPending)
+        let identifiers = await index.indexedIdentifiers
+        XCTAssertEqual(identifiers, ["PR_1", "PR_2", "PR_3", "PR_1", "PR_2", "PR_3"], "exported after the deletion, not before")
+        XCTAssertEqual(indexer.status.itemCount, 3)
+    }
+
+    func testRowsArrivingDuringASignOutDeletionAreExportedOnlyAfterIt() async {
+        let index = FakeSpotlightIndex()
+        let indexer = SpotlightIndexer(settings: makeSettings(), index: index)
+        await export(indexer, rows: rows)
+
+        // Same main-actor turn: the deletion task exists but has not run, and the next account's
+        // first sweep is already here.
+        indexer.reset()
+        indexer.considerExporting(rows: rows)
+        XCTAssertNil(indexer.passTask, "the sweep waits for the domain to be empty")
+        if let task = indexer.domainDeletionTask {
+            await task.value
+        }
+        if let task = indexer.passTask {
+            await task.value
+        }
+
+        let domainDeletions = await index.domainDeletions
+        XCTAssertEqual(domainDeletions, 1)
         let identifiers = await index.indexedIdentifiers
         XCTAssertEqual(identifiers, ["PR_1", "PR_2", "PR_3", "PR_1", "PR_2", "PR_3"])
     }

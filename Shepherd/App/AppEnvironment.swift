@@ -692,11 +692,14 @@ final class AppEnvironment {
     /// menu-bar badge already reads — so it does not matter which screen asked, and a session
     /// started from ⌘K on the review screen sees the same list as one started from the inbox
     /// header.
-    func startReviewSession() {
-        guard let session else { return }
+    /// - Returns: Whether a session began. Every surface with a screen ignores this — the toast
+    ///   says it — and `StartFocusSessionIntent` speaks it, because Siri has no toast.
+    @discardableResult
+    func startReviewSession() -> Bool {
+        guard let session else { return false }
         guard var started = ReviewSession.make(from: session.inboxRows) else {
             toasts.info(String(localized: "Nothing needs your review right now."))
-            return
+            return false
         }
         // Settled before anyone sees it, so the first entry is governed by exactly the rule every
         // later one is: the frozen queue and the "still in the inbox" set are two separate reads.
@@ -705,9 +708,10 @@ final class AppEnvironment {
             // Everything in the queue had already left the inbox. No session and no closing
             // toast — there is nothing to report about a sitting that never started.
             toasts.info(String(localized: "Nothing needs your review right now."))
-            return
+            return false
         }
         apply(started, advance: advance)
+        return true
     }
 
     /// Advances the session past the pull request the user just acted on.

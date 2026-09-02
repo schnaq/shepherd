@@ -993,12 +993,18 @@ struct IntelligenceSettingsTab: View {
         }
     }
 
-    /// "412 pull requests in Spotlight", and the two honest variants.
+    /// "412 pull requests in Spotlight", and the honest variants.
     private var spotlightStatusLine: String {
+        let status = environment.spotlight.status
+        // Comes first, on or off: the promise a pending deletion breaks is the same in both states.
+        if status.domainDeletionPending {
+            return String(
+                localized: "Spotlight has not confirmed the removal yet — Shepherd asks again on the next sync."
+            )
+        }
         guard environment.settings.spotlightExportEnabled else {
             return String(localized: "Off — Shepherd's pull requests are not in Spotlight.")
         }
-        let status = environment.spotlight.status
         guard status.itemCount > 0 else {
             guard status.isExporting else { return String(localized: "Nothing exported yet.") }
             return String(localized: "Exporting…")
