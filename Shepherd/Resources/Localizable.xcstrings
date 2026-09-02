@@ -1541,6 +1541,16 @@
         }
       }
     },
+    "Apple Intelligence declined this content.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence hat diesen Inhalt abgelehnt."
+          }
+        }
+      }
+    },
     "Apple Intelligence is turned off in System Settings.": {
       "localizations": {
         "de": {
@@ -7887,6 +7897,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dieser Build hat noch keinen Update-Signierschlüssel, deshalb sind Updates aus statt unverifiziert. Releases von github.com/schnaq/review sind signiert."
+          }
+        }
+      }
+    },
+    "This content is larger than the on-device model's context window. A cloud provider has room for it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Inhalt ist größer als das Kontextfenster des On-Device-Modells. Ein Cloud-Provider hat dafür Platz."
           }
         }
       }
