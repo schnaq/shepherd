@@ -48,13 +48,19 @@ Packages/ShepherdKit/          # SPM package, NO AppKit/SwiftUI imports
                                #     auto-merge rules, ledger/audit log and policy (ADR 0018)
       Digest/                  #     morning-digest report + delivery schedule
       Search/                  #     search document, lexical ranker, vector value (ADR 0019)
+      Intelligence/            #     the tool contract a model may call, the trace of a
+                               #     tool-calling turn, and the Codable twins of the
+                               #     generated types — Foundation only, no provider
     GitHubKit/                 #   GraphQL+REST client, device flow, rate limiting
     ShepherdPersistence/       #   GRDB schema, DAOs, outbox
     ShepherdSync/              #   sync engine orchestrating GitHubKit ⇄ Persistence
   Tests/                       #   unit tests per target (headless, `swift test`)
 ShepherdCLI/                   # `shepherd` command-line tool: argv → shepherd:// URL (ADR 0013)
 web/diff-viewer/               # TypeScript Monaco bundle (esbuild) → dist/ (committed)
-Scripts/                       # release pipeline: release.sh, Homebrew cask template (ADR 0010)
+Tests/Fixtures/eval/           # intelligence evaluation corpus (JSON), copied into the
+                               # ShepherdTests bundle as a folder reference
+Scripts/                       # release pipeline: release.sh, Homebrew cask template (ADR 0010);
+                               # check-localization.py; eval-intelligence/ (harness contract)
 docs/                          # this file, ADRs, research, roadmap, RELEASING.md
 project.yml                    # XcodeGen spec → Shepherd.xcodeproj (generated, not committed)
 ```
@@ -324,6 +330,50 @@ anchored lines the last thing surrendered. Both return plain text, parsed lenien
 usable. The text goes into a `TextEditor` and nowhere else; `AIDraftFieldState` — a pure value —
 owns the rules around it (ask before overwriting typed text, label an unedited draft, drop the
 label on the first keystroke).
+
+### The tool contract, the trace and the generated twins (`ShepherdCore/Intelligence/`)
+
+Groundwork for the features that call a tool or return a structure
+(`docs/plans/apple-intelligence-v2.md` §0.3/§0.4). It is all in `ShepherdCore` and imports
+Foundation only, so the contract, its validation and both wire encodings are tested on Linux;
+the concrete tools and the `@Generable` mirrors stay in the app target, where the Apple
+frameworks are.
+
+- **The registry is a fixed enum.** `IntelligenceToolName` has exactly three cases —
+  `failingChecks`, `jobLogTail`, `fileDiff` — and `IntelligenceToolRegistry.descriptor(for:)`
+  is static data, so a tool cannot be added at runtime and every tool is a *read*.
+  `IntelligenceToolDescriptor` + `IntelligenceToolParameter` are the JSON-schema-shaped
+  description; `IntelligenceToolCall` carries the tool name as a raw `String` because it comes
+  from a model, and `IntelligenceToolResult` carries a **budgeted** string, a one-line summary
+  and `wasTruncated`, so the model never sees a raw log or a raw file.
+- **`IntelligenceToolRegistry.validate(_:)` is the guardrail**, pure and total: unknown tool,
+  missing required argument, wrong argument type, an argument the tool never declared, and — the
+  invariant the plan names — a `fileDiff` path that is not one of the pull request's own changed
+  files, which is why the registry is a value holding `changedFilePaths` rather than a namespace.
+  No free text a model wrote can reach GitHub through a tool call. Arguments are checked in
+  sorted name order, so the refusal a reviewer sees for a given call is always the same one.
+- **Two wire shapes, one schema.** `IntelligenceToolJSONSchema` is the object both providers
+  send; `AnthropicToolSchema` (`name`/`description`/`input_schema`) and `OpenAIToolSchema`
+  (`type: "function"` + nested `function`) are the envelopes. Both are pinned byte for byte by
+  fixture tests, because a schema an endpoint dislikes fails on the user's Mac otherwise.
+- **`IntelligenceTrace`/`IntelligenceTraceStep`** are what the review screen renders as
+  expandable steps: tool, arguments rendered for display (sorted by name, so a row reads the same
+  every time), the tool's summary line, duration and ordering. Appending assigns the order.
+  Stored nowhere, and deliberately holds the *summary* rather than the content.
+- **The twins** are the `Codable` values the UI and the database see: `TriageVerdict`
+  (`Kind`/`Risk` + one-sentence reason), `CIDiagnosis` (`failingTest?`, `file?`, `line?`,
+  hypothesis, `Confidence`) and `ThreadDigest` (`State`, summary, open questions). Their coding
+  keys *are* the JSON contract the cloud prompt asks for, so renaming one is a prompt change.
+  Decoding is tolerant where a model's spelling varies and strict where it matters: an enum case
+  is matched ignoring case, spaces, hyphens and underscores, a quoted line number is still a line
+  number, an absent confidence reads as `low` — but a kind nobody declared is a decoding error
+  rather than a default presented as the model's verdict.
+- **The evaluation corpus** lives in `Tests/Fixtures/eval/` (twelve anonymised pull requests with
+  an expected kind and risk, four CI log tails with an expected diagnosis: `xcodebuild`,
+  `swift test`, npm and pytest shapes). `ShepherdTests/IntelligenceEvalTests.swift` is the
+  runner and is **skipped unless `SHEPHERD_EVAL=1`** — it measures a model, not the code, so a
+  new OS model must not be able to turn a build red. `Scripts/eval-intelligence/README.md` is
+  the harness contract: fixture shapes, how to run it, and why it is not in CI.
 
 ## UI conventions
 
@@ -845,8 +895,9 @@ key — and everything it decides is the pure `ShepherdCore/Search/` trio above.
   commands stay on top. A row opens through `AppEnvironment.openReview(prID:)`, the same call the
   inbox row and the menu-bar row make.
 - **Settings → Intelligence** carries the toggle, the size/last-indexed line and *Rebuild index*.
-  It is **on by default**, the only intelligence-shaped setting that is, because the reasons for
-  off-by-default (something is sent somewhere; it costs money) do not apply — see ADR 0019.
+  It is **on by default** — like the Spotlight export beside it and the structured-triage switch
+  under it, and unlike the tiers above them, because the reasons for off-by-default (something is
+  sent somewhere; it costs money) apply to none of the three — see ADR 0019.
   Switching it off empties the table and leaves the lexical ranker answering.
 - Device state versus setting, once more: the switch travels in the encrypted settings document
   (`search` group, both applier directions), the index does not — it is rebuildable from local
@@ -1023,6 +1074,10 @@ key-by-key coverage is `Scripts/check-localization.py`, which needs no Xcode and
 the Linux job; what only a built bundle can prove is that the catalog reached the resources phase,
 that `xcstringstool` compiled a German table, and that a lookup goes through it — three steps that
 all fail silently);
+the intelligence evaluation corpus (plan §0.4: every fixture decodes, every expected kind, risk
+and file status is a case the domain has, every CI fixture is a 30–60 line tail that names
+something to measure — and the whole class skips itself unless `SHEPHERD_EVAL=1`, because it
+measures a model rather than the code);
 and the app-side half of deep linking (resolving `owner/repo#number` against cached rows, filter
 token → rail state). The `shepherd://` grammar itself is tested in `ShepherdCoreTests` instead, so it
 runs on the Linux runner too. The web
