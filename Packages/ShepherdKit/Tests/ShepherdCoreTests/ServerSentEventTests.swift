@@ -1,0 +1,228 @@
+import XCTest
+@testable import ShepherdCore
+
+/// The pure half of streamed AI drafts (ADR 0007 amendment, plan §0.2).
+///
+/// Everything a streamed answer can do wrong to a reviewer's text field happens in the frames:
+/// a keep-alive comment, a payload split across two `data:` lines, a first frame that carries a
+/// role and no text, a `[DONE]` sentinel, an error announced after a 200. None of that needs a
+/// key or a socket to reproduce, so the fixtures below are recorded shapes of both providers and
+/// the assertions are on the text the reviewer would have seen.
+final class ServerSentEventTests: XCTestCase {
+    // MARK: - The line parser
+
+    func testABlankLineDispatchesTheFrameAndAcommentDoesNot() {
+        var parser = ServerSentEventParser()
+        XCTAssertNil(parser.consume(": keep-alive"))
+        XCTAssertNil(parser.consume(""), "a comment-only frame carries no data, so nothing is sent")
+        XCTAssertNil(parser.consume("event: message"))
+        XCTAssertNil(parser.consume("data: hello"))
+        let event = parser.consume("")
+        XCTAssertEqual(event?.event, "message")
+        XCTAssertEqual(event?.data, "hello")
+    }
+
+    func testOnlyOneSpaceAfterTheColonIsDropped() {
+        var parser = ServerSentEventParser()
+        _ = parser.consume("data:  two spaces")
+        XCTAssertEqual(parser.consume("")?.data, " two spaces")
+    }
+
+    func testSeveralDataLinesAreJoinedWithNewlines() {
+        var parser = ServerSentEventParser()
+        _ = parser.consume("data: {\"a\":")
+        _ = parser.consume("data: 1}")
+        XCTAssertEqual(parser.consume("")?.data, "{\"a\":\n1}")
+    }
+
+    func testIdAndRetryAreCarriedAndUnknownFieldsIgnored() {
+        var parser = ServerSentEventParser()
+        _ = parser.consume("id: 7")
+        _ = parser.consume("retry: 2500")
+        _ = parser.consume("something-new: whatever")
+        _ = parser.consume("data: x")
+        let event = parser.consume("")
+        XCTAssertEqual(event?.id, "7")
+        XCTAssertEqual(event?.retry, 2_500)
+        XCTAssertEqual(event?.data, "x")
+    }
+
+    func testCarriageReturnsFromCRLFDoNotEndUpInTheData() {
+        var parser = ServerSentEventParser()
+        _ = parser.consume("data: hello\r")
+        XCTAssertEqual(parser.consume("\r")?.data, "hello")
+    }
+
+    func testAnUnterminatedFrameIsNotDispatchedAtEndOfStream() {
+        var parser = ServerSentEventParser()
+        _ = parser.consume("data: half an object")
+        XCTAssertNil(parser.finish(), "half a frame is not an answer")
+    }
+
+    func testEventsInBodyParsesAWholeRecordedResponse() {
+        let body = """
+            : ping
+
+            event: a
+            data: one
+
+            event: b
+            data: two
+
+            """
+        let events = ServerSentEventParser.events(in: body)
+        XCTAssertEqual(events.map(\.event), ["a", "b"])
+        XCTAssertEqual(events.map(\.data), ["one", "two"])
+    }
+
+    // MARK: - Anthropic frames
+
+    /// A recorded `stream: true` response: the message envelope, two text deltas, the stops.
+    private let anthropicBody = """
+        event: message_start
+        data: {"type":"message_start","message":{"id":"msg_01","type":"message","role":"assistant","content":[],"stop_reason":null,"usage":{"input_tokens":812,"output_tokens":1}}}
+
+        event: content_block_start
+        data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+        : ping
+
+        event: content_block_delta
+        data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"{\\"draft\\": \\"The retry bound"}}
+
+        event: content_block_delta
+        data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" is not applied to the second upload.\\"}"}}
+
+        event: content_block_stop
+        data: {"type":"content_block_stop","index":0}
+
+        event: message_delta
+        data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":24}}
+
+        event: message_stop
+        data: {"type":"message_stop"}
+
+        """
+
+    func testAnthropicDeltasAccumulateIntoTheAnswerAndNothingElseDoes() {
+        XCTAssertEqual(
+            AnthropicStreamDecoder.text(in: anthropicBody),
+            "{\"draft\": \"The retry bound is not applied to the second upload.\"}"
+        )
+    }
+
+    func testAnthropicFramesWithoutTextContributeNothing() {
+        let events = ServerSentEventParser.events(in: anthropicBody)
+        XCTAssertEqual(events.count, 7, "the keep-alive comment is not a frame")
+        let carrying = events.filter { AnthropicStreamDecoder.textDelta(in: $0) != nil }
+        XCTAssertEqual(carrying.count, 2)
+    }
+
+    func testAnthropicNonTextDeltasAreIgnored() {
+        let event = ServerSentEvent(
+            event: "content_block_delta",
+            data: """
+                {"type":"content_block_delta","index":1,\
+                "delta":{"type":"input_json_delta","partial_json":"{\\"path\\":"}}
+                """
+        )
+        XCTAssertNil(AnthropicStreamDecoder.textDelta(in: event))
+    }
+
+    func testAnthropicAnnouncesAnErrorInsideASuccessfulResponse() {
+        let body = """
+            event: content_block_delta
+            data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"partial"}}
+
+            event: error
+            data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}
+
+            """
+        let events = ServerSentEventParser.events(in: body)
+        XCTAssertEqual(AnthropicStreamDecoder.textDelta(in: events[0]), "partial")
+        XCTAssertNil(AnthropicStreamDecoder.errorMessage(in: events[0]))
+        XCTAssertEqual(AnthropicStreamDecoder.errorMessage(in: events[1]), "Overloaded")
+    }
+
+    // MARK: - OpenAI-compatible frames
+
+    /// A recorded `stream: true` response: a role-only first frame, two content deltas, a
+    /// `finish_reason` frame with a null content, then the sentinel.
+    private let openAIBody = """
+        data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1756800000,\
+        "model":"test-model","choices":[{"index":0,"delta":{"role":"assistant","content":""},\
+        "finish_reason":null}]}
+
+        data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1756800000,\
+        "model":"test-model","choices":[{"index":0,"delta":{"content":"{\\"draft\\": \\"Confirm the"},\
+        "finish_reason":null}]}
+
+        data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1756800000,\
+        "model":"test-model","choices":[{"index":0,"delta":{"content":" timeout is bounded.\\"}"},\
+        "finish_reason":null}]}
+
+        data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1756800000,\
+        "model":"test-model","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}
+
+        data: [DONE]
+
+        """
+
+    func testOpenAIDeltasAccumulateAndTheEmptyOnesAreSkipped() {
+        XCTAssertEqual(
+            OpenAICompatibleStreamDecoder.text(in: openAIBody),
+            "{\"draft\": \"Confirm the timeout is bounded.\"}"
+        )
+    }
+
+    func testOpenAIDoneSentinelIsRecognisedAndCarriesNoText() {
+        let events = ServerSentEventParser.events(in: openAIBody)
+        XCTAssertEqual(events.count, 5)
+        XCTAssertTrue(OpenAICompatibleStreamDecoder.isDone(events[4]))
+        XCTAssertNil(OpenAICompatibleStreamDecoder.textDelta(in: events[4]))
+        XCTAssertFalse(OpenAICompatibleStreamDecoder.isDone(events[0]))
+        XCTAssertNil(
+            OpenAICompatibleStreamDecoder.textDelta(in: events[0]),
+            "the role-only frame is not text"
+        )
+    }
+
+    func testTextAfterTheDoneSentinelIsNotPartOfTheAnswer() {
+        let body = """
+            data: {"choices":[{"delta":{"content":"kept"}}]}
+
+            data: [DONE]
+
+            data: {"choices":[{"delta":{"content":" dropped"}}]}
+
+            """
+        XCTAssertEqual(OpenAICompatibleStreamDecoder.text(in: body), "kept")
+    }
+
+    func testOpenAIErrorFrameIsReadable() {
+        let event = ServerSentEvent(data: "{\"error\":{\"message\":\"context length exceeded\"}}")
+        XCTAssertEqual(
+            OpenAICompatibleStreamDecoder.errorMessage(in: event),
+            "context length exceeded"
+        )
+        XCTAssertNil(OpenAICompatibleStreamDecoder.textDelta(in: event))
+    }
+
+    func testAServerThatOmitsTheSentinelStillProducesTheWholeAnswer() {
+        let body = """
+            data: {"choices":[{"delta":{"content":"a"}}]}
+
+            data: {"choices":[{"delta":{"content":"b"}}]}
+
+            """
+        XCTAssertEqual(OpenAICompatibleStreamDecoder.text(in: body), "ab")
+    }
+
+    func testGarbageFramesAreIgnoredRatherThanThrown() {
+        let event = ServerSentEvent(data: "not json at all")
+        XCTAssertNil(OpenAICompatibleStreamDecoder.textDelta(in: event))
+        XCTAssertNil(AnthropicStreamDecoder.textDelta(in: event))
+        XCTAssertNil(OpenAICompatibleStreamDecoder.errorMessage(in: event))
+        XCTAssertNil(AnthropicStreamDecoder.errorMessage(in: event))
+    }
+}

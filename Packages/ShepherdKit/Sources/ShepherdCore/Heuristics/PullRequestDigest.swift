@@ -5,6 +5,11 @@ import Foundation
 /// ADR 0007 requires prompting code to budget tokens explicitly rather than hoping a prompt
 /// fits. Shepherd approximates tokens as `characters / charactersPerToken`, which is close
 /// enough for English prose and code and — crucially — is deterministic and free.
+///
+/// The estimate is the floor, not the ceiling: ``measured(_:using:)`` and
+/// ``limited(toContextSize:reservedForResponse:)`` let a caller that can ask its platform for a
+/// real token count and a real context window use those instead, without this type learning
+/// anything platform-specific (it has to keep building on Linux).
 public struct TokenBudget: Sendable, Codable, Hashable {
     /// The maximum number of approximate tokens the digest may occupy.
     public var maxTokens: Int
@@ -41,6 +46,56 @@ public struct TokenBudget: Sendable, Codable, Hashable {
     public func approximateTokens(characterCount: Int) -> Int {
         guard characterCount > 0 else { return 0 }
         return (characterCount + charactersPerToken - 1) / charactersPerToken
+    }
+
+    /// Counts the tokens in a string, preferring a real measurement over the estimate.
+    ///
+    /// The estimate above is deterministic and free, and it is also *wrong by design*: at four
+    /// characters per token it over-counts prose and under-counts dense diff punctuation, which
+    /// is why every budget built on it has to keep a slack margin it can never spend. Some
+    /// platforms can measure a string against the very tokenizer that will read it; where they
+    /// can, the slack is not needed and the caller should not have to choose between two
+    /// spellings of "how big is this".
+    ///
+    /// The measurement therefore arrives as a closure that may decline: `nil` is not an error but
+    /// "this platform cannot measure", and the estimate takes over. That keeps this type pure —
+    /// it stays Linux-testable and knows nothing about who can count tokens — while the one
+    /// caller that *can* measure passes a one-line closure over its platform API.
+    /// - Parameters:
+    ///   - text: The text to count.
+    ///   - measure: Returns the measured token count, or `nil` when no measurement is available.
+    /// - Returns: The measured count when there is one, the estimate otherwise. Never negative.
+    public func measured(_ text: String, using measure: (String) -> Int? = { _ in nil }) -> Int {
+        guard let count = measure(text) else { return approximateTokens(of: text) }
+        return max(0, count)
+    }
+
+    /// Whether a string fits this budget, measured the same way ``measured(_:using:)`` measures.
+    /// - Parameters:
+    ///   - text: The text to check.
+    ///   - measure: Returns the measured token count, or `nil` when no measurement is available.
+    /// - Returns: `true` when the text is inside ``maxTokens``.
+    public func fits(_ text: String, using measure: (String) -> Int? = { _ in nil }) -> Bool {
+        measured(text, using: measure) <= maxTokens
+    }
+
+    /// The same budget re-derived from a context window the platform reported itself.
+    ///
+    /// The constants above are guesses about somebody else's model: ``onDevice`` is "8K minus
+    /// room to answer", written down before the model could be asked. When the platform can say
+    /// what its context window actually is, that number wins — but the room for the answer still
+    /// has to be subtracted, because the prompt and the response share one window and a prompt
+    /// that fills it leaves the model nothing to reply with.
+    /// - Parameters:
+    ///   - contextSize: The context window the platform reported, in tokens.
+    ///   - reservedForResponse: Tokens to leave for the answer.
+    /// - Returns: A budget for the prompt alone. Never negative, and never larger than the
+    ///   context window.
+    public func limited(toContextSize contextSize: Int, reservedForResponse reservedForResponse: Int) -> TokenBudget {
+        TokenBudget(
+            maxTokens: max(0, contextSize - max(0, reservedForResponse)),
+            charactersPerToken: charactersPerToken
+        )
     }
 }
 

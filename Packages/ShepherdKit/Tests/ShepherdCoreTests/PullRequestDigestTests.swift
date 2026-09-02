@@ -142,4 +142,53 @@ final class PullRequestDigestTests: XCTestCase {
         // the prompt scaffolding and the response.
         XCTAssertLessThanOrEqual(TokenBudget.onDevice.maxTokens, 6_000)
     }
+
+    // MARK: - Measured budgets (plan §0.1)
+
+    func testAMeasurementWinsOverTheEstimate() {
+        let budget = TokenBudget(maxTokens: 100)
+        // Eight characters: the estimate says two tokens, the "tokenizer" says five, and the
+        // whole point of the hook is that the tokenizer is the one that will read the prompt.
+        XCTAssertEqual(budget.measured("abcdefgh") { _ in 5 }, 5)
+        XCTAssertEqual(budget.measured("abcdefgh"), 2, "no closure at all is the estimate")
+    }
+
+    func testDecliningToMeasureFallsBackToTheEstimate() {
+        let budget = TokenBudget(maxTokens: 100)
+        XCTAssertEqual(budget.measured("abcdefgh") { _ in nil }, 2)
+    }
+
+    func testANegativeMeasurementIsClamped() {
+        // A platform that answers with nonsense must not produce a negative token count that
+        // would make every oversized prompt look like it fits.
+        XCTAssertEqual(TokenBudget(maxTokens: 10).measured("abcd") { _ in -3 }, 0)
+    }
+
+    func testFitsUsesTheSameMeasurementAsMeasured() {
+        let budget = TokenBudget(maxTokens: 4)
+        XCTAssertTrue(budget.fits("abcdefghijklmnop") { _ in 4 })
+        XCTAssertFalse(budget.fits("abcdefghijklmnop") { _ in 5 })
+        XCTAssertTrue(budget.fits("abcdefghijklmnop"), "16 characters ÷ 4 is exactly the budget")
+        XCTAssertFalse(budget.fits("abcdefghijklmnopq"))
+    }
+
+    func testAReportedContextWindowReplacesTheGuessAndKeepsRoomToAnswer() {
+        let budget = TokenBudget.onDevice.limited(toContextSize: 8_192, reservedForResponse: 512)
+        XCTAssertEqual(budget.maxTokens, 7_680)
+        XCTAssertEqual(
+            budget.charactersPerToken,
+            TokenBudget.onDevice.charactersPerToken,
+            "the fallback estimate is unchanged by a measurement being available"
+        )
+        XCTAssertGreaterThan(
+            budget.maxTokens,
+            TokenBudget.onDevice.maxTokens,
+            "the ~25 % slack the estimate forces is what the measurement buys back"
+        )
+    }
+
+    func testAContextWindowSmallerThanTheReservationIsZeroRatherThanNegative() {
+        let budget = TokenBudget.onDevice.limited(toContextSize: 100, reservedForResponse: 512)
+        XCTAssertEqual(budget.maxTokens, 0)
+    }
 }
