@@ -2,20 +2,24 @@
 
 Scope decisions from the founder interviews (2026-08-31, the 2026-09-01 follow-up that
 prioritised saved replies, the focus review session and the morning digest, and the 2026-09-02 one
-that added semantic ⌘K search). v1 is deliberately
-full-featured on the review path — the founder's bar is "never need to open github.com for a
-routine review".
+that added semantic ⌘K search, the Apple-native intelligence block — Writing Tools, on-device
+translation, App Intents, Spotlight — and settled what comes after v1: the issues inbox, see
+[v1.1](#v11--issues-inbox-and-agent-assignment)). v1 is deliberately full-featured on the review
+path — the founder's bar is "never need to open github.com for a routine review".
+
+Ticked boxes are shipped on `main`; the unticked lines under **Foundation** are what remains before
+the release workflow is run in earnest.
 
 ## v0.x → v1.0 (current work)
 
 **Inbox**
-- [ ] GitHub sign-in: device flow + fine-grained PAT fallback (ADR 0004)
-- [ ] Cross-repo inbox via GraphQL search sweep; sections & facets: provenance (agent/human),
+- [x] GitHub sign-in: device flow + fine-grained PAT fallback (ADR 0004)
+- [x] Cross-repo inbox via GraphQL search sweep; sections & facets: provenance (agent/human),
       repo/org, review-requested / my PRs / involved (ADR 0005, 0008)
-- [ ] Agent detection with bundled + user-extensible registry (ADR 0008)
-- [ ] CI check rollup, review decision, draft/mergeable badges on rows
-- [ ] `j`/`k` navigation, ⌘K command palette, saved filter views
-- [ ] macOS notifications: new review requests, checks failed on own PRs (polling, ADR 0005)
+- [x] Agent detection with bundled + user-extensible registry (ADR 0008)
+- [x] CI check rollup, review decision, draft/mergeable badges on rows
+- [x] `j`/`k` navigation, ⌘K command palette, saved filter views
+- [x] macOS notifications: new review requests, checks failed on own PRs (polling, ADR 0005)
 - [x] Morning digest (founder interview 2026-09-01): an opt-in daily summary of what came in since
       the last one — new review requests, green agent pull requests that only need an approval or a
       merge (the ADR 0015 preselect), your own pull requests with red CI or a change request
@@ -50,15 +54,16 @@ routine review".
       inbox does, has no sync of its own, and can be switched off in Settings → Appearance
 
 **Review**
-- [ ] PR detail: description, timeline, commits, checks detail
+- [x] PR detail: description, timeline, commits, checks detail
 - [ ] Linked issues on PR detail: closing references ("closes #123") shown with title/state,
-      one keystroke to open; issue links in PR bodies/comments resolve to previews
-- [ ] Monaco diff viewer: side-by-side & inline, syntax highlighting, dark/light (ADR 0003)
-- [ ] File list ordered by review priority with reasons; viewed-state tracking (ADR 0007 tier 1)
-- [ ] Pending review composer: inline comments (incl. multi-line), summary, verdict;
+      one keystroke to open; issue links in PR bodies/comments resolve to previews — **moved into
+      the v1.1 issues block below**, where the issue model it needs is built once for everything
+- [x] Monaco diff viewer: side-by-side & inline, syntax highlighting, dark/light (ADR 0003)
+- [x] File list ordered by review priority with reasons; viewed-state tracking (ADR 0007 tier 1)
+- [x] Pending review composer: inline comments (incl. multi-line), summary, verdict;
       drafts survive restart/offline; staleness check before submit (ADR 0006)
-- [ ] Threads: reply, resolve/unresolve
-- [ ] Merge: merge/squash/rebase, delete-branch option, mergeability preflight
+- [x] Threads: reply, resolve/unresolve
+- [x] Merge: merge/squash/rebase, delete-branch option, mergeability preflight
 - [x] Bulk triage (ADR 0015, pulled into v1 from v1.x): tick rows with `x` / ⌘-click / ⇧-click
       (or "select all green agent PRs in this view"), then approve, approve & merge, or merge the
       selection behind **one** confirmation dialog that lists every pull request with its state
@@ -149,14 +154,14 @@ routine review".
       deletes the whole domain. On by default, synced in the encrypted settings document
 
 **Intelligence (ADR 0007)**
-- [ ] Tier 1 heuristics: file prioritization, risk hints — always on
-- [ ] Tier 2 on-device PR summaries via Foundation Models (availability-gated)
-- [ ] Tier 3 BYOK: whole-PR summary & review-focus hints — Anthropic, plus any
+- [x] Tier 1 heuristics: file prioritization, risk hints — always on
+- [x] Tier 2 on-device PR summaries via Foundation Models (availability-gated)
+- [x] Tier 3 BYOK: whole-PR summary & review-focus hints — Anthropic, plus any
       OpenAI-compatible endpoint with one-click endpoint presets (Konduit (EU) — EU-hosted open
       models, with a link to the console for the key; Ollama on localhost; or a custom base URL),
       model discovery via `GET {base}/models` with the free-text model field as the fallback, and
       a connection test (ADR 0007 amendment)
-- [ ] AI-drafted review text (tier 2 or 3): a "draft with AI" button beside the review summary and
+- [x] AI-drafted review text (tier 2 or 3): a "draft with AI" button beside the review summary and
       beside every inline comment. The summary is drafted from the tier-1 digest plus the inline
       comments already in your pending review; a comment is drafted from the diff excerpt around
       the line you clicked. The draft is editable text in the field, labelled until you edit it,
@@ -180,9 +185,81 @@ routine review".
       persisted, nothing synced, and no new host — the language pack is macOS's own download
 
 **Foundation**
-- [ ] Local-first SQLite cache + outbox (ADR 0006)
-- [ ] Dark/light theme system, Linear-inspired visual language
-- [ ] CI: ShepherdKit tests (macOS + Linux), web bundle build+tests, app build on macOS runner
+- [x] Local-first SQLite cache + outbox (ADR 0006)
+- [x] Dark/light theme system, Linear-inspired visual language
+- [x] CI: ShepherdKit tests (macOS + Linux), web bundle build+tests, app build on macOS runner
+- [ ] German localisation (founder interview 2026-09-02): a String Catalog for every
+      `String(localized:)` in the app and the CLI, German as the first added language, with the
+      review vocabulary kept in English where GitHub's own UI keeps it (approve, request changes,
+      merge, draft) so a bilingual team reads the same words in both places. Dates, counts and
+      plurals through the catalog's plural rules, not string concatenation
+- [ ] First signed release: the maintainer's Developer ID certificate and Sparkle's `generate_keys`
+      run once, then `Scripts/release.sh` (ADR 0010, [docs/RELEASING.md](RELEASING.md))
+
+## v1.1 — issues inbox and agent assignment
+
+The next big block, settled in the founder interview of 2026-09-02. Today Shepherd starts at the
+pull request; the founder's day starts one step earlier, at the issue an agent should pick up. The
+v1.1 theme is to move that first step into the app without turning Shepherd into an agent
+orchestrator (non-goal, below): Shepherd *assigns* and *watches*, the agent still runs where it runs.
+
+- [ ] Issues as a first-class inbox section (new ADR): a second sweep beside the pull-request one
+      — issues assigned to you, issues you opened, issues mentioning you — in the same GraphQL
+      search shape (ADR 0005), stored in the same local database with the same outbox for the
+      writes below, and drawn as a section with its own facets: repository, label, age, and
+      *has an agent pull request* / *has none*. Same `j`/`k`, same ⌘K search over title and body
+      through the ADR 0019 ranker, same provenance chip where the author is an agent
+- [ ] Issue ↔ pull request linking: GitHub's closing references (`closes #123`, the *Development*
+      panel) resolved in both directions, so a pull request shows the issue it closes with title
+      and state, and an issue shows the agent pull requests addressing it with their CI dot and
+      review decision. This is where the parked *linked issues on PR detail* item lands
+- [ ] Assign an issue to an agent: from the issue's row, start an ADR 0011 delegation whose task
+      is the issue — title, body, labels and the repository, rendered through a template the way
+      auto-delegation's `{{…}}` template works — in an isolated worktree with the same turn and
+      budget caps, and record the assignment on the issue as a comment (through the outbox, so it
+      is visible on GitHub and to teammates). Still no auto-push: the result waits in the
+      Delegation Center; opening the pull request the agent made is the human's click. A
+      **rule** that assigns unattended ("every issue with label `agent-ok`") is a separate, later
+      opt-in under ADR 0016's shape — condition enum plus checkbox — not part of the first cut
+- [ ] Issue triage writes: label, assign, close as completed / not planned, comment — each one
+      outbox row, each with the same staleness precondition the review writes have (ADR 0006)
+- [ ] Webhook events `issue.assigned_to_agent` and `issue.closed`, additive under `"v": 1`
+      (ADR 0012), and `shepherd://issue/{owner}/{repo}/{number}` plus an `issues` inbox filter
+      (ADR 0013, additive)
+- [ ] Morning digest gains one line: issues assigned to you since the last digest, and agent
+      pull requests that closed one (tier 1, no network — the rule of the digest stands)
+
+## Intelligence v2 (ADR 0007 follow-ups)
+
+What the 2026-09-02 interview kept from the Apple-intelligence brainstorm for *after* v1. Every
+item is tier 2 (on-device) first; a tier-3 variant only where the rules of ADR 0007 already allow
+that content to travel, and never for anything that runs unattended.
+
+- [ ] "Why is CI red?" — Foundation Models **tool calling** on the review screen: the model gets
+      three read-only tools (the failing check runs, the tail of a job log, the diff of one file)
+      and answers with the failing test, the line it points at, and a one-line hypothesis, each
+      hop shown as a step the reviewer can expand. Read-only by construction: the tools are
+      `GitHubKit` reads, there is no tool that writes, and the answer is text in a card, not an
+      action. Fits ADR 0011 too — the same summary makes a good delegation task
+- [ ] Structured triage classification — a `@Generable` verdict per pull request (kind:
+      feature / fix / chore / dependency bump; risk: low / medium / high, with the one-sentence
+      reason) computed on-device from the ADR 0019 search document, stored beside the vector, and
+      exposed as an inbox facet and a ⌘K filter. Never sent anywhere, never decides anything:
+      it sorts, it does not approve (non-goal). The on-device model is the ceiling here — when it
+      is unavailable the facet is simply absent, there is no cloud fallback for a bulk pass
+- [ ] Streaming drafts — the ✨ draft (ADR 0007 amendment) arrives token by token in the composer
+      instead of after a spinner, through `LanguageModelSession.streamResponse` for tier 2 and the
+      SSE variants of the tier-3 providers; still labelled until edited, still asks before
+      replacing anything typed
+- [ ] Saved-reply suggestion — when the reviewer starts a comment, the two saved replies whose
+      embedding (ADR 0019's on-device model, cached per snippet) is nearest to the thread's text are
+      offered in the `text.badge.plus` menu first. No new model, no new setting, and nothing
+      inserted uninvited
+- Considered and rejected in the same interview, recorded so it is not proposed again: Image
+  Playground / Genmoji (no image surface in a review tool), speech input (`SpeechAnalyzer` — a
+  review is read, not dictated), a sentiment check on outgoing comments (tone is the reviewer's
+  call; Writing Tools already offers a rewrite when asked), and an AI-written morning digest (the
+  digest runs unattended and its lines are deterministic on purpose, see v1.x below)
 
 ## v1.x
 
@@ -232,9 +309,8 @@ routine review".
 - More `shepherd://` commands (additive by design, ADR 0013). Anything that must *return* data
   (`shepherd status`, "how many need my review?") is not a URL-scheme feature and needs the XPC
   or AppleScript decision ADR 0013 deferred
-- Issues as a first-class inbox section: browse/triage issues across repos, link/unlink
-  issues to PRs, see which agent PRs address which issue — groundwork for "assign an issue
-  to an agent" flows
+- ~~Issues as a first-class inbox section~~ — promoted to the v1.1 block above, together with
+  linking and "assign an issue to an agent"
 - ~~Signed + notarized releases, Homebrew cask, Sparkle appcast (ADR 0010)~~ — **built, waiting on
   one credential.** `Scripts/release.sh` (build → Developer-ID sign → DMG → notarize → staple →
   Sparkle-sign → appcast), `.github/workflows/release.yml` (tag `v*` or manual), Sparkle 2 in the
