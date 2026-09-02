@@ -76,6 +76,9 @@ than a guess.
 <td>🔐 <b>Sync you host</b><br>Every setting <i>and</i> every secret in one AES-256-GCM object in an S3 bucket you own. A new Mac plus the passphrase is a set-up Mac. No account, no server.</td>
 <td>🗄️ <b>Local-first by construction</b><br>SQLite is the source of truth, writes go through a persisted outbox, secrets live in the Keychain, and there is no telemetry anywhere.</td>
 </tr>
+<tr>
+<td colspan="2">🇩🇪 <b>Auf Deutsch</b><br>Set your Mac to German and the whole app is German — no language setting, it follows the system. GitHub's own review vocabulary stays English inside the German sentences (pull request, review, approve, request changes, merge, draft, CI), so what you read matches what the next window says.</td>
+</tr>
 </table>
 
 The long form — every feature, with the decisions behind it — is in

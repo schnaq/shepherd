@@ -74,7 +74,38 @@ bumping a dependency that ships inside the app also means a line in
 ## Rules of the road
 
 - Decisions live in [docs/adr](docs/adr). Changing a decision = new ADR, not a silent edit.
-- UI strings: English, `String(localized:)`. Colors: semantic tokens only (dark/light!).
+- UI strings: English source, `String(localized:)`. Colors: semantic tokens only (dark/light!).
+- **Every new `String(localized:)` gets a German row in
+  `Shepherd/Resources/Localizable.xcstrings`, in the same commit** (ADR 0022). This has the shape
+  of the settings obligation below and the same reason: a key with no German value does not warn,
+  does not fail the build and does not look broken — Xcode resolves it to the key, which *is* the
+  English string, so a German user reads an English sentence and cannot tell it was not meant.
+  The same goes for a SwiftUI `Text("…")`, `Label("…", systemImage:)`, `Button("…")` or
+  `TextField("…")` with a **string literal** title: those are `LocalizedStringKey`s and are looked
+  up in the same catalog, however little they look like it.
+
+  ```sh
+  python3 Scripts/check-localization.py   # stdlib only, no Xcode, runs on Linux
+  ```
+
+  Run it before you push; it is the first step of the Linux CI job. It reports a key the catalog is
+  missing, an entry with no German value, a German value whose `%` specifiers disagree with the
+  key's, and a catalog entry no call site produces any more — that last one is a finding too, so a
+  string you delete takes its row with it. Interpolating a new `Int` also means a line in the
+  script's hand-checked type table (`INTEGER_EXPRESSIONS`), or the derived key will be `%@` where
+  Xcode writes `%lld` and the check will say the key is missing.
+
+  German style: Apple's macOS conventions (Einstellungen, Menüleiste, Mitteilungen, Schlüsselbund;
+  infinitives on buttons; „…“ and a real …), **du** where the app has to address the reader, and
+  roughly the English length — this UI has narrow columns. The review vocabulary GitHub keeps in
+  English stays English inside the German sentence: pull request, review, approve, request changes,
+  merge, draft, commit, diff, branch, CI, check. Counts that need agreement go through the
+  catalog's `variations.plural`, never through concatenation in code.
+
+  What is deliberately *not* localised: the `shepherd` CLI (above — console output is English),
+  `Packages/ShepherdKit` (no user-visible strings by decision), the web diff viewer (ADR 0003 keeps
+  that boundary at the bridge protocol), and literal syntax inside translated text — placeholders
+  like `{prompt}`, flag names, example values (`owner/repo`, `github_pat_…`) and shortcut names.
 - Adding a **setting** has a second obligation: carry it in `SyncedSettingsDocument` and in both
   directions of `SettingsSyncApplier` (ADR 0014), or it silently stops travelling between a user's
   Macs. The two functions are deliberately mirror images — diff them by eye — and

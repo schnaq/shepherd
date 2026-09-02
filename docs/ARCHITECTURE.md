@@ -36,7 +36,8 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
   Support/                     #   AppConfig, keyboard shortcuts, theming, notifications,
                                #   Sparkle updater wrapper (ADR 0010)
     AgentCLI/                  #   agent-CLI engine: config, locator, stream parser, worktrees
-  Resources/                   #   Assets.xcassets, DiffViewer/dist (built web bundle)
+  Resources/                   #   Assets.xcassets, DiffViewer/dist (built web bundle),
+                               #   Localizable.xcstrings (en keys + de, ADR 0022)
 Packages/ShepherdKit/          # SPM package, NO AppKit/SwiftUI imports
   Sources/
     ShepherdCore/              #   domain models, agent detection, heuristics, drafts
@@ -338,7 +339,12 @@ label on the first keystroke).
   `d` done & next (below).
 - Dark & light mode from day one: semantic color tokens only (`Color.shepherd*` asset
   catalog), theme piped into Monaco via `setTheme`.
-- All strings user-visible in English for v1; localization-ready (`String(localized:)`).
+- Every user-visible string goes through `String(localized:)` — or, for a SwiftUI literal title,
+  through `LocalizedStringKey`, which is the same table — with English as the key language and
+  German shipped in `Shepherd/Resources/Localizable.xcstrings` (ADR 0022). The language follows
+  `Locale.current`; there is no setting. `Scripts/check-localization.py` re-derives every key from
+  the source and fails CI on one that the catalog is missing, because the build does not:
+  an untranslated key resolves to itself, which is the English sentence.
 
 ## Verification reality check
 
@@ -1011,6 +1017,12 @@ composition and the ranker are tested in `ShepherdCoreTests`, the table in
 the translation offer rules and cache (ADR 0020: the pure decide-to-offer function including
 `en-GB` → `en-US`, the prose strip and both detection floors, and the cache's keying, collapse and
 eviction — `TranslationSession` itself is not mocked);
+the German catalog's *wiring* (ADR 0022: three keys, one of them interpolated, resolved out of
+`Bundle.main` against an explicit `de` locale, plus the English round trip — the exhaustive
+key-by-key coverage is `Scripts/check-localization.py`, which needs no Xcode and therefore runs on
+the Linux job; what only a built bundle can prove is that the catalog reached the resources phase,
+that `xcstringstool` compiled a German table, and that a lookup goes through it — three steps that
+all fail silently);
 and the app-side half of deep linking (resolving `owner/repo#number` against cached rows, filter
 token → rail state). The `shepherd://` grammar itself is tested in `ShepherdCoreTests` instead, so it
 runs on the Linux runner too. The web

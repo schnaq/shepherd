@@ -28,6 +28,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # Before Swift, because it is the fast check and the one an Xcode-less contributor cannot
+      # run any other way: a `String(localized:)` with no German row in the String Catalog builds
+      # fine and silently shows English (ADR 0022). Python 3 stdlib only, no setup step.
+      - name: Check the String Catalog against the source
+        run: python3 Scripts/check-localization.py
       - uses: swift-actions/setup-swift@v2
         with:
           swift-version: "6.1"

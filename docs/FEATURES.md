@@ -155,6 +155,31 @@ whether the text is already in your language, so you never get a button that can
 and the first translation of a new language may let macOS offer you its own language-pack download
 ([ADR 0020](adr/0020-apple-native-text-intelligence.md)).
 
+### Deutsch: the whole app in German
+
+Set your Mac to German and Shepherd is in German — every label, every tooltip, every notification,
+every error. There is no language setting to find: the app follows `Locale.current`, the way a
+macOS app should, and nothing about your language travels in the encrypted settings document.
+Apple's German conventions throughout — Einstellungen, Menüleiste, Mitteilungen, Schlüsselbund,
+infinitives on buttons, „typographische Anführungszeichen“.
+
+**The review vocabulary stays English**, on purpose: pull request, review, approve, request
+changes, merge, draft, commit, diff, CI. github.com is open in your other window and it says
+"Approve"; a German Shepherd that said "Genehmigen" would make you translate back before acting. So
+you read "Merge für schnaq/review#128 eingereiht." and "übersprungen · changes requested" — German
+sentences with GitHub's words in them.
+
+Counts and dates go through the system rather than through string concatenation: relative times are
+`RelativeDateTimeFormatter`'s, and where German needs "1 Pull Request" against "2 Pull Requests" the
+String Catalog's plural rules say so (and say it correctly for English too, which had a couple of
+"1 pull requests" before this). Everything else lives in one file,
+`Shepherd/Resources/Localizable.xcstrings`, with a CI check that fails if a single user-visible
+string is missing a German row — because a missing translation is otherwise invisible: it silently
+shows the English original ([ADR 0022](adr/0022-german-localisation.md)).
+
+The `shepherd` CLI stays English. Its output is read by shell scripts and n8n nodes, and it is a
+URL builder with no resource bundle (ADR 0013).
+
 ---
 
 ## Automation

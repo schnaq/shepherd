@@ -4,6 +4,12 @@ options:
   deploymentTarget:
     macOS: "26.0"
   createIntermediateGroups: true
+  # English is the key language of `Shepherd/Resources/Localizable.xcstrings` and therefore the
+  # project's development language: every key in the catalog *is* its English string, so a key
+  # with no translation falls back to English by construction (ADR 0022). German is the only
+  # added language and needs nothing here — Xcode reads the languages out of the catalog itself,
+  # so there is no `knownRegions` list and no `.lproj` directory to keep in step.
+  developmentLanguage: en
 
 packages:
   ShepherdKit:
@@ -29,6 +35,15 @@ targets:
         excludes:
           - "Resources/DiffViewer"
           - "Resources/DiffViewer/**"
+          - "Resources/Localizable.xcstrings"
+      # The String Catalog (ADR 0022), named explicitly with its build phase rather than left to
+      # the glob above. XcodeGen infers a file's phase from its extension, and `.xcstrings` is a
+      # young enough type that "which XcodeGen is on the runner" would decide whether the catalog
+      # is compiled as a resource or handed to the Swift compiler — the second one is a build
+      # error, and CI installs XcodeGen from Homebrew rather than pinning it. Saying it here
+      # costs one line and removes the question.
+      - path: Shepherd/Resources/Localizable.xcstrings
+        buildPhase: resources
       # The built web bundle goes in as a *folder reference* so `index.html` keeps its
       # relative `./viewer.js` / `./viewer.css` links and `loadFileURL(_:allowingReadAccessTo:)`
       # can hand the webview exactly one directory (ADR 0003).

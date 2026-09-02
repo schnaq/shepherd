@@ -188,11 +188,17 @@ the release workflow is run in earnest.
 - [x] Local-first SQLite cache + outbox (ADR 0006)
 - [x] Dark/light theme system, Linear-inspired visual language
 - [x] CI: ShepherdKit tests (macOS + Linux), web bundle build+tests, app build on macOS runner
-- [ ] German localisation (founder interview 2026-09-02): a String Catalog for every
+- [x] German localisation (founder interview 2026-09-02): a String Catalog for every
       `String(localized:)` in the app and the CLI, German as the first added language, with the
       review vocabulary kept in English where GitHub's own UI keeps it (approve, request changes,
       merge, draft) so a bilingual team reads the same words in both places. Dates, counts and
-      plurals through the catalog's plural rules, not string concatenation
+      plurals through the catalog's plural rules, not string concatenation. Shipped as
+      [ADR 0022](adr/0022-german-localisation.md): 859 entries in
+      `Shepherd/Resources/Localizable.xcstrings`, plus `Scripts/check-localization.py` as a Linux
+      CI gate, because a `String(localized:)` with no German row builds fine and silently shows
+      English. The **CLI stayed English** — CONTRIBUTING.md's existing line, kept deliberately: its
+      output is read by shell scripts and n8n nodes, and ADR 0013 leaves it a URL builder with no
+      resource bundle
 - [ ] First signed release: the maintainer's Developer ID certificate and Sparkle's `generate_keys`
       run once, then `Scripts/release.sh` (ADR 0010, [docs/RELEASING.md](RELEASING.md))
 
