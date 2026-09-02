@@ -143,11 +143,6 @@ final class ReviewModel {
     private var loadTask: Task<Void, Never>?
     private var intelligenceTask: Task<Void, Never>?
 
-    /// Creates the model.
-    /// - Parameters:
-    ///   - session: The signed-in session.
-    ///   - settings: The preference store.
-    ///   - prID: The pull request's node id.
     /// Called after a detail fetch has been stored, with the pull request's node id.
     ///
     /// Exists for one consumer, the search index (ADR 0019): storing a detail is the moment a
@@ -156,6 +151,11 @@ final class ReviewModel {
     /// the observation graph — the same treatment `AppEnvironment`'s routing closures get.
     @ObservationIgnored var onDidLoadDetail: (@MainActor (String) -> Void)?
 
+    /// Creates the model.
+    /// - Parameters:
+    ///   - session: The signed-in session.
+    ///   - settings: The preference store.
+    ///   - prID: The pull request's node id.
     init(session: SignedInSession, settings: AppSettings, prID: String) {
         self.session = session
         self.settings = settings

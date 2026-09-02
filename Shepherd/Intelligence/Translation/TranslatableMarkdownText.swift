@@ -57,6 +57,12 @@ struct TranslatableMarkdownText: View {
             translationBlock
         }
         .task(id: markdown) {
+            // A body that changes under the same view identity — the author edited the description
+            // between the cached and the fresh detail — is a different text with a different cache
+            // key. Dropping the configuration ends any session still working on the old text and
+            // puts the button back; a translation the cache already holds for the *new* text is
+            // still found by `controls`, because that lookup is keyed by the text, not by this view.
+            configuration = nil
             eligibility = await TranslationOffer.eligibility(for: markdown, target: target)
         }
         .translationTask(configuration, action: TranslationJob(requested: requested, store: store).run)

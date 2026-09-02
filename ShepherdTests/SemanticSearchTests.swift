@@ -271,6 +271,27 @@ final class SemanticSearchTests: XCTestCase {
         XCTAssertEqual(byDescription.map(\.id), ["PR_1"], "the description is indexed too")
     }
 
+    func testADetailAnnouncementDuringAPassDoesNotDiscardAWaitingSnapshot() async throws {
+        let database = try DatabaseManager.inMemory()
+        var edited = rows
+        edited[0].title = "Fix the flaky authentication test"
+        try await database.savePullRequestSummaries(edited)
+        let coordinator = makeCoordinator(settings: makeSettings(), embedder: FakeEmbedder())
+
+        // Three calls in one main-actor turn, so nothing can run in between: a pass over the old
+        // titles starts and cannot progress until this test yields; the sweep's snapshot with the
+        // new title queues behind it; then the review screen announces a detail for a *different*
+        // pull request. With a single "last write wins" slot that last call replaced the snapshot
+        // and the new title waited for the next sweep. The queue merges by pull request instead.
+        coordinator.considerIndexing(rows: rows, database: database)
+        coordinator.considerIndexing(rows: edited, database: database)
+        coordinator.indexAfterDetailLoad(prID: "PR_2", database: database)
+        await waitForPass(coordinator)
+
+        let found = await coordinator.results(for: "authentication")
+        XCTAssertEqual(found.map(\.id), ["PR_1"], "the queued snapshot was indexed, not dropped")
+    }
+
     // MARK: - Searching
 
     func testAnExactSlugOpensThatPullRequestFirst() async throws {

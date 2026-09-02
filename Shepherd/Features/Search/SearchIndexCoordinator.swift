@@ -100,9 +100,13 @@ final class SearchIndexCoordinator {
     /// for its effects — the same kind of seam ``AutoMergeCoordinator/run(rows:existingOutbox:write:)``
     /// gives by returning its writes. Nothing in the app reads it.
     private(set) var passTask: Task<Void, Never>?
-    /// Rows that arrived while a pass was running. One slot, last write wins — an intermediate
-    /// state of the inbox is of no interest once a newer one is known.
-    private var pendingRows: [PullRequestSummary]?
+    /// Rows that arrived while a pass was running, keyed by pull request so that callers of
+    /// different scope merge instead of overwriting each other: a full inbox snapshot from the
+    /// sweep upserts every row, a single row from ``indexAfterDetailLoad(prID:database:)`` upserts
+    /// one. Last write per pull request wins — an intermediate state of *that* pull request is of
+    /// no interest once a newer one is known — but a one-row announcement can no longer discard a
+    /// whole snapshot that was waiting alongside it.
+    private var pendingRows: [String: PullRequestSummary] = [:]
 
     /// Creates a coordinator.
     /// - Parameters:
@@ -285,7 +289,7 @@ final class SearchIndexCoordinator {
 
     private func schedulePass(rows: [PullRequestSummary], database: DatabaseManager) {
         guard passTask == nil else {
-            pendingRows = rows
+            for row in rows { pendingRows[row.id] = row }
             return
         }
         passTask = Task(priority: .low) { [weak self] in
@@ -302,8 +306,8 @@ final class SearchIndexCoordinator {
     }
 
     private func takePendingRows() -> [PullRequestSummary]? {
-        defer { pendingRows = nil }
-        return pendingRows
+        defer { pendingRows = [:] }
+        return pendingRows.isEmpty ? nil : Array(pendingRows.values)
     }
 
     private func runPass(rows: [PullRequestSummary], database: DatabaseManager) async {
