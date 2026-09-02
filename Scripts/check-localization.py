@@ -65,11 +65,32 @@ REQUIRED_LANGUAGE = "de"
 #: the opening parenthesis, so the scanner below never offers them.
 SWIFTUI_INITIALISERS = ("Text", "Label", "Button", "Toggle", "Section", "Picker", "TextField")
 
+#: The AppIntents shapes whose literal is a `LocalizedStringResource` looked up in the same catalog
+#: (ADR 0021, 0022): an intent's `title`, `@Parameter`/`@Property` titles, enum and entity display
+#: names, App Shortcut short titles, and the spoken `IntentDialog`. These literals must stay
+#: literals — the App Intents metadata processor reads them at build time — so the catalog has to
+#: be taught to find them where they are rather than the code being bent towards `String(localized:)`.
+APP_INTENTS_TAILS = (
+    r"LocalizedStringResource\s*\{\s*",
+    r"LocalizedStringResource\(\s*",
+    r"IntentDialog\(\s*",
+    r"TypeDisplayRepresentation\(\s*name:\s*",
+    r"DisplayRepresentation\(\s*title:\s*",
+    r"\bsubtitle:\s*",
+    r"@(?:Parameter|Property)\(\s*title:\s*",
+    r"\bshortTitle:\s*",
+    r"\bdialog:\s*",
+)
+
 #: Matches the code immediately in front of a string literal when that literal is a catalog key.
 #: Anchored at the end, so it is applied to the accumulated *code* text (comments already
 #: dropped) right before the quote — which is what makes a call split over several lines work.
 CALL_SITE_TAIL = re.compile(
-    r"(?:String\(\s*localized:\s*|\b(?:" + "|".join(SWIFTUI_INITIALISERS) + r")\(\s*)$"
+    r"(?:String\(\s*localized:\s*|\b(?:"
+    + "|".join(SWIFTUI_INITIALISERS)
+    + r")\(\s*|"
+    + "|".join(APP_INTENTS_TAILS)
+    + r")$"
 )
 
 # ---------------------------------------------------------------------------------------------
@@ -381,7 +402,10 @@ def extract_keys(text: str, path: str) -> list[tuple[int, str]]:
                 segments, index = read_literal(text, index)
             except ParseError as error:
                 raise ParseError("%s:%d: %s" % (path, line_number, error)) from error
-            if is_call_site:
+            # A literal that is nothing but interpolations — `DisplayRepresentation(title: "\(slug)")`
+            # — has no text to translate; its key would be a bare `%@`, which is noise in a catalog.
+            has_text = any(kind == "text" and value for kind, value in segments)
+            if is_call_site and has_text:
                 keys.append((line_number, _render_key(segments, path)))
             # A literal contributes nothing to the code text, but it must not glue the code
             # before it onto the code after it either.

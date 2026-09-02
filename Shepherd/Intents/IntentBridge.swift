@@ -80,11 +80,13 @@ enum IntentFailure: Error, CustomLocalizedStringResourceConvertible {
     var localizedStringResource: LocalizedStringResource {
         switch self {
         case .appNotRunning:
-            return "Shepherd is not running."
+            return LocalizedStringResource("Shepherd is not running.")
         case .notSignedIn:
-            return "Sign in to Shepherd first — no GitHub account is connected on this Mac."
+            return LocalizedStringResource(
+                "Sign in to Shepherd first — no GitHub account is connected on this Mac."
+            )
         case .pullRequestNotAvailable(let slug):
-            return "\(slug) is not in Shepherd's inbox any more."
+            return LocalizedStringResource("\(slug) is not in Shepherd's inbox any more.")
         }
     }
 }

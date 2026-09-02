@@ -61,6 +61,16 @@
         }
       }
     },
+    "%@ is not in Shepherd's inbox any more.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ist nicht mehr in Shepherds Inbox."
+          }
+        }
+      }
+    },
     "%@ · %@ · %@": {
       "localizations": {
         "de": {
@@ -157,16 +167,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@: %@"
-          }
-        }
-      }
-    },
-    "%lld": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld"
           }
         }
       }
@@ -781,6 +781,16 @@
         }
       }
     },
+    "%lld pull requests need your review.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Pull Requests brauchen dein Review."
+          }
+        }
+      }
+    },
     "%lld queued reviews were not sent": {
       "localizations": {
         "de": {
@@ -957,6 +967,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "1 deiner Pull Requests braucht Aufmerksamkeit"
+          }
+        }
+      }
+    },
+    "1 pull request needs your review.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 Pull Request braucht dein Review."
           }
         }
       }
@@ -1751,6 +1771,16 @@
         }
       }
     },
+    "Author": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autor"
+          }
+        }
+      }
+    },
     "Auto-delegated %@ to %@ — %@": {
       "localizations": {
         "de": {
@@ -2127,6 +2157,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Remote prüfen"
+          }
+        }
+      }
+    },
+    "Checks": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checks"
           }
         }
       }
@@ -3221,6 +3261,16 @@
         }
       }
     },
+    "Filter": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filter"
+          }
+        }
+      }
+    },
     "Fires when GitHub confirmed the merge, with the method used.": {
       "localizations": {
         "de": {
@@ -3317,6 +3367,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Generiert"
+          }
+        }
+      }
+    },
+    "Get Pull Requests Needing Review": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pull Requests abrufen, die ein Review brauchen"
           }
         }
       }
@@ -3587,6 +3647,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Inbox"
+          }
+        }
+      }
+    },
+    "Inbox Filter": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inbox-Filter"
           }
         }
       }
@@ -4691,6 +4761,16 @@
         }
       }
     },
+    "Nothing needs your review.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nichts braucht dein Review."
+          }
+        }
+      }
+    },
     "Nothing synced yet. Press ⌘R to run a sync now.": {
       "localizations": {
         "de": {
@@ -4941,6 +5021,16 @@
         }
       }
     },
+    "Open Pull Request": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pull Request öffnen"
+          }
+        }
+      }
+    },
     "Open Settings → Delegation": {
       "localizations": {
         "de": {
@@ -4967,6 +5057,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Shepherd öffnen"
+          }
+        }
+      }
+    },
+    "Open Shepherd Settings": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd-Einstellungen öffnen"
           }
         }
       }
@@ -5201,6 +5301,16 @@
         }
       }
     },
+    "People": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menschen"
+          }
+        }
+      }
+    },
     "Per day": {
       "localizations": {
         "de": {
@@ -5291,12 +5401,32 @@
         }
       }
     },
+    "Provenance": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Herkunft"
+          }
+        }
+      }
+    },
     "Provider": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Anbieter"
+          }
+        }
+      }
+    },
+    "Pull Request": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pull Request"
           }
         }
       }
@@ -5861,6 +5991,16 @@
         }
       }
     },
+    "Review queue": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review-Warteschlange"
+          }
+        }
+      }
+    },
     "Review requested": {
       "localizations": {
         "de": {
@@ -5887,6 +6027,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Review erforderlich"
+          }
+        }
+      }
+    },
+    "Review session": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review-Sitzung"
+          }
+        }
+      }
+    },
+    "Review session started.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review-Sitzung gestartet."
           }
         }
       }
@@ -6311,6 +6471,16 @@
         }
       }
     },
+    "Settings Tab": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einstellungs-Tab"
+          }
+        }
+      }
+    },
     "Settings found in the bucket.": {
       "localizations": {
         "de": {
@@ -6357,6 +6527,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Shepherd hat den Link „%@“ nicht verstanden."
+          }
+        }
+      }
+    },
+    "Shepherd is not running.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd läuft nicht."
           }
         }
       }
@@ -6447,6 +6627,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zeigen"
+          }
+        }
+      }
+    },
+    "Show Inbox": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inbox anzeigen"
           }
         }
       }
@@ -6547,6 +6737,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Melde dich im Hauptfenster an, damit dein Account hier erscheint."
+          }
+        }
+      }
+    },
+    "Sign in to Shepherd first — no GitHub account is connected on this Mac.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Melde dich zuerst in Shepherd an — auf diesem Mac ist kein GitHub-Account verbunden."
           }
         }
       }
@@ -6697,6 +6897,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sortieren"
+          }
+        }
+      }
+    },
+    "Spotlight has not confirmed the removal yet — Shepherd asks again on the next sync.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spotlight hat das Entfernen noch nicht bestätigt — Shepherd fragt beim nächsten Sync erneut."
           }
         }
       }
@@ -6897,6 +7107,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Synchronisiert"
+          }
+        }
+      }
+    },
+    "Syncing Shepherd.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd synchronisiert."
           }
         }
       }
@@ -7697,6 +7917,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Thread aufgelöst."
+          }
+        }
+      }
+    },
+    "Title": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Titel"
           }
         }
       }

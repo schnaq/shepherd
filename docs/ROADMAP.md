@@ -312,6 +312,8 @@ that content to travel, and never for anything that runs unattended.
   but its models are downloadable *assets*, and a search box that quietly starts a multi-megabyte
   download is not something Shepherd may do. It costs one new model identifier, which invalidates
   the index by itself
+- German Siri phrases: an `AppShortcuts.xcstrings` beside the catalog ADR 0022 introduced, so
+  "Öffne die Review-Warteschlange in Shepherd" works as well as the English phrase does today
 - More `shepherd://` commands (additive by design, ADR 0013). Anything that must *return* data
   (`shepherd status`, "how many need my review?") is not a URL-scheme feature and needs the XPC
   or AppleScript decision ADR 0013 deferred

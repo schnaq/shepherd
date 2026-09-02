@@ -229,9 +229,9 @@ struct StartFocusSessionIntent: AppIntent {
         environment.revealWindow()
         // Spoken, because Siri is the one caller with nothing to look at: the toast that says
         // "nothing needs your review" is on a screen the person asking may not be facing.
-        let dialog: IntentDialog = started
-            ? "Review session started."
-            : "Nothing needs your review right now."
+        let dialog = started
+            ? IntentDialog("Review session started.")
+            : IntentDialog("Nothing needs your review right now.")
         return .result(dialog: dialog)
     }
 }
@@ -304,9 +304,9 @@ struct GetReviewQueueIntent: AppIntent {
     /// - Returns: The dialog.
     private static func dialog(count: Int) -> IntentDialog {
         switch count {
-        case 0: return "Nothing needs your review."
-        case 1: return "1 pull request needs your review."
-        default: return "\(count) pull requests need your review."
+        case 0: return IntentDialog("Nothing needs your review.")
+        case 1: return IntentDialog("1 pull request needs your review.")
+        default: return IntentDialog("\(count) pull requests need your review.")
         }
     }
 }
