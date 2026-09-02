@@ -27,66 +27,61 @@ import XCTest
 ///   value whose specifier disagrees with the key's, which yields a wrong number rather than a
 ///   missing string.
 ///
-/// `String(localized:table:bundle:locale:comment:)` (macOS 13+) is used with `table: nil` for the
-/// default `Localizable` table, `bundle: .main` — the app bundle, because `ShepherdTests` is
-/// hosted by the app target, not the bundle these tests are compiled into — and an explicit
-/// `locale:`, which is what makes the assertion independent of the machine running it.
+/// The lookup goes through the compiled `de.lproj` **as a bundle of its own**, not through the
+/// `locale:` parameter of `String(localized:…)`. That parameter formats the interpolated values —
+/// decimal separators, dates — but it does not pick the language table; the table is chosen from
+/// the bundle's preferred localisations, which on the runner are the runner's, and a test that
+/// depended on the Mac it runs on would pass on a German machine and fail on an English one. The
+/// first version of this test did exactly that and read "Needs my review" back from a German
+/// table that was there all along. Loading `Bundle.main.url(forResource: "de",
+/// withExtension: "lproj")` as a `Bundle` puts the German `Localizable.strings` at that bundle's
+/// root, where the default table lookup finds it, and `XCTUnwrap` on the URL turns "the catalog
+/// did not compile a German table" — the wiring failure this test exists for — into a named
+/// failure rather than an English string.
 @MainActor
 final class LocalizationTests: XCTestCase {
-    /// German, regardless of what the runner's own language is.
-    private let german = Locale(identifier: "de")
-    /// The source language, where every key stands for itself.
-    private let english = Locale(identifier: "en")
+    /// The compiled German table, loaded as a bundle so the lookup cannot depend on the runner.
+    private func germanTable() throws -> Bundle {
+        let url = try XCTUnwrap(
+            Bundle.main.url(forResource: "de", withExtension: "lproj"),
+            "no de.lproj in the app bundle: the String Catalog was not compiled for German"
+        )
+        return try XCTUnwrap(Bundle(url: url), "de.lproj is not loadable as a bundle")
+    }
 
     // MARK: - German
 
-    func testPlainKeysResolveToGerman() {
+    func testPlainKeysResolveToGerman() throws {
+        let german = try germanTable()
+
         // `Support/DesignComponents.swift` — a smart-view name on the rail.
-        let smartView = String(
-            localized: "Needs my review",
-            table: nil,
-            bundle: .main,
-            locale: german
-        )
+        let smartView = String(localized: "Needs my review", bundle: german)
         XCTAssertEqual(smartView, "Braucht mein Review")
 
         // `Features/Digest/DigestPresentation.swift` — the morning digest's greeting, in a
         // different file so that one surviving entry cannot carry this test on its own.
-        let greeting = String(
-            localized: "Good morning",
-            table: nil,
-            bundle: .main,
-            locale: german
-        )
+        let greeting = String(localized: "Good morning", bundle: german)
         XCTAssertEqual(greeting, "Guten Morgen")
     }
 
-    func testInterpolatedKeyResolvesToGermanAndKeepsItsArgument() {
+    func testInterpolatedKeyResolvesToGermanAndKeepsItsArgument() throws {
+        let german = try germanTable()
         // The literal below is `Comment on line %lld` once the compiler has derived the key, and
         // the German value carries the same specifier — so the number has to come out unchanged.
         let line = 42
-        let composed = String(
-            localized: "Comment on line \(line)",
-            table: nil,
-            bundle: .main,
-            locale: german
-        )
+        let composed = String(localized: "Comment on line \(line)", bundle: german)
         XCTAssertEqual(composed, "Kommentar zu Zeile 42")
     }
 
     // MARK: - English
 
-    func testEnglishRoundTripsTheSourceKey() {
+    func testAMissingTableGivesTheKeyBack() {
         // No `en` string unit is written for a plain key: the key *is* the English string
-        // (ADR 0022), and a second copy of it in the catalog could only ever drift. So the
-        // English lookup has to give the key back verbatim — which is also the fallback a
-        // missing translation lands on, and therefore the reason a missing one is invisible.
-        let smartView = String(
-            localized: "Needs my review",
-            table: nil,
-            bundle: .main,
-            locale: english
-        )
+        // (ADR 0022), and a second copy of it in the catalog could only ever drift. So a lookup
+        // that finds no table has to give the key back verbatim — which is the fallback a missing
+        // translation lands on, and therefore the reason a missing one is invisible without the
+        // Python gate. The test bundle carries no `Localizable` table, so it is that miss.
+        let smartView = String(localized: "Needs my review", bundle: Bundle(for: Self.self))
         XCTAssertEqual(smartView, "Needs my review")
 
         let line = 42

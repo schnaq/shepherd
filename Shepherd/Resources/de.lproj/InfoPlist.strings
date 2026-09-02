@@ -1,0 +1,5 @@
+/* Deliberately empty. Shepherd has no Info.plist strings to localise — the display name is the
+   product name and the app asks for no permission that needs a usage description (ADR 0022).
+   This file exists because XcodeGen derives the project's `knownRegions` from the `.lproj`
+   directories it finds, and Xcode compiles a String Catalog's German only when German is a known
+   region. Remove it and the German table quietly stops shipping; `LocalizationTests` would notice. */

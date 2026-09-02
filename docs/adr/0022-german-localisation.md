@@ -158,10 +158,16 @@ deleted in the commit that stopped producing it.
 
 One `XCTestCase` (`ShepherdTests/LocalizationTests.swift`) covers what the Python cannot see, and
 only that: that the catalog reached the built app bundle, that `xcstringstool` compiled a German
-table out of it, and that `String(localized:table:bundle:locale:)` resolves through it — three
-keys, one of them interpolated, plus the English round trip. Every one of those three steps also
-fails silently, so a green Python check and a green build together still prove nothing about the
-wiring.
+table out of it, and that a `String(localized:)` resolves through it — three keys, one of them
+interpolated, plus the fallback that gives the key back. Every one of those three steps also fails
+silently, so a green Python check and a green build together still prove nothing about the wiring.
+Two things about *how* it looks up were learnt the expensive way. The `locale:` parameter of
+`String(localized:…)` formats the interpolated values but does not choose the language table — that
+follows the bundle's preferred localisations, i.e. the runner's — so the test loads the compiled
+`de.lproj` as a bundle of its own and looks the keys up there, which no machine setting can change.
+And XcodeGen has no `knownRegions` option: it derives the project's languages from `.lproj`
+directories, and Xcode compiles a catalog's German only for a known region, which is what the
+one-comment `Shepherd/Resources/de.lproj/InfoPlist.strings` is for.
 
 The App Intents surface (ADR 0021) is the one place the catalog is fed by something other than
 `String(localized:)` and the SwiftUI initialisers: an intent's `title`, the `@Parameter` and

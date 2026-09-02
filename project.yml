@@ -7,8 +7,10 @@ options:
   # English is the key language of `Shepherd/Resources/Localizable.xcstrings` and therefore the
   # project's development language: every key in the catalog *is* its English string, so a key
   # with no translation falls back to English by construction (ADR 0022). German is the only
-  # added language and needs nothing here — Xcode reads the languages out of the catalog itself,
-  # so there is no `knownRegions` list and no `.lproj` directory to keep in step.
+  # added language. XcodeGen has no `knownRegions` option; it derives the project's languages
+  # from the `.lproj` directories it finds, which is what `Shepherd/Resources/de.lproj` is for —
+  # a one-comment `InfoPlist.strings` whose only job is to put `de` in `knownRegions`, so that
+  # Xcode compiles the German half of the catalog on a project it did not create itself.
   developmentLanguage: en
 
 packages:
