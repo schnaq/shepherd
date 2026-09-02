@@ -262,7 +262,10 @@ final class SettingsSyncTests: XCTestCase {
         )
         // Non-default means *off* here: the index ships on, because it is on-device and costs
         // nothing but CPU (ADR 0019).
-        document.search = SyncedSettingsDocument.SearchGroup(isSemanticIndexEnabled: false)
+        document.search = SyncedSettingsDocument.SearchGroup(
+            isSemanticIndexEnabled: false,
+            isSpotlightExportEnabled: false
+        )
         document.appearance = SyncedSettingsDocument.AppearanceGroup(
             appearance: .dark,
             inboxGroupBy: .repository,
@@ -685,6 +688,8 @@ final class SettingsSyncTests: XCTestCase {
         // ADR 0019 must not read as "this user switched the index off".
         XCTAssertEqual(document.search, SyncedSettingsDocument.SearchGroup())
         XCTAssertTrue(document.search.isSemanticIndexEnabled)
+        // Same for the Spotlight export, one ADR later (0021).
+        XCTAssertTrue(document.search.isSpotlightExportEnabled)
         // A document written before diagnostics existed leaves them off rather than on.
         XCTAssertEqual(document.diagnostics, SyncedSettingsDocument.DiagnosticsGroup())
         XCTAssertFalse(document.diagnostics.isEnabled)
@@ -1076,6 +1081,8 @@ final class SettingsSyncTests: XCTestCase {
         // The switch travels; the vectors it produces never do — they are rebuildable device
         // state (ADR 0019).
         XCTAssertFalse(settings.semanticSearchEnabled)
+        // And the Spotlight switch, whose items are as unsyncable as the vectors (ADR 0021).
+        XCTAssertFalse(settings.spotlightExportEnabled)
         // The opt-in travels; the reports themselves never do (ADR 0017).
         XCTAssertTrue(settings.diagnosticsEnabled)
 
@@ -1269,6 +1276,8 @@ final class SettingsSyncTests: XCTestCase {
         // argues — it is on-device and costs nothing but CPU.
         XCTAssertTrue(document.appearance.showsMenuBarExtra)
         XCTAssertTrue(document.search.isSemanticIndexEnabled)
+        // Same for the Spotlight export, one ADR later (0021).
+        XCTAssertTrue(document.search.isSpotlightExportEnabled)
     }
 
     // MARK: - The model's flow

@@ -1,3 +1,4 @@
+import CoreSpotlight
 import ShepherdCore
 import SwiftUI
 
@@ -48,6 +49,17 @@ struct ShepherdApp: App {
                 // replayed after sign-in.
                 .onOpenURL { url in
                     environment.open(deepLinkURL: url)
+                }
+                // And once more for the Spotlight export (ADR 0021), so the toggle in Settings and
+                // an applied settings document both reach the exporter through one route.
+                .onChange(of: environment.settings.spotlightExportEnabled) { _, _ in
+                    environment.applySpotlightSetting()
+                }
+                // A clicked Spotlight result, beside `onOpenURL` because it is the same kind of
+                // arrival — something outside the app naming a pull request — and it ends in the
+                // same `DeepLink.pullRequest` routing (ADR 0021).
+                .onContinueUserActivity(CSSearchableItemActionType) { activity in
+                    environment.openSpotlightResult(activity)
                 }
         }
         .defaultSize(width: 1_440, height: 900)

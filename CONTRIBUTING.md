@@ -150,6 +150,18 @@ bumping a dependency that ships inside the app also means a line in
   structural; keep it that way. The lexical ranker in `ShepherdCore` is the fallback and is always
   on, which is why no search surface may hard-depend on a model being present (ADR 0007's rule,
   unchanged).
+- **Spotlight gets metadata, never content.** The Spotlight export (ADR 0021) is the only thing
+  Shepherd writes *outside* its own database that nobody asked for click by click, and the system
+  index is not the app's to govern: it is machine-wide, it is backed up, and other processes can
+  query it. So what is exported per pull request is the title, `owner/repo#123 · author · CI
+  state`, and its labels, repository and agent as keywords — the same metadata GitHub shows anyone
+  who can see the pull request — and **never** a description, a diff hunk, a review comment or a
+  draft. That is enforced by `SpotlightItemFields` having nowhere to put one, and by the App
+  Intents entity beside it carrying the same five fields and no more; keep it that way, because a
+  field added there leaves the app's sandbox for every pull request in the inbox at once. The
+  switch is in Settings → Intelligence, switching it off deletes the whole domain, and no host is
+  added — Spotlight is local. The same ADR is why there is no intent that approves, merges or
+  comments: see the verdict rule below.
 - **Shepherd never forms a verdict unattended.** Two rules may act without a human in the loop:
   auto-delegation (ADR 0016) starts a local agent, and auto-merge (ADR 0018) queues a merge. The
   second one is only acceptable because it *records* a decision a human already made — the

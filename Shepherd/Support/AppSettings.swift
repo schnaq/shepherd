@@ -134,6 +134,8 @@ final class AppSettings {
         )
         self.semanticSearchEnabled = defaults
             .object(forKey: Keys.semanticSearch) as? Bool ?? true
+        self.spotlightExportEnabled = defaults
+            .object(forKey: Keys.spotlightExport) as? Bool ?? true
         self.savedReplies = Self.readJSON(defaults, Keys.savedReplies, default: [SavedReply]())
         self.reviewTemplates = Self.readJSON(
             defaults,
@@ -422,6 +424,28 @@ final class AppSettings {
         didSet { defaults.set(semanticSearchEnabled, forKey: Keys.semanticSearch) }
     }
 
+    // MARK: - Pull requests in Spotlight (ADR 0021)
+
+    /// Whether the pull requests in the inbox appear in macOS Spotlight.
+    ///
+    /// **On on a fresh install**, for the reason the search index above is: the export is built
+    /// from rows the sweep already wrote, it makes no request, and it costs a batched Core
+    /// Spotlight call on the passes where something a result shows actually changed. A user who
+    /// presses ⌘Space and types a pull-request title expects to find it.
+    ///
+    /// It is a separate switch from ``semanticSearchEnabled`` rather than a mode of it, because
+    /// the two answer different questions. That one is about work done *inside* the app's own
+    /// database; this one is about what leaves it: Spotlight's index is system-wide, backed up, and
+    /// queryable by other processes. So what is exported is titles and metadata only
+    /// (``SpotlightItemFields``) — and the switch that governs it says so on the same card, where a
+    /// user deciding "do I want my pull-request titles in the system index" is standing.
+    ///
+    /// With it off, the whole `pullRequests` domain is deleted rather than left to expire, and ⌘K
+    /// inside the app is unaffected.
+    var spotlightExportEnabled: Bool {
+        didSet { defaults.set(spotlightExportEnabled, forKey: Keys.spotlightExport) }
+    }
+
     // MARK: - Saved replies & review templates
 
     /// The user's named, reusable comment bodies, in the order they chose.
@@ -701,6 +725,7 @@ final class AppSettings {
         static let autoDelegation = "delegation.autoRules"
         static let autoMerge = "automation.autoMergeRules"
         static let semanticSearch = "search.semanticIndexEnabled"
+        static let spotlightExport = "search.spotlightExportEnabled"
         static let savedReplies = "review.savedReplies"
         static let reviewTemplates = "review.templates"
         static let webhookEnabled = "automation.webhook.enabled"

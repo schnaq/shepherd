@@ -58,6 +58,10 @@ than a guess.
 <tr>
 <td colspan="2">🔗 <b>Webhooks, deep links, CLI</b><br>Signed outbound events into n8n, <code>shepherd://</code> links, and a <code>shepherd</code> binary that drives the app from a terminal, Raycast or Shortcuts.</td>
 </tr>
+<tr>
+<td>🗣️ <b>Shortcuts &amp; Siri</b><br>App Intents with typed parameters: open a pull request, show a filtered inbox, sync, start a review session, or just ask how many need you. No write actions — nothing can approve or merge from a phrase.</td>
+<td>🔦 <b>Spotlight</b><br>Your inbox in ⌘Space: title, <code>owner/repo#123 · author · CI state</code>, labels and agent as keywords. Titles and metadata only — never a description or a diff — and one toggle removes them all.</td>
+</tr>
 <tr><th colspan="2" align="left">Intelligence</th></tr>
 <tr>
 <td>✨ <b>Drafts, not submissions</b><br>Draft a review summary or an inline comment from the diff in front of you. It lands as editable text; nothing is ever submitted for you.</td>

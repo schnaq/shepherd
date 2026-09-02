@@ -95,6 +95,11 @@ final class AppEnvironment {
     /// Created inert: it holds no corpus and loads no model until the first inbox observation
     /// hands it rows, and with the setting off it never reads a diff or spends an embedding.
     let search: SearchIndexCoordinator
+    /// Keeps the pull requests in the inbox visible to macOS Spotlight (ADR 0021).
+    ///
+    /// Created inert, like the search index beside it: it writes nothing until the first inbox
+    /// observation hands it rows, and with the setting off it never makes a framework call.
+    let spotlight: SpotlightIndexer
     /// Delivers the opt-in morning digest: a notification when it is due, a card in the inbox
     /// while the day lasts. Created inert — it does nothing until ``bootstrap()`` starts its check,
     /// and that check does nothing until the user switches the digest on.
@@ -171,6 +176,7 @@ final class AppEnvironment {
             }
         )
         self.search = SearchIndexCoordinator(settings: settings)
+        self.spotlight = SpotlightIndexer(settings: settings)
         self.digest = DigestCoordinator(
             settings: settings,
             notify: { payload in
@@ -188,6 +194,10 @@ final class AppEnvironment {
         notifications.routeClicks { [weak self] in
             self?.openInboxFromNotification()
         }
+        // App Intents are created by the *system*, so they have no initialiser to be handed a
+        // dependency through; registering the container here is how an intent finds the running
+        // app (ADR 0021, `Intents/IntentBridge.swift`). The reference there is weak.
+        IntentBridge.register(self)
     }
 
     // MARK: - Lifecycle
@@ -199,6 +209,11 @@ final class AppEnvironment {
         // diagnostics shortly after launch, and a subscriber registered after that moment would
         // miss the batch that describes the crash the user is here about (ADR 0017).
         applyDiagnosticsSetting()
+        // Cheap and self-healing: with the export switched off this deletes the `pullRequests`
+        // domain, which repairs the one state nothing else can — the app was killed between the
+        // toggle going off and the deletion landing (ADR 0021). With it on there is no session
+        // yet, so it does nothing and the first inbox observation is what exports.
+        applySpotlightSetting()
         startDigestChecks()
         guard let account = settings.account else {
             phase = .signedOut
@@ -274,6 +289,10 @@ final class AppEnvironment {
         // Its table went with `eraseAllData()` above — the index is local cache in exactly the
         // sense ADR 0006 means.
         search.reset()
+        // And the Spotlight domain, which is the one piece of this account's data that lives
+        // *outside* the database `eraseAllData()` just emptied: the system index is not Shepherd's
+        // to leave behind (ADR 0021).
+        spotlight.reset()
     }
 
     private func startSession(for account: Account) async throws {
@@ -299,6 +318,11 @@ final class AppEnvironment {
                 // one nothing else announces, a detail fetch storing a diff (ADR 0019). The
                 // database comes from `self.session` rather than from the local above: the
                 // session holds this closure, so capturing it here would be a retain cycle.
+                // The third consumer of the same rows (ADR 0021), and it goes first because it
+                // is the one that needs no database: a Spotlight item is built out of the row
+                // itself. A sweep that changed nothing a result shows costs one dictionary
+                // comparison and no framework call.
+                self.spotlight.considerExporting(rows: rows)
                 guard let database = self.session?.database else { return }
                 self.search.considerIndexing(rows: rows, database: database)
             }

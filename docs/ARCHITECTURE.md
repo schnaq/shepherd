@@ -23,6 +23,9 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
                                #   cross-Mac sync), replies (saved replies + review templates),
                                #   agents, AI, delegation, automation, theme (+ menu-bar toggle)
     Onboarding/                #   device-flow sign-in, PAT entry
+  Intents/                     #   App Intents (Shortcuts/Siri) + Core Spotlight export of the
+                               #   inbox — app target only, the sole importers of AppIntents and
+                               #   CoreSpotlight; both route through DeepLink (ADR 0021)
   Automation/                  #   outbound webhook payload, signing, dispatcher (ADR 0012);
                                #   auto-delegation coordinator + ledger store (ADR 0016);
                                #   auto-merge coordinator + ledger/audit store (ADR 0018)

@@ -94,7 +94,10 @@ enum SettingsSyncApplier {
         // The switch, never the index: the vectors are device state that a local pass rebuilds
         // from local rows (ADR 0019).
         document.search = SyncedSettingsDocument.SearchGroup(
-            isSemanticIndexEnabled: settings.semanticSearchEnabled
+            isSemanticIndexEnabled: settings.semanticSearchEnabled,
+            // The switch, never the items: Spotlight's index belongs to the Mac it is on, and this
+            // Mac rebuilds its own from local rows (ADR 0021).
+            isSpotlightExportEnabled: settings.spotlightExportEnabled
         )
         document.appearance = SyncedSettingsDocument.AppearanceGroup(
             appearance: settings.appearance,
@@ -207,6 +210,11 @@ enum SettingsSyncApplier {
         // diagnostics opt-in takes (ADR 0017), so a flipped toggle and an applied document reach
         // the coordinator through one path rather than two.
         settings.semanticSearchEnabled = document.search.isSemanticIndexEnabled
+
+        // And the same again for the Spotlight export (ADR 0021): only the flag is applied, and
+        // `onChange(of: settings.spotlightExportEnabled)` in `ShepherdApp` is what turns it into
+        // items in the system index or a deleted domain.
+        settings.spotlightExportEnabled = document.search.isSpotlightExportEnabled
 
         settings.appearance = document.appearance.appearance
         settings.groupBy = document.appearance.inboxGroupBy

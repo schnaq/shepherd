@@ -215,6 +215,26 @@ never sees your token ([ADR 0013](adr/0013-url-scheme-and-cli.md)). A pull reque
 your inbox yet is fetched on demand, so a link from a colleague works; a link that arrives while
 you are signed out is remembered and opens right after sign-in.
 
+### Shortcuts, Siri and Spotlight
+
+Shepherd's commands are **App Intents**, so they show up in the Shortcuts app with typed
+parameters, in Spotlight's actions, and in Siri: *"Open my review queue in Shepherd"*, *"What needs
+my review in Shepherd"*, *"Sync Shepherd"*, *"Start a review session in Shepherd"*. An
+*Open Pull Request* action takes a pull request you pick — or search for, using the same on-device
+⌘K ranker — and a *Get Pull Requests Needing Review* action answers with the count and the list
+from the local database, with no GitHub call, so it is safe on a five-minute automation.
+
+Every pull request in your inbox is also in **⌘Space**: title, `owner/repo#123 · author · CI
+state`, and its labels, repository and agent as keywords. Opening a result opens the review screen
+through the same routing a `shepherd://` link uses. Only that metadata is exported — descriptions,
+diffs, review comments and your drafts never leave the local database — and one toggle in
+Settings → Intelligence deletes every item Shepherd put there.
+
+There are deliberately **no write actions**: nothing here can approve, request changes, comment,
+merge or delegate. An intent runs without the review screen in front of you and Siri has no screen
+at all, so a verdict formed there would be a verdict formed by somebody who has not read the diff
+([ADR 0021](adr/0021-app-intents-and-spotlight.md)).
+
 ---
 
 ## Intelligence

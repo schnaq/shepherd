@@ -26,6 +26,7 @@ founder interview (2026-08-31) combined with three research reports (see
 | 0018 | [Opt-in auto-merge rules (green, approved, agent PR)](0018-auto-merge-rules.md) | Accepted (v1.x) |
 | 0019 | [Semantic ⌘K search over pull requests, on-device only](0019-semantic-search-on-device-embeddings.md) | Accepted (v1.x) |
 | 0020 | [Apple-native text intelligence: Writing Tools + on-device translation](0020-apple-native-text-intelligence.md) | Accepted (v1.x) |
+| 0021 | [App Intents for Shortcuts and Siri, pull requests in Spotlight](0021-app-intents-and-spotlight.md) | Accepted (v1.x) |
 
 Format: lightweight [MADR](https://adr.github.io/madr/)-style — Context, Decision, Consequences.
 New decisions get the next number; superseded ADRs are marked, never deleted.

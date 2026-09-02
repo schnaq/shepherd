@@ -127,6 +127,26 @@ routine review".
       per commit. Every merge is recorded in an audit log in Settings → Automation, announced once
       per pass as a notification, and reported as the additive `pr.auto_merge_queued` webhook
       event. Auto-approve stays a non-goal: this only ever records a decision a human already made
+- [x] App Intents for Shortcuts and Siri (ADR 0021): *Open Pull Request* (with a `PullRequestEntity`
+      you pick or search for through the on-device ⌘K ranker), *Show Inbox* with a filter,
+      *Sync Now*, *Open Settings* on a tab, *Start Review Session*, and the one read-only action —
+      *Get Pull Requests Needing Review*, which answers with the count and the list from the local
+      database and makes no GitHub call. Four Siri phrases out of the box. Each intent builds a
+      `DeepLink` and hands it to the same `AppEnvironment.open(_:)` a `shepherd://` URL goes
+      through, so the cache lookup, the single-pull-request fetch and the queue-until-signed-in slot
+      have one implementation. **No write intents**: nothing may approve, request changes, comment,
+      merge or delegate from a surface with no review screen in front of the user, and that is a
+      non-goal rather than a gap
+- [x] Pull requests in Spotlight (ADR 0021): every row in the inbox becomes a `CSSearchableItem` —
+      title, `owner/repo#123 · author · CI state`, labels plus the agent's name and the repository
+      as keywords — and a ⌘Space result opens the review screen through the same
+      `DeepLink.pullRequest` routing. **Metadata only**: no description, no diff, no review comment
+      and no draft, enforced by the exported value type having nowhere to put one, because
+      Spotlight's index is system-wide and outside the app's database. Driven by the same
+      `onInboxRows` callback auto-merge and the search index use, diffed against what was last
+      written so a sweep that changed nothing costs no framework call, batched and low priority;
+      a pull request that leaves the inbox is deleted, and signing out or switching the toggle off
+      deletes the whole domain. On by default, synced in the encrypted settings document
 
 **Intelligence (ADR 0007)**
 - [ ] Tier 1 heuristics: file prioritization, risk hints — always on

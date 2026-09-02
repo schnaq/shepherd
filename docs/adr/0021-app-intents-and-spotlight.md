@@ -1,0 +1,251 @@
+# ADR 0021: App Intents for Shortcuts and Siri, and pull requests in Spotlight
+
+Status: Accepted (v1.x) · Date: 2026-09-02
+
+## Context
+
+ADR 0013 gave Shepherd a remote control: `shepherd://` URLs and a CLI that builds them. It works,
+and it is the wrong shape for two of the places a Mac user now expects an app to be.
+
+**Shortcuts and Siri want a typed vocabulary, not a URL.** A URL scheme is discoverable only from
+documentation. Shortcuts asks the app what actions it has, what parameters they take, and which
+values are valid; Siri needs a phrase; Spotlight's *action* results need the same metadata. All of
+that is `AppIntents`, and none of it can be inferred from a `CFBundleURLTypes` entry. The
+practical consequence is small but real: a user who wants "when I open my work Focus, show me the
+pull requests waiting on me" has to know that `shepherd://inbox?filter=needs-my-review` exists and
+wrap `open(1)` in a *Run Shell Script* action. That is a worse version of a thing the system does
+properly.
+
+**Spotlight wants an index, and it is the search a Mac user reaches for first.** ADR 0019 built a
+very good search *inside* the app: ⌘K ranks the inbox semantically and lexically. It answers
+nothing at all when Shepherd is not the front app, which is most of the time. ⌘Space is muscle
+memory, and a pull request is exactly the kind of small named thing people look for that way.
+
+Two more facts shape the design more than the request does.
+
+**The routing already exists and must not be duplicated.** "Open this pull request" is not a
+simple operation in this app. It consults the cache, fetches a single pull request from GitHub when
+the cache does not have it, writes it to SQLite so the screen renders from the database (ADR 0006),
+queues the whole request when it arrives before there is a session, and toasts by name when it
+fails. That behaviour lives in `AppEnvironment.open(_ link: DeepLink)` (ADR 0013). Any surface that
+grew its own version would be a second implementation of the awkward parts, and the second one is
+always the one that forgets the queue-until-signed-in slot.
+
+**Spotlight's index is not Shepherd's.** It lives outside the app's sandbox and outside its
+database: it is system-wide, it is included in backups, it is queryable by other processes through
+`CSSearchQuery`, and its default item lifetime is a month whatever the app thinks. Everything the
+app puts there stops being governed by ADR 0006 the moment it is written.
+
+Four failure modes have to be designed out rather than tested out:
+
+1. **A verdict formed without a human.** An intent runs with no review screen in front of anybody
+   and frequently from a voice request. "Hey Siri, approve schnaq/review#128" is a review submitted
+   by somebody who has not read the diff — the exact thing ADR 0016 and ADR 0018 are careful about,
+   and CONTRIBUTING.md states as a rule ("Shepherd never forms a verdict unattended").
+2. **A second implementation of "open a pull request".** Six intents plus a Spotlight continuation
+   is six and a half chances to reimplement the routing badly.
+3. **Diffs and review text in the system index.** The whole app is built on "the code stays in the
+   local database unless the user clicked". An export that carried a description, a diff hunk or a
+   pending review comment into Spotlight would undo that quietly, for every pull request, with no
+   click anywhere.
+4. **An export that costs more than the feature is worth.** The inbox observation fires on every
+   inbox write — a sweep that moved one `updatedAt`, an outbox drain, a detail fetch storing a diff.
+   Handing Core Spotlight a few hundred identical items every two minutes, forever, is a genuine
+   background-CPU regression on somebody's laptop.
+
+## Decision
+
+### The intents are a typed front for ADR 0013's grammar, and nothing else
+
+Six intents in `Shepherd/Intents/`, app target only:
+
+| Intent | Parameter | Routes to |
+| --- | --- | --- |
+| `OpenPullRequestIntent` | a `PullRequestEntity` | `DeepLink.pullRequest(repo:number:)` |
+| `ShowInboxIntent` | `InboxFilterOption?` | `DeepLink.inbox(filter:)` |
+| `SyncNowIntent` | — | `DeepLink.sync` |
+| `OpenSettingsIntent` | `SettingsTabOption` | `DeepLink.settings(tab:)` |
+| `StartFocusSessionIntent` | — | `AppEnvironment.startReviewSession()` |
+| `GetReviewQueueIntent` | — | reads the local inbox; returns entities |
+
+Every one of the first four builds a `DeepLink` and hands it to `AppEnvironment.open(_:)` — the
+same call `onOpenURL` makes for a URL from the terminal, from Raycast or from an n8n *Execute
+Command* node. So the cache lookup, the single-pull-request fetch, the queue-until-signed-in slot
+and the failure toast have exactly one implementation, and an intent is a *type* over the grammar
+rather than a second client of the app. The two parameter enums mirror `InboxDeepLinkFilter` and
+`SettingsDeepLinkTab` **by token**: each case's raw value is the string the URL grammar uses and the
+conversion is `init(token:)`, so there is no second table to keep in step, and a test asserts the
+two vocabularies are the same set.
+
+`StartFocusSessionIntent` is the one exception and it is deliberate: the focus session has no
+`shepherd://` command. The grammar is a public interface whose additions the CLI's argument parser,
+its `--help` output and the README's URL table all restate (ADR 0013), so adding a command to it is
+its own additive change with its own obligations — not something an App Intent may drag in as a
+side effect. What it calls instead *is* the single implementation:
+`AppEnvironment.startReviewSession()` is the method the Review menu, `r f`, ⌘K and the inbox
+header's button all reach through a `PendingAction`, and it freezes its queue from the session's own
+rows, so it does not care which surface asked.
+
+`perform()` is `@MainActor` on every intent, because everything it touches is.
+
+### No write intents. Not now and not as a checkbox
+
+There is no `ApproveIntent`, no `RequestChangesIntent`, no `MergeIntent`, no `SubmitReviewIntent`
+and no `DelegateIntent` — and the reason is not "not yet". An intent is performed with no review
+screen in front of the user; the Siri path has no screen at all. A verdict formed there is a verdict
+formed by somebody who has not looked at the diff, which is the line CONTRIBUTING.md draws and the
+line ADR 0018 was careful to stay inside: automatic merging is acceptable *only* because it records
+a decision a human already made, and it still goes through the ordinary outbox with the head commit
+it judged as a precondition. A Siri phrase has no such decision behind it. Anything that would let
+an intent approve, request changes, comment, merge or start a delegation is a new ADR, not a new
+file in `Intents/`.
+
+The read-only side is fine and is where the value is. `GetReviewQueueIntent` answers "how many pull
+requests need me, and which ones" from the local database — no GitHub call, so it is safe on a
+five-minute automation — and returns the *same* ordered queue the menu-bar badge, the focus session
+and the morning digest read (`SmartView.needsMyReview` plus `InboxModel.prioritySorted`), because
+four surfaces disagreeing about what is waiting would undermine all four.
+
+### `PullRequestEntity` is a handle, and it carries metadata only
+
+`PullRequestEntity` is `id` (the GraphQL node id, Shepherd's key everywhere) plus five exposed
+properties: slug, title, author, CI state, provenance label. `PullRequestEntityQuery` resolves ids
+against the cached inbox rows, suggests the current review queue, and — as an `EntityStringQuery` —
+searches through `SearchIndexCoordinator.results(for:limit:)`, the ⌘K ranker, so Shortcuts' own
+search field is the app's search field and is on-device for the reason ADR 0019 gives.
+
+Two properties of the type are decisions:
+
+- **It is a handle, not a snapshot.** A shortcut stores the id and asks for the entity again next
+  week; the query re-reads today's row. `OpenPullRequestIntent` therefore takes the repository and
+  number from the row it just resolved, and a shortcut built against a pull request that has since
+  been merged says so rather than opening whatever now holds that number.
+- **It carries nothing written in confidence.** No description, no diff, no review comment, no
+  draft. The entity leaves the app: Shortcuts can drop it into any other action, including a *Get
+  Contents of URL* the user built. "A shortcut that mails my pull-request diffs somewhere" must not
+  be assemblable out of Shepherd's own actions, and the way to guarantee that is for the fields not
+  to exist.
+
+`ShepherdShortcuts` (`AppShortcutsProvider`) offers four phrases out of the box — the review queue,
+the count, a sweep, the focus session. Navigation and reads, again: a Siri phrase that could approve
+a pull request is precisely the failure mode above.
+
+Nothing is needed in `project.yml`. XcodeGen globs `Shepherd/` into the app target and `ShepherdCLI/`
+into the CLI, so `Shepherd/Intents/` lands in the app and only in the app; App Intents metadata
+extraction needs no Info.plist key and no build setting, and `ShepherdKit` stays free of
+`AppIntents` — which matters, because it has to keep compiling on Linux.
+
+### Spotlight gets titles and metadata, and that is structural
+
+Every pull request in the inbox becomes one `CSSearchableItem`: unique id = the node id, domain =
+`pullRequests`, `title` = the pull-request title, `contentDescription` =
+`owner/repo#123 · author · CI state`, keywords = labels + the agent's name + owner + repository
+name. That is the complete list, and it is the same metadata GitHub shows to anybody who can see
+the pull request.
+
+What may be exported is a **type**, not a rule: `SpotlightItemFields` has four fields and no way to
+express a body, a diff or a comment, so "no diffs in Spotlight" is not a convention somebody has to
+remember when adding a field. It is also the seam that makes the mapping testable —
+`CSSearchableItemAttributeSet` is an `NSObject` that is awkward to assert against and impossible to
+build on a Linux runner.
+
+Two details are load-bearing:
+
+- `contentType: .content`, not a document or URL type: a pull request has no path, and claiming a
+  file type would invite Spotlight to offer "Reveal in Finder".
+- `expirationDate = .distantFuture`. Core Spotlight expires items after a month by default, which
+  is right for a mail client and wrong here — Shepherd knows exactly when a pull request stops
+  being interesting (it leaves the inbox) and deletes it then. The default would mean long-lived
+  pull requests silently vanishing from ⌘Space while still sitting in the inbox.
+
+### One export path, driven by the rows a sweep wrote, diffed so a quiet sweep is free
+
+`SpotlightIndexer` runs on the same `onInboxRows` callback automatic merging (ADR 0018) and the
+search index (ADR 0019) run on: that observation is the one place a change to the *content* of the
+inbox is reported. It holds the fields it last wrote and diffs against them
+(`SpotlightExportPlan`), which is what makes the common case free — the callback fires on every
+inbox write, and almost none of those writes change a title, an author, a label or a CI state, so
+an unchanged sweep costs one dictionary comparison and **no framework call at all**. What is left
+is a low-priority `Task` handing `Sendable` values to a `nonisolated` seam in batches of fifty,
+yielding between them; no `CSSearchableItem` ever crosses an isolation boundary, which is also what
+keeps it compiling under Swift 6 strict concurrency.
+
+The baseline is advanced only for a batch Spotlight accepted. An optimistic update would turn one
+transient failure into a permanently missing item, because nothing would ever mark it as needing an
+export again.
+
+The baseline is deliberately **not persisted**. The first pass after a launch therefore re-writes
+every item — one batched, idempotent call, once. The alternative is an on-disk record of what is in
+an on-disk index, and the failure mode it buys is the worse one: a stored map that disagreed with
+Spotlight (a restore from backup, a reindexed volume) would leave items missing with nothing to
+trigger a repair.
+
+A pull request that leaves the inbox is deleted. Signing out and switching the toggle off delete
+the **whole domain** in one call, which is why there is one domain: the previous account's pull
+requests, in a system-wide index the app does not own, are not something a switch may leave behind.
+
+### Opening a Spotlight result is the deep-link path
+
+`onContinueUserActivity(CSSearchableItemActionType)` sits beside `onOpenURL` in `ShepherdApp` — the
+same kind of arrival, something outside the app naming a pull request — and ends in the same
+`DeepLink.pullRequest`. Spotlight hands back only the identifier, so the repository and number are
+resolved out of the cached rows through one pure function (`PullRequestIdentifierLookup`), the
+mirror image of the lookup a `shepherd://pr/...` link uses. An item whose pull request has left the
+inbox is a stale item rather than a bug, and it gets a sentence.
+
+`IndexedEntity` — the macOS 15 integration that lets an `AppEntity` be donated to Spotlight
+directly — is deliberately not used. It would couple the export to the entity's shape and to
+Shortcuts' own indexing schedule, and the export needs to be driven by the inbox observation and
+diffed against what it wrote. Plain `CSSearchableIndex` is the smaller, more predictable thing.
+
+### One synced toggle, on by default, in Settings → Intelligence
+
+"Show pull requests in Spotlight", next to the search-index card, **on** on a fresh install. The
+argument is ADR 0019's: the things that are off by default (ADR 0007) are off because they send
+something somewhere or cost money, and this does neither — it is built from rows the sweep already
+wrote and it makes no request. A user who presses ⌘Space and types a pull-request title expects to
+find it.
+
+It is a *separate* switch rather than a mode of the search index, because the two answer different
+questions: that one is about work done inside the app's own database, this one is the only thing on
+the tab that puts pull-request data outside it. The card says exactly that, in the UI and not only
+here, because "what of mine ends up in the system index" is a question a user is entitled to have
+answered where they are standing.
+
+It travels in `SyncedSettingsDocument.search` beside the index switch, in both directions of
+`SettingsSyncApplier`, with a non-default fixture in `SettingsSyncTests` (ADR 0014). The items
+themselves cannot travel and do not: Spotlight's index belongs to the Mac it is on, and each Mac
+rebuilds its own from local rows.
+
+## Consequences
+
+- Shepherd becomes scriptable in the two ways macOS users actually script: a Shortcuts action with
+  typed parameters, and ⌘Space. Together with ADR 0012 and ADR 0013 the automation story is now
+  complete in both directions without Shepherd listening on a port.
+- **The intent identifiers are a public interface**, exactly as the URL grammar is. A user's
+  shortcut stores the intent's type name and its parameters, so renaming `ShowInboxIntent` or
+  dropping a case from `InboxFilterOption` breaks somebody's automation silently. Additions are
+  free; removals need a decision.
+- App Intents run in the app's process, so an intent needs the app. Every UI intent sets
+  `openAppWhenRun = true`, and so does `SyncNowIntent` — a sweep needs a session, and a
+  background-launched process has read no Keychain, so the alternative was a shortcut that reported
+  success having done nothing. `GetReviewQueueIntent` is the only intent that does not open the app,
+  which is the point of it; the cost is stated rather than papered over, and when Shepherd is not
+  running it says so instead of answering a reassuring zero.
+- The dependency hand-off is a weak static (`IntentBridge`), because the system creates intents and
+  there is no initialiser to pass a container through. It throws rather than force-unwrapping: the
+  state where there is no container is reachable, and a crash there is one the user cannot connect
+  to anything they did.
+- Spotlight results exist for pull requests the user can no longer open without a fetch. A row that
+  the sweep pruned is deleted from the index, but a result clicked in the second between the prune
+  and the next pass resolves to nothing and gets a toast. Acceptable, and better than teaching the
+  export about rows the inbox no longer has.
+- `Shepherd/Intents/` is the second folder that owns an Apple-only framework exclusively
+  (`AppIntents`, `CoreSpotlight`), joining `UpdateController` (Sparkle), `DiagnosticsReporter`
+  (MetricKit) and `EmbeddingProvider` (NaturalLanguage). `ShepherdKit` gains nothing and still
+  builds on Linux, which is why the two testable halves — the export mapping and the diff — are
+  plain structs in the app target rather than framework subclasses.
+- The Spotlight export is the first thing Shepherd writes **outside** its own database that is not a
+  request the user made. It is metadata only, it is deletable in one call, and the toggle deletes
+  it — but it does mean `CONTRIBUTING.md`'s privacy rules gained a line, because "the code stays
+  local" now has a neighbour: "and the titles stay local unless this switch is on".

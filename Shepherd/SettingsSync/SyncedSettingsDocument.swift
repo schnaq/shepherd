@@ -320,18 +320,32 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
     /// both Macs. The **index** does not, for the same reason the auto-merge ledger does not
     /// (ADR 0018): it is device state, it is rebuildable from local rows in seconds, and a bucket
     /// object carrying a megabyte of embeddings per Mac would be absurd.
+    ///
+    /// The Spotlight export (ADR 0021) is the group's second field rather than a group of its own,
+    /// because it is the same preference asked about a different index: "how do I want to find a
+    /// pull request". Both switches are on the same Settings card, both are on by default, and
+    /// both share the property that makes them safe to carry — the thing they govern is derived
+    /// from local rows and is rebuilt, not restored. What travels is the two flags; neither the
+    /// vectors nor the Spotlight items do, and the second one *cannot*: Spotlight's index belongs
+    /// to the Mac it is on.
     struct SearchGroup: Codable, Sendable, Equatable {
         /// Whether the semantic index is kept on this Mac.
         var isSemanticIndexEnabled: Bool
+        /// Whether the inbox's pull requests are exported to Spotlight on this Mac.
+        var isSpotlightExportEnabled: Bool
 
         /// Creates the group.
-        /// - Parameter isSemanticIndexEnabled: The opt-out flag.
-        init(isSemanticIndexEnabled: Bool = true) {
+        /// - Parameters:
+        ///   - isSemanticIndexEnabled: The search-index opt-out flag.
+        ///   - isSpotlightExportEnabled: The Spotlight-export opt-out flag.
+        init(isSemanticIndexEnabled: Bool = true, isSpotlightExportEnabled: Bool = true) {
             self.isSemanticIndexEnabled = isSemanticIndexEnabled
+            self.isSpotlightExportEnabled = isSpotlightExportEnabled
         }
 
         private enum CodingKeys: String, CodingKey {
             case isSemanticIndexEnabled
+            case isSpotlightExportEnabled
         }
 
         init(from decoder: any Decoder) throws {
@@ -339,6 +353,11 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
             // Defaults to `true`, matching ``AppSettings/semanticSearchEnabled``: a document from
             // a build that predates this field must not read as "the user switched it off".
             isSemanticIndexEnabled = container.syncedValue(.isSemanticIndexEnabled, default: true)
+            // The same argument, one ADR later (0021).
+            isSpotlightExportEnabled = container.syncedValue(
+                .isSpotlightExportEnabled,
+                default: true
+            )
         }
     }
 

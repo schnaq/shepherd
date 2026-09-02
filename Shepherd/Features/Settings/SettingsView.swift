@@ -845,6 +845,8 @@ struct IntelligenceSettingsTab: View {
 
             semanticSearchCard
 
+            spotlightCard
+
             Card {
                 VStack(alignment: .leading, spacing: 6) {
                     CardTitle(String(localized: "WHAT AI NEVER DOES"))
@@ -950,6 +952,67 @@ struct IntelligenceSettingsTab: View {
         }
         return String(
             localized: "\(status.embeddedCount) of \(status.documentCount) pull requests indexed · \(sizeText) · last updated \(RelativeDate.long(last))."
+        )
+    }
+
+    // MARK: - Pull requests in Spotlight (ADR 0021)
+
+    /// The one toggle and one status line the Spotlight export needs.
+    ///
+    /// A card of its own, directly under the search-index card, because it answers the question
+    /// that card raises next: the index above is work Shepherd does *inside* its own database, and
+    /// this is the only thing on the tab that puts pull-request data **outside** it. The two
+    /// sentences say exactly what leaves and what does not, in the UI rather than only in ADR 0021,
+    /// for the same reason the search card's do — "what of mine ends up in the system index" is a
+    /// question a user is entitled to have answered where they are standing.
+    private var spotlightCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 8) {
+                CardTitle(String(localized: "SPOTLIGHT"))
+                Toggle(
+                    String(localized: "Show pull requests in Spotlight"),
+                    isOn: spotlightBinding
+                )
+                Text(String(
+                    localized: "⌘Space finds the pull requests in your inbox by title, by owner/repo#number, by label, by repository and by the agent that wrote them. Opening a result opens the review screen, exactly as a shepherd:// link does."
+                ))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                Text(String(
+                    localized: "Spotlight's index is macOS's, not Shepherd's — so only the title and that metadata are exported. Descriptions, diffs, review comments and your drafts never leave the local database. Switching this off deletes every pull request Shepherd put there."
+                ))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                Text(spotlightStatusLine)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// "412 pull requests in Spotlight", and the two honest variants.
+    private var spotlightStatusLine: String {
+        guard environment.settings.spotlightExportEnabled else {
+            return String(localized: "Off — Shepherd's pull requests are not in Spotlight.")
+        }
+        let status = environment.spotlight.status
+        guard status.itemCount > 0 else {
+            guard status.isExporting else { return String(localized: "Nothing exported yet.") }
+            return String(localized: "Exporting…")
+        }
+        return String(localized: "\(status.itemCount) pull requests in Spotlight.")
+    }
+
+    private var spotlightBinding: Binding<Bool> {
+        Binding(
+            get: { environment.settings.spotlightExportEnabled },
+            // Nothing is applied here, exactly as above: `ShepherdApp` watches the flag and calls
+            // `applySpotlightSetting()`, so the toggle and an arriving settings document reach the
+            // exporter through one route (ADR 0021).
+            set: { environment.settings.spotlightExportEnabled = $0 }
         )
     }
 
