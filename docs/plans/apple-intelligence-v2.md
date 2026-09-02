@@ -363,6 +363,50 @@ stable, `AnthropicProvider`/`OpenAICompatibleProvider` shrink to configuration a
 tool and `@Generable` plumbing above becomes one code path. Evaluate after F ships; adopt only if
 the packages support tools + streaming + structured output on macOS. No user-visible change.
 
+### K. konduit as the EU tier-3 endpoint, first-class but still one code path
+
+**Story.** A user on the `Konduit (EU)` preset sees, per answer, *who actually ran the model and
+where*, can pin the request to a country set with zero retention, and picks models from a list
+that shows sovereignty beside the name. Nothing else in Shepherd changes: konduit stays the
+OpenAI-compatible provider it already is (ADR 0007 amendment: a preset only fills in a base URL).
+
+What the konduit gateway offers today (`schnaq/konduit`, `docs/openapi/gateway.yaml`, read-only
+reference — Shepherd never depends on konduit's code, only on its public API):
+
+- `POST /v1/chat/completions` with `stream: true` (SSE) and `tools`/`response_format` relayed
+  unchanged to the upstream — so Phase 0.2 streaming and Phase 0.3 tools work against konduit
+  without a konduit-specific request shape. A model that cannot do tools surfaces as the
+  gateway's `upstream_invalid_request`, which maps to `IntelligenceError.toolsUnsupported`.
+- `stream_options.include_usage: true` for a final usage chunk — the cloud twin of 0.1's
+  measured token count; the OpenAI-compatible provider should send it and read it.
+- An optional `provider` object in the body — the sovereignty policy: `countries: [DE, FR]`,
+  `zero_retention: true`, `require: [certifications]`, `order: [operators]`. Unknown fields are
+  rejected, so it is only ever sent when the user set it.
+- Response headers `Konduit-Provider` (the operator that ran the weights) and
+  `Konduit-Deployment` (the exact deployment id, pinnable by sending it back as `model`).
+- `GET /v1/models` extended with `pricing` and a `sovereignty` block (`hosting_country`,
+  `ownership`, `zero_retention`, `tier`, `certifications`, `note`) after OpenAI's four fields —
+  `OpenAIModelsResponse` already ignores the extras; a tolerant decode can keep them.
+- `Authorization: Bearer kdt-…`; OpenAI's error envelope with konduit codes
+  (`upstream_rate_limited`, `upstream_unavailable`, `no deployment matches your sovereignty
+  policy`) and `Retry-After` on every 429.
+
+**Design, kept inside the existing rules:**
+
+- The OpenAI-compatible provider reads two *optional* response headers into the outcome's tier
+  caption ("Drafted by konduit · scaleway, DE") — a generic "served-by" hook that any endpoint
+  may fill, not a konduit branch. Unknown headers: caption unchanged.
+- Model discovery keeps konduit's `sovereignty` block when present and the picker shows a
+  small badge (country · zero-retention). Pure decoding in `OpenAIModelsResponse`, fixture-tested.
+- One optional setting per OpenAI-compatible endpoint, `sovereigntyPolicy` (countries, zero
+  retention) — in the sync document like the base URL, sent only when non-empty, and the preset
+  picker explains it only for konduit. This is the single place a preset may show extra UI, and
+  it still does not add a request shape: the field is part of OpenAI's open `extra_body`.
+- `Retry-After` honoured once on 429 for drafting requests (never a loop).
+
+**Tier:** 3b. **Effort:** S–M. **ADR:** amendment to 0007's preset amendment (headers and
+policy are optional extensions a preset may *describe*; still no per-preset code path).
+
 ---
 
 ## 4. Sequence and milestones
@@ -379,7 +423,7 @@ Phase 0 ── groundwork (0.1 → 0.5)                                    ~1 we
    ├─ Sprint 3: F Why is CI red? (needs 0.3, E)                      ~2 weeks
    │            → the demo: red check → diagnosis → agent brief → fixed in a worktree
    │
-   └─ Sprint 4: H Siri summary · I PCC rung (after SDK check) · J evaluate
+   └─ Sprint 4: H Siri summary · K konduit extras · I PCC rung (after SDK check) · J evaluate
 ```
 
 Ship after each sprint behind the release train in `docs/RELEASING.md`; each feature is
