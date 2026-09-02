@@ -509,6 +509,10 @@ def translated_values(entry: dict, language: str) -> tuple[list[str], list[str]]
         values.append(value)
     if "other" not in plural:
         problems.append("%s plural variations without an 'other' category" % language)
+    # German has exactly two categories and needs both: an entry with only `other` would read
+    # "1 Pull Requests" and pass every other check here.
+    if language == REQUIRED_LANGUAGE and "one" not in plural:
+        problems.append("%s plural variations without a 'one' category" % language)
     return values, problems
 
 

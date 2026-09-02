@@ -1216,7 +1216,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "KI-Entwurf (%@) — vor dem Absenden prüfen."
+            "value": "KI-Draft (%@) — vor dem Absenden prüfen."
           }
         }
       }
@@ -1226,7 +1226,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "KI-Ausgaben erscheinen immer nur als ausblendbarer Hinweis. Shepherd schickt nie ein Review ab, approved nichts, mergt nichts und kommentiert nichts für dich."
+            "value": "KI-Ausgaben erscheinen immer nur als ausblendbarer Hinweis. Shepherd schickt nie ein Review ab, approvt nichts, mergt nichts und kommentiert nichts für dich."
           }
         }
       }
@@ -1346,7 +1346,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Den Entwurf hinter deinen Text anhängen"
+            "value": "Den Draft hinter deinen Text anhängen"
           }
         }
       }
@@ -3306,7 +3306,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Feuert, wenn eine Auto-Merge-Regel einen Merge eingereiht hat — in dem Moment, in dem Shepherd entschieden hat, nicht wenn GitHub bestätigt. Der Merge selbst sendet weiterhin „A pull request was merged“."
+            "value": "Feuert, wenn eine Auto-Merge-Regel einen Merge eingereiht hat — in dem Moment, in dem Shepherd entschieden hat, nicht wenn GitHub bestätigt. Der Merge selbst sendet weiterhin „Ein Pull Request wurde gemergt“."
           }
         }
       }
@@ -4206,7 +4206,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Grüne, approvete Agent-Pull-Requests selbst mergen"
+            "value": "Grüne, approved Agent-Pull-Requests selbst mergen"
           }
         }
       }
@@ -4886,7 +4886,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Standardmäßig aus. Eine Regel startet immer nur die Delegation, die du auch selbst hättest starten können: Sie läuft in einem isolierten Worktree mit den Leitlinien von oben und pusht, approved und mergt nie etwas."
+            "value": "Standardmäßig aus. Eine Regel startet immer nur die Delegation, die du auch selbst hättest starten können: Sie läuft in einem isolierten Worktree mit den Leitlinien von oben und pusht, approvt und mergt nie etwas."
           }
         }
       }
@@ -5186,7 +5186,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Das Feld mit dem Entwurf überschreiben"
+            "value": "Das Feld mit dem Draft überschreiben"
           }
         }
       }
@@ -6406,7 +6406,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Schick mir einen Morgen-Digest"
+            "value": "Morgen-Digest senden"
           }
         }
       }
@@ -7086,7 +7086,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Synchronisieren"
+            "value": "Jetzt synchronisieren"
           }
         }
       }
@@ -7136,7 +7136,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Sync läuft…"
+            "value": "Wird synchronisiert…"
           }
         }
       }
@@ -7496,7 +7496,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Das Modell hat einen leeren Entwurf zurückgegeben."
+            "value": "Das Modell hat einen leeren Draft zurückgegeben."
           }
         }
       }
@@ -9006,7 +9006,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rebase and merge"
+            "value": "Rebase-and-Merge"
           }
         }
       }
@@ -9216,7 +9216,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Squash and merge"
+            "value": "Squash-and-Merge"
           }
         }
       }
