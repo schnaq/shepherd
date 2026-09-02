@@ -284,6 +284,11 @@ struct DelegationSettingsTab: View {
                 .foregroundStyle(Theme.textSecondary)
             TextEditor(text: promptTemplateBinding)
                 .font(Theme.mono(11.5))
+                // `.limited`, not `.complete`: this is a template with `{{…}}` placeholders that
+                // `AutoDelegationPrompt` substitutes, and a rewrite that "improved" a placeholder
+                // away would break the automatic run silently. Proofreading is welcome; a full
+                // rewrite panel is not (ADR 0020).
+                .writingToolsBehavior(.limited)
                 .scrollContentBackground(.hidden)
                 .padding(8)
                 .frame(minHeight: 84, maxHeight: 120)

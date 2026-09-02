@@ -368,6 +368,9 @@ struct ThreadPopover: View {
     var onClose: () -> Void
 
     @State private var replyText = ""
+    /// The popover's own translation cache (ADR 0020), so a translated comment stays translated
+    /// while the reviewer scrolls the thread — and is gone when the popover is.
+    @State private var translations = TranslationCoordinator()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -376,7 +379,7 @@ struct ThreadPopover: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(thread.comments) { comment in
-                        ThreadCommentView(comment: comment)
+                        ThreadCommentView(comment: comment, translations: translations)
                     }
                 }
                 .padding(12)
@@ -419,6 +422,9 @@ struct ThreadPopover: View {
                 TextField(String(localized: "Reply…"), text: $replyText, axis: .vertical)
                     .textFieldStyle(.plain)
                     .font(.system(size: 12))
+                    // A growing field, so the full Writing Tools panel has somewhere to put its
+                    // result: this is review prose like any other composer (ADR 0020).
+                    .writingToolsBehavior(.complete)
                     .lineLimit(1...4)
                     .padding(8)
                     .background(
@@ -501,9 +507,16 @@ struct ThreadPopover: View {
 }
 
 /// One comment inside the thread panel.
+///
+/// The body goes through ``TranslatableMarkdownText``, so a comment written in a language the
+/// reviewer does not read can be translated on this Mac, below the original (ADR 0020). Everything
+/// around it — who wrote it, when, the agent chip — is Shepherd's own already-localized chrome and
+/// has nothing to translate.
 struct ThreadCommentView: View {
     /// The comment.
     let comment: ReviewComment
+    /// The screen's translation cache.
+    let translations: TranslationCoordinator
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -520,7 +533,10 @@ struct ThreadCommentView: View {
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.textMuted)
                 }
-                MarkdownText(markdown: comment.bodyMarkdown)
+                TranslatableMarkdownText(
+                    markdown: comment.bodyMarkdown,
+                    translations: translations
+                )
             }
         }
     }

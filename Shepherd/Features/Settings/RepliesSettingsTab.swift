@@ -238,6 +238,11 @@ struct SavedReplyEditor: View {
                 placeholder: String(localized: "Needs a test"),
                 text: $name
             )
+            // A saved reply's name is one line the user has to recognise in a menu, so Writing
+            // Tools is `.limited` here: proofreading yes, a rewrite panel over a three-word label
+            // no (ADR 0020). The body below is the prose, and it is a `ComposerTextEditor`, which
+            // is where `.complete` lives.
+            .writingToolsBehavior(.limited)
 
             VStack(alignment: .leading, spacing: 6) {
                 CardTitle(String(localized: "BODY"))
@@ -310,6 +315,10 @@ struct ReviewTemplateEditor: View {
                 placeholder: "schnaq/*",
                 text: $pattern
             )
+            // `owner/name` with `*`/`?` wildcards is not language, and a proofreader that
+            // "corrected" it would break the match rule that decides which template a repository
+            // gets. Writing Tools is off here on purpose (ADR 0020).
+            .writingToolsBehavior(.disabled)
 
             if !patternLooksLikeARepository {
                 Text(String(

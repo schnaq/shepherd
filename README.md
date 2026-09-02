@@ -63,6 +63,10 @@ than a guess.
 <td>✨ <b>Drafts, not submissions</b><br>Draft a review summary or an inline comment from the diff in front of you. It lands as editable text; nothing is ever submitted for you.</td>
 <td>🧠 <b>On-device first</b><br>Heuristics always, Apple Foundation Models where available, your own key optional — Anthropic, any OpenAI-compatible endpoint, Konduit (EU) or Ollama.</td>
 </tr>
+<tr>
+<td>🌐 <b>Translate in place</b><br>A description or comment in a language you don't read gets an on-device translation <i>below</i> the original — never instead of it, never through a cloud endpoint.</td>
+<td>✍️ <b>Writing Tools everywhere</b><br>Apple's proofread, rewrite and tone tools in every field you write review text in — summary, inline comment, thread reply, saved reply.</td>
+</tr>
 <tr><th colspan="2" align="left">Sync &amp; privacy</th></tr>
 <tr>
 <td>🔐 <b>Sync you host</b><br>Every setting <i>and</i> every secret in one AES-256-GCM object in an S3 bucket you own. A new Mac plus the passphrase is a set-up Mac. No account, no server.</td>

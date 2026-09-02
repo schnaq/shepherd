@@ -29,6 +29,7 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
   SettingsSync/                #   encrypted settings document, envelope, SigV4, S3 client (ADR 0014)
   Diagnostics/                 #   MetricKit subscriber + local report folder (ADR 0017)
   Intelligence/                #   IntelligenceProvider impls (FoundationModels, Anthropic)
+    Translation/               #     on-device translation of PR text: offer rules, cache, view (ADR 0020)
   Support/                     #   AppConfig, keyboard shortcuts, theming, notifications,
                                #   Sparkle updater wrapper (ADR 0010)
     AgentCLI/                  #   agent-CLI engine: config, locator, stream parser, worktrees
@@ -903,6 +904,48 @@ Three details are load-bearing:
 No network code exists in this path, and none may be added without a new ADR: see the
 "Diagnostics stay local" rule in CONTRIBUTING.md.
 
+### Apple-native text intelligence (ADR 0020)
+
+Two system frameworks, deliberately *not* on ADR 0007's ladder — they need no provider, no key, no
+prompt and no token budget, so routing them through `IntelligenceProvider` would only give the two
+cloud providers a method that could send somebody else's comment to an endpoint.
+
+**Writing Tools** is a modifier, set explicitly on every text control rather than left to
+`.automatic`: `.complete` on `ComposerTextEditor` (which is the review summary, the inline comment
+composer, the saved-reply body and the review-template body — one line, four fields), on the thread
+reply field and on the delegation task field; `.limited` on the saved-reply name and on the
+auto-delegation prompt template, whose `{{…}}` placeholders a rewrite would eat; `.disabled` on the
+review-template repository pattern, which is a glob and not language. Nothing in the webview
+(ADR 0003's rule that all text entry is native is unchanged), and no setting — it is the system's
+capability, and it complements the ✨ draft: the draft lands in the field, Writing Tools refines it
+there, and neither has a path to GitHub that skips the reviewer's click.
+
+**Translation** lives in `Intelligence/Translation/` and is the only place in the app that imports
+`Translation` or `NaturalLanguage`; `Packages/ShepherdKit` gains neither, so it keeps building on
+Linux. Three pieces:
+
+- `TranslationOffer` — the offer rules. `decide(source:target:isPairSupported:)` is pure and
+  therefore tested; the async shell asks `NLLanguageRecognizer` for the source language (over prose
+  only: fences, inline code, links and `@mentions` stripped, a length floor and a confidence floor)
+  and `LanguageAvailability().status(from:to:)` for the pair. `.installed` and `.supported` both
+  count as available — `.supported` means macOS will offer its own language-pack download on the
+  first call. Result: a button, a disabled button naming the pair, or no button at all when the text
+  is already in the reader's language (compared on the ISO-639 code, so `en-GB` → `en-US` is never
+  offered).
+- `TranslationCoordinator` — a `@MainActor @Observable` in-memory cache keyed by `(text, target
+  language)`, owned by the screen (the conversation tab; each thread popover). Bounded, oldest
+  first. Nothing persisted, nothing synced, so it is not a setting and ADR 0014's obligation does
+  not reach it. Keying on the text rather than a hash is what makes it survive a sweep replacing
+  `model.detail` or a `ForEach` rebuild — and what makes a collision impossible.
+- `TranslatableMarkdownText` — wraps `MarkdownText` and draws the translation in a tinted block
+  *below* the original, with a *Hide translation* toggle and no "show original", because the
+  original is never taken away. `TranslationSession` is obtained from `.translationTask(_:action:)`
+  and never leaves that closure (it is not `Sendable`): the closure captures the key and the
+  coordinator, and only the translated `String` crosses back, through `MainActor.run`.
+
+The condensed activity list is not translatable on purpose: a `TimelineEvent.summary` is a fixed
+Shepherd word or a commit headline, never a comment body (see `ResponseMapping.timeline`).
+
 ### Test target
 
 `ShepherdTests` (added to `project.yml`, sources in top-level `ShepherdTests/`) covers the
@@ -962,6 +1005,9 @@ exact-slug shortcut, an embedding finding a pull request the words do not, the t
 no model, and the toggle off — both still answering, and the chunker's boundaries; the document
 composition and the ranker are tested in `ShepherdCoreTests`, the table in
 `ShepherdPersistenceTests`, so both run on the Linux runner);
+the translation offer rules and cache (ADR 0020: the pure decide-to-offer function including
+`en-GB` → `en-US`, the prose strip and both detection floors, and the cache's keying, collapse and
+eviction — `TranslationSession` itself is not mocked);
 and the app-side half of deep linking (resolving `owner/repo#number` against cached rows, filter
 token → rail state). The `shepherd://` grammar itself is tested in `ShepherdCoreTests` instead, so it
 runs on the Linux runner too. The web

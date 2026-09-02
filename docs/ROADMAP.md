@@ -143,6 +143,21 @@ routine review".
       and it asks before replacing anything you typed. Auto-submitting stays a non-goal, below —
       prioritised in the founder interview of 2026-09-01 and pulled into v1 from v1.x
       (ADR 0007 amendment)
+- [x] Apple Writing Tools in every composer (ADR 0020): proofread, rewrite and tone changes in the
+      review summary, the inline comment composer, thread replies, saved replies and review
+      templates, and the delegation task field — `.complete` where prose is written, `.limited` on
+      one-line names and on the auto-delegation prompt template with its `{{…}}` placeholders, off
+      on the repository pattern, and nothing in the Monaco webview (ADR 0003 stands). No setting: it
+      is the system's own capability, and it complements the ✨ draft rather than competing with it —
+      the draft lands as editable text, Writing Tools refines it, and neither can submit anything
+- [x] On-device translation of pull-request text (ADR 0020): a *Translate* button on the description
+      and on every review or thread comment puts the translation in a tinted block **below** the
+      original — never replacing it — with a *Hide translation* toggle. Apple's Translation
+      framework, `Locale.current.language` as the target, **never** a cloud endpoint even with a
+      BYOK key configured (a fixed rule, not a preference); guarded by `LanguageAvailability` and
+      `NLLanguageRecognizer`, so an unsupported pair is a disabled button with a reason and text
+      already in your language gets no button at all. Cached in memory per screen, nothing
+      persisted, nothing synced, and no new host — the language pack is macOS's own download
 
 **Foundation**
 - [ ] Local-first SQLite cache + outbox (ADR 0006)

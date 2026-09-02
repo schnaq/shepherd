@@ -136,6 +136,25 @@ selected and what gets written can never drift apart. Each pull request is then 
 individually, with the same offline, retry, rate-limit and staleness handling a single review gets
 ([ADR 0015](adr/0015-bulk-triage.md)).
 
+### Writing Tools and on-device translation
+
+Every field you write review text in — the summary, an inline comment, a thread reply, a saved
+reply, the instructions you hand a local agent — offers Apple's **Writing Tools**: proofread,
+rewrite, change the tone, all on-device where the Mac supports it. Where the ✨ AI-draft button
+already sits, the two work together: the draft lands in the field as editable text, and Writing
+Tools is what you refine it with. Single-line fields get proofreading only, and the fields that are
+not language at all — a repository pattern like `schnaq/*` — get nothing, so nothing can helpfully
+"correct" a glob.
+
+And when a description or a comment is in a language you do not read, a **Translate** button puts an
+on-device translation in a tinted block *below* the original — never in place of it, so what you
+approve is always what was actually written, with *Hide translation* to collapse it again. It uses
+Apple's Translation framework: nothing is sent anywhere, not even when you have configured an API
+key, and nothing is stored or synced. Shepherd checks first whether the pair works on your Mac and
+whether the text is already in your language, so you never get a button that cannot do anything —
+and the first translation of a new language may let macOS offer you its own language-pack download
+([ADR 0020](adr/0020-apple-native-text-intelligence.md)).
+
 ---
 
 ## Automation

@@ -112,6 +112,16 @@ bumping a dependency that ships inside the app also means a line in
 
   Nothing else. This is a hard privacy line: adding a host means a new ADR, a settings control the
   user has to switch on, and a line here.
+- **Apple's on-device text features are not a tier and not a host.** Writing Tools in the composers
+  and the *Translate* button on pull-request text (ADR 0020) go through the system frameworks —
+  `TranslationSession`, `NLLanguageRecognizer` — and add no request to the list above: there is no
+  `URLSession` in `Shepherd/Intelligence/Translation/`, no endpoint and nothing to configure. A
+  language pack is fetched by **macOS**, through its own sheet, from Apple's asset infrastructure,
+  carrying neither the text nor anything about the user — the same category as the system dictionary
+  or a font, and it happens identically in TextEdit. What is a hard rule is the direction: a
+  translation may never be routed through a configured AI provider, not even as an opt-in, because
+  the text belongs to somebody who never saw Shepherd's settings. `IntelligenceProvider` therefore
+  has no translation method, and giving it one needs a new ADR.
 - **Diagnostics stay local.** Shepherd has no crash-reporting SDK and no crash endpoint. The opt-in
   crash/hang reporting (ADR 0017) is MetricKit: macOS hands the app its own `MXDiagnosticPayload`s
   on the next launch after a crash, and `Shepherd/Diagnostics/` writes each one as a JSON file in

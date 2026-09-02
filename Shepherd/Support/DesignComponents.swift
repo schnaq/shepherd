@@ -83,6 +83,12 @@ struct EmptyStateView: View {
 /// Extracted because the review summary, the inline comment composer and the two Settings editors
 /// for saved replies and templates are the same control, and a comment field that looks different
 /// depending on which sheet it is in reads as two different features.
+///
+/// It is also where Apple's Writing Tools are switched on for the whole app (ADR 0020). Every
+/// field that holds *review prose* is this control, so `.writingToolsBehavior(.complete)` here
+/// means proofreading, rewriting and tone changes are available in all of them and cannot be
+/// forgotten in the next one — while single-line fields, which are not prose, opt in one by one at
+/// their call site instead of inheriting a full rewrite panel they have no room for.
 struct ComposerTextEditor: View {
     /// The edited text.
     let text: Binding<String>
@@ -94,6 +100,7 @@ struct ComposerTextEditor: View {
     var body: some View {
         TextEditor(text: text)
             .font(.system(size: size))
+            .writingToolsBehavior(.complete)
             .scrollContentBackground(.hidden)
             .padding(6)
             .frame(height: height)

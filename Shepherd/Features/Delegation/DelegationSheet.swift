@@ -101,6 +101,10 @@ struct DelegationSheet: View {
                 CardTitle(String(localized: "TASK FOR THE AGENT"))
                 TextEditor(text: taskBinding)
                     .font(.system(size: 12.5))
+                    // The instructions handed to the agent are prose the user writes under time
+                    // pressure, so proofreading and rewriting belong here too (ADR 0020). Nothing
+                    // is sent by Writing Tools; the text still waits for the Run button.
+                    .writingToolsBehavior(.complete)
                     .scrollContentBackground(.hidden)
                     .padding(8)
                     .frame(minHeight: 120, maxHeight: 190)

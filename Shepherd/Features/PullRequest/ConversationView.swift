@@ -9,6 +9,11 @@ struct ConversationView: View {
     /// The write actions.
     let actions: PullRequestActions
 
+    /// This tab's translation cache (ADR 0020): the description and every comment on it share one,
+    /// so translating the description and then scrolling down does not re-translate anything, and
+    /// leaving the pull request throws all of it away.
+    @State private var translations = TranslationCoordinator()
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -31,7 +36,7 @@ struct ConversationView: View {
             VStack(alignment: .leading, spacing: 8) {
                 CardTitle(String(localized: "DESCRIPTION"))
                 if let body = model.detail?.bodyMarkdown, !body.isEmpty {
-                    MarkdownText(markdown: body)
+                    TranslatableMarkdownText(markdown: body, translations: translations)
                 } else {
                     Text(String(localized: "No description."))
                         .font(.system(size: 12))
@@ -41,6 +46,14 @@ struct ConversationView: View {
         }
     }
 
+    /// The condensed activity list.
+    ///
+    /// Deliberately *not* translatable (ADR 0020). A `TimelineEvent.summary` is either one of
+    /// Shepherd's own fixed words ("Approved", "Requested changes", "Commented") or a commit
+    /// message headline — never a comment body, because `ResponseMapping.timeline(commits:…)`
+    /// builds the list from commits and reviews rather than from GitHub's timeline API. There is no
+    /// third-party prose here to offer a translation of; the comment bodies themselves are
+    /// translatable where they are actually rendered, in ``ThreadCommentView``.
     @ViewBuilder
     private var timeline: some View {
         let events = model.detail?.timeline ?? []
@@ -154,7 +167,7 @@ struct ConversationView: View {
                         VStack(alignment: .leading, spacing: 8) {
                             threadAnchorLabel(thread)
                             ForEach(thread.comments) { comment in
-                                ThreadCommentView(comment: comment)
+                                ThreadCommentView(comment: comment, translations: translations)
                             }
                             if let summary = model.summary {
                                 HStack(spacing: 8) {
