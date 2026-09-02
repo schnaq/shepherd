@@ -294,6 +294,11 @@ protocol IntelligenceProvider: Sendable {
   func suggestReviewFocus(_ digest: PullRequestDigest) async throws -> [FocusHint]
   func draftReviewSummary(_ request: ReviewSummaryDraftRequest) async throws -> String
   func draftInlineComment(_ request: InlineCommentDraftRequest) async throws -> String
+  // Streamed twins of the two drafting calls. Every element is the whole draft so far —
+  // cumulative, never a delta — so a text field can be written with it directly. A tier that
+  // cannot stream inherits a default implementation that yields the finished answer once.
+  func streamReviewSummaryDraft(_: ReviewSummaryDraftRequest) -> AsyncThrowingStream<String, Error>
+  func streamInlineCommentDraft(_: InlineCommentDraftRequest) -> AsyncThrowingStream<String, Error>
 }
 ```
 
@@ -374,6 +379,22 @@ frameworks are.
   runner and is **skipped unless `SHEPHERD_EVAL=1`** — it measures a model, not the code, so a
   new OS model must not be able to turn a build red. `Scripts/eval-intelligence/README.md` is
   the harness contract: fixture shapes, how to run it, and why it is not in CI.
+Both drafting surfaces prefer the **streamed** path. `IntelligenceRouter.streamReviewSummaryDraft`
+/ `streamInlineCommentDraft` return an `IntelligenceStream` — the tier plus the stream — inside an
+`IntelligenceStreamOutcome` whose three failure shapes convert back into the ordinary
+`IntelligenceOutcome`, so the field has one way of saying "no draft, and here is why". The router
+awaits the tier's *first* element before answering: that is what keeps the cloud → on-device
+ladder working (a tier that fails on the connection has not shown anything yet) and what makes the
+caption correct before the first character lands. On-device streaming rides guided generation's
+partially-generated snapshots; the cloud tiers ask for `stream: true` and accumulate
+`content_block_delta` / `choices[].delta.content` through one pure `ServerSentEventParser` plus
+one decoder per shape in `ShepherdCore` — fixture-tested on Linux against recorded frames of both
+providers. Streamed cloud calls swap the `{"draft": …}` contract for a plain-text one, because
+half a JSON object is not text a reviewer can read. `AIDraftFieldState` gains `.streaming`: the
+replace/append question is asked **once, before the request is made**, the growing text is written
+cumulatively, the caption is up before the first token and stays until the reviewer's first
+keystroke, a keystroke during a stream takes the field away from it, and a cancelled stream keeps
+what arrived (still labelled).
 
 ## UI conventions
 
@@ -649,7 +670,16 @@ instead.
 `IntelligenceRouter` is a `Sendable` value rebuilt from `AppSettings` plus the Keychain
 whenever the settings change. It picks the tier, builds the digest with the *provider's* token
 budget (`TokenBudget.onDevice` ≈ 6K for Foundation Models, `TokenBudget.cloud` for BYOK) and
-degrades cloud → on-device → nothing. Results are returned as an `IntelligenceOutcome`, so the
+degrades cloud → on-device → nothing. The chars-÷-4 estimate is the floor rather than the law:
+`TokenBudget.measured(_:using:)` takes a measurement closure and
+`limited(toContextSize:reservedForResponse:)` re-derives the budget from a context window the
+platform reported, so on macOS 26.4+ `OnDeviceProvider` pre-flights the real prompt against the
+real window (minus room for the answer) and only falls back to the estimate where the OS cannot
+measure. Both helpers are pure and live in `ShepherdCore`. Per-request choices also live in that
+file: `OnDeviceUseCase` picks the general or the content-tagging model (availability is checked per
+model, since the assets download per model) and `OnDeviceGeneration` holds every temperature and
+`maximumResponseTokens` cap. A guardrail refusal and an exceeded context window map to
+`IntelligenceError.guardrailDeclined` / `.contextExceeded` and are **never** retried. Results are returned as an `IntelligenceOutcome`, so the
 UI can say *why* a card is missing instead of silently hiding it. `IntelligenceTiers` is the seam
 the ladder is tested through — a stub cloud tier that fails, a stub on-device tier that answers, an
 on-device tier that reports itself unavailable — so the degradation is verified without a key, a
@@ -1024,8 +1054,9 @@ is reached, an empty queue producing no session at all, and both shapes of the c
 AI drafting (the diff excerpt's window and character cap against a long-diff fixture, the
 per-tier budget accounting for a digest plus quoted comments, the draft prompts and both cloud
 shapes' encoded request bodies, the answer parser against JSON/fenced/prose answers, the router's
-degradation ladder through `IntelligenceTiers`, and `AIDraftFieldState`'s replace/append/label
-rules);
+degradation ladder through `IntelligenceTiers`, the streaming ladder through its two streaming
+closures — first element, mid-stream failure, an empty answer stepping down a tier — and
+`AIDraftFieldState`'s replace/append/label rules for both a value and a stream);
 the delegation engine (stream-event fixtures, argv
 construction, template splitting, git command sequences, state transitions) and the app half of
 auto-delegation (event → signal mapping, ledger persistence across a relaunch, cap notices —

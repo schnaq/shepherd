@@ -98,7 +98,7 @@ struct SubmitReviewSheet: View {
                     Spacer(minLength: 4)
                     if model.canDraftWithAI {
                         AIDraftButton(isDrafting: aiDraft.isDrafting) {
-                            Task { await requestSummaryDraft() }
+                            requestSummaryDraft()
                         }
                     }
                     SavedReplyMenu(replies: model.settings.usableSavedReplies) { snippet in
@@ -109,8 +109,8 @@ struct SubmitReviewSheet: View {
                 AIDraftStatusView(
                     state: aiDraft,
                     confirmationTitle: String(localized: "Replace current summary?"),
-                    onReplace: { apply(aiDraft.replaceWithPendingDraft()) },
-                    onAppend: { apply(aiDraft.appendPendingDraft(to: model.summaryText)) },
+                    onReplace: { resolve(.replace) },
+                    onAppend: { resolve(.append) },
                     onDiscard: { aiDraft.discardPendingDraft() }
                 )
             }
@@ -180,14 +180,60 @@ struct SubmitReviewSheet: View {
 
     // MARK: - AI drafting
 
-    /// Asks the intelligence layer for a summary suggestion.
+    /// Asks the intelligence layer for a summary suggestion, streamed (plan §0.2).
     ///
     /// Started only by the button's click, and its only effect is on the text field: the verdict
     /// picker and the Submit button are untouched (ADR 0007 non-goal — nothing auto-submits).
-    private func requestSummaryDraft() async {
-        aiDraft.begin()
-        let outcome = await model.draftReviewSummary()
-        apply(aiDraft.finish(outcome, existingText: model.summaryText))
+    /// When the field already holds text, this only *asks* — the request is made by
+    /// ``resolve(_:)`` once the reviewer has said replace or append, so a discarded question
+    /// never sends anything to a provider.
+    @MainActor
+    private func requestSummaryDraft() {
+        switch aiDraft.prepareStream(existingText: model.summaryText) {
+        case .askFirst:
+            break
+        case .ready(let base):
+            Task { await runSummaryStream(base: base) }
+        }
+    }
+
+    /// Applies the reviewer's answer to the replace-or-append question.
+    @MainActor
+    private func resolve(_ choice: AIDraftFieldState.Choice) {
+        switch aiDraft.resolve(choice, existingText: model.summaryText) {
+        case .write(let text):
+            model.summaryText = text
+        case .startStream(let base):
+            Task { await runSummaryStream(base: base) }
+        case .nothing:
+            break
+        }
+    }
+
+    /// Runs one streamed summary draft into the field.
+    ///
+    /// Every element is the whole draft so far, so each one is simply written; the state decides
+    /// whether it may be (it may not, once the reviewer has typed).
+    /// - Parameter base: What the draft grows after — empty, or the reviewer's own text plus a
+    ///   blank line when they chose *append*.
+    @MainActor
+    private func runSummaryStream(base: String) async {
+        let outcome = await model.streamReviewSummaryDraft()
+        guard let stream = outcome.stream else {
+            apply(aiDraft.finish(outcome.failure ?? .disabled, existingText: model.summaryText))
+            return
+        }
+        aiDraft.streamStarted(kind: stream.kind, base: base)
+        do {
+            for try await partial in stream.text {
+                apply(aiDraft.streamed(partial))
+            }
+            apply(aiDraft.finishStream())
+        } catch is CancellationError {
+            apply(aiDraft.cancelStream())
+        } catch {
+            apply(aiDraft.failStream(AIDraftFailure.describe(error)))
+        }
     }
 
     /// Writes text the drafting state produced into the field, when it produced any.
@@ -246,7 +292,7 @@ struct InlineCommentComposer: View {
                 Spacer(minLength: 4)
                 if model.canDraftWithAI {
                     AIDraftButton(isDrafting: aiDraft.isDrafting) {
-                        Task { await requestCommentDraft() }
+                        requestCommentDraft()
                     }
                 }
                 SavedReplyMenu(replies: model.settings.usableSavedReplies) { snippet in
@@ -259,8 +305,8 @@ struct InlineCommentComposer: View {
             AIDraftStatusView(
                 state: aiDraft,
                 confirmationTitle: String(localized: "Replace this comment?"),
-                onReplace: { apply(aiDraft.replaceWithPendingDraft()) },
-                onAppend: { apply(aiDraft.appendPendingDraft(to: commentText)) },
+                onReplace: { resolve(.replace) },
+                onAppend: { resolve(.append) },
                 onDiscard: { aiDraft.discardPendingDraft() }
             )
 
@@ -311,15 +357,56 @@ struct InlineCommentComposer: View {
 
     // MARK: - AI drafting
 
-    /// Asks the intelligence layer for a comment suggestion about this line.
+    /// Asks the intelligence layer for a comment suggestion about this line, streamed.
     ///
     /// The context is the file path and the diff around the anchored line, capped by
     /// ``InlineCommentDraftBuilder`` — and it goes only to the provider the user configured
-    /// themselves (`CONTRIBUTING.md`, "the complete list of hosts Shepherd may contact").
-    private func requestCommentDraft() async {
-        aiDraft.begin()
-        let outcome = await model.draftInlineComment(for: request)
-        apply(aiDraft.finish(outcome, existingText: commentText))
+    /// themselves (`CONTRIBUTING.md`, "the complete list of hosts Shepherd may contact"). With
+    /// text already in the field the question comes first and the request second, so answering
+    /// *discard* sends the excerpt nowhere.
+    @MainActor
+    private func requestCommentDraft() {
+        switch aiDraft.prepareStream(existingText: commentText) {
+        case .askFirst:
+            break
+        case .ready(let base):
+            Task { await runCommentStream(base: base) }
+        }
+    }
+
+    /// Applies the reviewer's answer to the replace-or-append question.
+    @MainActor
+    private func resolve(_ choice: AIDraftFieldState.Choice) {
+        switch aiDraft.resolve(choice, existingText: commentText) {
+        case .write(let text):
+            commentText = text
+        case .startStream(let base):
+            Task { await runCommentStream(base: base) }
+        case .nothing:
+            break
+        }
+    }
+
+    /// Runs one streamed comment draft into the field.
+    /// - Parameter base: What the draft grows after.
+    @MainActor
+    private func runCommentStream(base: String) async {
+        let outcome = await model.streamInlineCommentDraft(for: request)
+        guard let stream = outcome.stream else {
+            apply(aiDraft.finish(outcome.failure ?? .disabled, existingText: commentText))
+            return
+        }
+        aiDraft.streamStarted(kind: stream.kind, base: base)
+        do {
+            for try await partial in stream.text {
+                apply(aiDraft.streamed(partial))
+            }
+            apply(aiDraft.finishStream())
+        } catch is CancellationError {
+            apply(aiDraft.cancelStream())
+        } catch {
+            apply(aiDraft.failStream(AIDraftFailure.describe(error)))
+        }
     }
 
     /// Writes text the drafting state produced into the field, when it produced any.

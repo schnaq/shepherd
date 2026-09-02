@@ -102,6 +102,39 @@ Consequence: a new drafting surface is a new request type plus a case in the sam
 methods. Anything that would *act* on drafted text without a click needs its own ADR, and would
 have to overturn the non-goal above rather than quietly widen this one.
 
+## Amendment (2026-09-02): streaming and measured budgets
+
+Additive again, and again inside the decision above: the three tiers, the provider protocol, the
+"hints, never verdicts" rule and the host list are all unchanged. Two pieces of groundwork
+(`docs/plans/apple-intelligence-v2.md` §0.1–0.2), landed before the features that need them:
+
+- **Streaming.** The two drafting calls gained streamed twins that yield **cumulative** text — the
+  whole draft so far, never a delta — so the value that reaches a text field is always a complete
+  value, and a dropped element cannot leave a hole in a reviewer's comment. On-device this rides
+  guided generation's partially-generated snapshots; the two cloud shapes send `stream: true` and
+  are accumulated behind one pure server-sent-event parser plus one decoder per shape in
+  `ShepherdCore`, which is what makes both wire formats testable on Linux from recorded frames. A
+  tier that cannot stream keeps its button: the protocol's default implementation yields the
+  finished answer once. The router hands out the *tier together with the stream* and waits for the
+  first element before answering, which is what lets the cloud → on-device ladder still step down
+  (a tier that failed on the connection has shown nothing yet) while making the caption naming the
+  tier correct before the first character appears. The rule that a draft never silently replaces
+  typed text is unchanged and is now asked **before the request is made** — so answering *discard*
+  means nothing was generated and, for tier 3, nothing was sent.
+- **Measured budgets.** The chars-÷-4 estimate stays as the portable floor, but where the OS can
+  measure a prompt against the real tokenizer and report the real context window (macOS 26.4+),
+  that measurement wins and the ~25 % slack the estimate forced is given back to the prompt. The
+  arithmetic stays pure and Linux-tested (`TokenBudget.measured(_:using:)`,
+  `limited(toContextSize:reservedForResponse:)`); only a two-line helper in the app target names
+  the platform API. Tier 2's ceiling is still a hard error, never a truncation, and every
+  on-device call now also caps its *answer*, because prompt and response share one window.
+  Guardrail refusals and an exceeded window became two named errors with one sentence each, and
+  are never retried automatically: the guardrails over-fire on technical prose, so a retry would
+  trip the same guardrail on the same words and spend battery doing it.
+
+Consequence: a new drafting surface now has a streamed twin to implement as well — or it can
+inherit the single-element default and be indistinguishable from today's behaviour.
+
 ## Consequences
 
 - No feature may hard-depend on an LLM; every AI surface needs a heuristic-only fallback state.

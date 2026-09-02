@@ -601,6 +601,381 @@ final class AIDraftingTests: XCTestCase {
         XCTAssertNil(state.failureMessage)
     }
 
+    // MARK: - Streaming: the wire (plan §0.2)
+
+    func testBothCloudShapesAskForAStreamOnlyWhenStreaming() throws {
+        let openAI = OpenAICompatibleProvider(
+            baseURL: "https://api.example.eu/v1",
+            model: "test-model",
+            apiKey: "not-a-real-key"
+        )
+        let plain = try XCTUnwrap(
+            try JSONSerialization.jsonObject(
+                with: try openAI.completionRequestBody(system: "s", user: "u")
+            ) as? [String: Any]
+        )
+        XCTAssertNil(plain["stream"], "the key is absent rather than false when not streaming")
+        let streamed = try XCTUnwrap(
+            try JSONSerialization.jsonObject(
+                with: try openAI.completionRequestBody(system: "s", user: "u", streaming: true)
+            ) as? [String: Any]
+        )
+        XCTAssertEqual(streamed["stream"] as? Bool, true)
+
+        let anthropic = AnthropicProvider(apiKey: "not-a-real-key", model: "test-model")
+        let anthropicStreamed = try XCTUnwrap(
+            try JSONSerialization.jsonObject(
+                with: try anthropic.completionRequestBody(
+                    system: "s",
+                    user: "u",
+                    streaming: true
+                )
+            ) as? [String: Any]
+        )
+        XCTAssertEqual(anthropicStreamed["stream"] as? Bool, true)
+        XCTAssertNil(
+            try XCTUnwrap(
+                try JSONSerialization.jsonObject(
+                    with: try anthropic.completionRequestBody(system: "s", user: "u")
+                ) as? [String: Any]
+            )["stream"]
+        )
+    }
+
+    func testTheStreamedDraftPromptAsksForTextRatherThanJSON() {
+        // A partial JSON object is not text a reviewer can read, so the streamed calls swap the
+        // envelope for the same instruction in words.
+        XCTAssertTrue(IntelligencePrompt.draftPlainTextContract.contains("no JSON"))
+        XCTAssertFalse(IntelligencePrompt.draftPlainTextContract.contains("{"))
+    }
+
+    func testTheTwoNewFailuresReadAsSentencesWithoutTouchingAModel() {
+        XCTAssertEqual(
+            IntelligenceError.guardrailDeclined.errorDescription,
+            "Apple Intelligence declined this content."
+        )
+        XCTAssertNotEqual(IntelligenceError.guardrailDeclined, .contextExceeded)
+        let context = IntelligenceError.contextExceeded.errorDescription ?? ""
+        XCTAssertTrue(context.contains("context window"))
+    }
+
+    // MARK: - Streaming: the ladder
+
+    func testAStreamIsLabelledWithItsTierAndYieldsCumulativeText() async throws {
+        let router = IntelligenceRouter(
+            configuration: enabledConfiguration,
+            tiers: IntelligenceTiers(
+                cloud: { _ in StubProvider(kind: .anthropic) },
+                onDevice: { StubProvider(kind: .onDevice) },
+                onDeviceUnavailabilityReason: { nil },
+                summaryStream: { _, _ in streamScript(["Check", "Check the retry bound."]) }
+            )
+        )
+        let outcome = await router.streamReviewSummaryDraft(
+            for: detail(patch: longPatch(lines: 10))
+        )
+        let stream = try XCTUnwrap(outcome.stream, "a tier answered")
+        XCTAssertEqual(stream.kind, .anthropic, "the caption is known before the first token")
+        XCTAssertNil(outcome.failure)
+        let received = try await collect(stream.text)
+        XCTAssertEqual(received, ["Check", "Check the retry bound."])
+        XCTAssertEqual(received.last, "Check the retry bound.", "the last element is the draft")
+    }
+
+    func testACloudStreamThatFailsBeforeItsFirstTokenDegradesToTheOnDeviceTier() async throws {
+        let router = IntelligenceRouter(
+            configuration: enabledConfiguration,
+            tiers: IntelligenceTiers(
+                cloud: { _ in StubProvider(kind: .anthropic) },
+                onDevice: { StubProvider(kind: .onDevice) },
+                onDeviceUnavailabilityReason: { nil },
+                summaryStream: { provider, _ in
+                    provider.kind == .anthropic
+                        ? streamScript([], failure: .http(status: 503, message: "overloaded"))
+                        : streamScript(["On-device draft."])
+                }
+            )
+        )
+        let outcome = await router.streamReviewSummaryDraft(
+            for: detail(patch: longPatch(lines: 10))
+        )
+        let stream = try XCTUnwrap(outcome.stream)
+        XCTAssertEqual(stream.kind, .onDevice)
+        XCTAssertEqual(try await collect(stream.text), ["On-device draft."])
+    }
+
+    func testATierThatStreamsNothingCountsAsAFailureAndTheLadderMovesOn() async throws {
+        let router = IntelligenceRouter(
+            configuration: enabledConfiguration,
+            tiers: IntelligenceTiers(
+                cloud: { _ in StubProvider(kind: .anthropic) },
+                onDevice: { StubProvider(kind: .onDevice) },
+                onDeviceUnavailabilityReason: { nil },
+                summaryStream: { provider, _ in
+                    provider.kind == .anthropic
+                        ? streamScript([])
+                        : streamScript(["On-device draft."])
+                }
+            )
+        )
+        let stream = try XCTUnwrap(
+            await router.streamReviewSummaryDraft(
+                for: detail(patch: longPatch(lines: 10))
+            ).stream
+        )
+        XCTAssertEqual(stream.kind, .onDevice, "an empty answer is not an answer")
+    }
+
+    func testAStreamThatFailsAfterItsFirstTokenKeepsItsTierAndItsText() async throws {
+        let router = IntelligenceRouter(
+            configuration: enabledConfiguration,
+            tiers: IntelligenceTiers(
+                cloud: { _ in StubProvider(kind: .anthropic) },
+                onDevice: { StubProvider(kind: .onDevice) },
+                onDeviceUnavailabilityReason: { nil },
+                summaryStream: { _, _ in
+                    streamScript(["half a draft"], failure: .malformedResponse)
+                }
+            )
+        )
+        let stream = try XCTUnwrap(
+            await router.streamReviewSummaryDraft(
+                for: detail(patch: longPatch(lines: 10))
+            ).stream
+        )
+        // Committed: once the reviewer is watching text arrive, another tier's attempt at the
+        // same draft may not replace it.
+        XCTAssertEqual(stream.kind, .anthropic)
+        var received: [String] = []
+        do {
+            for try await text in stream.text { received.append(text) }
+            XCTFail("the stream must report the failure it ended with")
+        } catch {
+            XCTAssertEqual(error as? IntelligenceError, .malformedResponse)
+        }
+        XCTAssertEqual(received, ["half a draft"])
+    }
+
+    func testBothStreamingTiersFailingReportsTheLastReasonThroughTheSameOutcome() async {
+        let router = IntelligenceRouter(
+            configuration: enabledConfiguration,
+            tiers: IntelligenceTiers(
+                cloud: { _ in StubProvider(kind: .anthropic) },
+                onDevice: { StubProvider(kind: .onDevice) },
+                onDeviceUnavailabilityReason: { nil },
+                summaryStream: { provider, _ in
+                    provider.kind == .anthropic
+                        ? streamScript([], failure: .http(status: 503, message: "overloaded"))
+                        : streamScript([], failure: .digestTooLarge(tokens: 9_000, limit: 6_000))
+                }
+            )
+        )
+        let outcome = await router.streamReviewSummaryDraft(
+            for: detail(patch: longPatch(lines: 10))
+        )
+        XCTAssertNil(outcome.stream)
+        XCTAssertEqual(
+            outcome.failure,
+            .failed(IntelligenceError.digestTooLarge(tokens: 9_000, limit: 6_000).errorDescription ?? "")
+        )
+    }
+
+    func testStreamingIsDisabledWhenIntelligenceIsOff() async {
+        let router = IntelligenceRouter(configuration: .disabled, tiers: failingTiers())
+        let outcome = await router.streamReviewSummaryDraft(
+            for: detail(patch: longPatch(lines: 10))
+        )
+        XCTAssertNil(outcome.stream)
+        XCTAssertEqual(outcome.failure, .disabled)
+    }
+
+    func testNoStreamingTierAtAllIsReportedAsUnavailableWithTheOnDeviceReason() async {
+        let reason = "Apple Intelligence is turned off in System Settings."
+        let router = IntelligenceRouter(
+            configuration: IntelligenceConfiguration(mode: .onDevice),
+            tiers: IntelligenceTiers(
+                cloud: { _ in nil },
+                onDevice: { StubProvider(kind: .onDevice) },
+                onDeviceUnavailabilityReason: { reason }
+            )
+        )
+        let outcome = await router.streamInlineCommentDraft(
+            for: detail(patch: longPatch(lines: 10)),
+            anchor: InlineCommentAnchor(path: "Sources/Upload.swift", line: 5, side: .right)
+        )
+        XCTAssertEqual(outcome.failure, .unavailable(reason))
+    }
+
+    func testAFileWithoutADiffIsRefusedBeforeAnyStreamIsStarted() async {
+        let router = IntelligenceRouter(
+            configuration: enabledConfiguration,
+            tiers: failingTiers()
+        )
+        let outcome = await router.streamInlineCommentDraft(
+            for: detail(patch: nil),
+            anchor: InlineCommentAnchor(path: "Sources/Upload.swift", line: 5, side: .right)
+        )
+        XCTAssertNil(outcome.stream)
+        XCTAssertTrue(outcome.failure?.message?.contains("no diff") == true)
+    }
+
+    func testATierThatCannotStreamStillProducesOneCumulativeElement() async throws {
+        // The protocol's default implementation: exactly what the non-streaming call returns,
+        // wrapped as a stream, so "prefer streaming" never costs a tier its button.
+        let router = IntelligenceRouter(
+            configuration: enabledConfiguration,
+            tiers: IntelligenceTiers(
+                cloud: { _ in StubProvider(kind: .anthropic, text: "one-shot draft") },
+                onDevice: { StubProvider(kind: .onDevice) },
+                onDeviceUnavailabilityReason: { nil }
+            )
+        )
+        let stream = try XCTUnwrap(
+            await router.streamInlineCommentDraft(
+                for: detail(patch: longPatch(lines: 10)),
+                anchor: InlineCommentAnchor(path: "Sources/Upload.swift", line: 5, side: .right)
+            ).stream
+        )
+        XCTAssertEqual(try await collect(stream.text), ["one-shot draft"])
+    }
+
+    // MARK: - The field's own rules, streamed
+
+    func testAStreamAsksBeforeItStartsWhenTheFieldHasTextAndNotOtherwise() {
+        var empty = AIDraftFieldState()
+        XCTAssertEqual(empty.prepareStream(existingText: "   "), .ready(base: ""))
+        XCTAssertEqual(empty.phase, .drafting)
+
+        var typed = AIDraftFieldState()
+        XCTAssertEqual(typed.prepareStream(existingText: "My own notes."), .askFirst)
+        XCTAssertTrue(typed.isConfirmingStream)
+        XCTAssertNil(typed.streamingDraft, "nothing has been requested yet")
+
+        // Discarding here means the request is never made at all — nothing generated, nothing
+        // sent to a provider.
+        var discarding = typed
+        discarding.discardPendingDraft()
+        XCTAssertEqual(discarding.phase, .idle)
+
+        var replacing = typed
+        XCTAssertEqual(
+            replacing.resolve(.replace, existingText: "My own notes."),
+            .startStream(base: "")
+        )
+
+        var appending = typed
+        XCTAssertEqual(
+            appending.resolve(.append, existingText: "My own notes."),
+            .startStream(base: "My own notes.\n\n")
+        )
+    }
+
+    func testTheGrowingDraftIsWrittenCumulativelyAndStaysLabelledUntilAKeystroke() {
+        var state = AIDraftFieldState()
+        _ = state.prepareStream(existingText: "")
+        state.streamStarted(kind: .onDevice, base: "")
+        XCTAssertTrue(state.isDrafting, "the button stays busy while text arrives")
+        XCTAssertEqual(state.labelledKind, .onDevice, "the caption is up before the text is")
+
+        XCTAssertEqual(state.streamed("Check"), "Check")
+        XCTAssertNil(state.streamed("Check"), "an unchanged snapshot writes nothing")
+        XCTAssertEqual(state.streamed("Check the retry"), "Check the retry")
+        // Shepherd's own writes are not edits, or the caption would never be seen.
+        state.fieldChanged(to: "Check the retry")
+        XCTAssertEqual(state.labelledKind, .onDevice)
+
+        XCTAssertEqual(state.streamed("Check the retry bound.  "), "Check the retry bound.  ")
+        XCTAssertEqual(state.finishStream(), "Check the retry bound.", "trimmed once, at the end")
+        XCTAssertEqual(state.draftedKind, .onDevice)
+        XCTAssertFalse(state.isDrafting)
+
+        state.fieldChanged(to: "Check the retry bound. Also the timeout.")
+        XCTAssertNil(state.draftedKind, "their keystroke makes it their text")
+        XCTAssertNil(state.labelledKind)
+    }
+
+    func testAnAppendedStreamGrowsUnderTheReviewersOwnParagraph() {
+        var state = AIDraftFieldState()
+        _ = state.prepareStream(existingText: "My own notes.")
+        guard case .startStream(let base) = state.resolve(.append, existingText: "My own notes.")
+        else { return XCTFail("appending must start the stream") }
+        state.streamStarted(kind: .anthropic, base: base)
+        XCTAssertEqual(state.streamed("Also"), "My own notes.\n\nAlso")
+        XCTAssertEqual(state.finishStream(), "My own notes.\n\nAlso")
+        XCTAssertEqual(state.draftedKind, .anthropic)
+    }
+
+    func testAKeystrokeDuringAStreamKeepsTheTypedTextAndDropsLaterSnapshots() {
+        var state = AIDraftFieldState()
+        _ = state.prepareStream(existingText: "")
+        state.streamStarted(kind: .onDevice, base: "")
+        XCTAssertEqual(state.streamed("Check the"), "Check the")
+
+        // The reviewer types over it: the rule has no exception for an unfinished draft.
+        state.fieldChanged(to: "My own sentence.")
+        XCTAssertEqual(state.phase, .idle)
+        XCTAssertNil(state.streamed("Check the retry bound."), "the stream lost the field")
+        XCTAssertNil(state.finishStream())
+        XCTAssertNil(state.labelledKind)
+    }
+
+    func testCancellingAStreamKeepsWhatArrivedAndKeepsItLabelled() {
+        var state = AIDraftFieldState()
+        _ = state.prepareStream(existingText: "")
+        state.streamStarted(kind: .openAICompatible, base: "")
+        _ = state.streamed("A partial draft that ")
+        XCTAssertEqual(state.cancelStream(), "A partial draft that")
+        XCTAssertEqual(state.draftedKind, .openAICompatible)
+
+        // A stop before anything arrived leaves no trace: no caption, no error line.
+        var nothing = AIDraftFieldState()
+        _ = nothing.prepareStream(existingText: "")
+        nothing.streamStarted(kind: .onDevice, base: "")
+        XCTAssertNil(nothing.cancelStream())
+        XCTAssertEqual(nothing.phase, .idle)
+        XCTAssertNil(nothing.failureMessage)
+    }
+
+    func testAFailedStreamKeepsTextIfAnyArrivedAndOtherwiseSaysWhy() {
+        var withText = AIDraftFieldState()
+        _ = withText.prepareStream(existingText: "")
+        withText.streamStarted(kind: .anthropic, base: "")
+        _ = withText.streamed("Half a draft")
+        XCTAssertEqual(withText.failStream("the endpoint dropped the connection"), "Half a draft")
+        XCTAssertEqual(withText.draftedKind, .anthropic, "still labelled, because it is not theirs")
+        XCTAssertNil(withText.failureMessage)
+
+        var withNothing = AIDraftFieldState()
+        _ = withNothing.prepareStream(existingText: "")
+        withNothing.streamStarted(kind: .anthropic, base: "")
+        XCTAssertNil(withNothing.failStream("the endpoint returned 401"))
+        XCTAssertEqual(withNothing.failureMessage, "the endpoint returned 401")
+    }
+
+    func testAStreamThatEndedWithNothingIsAFailureLineRatherThanAnEmptyCaption() {
+        var state = AIDraftFieldState()
+        _ = state.prepareStream(existingText: "")
+        state.streamStarted(kind: .onDevice, base: "")
+        XCTAssertNil(state.finishStream())
+        XCTAssertNotNil(state.failureMessage)
+        XCTAssertNil(state.draftedKind)
+    }
+
+    func testResolvingAWaitingValueStillWritesItThroughTheSharedPath() {
+        var state = AIDraftFieldState()
+        state.begin()
+        _ = state.finish(
+            .value(IntelligenceOutput(kind: .anthropic, value: "Drafted text.")),
+            existingText: "My own notes."
+        )
+        XCTAssertEqual(
+            state.resolve(.append, existingText: "My own notes."),
+            .write("My own notes.\n\nDrafted text.")
+        )
+        XCTAssertEqual(state.draftedKind, .anthropic)
+        XCTAssertEqual(state.resolve(.replace, existingText: ""), .nothing, "nothing left to apply")
+    }
+
     // MARK: - Stubs
 
     private var enabledConfiguration: IntelligenceConfiguration {
@@ -647,5 +1022,36 @@ final class AIDraftingTests: XCTestCase {
             if let failure { throw failure }
             return text
         }
+    }
+}
+
+/// A scripted provider stream: these elements, then a clean finish or this failure.
+///
+/// Cumulative text is the contract, so the scripts below are written the way a provider would
+/// yield them — each element the whole draft so far.
+/// - Parameters:
+///   - chunks: The cumulative drafts to yield, in order.
+///   - failure: The error to finish with, or `nil` for a clean end.
+/// - Returns: The stream.
+private func streamScript(
+    _ chunks: [String],
+    failure: IntelligenceError? = nil
+) -> AsyncThrowingStream<String, Error> {
+    AsyncThrowingStream { continuation in
+        for chunk in chunks { continuation.yield(chunk) }
+        if let failure {
+            continuation.finish(throwing: failure)
+        } else {
+            continuation.finish()
+        }
+    }
+}
+
+extension AIDraftingTests {
+    /// Drains a stream into the elements a field would have been written with.
+    func collect(_ stream: AsyncThrowingStream<String, Error>) async throws -> [String] {
+        var elements: [String] = []
+        for try await element in stream { elements.append(element) }
+        return elements
     }
 }

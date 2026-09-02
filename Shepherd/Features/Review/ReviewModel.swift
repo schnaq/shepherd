@@ -421,6 +421,32 @@ final class ReviewModel {
         return await intelligence.draftInlineComment(for: detail, anchor: request.anchor)
     }
 
+    /// Drafts a review summary suggestion, streamed (plan §0.2).
+    ///
+    /// What the composers use: the ladder, the budgets and the failure shapes are the same as
+    /// ``draftReviewSummary()``, and a tier that cannot stream answers with a stream of one
+    /// element, so preferring this path costs nothing and never loses a tier.
+    /// - Returns: A labelled stream, or why there is none.
+    func streamReviewSummaryDraft() async -> IntelligenceStreamOutcome {
+        guard let detail else {
+            return .unavailable(String(localized: "The pull request is still loading."))
+        }
+        return await intelligence.streamReviewSummaryDraft(
+            for: detail,
+            pendingComments: draft?.comments ?? []
+        )
+    }
+
+    /// Drafts an inline comment suggestion for one anchor, streamed (plan §0.2).
+    /// - Parameter request: The composer's anchor.
+    /// - Returns: A labelled stream, or why there is none.
+    func streamInlineCommentDraft(for request: ComposerRequest) async -> IntelligenceStreamOutcome {
+        guard let detail else {
+            return .unavailable(String(localized: "The pull request is still loading."))
+        }
+        return await intelligence.streamInlineCommentDraft(for: detail, anchor: request.anchor)
+    }
+
     /// The AI focus hint for a file, if the provider produced one.
     /// - Parameter path: The file path.
     func focusHint(for path: String) -> String? {

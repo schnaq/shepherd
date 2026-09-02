@@ -57,7 +57,14 @@ struct AIDraftStatusView: View {
         case .idle, .drafting:
             EmptyView()
         case .confirming(let pending):
-            confirmation(pending)
+            // The draft exists but is not in the field, so it is previewed inside the question.
+            question(badge: pending.kind.badge, preview: pending.text)
+        case .confirmingStream:
+            // A streamed draft is asked about *before* the request is made, so there is nothing
+            // to preview and no tier to name yet — and a discarded question sends nothing at all.
+            question(badge: nil, preview: nil)
+        case .streaming(let streaming):
+            caption(streaming.kind)
         case .drafted(let kind):
             caption(kind)
         case .failed(let message):
@@ -86,11 +93,15 @@ struct AIDraftStatusView: View {
         .foregroundStyle(Theme.accentText)
     }
 
-    /// The replace-or-append question, with the draft itself shown above it.
+    /// The replace-or-append question.
     ///
-    /// The draft is *not* written into the field until one of these is clicked — that is the whole
-    /// point of asking — so it is previewed here instead.
-    private func confirmation(_ pending: AIDraftFieldState.PendingDraft) -> some View {
+    /// Nothing is written into the field until one of these is clicked — that is the whole point
+    /// of asking. A draft that already exists is previewed inside the question; a streamed one
+    /// has not been requested yet, so there is neither a preview nor a tier badge.
+    /// - Parameters:
+    ///   - badge: The tier that produced the waiting draft, when there is one.
+    ///   - preview: The waiting draft, when there is one.
+    private func question(badge: String?, preview: String?) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 5) {
                 Image(systemName: "sparkles")
@@ -98,20 +109,24 @@ struct AIDraftStatusView: View {
                 Text(confirmationTitle)
                     .font(.system(size: 11, weight: .semibold))
                 Spacer(minLength: 0)
-                Text(pending.kind.badge)
-                    .font(.system(size: 10))
-                    .foregroundStyle(Theme.textMuted)
+                if let badge {
+                    Text(badge)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Theme.textMuted)
+                }
             }
             .foregroundStyle(Theme.accentText)
 
-            ScrollView {
-                Text(pending.text)
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(Theme.textSecondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
+            if let preview {
+                ScrollView {
+                    Text(preview)
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(Theme.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxHeight: 96)
             }
-            .frame(maxHeight: 96)
 
             HStack(spacing: 8) {
                 Spacer(minLength: 0)

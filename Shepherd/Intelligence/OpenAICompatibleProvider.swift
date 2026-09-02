@@ -83,6 +83,44 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
         return try IntelligenceJSON.draft(from: text)
     }
 
+    func streamReviewSummaryDraft(
+        _ request: ReviewSummaryDraftRequest
+    ) -> AsyncThrowingStream<String, Error> {
+        streamDraft(
+            system: IntelligencePrompt.draftSummaryInstructions + "\n"
+                + IntelligencePrompt.draftPlainTextContract,
+            user: IntelligencePrompt.body(for: request)
+        )
+    }
+
+    func streamInlineCommentDraft(
+        _ request: InlineCommentDraftRequest
+    ) -> AsyncThrowingStream<String, Error> {
+        streamDraft(
+            system: IntelligencePrompt.draftInlineCommentInstructions + "\n"
+                + IntelligencePrompt.draftPlainTextContract,
+            user: IntelligencePrompt.body(for: request)
+        )
+    }
+
+    /// One streamed drafting request.
+    ///
+    /// The finished answer still goes through ``IntelligenceJSON/draft(from:)``: this tier is
+    /// "whatever speaks the chat-completions shape", so it is exactly the tier where a model
+    /// ignores the plain-text instruction and sends the JSON envelope anyway.
+    private func streamDraft(system: String, user: String) -> AsyncThrowingStream<String, Error> {
+        let source = streamComplete(system: system, user: user)
+        return IntelligenceStreaming.stream { continuation in
+            var answer = ""
+            for try await text in source {
+                answer = text
+                continuation.yield(text)
+            }
+            let finished = try IntelligenceJSON.draft(from: answer)
+            if finished != answer { continuation.yield(finished) }
+        }
+    }
+
     /// Cleans up a configured base URL: surrounding whitespace and trailing slashes go, and
     /// anything that is not an absolute `http(s)` URL is rejected.
     ///
@@ -158,8 +196,14 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
     /// - Parameters:
     ///   - system: The system message.
     ///   - user: The user message.
+    ///   - streaming: Whether to ask the endpoint for a streamed answer. The key is omitted
+    ///     entirely when this is `false`.
     /// - Returns: The encoded request body.
-    func completionRequestBody(system: String, user: String) throws -> Data {
+    func completionRequestBody(
+        system: String,
+        user: String,
+        streaming: Bool = false
+    ) throws -> Data {
         try JSONEncoder().encode(
             RequestBody(
                 model: model,
@@ -167,9 +211,83 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
                 messages: [
                     RequestBody.Message(role: "system", content: system),
                     RequestBody.Message(role: "user", content: user),
-                ]
+                ],
+                // Absent rather than `false` when not streaming: a local server that has never
+                // heard of the key is likelier to accept a body without it than to ignore it.
+                stream: streaming ? true : nil
             )
         )
+    }
+
+    /// Sends one **streaming** chat-completions request, yielding the answer as it grows.
+    ///
+    /// Every element is the whole answer so far. The deltas (`choices[].delta.content`) and the
+    /// `[DONE]` sentinel are read by the pure ``ShepherdCore/OpenAICompatibleStreamDecoder``,
+    /// which is deliberately tolerant: the servers behind this tier disagree about the role-only
+    /// first frame, about `null` contents and about whether the sentinel is sent at all, and none
+    /// of those disagreements may reach the reviewer's field as an error.
+    /// - Parameters:
+    ///   - system: The system message.
+    ///   - user: The user message.
+    /// - Returns: A stream of ever-longer answers.
+    func streamComplete(system: String, user: String) -> AsyncThrowingStream<String, Error> {
+        // One captured copy rather than property access inside an escaping closure; the provider
+        // is a `Sendable` struct.
+        let provider = self
+        return IntelligenceStreaming.stream { continuation in
+            guard let url = OpenAICompatibleProvider.completionsURL(base: provider.baseURL) else {
+                throw IntelligenceError.notConfigured("base URL")
+            }
+            guard !provider.model.isEmpty else {
+                throw IntelligenceError.notConfigured("model name")
+            }
+
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "content-type")
+            request.setValue("text/event-stream", forHTTPHeaderField: "accept")
+            if !provider.apiKey.isEmpty {
+                request.setValue(
+                    "Bearer \(provider.apiKey)",
+                    forHTTPHeaderField: "authorization"
+                )
+            }
+            request.httpBody = try provider.completionRequestBody(
+                system: system,
+                user: user,
+                streaming: true
+            )
+
+            let (bytes, response) = try await URLSession.shared.bytes(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard (200..<300).contains(status) else {
+                throw IntelligenceError.http(
+                    status: status,
+                    message: OpenAICompatibleProvider.errorMessage(
+                        in: await IntelligenceStreaming.failureBody(bytes)
+                    )
+                )
+            }
+
+            var parser = ServerSentEventParser()
+            var answer = ""
+            for try await line in bytes.lines {
+                guard let event = parser.consume(line) else { continue }
+                if OpenAICompatibleStreamDecoder.isDone(event) { break }
+                if let message = OpenAICompatibleStreamDecoder.errorMessage(in: event) {
+                    throw IntelligenceError.http(status: status, message: message)
+                }
+                guard let delta = OpenAICompatibleStreamDecoder.textDelta(in: event) else {
+                    continue
+                }
+                answer += delta
+                continuation.yield(answer)
+            }
+            _ = parser.finish()
+            guard !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw IntelligenceError.malformedResponse
+            }
+        }
     }
 
     /// Sends one non-streaming chat-completions request.
@@ -233,11 +351,13 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
         var model: String
         var maxTokens: Int
         var messages: [Message]
+        var stream: Bool?
 
         enum CodingKeys: String, CodingKey {
             case model
             case maxTokens = "max_tokens"
             case messages
+            case stream
         }
     }
 

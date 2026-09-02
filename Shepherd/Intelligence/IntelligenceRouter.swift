@@ -58,6 +58,80 @@ enum IntelligenceOutcome<Value: Sendable & Hashable>: Sendable, Hashable {
     }
 }
 
+/// A stream of cumulative drafts together with the tier producing them.
+///
+/// The pair is the point (plan §0.2). A streamed draft has to be *labelled* — "Drafted
+/// on-device", "Drafted by Anthropic" — and a caption that appeared after the text would be a
+/// caption nobody reads, so the tier is settled before the reviewer sees a character. That is
+/// also why ``IntelligenceRouter/streamReviewSummaryDraft(for:pendingComments:)`` is `async`
+/// although it returns a stream: it waits for the tier's *first* element before answering, which
+/// is exactly what lets the cloud → on-device ladder still step down. A cloud tier that is going
+/// to fail almost always fails on the connection, before any text exists; once the first token is
+/// out, the tier is committed and a failure is a failure.
+struct IntelligenceStream: Sendable {
+    /// Which tier is producing the text.
+    var kind: IntelligenceKind
+    /// The draft so far, growing. Never deltas.
+    var text: AsyncThrowingStream<String, Error>
+
+    /// Creates a labelled stream.
+    init(kind: IntelligenceKind, text: AsyncThrowingStream<String, Error>) {
+        self.kind = kind
+        self.text = text
+    }
+}
+
+/// What asking a tier for a *stream* produced.
+///
+/// The same four shapes as ``IntelligenceOutcome``, because the UI has to say the same four
+/// things; it cannot be that generic type because a stream is not `Hashable` and never will be.
+/// ``failure`` converts the three failure shapes back into it, so a caller that already knows how
+/// to show "no draft, and here is why" — ``AIDraftFieldState`` — needs no second code path.
+enum IntelligenceStreamOutcome: Sendable {
+    /// Intelligence is switched off.
+    case disabled
+    /// Nothing could answer, with a user-readable reason.
+    case unavailable(String)
+    /// Every configured tier failed, with the last error's description.
+    case failed(String)
+    /// A tier is answering.
+    case stream(IntelligenceStream)
+
+    /// The stream, when a tier answered.
+    var stream: IntelligenceStream? {
+        if case .stream(let stream) = self { return stream }
+        return nil
+    }
+
+    /// The same result as a non-streaming outcome, when it is not a stream.
+    var failure: IntelligenceOutcome<String>? {
+        switch self {
+        case .disabled: return .disabled
+        case .unavailable(let reason): return .unavailable(reason)
+        case .failed(let reason): return .failed(reason)
+        case .stream: return nil
+        }
+    }
+}
+
+/// What a tier's stream did first — the ladder's whole decision.
+private enum FirstElement: Sendable {
+    /// Text arrived; this tier owns the answer from here on.
+    case arrived
+    /// The stream finished without ever yielding.
+    case empty
+    /// The stream failed before yielding, with a readable reason.
+    case failed(String)
+}
+
+/// What starting one tier's stream told the ladder.
+private enum StartedStream: Sendable {
+    /// The tier produced its first element; everything after this belongs to that tier.
+    case started(IntelligenceStream)
+    /// The tier produced nothing usable, with a reason the next tier's failure can replace.
+    case failed(String)
+}
+
 /// Where a router gets its tiers from.
 ///
 /// A seam, for the same reason ``ModelListing`` is one: the degradation ladder — cloud first, then
@@ -71,6 +145,19 @@ struct IntelligenceTiers: Sendable {
     var onDevice: @Sendable () -> any IntelligenceProvider
     /// Why the on-device tier cannot answer right now, or `nil` when it can.
     var onDeviceUnavailabilityReason: @Sendable () -> String?
+    /// How a review-summary draft is streamed out of a tier.
+    ///
+    /// Defaulted to the provider's own method, so this is a seam rather than a decision: a test
+    /// that has to drive the *ladder* — first token, then a failure, then the tier below — needs
+    /// a stream it controls element by element, and every test that does not care never mentions
+    /// it (the memberwise initialiser keeps its three original arguments).
+    var summaryStream: @Sendable (
+        any IntelligenceProvider, ReviewSummaryDraftRequest
+    ) -> AsyncThrowingStream<String, Error> = { $0.streamReviewSummaryDraft($1) }
+    /// How an inline-comment draft is streamed out of a tier.
+    var inlineStream: @Sendable (
+        any IntelligenceProvider, InlineCommentDraftRequest
+    ) -> AsyncThrowingStream<String, Error> = { $0.streamInlineCommentDraft($1) }
 
     /// The real tiers.
     static let live = IntelligenceTiers(
@@ -217,6 +304,164 @@ struct IntelligenceRouter: Sendable {
         }
     }
 
+    // MARK: - Streaming (plan §0.2)
+
+    /// Drafts the body of a review as a stream of cumulative text.
+    ///
+    /// Same ladder, same budgets and the same four answers as
+    /// ``draftReviewSummary(for:pendingComments:)`` — the difference is only that the reviewer
+    /// watches it arrive. Nothing here submits anything.
+    /// - Parameters:
+    ///   - detail: The fetched pull request.
+    ///   - pendingComments: The inline comments already in the local draft, quoted and capped.
+    /// - Returns: A labelled stream, or why there is none.
+    func streamReviewSummaryDraft(
+        for detail: PullRequestDetail,
+        pendingComments: [DraftComment] = []
+    ) async -> IntelligenceStreamOutcome {
+        let tiers = self.tiers
+        return await runStream { provider, budget in
+            tiers.summaryStream(
+                provider,
+                ReviewSummaryDraftRequest.build(
+                    detail: detail,
+                    pendingComments: pendingComments,
+                    budget: budget
+                )
+            )
+        }
+    }
+
+    /// Drafts one inline comment as a stream of cumulative text.
+    /// - Parameters:
+    ///   - detail: The fetched pull request.
+    ///   - anchor: The line the comment hangs off.
+    /// - Returns: A labelled stream, or why there is none.
+    func streamInlineCommentDraft(
+        for detail: PullRequestDetail,
+        anchor: InlineCommentAnchor
+    ) async -> IntelligenceStreamOutcome {
+        guard isEnabled else { return .disabled }
+        // Settled before a tier is picked, exactly as in the non-streaming call: with no patch
+        // there is no excerpt, and a comment drafted from a file name alone would be invention.
+        guard detail.files.first(where: { $0.path == anchor.path })?.hasPatch == true else {
+            return .unavailable(
+                String(
+                    localized: "GitHub sent no diff for this file, so there is nothing to draft a comment from."
+                )
+            )
+        }
+        let tiers = self.tiers
+        return await runStream { provider, budget in
+            tiers.inlineStream(
+                provider,
+                InlineCommentDraftBuilder.build(detail: detail, anchor: anchor, budget: budget)
+            )
+        }
+    }
+
+    /// The degradation ladder, for streams.
+    ///
+    /// The shape mirrors ``run(operation:)`` deliberately, down to which failure wins, and adds
+    /// one rule streams need: a tier has "answered" only once its first element exists. Until
+    /// then the ladder may still step down, and after that it may not — a half-written draft the
+    /// reviewer is watching must not be replaced by another tier's attempt at the same thing.
+    private func runStream(
+        operation: @escaping @Sendable (any IntelligenceProvider, TokenBudget)
+            -> AsyncThrowingStream<String, Error>
+    ) async -> IntelligenceStreamOutcome {
+        guard isEnabled else { return .disabled }
+
+        var lastFailure: String?
+
+        if let cloud = cloudProvider {
+            switch await IntelligenceRouter.start(
+                operation(cloud, AnthropicProvider.budget),
+                kind: cloud.kind
+            ) {
+            case .started(let stream): return .stream(stream)
+            case .failed(let reason): lastFailure = reason
+            }
+        }
+
+        let unavailabilityReason = tiers.onDeviceUnavailabilityReason()
+        if unavailabilityReason == nil {
+            let onDevice = tiers.onDevice()
+            switch await IntelligenceRouter.start(
+                operation(onDevice, OnDeviceProvider.budget),
+                kind: onDevice.kind
+            ) {
+            case .started(let stream): return .stream(stream)
+            case .failed(let reason): lastFailure = reason
+            }
+        } else if lastFailure == nil {
+            return .unavailable(
+                unavailabilityReason
+                    ?? String(localized: "No intelligence provider is available.")
+            )
+        }
+
+        return .failed(lastFailure ?? String(localized: "No intelligence provider is available."))
+    }
+
+    /// Waits for a tier's first element and re-publishes the whole stream behind it.
+    ///
+    /// Everything the provider yields is forwarded into a second stream rather than the caller
+    /// being handed the provider's own: the first element has to be *awaited* here to decide
+    /// whether this tier answered at all, and an already-started iteration cannot be given away.
+    /// Buffering is what makes that free — the elements that arrive while the ladder is still
+    /// deciding are queued, not dropped, so the reviewer sees the draft from its first word.
+    ///
+    /// A tier that finishes without ever yielding counts as a failure. It is the on-device
+    /// model's most likely bad day (a guardrail refusal arrives as an error, but an empty answer
+    /// arrives as nothing at all), and treating it as success would leave the reviewer watching
+    /// an empty field with no reason in sight.
+    /// - Parameters:
+    ///   - source: The provider's stream, not yet iterated.
+    ///   - kind: The tier it came from.
+    /// - Returns: The labelled stream, or the reason this tier did not answer.
+    private static func start(
+        _ source: AsyncThrowingStream<String, Error>,
+        kind: IntelligenceKind
+    ) async -> StartedStream {
+        let relay = AsyncThrowingStream<String, Error>.makeStream()
+        let signal: FirstElement = await withCheckedContinuation { handshake in
+            let task = Task {
+                // The only thing that resumes the handshake, and it must do so exactly once:
+                // the flag is local to this task, so there is nothing to synchronise.
+                var reported = false
+                func report(_ value: FirstElement) {
+                    guard !reported else { return }
+                    reported = true
+                    handshake.resume(returning: value)
+                }
+                do {
+                    for try await text in source {
+                        report(.arrived)
+                        relay.continuation.yield(text)
+                    }
+                    report(.empty)
+                    relay.continuation.finish()
+                } catch {
+                    report(.failed(describe(error)))
+                    relay.continuation.finish(throwing: error)
+                }
+            }
+            // The reviewer closing the sheet ends the request: the stream going away cancels the
+            // task, which cancels the URL session's byte stream or the model's session.
+            relay.continuation.onTermination = { _ in task.cancel() }
+        }
+
+        switch signal {
+        case .arrived:
+            return .started(IntelligenceStream(kind: kind, text: relay.stream))
+        case .empty:
+            return .failed(describe(IntelligenceError.malformedResponse))
+        case .failed(let reason):
+            return .failed(reason)
+        }
+    }
+
     /// Runs an operation that needs a digest, building one per tier's budget.
     private func run<Value: Sendable & Hashable>(
         detail: PullRequestDetail,
@@ -249,7 +494,7 @@ struct IntelligenceRouter: Sendable {
                     )
                 )
             } catch {
-                lastFailure = describe(error)
+                lastFailure = IntelligenceRouter.describe(error)
             }
         }
 
@@ -264,7 +509,7 @@ struct IntelligenceRouter: Sendable {
                     )
                 )
             } catch {
-                lastFailure = describe(error)
+                lastFailure = IntelligenceRouter.describe(error)
             }
         } else if lastFailure == nil {
             return .unavailable(
@@ -276,7 +521,7 @@ struct IntelligenceRouter: Sendable {
         return .failed(lastFailure ?? String(localized: "No intelligence provider is available."))
     }
 
-    private func describe(_ error: any Error) -> String {
+    private static func describe(_ error: any Error) -> String {
         (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
     }
 }

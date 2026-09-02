@@ -9,6 +9,11 @@ struct AnthropicProvider: IntelligenceProvider {
     /// The token budget digests are built with for this tier.
     static let budget = TokenBudget.cloud
 
+    /// The one endpoint this tier talks to (`CONTRIBUTING.md`'s host list).
+    ///
+    /// Named once so the streaming and the non-streaming path cannot drift onto two hosts.
+    static let messagesURL = "https://api.anthropic.com/v1/messages"
+
     /// The default model: cheap, fast, and big enough for a whole pull request.
     static let defaultModel = "claude-haiku-4-5"
 
@@ -69,6 +74,45 @@ struct AnthropicProvider: IntelligenceProvider {
         return try IntelligenceJSON.draft(from: text)
     }
 
+    func streamReviewSummaryDraft(
+        _ request: ReviewSummaryDraftRequest
+    ) -> AsyncThrowingStream<String, Error> {
+        streamDraft(
+            system: IntelligencePrompt.draftSummaryInstructions + "\n"
+                + IntelligencePrompt.draftPlainTextContract,
+            user: IntelligencePrompt.body(for: request)
+        )
+    }
+
+    func streamInlineCommentDraft(
+        _ request: InlineCommentDraftRequest
+    ) -> AsyncThrowingStream<String, Error> {
+        streamDraft(
+            system: IntelligencePrompt.draftInlineCommentInstructions + "\n"
+                + IntelligencePrompt.draftPlainTextContract,
+            user: IntelligencePrompt.body(for: request)
+        )
+    }
+
+    /// One streamed drafting request.
+    ///
+    /// The last element is put through ``IntelligenceJSON/draft(from:)`` even though the prompt
+    /// asked for plain text, for the same reason the non-streaming path is lenient: a model that
+    /// wrapped the answer in the JSON envelope anyway has still done the work, and the reviewer
+    /// should end up with the draft rather than with the machinery around it.
+    private func streamDraft(system: String, user: String) -> AsyncThrowingStream<String, Error> {
+        let source = streamComplete(system: system, user: user)
+        return IntelligenceStreaming.stream { continuation in
+            var answer = ""
+            for try await text in source {
+                answer = text
+                continuation.yield(text)
+            }
+            let finished = try IntelligenceJSON.draft(from: answer)
+            if finished != answer { continuation.yield(finished) }
+        }
+    }
+
     /// The JSON body one completion request sends.
     ///
     /// Extracted so the encoding — the `max_tokens` key, the system prompt sent as its own field
@@ -77,16 +121,91 @@ struct AnthropicProvider: IntelligenceProvider {
     /// - Parameters:
     ///   - system: The system prompt.
     ///   - user: The user message.
+    ///   - streaming: Whether to ask the endpoint for a streamed answer. The key is omitted
+    ///     entirely when this is `false`.
     /// - Returns: The encoded request body.
-    func completionRequestBody(system: String, user: String) throws -> Data {
+    func completionRequestBody(
+        system: String,
+        user: String,
+        streaming: Bool = false
+    ) throws -> Data {
         try JSONEncoder().encode(
             RequestBody(
                 model: model,
                 maxTokens: maxTokens,
                 system: system,
-                messages: [RequestBody.Message(role: "user", content: user)]
+                messages: [RequestBody.Message(role: "user", content: user)],
+                // Absent rather than `false` on the non-streaming path: the key is only
+                // meaningful when it is `true`, and an endpoint proxy that copies the body
+                // should not have to reason about a flag Shepherd did not need to send.
+                stream: streaming ? true : nil
             )
         )
+    }
+
+    /// Sends one **streaming** completion request, yielding the answer as it grows.
+    ///
+    /// Every element is the whole answer so far: the wire carries `content_block_delta` deltas
+    /// (parsed by the pure ``ShepherdCore/AnthropicStreamDecoder``) and the accumulation happens
+    /// here, where the wire shape is known, rather than in the UI where it would have to be
+    /// reimplemented per provider.
+    /// - Parameters:
+    ///   - system: The system prompt.
+    ///   - user: The user message.
+    /// - Returns: A stream of ever-longer answers.
+    func streamComplete(system: String, user: String) -> AsyncThrowingStream<String, Error> {
+        // Captured as one value rather than reaching for properties inside an escaping closure:
+        // the provider is a `Sendable` struct, so this is a copy and there is nothing to race on.
+        let provider = self
+        return IntelligenceStreaming.stream { continuation in
+            guard !provider.apiKey.isEmpty else {
+                throw IntelligenceError.notConfigured("API key")
+            }
+            guard let url = URL(string: AnthropicProvider.messagesURL) else {
+                throw IntelligenceError.notConfigured("endpoint")
+            }
+
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue(provider.apiKey, forHTTPHeaderField: "x-api-key")
+            request.setValue("2023-06-01", forHTTPHeaderField: "anthropic-version")
+            request.setValue("application/json", forHTTPHeaderField: "content-type")
+            request.setValue("text/event-stream", forHTTPHeaderField: "accept")
+            request.httpBody = try provider.completionRequestBody(
+                system: system,
+                user: user,
+                streaming: true
+            )
+
+            let (bytes, response) = try await URLSession.shared.bytes(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard (200..<300).contains(status) else {
+                throw IntelligenceError.http(
+                    status: status,
+                    message: AnthropicProvider.errorMessage(
+                        in: await IntelligenceStreaming.failureBody(bytes)
+                    )
+                )
+            }
+
+            var parser = ServerSentEventParser()
+            var answer = ""
+            for try await line in bytes.lines {
+                guard let event = parser.consume(line) else { continue }
+                // A streamed request can answer 200 and then fail, which is the one failure a
+                // status check cannot see.
+                if let message = AnthropicStreamDecoder.errorMessage(in: event) {
+                    throw IntelligenceError.http(status: status, message: message)
+                }
+                guard let delta = AnthropicStreamDecoder.textDelta(in: event) else { continue }
+                answer += delta
+                continuation.yield(answer)
+            }
+            _ = parser.finish()
+            guard !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw IntelligenceError.malformedResponse
+            }
+        }
     }
 
     /// Sends one non-streaming completion request.
@@ -96,7 +215,7 @@ struct AnthropicProvider: IntelligenceProvider {
     /// - Returns: The concatenated text blocks of the answer.
     func complete(system: String, user: String) async throws -> String {
         guard !apiKey.isEmpty else { throw IntelligenceError.notConfigured("API key") }
-        guard let url = URL(string: "https://api.anthropic.com/v1/messages") else {
+        guard let url = URL(string: AnthropicProvider.messagesURL) else {
             throw IntelligenceError.notConfigured("endpoint")
         }
 
@@ -151,12 +270,14 @@ struct AnthropicProvider: IntelligenceProvider {
         var maxTokens: Int
         var system: String
         var messages: [Message]
+        var stream: Bool?
 
         enum CodingKeys: String, CodingKey {
             case model
             case maxTokens = "max_tokens"
             case system
             case messages
+            case stream
         }
     }
 
