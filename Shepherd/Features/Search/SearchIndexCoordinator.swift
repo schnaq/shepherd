@@ -192,7 +192,7 @@ final class SearchIndexCoordinator {
         guard settings.semanticSearchEnabled else {
             passTask?.cancel()
             passTask = nil
-            pendingRows = nil
+            pendingRows = [:]
             indexFromRowsOnly(rows)
             return
         }
@@ -223,7 +223,7 @@ final class SearchIndexCoordinator {
     func rebuild(database: DatabaseManager) async {
         passTask?.cancel()
         passTask = nil
-        pendingRows = nil
+        pendingRows = [:]
         documents = [:]
         vectors = [:]
         storedEntries = [:]
@@ -255,7 +255,7 @@ final class SearchIndexCoordinator {
     func disable(database: DatabaseManager?) async {
         passTask?.cancel()
         passTask = nil
-        pendingRows = nil
+        pendingRows = [:]
         vectors = [:]
         storedEntries = [:]
         hasReadStoredEntries = false
@@ -275,7 +275,7 @@ final class SearchIndexCoordinator {
     func reset() {
         passTask?.cancel()
         passTask = nil
-        pendingRows = nil
+        pendingRows = [:]
         documents = [:]
         vectors = [:]
         summaries = [:]
