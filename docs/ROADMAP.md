@@ -239,7 +239,10 @@ orchestrator (non-goal, below): Shepherd *assigns* and *watches*, the agent stil
 
 What the 2026-09-02 interview kept from the Apple-intelligence brainstorm for *after* v1. Every
 item is tier 2 (on-device) first; a tier-3 variant only where the rules of ADR 0007 already allow
-that content to travel, and never for anything that runs unattended.
+that content to travel, and never for anything that runs unattended. The engineering plan —
+groundwork, delivery order, APIs, budgets, guardrails and the ADRs each item needs — is
+[`docs/plans/apple-intelligence-v2.md`](plans/apple-intelligence-v2.md); the list below stays the
+short form.
 
 - [ ] "Why is CI red?" — Foundation Models **tool calling** on the review screen: the model gets
       three read-only tools (the failing check runs, the tail of a job log, the diff of one file)
