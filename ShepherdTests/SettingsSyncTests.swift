@@ -229,7 +229,10 @@ final class SettingsSyncTests: XCTestCase {
             cloudProviderKind: .openAICompatible,
             anthropicModel: "some-model",
             openAICompatibleBaseURL: "https://api.example.eu/v1",
-            openAICompatibleModel: "some-open-model"
+            openAICompatibleModel: "some-open-model",
+            // Non-default means *off* here: structured triage ships on, because it is on-device
+            // and costs nothing but CPU (plan §0.5).
+            structuredTriageEnabled: false
         )
         var cli = AgentCLIConfiguration()
         cli.kind = .custom(commandTemplate: "/usr/local/bin/my-agent --task {prompt}")
@@ -690,6 +693,9 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertTrue(document.search.isSemanticIndexEnabled)
         // Same for the Spotlight export, one ADR later (0021).
         XCTAssertTrue(document.search.isSpotlightExportEnabled)
+        // And the third such default: a document written before structured triage existed says
+        // nothing about it, which must not read as "switched off" either (plan §0.5).
+        XCTAssertTrue(document.intelligence.structuredTriageEnabled)
         // A document written before diagnostics existed leaves them off rather than on.
         XCTAssertEqual(document.diagnostics, SyncedSettingsDocument.DiagnosticsGroup())
         XCTAssertFalse(document.diagnostics.isEnabled)
@@ -1042,6 +1048,9 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertEqual(settings.openAICompatiblePreset, .custom)
         XCTAssertEqual(settings.openAICompatibleModel, "some-open-model")
         XCTAssertEqual(settings.anthropicModel, "some-model")
+        // The switch travels; the verdicts it produces never do — they are rebuildable device
+        // state, like the search vectors (plan §3.A).
+        XCTAssertFalse(settings.structuredTriageEnabled)
         XCTAssertEqual(settings.agentCLI.maxTurns, 42)
         XCTAssertNil(settings.agentCLI.maxBudgetUSD)
         XCTAssertEqual(settings.agentCLI.permissionMode, .plan)
@@ -1278,6 +1287,9 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertTrue(document.search.isSemanticIndexEnabled)
         // Same for the Spotlight export, one ADR later (0021).
         XCTAssertTrue(document.search.isSpotlightExportEnabled)
+        // And for structured triage, which is on-device for the same reason (plan §0.5) — even
+        // though nothing classifies anything until the tiers are switched on.
+        XCTAssertTrue(document.intelligence.structuredTriageEnabled)
     }
 
     // MARK: - The model's flow

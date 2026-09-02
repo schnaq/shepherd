@@ -102,6 +102,8 @@ final class AppSettings {
         self.anthropicModel = defaults.string(forKey: Keys.anthropicModel) ?? "claude-haiku-4-5"
         self.openAICompatibleBaseURL = defaults.string(forKey: Keys.openAIBaseURL) ?? ""
         self.openAICompatibleModel = defaults.string(forKey: Keys.openAIModel) ?? ""
+        self.structuredTriageEnabled = defaults
+            .object(forKey: Keys.structuredTriage) as? Bool ?? true
         self.groupBy = Self.read(defaults, Keys.groupBy, default: InboxFacet.provenance)
         self.sortOrder = Self.read(defaults, Keys.sortOrder, default: InboxSortOrder.priority)
         self.defaultMergeMethod = Self.read(
@@ -289,6 +291,30 @@ final class AppSettings {
     func applyEndpointPreset(_ preset: IntelligenceEndpointPreset) {
         guard let baseURL = preset.baseURL else { return }
         openAICompatibleBaseURL = baseURL
+    }
+
+    /// Whether the on-device classifier may give each pull request a kind and a risk (ADR 0007,
+    /// plan §3.A).
+    ///
+    /// **On on a fresh install**, like the search index and the Spotlight export and for the same
+    /// reason: the classification is on-device work over rows the sweep already wrote, it makes
+    /// no request, and there is no code path from a verdict to a button — it sorts the inbox and
+    /// fills a facet.
+    ///
+    /// The switch is not the whole condition. The classifier additionally requires the tiers to
+    /// be on at all (``intelligenceMode`` other than ``IntelligenceMode/off``), because there is
+    /// no model to ask otherwise; the plan words the default as "follows `intelligenceMode !=
+    /// .off`", and it is stored as a plain `Bool` rather than derived from the mode so that
+    /// switching the tiers on does not silently re-enable a classifier the user turned off. With
+    /// the mode off the toggle is simply inert, and the inbox falls back to the tier-1 risk
+    /// hints, which are always there.
+    ///
+    /// **Nothing reads this yet.** The classifier, its `triage_verdicts` table and the facet are
+    /// Sprint 1; the setting ships first so it travels between Macs (ADR 0014) and is translated
+    /// (ADR 0022) in the same commit as the copy that describes it, rather than in the commit
+    /// that is busy building a classifier.
+    var structuredTriageEnabled: Bool {
+        didSet { defaults.set(structuredTriageEnabled, forKey: Keys.structuredTriage) }
     }
 
     // MARK: - Inbox
@@ -711,6 +737,7 @@ final class AppSettings {
         static let anthropicModel = "intelligence.anthropic.model"
         static let openAIBaseURL = "intelligence.openaiCompatible.baseURL"
         static let openAIModel = "intelligence.openaiCompatible.model"
+        static let structuredTriage = "intelligence.structuredTriageEnabled"
         static let groupBy = "inbox.groupBy"
         static let sortOrder = "inbox.sortOrder"
         static let defaultMergeMethod = "review.defaultMergeMethod"

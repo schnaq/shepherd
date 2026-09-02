@@ -165,6 +165,15 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         var openAICompatibleBaseURL: String
         /// The model name sent to the OpenAI-compatible endpoint.
         var openAICompatibleModel: String
+        /// Whether the on-device classifier may give each pull request a kind and a risk.
+        ///
+        /// A field of this group rather than of ``SearchGroup``, even though it is as on-device
+        /// as the search index is, because it is the one on-device feature that *needs a model*:
+        /// with ``mode`` off there is nothing to ask, so the two settings are read together and
+        /// belong together. What travels is the switch; the verdicts do not — they are derived
+        /// from local rows and re-derived when the pull request changes, exactly like the search
+        /// vectors (ADR 0019's argument, applied to a second cache).
+        var structuredTriageEnabled: Bool
 
         /// Creates the group.
         init(
@@ -172,18 +181,21 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
             cloudProviderKind: CloudProviderKind = .anthropic,
             anthropicModel: String = "",
             openAICompatibleBaseURL: String = "",
-            openAICompatibleModel: String = ""
+            openAICompatibleModel: String = "",
+            structuredTriageEnabled: Bool = true
         ) {
             self.mode = mode
             self.cloudProviderKind = cloudProviderKind
             self.anthropicModel = anthropicModel
             self.openAICompatibleBaseURL = openAICompatibleBaseURL
             self.openAICompatibleModel = openAICompatibleModel
+            self.structuredTriageEnabled = structuredTriageEnabled
         }
 
         private enum CodingKeys: String, CodingKey {
             case mode, cloudProviderKind, anthropicModel
             case openAICompatibleBaseURL, openAICompatibleModel
+            case structuredTriageEnabled
         }
 
         init(from decoder: any Decoder) throws {
@@ -196,6 +208,12 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
             anthropicModel = container.syncedValue(.anthropicModel, default: "")
             openAICompatibleBaseURL = container.syncedValue(.openAICompatibleBaseURL, default: "")
             openAICompatibleModel = container.syncedValue(.openAICompatibleModel, default: "")
+            // Defaults to `true`, matching ``AppSettings/structuredTriageEnabled``: an upload
+            // from a build that predates this field must not read as "the user switched it off".
+            structuredTriageEnabled = container.syncedValue(
+                .structuredTriageEnabled,
+                default: true
+            )
         }
     }
 

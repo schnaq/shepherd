@@ -2271,6 +2271,16 @@
         }
       }
     },
+    "Classifies each pull request on this Mac — what kind of change it is and how much it can hurt, with a one-sentence reason — so the inbox can sort and filter by it. Nothing leaves this Mac, and nothing acts on it: it never approves, merges or comments.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ordnet jeden Pull Request auf diesem Mac ein — welche Art von Änderung er ist und wie viel Schaden er anrichten kann, mit einer Begründung in einem Satz — damit die Inbox danach sortieren und filtern kann. Nichts verlässt diesen Mac, und nichts handelt danach: Es approvt nichts, mergt nichts und kommentiert nichts."
+          }
+        }
+      }
+    },
     "Claude Code": {
       "localizations": {
         "de": {
@@ -3767,6 +3777,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Er wird ausschließlich aus der lokalen Datenbank gebaut — kein GitHub-Aufruf, keine KI, nichts wird irgendwohin gesendet —, denn er läuft, während du nicht hinsiehst. War dein Mac zu dieser Zeit im Ruhezustand, kommt der Digest beim Aufwachen, und nur wenn es noch derselbe Tag ist. Eine ruhige Nacht ergibt gar nichts."
+          }
+        }
+      }
+    },
+    "It needs the on-device model, so with the provider above set to Off nothing is classified. The inbox keeps the risk hints it works out without a model — “touches auth”, “deletes tests” — either way.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dafür braucht es das On-Device-Modell: Steht der Anbieter oben auf „Aus“, wird nichts eingeordnet. Die Risikohinweise, die Shepherd ohne Modell ermittelt — „betrifft Auth-Code“, „löscht Tests“ —, bleiben so oder so."
           }
         }
       }
@@ -6191,6 +6211,16 @@
         }
       }
     },
+    "STRUCTURED TRIAGE": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "STRUKTURIERTE TRIAGE"
+          }
+        }
+      }
+    },
     "SUMMARY": {
       "localizations": {
         "de": {
@@ -7007,6 +7037,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Der Agent wird gestoppt…"
+          }
+        }
+      }
+    },
+    "Structured triage": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Strukturierte Triage"
           }
         }
       }
@@ -8297,6 +8337,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nur an Wochentagen"
+          }
+        }
+      }
+    },
+    "When the model looks something up, it can only read — the checks, a log, a file. It cannot comment, approve, merge or start an agent.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wenn das Modell etwas nachschaut, kann es nur lesen — die Checks, ein Log, eine Datei. Es kann nicht kommentieren, nichts approven, nichts mergen und keinen Agenten starten."
           }
         }
       }

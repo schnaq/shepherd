@@ -76,7 +76,11 @@ enum SettingsSyncApplier {
             cloudProviderKind: settings.cloudProviderKind,
             anthropicModel: settings.anthropicModel,
             openAICompatibleBaseURL: settings.openAICompatibleBaseURL,
-            openAICompatibleModel: settings.openAICompatibleModel
+            openAICompatibleModel: settings.openAICompatibleModel,
+            // The switch, never the verdicts: a classification is derived from local rows and is
+            // re-derived when the pull request changes, so it is device state like the search
+            // vectors (plan §3.A, ADR 0019's argument).
+            structuredTriageEnabled: settings.structuredTriageEnabled
         )
         document.delegation = SyncedSettingsDocument.DelegationGroup(
             agentCLI: settings.agentCLI,
@@ -190,6 +194,10 @@ enum SettingsSyncApplier {
         // so there is nothing further to apply here.
         settings.openAICompatibleBaseURL = document.intelligence.openAICompatibleBaseURL
         settings.openAICompatibleModel = document.intelligence.openAICompatibleModel
+        // Only the flag is applied, and nothing else has to happen: nothing reads it yet, and
+        // when the classifier exists it will re-consider the inbox on the next indexing pass —
+        // the same one route the search index takes (ADR 0019).
+        settings.structuredTriageEnabled = document.intelligence.structuredTriageEnabled
 
         settings.agentCLI = document.delegation.agentCLI
         settings.localCheckouts = document.delegation.localCheckouts

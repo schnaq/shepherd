@@ -845,6 +845,8 @@ struct IntelligenceSettingsTab: View {
 
             semanticSearchCard
 
+            structuredTriageCard
+
             spotlightCard
 
             Card {
@@ -852,6 +854,16 @@ struct IntelligenceSettingsTab: View {
                     CardTitle(String(localized: "WHAT AI NEVER DOES"))
                     Text(String(
                         localized: "AI output is only ever shown as a dismissible hint. Shepherd never submits a review, approves, merges or comments on your behalf."
+                    ))
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    // The second sentence is about the *tools* a model may call (plan §0.3): the
+                    // registry is three reads, fixed at compile time, and the promise above would
+                    // be worth less if the model could look things up without the reader knowing
+                    // what "look up" is allowed to mean.
+                    Text(String(
+                        localized: "When the model looks something up, it can only read — the checks, a log, a file. It cannot comment, approve, merge or start an agent."
                     ))
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textSecondary)
@@ -952,6 +964,55 @@ struct IntelligenceSettingsTab: View {
         }
         return String(
             localized: "\(status.embeddedCount) of \(status.documentCount) pull requests indexed · \(sizeText) · last updated \(RelativeDate.long(last))."
+        )
+    }
+
+    // MARK: - Structured triage (plan §3.A)
+
+    /// The one toggle the on-device classifier needs.
+    ///
+    /// Directly under the search card because it is the same promise about the same kind of work:
+    /// on-device, over rows Shepherd already has, going nowhere. The difference is stated rather
+    /// than implied — this one *needs a model*, so with the provider above switched off it can do
+    /// nothing, and the card says so instead of leaving a toggle that looks broken.
+    ///
+    /// **Nothing consumes the switch yet.** The classifier, the `triage_verdicts` table and the
+    /// inbox facet are Sprint 1 (plan §3.A); the setting and its copy ship first so that they
+    /// travel between Macs and are translated in the commit that introduces them, rather than in
+    /// the commit that is busy building a classifier. So the copy is honest about what the switch
+    /// governs rather than about what it does today, and the second sentence names the fallback
+    /// that is already there — the tier-1 risk hints, which need no model at all.
+    private var structuredTriageCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 8) {
+                CardTitle(String(localized: "STRUCTURED TRIAGE"))
+                Toggle(
+                    String(localized: "Structured triage"),
+                    isOn: structuredTriageBinding
+                )
+                Text(String(
+                    localized: "Classifies each pull request on this Mac — what kind of change it is and how much it can hurt, with a one-sentence reason — so the inbox can sort and filter by it. Nothing leaves this Mac, and nothing acts on it: it never approves, merges or comments."
+                ))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                Text(String(
+                    localized: "It needs the on-device model, so with the provider above set to Off nothing is classified. The inbox keeps the risk hints it works out without a model — “touches auth”, “deletes tests” — either way."
+                ))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var structuredTriageBinding: Binding<Bool> {
+        Binding(
+            get: { environment.settings.structuredTriageEnabled },
+            // Nothing is applied here, exactly like the two switches above: the classifier reads
+            // the flag when it exists, so the toggle and an arriving settings document reach it
+            // through one route rather than two.
+            set: { environment.settings.structuredTriageEnabled = $0 }
         )
     }
 
