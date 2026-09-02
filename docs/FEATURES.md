@@ -105,6 +105,16 @@ The same three sentences go out twenty times a week — "please add a test for t
 generated, keep it out of the diff" — so save them once and drop them into any comment field with
 one click: inline comments, the review summary, thread replies.
 
+When you reach for the menu on a thread — a reply in the conversation panel, or a comment on a line
+that already has one — the two replies that fit *that* conversation are repeated at the top under
+**Suggested**, before the divider and your full list. It is the same on-device sentence embedding
+⌘K search uses ([ADR 0019](adr/0019-semantic-search-on-device-embeddings.md)): no language model,
+no setting, no network, and nothing that could reach an API key. A reply body is embedded once and
+cached until you edit it; the thread is embedded when you point at the button, never while you
+type. And it is a shortlist, not an answer — nothing is inserted until you click a row, a poor
+match is left out rather than padded to two, and on a Mac without the embedding model (or with
+fewer than three saved replies) the menu is exactly the plain list it has always been.
+
 And a repository (or a whole owner, `schnaq/*`) can carry a summary template, so a new review opens
 with your team's checklist already in it. Matching is exact-beats-wildcard, longer wildcard beats
 shorter, then list order. It only ever fills an *empty* review: a pull request you have written

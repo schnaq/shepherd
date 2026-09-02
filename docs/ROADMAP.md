@@ -260,7 +260,7 @@ short form.
       instead of after a spinner, through `LanguageModelSession.streamResponse` for tier 2 and the
       SSE variants of the tier-3 providers; still labelled until edited, still asks before
       replacing anything typed
-- [ ] Saved-reply suggestion — when the reviewer starts a comment, the two saved replies whose
+- [x] Saved-reply suggestion — when the reviewer starts a comment, the two saved replies whose
       embedding (ADR 0019's on-device model, cached per snippet) is nearest to the thread's text are
       offered in the `text.badge.plus` menu first. No new model, no new setting, and nothing
       inserted uninvited

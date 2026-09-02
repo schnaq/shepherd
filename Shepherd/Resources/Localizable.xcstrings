@@ -7091,6 +7091,16 @@
         }
       }
     },
+    "Suggested": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorschläge"
+          }
+        }
+      }
+    },
     "Sync": {
       "localizations": {
         "de": {

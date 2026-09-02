@@ -101,9 +101,20 @@ struct SubmitReviewSheet: View {
                             requestSummaryDraft()
                         }
                     }
-                    SavedReplyMenu(replies: model.settings.usableSavedReplies) { snippet in
-                        model.summaryText = SavedReply.inserting(snippet, into: model.summaryText)
-                    }
+                    // No `suggestedIDs` here, and that is the rule rather than an omission: a
+                    // review summary has no thread behind it, so there is nothing to rank the
+                    // replies against. Ranking them against the pull request's diff instead would
+                    // be a different feature with a different budget, and guessing from an empty
+                    // context is exactly the "confidently wrong" answer ADR 0019 refuses to give.
+                    SavedReplyMenu(
+                        replies: model.settings.usableSavedReplies,
+                        onInsert: { snippet in
+                            model.summaryText = SavedReply.inserting(
+                                snippet,
+                                into: model.summaryText
+                            )
+                        }
+                    )
                 }
                 ComposerTextEditor(text: summaryBinding, height: 130)
                 AIDraftStatusView(
@@ -266,6 +277,7 @@ struct SubmitReviewSheet: View {
 /// Text entry never happens inside the webview — that is the bridge's rule.
 struct InlineCommentComposer: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppEnvironment.self) private var environment
     /// The review model.
     let model: ReviewModel
     /// Where the comment is anchored.
@@ -275,6 +287,10 @@ struct InlineCommentComposer: View {
     @State private var errorMessage: String?
     /// The comment field's AI-drafting state (ADR 0007 amendment).
     @State private var aiDraft = AIDraftFieldState()
+    /// The saved replies that fit the conversation already on this line, best first.
+    @State private var suggestedReplyIDs: [SavedReply.ID] = []
+    /// Whether the embeddings for this composer have already been spent.
+    @State private var hasRequestedSuggestions = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -295,9 +311,14 @@ struct InlineCommentComposer: View {
                         requestCommentDraft()
                     }
                 }
-                SavedReplyMenu(replies: model.settings.usableSavedReplies) { snippet in
-                    commentText = SavedReply.inserting(snippet, into: commentText)
-                }
+                SavedReplyMenu(
+                    replies: model.settings.usableSavedReplies,
+                    suggestedIDs: suggestedReplyIDs,
+                    onInsert: { snippet in
+                        commentText = SavedReply.inserting(snippet, into: commentText)
+                    },
+                    onWillOpen: { requestSavedReplySuggestions() }
+                )
             }
 
             ComposerTextEditor(text: $commentText, height: 120)
@@ -352,6 +373,47 @@ struct InlineCommentComposer: View {
         }
         .onChange(of: commentText) { _, text in
             aiDraft.fieldChanged(to: text)
+        }
+    }
+
+    // MARK: - Saved-reply suggestions
+
+    /// The conversation already anchored to this line, oldest comment first.
+    ///
+    /// The published threads at the same path and line, and nothing else. A brand-new comment on
+    /// an untouched line therefore has no context at all — and gets the plain menu, which is the
+    /// honest answer: the alternative would be ranking the reviewer's saved replies against a
+    /// diff, which is a different feature with a different budget.
+    ///
+    /// The reviewer's own half-typed text is deliberately *not* in here. It changes on every
+    /// keystroke, and a suggestion that reshuffled itself while somebody was writing would be
+    /// competing with them for the same two lines of the menu.
+    private var threadCommentBodies: [String] {
+        guard let threads = model.detail?.threads else { return [] }
+        return threads
+            .filter { $0.path == request.path && $0.line == request.line }
+            .flatMap { thread in thread.comments.map(\.bodyMarkdown) }
+    }
+
+    /// Spends the embeddings that fill the menu's "Suggested" section, at most once per composer.
+    ///
+    /// Called from the menu's hover, so nothing is embedded for a reviewer who never reaches for
+    /// a saved reply. The guard is what makes a pointer crossing the button five times cost one
+    /// thread vector: the thread cannot change while this sheet is open, so a second answer would
+    /// be the first one again.
+    private func requestSavedReplySuggestions() {
+        // Read out of the view before the task, so the closure captures values rather than the
+        // view: `Sendable` arrays of `Sendable` values and one `@MainActor` coordinator.
+        let comments = threadCommentBodies
+        guard !hasRequestedSuggestions, !comments.isEmpty else { return }
+        hasRequestedSuggestions = true
+        let replies = model.settings.usableSavedReplies
+        let coordinator = environment.savedReplySuggestions
+        Task {
+            suggestedReplyIDs = await coordinator.suggestions(
+                forThreadComments: comments,
+                replies: replies
+            )
         }
     }
 
@@ -458,6 +520,10 @@ struct ThreadPopover: View {
     /// The popover's own translation cache (ADR 0020), so a translated comment stays translated
     /// while the reviewer scrolls the thread — and is gone when the popover is.
     @State private var translations = TranslationCoordinator()
+    /// The saved replies that fit this thread, best first, or empty for the plain menu.
+    @State private var suggestedReplyIDs: [SavedReply.ID] = []
+    /// Whether the embeddings for this thread have already been spent.
+    @State private var hasRequestedSuggestions = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -477,6 +543,13 @@ struct ThreadPopover: View {
         }
         .frame(width: 380)
         .background(Theme.panel)
+        // The popover's content keeps its `@State` when the reviewer clicks a different comment
+        // card while it is open, so the suggestions have to be told that the conversation under
+        // them changed — otherwise the second thread would be offered the first thread's replies.
+        .onChange(of: thread.id) { _, _ in
+            suggestedReplyIDs = []
+            hasRequestedSuggestions = false
+        }
     }
 
     private var header: some View {
@@ -520,9 +593,11 @@ struct ThreadPopover: View {
                     )
                 SavedReplyMenu(
                     replies: environment.settings.usableSavedReplies,
+                    suggestedIDs: suggestedReplyIDs,
                     onInsert: { snippet in
                         replyText = SavedReply.inserting(snippet, into: replyText)
                     },
+                    onWillOpen: { requestSavedReplySuggestions() },
                     height: 30
                 )
             }
@@ -581,6 +656,27 @@ struct ThreadPopover: View {
 
     private var replyTargetID: Int? {
         thread.comments.compactMap(\.databaseID).last
+    }
+
+    /// Spends the embeddings that fill the menu's "Suggested" section, at most once per popover.
+    ///
+    /// This is the surface the feature was designed for: a thread has a conversation in it, so
+    /// there is something real to rank against. Called from the menu's hover, so a reviewer who
+    /// only types a reply never pays for a vector, and guarded so that a pointer crossing the
+    /// button repeatedly costs one.
+    private func requestSavedReplySuggestions() {
+        guard !hasRequestedSuggestions else { return }
+        hasRequestedSuggestions = true
+        // Read out of the view before the task, so the closure captures values rather than views.
+        let comments = thread.comments.map(\.bodyMarkdown)
+        let replies = environment.settings.usableSavedReplies
+        let coordinator = environment.savedReplySuggestions
+        Task {
+            suggestedReplyIDs = await coordinator.suggestions(
+                forThreadComments: comments,
+                replies: replies
+            )
+        }
     }
 
     private func sendReply() async {

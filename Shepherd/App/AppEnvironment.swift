@@ -95,6 +95,15 @@ final class AppEnvironment {
     /// Created inert: it holds no corpus and loads no model until the first inbox observation
     /// hands it rows, and with the setting off it never reads a diff or spends an embedding.
     let search: SearchIndexCoordinator
+    /// Ranks the saved replies against the thread a reviewer is answering, so the two that fit
+    /// are at the top of the insert menu (ADR 0019's embedder, reused).
+    ///
+    /// Created inert, and it stays inert for a reviewer who never reaches for a saved reply: it
+    /// loads no model and holds no vector until a menu is about to open on a thread. Owned here
+    /// rather than by a screen because the cache is one vector per saved-reply *body* — the
+    /// replies are the same in every composer in every window, and a per-screen cache would
+    /// re-embed them each time a popover opened.
+    let savedReplySuggestions = SavedReplySuggestionCoordinator()
     /// Keeps the pull requests in the inbox visible to macOS Spotlight (ADR 0021).
     ///
     /// Created inert, like the search index beside it: it writes nothing until the first inbox

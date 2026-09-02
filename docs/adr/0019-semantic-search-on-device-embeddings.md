@@ -279,3 +279,29 @@ symmetry.
   `SearchDocument.schemaVersion`, which re-embeds the inbox by itself. Adding a *provider* for
   embeddings that is not on-device needs a new ADR, and it would have to overturn this one's
   central claim rather than quietly widen it.
+
+## Amendment (2026-09-02): saved-reply suggestion reuses the embedder
+
+The insert menu on a thread reply or an inline comment (`text.badge.plus`) now repeats the two
+saved replies nearest to the thread's conversation at the top, under a **Suggested** header and a
+divider, before the user's own full list. It is the first feature outside `Features/Search/` to
+spend an embedding, and it is deliberately a *reuse* rather than a second system: the same
+`EmbeddingProviding` seam, the same `NaturalLanguageEmbedder` actor, the same
+`SearchVector.cosineSimilarity`. No language model, no `IntelligenceRouter`, no setting, no
+migration — the vectors live in memory for the life of the app, keyed by a hash of the reply
+*body* (the `id` is stable across edits on purpose, so keying on it would keep ranking an edited
+reply as the text it used to be). This document's structural rule holds unchanged: no type in the
+feature takes a base URL or a key, so the host list in `CONTRIBUTING.md` is untouched.
+
+Three of the decisions above are re-applied at different numbers. The **cut-off** is the "never
+confidently wrong" rule at 0.45 rather than the palette's 0.35, because the candidates are a
+handful of short review-prose snippets in one voice instead of hundreds of mixed-register
+documents, so their cosines sit higher and closer together and a relative "best two" would always
+have an answer; below three saved replies no shortlist is offered at all, since "Suggested" would
+be the whole list with a header on it. The **byte budget** is `SearchDocument`'s discipline
+pointed the other way — `SavedReplyThreadBudget` caps a thread at ~2 KB with a per-comment cut and
+fills it from the *newest* comment backwards, because what a reviewer is answering is the end of a
+conversation. The **degraded state** is one code path once more: no model, no thread, too few
+replies or nothing above the floor all produce an empty list, and an empty list means the plain
+menu Shepherd already shipped. Nothing is inserted either — the only output is an ordering, and
+the click on a menu row is still the reviewer's.
