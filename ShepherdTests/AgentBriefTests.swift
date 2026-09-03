@@ -276,7 +276,7 @@ final class AgentBriefTests: XCTestCase {
 
         // The instructions carry the product rule and the reviewer's language.
         let instructions = IntelligencePrompt.agentBriefInstructions
-        XCTAssertTrue(instructions.contains("start the agent themselves"))
+        XCTAssertTrue(instructions.contains("starts the agent themselves"))
         XCTAssertTrue(instructions.contains(IntelligencePrompt.answerLanguageName))
         XCTAssertFalse(IntelligencePrompt.answerLanguageName.isEmpty)
     }

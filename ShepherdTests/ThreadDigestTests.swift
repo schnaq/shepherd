@@ -275,18 +275,19 @@ final class ThreadDigestTests: XCTestCase {
         XCTAssertFalse(reason.isEmpty)
     }
 
-    func testABudgetRefusalReachesTheCardRatherThanBeingRetried() async {
+    func testABudgetRefusalReachesTheCardAndTheButtonMayAskAgain() async {
         let fake = FakeDigester(answer: .failure(.digestTooLarge(tokens: 9_000, limit: 6_000)))
         let coordinator = ThreadDigestCoordinator(digester: fake)
         let thread = comments(8)
 
         await coordinator.digest(for: threadID, comments: thread)
-        // Asked again with the same thread: the failure is cached like an answer, so a reviewer
-        // cannot spend the battery re-asking a question whose answer cannot change.
+        // Asked again with the same thread: a failure is not cached like an answer — the button
+        // stays, like every other drafting button, so the second press is a second run. Only a
+        // finished digest is final for its content.
         await coordinator.digest(for: threadID, comments: thread)
 
         let calls = await fake.callCount
-        XCTAssertEqual(calls, 1)
+        XCTAssertEqual(calls, 2)
         guard let state = coordinator.state(for: threadID, comments: thread),
             case .failed(let reason) = state
         else { return XCTFail("the refusal is shown") }

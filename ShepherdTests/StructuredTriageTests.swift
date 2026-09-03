@@ -242,7 +242,8 @@ final class StructuredTriageTests: XCTestCase {
         XCTAssertEqual(coordinator.verdict(for: "PR_2")?.kind, .dependencyBump)
 
         var edited = rows
-        edited[1].title = "Fix the auth middleware after the bump"
+        // No "bump" in the new title: the fake answers on the first word it recognises.
+        edited[1].title = "Fix the auth middleware regression"
         try await database.savePullRequestSummaries(edited)
         await classify(coordinator, rows: edited, database: database)
 
