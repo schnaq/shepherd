@@ -665,10 +665,12 @@ final class IssueMigrationTests: XCTestCase {
         try await database.writer.write { db in
             try PullRequestClosingIssueRecord(
                 prID: "PR_1",
-                issueRepoFullName: PersistenceFixtures.repo.fullName,
-                issueNumber: 42,
-                issueTitle: "Login times out after the token refresh",
-                issueState: "open",
+                reference: LinkedIssueReference(
+                    repo: PersistenceFixtures.repo,
+                    number: 42,
+                    title: "Login times out after the token refresh",
+                    state: .open
+                ),
                 sortIndex: 0
             ).save(db)
         }
