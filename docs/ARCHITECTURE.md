@@ -156,10 +156,13 @@ Pure logic in `ShepherdCore` (all unit-tested):
   `EvidenceChecker.check(_:in:)` is a pure function of a `PullRequestDetail`: changed paths through
   `FilePrioritizer`'s classifications, the check rollup with its failing checks named, and hunk
   walks (`PatchWalker`, `IntelligenceDiffWindow`'s arithmetic in a second, smaller walker) for
-  assertion drift and for removed exported declarations per language. Every fact is a sentence with
-  an optional `path`/`line`; the status (`ok` / `contradicted` / `unclear`) is *derived from the
-  facts* by rules documented per claim. `ClaimsEvidenceReport.build(detail:summary:)` composes the
-  lines and has **no aggregate field at all** — a score would be a verdict. `ClaimList` /
+  assertion drift and for removed exported declarations per language. Every fact is an
+  `EvidenceFact.Kind` — a closed set of sentence templates carrying the counts, paths, issue
+  number, code snippets and matched words the sentence is made of — plus an optional
+  `path`/`line`; `EvidenceFact.englishSentence` renders it here, purely, and the app renders the
+  same case into German (below). The status (`ok` / `contradicted` / `unclear`) is *derived from
+  the facts* by rules documented per claim. `ClaimsEvidenceReport.build(detail:summary:)` composes
+  the lines and has **no aggregate field at all** — a score would be a verdict. `ClaimList` /
   `ExtractedClaim` are the `Codable` twin of the optional on-device pass, and
   `ClaimList.merged(into:)` is what makes that pass *additive*: the pattern claims come out
   unchanged, a model claim repeating one of them is dropped by the same `dedupKey`, and what
@@ -172,12 +175,15 @@ Pure logic in `ShepherdCore` (all unit-tested):
   duplicates dropped. `AcceptanceMatcher.match(bullets:against:vectors:) -> [AcceptanceMatch]`
   decides *mentioned* or *not mentioned* per bullet: keyword overlap over `SearchText.tokens`
   (≥ 4 characters, minus a small stop list, ≥ 40 % of the bullet's distinctive words present) with
-  `SearchVector.cosineSimilarity` ≥ 0.6 as a second pass when the app supplied vectors.
+  `SearchVector.cosineSimilarity` ≥ 0.6 as a second pass when the app supplied vectors. The answer
+  is an `AcceptanceMatch.Reason` — four cases carrying the matched words, the totals and the
+  cosine — with its own `englishSentence`, so the card can say it in German.
   `evidenceText(for:)` is the haystack — description, changed paths, commit messages, clamped to
   20 KB, and deliberately **not** the hunks. `EvidenceChecker.check(_:in:issue:matches:failure:)`
   turns the matches into one fact per bullet (`EvidenceFact.mark`) and derives ✓ only when every
   bullet is mentioned; ✗ is unreachable for this claim, which is a test rather than a comment.
-  `IssueLookupFailure` holds the four sentences a failed read contributes.
+  `IssueLookupFailure` is the four answers a failed read contributes, each with its English
+  sentence.
 - `IssueSummary` (`Models/`) — number, title, body, state and the `isPullRequest` marker; nothing
   else, and nothing persisted.
 - `BulkTriagePlan` (`Triage/`) — the whole of bulk triage's judgement as a value (ADR 0015):
@@ -722,8 +728,14 @@ matcher is its keyword pass, which is the whole behaviour rather than a degraded
 about the issue is persisted and there is no migration for it** — the body is worth having while
 the card is open and stale afterwards, so the client's ETag cache is the only durable half.
 
-Evidence facts are English sentences built in `ShepherdCore`, like `FilePrioritizer`'s reasons; the
-card's own chrome goes through `String(localized:)` with a German row (ADR 0022).
+Evidence facts are **structured** in `ShepherdCore` (`EvidenceFact.Kind`) and rendered twice:
+`englishSentence` there, which is what *Turn into a comment* writes to GitHub and what the tests
+assert on, and `EvidenceFact.localizedSentence(bundle:)` in
+`Features/Review/EvidenceFactText.swift`, which is the only thing the card draws — one
+`String(localized:)` key per shape, each with a German row, plural `variations` where the count is
+a sentence's only argument and two keys where it is not (ADR 0022, ADR 0026's third amendment).
+`ShepherdCore` neither can nor may call `String(localized:)`: it is Foundation-only and
+Linux-tested. The card's own chrome goes through `String(localized:)` the same way.
 
 **The optional tier-2 pass** (ADR 0026's amendment) hangs off the *expansion* and nothing else.
 `ClaimExtracting` is the seam and `Intelligence/OnDeviceClaimExtractor.swift` its one

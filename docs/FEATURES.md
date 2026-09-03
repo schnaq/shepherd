@@ -225,9 +225,12 @@ to the evidence for it, one line each:
   or commit messages.* — with a ✓ or a · in front of each bullet.
 
 Every fact is a sentence and every fact with a file behind it is a link: one click puts you on that
-line in the diff. A ✗ line also offers **Turn into a comment**, which drops the claim and the facts
-under it into your review summary — and asks first if you have already written something there.
-Nothing is submitted; nothing is even sent.
+line in the diff. On a German Mac the facts are German too, down to the plurals — the paths, the
+issue numbers and the quoted lines of code are of course left exactly as they are. A ✗ line also
+offers **Turn into a comment**, which drops the claim and the facts under it into your review
+summary — in **English**, because that comment goes to GitHub, where the author reads it — and
+asks first if you have already written something there. Nothing is submitted; nothing is even
+sent.
 
 The most useful line is the one that catches a green CI: a hunk that deletes an `XCTAssert` or adds
 an `XCTSkip` makes the suite pass, so "tests added" is marked ✗ *with the line* even when every
@@ -371,6 +374,10 @@ String Catalog's plural rules say so (and say it correctly for English too, whic
 `Shepherd/Resources/Localizable.xcstrings`, with a CI check that fails if a single user-visible
 string is missing a German row — because a missing translation is otherwise invisible: it silently
 shows the English original ([ADR 0022](adr/0022-german-localisation.md)).
+
+The claims card's evidence is German as well — "„Tests/UploadTests.swift“ entfernt eine
+Assertion in Zeile 12: …" — while the text *Turn into a comment* hands your review summary stays
+English, because that one is written to GitHub rather than to you.
 
 The `shepherd` CLI stays English. Its output is read by shell scripts and n8n nodes, and it is a
 URL builder with no resource bundle (ADR 0013).

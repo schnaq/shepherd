@@ -88,11 +88,18 @@ this card is not something the reviewer clicked.
   evidence rule. Patterns are `NSRegularExpression`, compiled once into statics behind a small
   `ClaimPattern` value, because that is the one engine that behaves identically on a Mac and on the
   Linux runner.
-- Evidence facts are **English sentences produced in `ShepherdCore`**, like `FilePrioritizer`'s
-  review reasons and for the same reason: they are assembled from paths, counts and code snippets,
-  and a catalog key per shape would be a key per sentence template. The card's own chrome — header,
-  labels, buttons, captions — goes through `String(localized:)` with a German row
-  ([ADR 0022](0022-german-localisation.md)). Localising the facts is a follow-up, not a hole.
+- Evidence facts are **structured values produced in `ShepherdCore`** — `EvidenceFact.Kind`, a
+  closed set of sentence templates carrying the counts, paths, issue number, code snippets and
+  matched words the sentence is made of — with `englishSentence` as the module's own pure
+  rendering of them. The card draws the *app's* rendering,
+  `EvidenceFact.localizedSentence(bundle:)`, which is `String(localized:)` with a German row per
+  shape, like the card's own chrome — header, labels, buttons, captions
+  ([ADR 0022](0022-german-localisation.md)). The English
+  rendering stays where it is and is what a test asserts on and what *Turn into a comment* writes,
+  because a review comment is written to GitHub. (This bullet said the facts were English
+  sentences and that localising them was "a follow-up, not a hole"; the follow-up is the
+  amendment below, and the sentence it was withheld for — one rendering, no concatenation — is
+  kept.)
 - `FilePrioritizer` gained one public function, `isLockfile(_:)`, so "a lockfile changed" can be its
   own fact without a second copy of the lockfile name list.
 - The card adds **no network read, no write, no setting and no persistence**. It is recomputed from
@@ -227,3 +234,59 @@ That is the paragraph above's rule kept: the line still says what it checked and
 Everything else in this decision is untouched. There is still no score and no aggregate, still no
 model in this card, still no write, no setting and no persistence, and still no new host: the
 issue read is `api.github.com`, the endpoint already on `CONTRIBUTING.md`'s list.
+
+## Amendment (2026-09-03): the facts are data, and their German lives in the app
+
+The follow-up the Consequences bullet above parked — *"localising the facts is a follow-up, not a
+hole"* — is done, and it is the only thing that changed: the four claim shapes, the evidence
+rules, the status derivation, the no-score rule and the single exit are all untouched, and so is
+every sentence a reviewer reading English sees.
+
+**The fact stopped being a string.** `EvidenceFact.text` is now `EvidenceFact.kind`, an
+`EvidenceFact.Kind` with an associated value per thing the sentence names: a count, a path, an
+issue number, a repository, a `+`/`−` pair, the head-side line, a snippet of somebody's code, the
+bullet's own text, the matcher's reason. `AcceptanceMatch.reason` went the same way and is now an
+`AcceptanceMatch.Reason` of four cases. Nothing about a fact's identity, its `path`/`line` link
+into the diff, its `url` or its `mark` moved, and facts are still not persisted anywhere — the
+`Codable` conformance is there because the type has always had it, and no stored row, no
+`UserDefaults` key and no synced field holds one, so this is not a migration.
+
+**Two renderings, and they answer different questions.**
+
+- `EvidenceFact.englishSentence` — and `IssueLookupFailure.sentence`, and
+  `AcceptanceMatch.Reason.englishSentence` — stay in `ShepherdCore`: pure, Linux-tested,
+  unchanged word for word. They are what a test
+  asserts on and what *Turn into a comment* puts in the review summary — that text is written to
+  **GitHub**, where the author and every later reader of the thread reads English, which is
+  [ADR 0022](0022-german-localisation.md)'s "the review vocabulary stays English" taken to its
+  end. A German reviewer's comment does not become German because their Mac is.
+- `EvidenceFact.localizedSentence(bundle:)` in the app target
+  (`Shepherd/Features/Review/EvidenceFactText.swift`) is one `switch` over the same cases into
+  `String(localized:)`, and it is the only thing the card draws. Sixty-six new keys in
+  `Shepherd/Resources/Localizable.xcstrings`, every one with a German row and
+  `python3 Scripts/check-localization.py` green.
+
+**A key per shape was the cost this ADR named, and it is the cost that was paid.** Sixty-six rather
+than the twenty-odd cases, because grammar is not a formatting detail: where the count is a
+sentence's only argument the entry carries `variations.plural` with a German *and* an English
+`one`/`other` pair (ADR 0022's plural rule), and where the count shares the sentence with a path,
+a token or a title — which a top-level variation cannot express — the renderer picks between two
+keys on `count == 1` instead, the shape `DigestPresentation.line(for:)` already uses. The
+`fixes #N` line's own sentence is twelve keys for that reason: three states, a titled and an
+untitled form, singular and plural.
+
+**Paths, repository names, issue numbers, quoted words and code snippets are interpolated
+verbatim** and are never in a translation. The quotation marks, on the other hand, belong to the
+sentence: every key carries its own `“…”` so the German row can write „…“, which is why there
+is one key in the catalog that is nothing but quotation marks — the one place a *list* of
+quoted paths is assembled.
+
+**What keeps it honest.** `Scripts/check-localization.py` proves every key the renderer writes has
+a German row with matching specifiers; it cannot prove that every case the checker *produces*
+reaches a key, because that is a fact about a `switch`. So
+`ShepherdTests/EvidenceFactTextTests.swift` walks one sample per case *and per branch* and
+asserts each renders to a sentence and that its
+German differs from its English — the only way from inside the app to say "there is a German row
+and it was used" — with a `default`-less `switch` beside the sample list that stops compiling when
+a case is added. The `ShepherdCore` tests assert the structured kind and the English sentence
+side by side, so a change to either is a change somebody meant.
