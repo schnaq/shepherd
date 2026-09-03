@@ -162,10 +162,34 @@ public enum AcceptanceCriteria {
         AcceptanceBullet(text: strippedInline(ClaimText.stripped(line)), isChecked: isChecked)
     }
 
+    /// The body's lines, with everything inside a fenced code block blanked.
+    ///
+    /// An issue that quotes Markdown — a template, a "write it like this" example — has `- [ ]`
+    /// lines in it that are about the *syntax*, and the checkbox pass would otherwise let them
+    /// win outright over the real list. A fenced line becomes an empty one rather than
+    /// disappearing, so a fence between two lists still ends the first (a blank line is what
+    /// ends a list here) and nothing in the passes below has to know fences exist.
     private static func lines(of text: String) -> [String] {
-        text.replacingOccurrences(of: "\r\n", with: "\n")
+        var fenceMarker: Character?
+        return text.replacingOccurrences(of: "\r\n", with: "\n")
             .split(separator: "\n", omittingEmptySubsequences: false)
-            .map(String.init)
+            .map { raw -> String in
+                let line = String(raw)
+                let trimmed = line.drop(while: { $0 == " " })
+                if let marker = fenceMarker {
+                    // Closing fence: the same character, at least three of them, nothing after.
+                    if trimmed.hasPrefix(String(repeating: marker, count: 3)),
+                       trimmed.allSatisfy({ $0 == marker || $0 == " " }) {
+                        fenceMarker = nil
+                    }
+                    return ""
+                }
+                if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
+                    fenceMarker = trimmed.first
+                    return ""
+                }
+                return line
+            }
     }
 
     /// The text after a `-` / `*` / `+` / `1.` / `1)` marker, or `nil` when the line is not a

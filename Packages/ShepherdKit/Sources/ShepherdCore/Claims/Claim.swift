@@ -195,8 +195,10 @@ public enum ClaimExtractor {
     private static let issueLabelled = ClaimPattern(
         #"\b(?:fixes|closes|resolves|fix|close|resolve)\s+#(\d+)\b"#
     )
-    /// A bare `#42`. Only trusted inside the first paragraph.
-    private static let issueBare = ClaimPattern(#"#(\d+)\b"#)
+    /// A bare `#42`. Only trusted inside the first paragraph, and only when nothing is glued to
+    /// its front: `octocat/Hello-World#42` names another repository's issue, and reading its
+    /// number as one of ours would fetch — and show the checklist of — the wrong issue.
+    private static let issueBare = ClaimPattern(#"(?<![\w/])#(\d+)\b"#)
 
     // MARK: - Extraction
 

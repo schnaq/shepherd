@@ -219,9 +219,10 @@ work was not done. A ✓ here therefore means less than the other three lines' �
 mentioned, not the issue is resolved — which is why the facts, one per bullet with the matched
 words in them, are what the card actually shows.
 
-When the issue cannot be read — a `404`, a token that cannot see it, an offline Mac, no session at
-all — the old two facts stay exactly as they were and a third names the reason. That is the
-paragraph above's rule kept: the line still says what it checked and what it did not.
+When the issue cannot be read — a `404`, a token that cannot see it, an offline Mac — the old two
+facts stay exactly as they were and a third names the reason. A window with no session at all never
+asks, so its line keeps the two facts and nothing more: "not fetched" is already the truth there.
+That is the paragraph above's rule kept: the line still says what it checked and what it did not.
 
 Everything else in this decision is untouched. There is still no score and no aggregate, still no
 model in this card, still no write, no setting and no persistence, and still no new host: the

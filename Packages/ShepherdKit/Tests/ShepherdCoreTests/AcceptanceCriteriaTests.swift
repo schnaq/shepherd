@@ -41,6 +41,42 @@ final class AcceptanceCriteriaTests: XCTestCase {
         XCTAssertEqual(bullets.map(\.isChecked), [false, true])
     }
 
+    func testACheckboxInsideACodeFenceIsSyntaxNotACriterion() {
+        let bullets = AcceptanceCriteria.bullets(from: """
+        Please write the criteria like this:
+
+        ```markdown
+        - [ ] a thing that must be true
+        - [x] a thing that already is
+        ```
+
+        ## Acceptance criteria
+
+        - The upload retries a dropped connection
+        - A failure surfaces a toast
+        """)
+
+        XCTAssertEqual(
+            bullets.map(\.text),
+            ["The upload retries a dropped connection", "A failure surfaces a toast"]
+        )
+        XCTAssertEqual(bullets.map(\.isChecked), [nil, nil])
+    }
+
+    func testATildeFenceHidesItsListTooAndAnUnclosedFenceHidesTheRest() {
+        XCTAssertTrue(AcceptanceCriteria.bullets(from: """
+        ~~~
+        - [ ] not a criterion
+        ~~~
+        """).isEmpty)
+        XCTAssertTrue(AcceptanceCriteria.bullets(from: """
+        Example:
+        ```
+        - first
+        - second
+        """).isEmpty)
+    }
+
     func testAHeadedListIsReadWhenThereAreNoCheckboxes() {
         let bullets = AcceptanceCriteria.bullets(from: """
         ## Steps to reproduce

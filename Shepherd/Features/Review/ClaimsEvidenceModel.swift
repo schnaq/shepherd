@@ -369,13 +369,17 @@ final class ClaimsEvidenceModel {
 
     /// Identifies the work ``loadAcceptanceCriteria(using:)`` would do, for a view's `task(id:)`.
     ///
-    /// The pull request, its head commit and whether the card is open — the three things a change
-    /// in which means the read has to be reconsidered. Everything else about the screen (the diff
-    /// tab, a keystroke in the summary field, a redraw) leaves it alone, which is what keeps a
-    /// `task(id:)` from restarting the read for no reason.
+    /// The pull request, its head commit, whether the card is open and which issues the card
+    /// references — the four things a change in which means the read has to be reconsidered. The
+    /// fourth is there for the tier-2 pass: a `fixes #N` the model found after the patterns ran
+    /// is a new line with an issue behind it, and without it in the key the view's task would
+    /// never fire for it. Everything else about the screen (the diff tab, a keystroke in the
+    /// summary field, a redraw) leaves it alone, which is what keeps a `task(id:)` from
+    /// restarting the read for no reason.
     var acceptanceLoadKey: String {
         guard let detail = builtFrom else { return "-" }
-        return "\(detail.id)|\(detail.summary.headRefOid)|\(state.isExpanded)"
+        let issues = referencedIssueNumbers.map(String.init).joined(separator: ",")
+        return "\(detail.id)|\(detail.summary.headRefOid)|\(state.isExpanded)|\(issues)"
     }
 
     /// The issue numbers the report references, in the report's order and without duplicates.

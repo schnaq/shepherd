@@ -161,6 +161,16 @@ final class ClaimExtractorTests: XCTestCase {
             expected: [.fixesIssue(number: 142)]
         ),
         Fixture(
+            name: "issue-reference-into-another-repository-is-not-ours",
+            body: """
+            ## Summary
+            Mirrors the fix from octocat/Hello-World#123 into the uploader.
+
+            Nothing else.
+            """,
+            expected: []
+        ),
+        Fixture(
             name: "agent-long-body-all-four-claims",
             body: """
             ## Summary
