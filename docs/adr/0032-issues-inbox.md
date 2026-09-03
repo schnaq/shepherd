@@ -350,7 +350,9 @@ embedding finding that out.
   Settings row moved into a shared `RailSettingsRow`. `InboxSidebar`, `InboxListView` and
   `InboxDetailPanel` are otherwise untouched.
 
-### Sprint 3 — linking
+---
+
+## Amendment, 2026-09-03 — Sprint 3: the link in both directions
 
 The link is read in **both directions**, and each direction is read where the round trip already
 happens.

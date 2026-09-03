@@ -192,7 +192,15 @@ struct IssueDetailPanel: View {
                             // is stable across fetches.
                             hasKeyboardShortcut: pair.offset == 0,
                             onOpen: open(reference:localPullRequestID:)
-                        )
+                        ) {
+                            // The CI dot and the review decision, resolved by a local join
+                            // against `pull_requests`; the badge draws nothing when the pull
+                            // request is not cached, and this row never reads the database.
+                            LinkedPullRequestStatusBadge(
+                                reference: pair.element,
+                                database: environment.session?.database
+                            )
+                        }
                     }
                 }
             }

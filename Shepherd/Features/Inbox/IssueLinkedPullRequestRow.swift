@@ -121,7 +121,8 @@ struct IssueLinkedPullRequestRow<Badge: View>: View {
 }
 
 extension IssueLinkedPullRequestRow where Badge == EmptyView {
-    /// Creates a row with no status badge — the only shape this sprint builds.
+    /// Creates a row with no status badge — for previews and tests; the panel passes
+    /// ``LinkedPullRequestStatusBadge`` into the slot.
     /// - Parameters:
     ///   - reference: The linked pull request.
     ///   - localPullRequestID: Its node id when it is in the local inbox.
