@@ -41,6 +41,8 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
 Packages/ShepherdKit/          # SPM package, NO AppKit/SwiftUI imports
   Sources/
     ShepherdCore/              #   domain models, agent detection, heuristics, drafts
+      Claims/                  #     claims read from the description + evidence over the diff
+                               #     and CI, one line per claim, no score (ADR 0026)
       Review/                  #     saved replies, per-repo review templates + matching rule
       Routing/                 #     shepherd:// grammar + CLI argument grammar (ADR 0013)
       Triage/                  #     bulk-triage partition + intended writes (ADR 0015)
@@ -134,8 +136,22 @@ Pure logic in `ShepherdCore` (all unit-tested):
   scoring: source > tests > config > docs > lockfiles/generated; boosts for security-sensitive
   paths (auth, crypto, CI workflows, Dockerfiles), large single-file churn, deleted tests;
   demotes vendored/generated (linguist-style patterns, `dist/`, `*.lock`, snapshots).
-  Reasons are human-readable strings shown in the UI.
+  Reasons are human-readable strings shown in the UI. `category(of:)` and `isLockfile(_:)` are the
+  public classifications other features borrow rather than restate (ADR 0026).
 - `InboxGrouper` — sections by facet (provenance / repo / review state) + sorting.
+- `Claim` / `ClaimExtractor` / `EvidenceChecker` / `ClaimsEvidenceReport` (`Claims/`) — the whole
+  of "what it says beside what Shepherd found" as values (ADR 0026).
+  `ClaimExtractor.extract(from:) -> [Claim]` reads four claim shapes (`testsAdded`,
+  `scopeLimited(module:)`, `noBreakingChanges`, `fixesIssue(number:)`) out of the description with
+  documented `NSRegularExpression` patterns, **sentence-scoped** (`ClaimText`) so a noun in one
+  bullet cannot borrow a verb from the next, deduplicated by `Kind.dedupKey` and totally ordered.
+  `EvidenceChecker.check(_:in:)` is a pure function of a `PullRequestDetail`: changed paths through
+  `FilePrioritizer`'s classifications, the check rollup with its failing checks named, and hunk
+  walks (`PatchWalker`, `IntelligenceDiffWindow`'s arithmetic in a second, smaller walker) for
+  assertion drift and for removed exported declarations per language. Every fact is a sentence with
+  an optional `path`/`line`; the status (`ok` / `contradicted` / `unclear`) is *derived from the
+  facts* by rules documented per claim. `ClaimsEvidenceReport.build(detail:summary:)` composes the
+  lines and has **no aggregate field at all** — a score would be a verdict.
 - `BulkTriagePlan` (`Triage/`) — the whole of bulk triage's judgement as a value (ADR 0015):
   `make(action:pullRequests:) -> BulkTriagePlan` partitions a selection into entries carrying
   either the `steps` to write (`.approve` / `.merge`, in send order) or a `skipReason`, plus
@@ -522,6 +538,33 @@ the tool's own `resultContent`; the cloud question appears only for a budget fai
 `.reviewFinding(path:line:)` when the log named a file, one finding comment *"CI: test —
 hypothesis"*, no author because the sentence is Shepherd's) and opens the delegation sheet, where
 Run stays the reviewer's click. Nothing is persisted.
+
+### Claims vs. Evidence (tier 1 only, ADR 0026)
+
+`Features/Review/ClaimsEvidenceModel.swift` and `ClaimsEvidenceCard.swift`; the card hangs above
+the description in `Features/PullRequest/ConversationView.swift`.
+
+`ClaimsEvidenceCardState` is a pure value holding the report plus three rules that are therefore
+unit-tested rather than eyeballed: an empty report draws **no card** (`isHidden`), an agent's pull
+request opens expanded and a person's collapsed (ADR 0008's facet; a bot that is not a recognised
+agent counts as a person), and the reviewer's own toggle outranks that default from then on
+(`didChooseExpansion`). `ClaimsEvidenceModel` is the `@MainActor @Observable` per review screen
+around it, and it exists for one reason: building the report walks every hunk of every file, so it
+is rebuilt only when the `PullRequestDetail` actually changes and cached in between — never in a
+SwiftUI `body`. Nothing is persisted.
+
+Two things leave the card. A fact with a path becomes a link through `ReviewModel.reveal(path:line:)`
+— the same seam the CI diagnosis card uses. And *Turn into a comment*, on a contradicted line only,
+assembles `"<quote> — <facts>"` and writes it into `ReviewModel.summaryText`, the field the submit
+sheet edits. That write is a **plain insertion, not a draft**: it does not go through
+`AIDraftFieldState`, because there is no tier to name and no "AI draft" caption to earn, but it
+borrows that type's rule — a non-empty field is never overwritten silently, so the card asks
+*replace / append / discard* first and appends through
+`ShepherdCore/SavedReply.inserting(_:into:)`. There is no path from the card to `submitReview`, to
+the outbox or to a saved draft comment.
+
+Evidence facts are English sentences built in `ShepherdCore`, like `FilePrioritizer`'s reasons; the
+card's own chrome goes through `String(localized:)` with a German row (ADR 0022).
 
 ## UI conventions
 
@@ -1268,6 +1311,11 @@ button, a cloud failure not offering itself again, every other failure as one li
 asking no tier at all; what the brief is handed; and the card's copy. `LogDigest`, the job-id
 parser and the read itself are tested in `ShepherdCoreTests`/`GitHubKitTests`, so they run on the
 Linux runner);
+the claims-vs-evidence card's state (ADR 0026: an empty report drawing nothing, expanded for a
+recognised agent and collapsed for a person *and* for an unrecognised bot, the reviewer's toggle
+surviving a background refresh, the comment text's assembly, and the replace/append/discard
+question over a summary that already has text in it — the extractor, the evidence rules and the
+report are tested in `ShepherdCoreTests`, so they run on the Linux runner);
 the translation offer rules and cache (ADR 0020: the pure decide-to-offer function including
 `en-GB` → `en-US`, the prose strip and both detection floors, and the cache's keying, collapse and
 eviction — `TranslationSession` itself is not mocked);

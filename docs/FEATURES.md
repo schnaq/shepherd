@@ -171,6 +171,36 @@ selected and what gets written can never drift apart. Each pull request is then 
 individually, with the same offline, retry, rate-limit and staleness handling a single review gets
 ([ADR 0015](adr/0015-bulk-triage.md)).
 
+### What it says, and what Shepherd found
+
+Above the description of an agent's pull request, a card puts each claim the description makes next
+to the evidence for it, one line each:
+
+- **Tests added or run** — ✓ *2 changed files match a test naming convention. CI is green: 7 of 7
+  checks passed.*
+- **Only `Sources/Parser` changed** — ✗ *8 of 11 changed files are under "Sources/Parser".
+  ".github/workflows/ci.yml" is outside "Sources/Parser".*
+- **No breaking changes** — ✗ *"Sources/GitHubKit/GitHubClient.swift" removes or changes an exported
+  declaration at line 214.*
+- **Fixes issue #142** — ? *Issue #142 of schnaq/review is referenced. Acceptance criteria not
+  checked — the issue is not fetched.*
+
+Every fact is a sentence and every fact with a file behind it is a link: one click puts you on that
+line in the diff. A ✗ line also offers **Turn into a comment**, which drops the claim and the facts
+under it into your review summary — and asks first if you have already written something there.
+Nothing is submitted; nothing is even sent.
+
+The most useful line is the one that catches a green CI: a hunk that deletes an `XCTAssert` or adds
+an `XCTSkip` makes the suite pass, so "tests added" is marked ✗ *with the line* even when every
+check is green.
+
+**There is no score, and there never will be** — no number, no badge, no "looks safe". The card
+lists what the description claims and what the diff and CI show, and the judgement is yours
+([ADR 0026](adr/0026-claims-vs-evidence.md)). It runs entirely on data Shepherd already fetched:
+no model, no network read, nothing stored. On an agent's pull request it opens expanded; on a
+person's it is a header you can open ([ADR 0008](adr/0008-agent-provenance-first-class.md)). A
+description that claims nothing gets no card at all.
+
 ### Where does this long thread stand?
 
 A review thread with six comments or more gets a **Summarise** button. Press it and three lines

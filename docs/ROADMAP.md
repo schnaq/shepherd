@@ -284,8 +284,12 @@ engineering plan — data, rules, guardrails, ADRs — is
 [`docs/plans/agent-fleet.md`](plans/agent-fleet.md); this is the short form, in the interview's
 order. Everything here is tier 1 first (deterministic, local); a model only ever adds a hint.
 
-- [ ] Claims vs. Evidence — what the description says ("tests added", "only X changed", "no
+- [x] Claims vs. Evidence — what the description says ("tests added", "only X changed", "no
       breaking changes", "fixes #N") beside what the diff and CI show, line by line, no score
+      (ADR 0026). Tier 1 is complete: the extractor, the evidence over the diff and CI, and the
+      card above the description. Still open on top of it: matching a referenced issue's
+      acceptance bullets, which needs an issue read GitHubKit does not have yet, and the optional
+      on-device claim extraction for phrasings the patterns miss
 - [ ] Track record and trust lanes — closed pull requests of the last 90 days backfilled once per
       repository; **Short look** only when CI is green and the diff is small, history informs the
       badge and the sort, never the lane

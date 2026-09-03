@@ -30,6 +30,7 @@ founder interview (2026-08-31) combined with three research reports (see
 | 0022 | [German localisation through one String Catalog, with a Python gate in CI](0022-german-localisation.md) | Accepted (v1.x) |
 | 0023 | [Structured triage: one on-device verdict per pull request](0023-structured-triage.md) | Accepted (v1.x) |
 | 0024 | [Tool calling for "why is CI red?": three reads, one card](0024-tool-calling-ci-diagnosis.md) | Accepted (v1.x) |
+| 0026 | [Claims vs. Evidence: the description beside the diff, no score](0026-claims-vs-evidence.md) | Accepted (v1.2) |
 
 Format: lightweight [MADR](https://adr.github.io/madr/)-style — Context, Decision, Consequences.
 New decisions get the next number; superseded ADRs are marked, never deleted.
