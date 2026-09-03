@@ -1,3 +1,4 @@
+import GitHubKit
 import ShepherdCore
 import SwiftUI
 

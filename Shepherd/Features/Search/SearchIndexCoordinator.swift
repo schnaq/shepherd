@@ -290,6 +290,12 @@ final class SearchIndexCoordinator {
     /// Ties break pull requests first and then on node id, so the order is total: two sweeps of
     /// the same data can never reshuffle the palette (the property ``ShepherdCore/SearchRanker``
     /// pins for one corpus, extended to the merge of two).
+    ///
+    /// The two halves each embed the query text, so a keystroke that reaches both corpora costs
+    /// two on-device calls rather than one. Left as it is deliberately: the alternative is
+    /// threading a pre-computed vector through both ranking methods, which would put the "an
+    /// exact reference spends no embedding" rule in a third place. Both calls go to the same
+    /// `actor` with the same text, and neither can reach a network.
     /// - Parameters:
     ///   - query: What the user typed.
     ///   - limit: How many rows the palette has room for, across both kinds.
@@ -317,8 +323,8 @@ final class SearchIndexCoordinator {
         }
         // One ordered list, sliced once, then partitioned back — which is the whole point: the
         // slice is what a quota per kind would get wrong.
-        let merged = (pullRequests.map(MergedSearchRow.pullRequest)
-            + issues.map(MergedSearchRow.issue))
+        let merged = (pullRequests.map { MergedSearchRow.pullRequest($0) }
+            + issues.map { MergedSearchRow.issue($0) })
             .sorted { left, right in
                 if left.score != right.score { return left.score > right.score }
                 return left.sortKey < right.sortKey
