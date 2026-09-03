@@ -18,11 +18,12 @@ import Foundation
 /// - the summary of the next review (plan §3.H), the second thing worth *hearing* rather than
 ///   reading — and the only phrase here that runs a model, on-device only.
 ///
-/// The phrases are English, including both spellings of *summarise*, because Siri matches a phrase
-/// literally and a user who says "summarize" is asking for the same thing. German phrases are the
-/// `AppShortcuts.xcstrings` follow-up ADR 0022 lists in the roadmap, not a row in
-/// `Localizable.xcstrings`; until then the English phrases work on a German Mac, because Siri
-/// matches them by the app's name.
+/// The phrases here are English, including both spellings of *summarise*, because Siri matches a
+/// phrase literally and a user who says "summarize" is asking for the same thing. Their German
+/// utterances live in `Resources/AppShortcuts.xcstrings` (ADR 0022's amendment), one per English
+/// key — not in `Localizable.xcstrings`, because the App Intents metadata processor looks them up
+/// in a catalog of exactly that name, which is also why `Scripts/check-localization.py` leaves it
+/// alone.
 ///
 /// Nothing that writes to GitHub is here, and nothing that writes to GitHub exists as an intent at
 /// all — see the note in `ShepherdIntents.swift` and ADR 0021. A Siri phrase that could approve a
