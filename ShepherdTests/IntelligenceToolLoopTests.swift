@@ -639,6 +639,83 @@ final class IntelligenceToolLoopTests: XCTestCase {
         }
     }
 
+    // MARK: - The on-device hop cap
+
+    func testTheRecorderReservesAHopAtomicallySoTwoCallsCannotBothPassTheSameCheck() async {
+        // Two tools for one turn is something the framework may do, and it is the case a
+        // read-then-write cap cannot survive: both calls read the same count, both pass.
+        let recorder = ToolTraceRecorder()
+        async let first = recorder.reserveHop()
+        async let second = recorder.reserveHop()
+        let firstGranted = await first
+        let secondGranted = await second
+        XCTAssertTrue(firstGranted, "the cap has room for both of these")
+        XCTAssertTrue(secondGranted)
+
+        // Twice the cap, all at once: exactly the cap is granted, whatever the interleaving.
+        let crowded = ToolTraceRecorder()
+        let granted = await withTaskGroup(of: Bool.self) { group in
+            for _ in 0..<(IntelligenceToolLoop.maximumHops * 2) {
+                group.addTask { await crowded.reserveHop() }
+            }
+            var count = 0
+            for await didReserve in group {
+                if didReserve { count += 1 }
+            }
+            return count
+        }
+        XCTAssertEqual(granted, IntelligenceToolLoop.maximumHops)
+    }
+
+    func testTheOnDeviceBridgeStopsTheTurnOnceTheCapIsSpent() async {
+        let recorder = ToolTraceRecorder()
+        let local = executor()
+
+        for hop in 1...IntelligenceToolLoop.maximumHops {
+            let content = try? await OnDeviceToolBridge.run(
+                IntelligenceToolCall(id: "hop-\(hop)", tool: .failingChecks),
+                tool: .failingChecks,
+                executor: local,
+                recorder: recorder
+            )
+            XCTAssertNotNil(content, "hop \(hop) is inside the cap")
+        }
+
+        await assertThrows(.toolLoopExceeded) {
+            _ = try await OnDeviceToolBridge.run(
+                IntelligenceToolCall(id: "one-too-many", tool: .failingChecks),
+                tool: .failingChecks,
+                executor: local,
+                recorder: recorder
+            )
+        }
+        let count = await recorder.count
+        XCTAssertEqual(count, IntelligenceToolLoop.maximumHops)
+    }
+
+    func testConcurrentOnDeviceToolCallsCannotRecordMoreHopsThanTheCapAllows() async {
+        let recorder = ToolTraceRecorder()
+        let local = executor()
+
+        // The cap plus two, started together. Whichever ones win, the trace the reviewer is
+        // shown may not hold more hops than the cap says one diagnosis is allowed.
+        await withTaskGroup(of: Void.self) { group in
+            for hop in 0..<(IntelligenceToolLoop.maximumHops + 2) {
+                group.addTask {
+                    _ = try? await OnDeviceToolBridge.run(
+                        IntelligenceToolCall(id: "hop-\(hop)", tool: .failingChecks),
+                        tool: .failingChecks,
+                        executor: local,
+                        recorder: recorder
+                    )
+                }
+            }
+        }
+
+        let count = await recorder.count
+        XCTAssertEqual(count, IntelligenceToolLoop.maximumHops)
+    }
+
     // MARK: - The router's ladder
 
     func testTheLadderAsksTheOnDeviceTierFirstAndKeepsItsTrace() async throws {

@@ -16,6 +16,12 @@ import ShepherdCore
 /// framework is in charge of the turn.
 actor ToolTraceRecorder {
     private var trace = IntelligenceTrace()
+    /// How many hops have been *claimed* — started, whether or not they have finished.
+    ///
+    /// Never fewer than ``count``: a hop is reserved before the read runs and recorded after it
+    /// answered, so between the two the recorder knows about a hop the trace does not hold yet.
+    /// That gap is the whole point of the counter existing (see ``reserveHop()``).
+    private var reservedHops = 0
 
     /// Creates an empty recorder.
     init() {}
@@ -23,8 +29,25 @@ actor ToolTraceRecorder {
     /// The trace so far.
     var current: IntelligenceTrace { trace }
 
-    /// How many hops have happened, which is what the hop cap is measured against.
+    /// How many hops have happened, which is what the reviewer sees in the trace.
     var count: Int { trace.count }
+
+    /// Claims one hop against the cap, or refuses because the cap is reached.
+    ///
+    /// **The check and the increment have to be one actor-isolated step.** The framework drives
+    /// the calls on this tier and may run two tools for one turn, and `await recorder.count <
+    /// cap` followed by `await recorder.record(…)` is two hops through the actor with a
+    /// suspension between them: two calls arriving on the sixth hop would both read `5`, both
+    /// pass, and both record — a seventh read, from a cap that says six. Reserving closes that
+    /// window by counting calls that *started* rather than calls that finished, which is also
+    /// the honest thing to count: a read that has been issued has already cost the reviewer
+    /// whatever it was going to cost.
+    /// - Returns: `true` when the call may run, `false` when the cap is spent.
+    func reserveHop() -> Bool {
+        guard reservedHops < IntelligenceToolLoop.maximumHops else { return false }
+        reservedHops += 1
+        return true
+    }
 
     /// Records one finished hop.
     /// - Parameters:
@@ -85,11 +108,17 @@ enum OnDeviceToolBridge {
     /// way to stop a turn from inside a tool, which is why it is
     /// ``IntelligenceError/toolLoopExceeded`` and not a result — a result saying "that is
     /// enough" is a sentence a model is free to ignore.
+    ///
+    /// The hop is **reserved before the read and recorded after it**
+    /// (``ToolTraceRecorder/reserveHop()``), which is the one ordering that holds when the
+    /// framework runs two tools at once: reading the count, awaiting a read and then recording
+    /// would let two concurrent calls pass the same check and produce one hop more than the cap
+    /// allows.
     /// - Parameters:
     ///   - call: The call built from the generated arguments.
     ///   - tool: Which tool it is, for the trace.
     ///   - executor: The reads.
-    ///   - recorder: Where the hop is recorded.
+    ///   - recorder: Where the hop is reserved and recorded.
     /// - Returns: The budgeted text the model gets.
     static func run(
         _ call: IntelligenceToolCall,
@@ -97,7 +126,7 @@ enum OnDeviceToolBridge {
         executor: any IntelligenceToolExecuting,
         recorder: ToolTraceRecorder
     ) async throws -> String {
-        guard await recorder.count < IntelligenceToolLoop.maximumHops else {
+        guard await recorder.reserveHop() else {
             throw IntelligenceError.toolLoopExceeded
         }
         let started = Date()
