@@ -418,7 +418,8 @@ non-Actions check. Model-facing tool content is English like every prompt here; 
 summaries beside it are the reviewer's and are localised.
 
 Each tier drives the loop in its own shape and they agree on everything that matters:
-`OnDeviceToolBridge` (the second and last file importing `FoundationModels`) wraps the three tools
+`OnDeviceToolBridge` (`FoundationModels` is imported only by the `OnDevice*.swift` files in
+`Intelligence/` — the provider, this bridge and the triage classifier) wraps the three tools
 in `FoundationModels.Tool` conformances with `@Generable` argument structs, and the framework
 drives the calls — so the hop cap lives in the wrappers and the trace is collected by a shared
 `ToolTraceRecorder` actor; `AnthropicProvider` keeps a `tool_use`/`tool_result` transcript, echoing

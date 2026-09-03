@@ -258,10 +258,6 @@ short form.
       the rules engines' inputs enforces it. The on-device model is the ceiling here — there is no
       cloud fallback for a bulk pass, and without a model the facet falls back to the tier-1 risk
       hints
-- [ ] Streaming drafts — the ✨ draft (ADR 0007 amendment) arrives token by token in the composer
-      exposed as an inbox facet and a ⌘K filter. Never sent anywhere, never decides anything:
-      it sorts, it does not approve (non-goal). The on-device model is the ceiling here — when it
-      is unavailable the facet is simply absent, there is no cloud fallback for a bulk pass
 - [x] Streaming drafts — the ✨ draft (ADR 0007 amendment) arrives token by token in the composer
       instead of after a spinner, through `LanguageModelSession.streamResponse` for tier 2 and the
       SSE variants of the tier-3 providers; still labelled until edited, still asks before
