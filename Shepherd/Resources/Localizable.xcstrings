@@ -61,6 +61,16 @@
         }
       }
     },
+    "%@ is not a GitHub Actions job": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ist kein GitHub-Actions-Job"
+          }
+        }
+      }
+    },
     "%@ is not in Shepherd's inbox any more.": {
       "localizations": {
         "de": {
@@ -9541,6 +9551,16 @@
         }
       }
     },
+    "last %lld of %lld lines of %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "letzte %lld von %lld Zeilen von %@"
+          }
+        }
+      }
+    },
     "last applied: %@": {
       "localizations": {
         "de": {
@@ -9721,12 +9741,12 @@
         }
       }
     },
-    "no log available for this check yet": {
+    "no log available for this check": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "für diesen Check ist noch kein Log verfügbar"
+            "value": "kein Log für diesen Check verfügbar"
           }
         }
       }
@@ -10077,6 +10097,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Squash-and-Merge"
+          }
+        }
+      }
+    },
+    "the log of %@ could not be read": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "das Log von %@ konnte nicht gelesen werden"
+          }
+        }
+      }
+    },
+    "the log of %@ is empty": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "das Log von %@ ist leer"
           }
         }
       }

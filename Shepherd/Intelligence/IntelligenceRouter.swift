@@ -114,6 +114,25 @@ enum IntelligenceStreamOutcome: Sendable {
     }
 }
 
+/// A diagnosis attempt: what came back, and whether tier 2 refused it for being too large.
+///
+/// A separate value rather than a fourth case on ``IntelligenceOutcome`` because the question it
+/// answers is local to one feature: every surface in the app knows how to show "no answer, and
+/// here is the sentence", and only the CI card has a *second* thing to do with one particular
+/// failure — offer the cloud rung. Widening the generic outcome for that would make every other
+/// caller carry a case it can never see.
+struct CIDiagnosisAttempt: Sendable {
+    /// What the ladder produced.
+    var outcome: IntelligenceOutcome<IntelligenceToolRun<CIDiagnosis>>
+    /// Whether the on-device tier refused because the content did not fit.
+    ///
+    /// `true` only for ``IntelligenceError/contextExceeded`` and
+    /// ``IntelligenceError/digestTooLarge(tokens:limit:)`` — the two failures a larger context
+    /// window is an answer to (``IntelligenceRouter/isBudgetFailure(_:)``) — and `false` once the
+    /// cloud rung has itself been asked and failed, so a card cannot offer the same rung twice.
+    var didExceedBudget: Bool = false
+}
+
 /// What a tier's stream did first — the ladder's whole decision.
 private enum FirstElement: Sendable {
     /// Text arrived; this tier owns the answer from here on.
@@ -343,15 +362,28 @@ struct IntelligenceRouter: Sendable {
 
     // MARK: - Tool calling (plan §3.F)
 
+    /// Whether a cloud rung exists at all, for the card that may have to offer it.
+    ///
+    /// The card asks this *before* it draws "ask <provider> with the full log?": on a Mac with no
+    /// key configured, the honest answer to a log that did not fit is "it did not fit", not a
+    /// button that would fail. Same reasoning as ``canDraft``, one rung further up.
+    var hasCloudTier: Bool { isEnabled && cloudProvider != nil }
+
+    /// What to call the configured cloud tier on that button, or `nil` when there is none.
+    ///
+    /// The tier's own badge — "Anthropic", "custom endpoint" — so the question the reviewer is
+    /// asked names the endpoint they configured rather than "the cloud".
+    var cloudBadge: String? { cloudProvider?.kind.badge }
+
     /// Works out why CI is red, by letting a tier read the pull request (plan §3.F).
     ///
     /// **The ladder runs the other way round here, and that is the point.** Every other call in
     /// this router tries the cloud tier first, because it sees a larger digest and answers
     /// better. This one is tier 2 first and tier 3 only as an *explicit* second rung, because the
-    /// content is different in kind: a diagnosis reads check summaries and diff windows chosen by
-    /// a model rather than a digest a human can see the shape of, and — once the job-log read
-    /// exists — CI log output as well. ADR 0007 lets that travel only when the user says so for
-    /// this click, so:
+    /// content is different in kind: a diagnosis reads check summaries, diff windows chosen by a
+    /// model rather than a digest a human can see the shape of, and — since the job-log read
+    /// landed with ADR 0024 — the reduced tail of a CI log. ADR 0007 lets that travel only when
+    /// the user says so for this click, so:
     ///
     /// - tier 2 answers, and normally that is the whole story;
     /// - tier 3 is tried **only** when tier 2 failed *because the content did not fit*
@@ -360,27 +392,62 @@ struct IntelligenceRouter: Sendable {
     ///   Any other tier-2 failure — a guardrail refusal, an unreadable answer, the model being
     ///   switched off — is reported as it happened. A cloud provider is not a retry.
     ///
-    /// `preferCloud` exists because there is no card yet: the plan's UI asks the reviewer *"ask
-    /// <provider> with the full log?"* when the on-device tier reports the budget exceeded, and
-    /// the answer to that question is this parameter. It defaults to `false` so that no caller
-    /// can send a pull request's contents to a configured endpoint by leaving an argument out.
+    /// `preferCloud` is the reviewer's answer to one button: ``CIDiagnosisCard`` asks *"ask
+    /// <provider> with the full log?"* when — and only when — the on-device tier reported the
+    /// budget exceeded and a cloud tier is configured. It defaults to `false` so that no caller
+    /// can send a pull request's contents, log included, to a configured endpoint by leaving an
+    /// argument out.
     /// - Parameters:
     ///   - detail: The fetched pull request. The tools answer from this snapshot.
     ///   - summary: The inbox row the reviewer opened — where the title and number come from.
     ///   - preferCloud: Whether the reviewer has agreed to the cloud rung for *this* diagnosis.
+    ///   - jobLog: How the `jobLogTail` tool downloads a log. `nil` makes that tool answer that
+    ///     there is no log — see ``JobLogFetching``.
     /// - Returns: The diagnosis and its trace, or why there is none.
     func diagnoseFailingChecks(
         for detail: PullRequestDetail,
         summary: PullRequestSummary,
-        preferCloud: Bool = false
+        preferCloud: Bool = false,
+        jobLog: (any JobLogFetching)? = nil
     ) async -> IntelligenceOutcome<IntelligenceToolRun<CIDiagnosis>> {
-        guard isEnabled else { return .disabled }
+        await attemptDiagnosis(
+            for: detail,
+            summary: summary,
+            preferCloud: preferCloud,
+            jobLog: jobLog
+        ).outcome
+    }
+
+    /// The same diagnosis, plus the one thing about a failure the card has to know.
+    ///
+    /// ``IntelligenceOutcome`` carries a failure as a *sentence*, which is right for every other
+    /// surface: a missing summary card shows the tier's own words and there is nothing to decide.
+    /// Here there is one decision — whether to offer the cloud rung — and it may only be offered
+    /// for the two failures a larger context window is a fix for. Recovering that from the
+    /// sentence would mean string-matching an error message, so the fact is returned beside the
+    /// outcome instead, and ``diagnoseFailingChecks(for:summary:preferCloud:jobLog:)`` stays the
+    /// call for everything that does not care.
+    /// - Parameters:
+    ///   - detail: The fetched pull request. The tools answer from this snapshot.
+    ///   - summary: The inbox row the reviewer opened.
+    ///   - preferCloud: Whether the reviewer has agreed to the cloud rung for *this* diagnosis.
+    ///   - jobLog: How the `jobLogTail` tool downloads a log.
+    /// - Returns: The outcome, and whether tier 2 refused because the content did not fit.
+    func attemptDiagnosis(
+        for detail: PullRequestDetail,
+        summary: PullRequestSummary,
+        preferCloud: Bool = false,
+        jobLog: (any JobLogFetching)? = nil
+    ) async -> CIDiagnosisAttempt {
+        guard isEnabled else { return CIDiagnosisAttempt(outcome: .disabled) }
         // Settled before a tier is picked, because the answer is the same for all of them and
         // costs nothing to find out: a pull request with nothing red has nothing to diagnose.
         guard !LocalToolExecutor.failingChecks(in: detail).isEmpty else {
-            return .unavailable(
-                String(
-                    localized: "No check on this pull request is failing, so there is nothing to diagnose."
+            return CIDiagnosisAttempt(
+                outcome: .unavailable(
+                    String(
+                        localized: "No check on this pull request is failing, so there is nothing to diagnose."
+                    )
                 )
             )
         }
@@ -388,43 +455,52 @@ struct IntelligenceRouter: Sendable {
         // rung answers a budget failure, and a machine with Apple Intelligence switched off never
         // produced one. Saying why is the honest answer.
         if let reason = tiers.onDeviceUnavailabilityReason() {
-            return .unavailable(reason)
+            return CIDiagnosisAttempt(outcome: .unavailable(reason))
         }
 
         let onDevice = tiers.onDevice()
         do {
-            return .value(
-                IntelligenceOutput(
-                    kind: onDevice.kind,
-                    value: try await ask(
-                        onDevice,
-                        detail: detail,
-                        summary: summary,
-                        budget: OnDeviceProvider.budget
+            return CIDiagnosisAttempt(
+                outcome: .value(
+                    IntelligenceOutput(
+                        kind: onDevice.kind,
+                        value: try await ask(
+                            onDevice,
+                            detail: detail,
+                            summary: summary,
+                            budget: OnDeviceProvider.budget,
+                            jobLog: jobLog
+                        )
                     )
                 )
             )
         } catch {
-            guard preferCloud,
-                  IntelligenceRouter.isBudgetFailure(error),
-                  let cloud = cloudProvider
-            else {
-                return .failed(IntelligenceRouter.describe(error))
+            let didExceedBudget = IntelligenceRouter.isBudgetFailure(error)
+            guard preferCloud, didExceedBudget, let cloud = cloudProvider else {
+                return CIDiagnosisAttempt(
+                    outcome: .failed(IntelligenceRouter.describe(error)),
+                    didExceedBudget: didExceedBudget
+                )
             }
             do {
-                return .value(
-                    IntelligenceOutput(
-                        kind: cloud.kind,
-                        value: try await ask(
-                            cloud,
-                            detail: detail,
-                            summary: summary,
-                            budget: AnthropicProvider.budget
+                return CIDiagnosisAttempt(
+                    outcome: .value(
+                        IntelligenceOutput(
+                            kind: cloud.kind,
+                            value: try await ask(
+                                cloud,
+                                detail: detail,
+                                summary: summary,
+                                budget: AnthropicProvider.budget,
+                                jobLog: jobLog
+                            )
                         )
                     )
                 )
             } catch {
-                return .failed(IntelligenceRouter.describe(error))
+                // The cloud rung's own failure, and `didExceedBudget` stays `false`: the card has
+                // already spent the one offer it had, and offering it again would be a loop.
+                return CIDiagnosisAttempt(outcome: .failed(IntelligenceRouter.describe(error)))
             }
         }
     }
@@ -441,17 +517,19 @@ struct IntelligenceRouter: Sendable {
     ///   - detail: The pull request snapshot.
     ///   - summary: The inbox row.
     ///   - budget: The tier's token budget.
+    ///   - jobLog: How the `jobLogTail` tool downloads a log.
     /// - Returns: The diagnosis and its trace.
     private func ask(
         _ provider: any IntelligenceProvider,
         detail: PullRequestDetail,
         summary: PullRequestSummary,
-        budget: TokenBudget
+        budget: TokenBudget,
+        jobLog: (any JobLogFetching)?
     ) async throws -> IntelligenceToolRun<CIDiagnosis> {
         try await tiers.diagnose(
             provider,
             CIDiagnosisRequest.build(detail: detail, summary: summary, budget: budget),
-            LocalToolExecutor(detail: detail, budget: budget)
+            LocalToolExecutor(detail: detail, budget: budget, jobLog: jobLog)
         )
     }
 

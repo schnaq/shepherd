@@ -415,8 +415,16 @@ final class IntelligenceTraceTests: XCTestCase {
         XCTAssertEqual(step?.argumentsDisplay, "checkName: App build (macOS)")
         XCTAssertEqual(step?.summaryLine, "42 of 1320 lines of App build (macOS)")
         XCTAssertEqual(step?.duration, 0.25)
-        // The budgeted content stays with the tool result; the trace is a display record.
+        // The budgeted content travels with the step, because that is what the card's expanded
+        // row shows: exactly what the model was given, not a re-description of it (ADR 0024).
+        // The *summary* line stays the one-line version beside the collapsed row.
+        XCTAssertEqual(step?.resultContent, "error: no such module 'FoundationModels'")
         XCTAssertFalse(trace.steps.contains { $0.summaryLine.contains("FoundationModels") })
+
+        // A step recorded without a result has no content rather than a placeholder — which is
+        // what a test scripting a sequence of hops produces.
+        trace.append(tool: .failingChecks, summaryLine: "2 failing checks", duration: 0)
+        XCTAssertEqual(trace.steps.last?.resultContent, "")
     }
 
     func testADecodedTraceIsOrderedByItsOwnNumbersRatherThanByArrayOrder() throws {

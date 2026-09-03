@@ -207,7 +207,11 @@ final class IntelligenceToolLoopTests: XCTestCase {
         XCTAssertTrue(cloud.contains("context line 2000"))
     }
 
-    func testJobLogTailAnswersThatThereIsNoLogYetRatherThanFailing() async throws {
+    func testJobLogTailAnswersThatThereIsNoLogRatherThanFailingWhenNothingCanReadOne() async throws {
+        // The executor here is built without a ``JobLogFetching`` — a screen with no session, and
+        // every test in this suite that is not about logs. The tool still answers, and the answer
+        // still tells the model what to do instead. Reading a real log is
+        // `ShepherdTests/CIDiagnosisTests.swift`.
         let result = try await executor().execute(
             IntelligenceToolCall(
                 id: "c5",
@@ -216,7 +220,7 @@ final class IntelligenceToolLoopTests: XCTestCase {
             )
         )
 
-        XCTAssertTrue(result.content.contains("No log is available"))
+        XCTAssertTrue(result.content.contains("no log"))
         XCTAssertTrue(result.content.contains("summary"), "it says what to do instead")
         XCTAssertFalse(result.wasTruncated)
         XCTAssertFalse(result.summaryLine.isEmpty)

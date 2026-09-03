@@ -2,11 +2,15 @@ import Foundation
 
 /// One hop of a tool-calling turn, in the shape the review screen renders it.
 ///
-/// A *display* record, not an audit log: it holds the rendered arguments and the tool's own
-/// summary line rather than the budgeted content the model was given, because what a reviewer
-/// needs from an expanded step is "what did it look at, and what did it find" — and because a
-/// trace that carried the content would carry a log tail into whatever the UI does with its
-/// state. Nothing here is persisted (the plan: "stored nowhere; lives with the card").
+/// A *display* record, not an audit log: the arguments arrive rendered and the tool's own summary
+/// line comes with them, because what a reviewer needs from a collapsed step is "what did it look
+/// at, and what did it find". ``resultContent`` is the expanded half of the same answer: the
+/// plan's card lets every step "expand to show exactly what the model saw"
+/// (`docs/plans/apple-intelligence-v2.md` §3.F), and a card that showed a summary of the log
+/// instead of the log would be asking the reviewer to trust the summary — which is the one thing
+/// a trace exists to avoid. It is the tool's **budgeted** content, so it is bounded by the tier's
+/// budget before it exists, and nothing here is persisted (the plan: "stored nowhere; lives with
+/// the card") or written anywhere a log tail could outlive the card.
 ///
 /// ``order`` is a field rather than an array index so a step stays self-describing once the UI has
 /// it: a disclosure row that was handed a single step still knows it is the third one.
@@ -21,6 +25,11 @@ public struct IntelligenceTraceStep: Codable, Sendable, Hashable {
     public var summaryLine: String
     /// How long the hop took, in seconds.
     public var duration: TimeInterval
+    /// Exactly what the model was given: the tool's budgeted result content.
+    ///
+    /// Empty for a step recorded without one, which is what a test that only cares about the
+    /// sequence of hops produces.
+    public var resultContent: String
 
     /// Creates a step.
     /// - Parameters:
@@ -29,18 +38,21 @@ public struct IntelligenceTraceStep: Codable, Sendable, Hashable {
     ///   - argumentsDisplay: The rendered arguments.
     ///   - summaryLine: The tool's summary line.
     ///   - duration: How long the hop took, in seconds.
+    ///   - resultContent: What the model was given. Defaults to nothing.
     public init(
         order: Int,
         toolName: IntelligenceToolName,
         argumentsDisplay: String,
         summaryLine: String,
-        duration: TimeInterval
+        duration: TimeInterval,
+        resultContent: String = ""
     ) {
         self.order = order
         self.toolName = toolName
         self.argumentsDisplay = argumentsDisplay
         self.summaryLine = summaryLine
         self.duration = duration
+        self.resultContent = resultContent
     }
 
     /// Renders a call's arguments as one line, sorted by argument name.
@@ -63,6 +75,7 @@ public struct IntelligenceTraceStep: Codable, Sendable, Hashable {
         case argumentsDisplay
         case summaryLine
         case duration
+        case resultContent
     }
 }
 
@@ -106,11 +119,15 @@ public struct IntelligenceTrace: Codable, Sendable, Hashable {
     ///   - arguments: The call's arguments; rendered for display.
     ///   - summaryLine: The tool's summary line.
     ///   - duration: How long the hop took, in seconds.
+    ///   - resultContent: Exactly what the model was given, for the step the reviewer expands.
+    ///     Defaults to nothing, which is the right value for a caller that has no result — a
+    ///     test scripting a sequence of hops.
     public mutating func append(
         tool: IntelligenceToolName,
         arguments: [String: IntelligenceToolArgument] = [:],
         summaryLine: String,
-        duration: TimeInterval
+        duration: TimeInterval,
+        resultContent: String = ""
     ) {
         steps.append(
             IntelligenceTraceStep(
@@ -118,15 +135,18 @@ public struct IntelligenceTrace: Codable, Sendable, Hashable {
                 toolName: tool,
                 argumentsDisplay: IntelligenceTraceStep.renderArguments(arguments),
                 summaryLine: summaryLine,
-                duration: duration
+                duration: duration,
+                resultContent: resultContent
             )
         )
     }
 
     /// Appends a hop from the call that ran and the result it produced.
     ///
-    /// The convenience the app target will use: the tool has just answered, and both halves of
-    /// the step are already in hand.
+    /// The convenience every tier's loop uses: the tool has just answered, and all three halves
+    /// of the step are already in hand. This is the one place the model's own input reaches the
+    /// trace, which is why the card can promise that an expanded step shows what the model saw
+    /// rather than a re-description of it.
     /// - Parameters:
     ///   - tool: Which tool ran.
     ///   - call: The validated call.
@@ -142,7 +162,8 @@ public struct IntelligenceTrace: Codable, Sendable, Hashable {
             tool: tool,
             arguments: call.arguments,
             summaryLine: result.summaryLine,
-            duration: duration
+            duration: duration,
+            resultContent: result.content
         )
     }
 

@@ -1,4 +1,5 @@
 import Foundation
+import GitHubKit
 import ShepherdCore
 
 /// Something that can run a tool call a model produced.
@@ -22,6 +23,37 @@ protocol IntelligenceToolExecuting: Sendable {
     /// - Throws: Only when the read itself could not be attempted.
     func execute(_ call: IntelligenceToolCall) async throws -> IntelligenceToolResult
 }
+
+/// Something that can download the log of one CI job.
+///
+/// The seam between ``LocalToolExecutor``'s `jobLogTail` tool and the network (plan §3.F), and it
+/// exists for three reasons that are one reason:
+///
+/// - **The executor stays testable.** Every other answer the executor gives comes out of a
+///   `PullRequestDetail` snapshot; the log is the one that needs a GitHub call, and a test of
+///   "does the digest reach the model" must not need a token, a network or a real failing job.
+/// - **A missing log is a state, not a failure.** The parameter is optional wherever it is
+///   passed, so a caller that has no client — a test, or a screen with no session — produces a
+///   tool that answers *there is no log here* rather than one that throws.
+/// - **Nothing about the reads is provider-specific.** Like ``IntelligenceToolExecuting``, this
+///   is one method with plain values on either side, so the three tiers share it untouched.
+///
+/// The one production conformance is ``GitHubKit/GitHubClient``, whose
+/// `jobLog(repo:jobID:)` this method *is* — the conformance below adds no behaviour, which is
+/// deliberate: a seam that transformed the answer on the way through would be a second place for
+/// the 2 MB cap and the lossy decode to live.
+protocol JobLogFetching: Sendable {
+    /// Downloads one job's log.
+    /// - Parameters:
+    ///   - repo: The repository the job ran in.
+    ///   - jobID: The Actions job id, from ``ShepherdCore/CheckRun/actionsJobID``.
+    /// - Returns: The log as text.
+    /// - Throws: Whatever the read failed with; the tool turns it into one line for the model.
+    func jobLog(repo: RepoRef, jobID: Int) async throws -> String
+}
+
+/// The live log read: GitHub's own, with nothing in between.
+extension GitHubClient: JobLogFetching {}
 
 /// The numbers and the string tests every provider's tool loop shares.
 ///
@@ -109,15 +141,25 @@ actor LocalToolExecutor: IntelligenceToolExecuting {
     private let registry: IntelligenceToolRegistry
     /// The tier's budget, which every answer is cut to fit.
     private let budget: TokenBudget
+    /// How a job log is downloaded, or `nil` when this executor cannot read one.
+    private let logFetcher: (any JobLogFetching)?
 
     /// Creates an executor over one pull request.
     /// - Parameters:
     ///   - detail: The fetched pull request. Held as a snapshot.
     ///   - budget: The answering tier's token budget.
-    init(detail: PullRequestDetail, budget: TokenBudget) {
+    ///   - jobLog: How to download a job log. `nil` — the default — makes `jobLogTail` answer
+    ///     that there is no log rather than fail, which is the honest answer for a caller with no
+    ///     signed-in session and the answer every test that is not about logs wants.
+    init(
+        detail: PullRequestDetail,
+        budget: TokenBudget,
+        jobLog: (any JobLogFetching)? = nil
+    ) {
         self.detail = detail
         self.registry = IntelligenceToolRegistry(changedFiles: detail.files)
         self.budget = budget
+        self.logFetcher = jobLog
     }
 
     /// Runs one call, refusing rather than throwing when the model got it wrong.
@@ -145,7 +187,7 @@ actor LocalToolExecutor: IntelligenceToolExecuting {
         case .failingChecks:
             return failingChecks(callID: call.id)
         case .jobLogTail:
-            return jobLogTail(
+            return await jobLogTail(
                 checkName: call.arguments[IntelligenceToolName.checkNameArgument]?.stringValue ?? "",
                 callID: call.id
             )
@@ -212,27 +254,31 @@ actor LocalToolExecutor: IntelligenceToolExecuting {
 
     // MARK: - jobLogTail
 
-    /// The failing region of one check's job log — which Shepherd cannot read yet.
+    /// The failing region of one check's job log (plan §3.F).
     ///
-    /// This is honest rather than empty on purpose. Reading a job log means a new GitHub call
-    /// (`GET /repos/{owner}/{repo}/actions/jobs/{id}/logs`, a redirect to a short-lived blob, the
-    /// job id parsed out of the check's `detailsURL`) plus the tier-1 digest that reduces a
-    /// megabyte of `xcodebuild` output to its failing lines. Both belong to the feature that adds
-    /// the card and the ADR line for log content travelling to a cloud tier
-    /// (`docs/plans/apple-intelligence-v2.md` §3.F); wiring the read in here, ahead of them, would
-    /// mean a log leaving the machine before anything told the user it could.
+    /// Three steps, and each of them can end the tool honestly rather than emptily: the check has
+    /// to be one of the red ones the model was told about, it has to be a GitHub Actions job (so
+    /// that ``ShepherdCore/CheckRun/actionsJobID`` finds an id in its `detailsURL`), and the
+    /// download has to work. Every one of those failures answers *there is no log — work from the
+    /// check's own summary and the diff*, **and says which of the three it was**, because the
+    /// three call for different next moves from a model: a Buildkite check will never have a log,
+    /// while a fetch that failed once might work on the next hop.
     ///
-    /// So the tool exists, is offered to the model, validates its argument, and answers in words
-    /// that a model can act on: *there is no log, work from the check's own summary*. That is the
-    /// same answer the finished tool gives for a Buildkite or a CircleCI check, which has no
-    /// readable log either — so this is the tool's permanent behaviour for part of its input, not
-    /// a placeholder for all of it.
+    /// What comes back on success is never the log. ``ShepherdCore/LogDigest`` reduces it to the
+    /// failing region first — that is the tier-1 pre-digestion ADR 0007 requires, and on the
+    /// on-device tier it is the difference between a megabyte of `xcodebuild` output and the
+    /// ~1,200 tokens the model can actually be given. The digest is cut to *this executor's*
+    /// budget, so the cloud rung a reviewer explicitly asked for genuinely sees more of the log
+    /// than the on-device tier did rather than the same digest through a bigger window.
+    ///
+    /// The content is English, like every prompt in this layer; the summary line beside it is the
+    /// reviewer's and says what the reduction cost.
     /// - Parameters:
     ///   - checkName: The check the model named.
     ///   - callID: The call being answered.
-    private func jobLogTail(checkName: String, callID: String) -> IntelligenceToolResult {
-        let known = Self.failingChecks(in: detail).contains { $0.name == checkName }
-        guard known else {
+    private func jobLogTail(checkName: String, callID: String) async -> IntelligenceToolResult {
+        guard let check = Self.failingChecks(in: detail).first(where: { $0.name == checkName })
+        else {
             return IntelligenceToolResult(
                 callID: callID,
                 content: """
@@ -242,13 +288,87 @@ actor LocalToolExecutor: IntelligenceToolExecuting {
                 summaryLine: String(localized: "no check called \(checkName) on this pull request")
             )
         }
+        guard let fetcher = logFetcher else {
+            return Self.noLog(
+                callID: callID,
+                content: """
+                    Shepherd cannot read logs in this context, so there is no log for \
+                    "\(checkName)". Answer from the check's own summary text and from the diff.
+                    """,
+                summaryLine: String(localized: "no log available for this check")
+            )
+        }
+        guard let jobID = check.actionsJobID else {
+            return Self.noLog(
+                callID: callID,
+                content: """
+                    "\(checkName)" is not a GitHub Actions job, so it has no log Shepherd can \
+                    read. Answer from the check's own summary text and from the diff.
+                    """,
+                summaryLine: String(localized: "\(checkName) is not a GitHub Actions job")
+            )
+        }
+
+        let log: String
+        do {
+            log = try await fetcher.jobLog(repo: detail.repo, jobID: jobID)
+        } catch {
+            // The reason travels to the model in English and to the reviewer as one line. It is a
+            // *result*, not a throw, for this file's own rule: a read that failed must not be
+            // able to end a turn that could still answer from the summary and the diff.
+            return Self.noLog(
+                callID: callID,
+                content: """
+                    The log of "\(checkName)" could not be read: \
+                    \(AIDraftFailure.describe(error)) Answer from the check's own summary text \
+                    and from the diff.
+                    """,
+                summaryLine: String(localized: "the log of \(checkName) could not be read")
+            )
+        }
+
+        let digest = LogDigest.reduce(log, budget: budget)
+        guard !digest.isEmpty else {
+            return Self.noLog(
+                callID: callID,
+                content: """
+                    The log of "\(checkName)" is empty. Answer from the check's own summary text \
+                    and from the diff.
+                    """,
+                summaryLine: String(localized: "the log of \(checkName) is empty")
+            )
+        }
+        let count = digest.lineCount
+        let total = digest.totalLines
         return IntelligenceToolResult(
             callID: callID,
             content: """
-                No log is available for this check yet. Answer from the check's own summary text \
-                and from the diff instead.
+                Log of \(checkName), reduced to the failing lines and their context \
+                (\(count) of \(total) lines):
+                \(digest.text)
                 """,
-            summaryLine: String(localized: "no log available for this check yet"),
+            summaryLine: String(localized: "last \(count) of \(total) lines of \(checkName)"),
+            wasTruncated: digest.wasTruncated
+        )
+    }
+
+    /// The answer for a check whose log cannot be read, in the model's words and the reviewer's.
+    ///
+    /// One helper because there are four ways to have no log and they must be indistinguishable
+    /// in *shape*: never truncated, never an error, always naming what to do instead.
+    /// - Parameters:
+    ///   - callID: The call being answered.
+    ///   - content: What the model is told, in English.
+    ///   - summaryLine: The one line the reviewer reads in the trace.
+    private static func noLog(
+        callID: String,
+        content: String,
+        summaryLine: String
+    ) -> IntelligenceToolResult {
+        IntelligenceToolResult(
+            callID: callID,
+            content: content,
+            summaryLine: summaryLine,
             wasTruncated: false
         )
     }
