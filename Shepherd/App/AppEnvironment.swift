@@ -538,6 +538,30 @@ final class AppEnvironment {
     ///   pull request and was revealed instead.
     @discardableResult
     func sendToSession(_ context: DelegationContext, message: String) -> DelegationModel? {
+        let onDidPush: @MainActor () async -> Void = { [weak self] in
+            await self?.syncNow()
+        }
+        let onDidFinish: @MainActor (DelegationOutcome) -> Void = { [weak self] outcome in
+            guard let self else { return }
+            self.webhookCoordinator.handle(outcome, database: self.session?.database)
+        }
+        let model = delegation.open(
+            context: context,
+            settings: settings,
+            toasts: toasts,
+            onDidPush: onDidPush,
+            onDidFinish: onDidFinish,
+            // See above: a confirmed message is not a field to draft into.
+            brief: nil
+        )
+        // A run already in flight for this pull request owns its prompt and its transcript; the
+        // centre revealed it rather than replacing it, and this message is not sent twice.
+        guard !model.isBusy else { return nil }
+        model.task = message
+        model.start()
+        return model
+    }
+
     /// Opens the delegation sheet with a **rule** for the repository's agent instructions
     /// (ADR 0029).
     ///
@@ -575,15 +599,6 @@ final class AppEnvironment {
             toasts: toasts,
             onDidPush: onDidPush,
             onDidFinish: onDidFinish,
-            // See above: a confirmed message is not a field to draft into.
-            brief: nil
-        )
-        // A run already in flight for this pull request owns its prompt and its transcript; the
-        // centre revealed it rather than replacing it, and this message is not sent twice.
-        guard !model.isBusy else { return nil }
-        model.task = message
-        model.start()
-        return model
             brief: ruleBriefDrafter()
         )
         // Never over a run in flight: that sheet's task belongs to the prompt the agent is

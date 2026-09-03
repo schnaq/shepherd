@@ -295,8 +295,6 @@ order. Everything here is tier 1 first (deterministic, local); a model only ever
       badge and the sort, never the lane
 - [x] Since my review — a snapshot of the reviewed head at submit time, the interdiff computed
       locally, each finding marked addressed / unchanged / moved / replied (ADR 0028)
-- [ ] Feedback loop — a finding the reviewer has written three times becomes a drafted `CLAUDE.md`
-      rule in the delegation sheet; the local agent opens the pull request
 - [x] Session back-channel — a finding goes to the Claude Code session named in the head commits'
       `Claude-Session:` trailer, through the user's own CLI (ADR 0011: no Shepherd-held
       credentials; ADR 0030). The local path ships: the second button beside "Add comment", the
@@ -308,8 +306,6 @@ order. Everything here is tier 1 first (deterministic, local); a model only ever
 - [x] Feedback loop — a finding the reviewer has written three times becomes a drafted `CLAUDE.md`
       rule in the delegation sheet; the local agent opens the pull request (ADR 0029). Detection is
       on-device over the reviewer's own comments only; the rules engine never gets the trigger
-- [ ] Session back-channel — a finding goes to the Claude Code session named in the head commits'
-      `Claude-Session:` trailer, through the user's own CLI (ADR 0011: no Shepherd-held credentials)
 
 ## v1.x
 
