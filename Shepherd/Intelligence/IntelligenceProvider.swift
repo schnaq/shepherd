@@ -382,6 +382,19 @@ enum IntelligenceError: Error, LocalizedError, Equatable {
     /// converged, and a diagnosis assembled from a turn that was cut off mid-thought would carry
     /// a confidence the reviewer has no way to discount.
     case toolLoopExceeded
+    /// The request was cancelled — the reviewer pressed Stop, or the task it ran in was cancelled.
+    ///
+    /// Its own case because the degradation ladder has to be able to tell a *cancellation* apart
+    /// from a tier that failed: stepping down to the on-device tier because the cloud call was
+    /// cancelled would start a second request nobody asked for, on a Mac whose owner has just
+    /// said stop. It is an ``IntelligenceError`` rather than a fifth ``IntelligenceOutcome`` case
+    /// so that every call site stays unchanged — "no answer, and here is the one line why" is
+    /// what every AI surface in the app already knows how to show, and a cancelled request is
+    /// exactly that, with the reviewer's own decision as the reason.
+    ///
+    /// Never mapped back onto a retry: the ladder stops, and pressing the button again is the
+    /// reviewer's to press.
+    case cancelled
 
     var errorDescription: String? {
         switch self {
@@ -405,6 +418,8 @@ enum IntelligenceError: Error, LocalizedError, Equatable {
             return String(localized: "This endpoint cannot call tools, so it cannot look up why CI is red.")
         case .toolLoopExceeded:
             return String(localized: "The model asked to read more than Shepherd allows for one diagnosis.")
+        case .cancelled:
+            return String(localized: "Cancelled.")
         }
     }
 }

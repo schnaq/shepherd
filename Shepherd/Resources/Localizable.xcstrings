@@ -2171,6 +2171,16 @@
         }
       }
     },
+    "Cancelled.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abgebrochen."
+          }
+        }
+      }
+    },
     "Cancelled. The worktree is left in place.": {
       "localizations": {
         "de": {

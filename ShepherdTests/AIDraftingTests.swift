@@ -996,6 +996,93 @@ final class AIDraftingTests: XCTestCase {
         XCTAssertEqual(state.resolve(.replace, existingText: ""), .nothing, "nothing left to apply")
     }
 
+    // MARK: - Cancellation
+
+    func testCancellationIsToldApartFromEveryOtherFailure() {
+        XCTAssertTrue(IntelligenceRouter.isCancellation(CancellationError()))
+        XCTAssertTrue(IntelligenceRouter.isCancellation(URLError(.cancelled)))
+        XCTAssertTrue(IntelligenceRouter.isCancellation(IntelligenceError.cancelled))
+        // Everything the ladder is *supposed* to step down for stays a failure.
+        XCTAssertFalse(IntelligenceRouter.isCancellation(URLError(.timedOut)))
+        XCTAssertFalse(IntelligenceRouter.isCancellation(IntelligenceError.guardrailDeclined))
+        XCTAssertFalse(
+            IntelligenceRouter.isCancellation(IntelligenceError.http(status: 503, message: "busy"))
+        )
+    }
+
+    func testACancelledCloudTierEndsTheLadderRatherThanStartingTheOnDeviceOne() async {
+        let asked = AskedTiers()
+        let router = IntelligenceRouter(
+            configuration: enabledConfiguration,
+            tiers: IntelligenceTiers(
+                cloud: { _ in StubProvider(kind: .anthropic, cancels: true, asked: asked) },
+                onDevice: { StubProvider(kind: .onDevice, text: "on-device draft", asked: asked) },
+                onDeviceUnavailabilityReason: { nil }
+            )
+        )
+
+        let outcome = await router.draftReviewSummary(for: detail(patch: longPatch(lines: 10)))
+
+        let kinds = await asked.kinds
+        XCTAssertNil(outcome.output, "a stopped request is not answered by the tier below")
+        XCTAssertEqual(outcome.message, IntelligenceError.cancelled.errorDescription)
+        XCTAssertEqual(kinds, [.anthropic], "the on-device tier was never asked")
+    }
+
+    func testACancelledCloudStreamEndsTheRequestRatherThanStartingTheOnDeviceOne() async {
+        let router = IntelligenceRouter(
+            configuration: enabledConfiguration,
+            tiers: IntelligenceTiers(
+                cloud: { _ in StubProvider(kind: .anthropic) },
+                onDevice: { StubProvider(kind: .onDevice) },
+                onDeviceUnavailabilityReason: { nil },
+                summaryStream: { provider, _ in
+                    // The on-device rung *would* answer, which is what makes the assertion below
+                    // an assertion about the ladder rather than about two broken tiers.
+                    provider.kind == .anthropic
+                        ? cancelledStreamScript()
+                        : streamScript(["On-device draft."])
+                }
+            )
+        )
+
+        let outcome = await router.streamReviewSummaryDraft(
+            for: detail(patch: longPatch(lines: 10))
+        )
+
+        XCTAssertNil(outcome.stream)
+        XCTAssertEqual(
+            outcome.failure,
+            .failed(IntelligenceError.cancelled.errorDescription ?? "")
+        )
+    }
+
+    func testStoppingBeforeTheFirstElementEndsTheRequestInsteadOfWaitingForever() async {
+        // The window the old handshake could not be interrupted in: the tier has been asked, no
+        // element exists yet, and the relay nobody holds cannot be terminated to cancel it.
+        let router = IntelligenceRouter(
+            configuration: enabledConfiguration,
+            tiers: IntelligenceTiers(
+                cloud: { _ in StubProvider(kind: .anthropic) },
+                onDevice: { StubProvider(kind: .onDevice) },
+                onDeviceUnavailabilityReason: { nil },
+                summaryStream: { _, _ in stalledStream() }
+            )
+        )
+        let pullRequest = detail(patch: longPatch(lines: 10))
+
+        let request = Task { await router.streamReviewSummaryDraft(for: pullRequest) }
+        request.cancel()
+        let outcome = await request.value
+
+        XCTAssertNil(outcome.stream)
+        XCTAssertEqual(
+            outcome.failure,
+            .failed(IntelligenceError.cancelled.errorDescription ?? ""),
+            "stopping is the reviewer's own answer, not the tier below's"
+        )
+    }
+
     // MARK: - Stubs
 
     private var enabledConfiguration: IntelligenceConfiguration {
@@ -1020,28 +1107,55 @@ final class AIDraftingTests: XCTestCase {
         let kind: IntelligenceKind
         var text: String = "drafted text"
         var failure: IntelligenceError?
+        /// Whether this tier throws ``CancellationError`` instead of answering.
+        ///
+        /// Its own flag rather than a case of ``failure``, because the point is precisely that
+        /// the error is *not* an ``IntelligenceError``: it is what the language throws when a
+        /// task is cancelled, and the ladder has to recognise it anyway.
+        var cancels: Bool = false
+        /// Records that this tier was asked at all, for the tests that assert it was not.
+        var asked: AskedTiers?
 
         var isAvailable: Bool { get async { failure == nil } }
 
-        func summarizePullRequest(_ digest: PullRequestDigest) async throws -> PRSummary {
+        /// What every method below does before it answers: log the call, then obey the flags.
+        private func begin() async throws {
+            await asked?.record(kind)
+            if cancels { throw CancellationError() }
             if let failure { throw failure }
+        }
+
+        func summarizePullRequest(_ digest: PullRequestDigest) async throws -> PRSummary {
+            try await begin()
             return PRSummary(overview: text)
         }
 
         func suggestReviewFocus(_ digest: PullRequestDigest) async throws -> [FocusHint] {
-            if let failure { throw failure }
+            try await begin()
             return []
         }
 
         func draftReviewSummary(_ request: ReviewSummaryDraftRequest) async throws -> String {
-            if let failure { throw failure }
+            try await begin()
             return text
         }
 
         func draftInlineComment(_ request: InlineCommentDraftRequest) async throws -> String {
-            if let failure { throw failure }
+            try await begin()
             return text
         }
+    }
+}
+
+/// Which tiers a router asked, in order.
+///
+/// An `actor` because the tiers are asked from whatever task the router is on and the log is read
+/// back from the test's.
+private actor AskedTiers {
+    private(set) var kinds: [IntelligenceKind] = []
+
+    func record(_ kind: IntelligenceKind) {
+        kinds.append(kind)
     }
 }
 
@@ -1064,6 +1178,32 @@ private func streamScript(
         } else {
             continuation.finish()
         }
+    }
+}
+
+/// A provider stream that fails the way an in-flight request that was cancelled does.
+///
+/// ``CancellationError`` rather than an ``IntelligenceError``, because that is what actually
+/// arrives: the language's own error, or `URLError.cancelled` from a URL session whose task went
+/// away — neither of which the ladder may read as "this tier failed, try the next one".
+/// - Returns: A stream that yields nothing and ends cancelled.
+private func cancelledStreamScript() -> AsyncThrowingStream<String, Error> {
+    AsyncThrowingStream { continuation in
+        continuation.finish(throwing: CancellationError())
+    }
+}
+
+/// A provider stream that never yields and never finishes on its own.
+///
+/// The fixture for "Stop before the first token": the whole point is the window in which no
+/// element exists yet, so the only thing that may end this stream is the task driving it being
+/// cancelled. A test that hangs on this stream is a test reporting that cancellation is not
+/// reaching the provider.
+/// - Returns: A stream that stays open and empty.
+private func stalledStream() -> AsyncThrowingStream<String, Error> {
+    AsyncThrowingStream { _ in
+        // Nothing is yielded and nothing is finished on purpose: cancelling the task that drives
+        // this stream is the only thing that can end it.
     }
 }
 

@@ -120,6 +120,11 @@ private enum FirstElement: Sendable {
     case arrived
     /// The stream finished without ever yielding.
     case empty
+    /// The request was cancelled before any text existed.
+    ///
+    /// Its own case rather than a ``failed(_:)`` with a cancellation message, because the ladder
+    /// treats it differently: a failure moves down a rung, a cancellation stops.
+    case cancelled
     /// The stream failed before yielding, with a readable reason.
     case failed(String)
 }
@@ -128,6 +133,8 @@ private enum FirstElement: Sendable {
 private enum StartedStream: Sendable {
     /// The tier produced its first element; everything after this belongs to that tier.
     case started(IntelligenceStream)
+    /// The request was cancelled while this tier was still thinking, so there is no next rung.
+    case cancelled
     /// The tier produced nothing usable, with a reason the next tier's failure can replace.
     case failed(String)
 }
@@ -466,6 +473,34 @@ struct IntelligenceRouter: Sendable {
         }
     }
 
+    /// Whether a failure means the work was **cancelled** rather than that a tier failed.
+    ///
+    /// The distinction the degradation ladder cannot do without. Every rung of both ladders
+    /// catches whatever the tier threw and tries the tier below, which is right for a wrong key,
+    /// an unreachable endpoint or a guardrail refusal — and wrong for a cancellation: the
+    /// reviewer who pressed Stop while the cloud tier was in flight would have the on-device
+    /// model started for them, and would watch a draft they had just cancelled appear anyway.
+    ///
+    /// Three shapes, because cancellation reaches us in three spellings: the language's own
+    /// ``CancellationError``, `URLSession`'s ``URLError/Code/cancelled`` (what an in-flight cloud
+    /// request throws when its task goes away), and — as a backstop — the state of the current
+    /// task itself, for a provider that swallows the cancellation and reports something of its
+    /// own instead. ``IntelligenceError/cancelled`` is included so that a ladder rung that has
+    /// already mapped one of the three keeps being recognised by the next.
+    /// - Parameter error: What the tier threw.
+    /// - Returns: `true` when nobody is waiting for an answer any more.
+    static func isCancellation(_ error: any Error) -> Bool {
+        if error is CancellationError { return true }
+        if let urlError = error as? URLError, urlError.code == .cancelled { return true }
+        if let intelligence = error as? IntelligenceError, intelligence == .cancelled { return true }
+        return Task.isCancelled
+    }
+
+    /// The one line a cancelled request answers with, in both ladders and on both rungs.
+    private static var cancelledFailureMessage: String {
+        describe(IntelligenceError.cancelled)
+    }
+
     // MARK: - Streaming (plan §0.2)
 
     /// Drafts the body of a review as a stream of cumulative text.
@@ -597,6 +632,9 @@ struct IntelligenceRouter: Sendable {
                 kind: cloud.kind
             ) {
             case .started(let stream): return .stream(stream)
+            // A cancellation ends the request instead of moving down a rung: the reviewer who
+            // pressed Stop is not asking for the tier below to try the same thing.
+            case .cancelled: return .failed(IntelligenceRouter.cancelledFailureMessage)
             case .failed(let reason): lastFailure = reason
             }
         }
@@ -609,6 +647,7 @@ struct IntelligenceRouter: Sendable {
                 kind: onDevice.kind
             ) {
             case .started(let stream): return .stream(stream)
+            case .cancelled: return .failed(IntelligenceRouter.cancelledFailureMessage)
             case .failed(let reason): lastFailure = reason
             }
         } else if lastFailure == nil {
@@ -633,40 +672,71 @@ struct IntelligenceRouter: Sendable {
     /// model's most likely bad day (a guardrail refusal arrives as an error, but an empty answer
     /// arrives as nothing at all), and treating it as success would leave the reviewer watching
     /// an empty field with no reason in sight.
+    ///
+    /// **The wait is structured, and it has to be.** The task driving the provider is created
+    /// before the wait, and the wait itself runs inside ``withTaskCancellationHandler``, so a
+    /// caller cancelled while the tier is still thinking — the reviewer pressing Stop before the
+    /// first token — cancels that task rather than abandoning it. Cancelling through
+    /// ``AsyncThrowingStream/Continuation/onTermination`` alone cannot do that job: it fires when
+    /// the *relay* is terminated, and until the first element exists the relay has not been handed
+    /// to anybody who could terminate it, so an in-flight cloud request would run to completion
+    /// with nobody left to read it. The handshake travels through a one-element stream rather than
+    /// a continuation for the same reason — the driving task has to exist before the wait does, so
+    /// that the cancellation handler has something to cancel.
     /// - Parameters:
     ///   - source: The provider's stream, not yet iterated.
     ///   - kind: The tier it came from.
-    /// - Returns: The labelled stream, or the reason this tier did not answer.
+    /// - Returns: The labelled stream, the fact that the request was cancelled, or the reason this
+    ///   tier did not answer.
     private static func start(
         _ source: AsyncThrowingStream<String, Error>,
         kind: IntelligenceKind
     ) async -> StartedStream {
         let relay = AsyncThrowingStream<String, Error>.makeStream()
-        let signal: FirstElement = await withCheckedContinuation { handshake in
-            let task = Task {
-                // The only thing that resumes the handshake, and it must do so exactly once:
-                // the flag is local to this task, so there is nothing to synchronise.
-                var reported = false
-                func report(_ value: FirstElement) {
-                    guard !reported else { return }
-                    reported = true
-                    handshake.resume(returning: value)
-                }
-                do {
-                    for try await text in source {
-                        report(.arrived)
-                        relay.continuation.yield(text)
-                    }
-                    report(.empty)
-                    relay.continuation.finish()
-                } catch {
-                    report(.failed(describe(error)))
-                    relay.continuation.finish(throwing: error)
-                }
+        // One value, from the driving task to the ladder: which of the four things happened first.
+        let handshake = AsyncStream<FirstElement>.makeStream()
+        let driver = Task {
+            // The only thing that answers the handshake, and it must do so exactly once: the flag
+            // is local to this task, so there is nothing to synchronise.
+            var reported = false
+            func report(_ value: FirstElement) {
+                guard !reported else { return }
+                reported = true
+                handshake.continuation.yield(value)
+                handshake.continuation.finish()
             }
-            // The reviewer closing the sheet ends the request: the stream going away cancels the
-            // task, which cancels the URL session's byte stream or the model's session.
-            relay.continuation.onTermination = { _ in task.cancel() }
+            do {
+                for try await text in source {
+                    report(.arrived)
+                    relay.continuation.yield(text)
+                }
+                // A cancelled `AsyncThrowingStream` ends by *finishing*, not by throwing, so an
+                // empty answer and a stopped one arrive at the same place and are told apart here.
+                report(Task.isCancelled ? .cancelled : .empty)
+                relay.continuation.finish()
+            } catch {
+                report(isCancellation(error) ? .cancelled : .failed(describe(error)))
+                relay.continuation.finish(throwing: error)
+            }
+        }
+        // The reviewer closing the sheet ends the request too: the stream going away cancels the
+        // task, which cancels the URL session's byte stream or the model's session.
+        relay.continuation.onTermination = { _ in driver.cancel() }
+
+        let signal: FirstElement? = await withTaskCancellationHandler {
+            var iterator = handshake.stream.makeAsyncIterator()
+            return await iterator.next()
+        } onCancel: {
+            driver.cancel()
+        }
+
+        // Checked after the first element, not only before it: the wait can be cancelled while
+        // the tier is still thinking (`next()` then comes back empty), and it can be cancelled in
+        // the instant between the first element and this line — in which case handing the stream
+        // out would hand a live request to a caller that has already stopped waiting for it.
+        guard let signal, !Task.isCancelled else {
+            driver.cancel()
+            return .cancelled
         }
 
         switch signal {
@@ -674,6 +744,8 @@ struct IntelligenceRouter: Sendable {
             return .started(IntelligenceStream(kind: kind, text: relay.stream))
         case .empty:
             return .failed(describe(IntelligenceError.malformedResponse))
+        case .cancelled:
+            return .cancelled
         case .failed(let reason):
             return .failed(reason)
         }
@@ -711,6 +783,11 @@ struct IntelligenceRouter: Sendable {
                     )
                 )
             } catch {
+                // A cancellation is not a tier failure: stepping down here would start the
+                // on-device tier for a reviewer who has just stopped the request.
+                guard !IntelligenceRouter.isCancellation(error) else {
+                    return .failed(IntelligenceRouter.cancelledFailureMessage)
+                }
                 lastFailure = IntelligenceRouter.describe(error)
             }
         }
@@ -726,6 +803,9 @@ struct IntelligenceRouter: Sendable {
                     )
                 )
             } catch {
+                guard !IntelligenceRouter.isCancellation(error) else {
+                    return .failed(IntelligenceRouter.cancelledFailureMessage)
+                }
                 lastFailure = IntelligenceRouter.describe(error)
             }
         } else if lastFailure == nil {
