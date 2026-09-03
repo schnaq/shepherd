@@ -63,7 +63,10 @@ final class SessionBackChannelTests: XCTestCase {
         var configuration = AgentCLIConfiguration()
         // The shipped state: no remote command, so the button links to the session.
         XCTAssertTrue(configuration.remoteSessionTemplate.isEmpty)
-        guard let url = remote.url else { return XCTFail("the fixture has no URL") }
+        guard let url = remote.url else {
+            XCTFail("the fixture has no URL")
+            return
+        }
         XCTAssertEqual(
             SessionBackChannel.action(session: remote, configuration: configuration),
             .open(remote, url)

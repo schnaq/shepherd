@@ -72,6 +72,8 @@ struct ReviewComposerBar: View {
 /// The submit sheet: summary text plus the verdict picker.
 struct SubmitReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
+    /// The app-wide environment, for the session back-channel's delegation (ADR 0030).
+    @Environment(AppEnvironment.self) private var environment
     /// The review model.
     let model: ReviewModel
     /// The write actions.
@@ -88,6 +90,8 @@ struct SubmitReviewSheet: View {
     /// session or the SSE connection. Dropping the field's state alone would leave a model
     /// generating tokens nobody will ever read.
     @State private var draftTask: Task<Void, Never>?
+    /// Whether the session-send confirmation is up (ADR 0030).
+    @State private var isSessionSheetPresented = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -194,6 +198,12 @@ struct SubmitReviewSheet: View {
                 }
                 .buttonStyle(SecondaryButtonStyle())
                 .keyboardShortcut(.cancelAction)
+                // The summary's own second button (ADR 0030). It sends the summary text to the
+                // session and does *nothing else*: the review is still submitted by the button
+                // beside it, because submitting is a review action and sending is not.
+                if let action = sessionAction {
+                    sessionButton(action)
+                }
                 Button {
                     Task {
                         await model.submit(verdict: model.pendingVerdict, actions: actions)
@@ -341,6 +351,84 @@ struct SubmitReviewSheet: View {
         model.summaryText = text
     }
 
+    // MARK: - Send to the session (ADR 0030)
+
+    /// What the second button offers, or `nil` when there is no session to answer.
+    private var sessionAction: SessionBackChannel.Action? {
+        SessionBackChannel.action(
+            session: SessionReference.mostRecent(in: model.detail?.commits ?? []),
+            configuration: model.settings.agentCLI
+        )
+    }
+
+    /// The message and the delegation this press would produce.
+    ///
+    /// No path and no line: a summary is about the pull request, so the message carries the slug
+    /// and the link and nothing that would claim a location it does not have.
+    private func sessionPlan(_ session: SessionReference) -> SessionBackChannel.Plan? {
+        guard let summary = model.summary else { return nil }
+        return SessionBackChannel.plan(
+            summary: summary,
+            session: session,
+            path: nil,
+            line: nil,
+            text: model.summaryText,
+            round: model.round?.roundCount
+        )
+    }
+
+    @ViewBuilder
+    private func sessionButton(_ action: SessionBackChannel.Action) -> some View {
+        switch action {
+        case .send(let session):
+            Button {
+                isSessionSheetPresented = true
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "bubble.left.and.text.bubble.right")
+                        .font(.system(size: 10, weight: .bold))
+                    Text(String(localized: "Send to the session"))
+                }
+            }
+            .buttonStyle(SecondaryButtonStyle(tint: Theme.agent))
+            .disabled(model.summaryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .help(String(
+                localized: "Send this summary to the session that wrote this code"
+            ))
+            .sheet(isPresented: $isSessionSheetPresented) {
+                if let plan = sessionPlan(session) {
+                    SessionSendSheet(
+                        session: session,
+                        message: plan.message,
+                        note: String(
+                            localized: "Your summary stays in the field: sending does not submit the review, does not approve and resolves nothing. This sheet closes so you can watch the run."
+                        ),
+                        agentName: model.settings.agentCLI.kind.displayName
+                    ) {
+                        // The submit sheet goes first, and the run is asked for after it: the
+                        // delegation panel is presented at the window's root, and a sheet cannot
+                        // open in front of another sheet. The summary itself is the model's, so
+                        // it is still there when the reviewer comes back to submit.
+                        dismiss()
+                        _ = environment.sendToSession(plan.context, message: plan.message)
+                    }
+                }
+            }
+        case .open(_, let url):
+            Link(destination: url) {
+                HStack(spacing: 5) {
+                    Image(systemName: "arrow.up.right.square")
+                        .font(.system(size: 10, weight: .bold))
+                    Text(String(localized: "Open the session"))
+                }
+            }
+            .buttonStyle(SecondaryButtonStyle(tint: Theme.agent))
+            .help(String(
+                localized: "No command is configured for this kind of session, so this opens it in the browser instead"
+            ))
+        }
+    }
+
     /// Whether the verdict needs a summary the user has not written.
     ///
     /// `POST /pulls/{n}/reviews` documents `body` as required for `REQUEST_CHANGES` and
@@ -397,6 +485,8 @@ struct InlineCommentComposer: View {
     @State private var explainTask: Task<Void, Never>?
     /// Whether the explanation popover is up.
     @State private var isExplainPresented = false
+    /// Whether the session-send confirmation is up (ADR 0030).
+    @State private var isSessionSheetPresented = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -498,6 +588,12 @@ struct InlineCommentComposer: View {
                 }
                 .buttonStyle(SecondaryButtonStyle())
                 .keyboardShortcut(.cancelAction)
+                // The second button, and only when the head commits carry a return address
+                // (ADR 0030). It never replaces "Add comment": the comment is still what gets
+                // posted, and the thread stays the record.
+                if let action = sessionAction {
+                    sessionButton(action)
+                }
                 Button(String(localized: "Add comment")) {
                     Task { await save() }
                 }
@@ -785,6 +881,98 @@ struct InlineCommentComposer: View {
             errorMessage = (error as? LocalizedError)?.errorDescription
                 ?? error.localizedDescription
         }
+    }
+
+    // MARK: - Send to the session (ADR 0030)
+
+    /// What the second button offers, or `nil` when there is no session to answer.
+    private var sessionAction: SessionBackChannel.Action? {
+        SessionBackChannel.action(
+            session: SessionReference.mostRecent(in: model.detail?.commits ?? []),
+            configuration: model.settings.agentCLI
+        )
+    }
+
+    /// The message and the delegation this press would produce, or `nil` before the pull
+    /// request has loaded.
+    private func sessionPlan(_ session: SessionReference) -> SessionBackChannel.Plan? {
+        guard let summary = model.summary else { return nil }
+        return SessionBackChannel.plan(
+            summary: summary,
+            session: session,
+            path: request.path,
+            line: request.line,
+            text: commentText,
+            round: model.round?.roundCount
+        )
+    }
+
+    @ViewBuilder
+    private func sessionButton(_ action: SessionBackChannel.Action) -> some View {
+        switch action {
+        case .send(let session):
+            Button {
+                isSessionSheetPresented = true
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: "bubble.left.and.text.bubble.right")
+                        .font(.system(size: 10, weight: .bold))
+                    Text(String(localized: "Send to the session"))
+                }
+            }
+            .buttonStyle(SecondaryButtonStyle(tint: Theme.agent))
+            .disabled(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .help(String(
+                localized: "Add the comment and send it to the session that wrote this code"
+            ))
+            .sheet(isPresented: $isSessionSheetPresented) {
+                if let plan = sessionPlan(session) {
+                    SessionSendSheet(
+                        session: session,
+                        message: plan.message,
+                        note: String(
+                            localized: "The comment is saved to your pending review exactly as “Add comment” saves it. Sending resolves nothing and submits nothing."
+                        ),
+                        agentName: model.settings.agentCLI.kind.displayName
+                    ) {
+                        Task { await sendToSession(plan) }
+                    }
+                }
+            }
+        case .open(_, let url):
+            Link(destination: url) {
+                HStack(spacing: 5) {
+                    Image(systemName: "arrow.up.right.square")
+                        .font(.system(size: 10, weight: .bold))
+                    Text(String(localized: "Open the session"))
+                }
+            }
+            .buttonStyle(SecondaryButtonStyle(tint: Theme.agent))
+            .help(String(
+                localized: "No command is configured for this kind of session, so this opens it in the browser instead"
+            ))
+        }
+    }
+
+    /// Saves the comment the way "Add comment" does, then opens the delegation that carries the
+    /// message to the session.
+    ///
+    /// The order is deliberate: a comment that could not be saved sends nothing, because the
+    /// thread is the record and a session answering a finding GitHub never received would be the
+    /// one outcome nobody could reconstruct afterwards. The composer closes before the run is
+    /// asked for, because the delegation panel is presented at the window's root and a sheet
+    /// cannot open in front of another sheet.
+    /// - Parameter plan: The message and the delegation, already confirmed.
+    private func sendToSession(_ plan: SessionBackChannel.Plan) async {
+        do {
+            try await model.saveDraftComment(request, body: commentText)
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription
+                ?? error.localizedDescription
+            return
+        }
+        dismiss()
+        environment.sendToSession(plan.context, message: plan.message)
     }
 }
 

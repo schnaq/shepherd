@@ -282,6 +282,12 @@ final class InboxModel {
     var triage: TriageCoordinator?
     /// Whether a detail refresh is in flight.
     private(set) var isRefreshingDetail = false
+    /// The return address of each row whose cached head commits carry one (ADR 0030).
+    ///
+    /// Keyed by node id and filled in in the background from the local rows, like
+    /// ``reviewRoundsByID``: a row with no entry is a row whose detail Shepherd has not read yet
+    /// or whose commits carry no `Claude-Session:` trailer, never a row that is still loading.
+    private(set) var sessionsByID: [String: SessionReference] = [:]
     /// What each row says about the rounds it has been reviewed in (ADR 0028).
     ///
     /// Keyed by node id and filled in in the background: the numbers come from the local
@@ -296,8 +302,11 @@ final class InboxModel {
     private var detailTask: Task<Void, Never>?
     private var intelligenceTask: Task<Void, Never>?
     private var roundsTask: Task<Void, Never>?
+    private var sessionsTask: Task<Void, Never>?
     /// The rows the rounds chips were last computed for, as `id:head` pairs.
     private var roundsSignature = ""
+    /// The rows the session glyphs were last read for, as `id:head` pairs.
+    private var sessionsSignature = ""
 
     /// Creates the model.
     /// - Parameters:
@@ -321,6 +330,7 @@ final class InboxModel {
                 self.hasLoaded = true
                 self.clampSelection()
                 self.refreshReviewRounds()
+                self.refreshSessionReferences()
             }
         }
     }
@@ -335,6 +345,8 @@ final class InboxModel {
         intelligenceTask = nil
         roundsTask?.cancel()
         roundsTask = nil
+        sessionsTask?.cancel()
+        sessionsTask = nil
     }
 
     /// Recomputes the rounds chips, but only when the rows they describe have moved.
@@ -359,6 +371,34 @@ final class InboxModel {
             guard let self, !Task.isCancelled else { return }
             self.reviewRoundsByID = rounds
         }
+    }
+
+    /// Re-reads the return addresses, but only when the rows they describe have moved.
+    ///
+    /// The same cheap gate as ``refreshReviewRounds()``, for the same reason: the inbox
+    /// observation speaks on every write, and a glyph can only change when a pull request
+    /// appears, disappears or gets a new head commit (ADR 0030).
+    private func refreshSessionReferences() {
+        let signature = allRows.map { "\($0.id):\($0.headRefOid)" }.joined(separator: ",")
+        guard signature != sessionsSignature else { return }
+        sessionsSignature = signature
+        let rows = allRows
+        let database = session.database
+        sessionsTask?.cancel()
+        sessionsTask = Task { [weak self] in
+            let references = await SessionReturnAddressLoader.references(
+                database: database,
+                rows: rows
+            )
+            guard let self, !Task.isCancelled else { return }
+            self.sessionsByID = references
+        }
+    }
+
+    /// The session a row can be answered at, or `nil` when it has no return address (ADR 0030).
+    /// - Parameter id: The pull request's node id.
+    func sessionReference(for id: String) -> SessionReference? {
+        sessionsByID[id]
     }
 
     /// What one row shows about its review rounds, or `nil` when it has never been reviewed here.

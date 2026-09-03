@@ -1551,6 +1551,16 @@
         }
       }
     },
+    "Add the comment and send it to the session that wrote this code": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den Kommentar speichern und an die Session schicken, die diesen Code geschrieben hat"
+          }
+        }
+      }
+    },
     "Add the draft after what you already wrote": {
       "localizations": {
         "de": {
@@ -4191,6 +4201,16 @@
         }
       }
     },
+    "Has a session to answer to": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hat eine Session, der man antworten kann"
+          }
+        }
+      }
+    },
     "Hide translation": {
       "localizations": {
         "de": {
@@ -5161,6 +5181,16 @@
         }
       }
     },
+    "No command is configured for this kind of session, so this opens it in the browser instead": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für diese Art von Session ist kein Befehl konfiguriert – das öffnet sie stattdessen im Browser"
+          }
+        }
+      }
+    },
     "No command is configured for this kind of session. Set one in Settings → Delegation.": {
       "localizations": {
         "de": {
@@ -5937,6 +5967,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Das Issue auf GitHub öffnen"
+          }
+        }
+      }
+    },
+    "Open the session": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session öffnen"
           }
         }
       }
@@ -7491,6 +7531,16 @@
         }
       }
     },
+    "Send this summary to the session that wrote this code": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Zusammenfassung an die Session schicken, die diesen Code geschrieben hat"
+          }
+        }
+      }
+    },
     "Send to the session": {
       "localizations": {
         "de": {
@@ -8697,6 +8747,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "In der Befehlsvorlage ist ein %@-Anführungszeichen nicht geschlossen."
+          }
+        }
+      }
+    },
+    "The comment is saved to your pending review exactly as “Add comment” saves it. Sending resolves nothing and submits nothing.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Kommentar landet genau so in deinem offenen Review wie über „Kommentar hinzufügen“. Das Senden löst nichts auf und schickt kein Review ab."
           }
         }
       }
@@ -10027,6 +10087,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Deine Einstellungen und deine Secrets werden auf diesem Mac mit einer Passphrase verschlüsselt, die du wählst, und dann als ein Objekt in einem Bucket abgelegt, der dir gehört. Der Bucket-Betreiber — und jeder, der den Bucket lesen kann — sieht nur Chiffrat."
+          }
+        }
+      }
+    },
+    "Your summary stays in the field: sending does not submit the review, does not approve and resolves nothing. This sheet closes so you can watch the run.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Zusammenfassung bleibt im Feld: Das Senden schickt kein Review ab, genehmigt nichts und löst nichts auf. Dieses Fenster schließt sich, damit du den Lauf sehen kannst."
           }
         }
       }

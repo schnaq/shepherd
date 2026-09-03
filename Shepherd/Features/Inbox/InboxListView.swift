@@ -143,6 +143,7 @@ struct InboxListView: View {
                                         isMarked: model.markedIDs.contains(row.id),
                                         triage: model.triageSummary(for: row.id),
                                         rounds: model.reviewRounds(for: row.id),
+                                        hasSession: model.sessionReference(for: row.id) != nil,
                                         onToggleMark: { model.toggleMark(row.id) }
                                     )
                                     .id(row.id)
@@ -369,6 +370,12 @@ struct InboxRowView: View {
     /// Passed in for ``triage``'s reason: a row is a value renderer, and the numbers come from
     /// the model that read them.
     var rounds: ReviewRoundsSummary?
+    /// Whether this pull request's head commits carry a session to answer to (ADR 0030).
+    ///
+    /// Passed in for ``triage``'s reason again: the trailer lives in the detail row the model
+    /// read, and a row that went looking for it itself would make the list depend on the
+    /// database.
+    var hasSession = false
     /// Ticks or unticks this row.
     var onToggleMark: (() -> Void)?
 
@@ -410,6 +417,17 @@ struct InboxRowView: View {
 
             ProvenanceChip(actor: row.author)
                 .layoutPriority(1)
+
+            // Beside the provenance chip, because it says the same kind of thing: this pull
+            // request came from a session, and that session can still be answered (ADR 0030).
+            if hasSession {
+                Image(systemName: "bubble.left.and.text.bubble.right")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.agent)
+                    .layoutPriority(1)
+                    .help(String(localized: "Has a session to answer to"))
+                    .accessibilityLabel(Text(String(localized: "Has a session to answer to")))
+            }
 
             // Beside the provenance chip, because the two say the same kind of thing about the
             // row — where it came from, and what it is — and both are read before the title's
