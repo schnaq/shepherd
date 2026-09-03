@@ -281,6 +281,16 @@ short form.
   call; Writing Tools already offers a rewrite when asked), and an AI-written morning digest (the
   digest runs unattended and its lines are deterministic on purpose, see v1.x below)
 
+## macOS 27 — the target moves (decision 2026-09-03)
+
+Shepherd targets macOS 27 as soon as CI can build against its SDK; the plan, verified against
+Apple's documentation, is [`docs/plans/macos-27.md`](plans/macos-27.md). In order: the toolchain
+commit (held until the runner has Xcode 27 or the hosted `xcode-27` image is used), a local model
+you bring via `MLXLanguageModel` as the second on-device model with a context far past 8K and
+nothing leaving the Mac (ADR 0031), image input for the attended surfaces, `DynamicProfile` for the
+CI diagnosis, Siri interaction donations, and Anthropic's `LanguageModel` package at 1.0.
+Private Cloud Compute stays parked (ADR 0025).
+
 ## v1.2 — managing the herd (interview 2026-09-03)
 
 For the maintainer whose pull requests come from Claude Code sessions, ten to forty a week. The
