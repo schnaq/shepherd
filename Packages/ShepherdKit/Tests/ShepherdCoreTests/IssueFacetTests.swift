@@ -6,7 +6,6 @@ import XCTest
 /// prints are pinned on the Linux runner rather than discovered in a window.
 final class IssueFacetTests: XCTestCase {
     private let repo = RepoRef(owner: "schnaq", name: "review")
-    private let other = RepoRef(owner: "schnaq", name: "web")
     private let now = Date(timeIntervalSince1970: 1_788_162_000)
 
     private func issue(
@@ -42,11 +41,13 @@ final class IssueFacetTests: XCTestCase {
         )
     }
 
+    /// A recognised agent, spelled neutrally: the facet's question is "did somebody hand this to
+    /// a machine", and which machine is ``AgentDetectorTests``' business.
     private var agentKind: ActorKind {
         .agent(
             AgentIdentity(
-                id: "claude-code",
-                displayName: "Claude Code",
+                id: "example-agent",
+                displayName: "Example Agent",
                 matchedBy: .login
             )
         )

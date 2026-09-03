@@ -58,11 +58,17 @@ final class IssuesInboxTests: XCTestCase {
         }
     }
 
+    /// A machine author, spelled neutrally: what the facet asks is whether a machine wrote the
+    /// linked pull request, and which one is the detector's own suite's business.
     private func agentActor() -> ShepherdCore.Actor {
         ShepherdCore.Actor(
-            login: "claude[bot]",
+            login: "example-agent[bot]",
             kind: .agent(
-                AgentIdentity(id: "claude-code", displayName: "Claude Code", matchedBy: .login)
+                AgentIdentity(
+                    id: "example-agent",
+                    displayName: "Example Agent",
+                    matchedBy: .login
+                )
             )
         )
     }
@@ -376,7 +382,7 @@ final class IssuesInboxTests: XCTestCase {
         // Every other token stays on the pull-request side and keeps naming a rail state.
         for filter: InboxDeepLinkFilter in [
             .needsMyReview, .myPullRequests, .involved, .approvedByMe, .humans, .bots,
-            .agent(id: "claude-code"), .repository(RepoRef(owner: "schnaq", name: "review")),
+            .agent(id: "example-agent"), .repository(RepoRef(owner: "schnaq", name: "review")),
         ] {
             let mapped = InboxRailSelection(filter)
             XCTAssertEqual(mapped.contentKind, .pullRequests, "\(filter)")
