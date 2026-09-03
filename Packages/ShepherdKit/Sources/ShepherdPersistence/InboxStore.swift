@@ -164,7 +164,10 @@ extension DatabaseManager {
         try await writer.read { db in
             try PullRequestRecord.fetchOne(
                 db,
-                sql: "SELECT * FROM pull_requests WHERE repoFullName = ? AND number = ?",
+                // `COLLATE NOCASE`, as the outcome store compares this column: a reference that
+                // arrived through another GraphQL field may spell the owner differently from the
+                // sweep that stored the row, and GitHub treats the two as one repository.
+                sql: "SELECT * FROM pull_requests WHERE repoFullName = ? COLLATE NOCASE AND number = ?",
                 arguments: [repo.fullName, number]
             )?.summary
         }

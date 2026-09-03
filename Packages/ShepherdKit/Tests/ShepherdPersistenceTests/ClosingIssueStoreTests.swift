@@ -178,6 +178,20 @@ final class ClosingIssueStoreTests: XCTestCase {
         XCTAssertEqual(other?.reviewDecision, .changesRequested)
     }
 
+    func testTheLookupIgnoresTheCaseOfTheRepositoryName() async throws {
+        let database = try makeDatabase()
+        try await database.savePullRequestSummaries([
+            PersistenceFixtures.summary(id: "PR_1", number: 128, repo: PersistenceFixtures.repo),
+        ])
+        let shouted = RepoRef(
+            owner: PersistenceFixtures.repo.owner.uppercased(),
+            name: PersistenceFixtures.repo.name.uppercased()
+        )
+
+        let found = try await database.fetchPullRequestSummary(repo: shouted, number: 128)
+        XCTAssertEqual(found?.id, "PR_1", "GitHub treats the two spellings as one repository")
+    }
+
     func testAPullRequestThatIsNotCachedIsNilRatherThanAnError() async throws {
         let database = try makeDatabase()
         try await database.savePullRequestSummaries([PersistenceFixtures.summary()])
