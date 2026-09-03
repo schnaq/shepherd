@@ -112,6 +112,21 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
         )
     }
 
+    /// Explains a selection (plan §3.D).
+    ///
+    /// The same streamed plain-text path as the two drafts, carrying the same excerpt
+    /// ``InlineCommentDraftBuilder`` cut for an inline draft — so a reviewer who has read
+    /// `CONTRIBUTING.md`'s sentence about what a drafted comment sends to their own endpoint
+    /// already knows what an explanation sends.
+    func streamExplanation(
+        _ request: ExplainSelectionRequest
+    ) -> AsyncThrowingStream<String, Error> {
+        streamDraft(
+            system: request.instructions + "\n" + IntelligencePrompt.draftPlainTextContract,
+            user: IntelligencePrompt.body(for: request)
+        )
+    }
+
     /// One streamed drafting request.
     ///
     /// The finished answer still goes through ``IntelligenceJSON/draft(from:)``: this tier is

@@ -158,6 +158,14 @@ struct IntelligenceTiers: Sendable {
     var inlineStream: @Sendable (
         any IntelligenceProvider, InlineCommentDraftRequest
     ) -> AsyncThrowingStream<String, Error> = { $0.streamInlineCommentDraft($1) }
+    /// How an explanation of a selection is streamed out of a tier (plan §3.D).
+    ///
+    /// The same kind of seam as the two above and needed for the same reason: what is worth
+    /// testing about explaining is the *ladder* and the popover behind it, and driving either
+    /// through a real provider would need Apple Intelligence, a key and a network.
+    var explanationStream: @Sendable (
+        any IntelligenceProvider, ExplainSelectionRequest
+    ) -> AsyncThrowingStream<String, Error> = { $0.streamExplanation($1) }
     /// How a CI diagnosis is asked of a tier.
     ///
     /// The same kind of seam as the two streams above, and needed for the same reason: the part
@@ -501,6 +509,54 @@ struct IntelligenceRouter: Sendable {
             tiers.inlineStream(
                 provider,
                 InlineCommentDraftBuilder.build(detail: detail, anchor: anchor, budget: budget)
+            )
+        }
+    }
+
+    /// Explains the lines a reviewer selected, as a stream of cumulative prose (plan §3.D).
+    ///
+    /// The same ladder as the two drafting streams, deliberately and not by coincidence: an
+    /// explanation carries the excerpt an inline draft carries, so a tier that may draft a
+    /// comment about these lines may explain them, and one that may not, may not. Tier 2 is what
+    /// the feature is designed for; the cloud rung is tried first only because it is tried first
+    /// for everything that sends a diff excerpt, and it is only ever a tier the user configured
+    /// themselves.
+    ///
+    /// Nothing here writes anywhere. The result is text in a popover, and turning it into a
+    /// comment is a separate click that goes through ``AIDraftFieldState`` — there is no path
+    /// from this call to the outbox (ADR 0007's non-goal).
+    /// - Parameters:
+    ///   - detail: The fetched pull request.
+    ///   - anchor: The lines the reviewer selected.
+    ///   - languageName: The language to answer in. Defaults to the reviewer's own, which is the
+    ///     whole point of the parameter existing at the edge rather than being read inside the
+    ///     prompt builder: a test can pin a language without pinning the runner's locale.
+    /// - Returns: A labelled stream, or why there is none.
+    func streamExplanation(
+        for detail: PullRequestDetail,
+        anchor: InlineCommentAnchor,
+        languageName: String = ExplainSelectionRequest.currentLanguageName()
+    ) async -> IntelligenceStreamOutcome {
+        guard isEnabled else { return .disabled }
+        // Settled before a tier is picked, exactly as in the drafting calls: with no patch there
+        // is no excerpt, and an explanation of a file name would be invention.
+        guard detail.files.first(where: { $0.path == anchor.path })?.hasPatch == true else {
+            return .unavailable(
+                String(
+                    localized: "GitHub sent no diff for this file, so there is nothing to explain."
+                )
+            )
+        }
+        let tiers = self.tiers
+        return await runStream { provider, budget in
+            tiers.explanationStream(
+                provider,
+                ExplainSelectionRequest.build(
+                    detail: detail,
+                    anchor: anchor,
+                    budget: budget,
+                    languageName: languageName
+                )
             )
         }
     }

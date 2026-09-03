@@ -102,6 +102,21 @@ struct AnthropicProvider: IntelligenceProvider {
         )
     }
 
+    /// Explains a selection (plan §3.D).
+    ///
+    /// The same streamed plain-text path as the two drafts: the excerpt is the one
+    /// ``InlineCommentDraftBuilder`` cut, so the only thing that differs on the wire is the
+    /// system prompt. A tier-3 explanation is allowed for exactly that reason — this excerpt
+    /// already travels here for an inline draft (ADR 0007's drafting amendment).
+    func streamExplanation(
+        _ request: ExplainSelectionRequest
+    ) -> AsyncThrowingStream<String, Error> {
+        streamDraft(
+            system: request.instructions + "\n" + IntelligencePrompt.draftPlainTextContract,
+            user: IntelligencePrompt.body(for: request)
+        )
+    }
+
     /// One streamed drafting request.
     ///
     /// The last element is put through ``IntelligenceJSON/draft(from:)`` even though the prompt

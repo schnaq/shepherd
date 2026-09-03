@@ -447,6 +447,22 @@ final class ReviewModel {
         return await intelligence.streamInlineCommentDraft(for: detail, anchor: request.anchor)
     }
 
+    /// Explains the lines the reviewer selected, streamed (plan §3.D).
+    ///
+    /// Reachable from the same ``ComposerRequest`` the gutter gesture produces, because that is
+    /// the whole feature: the selection the reviewer already made is the selection they want
+    /// explained, and asking for it must not need a second gesture. Returns the outcome rather
+    /// than writing anywhere — the popover owns the text, and putting it into the comment field
+    /// is a further click.
+    /// - Parameter request: The composer's anchor.
+    /// - Returns: A labelled stream, or why there is none.
+    func streamExplanation(for request: ComposerRequest) async -> IntelligenceStreamOutcome {
+        guard let detail else {
+            return .unavailable(String(localized: "The pull request is still loading."))
+        }
+        return await intelligence.streamExplanation(for: detail, anchor: request.anchor)
+    }
+
     /// The AI focus hint for a file, if the provider produced one.
     /// - Parameter path: The file path.
     func focusHint(for path: String) -> String? {

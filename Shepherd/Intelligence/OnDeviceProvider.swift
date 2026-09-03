@@ -39,17 +39,22 @@ struct OnDeviceFocus {
     var hints: [OnDeviceFocusHint]
 }
 
-/// The shape the on-device model fills in for a drafted review summary or inline comment.
+/// The shape the on-device model fills in for every prose request: a drafted review summary, a
+/// drafted inline comment, or an explanation of a selection.
 ///
 /// One `String` field, which is all guided generation is needed for here: the value of the schema
 /// is that the answer arrives without a preamble the reviewer would have to delete. It is also
-/// what makes streaming usable — a partially generated snapshot of this type is a partial draft
+/// what makes streaming usable — a partially generated snapshot of this type is a partial answer
 /// and nothing else, whereas a partially generated *prose* answer can still be halfway through a
 /// preamble the reviewer never wanted to watch being typed.
+///
+/// The guide is deliberately about the answer's *shape* rather than about which of the three
+/// requests is being answered: the instructions say what to write, and a schema that called this
+/// "the review text" would be quietly asking an explanation to be a review.
 @Generable
 struct OnDeviceReviewDraft {
-    /// The drafted text, ready to be edited by the reviewer.
-    @Guide(description: "The review text itself, with no preamble and no sign-off.")
+    /// The generated text, ready to be read or edited by the reviewer.
+    @Guide(description: "The requested text itself, with no preamble and no sign-off.")
     var draft: String
 }
 
@@ -299,6 +304,27 @@ struct OnDeviceProvider: IntelligenceProvider {
     ) -> AsyncThrowingStream<String, Error> {
         streamedDraft(
             instructions: IntelligencePrompt.draftInlineCommentInstructions,
+            prompt: IntelligencePrompt.body(for: request),
+            estimate: request.approximateTokenCount
+        )
+    }
+
+    /// Explains a selection (plan §3.D).
+    ///
+    /// The `.prose` model and ``OnDeviceGeneration/draft`` — the same knobs a drafted comment
+    /// uses, because it is the same kind of work: a few sentences of prose from a windowed diff
+    /// excerpt, with the framework's default temperature because naming a colder one makes every
+    /// answer read like the same paragraph. Guided generation is what keeps the streamed
+    /// snapshots readable (see ``streamedDraft(instructions:prompt:estimate:)``): the reviewer
+    /// watches sentences arrive, never half a JSON object.
+    ///
+    /// This is the tier the feature is designed for. Tier 2 first, and a tier-2 answer is the
+    /// whole story on a Mac with Apple Intelligence on — nothing leaves the machine.
+    func streamExplanation(
+        _ request: ExplainSelectionRequest
+    ) -> AsyncThrowingStream<String, Error> {
+        streamedDraft(
+            instructions: request.instructions,
             prompt: IntelligencePrompt.body(for: request),
             estimate: request.approximateTokenCount
         )

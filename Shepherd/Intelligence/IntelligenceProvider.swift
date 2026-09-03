@@ -105,6 +105,22 @@ protocol IntelligenceProvider: Sendable {
     func streamInlineCommentDraft(
         _ request: InlineCommentDraftRequest
     ) -> AsyncThrowingStream<String, Error>
+    /// Explains the lines a reviewer selected, as a stream of **cumulative** text (plan §3.D).
+    ///
+    /// The third surface built on the drafting contract and the one that is not a draft: the
+    /// answer is prose the reviewer *reads* rather than text they send, so it is asked for as
+    /// plain text (``IntelligencePrompt/draftPlainTextContract``) and nothing about it is written
+    /// into a field unless the reviewer presses "Turn into a comment" — which then goes through
+    /// ``AIDraftFieldState`` exactly like any other draft.
+    ///
+    /// Streamed only, with no awaited twin. An explanation is read as it arrives — that is what
+    /// makes a three-sentence answer from a small local model feel instant — and a second,
+    /// non-streaming entry point would be a code path with no caller.
+    /// - Parameter request: The selection, its excerpt and the language to answer in.
+    /// - Returns: A stream of ever-longer explanations.
+    func streamExplanation(
+        _ request: ExplainSelectionRequest
+    ) -> AsyncThrowingStream<String, Error>
     /// Diagnoses a red pull request by **reading** it, one tool call at a time (plan §3.F).
     ///
     /// The first method on this protocol where the model does not simply answer a prompt: it is
@@ -158,6 +174,28 @@ extension IntelligenceProvider {
         IntelligenceStreaming.singleValue { try await self.draftInlineComment(request) }
     }
 
+    /// Explaining, for tiers that have not implemented it.
+    ///
+    /// Unlike the two drafting streams above there is nothing to fall back *to*: an explanation
+    /// has no awaited twin on this protocol, so a tier that has not written the method has no
+    /// non-streaming path to be wrapped. Refusing is therefore what the default has to do, and
+    /// the same reasoning as ``diagnoseFailingChecks(_:tools:)``'s default applies to why that is
+    /// right rather than merely unavoidable: an explanation the reviewer cannot tell apart from a
+    /// real one is worse than a sentence saying this tier does not do it, and the router's ladder
+    /// already knows how to step down to a tier that does.
+    ///
+    /// Every tier Shepherd ships implements the method; this exists for the ones a test or a
+    /// later plan adds.
+    func streamExplanation(
+        _ request: ExplainSelectionRequest
+    ) -> AsyncThrowingStream<String, Error> {
+        IntelligenceStreaming.failing(
+            IntelligenceError.unavailable(
+                String(localized: "This provider cannot explain a selection.")
+            )
+        )
+    }
+
     /// Tool calling, for tiers that cannot call tools.
     ///
     /// Refusing in the default implementation rather than requiring every conformance to write
@@ -195,6 +233,20 @@ enum IntelligenceStreaming {
                 }
             }
             continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    /// A stream that produces nothing and finishes with one error.
+    ///
+    /// Spelled out rather than written as a `singleValue` closure that only throws, because a
+    /// refusal is not a value the caller nearly got: the ladder in ``IntelligenceRouter`` reads
+    /// "finished before the first element" as "this tier did not answer", which is exactly what a
+    /// tier that cannot serve a request wants to say.
+    /// - Parameter error: Why this tier cannot answer.
+    /// - Returns: A stream that immediately finishes throwing.
+    static func failing(_ error: any Error) -> AsyncThrowingStream<String, Error> {
+        AsyncThrowingStream { continuation in
+            continuation.finish(throwing: error)
         }
     }
 
@@ -365,6 +417,28 @@ enum IntelligencePrompt {
         suggestion for a human reviewer, not a verdict.
         """
 
+    /// The system/instructions text for explaining a selection (plan §3.D).
+    ///
+    /// The one instruction in this enum that asks for *understanding* rather than for review
+    /// prose, and the wording is where that difference lives. It must not drift into a review:
+    /// a reviewer who asked "what do these lines do?" and got "consider adding a test" has been
+    /// answered by a different feature, and the two are one keystroke apart on the same popover.
+    /// Hence the explicit "this explains, it does not judge" — and hence the sentence range,
+    /// because an explanation with no length bound is where a small model starts restating the
+    /// diff line by line, which the reviewer can already read for themselves.
+    ///
+    /// The language sentence is appended per request (``ExplainSelectionRequest/instructions``),
+    /// not written here, because it is the only part that changes per reviewer.
+    static let explainSelectionInstructions = """
+        You explain code changes to a senior engineer who is reading a pull request. Explain what \
+        the marked lines change and what they touch — the callers, the data or the behaviour a \
+        reader would want to know about — in three to six sentences of plain language. Use only \
+        what the excerpt shows: say which context you would need instead of guessing, and never \
+        invent files, APIs, behaviour or test results. No greeting, no sign-off, no line-by-line \
+        restatement of the code. This explains, it does not judge: no verdict, no praise, no \
+        suggestion to approve, reject or change anything.
+        """
+
     /// The system/instructions text for "why is CI red?" (plan §3.F).
     ///
     /// Short on purpose. This is the one request where the *tools* carry the instructions — each
@@ -477,9 +551,26 @@ enum IntelligencePrompt {
         return text
     }
 
-    /// Renders an inline-comment-draft request.
-    /// - Parameter request: The request.
-    static func body(for request: InlineCommentDraftRequest) -> String {
+    /// Renders an inline-comment-draft request — and, with the two labels changed, an
+    /// explain-a-selection request (plan §3.D).
+    ///
+    /// One renderer for both surfaces because they carry the *same* excerpt, cut by the same
+    /// builder against the same budget: a second copy of this function would be a second place
+    /// for the anchor marker's explanation to drift away from
+    /// ``InlineCommentDraftBuilder/anchorMarker``, and a marker the model does not understand is
+    /// an answer about the wrong lines. Only the two nouns differ, and they matter enough to be
+    /// parameters: a prompt that tells the model the lines are "being commented on" is a prompt
+    /// nudging it towards writing a comment, which is the one thing an explanation must not do.
+    /// Both defaults reproduce the drafting prompt byte for byte.
+    /// - Parameters:
+    ///   - request: The request.
+    ///   - anchorLabel: How the header names the anchored lines.
+    ///   - markerLabel: How the excerpt's preamble describes them.
+    static func body(
+        for request: InlineCommentDraftRequest,
+        anchorLabel: String = "Commented line",
+        markerLabel: String = "being commented on"
+    ) -> String {
         let side = request.anchor.side == .left ? "base" : "head"
         let lines = request.anchor.lineRange.lowerBound == request.anchor.lineRange.upperBound
             ? "\(request.anchor.line)"
@@ -492,7 +583,7 @@ enum IntelligencePrompt {
         if let status = request.fileStatus {
             text += " [\(status.rawValue)]"
         }
-        text += "\nCommented line: \(side) side, line \(lines)"
+        text += "\n\(anchorLabel): \(side) side, line \(lines)"
         if request.excerpt.isEmpty {
             // Said plainly rather than left out: a model given a file name and no diff should ask
             // for the code, not improvise a review of it.
@@ -500,7 +591,7 @@ enum IntelligencePrompt {
             return text
         }
         text += "\n\nDiff excerpt."
-            + " The line or lines being commented on are prefixed with"
+            + " The line or lines \(markerLabel) are prefixed with"
             + " \"\(InlineCommentDraftBuilder.anchorMarker.trimmingCharacters(in: .whitespaces))\";"
             + " every other line is context:\n"
             + request.excerpt
@@ -508,6 +599,20 @@ enum IntelligencePrompt {
             text += "\n\n(Note: the excerpt is a window into a longer diff.)"
         }
         return text
+    }
+
+    /// Renders an explain-a-selection request (plan §3.D).
+    ///
+    /// The drafting body with two nouns swapped — see ``body(for:anchorLabel:markerLabel:)``. The
+    /// language is not in here: it belongs with the instructions, where the model reads it once
+    /// rather than after the excerpt it is meant to shape.
+    /// - Parameter request: The request.
+    static func body(for request: ExplainSelectionRequest) -> String {
+        body(
+            for: request.selection,
+            anchorLabel: "Selected line",
+            markerLabel: "the reader selected"
+        )
     }
 
     /// Renders a CI-diagnosis request: which pull request, what is red, what may be read.
