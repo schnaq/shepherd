@@ -199,6 +199,19 @@ struct PullRequestHeadData: Decodable {
     var repository: Repository?
 }
 
+/// The payload of ``GraphQLDocuments/issueState`` (ADR 0032).
+struct IssueStateData: Decodable {
+    struct Repository: Decodable {
+        struct Issue: Decodable {
+            var id: String?
+            var updatedAt: String?
+            var closed: Bool?
+        }
+        var issue: Issue?
+    }
+    var repository: Repository?
+}
+
 /// The payload of the resolve/unresolve mutations.
 struct ResolveThreadData: Decodable {
     struct Payload: Decodable {

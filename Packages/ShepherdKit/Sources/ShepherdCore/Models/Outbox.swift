@@ -1,10 +1,36 @@
 import Foundation
 
+/// Why an issue is being closed — GitHub's `state_reason` vocabulary as a closed enum (ADR 0032).
+///
+/// A real enum rather than ``OutboxAction/merge(method:expectedHeadOid:)``'s raw string, and the
+/// asymmetry is deliberate: a merge method is one of three words GitHub may grow, while "completed
+/// or not planned" is the *whole* of the choice the close button offers and the two halves read
+/// differently in the UI. So the vocabulary is closed here, and a row written by a build that knew
+/// a third reason simply fails to decode — which
+/// ``ShepherdPersistence/DatabaseManager/claimReadyOutboxItems(now:limit:)`` already skips rather
+/// than letting it poison the queue.
+///
+/// The raw values *are* the wire values: they go into `state_reason` verbatim.
+public enum IssueCloseReason: String, Sendable, Codable, Hashable, CaseIterable {
+    /// The issue was addressed. GitHub's `completed`.
+    case completed
+    /// The issue will not be addressed. GitHub's `not_planned`.
+    case notPlanned = "not_planned"
+}
+
 /// An outbound mutation waiting to be sent to GitHub.
 ///
 /// Every write Shepherd performs — submitting a review, replying, resolving a thread,
 /// merging — is written to the outbox first and executed by the sync engine (ADR 0006). That
 /// is what makes writes survive a crash, a quit, or a train tunnel.
+///
+/// The five issue cases (ADR 0032's Sprint 4a amendment) are additive to this type and to nothing
+/// else: `outbox.payload` stores the whole enum as an opaque blob, so a new case needs no
+/// migration, and a row written before they existed still decodes because its discriminator is
+/// still one of the cases below. Each of them carries `basedOnUpdatedAt` — the issue's
+/// `updatedAt` at the moment the user pressed the button — which the drain re-reads and compares
+/// before it sends anything, exactly as ``ReviewDraft/basedOnHeadOid`` is compared before a review
+/// is submitted.
 public enum OutboxAction: Sendable, Codable, Hashable {
     /// Submit a locally composed review.
     case submitReview(ReviewDraft)
@@ -22,6 +48,33 @@ public enum OutboxAction: Sendable, Codable, Hashable {
     case merge(method: String, expectedHeadOid: String?)
     /// Take the pull request out of draft state.
     case markReadyForReview
+    /// Post a comment on the issue (ADR 0032).
+    /// - Parameters:
+    ///   - body: The comment as Markdown source.
+    ///   - basedOnUpdatedAt: The issue's ``IssueRowSummary/updatedAt`` when this was queued.
+    case addIssueComment(body: String, basedOnUpdatedAt: Date)
+    /// Add one label to the issue, without touching the ones already on it.
+    ///
+    /// The *additive* endpoint, never the full-replace `PATCH`: two queued label writes must not
+    /// be able to race each other into one lost update (ADR 0032).
+    /// - Parameters:
+    ///   - name: The label name, exactly as GitHub spells it.
+    ///   - basedOnUpdatedAt: The issue's ``IssueRowSummary/updatedAt`` when this was queued.
+    case addIssueLabel(name: String, basedOnUpdatedAt: Date)
+    /// Add one assignee to the issue, without removing the ones already on it.
+    /// - Parameters:
+    ///   - login: The GitHub login to assign.
+    ///   - basedOnUpdatedAt: The issue's ``IssueRowSummary/updatedAt`` when this was queued.
+    case addIssueAssignee(login: String, basedOnUpdatedAt: Date)
+    /// Close the issue with a reason.
+    /// - Parameters:
+    ///   - reason: Completed, or not planned.
+    ///   - basedOnUpdatedAt: The issue's ``IssueRowSummary/updatedAt`` when this was queued.
+    case closeIssue(reason: IssueCloseReason, basedOnUpdatedAt: Date)
+    /// Reopen a closed issue.
+    /// - Parameter basedOnUpdatedAt: The issue's ``IssueRowSummary/updatedAt`` when this was
+    ///   queued.
+    case reopenIssue(basedOnUpdatedAt: Date)
 
     /// A short, stable discriminator, used as a database column and in logs.
     public var kind: String {
@@ -32,8 +85,39 @@ public enum OutboxAction: Sendable, Codable, Hashable {
         case .unresolveThread: return "unresolveThread"
         case .merge: return "merge"
         case .markReadyForReview: return "markReadyForReview"
+        case .addIssueComment: return "addIssueComment"
+        case .addIssueLabel: return "addIssueLabel"
+        case .addIssueAssignee: return "addIssueAssignee"
+        case .closeIssue: return "closeIssue"
+        case .reopenIssue: return "reopenIssue"
         }
     }
+
+    /// The issue `updatedAt` this action was composed against, or `nil` when it is a
+    /// pull-request action.
+    ///
+    /// The drain's staleness precondition reads exactly this: a non-`nil` answer means "probe the
+    /// issue before sending", so the rule cannot be forgotten for a case added later — a new issue
+    /// action that did not carry the date would have to say so here.
+    public var basedOnIssueUpdatedAt: Date? {
+        switch self {
+        case .addIssueComment(_, let updatedAt),
+             .addIssueLabel(_, let updatedAt),
+             .addIssueAssignee(_, let updatedAt),
+             .closeIssue(_, let updatedAt),
+             .reopenIssue(let updatedAt):
+            return updatedAt
+        case .submitReview, .replyToComment, .resolveThread, .unresolveThread, .merge,
+             .markReadyForReview:
+            return nil
+        }
+    }
+
+    /// Whether the action targets an issue rather than a pull request.
+    ///
+    /// Which is also what decides how ``OutboxItem``'s three target fields are to be read — see
+    /// that type's own note.
+    public var targetsIssue: Bool { basedOnIssueUpdatedAt != nil }
 }
 
 /// Where an outbox row is in its lifecycle.
@@ -56,14 +140,23 @@ public enum OutboxState: String, Sendable, Codable, Hashable, CaseIterable {
 }
 
 /// One row of the outbox.
+///
+/// ``prID``, ``repo`` and ``number`` name **the target**, whichever kind of node that is. They
+/// keep their pull-request names because renaming them would touch every existing call site for
+/// no behavioural change, and because the prune guard already asks the generic question — "is
+/// something queued against this id" (ADR 0032). ``OutboxAction/targetsIssue`` is how a reader
+/// tells the two apart, and every issue call site says so in a comment where it fills the fields
+/// in.
 public struct OutboxItem: Sendable, Codable, Hashable, Identifiable {
     /// The row's local identity.
     public let id: UUID
-    /// The pull request the mutation targets (a GraphQL node id).
+    /// The node id of the target — the pull request's, or the issue's for an issue action
+    /// (ADR 0032).
     public var prID: String
-    /// The repository the pull request lives in.
+    /// The repository the target lives in.
     public var repo: RepoRef
-    /// The pull request number.
+    /// The target's number within its repository. GitHub draws issues and pull requests from one
+    /// number sequence, so this means the same thing either way.
     public var number: Int
     /// What to do.
     public var action: OutboxAction

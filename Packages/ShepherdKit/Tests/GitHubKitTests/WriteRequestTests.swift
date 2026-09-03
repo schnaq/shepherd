@@ -30,6 +30,25 @@ private struct ReplyRequestBody: Decodable {
     var body: String
 }
 
+private struct LabelsRequestBody: Decodable {
+    var labels: [String]
+}
+
+private struct AssigneesRequestBody: Decodable {
+    var assignees: [String]
+}
+
+/// The `PATCH /issues/{n}` body, decoded with every key the endpoint accepts so that a test can
+/// assert the ones Shepherd deliberately never sends are absent (ADR 0032).
+private struct IssuePatchRequestBody: Decodable {
+    var state: String?
+    var state_reason: String?
+    var title: String?
+    var body: String?
+    var labels: [String]?
+    var assignees: [String]?
+}
+
 final class WriteRequestTests: XCTestCase {
     private let repo = RepoRef(owner: "schnaq", name: "review")
 
@@ -265,5 +284,157 @@ final class WriteRequestTests: XCTestCase {
             }
             XCTAssertTrue(message.contains("not mergeable"))
         }
+    }
+
+    // MARK: - Issue writes (ADR 0032's Sprint 4a amendment)
+
+    func testAnIssueCommentIsOnePostToTheIssuesCommentsEndpoint() async throws {
+        let transport = MockTransport()
+        await transport.route("/issues/128/comments", Fixture.response(json: "{\"id\":1}"))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        try await client.addIssueComment(repo: repo, number: 128, body: "Picking this up.")
+
+        let request = await transport.onlyRequest()
+        XCTAssertEqual(request?.method, "POST")
+        XCTAssertEqual(
+            request?.url.absoluteString,
+            "https://api.github.com/repos/schnaq/review/issues/128/comments"
+        )
+        let body = try decodeBody(ReplyRequestBody.self, from: request)
+        XCTAssertEqual(body.body, "Picking this up.")
+    }
+
+    func testALabelWriteUsesTheAdditiveEndpointAndNotTheFullReplacePatch() async throws {
+        let transport = MockTransport()
+        await transport.route("/issues/128/labels", Fixture.response(json: "[]"))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        try await client.addIssueLabels(repo: repo, number: 128, labels: ["needs-triage"])
+
+        let request = await transport.onlyRequest()
+        // The whole point: `POST .../labels`, so a second queued label cannot undo the first.
+        XCTAssertEqual(request?.method, "POST")
+        XCTAssertEqual(
+            request?.url.absoluteString,
+            "https://api.github.com/repos/schnaq/review/issues/128/labels"
+        )
+        let body = try decodeBody(LabelsRequestBody.self, from: request)
+        XCTAssertEqual(body.labels, ["needs-triage"])
+    }
+
+    func testAnAssigneeWriteUsesTheAdditiveAssigneesEndpoint() async throws {
+        let transport = MockTransport()
+        await transport.route("/issues/128/assignees", Fixture.response(json: "{\"number\":128}"))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        try await client.addIssueAssignees(repo: repo, number: 128, logins: ["octocat"])
+
+        let request = await transport.onlyRequest()
+        XCTAssertEqual(request?.method, "POST")
+        XCTAssertEqual(
+            request?.url.absoluteString,
+            "https://api.github.com/repos/schnaq/review/issues/128/assignees"
+        )
+        let body = try decodeBody(AssigneesRequestBody.self, from: request)
+        XCTAssertEqual(body.assignees, ["octocat"])
+    }
+
+    func testClosingAnIssueSendsOnlyTheStateAndTheReason() async throws {
+        let transport = MockTransport()
+        await transport.route("/issues/128", Fixture.response(json: "{\"number\":128}"))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        try await client.setIssueState(
+            repo: repo,
+            number: 128,
+            state: "closed",
+            stateReason: "not_planned"
+        )
+
+        let request = await transport.onlyRequest()
+        XCTAssertEqual(request?.method, "PATCH")
+        XCTAssertEqual(
+            request?.url.absoluteString,
+            "https://api.github.com/repos/schnaq/review/issues/128"
+        )
+        let body = try decodeBody(IssuePatchRequestBody.self, from: request)
+        XCTAssertEqual(body.state, "closed")
+        XCTAssertEqual(body.state_reason, "not_planned")
+        // The endpoint would happily rewrite all four of these; a body that carried them would
+        // overwrite whatever somebody else changed in the meantime.
+        XCTAssertNil(body.title)
+        XCTAssertNil(body.body)
+        XCTAssertNil(body.labels)
+        XCTAssertNil(body.assignees)
+        XCTAssertFalse(bodyText(request).contains("title"))
+        XCTAssertFalse(bodyText(request).contains("assignees"))
+    }
+
+    func testReopeningAnIssueOmitsTheReasonRatherThanSendingANull() async throws {
+        let transport = MockTransport()
+        await transport.route("/issues/128", Fixture.response(json: "{\"number\":128}"))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        try await client.setIssueState(repo: repo, number: 128, state: "open", stateReason: nil)
+
+        let request = await transport.onlyRequest()
+        XCTAssertEqual(request?.method, "PATCH")
+        XCTAssertEqual(bodyText(request), "{\"state\":\"open\"}")
+    }
+
+    // MARK: - The issue staleness probe
+
+    func testTheIssueProbeReadsTheTimestampTheDrainComparesAgainst() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "ShepherdIssueState",
+            Fixture.response(
+                json: """
+                {"data":{"repository":{"issue":{
+                  "id":"I_kwDOissue","updatedAt":"2026-09-03T08:15:00Z","closed":false
+                }}}}
+                """
+            )
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let state = try await client.issueState(repo: repo, number: 128)
+
+        XCTAssertEqual(state.id, "I_kwDOissue")
+        XCTAssertEqual(state.updatedAt, Date(timeIntervalSince1970: 1_788_423_300))
+        XCTAssertFalse(state.isClosed)
+
+        let request = await transport.onlyRequest()
+        XCTAssertEqual(request?.method, "POST")
+        XCTAssertEqual(request?.url.absoluteString, "https://api.github.com/graphql")
+    }
+
+    func testAnIssueTheProbeCannotSeeIsNotFoundRatherThanASilentPass() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "ShepherdIssueState",
+            Fixture.response(json: "{\"data\":{\"repository\":{\"issue\":null}}}")
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            _ = try await client.issueState(repo: repo, number: 404)
+            XCTFail("expected a not-found error")
+        } catch let error as GitHubError {
+            guard case .notFound(let resource) = error else {
+                return XCTFail("expected .notFound, got \(error)")
+            }
+            XCTAssertEqual(resource, "schnaq/review#404")
+        }
+    }
+
+    func testStalenessIsAOneSecondQuestionRatherThanAFloatingPointOne() {
+        let base = Date(timeIntervalSince1970: 1_788_423_300)
+        let state = IssueState(id: "I_1", updatedAt: base, isClosed: false)
+        XCTAssertFalse(state.isStale(against: base))
+        XCTAssertFalse(state.isStale(against: base.addingTimeInterval(0.4)))
+        XCTAssertTrue(state.isStale(against: base.addingTimeInterval(-60)))
+        XCTAssertTrue(state.isStale(against: base.addingTimeInterval(60)))
     }
 }

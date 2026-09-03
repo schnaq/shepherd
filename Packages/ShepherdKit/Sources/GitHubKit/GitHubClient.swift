@@ -970,6 +970,140 @@ public actor GitHubClient {
         }
     }
 
+    // MARK: - Issue writes (ADR 0032's Sprint 4a amendment)
+
+    /// Reads an issue's current `updatedAt` — the staleness probe for a queued triage write.
+    ///
+    /// ``headRefOid(repo:number:)``'s twin for the other kind of node, and the reason it exists
+    /// is the same: ADR 0006 requires every write to be re-validated against the state the user
+    /// actually saw, and an issue has no head commit to compare. `updatedAt` is what GitHub moves
+    /// for every edit, label, assignment, comment and state change, so it is the one field a
+    /// triage write can be pinned to.
+    ///
+    /// GraphQL rather than the REST `GET /repos/…/issues/{n}` the claims card uses, and
+    /// deliberately: that read is ETag-cached on its URL, and a probe that can be answered from
+    /// the cache is not a probe. Three fields on one node, sent as an idempotent query.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - number: The issue number.
+    /// - Returns: The issue's node id, its current `updatedAt` and whether it is closed.
+    /// - Throws: ``GitHubError/notFound(resource:)`` when the issue is not there (or is a pull
+    ///   request, which `Repository.issue` does not answer for), and whatever else the transport
+    ///   maps.
+    public func issueState(repo: RepoRef, number: Int) async throws -> IssueState {
+        let data: IssueStateData = try await graphQL(
+            document: GraphQLDocuments.issueState,
+            variables: [
+                "owner": .string(repo.owner),
+                "name": .string(repo.name),
+                "number": .int(number),
+            ],
+            resource: "\(repo.fullName)#\(number) issue state",
+            isIdempotent: true
+        )
+        guard let issue = data.repository?.issue,
+              let id = issue.id,
+              let timestamp = issue.updatedAt,
+              let updatedAt = GitHubTimestamp.parse(timestamp)
+        else {
+            throw GitHubError.notFound(resource: "\(repo.fullName)#\(number)")
+        }
+        return IssueState(id: id, updatedAt: updatedAt, isClosed: issue.closed ?? false)
+    }
+
+    /// Posts a comment on an issue.
+    ///
+    /// `POST /repos/{o}/{r}/issues/{n}/comments` — REST, like every other write (ADR 0005).
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - number: The issue number.
+    ///   - body: The comment as Markdown source.
+    public func addIssueComment(repo: RepoRef, number: Int, body: String) async throws {
+        let encodedBody = try RESTJSON.encode(CommentBody(body: body))
+        _ = try await performREST(
+            method: "POST",
+            path: "/repos/\(repo.owner)/\(repo.name)/issues/\(number)/comments",
+            queryItems: [],
+            body: encodedBody,
+            useCache: false,
+            resource: "\(repo.fullName)#\(number) issue comment"
+        )
+    }
+
+    /// Adds labels to an issue, leaving the ones already on it alone.
+    ///
+    /// `POST /repos/{o}/{r}/issues/{n}/labels`, the **additive** endpoint. Not the full-replace
+    /// `PATCH /issues/{n}` with a `labels` array, and that is the interesting part: two label
+    /// writes queued a second apart would each carry the list as it was when they were composed,
+    /// so the second would silently undo the first. An additive `POST` cannot lose an update
+    /// (ADR 0032).
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - number: The issue number.
+    ///   - labels: The label names to add, exactly as GitHub spells them.
+    public func addIssueLabels(repo: RepoRef, number: Int, labels: [String]) async throws {
+        let encodedBody = try RESTJSON.encode(IssueLabelsBody(labels: labels))
+        _ = try await performREST(
+            method: "POST",
+            path: "/repos/\(repo.owner)/\(repo.name)/issues/\(number)/labels",
+            queryItems: [],
+            body: encodedBody,
+            useCache: false,
+            resource: "\(repo.fullName)#\(number) issue labels"
+        )
+    }
+
+    /// Adds assignees to an issue, leaving the ones already on it alone.
+    ///
+    /// `POST /repos/{o}/{r}/issues/{n}/assignees`, additive for ``addIssueLabels(repo:number:labels:)``'s
+    /// reason. GitHub silently ignores a login that cannot be assigned in that repository, which
+    /// is why this returns nothing to check: the honest confirmation is the next sweep.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - number: The issue number.
+    ///   - logins: The GitHub logins to assign.
+    public func addIssueAssignees(repo: RepoRef, number: Int, logins: [String]) async throws {
+        let encodedBody = try RESTJSON.encode(IssueAssigneesBody(assignees: logins))
+        _ = try await performREST(
+            method: "POST",
+            path: "/repos/\(repo.owner)/\(repo.name)/issues/\(number)/assignees",
+            queryItems: [],
+            body: encodedBody,
+            useCache: false,
+            resource: "\(repo.fullName)#\(number) issue assignees"
+        )
+    }
+
+    /// Opens or closes an issue.
+    ///
+    /// `PATCH /repos/{o}/{r}/issues/{n}` carrying `state` and `state_reason` and **nothing else**.
+    /// The endpoint can also rewrite the title, the body, the labels and the assignees; a body
+    /// that sent any of those would replace what somebody else changed in the meantime, which is
+    /// the lost update the staleness probe exists to prevent (ADR 0032).
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - number: The issue number.
+    ///   - state: `"open"` or `"closed"`.
+    ///   - stateReason: GitHub's `state_reason`, or `nil` to send none at all.
+    public func setIssueState(
+        repo: RepoRef,
+        number: Int,
+        state: String,
+        stateReason: String?
+    ) async throws {
+        let encodedBody = try RESTJSON.encode(
+            IssueStateBody(state: state, stateReason: stateReason)
+        )
+        _ = try await performREST(
+            method: "PATCH",
+            path: "/repos/\(repo.owner)/\(repo.name)/issues/\(number)",
+            queryItems: [],
+            body: encodedBody,
+            useCache: false,
+            resource: "\(repo.fullName)#\(number) issue state change"
+        )
+    }
+
     // MARK: - Notifications
 
     /// Polls `GET /notifications`.
@@ -1338,6 +1472,27 @@ struct ReviewSubmissionBody: Encodable {
 /// The body of the reply endpoint.
 struct CommentBody: Encodable {
     var body: String
+}
+
+/// The body of `POST /repos/{owner}/{repo}/issues/{number}/labels` (ADR 0032).
+struct IssueLabelsBody: Encodable {
+    var labels: [String]
+}
+
+/// The body of `POST /repos/{owner}/{repo}/issues/{number}/assignees` (ADR 0032).
+struct IssueAssigneesBody: Encodable {
+    var assignees: [String]
+}
+
+/// The body of `PATCH /repos/{owner}/{repo}/issues/{number}` — two keys, and only ever two
+/// (ADR 0032).
+///
+/// `stateReason` is a plain optional so that a `nil` is *omitted* rather than sent as an explicit
+/// null: the two are not the same request to GitHub, and "do not mention the reason" is what a
+/// reopen means.
+struct IssueStateBody: Encodable {
+    var state: String
+    var stateReason: String?
 }
 
 /// The body of `PUT /repos/{owner}/{repo}/pulls/{number}/merge`.

@@ -157,6 +157,63 @@ final class ModelCodingTests: XCTestCase {
         )
     }
 
+    func testTheFiveIssueActionsRoundTripThroughJSON() throws {
+        let queuedAt = Date(timeIntervalSince1970: 1_788_162_000)
+        let actions: [OutboxAction] = [
+            .addIssueComment(body: "On it.", basedOnUpdatedAt: queuedAt),
+            .addIssueLabel(name: "needs-triage", basedOnUpdatedAt: queuedAt),
+            .addIssueAssignee(login: "octocat", basedOnUpdatedAt: queuedAt),
+            .closeIssue(reason: .completed, basedOnUpdatedAt: queuedAt),
+            .closeIssue(reason: .notPlanned, basedOnUpdatedAt: queuedAt),
+            .reopenIssue(basedOnUpdatedAt: queuedAt),
+        ]
+        for action in actions {
+            let data = try JSONEncoder().encode(action)
+            XCTAssertEqual(try JSONDecoder().decode(OutboxAction.self, from: data), action)
+        }
+        XCTAssertEqual(
+            actions.map(\.kind),
+            [
+                "addIssueComment", "addIssueLabel", "addIssueAssignee", "closeIssue",
+                "closeIssue", "reopenIssue",
+            ]
+        )
+        // Every one of them carries the staleness key, which is what the drain's precondition
+        // reads: a case that forgot it would answer `nil` here and would be sent blind.
+        XCTAssertEqual(actions.map(\.basedOnIssueUpdatedAt), Array(repeating: queuedAt, count: 6))
+        XCTAssertTrue(actions.allSatisfy(\.targetsIssue))
+    }
+
+    func testAPullRequestActionCarriesNoIssueStalenessKey() {
+        let actions: [OutboxAction] = [
+            .submitReview(ReviewDraft(prID: "PR_1", basedOnHeadOid: "abc")),
+            .replyToComment(commentDatabaseID: 42, body: "Thanks!"),
+            .resolveThread(threadID: "RT_1"),
+            .unresolveThread(threadID: "RT_2"),
+            .merge(method: "squash", expectedHeadOid: "abc"),
+            .markReadyForReview,
+        ]
+        XCTAssertTrue(actions.allSatisfy { $0.basedOnIssueUpdatedAt == nil })
+        XCTAssertTrue(actions.allSatisfy { !$0.targetsIssue })
+    }
+
+    func testARowWrittenBeforeTheIssueActionsExistedStillDecodes() throws {
+        // The bytes an older build wrote: the payload column is an opaque blob of this very
+        // enum, so "no migration" is only true if the old discriminators still decode.
+        let legacy = Data(#"{"resolveThread":{"threadID":"RT_legacy"}}"#.utf8)
+        XCTAssertEqual(
+            try JSONDecoder().decode(OutboxAction.self, from: legacy),
+            .resolveThread(threadID: "RT_legacy")
+        )
+    }
+
+    func testTheCloseReasonsAreGitHubsOwnTwoWords() {
+        XCTAssertEqual(
+            IssueCloseReason.allCases.map(\.rawValue).sorted(),
+            ["completed", "not_planned"]
+        )
+    }
+
     func testCheckRollupIsDerivedFromRuns() {
         let runs = [
             CheckRun(id: "1", name: "build", status: .completed, conclusion: .success),

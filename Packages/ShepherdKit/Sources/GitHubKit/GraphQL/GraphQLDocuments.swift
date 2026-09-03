@@ -565,6 +565,25 @@ public enum GraphQLDocuments {
     }
     """
 
+    /// The cheapest possible staleness probe for an issue: its current `updatedAt` (ADR 0032's
+    /// Sprint 4a amendment).
+    ///
+    /// ``pullRequestHead``'s shape with the other node in it, and deliberately so: an issue has
+    /// no head commit, so the field a queued triage write has to be re-validated against is the
+    /// timestamp every issue write moves. `closed` comes along because it costs nothing on a
+    /// query that is being made anyway and it is what tells a reopen that has already happened
+    /// from one that has not.
+    ///
+    /// Three fields, one node, no connection — the same reasoning that makes the head probe
+    /// cheap enough to run before every review submission.
+    public static let issueState = """
+    query ShepherdIssueState($owner: String!, $name: String!, $number: Int!) {
+      repository(owner: $owner, name: $name) {
+        issue(number: $number) { id updatedAt closed }
+      }
+    }
+    """
+
     /// Resolve a review thread. GraphQL-only — REST has no equivalent.
     public static let resolveReviewThread = """
     mutation ShepherdResolveThread($threadId: ID!) {
