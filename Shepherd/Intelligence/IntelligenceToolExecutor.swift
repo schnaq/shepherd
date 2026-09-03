@@ -350,7 +350,7 @@ actor LocalToolExecutor: IntelligenceToolExecuting {
                 (\(count) of \(total) lines):
                 \(digest.text)
                 """,
-            summaryLine: String(localized: "last \(count) of \(total) lines of \(checkName)"),
+            summaryLine: String(localized: "\(count) of \(total) lines of \(checkName)"),
             wasTruncated: digest.wasTruncated
         )
     }

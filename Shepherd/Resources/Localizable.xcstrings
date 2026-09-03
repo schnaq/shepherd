@@ -671,6 +671,16 @@
         }
       }
     },
+    "%lld of %lld lines of %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %lld Zeilen von %@"
+          }
+        }
+      }
+    },
     "%lld of %lld pull requests are still in the queue. Nothing you already queued is affected.": {
       "localizations": {
         "de": {
@@ -9747,16 +9757,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "mit %@ gelabelt"
-          }
-        }
-      }
-    },
-    "last %lld of %lld lines of %@": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "letzte %lld von %lld Zeilen von %@"
           }
         }
       }
