@@ -448,8 +448,10 @@ final class IssuesInboxTests: XCTestCase {
         XCTAssertTrue(reopened)
 
         let queued = try await database.allOutboxItems()
+        // As a set: five rows enqueued in the same millisecond are ordered by `createdAt`, and
+        // what is being asserted here is *which* writes exist, not what order the drain sees.
         XCTAssertEqual(
-            queued.map(\.action),
+            Set(queued.map(\.action)),
             [
                 // Trimmed: a comment is prose, and trailing whitespace is not part of it.
                 .addIssueComment(body: "On it.", basedOnUpdatedAt: row.updatedAt),
@@ -459,6 +461,7 @@ final class IssuesInboxTests: XCTestCase {
                 .reopenIssue(basedOnUpdatedAt: row.updatedAt),
             ]
         )
+        XCTAssertEqual(queued.count, 5)
         // The three target fields carry the issue, which is what the drain and the prune guard
         // both read them as.
         XCTAssertEqual(Set(queued.map(\.prID)), ["I_1"])
