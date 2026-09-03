@@ -30,6 +30,8 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
     let apiKey: String
     /// How many tokens the answer may use.
     var maxTokens: Int = 1_024
+    /// Where a non-streaming request goes. `URLSession` outside tests.
+    let transport: any IntelligenceTransport
 
     var kind: IntelligenceKind { .openAICompatible }
 
@@ -42,10 +44,17 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
     ///   - baseURL: The endpoint's base URL.
     ///   - model: The model name.
     ///   - apiKey: The bearer token.
-    init(baseURL: String, model: String, apiKey: String) {
+    ///   - transport: Where requests go. Defaults to `URLSession`; a test substitutes a script.
+    init(
+        baseURL: String,
+        model: String,
+        apiKey: String,
+        transport: any IntelligenceTransport = URLSessionTransport()
+    ) {
         self.baseURL = baseURL
         self.model = model
         self.apiKey = apiKey
+        self.transport = transport
     }
 
     func summarizePullRequest(_ digest: PullRequestDigest) async throws -> PRSummary {
@@ -327,6 +336,163 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
         return text
     }
 
+    // MARK: - The tool loop (plan §3.F)
+
+    /// Diagnoses a red pull request through `tool_calls` and `role: "tool"` messages.
+    ///
+    /// The chat-completions shape for this is a message list Shepherd keeps: the request carries
+    /// `tools`, a choice whose `finish_reason` is `tool_calls` carries the calls on its assistant
+    /// message, and the way to answer them is to append that assistant message **including its
+    /// `tool_calls`** and then one `role: "tool"` message per call, each keyed by its
+    /// `tool_call_id`. Servers reject a `tool` message whose id they never issued, so the ids are
+    /// echoed rather than regenerated.
+    ///
+    /// Non-streaming, deliberately. A streamed tool call arrives as `arguments` split across
+    /// frames, reassembled differently by every server behind this tier — and there is nothing to
+    /// show the reviewer while it happens anyway: the visible progress of this feature is the
+    /// trace, one finished hop at a time.
+    ///
+    /// The loop is tolerant in one place: a server that fills `tool_calls` but forgets
+    /// `finish_reason` is still asking for a tool. This tier is "whatever speaks the shape", and
+    /// treating a present, non-empty call list as the request it obviously is costs nothing.
+    /// - Parameters:
+    ///   - request: What is red and what may be read.
+    ///   - tools: The reads, already bound to this pull request.
+    /// - Returns: The diagnosis and its hops.
+    func diagnoseFailingChecks(
+        _ request: CIDiagnosisRequest,
+        tools: any IntelligenceToolExecuting
+    ) async throws -> IntelligenceToolRun<CIDiagnosis> {
+        guard let url = OpenAICompatibleProvider.completionsURL(base: baseURL) else {
+            throw IntelligenceError.notConfigured("base URL")
+        }
+        guard !model.isEmpty else { throw IntelligenceError.notConfigured("model name") }
+
+        var headers = ["content-type": "application/json"]
+        if !apiKey.isEmpty { headers["authorization"] = "Bearer \(apiKey)" }
+        var messages: [ToolMessage] = [
+            ToolMessage(
+                role: "system",
+                content: IntelligencePrompt.ciDiagnosisInstructions + "\n"
+                    + IntelligencePrompt.ciDiagnosisJSONContract
+            ),
+            ToolMessage(role: "user", content: IntelligencePrompt.body(for: request)),
+        ]
+        var trace = IntelligenceTrace()
+        var answer = ""
+
+        while true {
+            let (data, status) = try await transport.post(
+                url: url,
+                headers: headers,
+                body: try toolRequestBody(messages: messages)
+            )
+            guard (200..<300).contains(status) else {
+                throw OpenAICompatibleProvider.toolFailure(
+                    status: status,
+                    message: OpenAICompatibleProvider.errorMessage(in: data)
+                )
+            }
+            guard let decoded = try? JSONDecoder().decode(ToolResponseBody.self, from: data),
+                  let choice = decoded.choices.first
+            else {
+                throw IntelligenceError.malformedResponse
+            }
+            answer = choice.message?.content?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let calls = choice.message?.toolCalls ?? []
+            guard !calls.isEmpty, choice.finishReason == "tool_calls" || choice.finishReason == nil
+            else { break }
+            guard trace.count + calls.count <= IntelligenceToolLoop.maximumHops else {
+                throw IntelligenceError.toolLoopExceeded
+            }
+
+            messages.append(
+                ToolMessage(role: "assistant", content: choice.message?.content, toolCalls: calls)
+            )
+            for wireCall in calls {
+                let call = IntelligenceToolCall(
+                    id: wireCall.id,
+                    toolName: wireCall.function.name,
+                    arguments: OpenAICompatibleProvider.arguments(in: wireCall.function.arguments)
+                )
+                let started = Date()
+                let result = try await tools.execute(call)
+                if let name = IntelligenceToolName(rawValue: call.toolName) {
+                    trace.append(
+                        tool: name,
+                        call: call,
+                        result: result,
+                        duration: Date().timeIntervalSince(started)
+                    )
+                }
+                messages.append(
+                    ToolMessage(role: "tool", content: result.content, toolCallID: wireCall.id)
+                )
+            }
+        }
+
+        return IntelligenceToolRun(
+            value: try IntelligenceJSON.diagnosis(from: answer),
+            trace: trace
+        )
+    }
+
+    /// The JSON body one tool-calling request sends.
+    ///
+    /// Exposed for the same reason ``completionRequestBody(system:user:streaming:)`` is: the tool
+    /// schemas have to reach the wire, and an endpoint that dislikes them answers `400` on the
+    /// user's Mac otherwise.
+    ///
+    /// No `temperature` and no `tool_choice`: this tier is the one that is *least* likely to
+    /// accept a key it has never heard of, and neither is needed — the descriptors say what the
+    /// tools do and the JSON contract says what the answer looks like.
+    /// - Parameter messages: The transcript so far, oldest first.
+    /// - Returns: The encoded request body.
+    func toolRequestBody(messages: [ToolMessage]) throws -> Data {
+        try JSONEncoder().encode(
+            ToolRequestBody(
+                model: model,
+                maxTokens: maxTokens,
+                messages: messages,
+                tools: OpenAIToolSchema.all
+            )
+        )
+    }
+
+    /// Parses a `tool_calls[].function.arguments` JSON *string* into the contract's argument map.
+    ///
+    /// This shape's one real difference from the other: the arguments arrive as a string holding
+    /// JSON, not as JSON. A string that does not parse — an unterminated object, a model that
+    /// wrote prose there — yields no arguments at all, which the registry then refuses by name
+    /// with a sentence the model can act on. That is the same outcome an argument this contract
+    /// cannot hold gets, and better than ending the turn over a malformed field.
+    /// - Parameter json: The `arguments` string.
+    /// - Returns: The arguments, or an empty map.
+    static func arguments(in json: String) -> [String: IntelligenceToolArgument] {
+        let trimmed = json.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [:] }
+        return (try? JSONDecoder().decode(
+            [String: IntelligenceToolArgument].self,
+            from: Data(trimmed.utf8)
+        )) ?? [:]
+    }
+
+    /// Maps a failed tool-calling request onto the error the UI can act on.
+    ///
+    /// The case this exists for is the konduit/Ollama-class endpoint that answers `400` with
+    /// "this model does not support tools": there is no status code for it, so the message is
+    /// what there is, and ``IntelligenceError/toolsUnsupported`` is what the reviewer can act on.
+    /// - Parameters:
+    ///   - status: The HTTP status.
+    ///   - message: The endpoint's own message.
+    /// - Returns: The error to throw.
+    static func toolFailure(status: Int, message: String) -> IntelligenceError {
+        guard status == 400, IntelligenceToolLoop.mentionsTools(message) else {
+            return .http(status: status, message: message)
+        }
+        return .toolsUnsupported
+    }
+
     /// Best-effort extraction of the `{"error": {"message": …}}` shape most servers use.
     static func errorMessage(in data: Data) -> String {
         struct Envelope: Decodable {
@@ -368,6 +534,160 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
                 var content: String?
             }
             var message: Message?
+        }
+        var choices: [Choice]
+    }
+
+    // MARK: - Tool-calling wire types
+
+    /// One entry of `tool_calls`, in the shape that goes both ways.
+    ///
+    /// `arguments` is a `String` and stays one: that is what the API puts on the wire, and
+    /// echoing the model's own text back in the assistant message — rather than re-encoding a
+    /// parsed map — is what keeps the transcript byte-identical to what the server issued.
+    /// Parsing happens once, beside the call, through
+    /// ``OpenAICompatibleProvider/arguments(in:)``.
+    struct WireToolCall: Codable, Sendable {
+        /// One function call.
+        struct Function: Codable, Sendable {
+            /// The tool name the model asked for.
+            var name: String
+            /// The arguments, as a JSON string.
+            var arguments: String
+
+            /// Creates a function call.
+            /// - Parameters:
+            ///   - name: The tool name.
+            ///   - arguments: The arguments, as a JSON string.
+            init(name: String, arguments: String) {
+                self.name = name
+                self.arguments = arguments
+            }
+
+            /// Decodes a function call, tolerating an absent `arguments`.
+            ///
+            /// A tool that takes none — `failingChecks` — is sent by some servers with the key
+            /// missing rather than as `"{}"`, and refusing to decode that would refuse the one
+            /// call the model is most likely to start with.
+            init(from decoder: any Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+                arguments = try container.decodeIfPresent(String.self, forKey: .arguments) ?? ""
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case name
+                case arguments
+            }
+        }
+
+        /// The call's id, echoed on the `tool` message that answers it.
+        var id: String
+        /// Always `"function"`.
+        var type: String
+        /// What to call.
+        var function: Function
+
+        /// Creates a call.
+        /// - Parameters:
+        ///   - id: The call id.
+        ///   - type: The call type. Defaults to `"function"`.
+        ///   - function: What to call.
+        init(id: String, type: String = "function", function: Function) {
+            self.id = id
+            self.type = type
+            self.function = function
+        }
+
+        /// Decodes a call, defaulting the two fields a permissive server may omit.
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decodeIfPresent(String.self, forKey: .id) ?? ""
+            type = try container.decodeIfPresent(String.self, forKey: .type) ?? "function"
+            function = try container.decode(Function.self, forKey: .function)
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id
+            case type
+            case function
+        }
+    }
+
+    /// One message of a tool-calling transcript.
+    ///
+    /// Four roles ride on this one shape — `system`, `user`, the `assistant` message that carries
+    /// `tool_calls`, and the `tool` message that answers one — because that is how the API models
+    /// them: the same object with different fields filled in. The absent ones are omitted by the
+    /// encoder, so a `user` message does not carry a null `tool_call_id`.
+    struct ToolMessage: Codable, Sendable {
+        /// `system`, `user`, `assistant` or `tool`.
+        var role: String
+        /// The message text. Absent on an assistant message that only asked for tools.
+        var content: String?
+        /// The calls the assistant asked for.
+        var toolCalls: [WireToolCall]?
+        /// Which call a `tool` message answers.
+        var toolCallID: String?
+
+        /// Creates a message.
+        /// - Parameters:
+        ///   - role: The role.
+        ///   - content: The text, if any.
+        ///   - toolCalls: The calls, for an assistant message.
+        ///   - toolCallID: The call answered, for a `tool` message.
+        init(
+            role: String,
+            content: String? = nil,
+            toolCalls: [WireToolCall]? = nil,
+            toolCallID: String? = nil
+        ) {
+            self.role = role
+            self.content = content
+            self.toolCalls = toolCalls
+            self.toolCallID = toolCallID
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case role
+            case content
+            case toolCalls = "tool_calls"
+            case toolCallID = "tool_call_id"
+        }
+    }
+
+    private struct ToolRequestBody: Encodable {
+        var model: String
+        var maxTokens: Int
+        var messages: [ToolMessage]
+        var tools: [OpenAIToolSchema]
+
+        enum CodingKeys: String, CodingKey {
+            case model
+            case maxTokens = "max_tokens"
+            case messages
+            case tools
+        }
+    }
+
+    private struct ToolResponseBody: Decodable {
+        struct Choice: Decodable {
+            struct Message: Decodable {
+                var content: String?
+                var toolCalls: [WireToolCall]?
+
+                enum CodingKeys: String, CodingKey {
+                    case content
+                    case toolCalls = "tool_calls"
+                }
+            }
+            var message: Message?
+            var finishReason: String?
+
+            enum CodingKeys: String, CodingKey {
+                case message
+                case finishReason = "finish_reason"
+            }
         }
         var choices: [Choice]
     }

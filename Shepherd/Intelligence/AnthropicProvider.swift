@@ -23,6 +23,8 @@ struct AnthropicProvider: IntelligenceProvider {
     let model: String
     /// How many tokens the answer may use.
     var maxTokens: Int = 1_024
+    /// Where a non-streaming request goes. `URLSession` outside tests.
+    let transport: any IntelligenceTransport
 
     var kind: IntelligenceKind { .anthropic }
 
@@ -34,9 +36,15 @@ struct AnthropicProvider: IntelligenceProvider {
     /// - Parameters:
     ///   - apiKey: The user's Anthropic key.
     ///   - model: The model id.
-    init(apiKey: String, model: String = AnthropicProvider.defaultModel) {
+    ///   - transport: Where requests go. Defaults to `URLSession`; a test substitutes a script.
+    init(
+        apiKey: String,
+        model: String = AnthropicProvider.defaultModel,
+        transport: any IntelligenceTransport = URLSessionTransport()
+    ) {
         self.apiKey = apiKey
         self.model = model.isEmpty ? AnthropicProvider.defaultModel : model
+        self.transport = transport
     }
 
     func summarizePullRequest(_ digest: PullRequestDigest) async throws -> PRSummary {
@@ -245,6 +253,148 @@ struct AnthropicProvider: IntelligenceProvider {
         return text
     }
 
+    // MARK: - The tool loop (plan §3.F)
+
+    /// Diagnoses a red pull request through `tool_use`/`tool_result` blocks.
+    ///
+    /// The Messages API's shape for this is a conversation Shepherd keeps: the request carries
+    /// `tools`, an answer whose `stop_reason` is `tool_use` holds one or more `tool_use` blocks,
+    /// and the way to answer them is to append the assistant's content **verbatim** and then a
+    /// `user` message of `tool_result` blocks — one per call, keyed by `tool_use_id`. Dropping any
+    /// part of the assistant's content, or answering the calls out of order, makes the endpoint
+    /// reject the next request, so the blocks are round-tripped through one typed value rather
+    /// than rebuilt.
+    ///
+    /// The loop ends in exactly three ways: the model stops asking (its text is the answer), the
+    /// hop cap fires, or the endpoint fails. There is no "answer with what you have" fallback —
+    /// see ``IntelligenceError/toolLoopExceeded``.
+    /// - Parameters:
+    ///   - request: What is red and what may be read.
+    ///   - tools: The reads, already bound to this pull request.
+    /// - Returns: The diagnosis and its hops.
+    func diagnoseFailingChecks(
+        _ request: CIDiagnosisRequest,
+        tools: any IntelligenceToolExecuting
+    ) async throws -> IntelligenceToolRun<CIDiagnosis> {
+        guard !apiKey.isEmpty else { throw IntelligenceError.notConfigured("API key") }
+        guard let url = URL(string: AnthropicProvider.messagesURL) else {
+            throw IntelligenceError.notConfigured("endpoint")
+        }
+
+        let system = IntelligencePrompt.ciDiagnosisInstructions + "\n"
+            + IntelligencePrompt.ciDiagnosisJSONContract
+        var messages: [ToolMessage] = [
+            ToolMessage(
+                role: "user",
+                content: [ContentBlock(text: IntelligencePrompt.body(for: request))]
+            ),
+        ]
+        var trace = IntelligenceTrace()
+        var answer = ""
+
+        while true {
+            let (data, status) = try await transport.post(
+                url: url,
+                headers: [
+                    "x-api-key": apiKey,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                ],
+                body: try toolRequestBody(system: system, messages: messages)
+            )
+            guard (200..<300).contains(status) else {
+                throw AnthropicProvider.toolFailure(
+                    status: status,
+                    message: AnthropicProvider.errorMessage(in: data)
+                )
+            }
+            guard let decoded = try? JSONDecoder().decode(ToolResponseBody.self, from: data) else {
+                throw IntelligenceError.malformedResponse
+            }
+            answer = decoded.text
+            let calls = decoded.toolUseBlocks
+            guard decoded.stopReason == "tool_use", !calls.isEmpty else { break }
+            guard trace.count + calls.count <= IntelligenceToolLoop.maximumHops else {
+                throw IntelligenceError.toolLoopExceeded
+            }
+
+            // Verbatim, including any text block the model wrote alongside the call: the
+            // transcript the endpoint validates the next request against is its own.
+            messages.append(ToolMessage(role: "assistant", content: decoded.content))
+            var results: [ContentBlock] = []
+            for block in calls {
+                let call = IntelligenceToolCall(
+                    id: block.id ?? "",
+                    toolName: block.name ?? "",
+                    arguments: block.input ?? [:]
+                )
+                let started = Date()
+                let result = try await tools.execute(call)
+                if let name = IntelligenceToolName(rawValue: call.toolName) {
+                    // Only a known tool becomes a step: the trace is typed, and a name the model
+                    // invented was refused rather than run, which the model reads in the result.
+                    trace.append(
+                        tool: name,
+                        call: call,
+                        result: result,
+                        duration: Date().timeIntervalSince(started)
+                    )
+                }
+                results.append(ContentBlock(toolUseID: call.id, content: result.content))
+            }
+            messages.append(ToolMessage(role: "user", content: results))
+        }
+
+        return IntelligenceToolRun(
+            value: try IntelligenceJSON.diagnosis(from: answer),
+            trace: trace
+        )
+    }
+
+    /// The JSON body one tool-calling request sends.
+    ///
+    /// Its own encoder rather than a flag on ``completionRequestBody(system:user:streaming:)``,
+    /// because the two bodies are genuinely different shapes: that one carries a single string
+    /// message and no `tools`, this one carries a growing transcript of content blocks. Exposed
+    /// so a test can assert that the tool schemas reach the wire — a schema an endpoint dislikes
+    /// otherwise fails on the user's machine.
+    ///
+    /// No `temperature`: the tool descriptors and the JSON contract are what constrain this
+    /// answer, and a key the request does not need is one more thing a proxy in front of the API
+    /// can disagree about.
+    /// - Parameters:
+    ///   - system: The system prompt.
+    ///   - messages: The transcript so far, oldest first.
+    /// - Returns: The encoded request body.
+    func toolRequestBody(system: String, messages: [ToolMessage]) throws -> Data {
+        try JSONEncoder().encode(
+            ToolRequestBody(
+                model: model,
+                maxTokens: maxTokens,
+                system: system,
+                messages: messages,
+                tools: AnthropicToolSchema.all
+            )
+        )
+    }
+
+    /// Maps a failed tool-calling request onto the error the UI can act on.
+    ///
+    /// A `400` that mentions tools is an endpoint that cannot do this at all — a proxy in front
+    /// of the Messages API that strips the parameter, most often — and saying so is more useful
+    /// than showing the reviewer a status code. Every other status keeps its own message: a `401`
+    /// is a wrong key and a `429` is a rate limit whatever the request carried.
+    /// - Parameters:
+    ///   - status: The HTTP status.
+    ///   - message: The endpoint's own message.
+    /// - Returns: The error to throw.
+    static func toolFailure(status: Int, message: String) -> IntelligenceError {
+        guard status == 400, IntelligenceToolLoop.mentionsTools(message) else {
+            return .http(status: status, message: message)
+        }
+        return .toolsUnsupported
+    }
+
     /// Best-effort extraction of Anthropic's `{"error": {"message": …}}` shape.
     static func errorMessage(in data: Data) -> String {
         struct Envelope: Decodable {
@@ -287,5 +437,145 @@ struct AnthropicProvider: IntelligenceProvider {
             var text: String?
         }
         var content: [Block]
+    }
+
+    // MARK: - Tool-calling wire types
+
+    /// One content block of a tool-calling turn, in all four shapes the loop deals with.
+    ///
+    /// Flat rather than an enum with four cases, because this type has to *round-trip*: the
+    /// assistant's blocks are decoded and sent straight back, and an enum would have to be
+    /// exhaustive about a shape the API may extend. Every field is optional and the encoder omits
+    /// the absent ones, so a `text` block encodes as `{"type":"text","text":…}` and nothing else.
+    ///
+    /// `input` is `[String: IntelligenceToolArgument]` — the contract's own flat, typed argument
+    /// map — which is what makes the round trip lossless *and* checked: an argument that is not a
+    /// string or an integer cannot be represented, and a model that sent one ends up with an
+    /// empty argument map that the registry then refuses by name. That is the right outcome; the
+    /// three tools take a check name, a path and a line number, and nothing nested.
+    struct ContentBlock: Codable, Sendable {
+        /// `text`, `tool_use` or `tool_result`.
+        var type: String
+        /// The assistant's prose, for a `text` block.
+        var text: String?
+        /// The call's id, for a `tool_use` block.
+        var id: String?
+        /// The tool's name, for a `tool_use` block.
+        var name: String?
+        /// The arguments, for a `tool_use` block.
+        var input: [String: IntelligenceToolArgument]?
+        /// Which call this answers, for a `tool_result` block.
+        var toolUseID: String?
+        /// The tool's budgeted text, for a `tool_result` block.
+        var content: String?
+
+        /// A `text` block.
+        /// - Parameter text: The prose.
+        init(text: String) {
+            self.type = "text"
+            self.text = text
+        }
+
+        /// A `tool_result` block.
+        /// - Parameters:
+        ///   - toolUseID: The call this answers.
+        ///   - content: The tool's budgeted text.
+        init(toolUseID: String, content: String) {
+            self.type = "tool_result"
+            self.toolUseID = toolUseID
+            self.content = content
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case type
+            case text
+            case id
+            case name
+            case input
+            case toolUseID = "tool_use_id"
+            case content
+        }
+
+        /// Decodes a block, tolerating an `input` this contract cannot hold.
+        ///
+        /// `try?` on that one field only: a nested or array-valued argument is a call that would
+        /// have been refused anyway, and losing the arguments turns it into a refusal the model
+        /// can read instead of a decoding failure that ends the turn. The double-optional dance is
+        /// `try?` over `decodeIfPresent` — "absent" and "unreadable" collapse to the same `nil`.
+        ///
+        /// A `tool_use` block that lost its arguments keeps an *empty* map rather than none,
+        /// because this block is sent back in the next request and the API requires the key to be
+        /// there. An empty map is also exactly what makes the registry refuse the call by name.
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            type = try container.decodeIfPresent(String.self, forKey: .type) ?? "text"
+            text = try container.decodeIfPresent(String.self, forKey: .text)
+            id = try container.decodeIfPresent(String.self, forKey: .id)
+            name = try container.decodeIfPresent(String.self, forKey: .name)
+            let decodedInput = (try? container.decodeIfPresent(
+                [String: IntelligenceToolArgument].self,
+                forKey: .input
+            )) ?? nil
+            input = type == "tool_use" ? (decodedInput ?? [:]) : decodedInput
+            toolUseID = try container.decodeIfPresent(String.self, forKey: .toolUseID)
+            content = try container.decodeIfPresent(String.self, forKey: .content)
+        }
+    }
+
+    /// One message of a tool-calling transcript.
+    struct ToolMessage: Codable, Sendable {
+        /// `user` or `assistant`.
+        var role: String
+        /// The message's content blocks.
+        var content: [ContentBlock]
+
+        /// Creates a message.
+        /// - Parameters:
+        ///   - role: `user` or `assistant`.
+        ///   - content: The blocks.
+        init(role: String, content: [ContentBlock]) {
+            self.role = role
+            self.content = content
+        }
+    }
+
+    private struct ToolRequestBody: Encodable {
+        var model: String
+        var maxTokens: Int
+        var system: String
+        var messages: [ToolMessage]
+        var tools: [AnthropicToolSchema]
+
+        enum CodingKeys: String, CodingKey {
+            case model
+            case maxTokens = "max_tokens"
+            case system
+            case messages
+            case tools
+        }
+    }
+
+    private struct ToolResponseBody: Decodable {
+        var content: [ContentBlock]
+        var stopReason: String?
+
+        enum CodingKeys: String, CodingKey {
+            case content
+            case stopReason = "stop_reason"
+        }
+
+        /// Every `tool_use` block, in the order the model asked for them.
+        var toolUseBlocks: [ContentBlock] {
+            content.filter { $0.type == "tool_use" }
+        }
+
+        /// The answer's prose, which on the last turn is the JSON contract's payload.
+        var text: String {
+            content
+                .filter { $0.type == "text" }
+                .compactMap(\.text)
+                .joined(separator: "\n")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
     }
 }

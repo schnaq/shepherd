@@ -136,6 +136,13 @@ enum OnDeviceGeneration {
         )
     }
 
+    /// How many tokens a CI diagnosis may use.
+    ///
+    /// Small, because the answer is five short fields and the tool results have to share the
+    /// same window with them: a diagnosis that ran away would be a hypothesis paragraph in a
+    /// field the card draws as one line.
+    static let diagnosisResponseTokens = 320
+
     /// Options for a drafting request.
     ///
     /// No temperature: a draft is prose a person will rewrite, and the framework's default is
@@ -144,15 +151,28 @@ enum OnDeviceGeneration {
     static var draft: GenerationOptions {
         GenerationOptions(maximumResponseTokens: draftResponseTokens)
     }
+
+    /// Options for a CI diagnosis.
+    ///
+    /// The structured temperature, for the reason it exists: this answer is read as a fact about
+    /// a log, and a warmer model invents the failing test it expects to find rather than the one
+    /// the tools showed it.
+    static var diagnosis: GenerationOptions {
+        GenerationOptions(
+            temperature: structuredTemperature,
+            maximumResponseTokens: diagnosisResponseTokens
+        )
+    }
 }
 
 // MARK: - The provider
 
 /// Tier 2: Apple's on-device Foundation Model (ADR 0007).
 ///
-/// **This is the only file in the app that imports `FoundationModels`.** Everything the rest
-/// of the app sees is ``IntelligenceProvider``, so a change in that framework can only break
-/// this file.
+/// **`FoundationModels` is imported only by the `OnDevice*.swift` files in this folder** — this
+/// one and ``OnDeviceToolBridge``, which wraps the read-only tool contract in the framework's
+/// `Tool` protocol. Everything the rest of the app sees is ``IntelligenceProvider``, so a change
+/// in that framework can only break those two files.
 ///
 /// The model is guarded twice: the chosen model's `availability` must report `.available` (Apple
 /// Intelligence can be off, the device can be ineligible, the assets can still be downloading),
@@ -282,6 +302,48 @@ struct OnDeviceProvider: IntelligenceProvider {
             prompt: IntelligencePrompt.body(for: request),
             estimate: request.approximateTokenCount
         )
+    }
+
+    /// Diagnoses a red pull request by letting the model call the read-only tools (plan §3.F).
+    ///
+    /// The one request on this tier where Shepherd does not drive the turn: the session is
+    /// created *with* the tools, and the framework decides which of them to call and when. So
+    /// there is no loop here — the loop is inside `respond(to:generating:)` — and the two things
+    /// Shepherd still owns are pushed to the edges: the hop cap lives in the tool wrappers,
+    /// which are the only code that runs per call, and the trace is collected by the
+    /// ``ToolTraceRecorder`` they share and read back once the answer exists.
+    ///
+    /// The pre-flight measures the opening prompt only, which is the honest thing it can do: the
+    /// tool results are not written yet, and the framework's own accounting of the transcript is
+    /// what will notice if they do not fit — arriving here as
+    /// ``IntelligenceError/contextExceeded``, which is exactly the failure the router is allowed
+    /// to offer the cloud tier for.
+    func diagnoseFailingChecks(
+        _ request: CIDiagnosisRequest,
+        tools: any IntelligenceToolExecuting
+    ) async throws -> IntelligenceToolRun<CIDiagnosis> {
+        let prompt = IntelligencePrompt.body(for: request)
+        let recorder = ToolTraceRecorder()
+        let session = try await OnDeviceProvider.preflight(
+            useCase: .prose,
+            instructions: IntelligencePrompt.ciDiagnosisInstructions,
+            prompt: prompt,
+            estimate: request.approximateTokenCount,
+            tools: OnDeviceToolBridge.tools(executor: tools, recorder: recorder)
+        )
+        let generated: OnDeviceCIDiagnosis
+        do {
+            generated = try await session.respond(
+                to: prompt,
+                generating: OnDeviceCIDiagnosis.self,
+                options: OnDeviceGeneration.diagnosis
+            ).content
+        } catch {
+            throw OnDeviceProvider.mapped(error)
+        }
+        let diagnosis = CIDiagnosis(generated)
+        guard !diagnosis.hypothesis.isEmpty else { throw IntelligenceError.malformedResponse }
+        return IntelligenceToolRun(value: diagnosis, trace: await recorder.current)
     }
 
     /// One drafting request, awaited to the end.
@@ -415,7 +477,15 @@ struct OnDeviceProvider: IntelligenceProvider {
     /// spend battery to do it. An exceeded context window is the real tokenizer disagreeing with
     /// the pre-flight estimate, which is worth its own sentence because the fix ("smaller
     /// selection, or the cloud tier") is different from every other failure's.
+    ///
+    /// A failure that came out of a *tool* is unwrapped first. The framework reports one as its
+    /// own error wrapping the tool's, so a hop cap that fired inside a wrapper would otherwise
+    /// reach the router as a framework type nobody can read — and the cap firing is one of the
+    /// two failures of this feature a reviewer is most likely to see.
     private static func mapped(_ error: any Error) -> any Error {
+        if let toolError = error as? LanguageModelSession.ToolCallError {
+            return mapped(toolError.underlyingError)
+        }
         guard let generation = error as? LanguageModelSession.GenerationError else { return error }
         switch generation {
         case .guardrailViolation:
@@ -440,13 +510,18 @@ struct OnDeviceProvider: IntelligenceProvider {
     ///     prompt, which is why they are measured together.
     ///   - prompt: The prompt.
     ///   - estimate: The request's own chars-÷-4 estimate, used when the OS cannot measure.
+    ///   - tools: The tools the session may call. Empty for every request that only answers a
+    ///     prompt, and the empty case keeps the exact initialiser those requests have always
+    ///     used — a `tools:` argument on a request with no tools would be a change in what the
+    ///     framework is asked for, in return for one fewer line here.
     /// - Returns: A session on the chosen model.
     /// - Throws: ``IntelligenceError/unavailable(_:)`` or ``IntelligenceError/digestTooLarge(tokens:limit:)``.
     private static func preflight(
         useCase: OnDeviceUseCase,
         instructions: String,
         prompt: String,
-        estimate: Int
+        estimate: Int,
+        tools: [any Tool] = []
     ) async throws -> LanguageModelSession {
         let model = useCase.model()
         if let reason = unavailabilityReason(of: model) {
@@ -471,7 +546,10 @@ struct OnDeviceProvider: IntelligenceProvider {
             throw IntelligenceError.digestTooLarge(tokens: tokens, limit: budget.maxTokens)
         }
 
-        return LanguageModelSession(model: model, instructions: instructions)
+        guard !tools.isEmpty else {
+            return LanguageModelSession(model: model, instructions: instructions)
+        }
+        return LanguageModelSession(model: model, tools: tools, instructions: instructions)
     }
 
     /// Trims a generated draft and refuses an empty one.
