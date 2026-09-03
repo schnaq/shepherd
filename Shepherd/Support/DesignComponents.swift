@@ -96,10 +96,24 @@ struct ComposerTextEditor: View {
     var height: CGFloat = 130
     /// The font size.
     var size: CGFloat = 12
+    /// The colour the text is drawn in.
+    ///
+    /// A parameter rather than a second control, because the one field that needs another colour
+    /// needs it for a second and a half: while an AI draft *streams* into it, the growing text is
+    /// drawn in the caption colour (plan §3.B), which is the same signal the caption under the
+    /// field carries and is readable while the reviewer is looking at the words rather than at
+    /// the line below them.
+    ///
+    /// The whole field takes the colour, not only the part the model wrote. Styling a *range*
+    /// would mean an attributed-text editor, and appending a draft under the reviewer's own
+    /// paragraph is the only case where the two differ — for the second the stream runs, and
+    /// never afterwards, because the tint goes as soon as the stream ends.
+    var textColor: Color = Theme.text
 
     var body: some View {
         TextEditor(text: text)
             .font(.system(size: size))
+            .foregroundStyle(textColor)
             .writingToolsBehavior(.complete)
             .scrollContentBackground(.hidden)
             .padding(6)

@@ -1,23 +1,40 @@
 import SwiftUI
 
 /// The "draft this text with AI" button that sits next to the summary and comment fields
-/// (ADR 0007 amendment).
+/// (ADR 0007 amendment), and the stop button it becomes while a draft streams (plan §3.B).
 ///
 /// Placed beside the field it writes into, exactly like ``SavedReplyMenu`` and for the same
 /// reason: a text-inserting control must never have to guess which field it is inserting into.
 /// The button is only rendered when a tier could take the request (``IntelligenceRouter/canDraft``)
 /// — an always-present button that always fails would be worse than no button.
+///
+/// **One control, one shortcut, both directions.** Starting and stopping share this button and
+/// ⇧⌘D rather than growing a second control: while text is arriving, the only thing a reviewer
+/// wants from the sparkles button is to make it stop, and a stop that lives somewhere else is a
+/// stop nobody finds in the second it is useful. That is also why the button is no longer
+/// disabled while a request is in flight — a disabled button in that second would be the bug.
 struct AIDraftButton: View {
-    /// Whether a request is in flight.
+    /// Whether a request is in flight: waiting for its first token, or streaming.
     let isDrafting: Bool
+    /// Whether text is arriving right now, so the control is a stop button with something to stop.
+    ///
+    /// Split from ``isDrafting`` only for the icon: before the first token there is nothing to
+    /// show but a spinner, and swapping the spinner for a stop glyph the moment the first
+    /// character lands is what tells the reviewer that the field is now moving.
+    var isStreaming: Bool = false
     /// The control's height, so it lines up with the controls beside it.
     var height: CGFloat = 24
-    /// Starts a request. Nothing happens without this click — there is no automatic drafting.
+    /// Starts a request, or stops the one that is running. Nothing happens without this click —
+    /// there is no automatic drafting.
     var action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            if isDrafting {
+            if isStreaming {
+                Image(systemName: "stop.circle")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Theme.accentText)
+            } else if isDrafting {
                 ProgressView()
                     .controlSize(.small)
             } else {
@@ -27,19 +44,28 @@ struct AIDraftButton: View {
             }
         }
         .buttonStyle(.plain)
-        .disabled(isDrafting)
         .fixedSize()
         .frame(height: height)
-        .help(String(localized: "Draft with AI — a suggestion you review before anything is sent"))
-        .accessibilityLabel(String(localized: "Draft with AI"))
+        .keyboardShortcut("d", modifiers: [.command, .shift])
+        .help(isDrafting
+            ? String(localized: "Stop drafting — what has already arrived stays in the field")
+            : String(localized: "Draft with AI — a suggestion you review before anything is sent"))
+        .accessibilityLabel(isDrafting
+            ? String(localized: "Stop drafting")
+            : String(localized: "Draft with AI"))
+        .accessibilityHint(isDrafting
+            ? String(localized: "Keeps the text that has already arrived, still labelled as a draft.")
+            : String(localized: "Drafts a suggestion into the field beside this button. Nothing is sent."))
     }
 }
 
 /// Everything a drafting attempt has to say, under the field it belongs to.
 ///
-/// One view for all four phases so the two composers cannot drift apart: the caption that marks
-/// generated text, the replace-or-append question for a field that already had text in it, and the
-/// tier's own reason when nothing came back.
+/// One view for every phase so the two composers cannot drift apart: the replace-or-append
+/// question for a field that already had text in it, the "Drafting on-device…" line while the
+/// text arrives, the caption that marks the arrived text as generated, and the tier's own reason
+/// when nothing came back. All of them are one short line in the same place, so a draft that
+/// streams, is stopped and then fails does not make the sheet jump.
 struct AIDraftStatusView: View {
     /// The field's drafting state.
     let state: AIDraftFieldState
@@ -64,7 +90,7 @@ struct AIDraftStatusView: View {
             // to preview and no tier to name yet — and a discarded question sends nothing at all.
             question(badge: nil, preview: nil)
         case .streaming(let streaming):
-            caption(streaming.kind)
+            streamingCaption(streaming.kind)
         case .drafted(let kind):
             caption(kind)
         case .failed(let message):
@@ -76,6 +102,42 @@ struct AIDraftStatusView: View {
             }
             .font(.system(size: 11))
             .foregroundStyle(Theme.failure)
+        }
+    }
+
+    /// The line shown while text is still arriving, naming the tier producing it.
+    ///
+    /// A different sentence from ``caption(_:)`` on purpose. While the stream runs, the fact the
+    /// reviewer needs is that *more is coming* — a field that is growing under the cursor is not
+    /// a field to start editing — and afterwards the fact they need is that what they are reading
+    /// was generated. The tier is in both, and it is in this one because
+    /// ``IntelligenceStream`` settles it before the first character: "Drafting on-device…" is
+    /// also the honest answer to "did this just leave my Mac?", which is worth reading while the
+    /// text arrives rather than after.
+    /// - Parameter kind: The tier that is answering.
+    private func streamingCaption(_ kind: IntelligenceKind) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: "sparkles")
+                .font(.system(size: 10))
+            Text(AIDraftStatusView.draftingLine(kind))
+        }
+        .font(.system(size: 11))
+        .foregroundStyle(Theme.accentText)
+    }
+
+    /// "Drafting on-device…" or "Drafting with <provider>…".
+    ///
+    /// Two sentences rather than one interpolation of ``IntelligenceKind/badge``, because the
+    /// badges are not all nouns you can put after "with": "Drafting with on-device…" is not a
+    /// sentence, and a translator handed one key here could not fix that either.
+    /// - Parameter kind: The tier that is answering.
+    /// - Returns: The already-localized line.
+    static func draftingLine(_ kind: IntelligenceKind) -> String {
+        switch kind {
+        case .onDevice:
+            return String(localized: "Drafting on-device…")
+        case .anthropic, .openAICompatible:
+            return String(localized: "Drafting with \(kind.badge)…")
         }
     }
 

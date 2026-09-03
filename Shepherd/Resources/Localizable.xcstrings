@@ -3131,6 +3131,36 @@
         }
       }
     },
+    "Drafting on-device…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entwurf entsteht auf dem Gerät…"
+          }
+        }
+      }
+    },
+    "Drafting with %@…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entwurf entsteht mit %@…"
+          }
+        }
+      }
+    },
+    "Drafts a suggestion into the field beside this button. Nothing is sent.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entwirft einen Vorschlag im Feld neben dieser Schaltfläche. Es wird nichts gesendet."
+          }
+        }
+      }
+    },
     "ENTER THIS CODE ON GITHUB": {
       "localizations": {
         "de": {
@@ -3977,6 +4007,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Einstellungen in einem S3-kompatiblen Bucket ablegen"
+          }
+        }
+      }
+    },
+    "Keeps the text that has already arrived, still labelled as a draft.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Behält den bereits angekommenen Text, weiterhin als Entwurf gekennzeichnet."
           }
         }
       }
@@ -7237,6 +7277,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Von einer automatischen Delegationsregel gestartet. Es wird nichts gepusht — du reviewst und pushst den Diff weiterhin selbst."
+          }
+        }
+      }
+    },
+    "Stop drafting": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entwurf stoppen"
+          }
+        }
+      }
+    },
+    "Stop drafting — what has already arrived stays in the field": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entwurf stoppen — was bereits angekommen ist, bleibt im Feld"
           }
         }
       }

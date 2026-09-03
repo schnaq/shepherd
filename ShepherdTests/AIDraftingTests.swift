@@ -936,6 +936,26 @@ final class AIDraftingTests: XCTestCase {
         XCTAssertNil(nothing.failureMessage)
     }
 
+    func testStoppingBeforeTheFirstSnapshotLeavesTheFieldExactlyAsItWas() {
+        // The stop button exists from the click, not from the first token: an on-device session
+        // that is still warming up has to be stoppable, and stopping it is not a failure.
+        var waiting = AIDraftFieldState()
+        XCTAssertEqual(waiting.prepareStream(existingText: ""), .ready(base: ""))
+        waiting.cancelDrafting()
+        XCTAssertEqual(waiting.phase, .idle)
+        XCTAssertNil(waiting.failureMessage, "the reviewer stopped it themselves")
+        XCTAssertNil(waiting.labelledKind)
+
+        // Once text is arriving, ending the stream is ``cancelStream``'s job and this one keeps
+        // its hands off — the two are called together, and exactly one of them does anything.
+        var streaming = AIDraftFieldState()
+        _ = streaming.prepareStream(existingText: "")
+        streaming.streamStarted(kind: .onDevice, base: "")
+        _ = streaming.streamed("Half a draft")
+        streaming.cancelDrafting()
+        XCTAssertEqual(streaming.streamingDraft?.partial, "Half a draft")
+    }
+
     func testAFailedStreamKeepsTextIfAnyArrivedAndOtherwiseSaysWhy() {
         var withText = AIDraftFieldState()
         _ = withText.prepareStream(existingText: "")

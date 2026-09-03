@@ -79,6 +79,15 @@ struct SubmitReviewSheet: View {
 
     /// The summary field's AI-drafting state (ADR 0007 amendment).
     @State private var aiDraft = AIDraftFieldState()
+    /// The task producing the streamed draft, while one runs (plan §3.B).
+    ///
+    /// Held because a stream has three ways to end that are not "the model stopped talking": the
+    /// stop button, Escape, and the reviewer typing. All three have to stop the *request* as well
+    /// as the field's claim on it — cancelling this task drops the iteration, which cancels the
+    /// router's relay, which cancels the provider's own task, which is what ends the on-device
+    /// session or the SSE connection. Dropping the field's state alone would leave a model
+    /// generating tokens nobody will ever read.
+    @State private var draftTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -97,8 +106,11 @@ struct SubmitReviewSheet: View {
                     CardTitle(String(localized: "SUMMARY"))
                     Spacer(minLength: 4)
                     if model.canDraftWithAI {
-                        AIDraftButton(isDrafting: aiDraft.isDrafting) {
-                            requestSummaryDraft()
+                        AIDraftButton(
+                            isDrafting: aiDraft.isDrafting,
+                            isStreaming: aiDraft.streamingDraft != nil
+                        ) {
+                            toggleSummaryDraft()
                         }
                     }
                     // No `suggestedIDs` here, and that is the rule rather than an omission: a
@@ -116,7 +128,13 @@ struct SubmitReviewSheet: View {
                         }
                     )
                 }
-                ComposerTextEditor(text: summaryBinding, height: 130)
+                ComposerTextEditor(
+                    text: summaryBinding,
+                    height: 130,
+                    // The growing draft is drawn in the caption colour, so the reviewer can see
+                    // which words are the model's while they are still arriving.
+                    textColor: aiDraft.streamingDraft == nil ? Theme.text : Theme.accentText
+                )
                 AIDraftStatusView(
                     state: aiDraft,
                     confirmationTitle: String(localized: "Replace current summary?"),
@@ -159,9 +177,23 @@ struct SubmitReviewSheet: View {
 
             HStack {
                 Spacer()
-                Button(String(localized: "Cancel")) { dismiss() }
-                    .buttonStyle(SecondaryButtonStyle())
-                    .keyboardShortcut(.cancelAction)
+                // Escape while a draft is in flight stops the draft rather than throwing the
+                // sheet away, and this is the one control `.cancelAction` sits on, so there is
+                // nothing ambiguous about where the key goes. A reviewer who reaches for Escape
+                // while text is growing in front of them means *that*; the sheet is one Escape
+                // further along, with everything the draft produced still in the field.
+                Button(aiDraft.isDrafting
+                    ? String(localized: "Stop drafting")
+                    : String(localized: "Cancel")
+                ) {
+                    if aiDraft.isDrafting {
+                        stopSummaryDraft()
+                    } else {
+                        dismiss()
+                    }
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .keyboardShortcut(.cancelAction)
                 Button {
                     Task {
                         await model.submit(verdict: model.pendingVerdict, actions: actions)
@@ -185,7 +217,21 @@ struct SubmitReviewSheet: View {
         .frame(width: 460)
         .background(Theme.panel)
         .onChange(of: model.summaryText) { _, text in
+            let wasStreaming = aiDraft.streamingDraft != nil
             aiDraft.fieldChanged(to: text)
+            // The reviewer's keystroke won the field (``AIDraftFieldState/fieldChanged(to:)``
+            // dropped the stream's claim on it), so the request has to stop too: snapshots that
+            // would be refused anyway are tokens somebody's Mac is still generating.
+            if wasStreaming, aiDraft.streamingDraft == nil {
+                draftTask?.cancel()
+                draftTask = nil
+            }
+        }
+        // The sheet closing is a stop as well. There is no field left to write into, and an
+        // on-device session that outlives its window is battery spent on nothing.
+        .onDisappear {
+            draftTask?.cancel()
+            draftTask = nil
         }
     }
 
@@ -204,8 +250,37 @@ struct SubmitReviewSheet: View {
         case .askFirst:
             break
         case .ready(let base):
-            Task { await runSummaryStream(base: base) }
+            draftTask = Task { await runSummaryStream(base: base) }
         }
+    }
+
+    /// The sparkles button, and ⇧⌘D: start a draft, or stop the one that is running.
+    ///
+    /// One entry point for both directions so the button and the shortcut cannot disagree about
+    /// what they do (plan §3.B).
+    @MainActor
+    private func toggleSummaryDraft() {
+        if aiDraft.isDrafting {
+            stopSummaryDraft()
+        } else {
+            requestSummaryDraft()
+        }
+    }
+
+    /// Stops the running draft, keeping every word that arrived.
+    ///
+    /// The field is settled here rather than in the task, so a stop is *immediate*: the task ends
+    /// on its own schedule (it has to be resumed by the runtime first), and a stop button that
+    /// left the stop caption up for another beat would look like it had not worked. Everything it
+    /// touches is idempotent, so the task doing the same thing again when it wakes is a no-op.
+    @MainActor
+    private func stopSummaryDraft() {
+        draftTask?.cancel()
+        draftTask = nil
+        // Exactly one of these two does anything: the first before the first token has arrived,
+        // the second once text is in the field.
+        aiDraft.cancelDrafting()
+        apply(aiDraft.cancelStream())
     }
 
     /// Applies the reviewer's answer to the replace-or-append question.
@@ -215,7 +290,7 @@ struct SubmitReviewSheet: View {
         case .write(let text):
             model.summaryText = text
         case .startStream(let base):
-            Task { await runSummaryStream(base: base) }
+            draftTask = Task { await runSummaryStream(base: base) }
         case .nothing:
             break
         }
@@ -230,6 +305,10 @@ struct SubmitReviewSheet: View {
     @MainActor
     private func runSummaryStream(base: String) async {
         let outcome = await model.streamReviewSummaryDraft()
+        // Stopped while the ladder was still choosing a tier: ``stopSummaryDraft()`` has already
+        // put the field back, and reporting this outcome would answer a question nobody is
+        // asking any more.
+        guard !Task.isCancelled else { return }
         guard let stream = outcome.stream else {
             apply(aiDraft.finish(outcome.failure ?? .disabled, existingText: model.summaryText))
             return
@@ -239,7 +318,16 @@ struct SubmitReviewSheet: View {
             for try await partial in stream.text {
                 apply(aiDraft.streamed(partial))
             }
-            apply(aiDraft.finishStream())
+            // A cancelled task ends the iteration *without* an error — `AsyncThrowingStream`
+            // finishes its iterator when the consuming task is cancelled — so a stop has to be
+            // recognised here as well, or the last thing a stopped stream did would be to file
+            // itself as one that ran to completion (which, with nothing yet arrived, would put a
+            // failure line under the field the reviewer just stopped).
+            if Task.isCancelled {
+                apply(aiDraft.cancelStream())
+            } else {
+                apply(aiDraft.finishStream())
+            }
         } catch is CancellationError {
             apply(aiDraft.cancelStream())
         } catch {
@@ -287,6 +375,12 @@ struct InlineCommentComposer: View {
     @State private var errorMessage: String?
     /// The comment field's AI-drafting state (ADR 0007 amendment).
     @State private var aiDraft = AIDraftFieldState()
+    /// The task producing the streamed draft, while one runs (plan §3.B).
+    ///
+    /// Same reason as in ``SubmitReviewSheet``: the stop button, Escape and the reviewer typing
+    /// all have to end the request itself, and cancelling this task is what walks back down
+    /// through the router's relay to the provider and ends the on-device session.
+    @State private var draftTask: Task<Void, Never>?
     /// The saved replies that fit the conversation already on this line, best first.
     @State private var suggestedReplyIDs: [SavedReply.ID] = []
     /// Whether the embeddings for this composer have already been spent.
@@ -307,8 +401,11 @@ struct InlineCommentComposer: View {
                 }
                 Spacer(minLength: 4)
                 if model.canDraftWithAI {
-                    AIDraftButton(isDrafting: aiDraft.isDrafting) {
-                        requestCommentDraft()
+                    AIDraftButton(
+                        isDrafting: aiDraft.isDrafting,
+                        isStreaming: aiDraft.streamingDraft != nil
+                    ) {
+                        toggleCommentDraft()
                     }
                 }
                 SavedReplyMenu(
@@ -321,7 +418,12 @@ struct InlineCommentComposer: View {
                 )
             }
 
-            ComposerTextEditor(text: $commentText, height: 120)
+            ComposerTextEditor(
+                text: $commentText,
+                height: 120,
+                // The caption colour while the draft streams, the field's own colour after it.
+                textColor: aiDraft.streamingDraft == nil ? Theme.text : Theme.accentText
+            )
 
             AIDraftStatusView(
                 state: aiDraft,
@@ -354,9 +456,21 @@ struct InlineCommentComposer: View {
                     .buttonStyle(SecondaryButtonStyle(tint: Theme.failure))
                 }
                 Spacer()
-                Button(String(localized: "Cancel")) { dismiss() }
-                    .buttonStyle(SecondaryButtonStyle())
-                    .keyboardShortcut(.cancelAction)
+                // Escape stops a draft that is in flight before it closes the composer — the
+                // same rule as the submit sheet, on the same single `.cancelAction` control, so
+                // the key means one thing in both places.
+                Button(aiDraft.isDrafting
+                    ? String(localized: "Stop drafting")
+                    : String(localized: "Cancel")
+                ) {
+                    if aiDraft.isDrafting {
+                        stopCommentDraft()
+                    } else {
+                        dismiss()
+                    }
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .keyboardShortcut(.cancelAction)
                 Button(String(localized: "Add comment")) {
                     Task { await save() }
                 }
@@ -372,7 +486,17 @@ struct InlineCommentComposer: View {
             commentText = existingComment?.body ?? ""
         }
         .onChange(of: commentText) { _, text in
+            let wasStreaming = aiDraft.streamingDraft != nil
             aiDraft.fieldChanged(to: text)
+            // The keystroke wins the field, so the request stops with it.
+            if wasStreaming, aiDraft.streamingDraft == nil {
+                draftTask?.cancel()
+                draftTask = nil
+            }
+        }
+        .onDisappear {
+            draftTask?.cancel()
+            draftTask = nil
         }
     }
 
@@ -432,8 +556,30 @@ struct InlineCommentComposer: View {
         case .askFirst:
             break
         case .ready(let base):
-            Task { await runCommentStream(base: base) }
+            draftTask = Task { await runCommentStream(base: base) }
         }
+    }
+
+    /// The sparkles button, and ⇧⌘D: start a draft, or stop the one that is running.
+    @MainActor
+    private func toggleCommentDraft() {
+        if aiDraft.isDrafting {
+            stopCommentDraft()
+        } else {
+            requestCommentDraft()
+        }
+    }
+
+    /// Stops the running draft, keeping every word that arrived.
+    ///
+    /// Settled here rather than in the task so the stop is immediate; both calls are no-ops in
+    /// the phase the other one handles, and both are idempotent.
+    @MainActor
+    private func stopCommentDraft() {
+        draftTask?.cancel()
+        draftTask = nil
+        aiDraft.cancelDrafting()
+        apply(aiDraft.cancelStream())
     }
 
     /// Applies the reviewer's answer to the replace-or-append question.
@@ -443,7 +589,7 @@ struct InlineCommentComposer: View {
         case .write(let text):
             commentText = text
         case .startStream(let base):
-            Task { await runCommentStream(base: base) }
+            draftTask = Task { await runCommentStream(base: base) }
         case .nothing:
             break
         }
@@ -454,6 +600,8 @@ struct InlineCommentComposer: View {
     @MainActor
     private func runCommentStream(base: String) async {
         let outcome = await model.streamInlineCommentDraft(for: request)
+        // Stopped before a tier answered: the field is already back where the reviewer left it.
+        guard !Task.isCancelled else { return }
         guard let stream = outcome.stream else {
             apply(aiDraft.finish(outcome.failure ?? .disabled, existingText: commentText))
             return
@@ -463,7 +611,13 @@ struct InlineCommentComposer: View {
             for try await partial in stream.text {
                 apply(aiDraft.streamed(partial))
             }
-            apply(aiDraft.finishStream())
+            // Cancellation ends the iteration without an error, so the stop is recognised here
+            // too — see ``SubmitReviewSheet/runSummaryStream(base:)``.
+            if Task.isCancelled {
+                apply(aiDraft.cancelStream())
+            } else {
+                apply(aiDraft.finishStream())
+            }
         } catch is CancellationError {
             apply(aiDraft.cancelStream())
         } catch {

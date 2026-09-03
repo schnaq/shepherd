@@ -317,11 +317,20 @@ against an explicit token budget before it is sent.
 
 ### AI-drafted review text — a suggestion, never a submission
 
-A ✨ button next to the review summary and next to any inline comment drafts the text for you: the
-summary from the pull request's digest and the comments you have already written, an inline comment
-from the diff around the line you clicked. It lands in the field as editable text, labelled as a
-draft until you touch it, and it never overwrites what you typed without asking whether to replace
-or append.
+A ✨ button (⇧⌘D) next to the review summary and next to any inline comment drafts the text for
+you: the summary from the pull request's digest and the comments you have already written, an
+inline comment from the diff around the line you clicked. The draft **arrives word by word** —
+in the AI caption colour, under a line naming the tier writing it (*Drafting on-device…*), so you
+read it as it lands instead of watching a spinner. It is editable text, labelled as a draft until
+you touch it, and it never overwrites what you typed without asking whether to replace or append —
+for a streamed draft that question comes *before* the request is made, so answering *discard*
+means nothing was generated and nothing was sent anywhere.
+
+While the text arrives, the ✨ button is a stop button. Press it, press Escape, or simply start
+typing: your keystroke wins the field, and either way the request ends there — the on-device
+session is cancelled with it. Everything that had already arrived stays where it is, still labelled
+as a draft, because you asked for text and some text came. A stream that fails half-way is the same
+story with one line of the provider's own words under the field.
 
 Nothing is ever submitted for you — Shepherd has no path from generated text to GitHub that does
 not go through your click.

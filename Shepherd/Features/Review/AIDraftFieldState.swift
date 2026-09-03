@@ -324,6 +324,21 @@ struct AIDraftFieldState: Equatable, Sendable {
         return write(streaming.base + trimmed, kind: streaming.kind)
     }
 
+    /// Stops a request that has not produced a single character yet.
+    ///
+    /// The counterpart of ``cancelStream()`` for the window between the click and the first
+    /// snapshot — a warm-up that is usually short and occasionally is not. Without it the stop
+    /// button would be a button that does nothing exactly while the reviewer most wants it: the
+    /// spinner is up, no text has arrived, and the only way out would be to wait for a draft they
+    /// have decided against. It leaves no trace of any kind, because nothing was written and
+    /// nothing failed — the reviewer stopped it themselves, and telling them so would be noise.
+    ///
+    /// Stopping the *task* is the caller's half of this (the composers own it); this half is the
+    /// field's, and the two are separate because a value type cannot cancel anything.
+    mutating func cancelDrafting() {
+        if case .drafting = phase { phase = .idle }
+    }
+
     /// Ends a stream the reviewer stopped, or that stopped with the window.
     ///
     /// What arrived stays, and stays labelled — see the type's rules. An empty stop leaves no
