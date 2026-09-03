@@ -330,6 +330,18 @@ struct OnDeviceProvider: IntelligenceProvider {
         )
     }
 
+    /// The brief for a coding agent, streamed as Markdown through the same plain-text path as
+    /// the drafts: the instructions ask for the three sections, the contract keeps the answer
+    /// to Markdown, and the request has already reserved room for the finding comments.
+    func streamAgentBrief(_ request: AgentBriefRequest) -> AsyncThrowingStream<String, Error> {
+        streamedDraft(
+            instructions: IntelligencePrompt.agentBriefInstructions
+                + "\n" + IntelligencePrompt.agentBriefMarkdownContract,
+            prompt: IntelligencePrompt.body(for: request),
+            estimate: request.approximateTokenCount
+        )
+    }
+
     /// Diagnoses a red pull request by letting the model call the read-only tools (plan §3.F).
     ///
     /// The one request on this tier where Shepherd does not drive the turn: the session is
