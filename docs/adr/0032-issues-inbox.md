@@ -209,6 +209,147 @@ in answer would be an opinion nobody asked for.
   *Sprint 3 — linking* amendment below. An empty table is cheap; a migration ordered after the
   feature that needs it is not.
 
+---
+
+## Amendment, 2026-09-03 — Sprint 2: a picker, not a route; the facets; the additive grammar
+
+The data half above is what the section stands on. This amendment records the three decisions the
+*section itself* makes, all of them taken in the founder review of 2026-09-03
+(`docs/plans/issues-inbox.md` §10).
+
+### One `InboxScreen` with a content-kind picker
+
+`ContentKind { pullRequests, issues }` is a segmented control at the top of the rail, and
+`InboxScreen` holds both models for its own lifetime and switches which one drives the rail, the
+list and the panel. It is **not** a second top-level route, and the reason is that the keyboard
+already works this way: `j`/`k`, ⌘K, the focus session and the menu-bar item all address *the
+model that owns the selection* rather than a screen. A route would therefore duplicate the
+toolbar, the digest card, the Settings sheet and the palette overlay for one control's worth of
+difference — and it would give the focus session a second place to be started from.
+
+Three properties fall out of holding both models rather than rebuilding one:
+
+- **Switching the section disturbs nothing.** The pull-request model keeps its smart view, its
+  facets, its cursor, its ticks and its half-typed key sequence, because it is never told anything
+  happened. Both lists raise the same `ShortcutAction.selectNext`/`selectPrevious`, and the screen
+  routes it to whichever section is showing.
+- **Every other command stays a pull-request verb.** `r a`, `m`, `x` and the bulk actions are
+  refused with one line while the issues section is up, rather than acting on a pull request the
+  user cannot see. The two exceptions are the focus session, whose queue comes from the session's
+  own observation and not from a screen's list, and the grouping commands, which change a
+  preference.
+- **The chosen kind is remembered per window, in `@SceneStorage`.** Not `@State`, because
+  `InboxScreen` is rebuilt whenever the route changes and the picker would snap back to *Pull
+  requests* after every trip to the review screen — including the trip a linked pull request in
+  the issue panel just made. Not `AppSettings`, and therefore **not** in `SyncedSettingsDocument`
+  (ADR 0014): which section a window happens to be showing is not a preference, and travelling
+  between a user's Macs it could only ever arrive wrong.
+
+`IssueInboxModel` mirrors `InboxModel`'s shape and diverges in one place: it is built from a
+`DatabaseManager` and the existing `IssueFetching` seam rather than from a `SignedInSession`. The
+narrower dependency is what makes its facet counts and its selection pruning testable without a
+Keychain, a token or a network — the argument the claims card already makes for the same seam. It
+also settles `IssueFilter.now`: the observation is as wide as the section and the facets narrow it
+in Swift, so the model states one moment and no predicate ever reads the clock inside an
+observation key.
+
+### The facet list, and what each one is honest about
+
+Four, in the order a triage pass reads them, and every one of them omits a level nobody is in —
+the rule the AGENTS and REPOSITORIES facets already follow, because a rail row that filters to an
+empty list is a dead end you have to click to discover.
+
+| Facet | Where the logic lives | The honest part |
+|---|---|---|
+| **Agent pull requests** — *Nothing started yet* / *Has an agent pull request* | `IssueFacets.agentPullRequestFacets`, reading `IssueRowSummary.hasAgentPullRequest` | Drawn only when both halves are populated, so it can always narrow something. It can understate and never overstate: `first: 5` is what the sweep saw. |
+| **Labels** | `IssueFacets.labelFacets`, sorted by count then name (case-insensitively, so equal counts keep their order between sweeps) | Capped, with the overflow counted in the same value as the rows — so the list and the "+3 more…" line cannot come from two different sorts. |
+| **Age** | `IssueFacets.ageFacets` over `IssueAgeBucket` | Buckets `createdAt`, never `updatedAt`: an issue somebody commented on this morning has not become a new issue. |
+| **Repository** | the model, mirroring `InboxModel.repositoryFacets` | The existing comparison (`isSameRepository(as:)`), so a link's casing resolves. |
+
+All four are counted over the **whole section** rather than over the filtered list, exactly as the
+pull-request rail's are: a facet whose counts changed when you selected one of its own rows could
+not be used to compare them. The counting is pure and lives in
+`ShepherdCore/Triage/IssueFacet.swift`, tested on the Linux runner.
+
+There is deliberately **no smart view, no grouping and no sort picker** on this side. The rail's
+four smart views are review states; grouping and sorting would need a second vocabulary beside
+`InboxFacet`/`InboxSortOrder`, and nothing asks for one — the order is the store's, most recently
+updated first.
+
+### The detail panel, and the hole Sprint 3 fills
+
+`IssueDetailPanel` shows the provenance chip (unchanged — an issue's author comes from the same
+`AgentDetector`), the state with GitHub's raw `stateReason` printed rather than translated, the
+age, the labels, the body through the *same* `AttributedString` renderer the pull-request
+description uses, and the "Linked pull requests" section built from
+`IssueRowSummary.linkedPullRequests` at zero extra GitHub calls.
+
+A row opens the review through `AppEnvironment.openReview(prID:)` when the pull request is in the
+local inbox and github.com when it is not — the reference stores its repository by value precisely
+because the second case is normal. `IssueLinkedPullRequestRow` carries an empty, commented
+`badge` slot; the CI dot and the review decision Sprint 3 adds are resolved by a **local join**
+against `pull_requests` and arrive as a view passed into that slot from a file of their own, so
+the row never grows a database read. No comments and no timeline, as decided above.
+
+### The grammar stays additive, and the section token is the odd one
+
+- `DeepLink.issue(repo:number:)` ⇄ `shepherd://issue/<owner>/<repo>/<number>`, through the same
+  three validators as `.pullRequest` — GitHub draws issues and pull requests from one number
+  sequence, so one rule for both.
+- `InboxDeepLinkFilter.issues` ⇄ `shepherd://inbox?filter=issues`. It names the *section* rather
+  than a rail state, so `InboxRailSelection` answers `nil` for the smart view and the
+  pull-request rail is left exactly as the user set it up. Widening it the way a facet token does
+  would silently change what they come back to.
+- `shepherd issue <owner>/<repo>#<number>` and `shepherd inbox issues`, with the reference reader
+  now shared by both verbs and parameterised on the github.com path segment, so the two cannot
+  drift into accepting different references. Usage and `--help` in the same commit, as ADR 0013
+  requires.
+- `DeepLinkRouter` follows `openPullRequest`'s rule unchanged: cache first, then one fetch of that
+  one issue, stored with `pruneMissing: false` because a link is not a sweep and must not be
+  treated as the complete set. That fetch is `GitHubClient.issueRow(repo:number:)` — the sweep's
+  own field set under `repository { issue(number:) }`, so a row a link produced cannot be shaped
+  differently from a swept one, and it claims no relation.
+
+### ⌘K: two corpora, one slice
+
+`SearchIndexCoordinator` runs a second pass over `issue_search_index`, triggered by a second
+observation on the session (`onIssueRows`) — which is the only announcement the issues sweep
+makes, since it emits no `SyncEvent` by decision above. The pass is the first one's twin: the
+`sourceFingerprint` decides whether a body is read back out of SQLite, and only then does the
+`documentHash` decide whether an embedding is spent, with `detailFetchedAt` in the first hash so
+that opening an issue grows its document on the very next pass. *Rebuild index* clears both
+tables, and the Settings line adds `issueSearchIndexStatistics()` to the one byte count the card
+reports.
+
+`CommandPaletteView.PaletteRow` gains a third case. Both ranked sets are computed to the same
+limit and then **merged by score and sliced once**, which is what ADR 0019's "the keyboard does
+not notice" rule needs: the palette has room for a fixed number of rows, and a quota per kind
+would let a weak issue push out a strong pull request. Ties break towards the pull request and
+then on node id, so the order is total. Selecting an issue row goes through
+`AppEnvironment.openIssue(issueID:)` — one route, which is what makes "switch the section *and*
+reveal the row even when a facet is hiding it" impossible to half-implement.
+
+The one deliberate divergence from ADR 0019 stands and is now also enforced in the app layer: a
+query that is nothing but a `risk:`/`kind:` token answers with **no issues at all**, and spends no
+embedding finding that out.
+
+### Consequences of this amendment
+
+- **A second `ValueObservation` on `issues`, on the session.** The issues model observes again for
+  its own filtered view, so there are two local `SELECT`s per issue write while the section is on
+  screen. That is `inboxRows`' price paid a second time, for its reason: ⌘K has to be able to
+  answer with an issue from the review screen, where no `IssueInboxModel` exists.
+- **A pull-request verb raised while the issues section is up is refused, not queued.** One toast,
+  one sentence. The alternative — acting on the invisible pull-request selection — is the failure
+  this rule exists to prevent.
+- **`@SceneStorage` is the first per-window UI state in the app.** There was no existing mechanism
+  for it; `@State` in `InboxScreen` was the closest thing and it does not survive the route swap.
+  Anything else that needs per-window state should use the same one rather than inventing a third.
+- **Nothing about the pull-request section changed shape.** `InboxModel` gained one guard in
+  `apply(_:)` and `InboxRailSelection` gained an optional smart view and a content kind; the
+  Settings row moved into a shared `RailSettingsRow`. `InboxSidebar`, `InboxListView` and
+  `InboxDetailPanel` are otherwise untouched.
+
 ### Sprint 3 — linking
 
 The link is read in **both directions**, and each direction is read where the round trip already

@@ -132,7 +132,14 @@ bumping a dependency that ships inside the app also means a line in
     fetch a pull request already makes — `closingIssuesReferences` on the same GraphQL endpoint,
     beside the review-threads query, so it is neither a new host nor a new request — and the CI
     state the issue's list shows for a linked pull request is read out of the local database by
-    `(repo, number)`, never fetched;
+    `(repo, number)`, never fetched.
+    The issues *section* (ADR 0032's Sprint 2
+    amendment) adds two per-issue reads on that same host, each made only when somebody asks for
+    that one issue: the ETag-cached `GET /repos/…/issues/{n}` the claims card already makes, used
+    once for the body when the panel opens an issue whose cached body is older than the row, and
+    one `repository { issue(number:) }` GraphQL query when a `shepherd://issue/…` link names an
+    issue the local cache does not have. Both are reads, both are `api.github.com`, and typing in
+    ⌘K still cannot produce either — the search index is built from rows that are already stored;
   - only when the user configures a key: api.anthropic.com, or the OpenAI-compatible endpoint
     they chose themselves (a preset's base URL is still their choice). What travels there is the
     tier-1 digest — title, description excerpt, file list, top hunks — and, when you use AI

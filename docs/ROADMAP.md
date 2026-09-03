@@ -214,7 +214,7 @@ orchestrator (non-goal, below): Shepherd *assigns* and *watches*, the agent stil
 The engineering plan — four sprints, migration v7, ADR 0032 — is
 [`docs/plans/issues-inbox.md`](plans/issues-inbox.md).
 
-- [ ] Issues as a first-class inbox section (new ADR): a second sweep beside the pull-request one
+- [x] Issues as a first-class inbox section ([ADR 0032](adr/0032-issues-inbox.md)): a second sweep beside the pull-request one
       — issues assigned to you, issues you opened, issues mentioning you — in the same GraphQL
       search shape (ADR 0005), stored in the same local database with the same outbox for the
       writes below, and drawn as a section with its own facets: repository, label, age, and

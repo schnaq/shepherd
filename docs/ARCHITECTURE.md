@@ -9,7 +9,9 @@ disagree, fix one of them in the same PR. Decisions behind this design: [docs/ad
 Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
   App/                         #   @main, DI container (AppEnvironment), shepherd:// routing
   Features/
-    Inbox/                     #   inbox list, sections, filters, command palette actions
+    Inbox/                     #   inbox list, sections, filters, command palette actions;
+                               #   the issues section beside it — content-kind picker, issues
+                               #   model, rail, list, detail panel, linked-PR row (ADR 0032)
     Digest/                    #   morning digest: due-check loop, inbox card, wording
     MenuBar/                   #   menu-bar quick inbox: badge label + mini-inbox window
     PullRequest/               #   PR detail: header, timeline, file list, checks
@@ -19,7 +21,8 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
     Delegation/                #   delegate-to-local-agent model + sheet (ADR 0011, 0016);
                                #   session back-channel: decisions + confirmation (ADR 0030)
     Search/                    #   ⌘K semantic search: on-device embedder, index coordinator,
-                               #   result row (ADR 0019)
+                               #   result row (ADR 0019); the issue result row beside it, fed
+                               #   by the coordinator's second pass (ADR 0032)
     Settings/                  #   accounts (+ updates, local diagnostics), sync (+ encrypted
                                #   cross-Mac sync), replies (saved replies + review templates),
                                #   agents, AI, delegation, automation, theme (+ menu-bar toggle)
@@ -54,7 +57,8 @@ Packages/ShepherdKit/          # SPM package, NO AppKit/SwiftUI imports
                                #     comments (ADR 0029)
       Routing/                 #     shepherd:// grammar + CLI argument grammar (ADR 0013)
       Triage/                  #     bulk-triage partition + intended writes (ADR 0015); the
-                               #     issues rail's age buckets (ADR 0032)
+                               #     issues rail's age buckets and its label/age/agent-PR
+                               #     facet counting (ADR 0032)
       Automation/              #     auto-delegation rules, ledger and policy (ADR 0016);
                                #     auto-merge rules, ledger/audit log and policy (ADR 0018)
       Digest/                  #     morning-digest report + delivery schedule
@@ -970,6 +974,42 @@ The data flow is the point, and it is deliberately not a new one:
 Signed out the menu shows one line and a button that brings the sign-in window forward — the item
 stays in the menu bar, because disappearing chrome reads as a bug.
 
+### The issues section (ADR 0032)
+
+One `InboxScreen`, two sections. `ContentKind` is a segmented control at the top of the rail;
+`InboxScreen` holds `InboxModel` *and* `IssueInboxModel` for its own lifetime and switches which
+one drives the rail, the list and the panel. Not a second route: `j`/`k`, ⌘K, the focus session
+and the menu-bar item already address the model that owns the selection, so a route would
+duplicate the toolbar, the digest card, the Settings sheet and the palette overlay.
+
+- **Switching the section disturbs nothing.** Both lists raise the same
+  `ShortcutAction.selectNext`/`selectPrevious`; `InboxScreen.perform` routes it to whichever
+  section is showing, and the pull-request model keeps its smart view, facets, cursor, ticks and
+  half-typed key sequence because nothing tells it anything happened. Every other command is a
+  pull-request verb and is refused with one line while the issues section is up — the exceptions
+  are the focus session (its queue comes from the session's observation, not a screen's list) and
+  the grouping commands.
+- **The chosen kind lives in `@SceneStorage`**, the app's first per-window UI state. `@State`
+  would snap back to *Pull requests* after every trip to the review screen, since the screen is
+  rebuilt on a route change; `AppSettings` would put it in the synced document, and which section
+  a window shows is not a preference (ADR 0014).
+- **`IssueInboxModel`** is `InboxModel`'s twin — `observeIssues(filter:)`, selection with pruning,
+  four facets — built from a `DatabaseManager` and the existing `IssueFetching` seam rather than
+  from a `SignedInSession`, which is what makes it testable without a Keychain. The observation is
+  as wide as the section and the facets narrow it in Swift, which is also how `IssueFilter.now` is
+  settled: the filter is the observation's key, so the model states one moment and no predicate
+  reads the clock.
+- **The facets are pure** (`ShepherdCore/Triage/IssueFacet.swift`): labels sorted by count then
+  name and capped with the overflow counted beside the rows, age over `IssueAgeBucket`, the two
+  agent-pull-request halves drawn only when both are populated. Counted over the whole section, so
+  clicking one does not change the numbers.
+- **`IssueDetailPanel`** shows provenance, state with GitHub's raw reason, age, labels and the
+  body through the same `AttributedString` renderer the pull-request description uses, plus
+  "Linked pull requests" from `IssueRowSummary.linkedPullRequests` at zero extra GitHub calls. A
+  row opens the review when the pull request is in the local inbox and github.com when it is not.
+  `IssueLinkedPullRequestRow` carries an empty, commented `badge` slot for the CI/review badge a
+  later sprint passes in from its own file.
+
 ### Morning digest (opt-in, local, no scheduler)
 
 Once a day, at a time the user picks, Shepherd says what came in: new review requests, green agent
@@ -1242,10 +1282,13 @@ app target rather than ShepherdKit.
 `onOpenURL` in `ShepherdApp` is the only entry point, and it hands the URL straight to
 `AppEnvironment.open(deepLinkURL:)` (`App/DeepLinkRouter.swift`). Everything interesting about the
 parsing is in `ShepherdCore`; the app layer only routes, and it routes through the surfaces that
-already exist: `.pullRequest` → `openReview(prID:)`, `.sync` → `syncNow()`, `.inbox`/`.settings`
-→ `route` plus a pending request the inbox screen consumes — the same "raise it, let the screen
-that owns the state run it" mechanism as `PendingAction`. `InboxRailSelection` is the pure value
-that maps a filter token onto rail state, so the mapping is testable without a session.
+already exist: `.pullRequest` → `openReview(prID:)`, `.issue` → `openIssue(issueID:)`,
+`.sync` → `syncNow()`, `.inbox`/`.settings` → `route` plus a pending request the inbox screen
+consumes — the same "raise it, let the screen that owns the state run it" mechanism as
+`PendingAction`. `InboxRailSelection` is the pure value that maps a filter token onto rail state,
+so the mapping is testable without a session; its smart view is **optional**, and the one token
+that answers `nil` is `filter=issues`, which names the inbox *section* rather than a rail state
+(ADR 0032).
 
 Two behaviours are worth knowing because they are the robust rather than the obvious choice:
 
@@ -1255,10 +1298,15 @@ Two behaviours are worth knowing because they are the robust rather than the obv
   clears the slot.
 - **A pull request that is not in the local cache is fetched individually** and stored, then
   opened. The sweep searches `involves:@me`, so a link from a colleague is routinely absent from
-  the inbox — a sweep would be slow *and* still miss it.
+  the inbox — a sweep would be slow *and* still miss it. `shepherd://issue/…` follows the same
+  rule through `GitHubClient.issueRow(repo:number:)`, written with `pruneMissing: false` because
+  a link is not a sweep and must not be treated as the complete set (ADR 0032).
 
 `shepherd` (`ShepherdCLI/`, target `ShepherdCLI`, product name `shepherd`) is a thin URL builder:
-`ShepherdCommandLine.parse` → `DeepLink` → `NSWorkspace.shared.open`. It links `ShepherdCore`
+`ShepherdCommandLine.parse` → `DeepLink` → `NSWorkspace.shared.open`. Its verbs are `open`,
+`issue`, `inbox`, `sync` and `settings`; `open` and `issue` share one reference reader,
+parameterised on the github.com path segment, so the two cannot drift into accepting different
+spellings. It links `ShepherdCore`
 only. That is deliberate and is the security boundary — no token, no database, no network, so it
 grants nothing the app does not already expose to every process on the Mac. It has its own
 scheme (`xcodebuild -scheme ShepherdCLI`) so the app scheme's Run action stays the app.
@@ -1488,9 +1536,22 @@ key — and everything it decides is the pure `ShepherdCore/Search/` trio above.
   under it, and unlike the tiers above them, because the reasons for off-by-default (something is
   sent somewhere; it costs money) apply to none of the three — see ADR 0019.
   Switching it off empties the table and leaves the lexical ranker answering.
+- **A second corpus, one slice** (ADR 0032). The coordinator runs a second pass over
+  `issue_search_index`, triggered by the session's own `issues` observation (`onIssueRows`) —
+  the only announcement the issues sweep makes, since it emits no `SyncEvent`. The pass is the
+  first one's twin down to the two hashes, with `detailFetchedAt` in the fingerprint so that
+  opening an issue grows its document on the very next pass; *Rebuild index* clears both tables
+  and the Settings line adds `issueSearchIndexStatistics()` to the one byte count. The palette's
+  `PaletteRow` gained a third case: both ranked sets are computed to the same limit and then
+  merged by score and **sliced once**, so the rows it has room for are the best of both kinds and
+  a quota per kind cannot push a strong pull request out. Ties break towards the pull request,
+  then on node id, so the order is total. A row opens through `AppEnvironment.openIssue(issueID:)`
+  — one route, because selecting an issue has to switch the section *and* reveal a row a facet may
+  be hiding. A query that is nothing but a `risk:`/`kind:` token answers with no issues at all and
+  spends no embedding finding out.
 - Device state versus setting, once more: the switch travels in the encrypted settings document
-  (`search` group, both applier directions), the index does not — it is rebuildable from local
-  rows, and it is dropped with the rest of the local data on sign-out.
+  (`search` group, both applier directions), neither index does — both are rebuildable from local
+  rows, and they are dropped with the rest of the local data on sign-out.
 
 ### Structured triage (on-device, ADR 0023)
 

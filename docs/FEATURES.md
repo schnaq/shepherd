@@ -40,6 +40,38 @@ opens the pull request in the main window. "Sync now" and the full inbox are one
 It reads the same local database the window does, so it costs no extra GitHub call, and it can be
 switched off in Settings → Appearance.
 
+### The issues you should be handing out
+
+Shepherd starts at the pull request. Your morning does not — it starts at the issue somebody should
+pick up. So the inbox now has two sections, and a segmented control at the top of the rail moves
+between them. It is the same window, the same three panes, the same `j`/`k` and the same ⌘K: the
+picker changes what is in front of you and nothing else. Switch to *Issues*, work through them,
+switch back, and the pull-request side is exactly where you left it — same smart view, same
+facets, same row under the cursor.
+
+What lands there is what the sweep finds: issues assigned to you, issues you opened, issues
+mentioning you. Three searches beside the five the review inbox already runs, in the same cycle, on
+the same host, at the same cadence — and if they fail, the review inbox does not
+([ADR 0032](adr/0032-issues-inbox.md)).
+
+The rail asks the four questions a triage pass asks. **Has anything been started on this?** — the
+facet reads whether a machine already has a pull request open that would close the issue, so
+*Nothing started yet* is the pile you are actually looking for. Then **labels**, **age** — bucketed
+by when the issue was *opened*, because an issue somebody commented on this morning has not become
+a new issue — and **repository**. Each row carries the provenance chip you already know from the
+review inbox, a small glyph when an agent is on it, its labels and its comment count.
+
+Open one and the panel shows the body rendered the way a pull-request description is, the labels,
+the state with GitHub's own reason for it, and *Linked pull requests*: the pull requests GitHub says
+would close this issue, each with its state and who wrote it. One keystroke opens the one you care
+about — the review screen when it is a pull request you already have, its GitHub page when it is
+somebody else's. That list costs no extra request: the sweep already saw it.
+
+And it is drivable from outside like everything else: `shepherd issue schnaq/review#128` opens one,
+`shepherd inbox issues` opens the section, and `shepherd://issue/…` does the same from a script or
+a Raycast command ([ADR 0013](adr/0013-deep-links-and-cli.md)). An issue a colleague sends you that
+is not in your inbox at all is fetched, once, and opened.
+
 ### Find a pull request by what it is about
 
 ⌘K has always been the command palette. It is now also the search box: type two or three words and
@@ -56,6 +88,12 @@ What is searched is the title, the repository and number, the labels, the branch
 **every** pull request, plus the description, the changed-file paths and the added lines of the diff
 for anything you have opened for review. Nothing extra is downloaded to build that: it is the same
 rows the inbox and the review screen already store ([ADR 0006](adr/0006-local-first-sqlite-grdb.md)).
+
+Your **issues** answer the same ⌘K, under their own heading, ranked the same way over their title,
+labels and body. The two sets are merged by how well they match before the list is cut, so the rows
+you get are the best of both rather than a fixed share each — and the arrows and ⏎ walk them as one
+list, which is the only thing your fingers care about. Picking an issue moves the picker to *Issues*
+and puts the cursor on it, even if a facet was hiding it.
 
 **The ranking happens on your Mac and cannot happen anywhere else.** The embeddings are Apple's
 on-device model, stored in the local SQLite database; a configured AI endpoint is never used for
