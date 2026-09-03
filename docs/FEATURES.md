@@ -171,6 +171,28 @@ selected and what gets written can never drift apart. Each pull request is then 
 individually, with the same offline, retry, rate-limit and staleness handling a single review gets
 ([ADR 0015](adr/0015-bulk-triage.md)).
 
+### Where does this long thread stand?
+
+A review thread with six comments or more gets a **Summarise** button. Press it and three lines
+appear above the conversation: a chip saying whether the thread is **Agreed**, **Open** or
+**Blocked**, one paragraph of what was settled and who is waiting on whom, and the questions nobody
+has answered yet as bullets.
+
+It runs on Apple's on-device model and only there. These are your colleagues' comments, so there is
+no cloud option for them even when you have configured an API key — the same line ADR 0020 draws
+around translating somebody else's sentence ([ADR 0007](adr/0007-layered-intelligence.md)). On a Mac
+without Apple Intelligence the button simply is not there, and the thread reads exactly as it always
+did.
+
+Long threads are summarised from their end rather than refused: when the conversation does not fit
+the model's context window, the newest comments are kept, the oldest are given up, and the card says
+so — *"Covers the last 8 of 23 comments"*. Nothing is stored, nothing is synced, and a new reply
+retires the summary rather than leaving a stale one above an answered question.
+
+And it summarises only. **Resolve thread** stays your own button beside the reply field; the digest
+is not allowed to suggest pressing it, and there is no path from it to a reply, a resolution or the
+outbox.
+
 ### Writing Tools and on-device translation
 
 Every field you write review text in — the summary, an inline comment, a thread reply, a saved

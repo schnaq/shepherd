@@ -110,6 +110,16 @@ final class AppEnvironment {
     /// replies are the same in every composer in every window, and a per-screen cache would
     /// re-embed them each time a popover opened.
     let savedReplySuggestions = SavedReplySuggestionCoordinator()
+    /// Summarises a long review thread on-device when a reviewer asks it to (ADR 0007's
+    /// on-device-only amendment).
+    ///
+    /// Created inert, like the coordinator above it: no model is loaded and no session exists
+    /// until somebody presses *Summarise* on a thread with at least six comments. Owned here
+    /// rather than by the popover because the popover's `@State` survives a click on a different
+    /// comment card and is discarded on a trip to the Files tab — the opposite of what a cache of
+    /// digests wants, which is to be keyed by the thread and to outlive the panel. Nothing it
+    /// holds is persisted or synced: these are colleagues' comments (ADR 0020's argument).
+    let threadDigests = ThreadDigestCoordinator()
     /// Keeps the pull requests in the inbox visible to macOS Spotlight (ADR 0021).
     ///
     /// Created inert, like the search index beside it: it writes nothing until the first inbox

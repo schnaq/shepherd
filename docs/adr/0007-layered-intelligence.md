@@ -164,6 +164,62 @@ Consequence: the protocol gained one requirement (`streamExplanation(_:)`) whose
 implementation **refuses**, unlike the two drafting streams' defaults, because an explanation has no
 awaited twin to wrap — and a tier answering without one would be indistinguishable from a tier that
 had.
+## Amendment (2026-09-03): thread digests are an on-device-only content class
+
+Additive, and this one narrows rather than widens: the three tiers, the provider protocol and the
+"hints, never verdicts" rule are unchanged, and the host list gains nothing. What is new is a
+*content class* that the ladder above does not apply to
+(`docs/plans/apple-intelligence-v2.md` §3.G).
+
+A review thread with six comments or more offers **Summarise**: a card above the conversation with
+a state chip (*Agreed* / *Open* / *Blocked*), one paragraph of what was agreed and who is waiting
+on whom, the questions nobody has answered as bullets, and the caption *Summarised on-device*.
+
+**Tier 2 only, and by construction rather than by a setting.** The input is *colleagues' comments*.
+The tier-3 argument this ADR makes is that a BYOK endpoint is acceptable because the user
+configured it themselves and can see the one answer they asked for; the people in a review thread
+configured nothing, and there is no version of "your colleague's sentence reached the endpoint you
+configured" that is an informed choice by the person who wrote the sentence. That is the argument
+ADR 0020 makes about translating a comment, applied to summarising one. So the rule is expressed as
+unreachability, the way ADR 0020 expresses its own:
+
+- the feature's only seam is `ThreadDigesting`, whose one production implementation is
+  `Intelligence/OnDeviceThreadDigester.swift`;
+- `ThreadDigestCoordinator`'s initialiser takes that seam and a `TokenBudget` — there is no
+  router, no base URL and no key to hand it, which a test asserts;
+- no request type for a thread digest exists on `IntelligenceProvider`, so `IntelligenceRouter`
+  and the two cloud providers are untouched by this feature and cannot be reached from it.
+
+Turning that around — summarising a thread through a cloud model, even as an opt-in — needs a new
+ADR, because "somebody else's comment never leaves this Mac" is the entire reason this feature is
+acceptable without a consent dialog.
+
+**When the model is not there, the button is not there.** No disabled control and no tooltip: the
+availability answer (`SystemLanguageModel.availability` for the prose model) is asked once per app
+run, and until it says yes nothing is drawn. That is this ADR's own principle — no feature
+hard-depends on a tier — with the degraded state being the thread exactly as Shepherd has always
+shown it.
+
+**The budget is the hard error it always was, and the card says what it cost.** `ThreadDigestRequest`
+(pure, in `ShepherdCore`, Linux-tested) drops the **oldest** comments first until the conversation
+fits the tier's character share, caps any single comment so a pasted stack trace cannot push the
+human sentences out, and records `coveredCount`/`totalCount`. A partial digest therefore says
+*"Covers the last 8 of 23 comments"* rather than presenting a summary of the end of a thread as a
+summary of the thread. Newest-last is the eviction order because a digest answers "where does this
+stand *now*"; giving up the newest comments would produce a confident answer that is wrong rather
+than a partial one that is honest.
+
+**Nothing in it acts, and the guardrail is a sentence in the prompt as well as an absence in the
+code.** *Resolve thread* stays the reviewer's own button beside the reply field; the instructions
+forbid the model from suggesting that it be pressed, from replying, approving or merging, and there
+is no code path from a digest to `setThread(on:threadID:resolved:)`, to a reply or to the outbox.
+The digest is not persisted either — no `UserDefaults`, no GRDB table, no field in
+`SyncedSettingsDocument` — for ADR 0020's reason: it is a reading aid held in memory for as long as
+somebody is reading it, keyed by the thread and its newest comment so that a reply invalidates it.
+
+Consequence: a further on-device-only content class is a new seam plus its own file, not a case in
+`IntelligenceProvider`. Anything that would send third-party prose to a configured endpoint has to
+overturn the paragraph above rather than quietly widen it.
 
 ## Consequences
 

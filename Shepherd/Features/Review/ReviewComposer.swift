@@ -815,6 +815,13 @@ struct ThreadPopover: View {
             Divider().overlay(Theme.border)
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
+                    // Above the conversation, because it is a way *into* the conversation
+                    // (plan §3.G). It scrolls with the comments rather than pinning itself to the
+                    // header: a card that ate a third of a 260-point panel permanently would cost
+                    // the reviewer the thread it summarises.
+                    if let digest = digestState {
+                        ThreadDigestCard(state: digest)
+                    }
                     ForEach(thread.comments) { comment in
                         ThreadCommentView(comment: comment, translations: translations)
                     }
@@ -827,12 +834,18 @@ struct ThreadPopover: View {
         }
         .frame(width: 380)
         .background(Theme.panel)
+        // Asked once per app run and cached, so the button below is drawn only where pressing it
+        // would do something (plan §3.G, ADR 0007).
+        .task { await environment.threadDigests.prepare() }
         // The popover's content keeps its `@State` when the reviewer clicks a different comment
         // card while it is open, so the suggestions have to be told that the conversation under
         // them changed — otherwise the second thread would be offered the first thread's replies.
-        .onChange(of: thread.id) { _, _ in
+        .onChange(of: thread.id) { previous, _ in
             suggestedReplyIDs = []
             hasRequestedSuggestions = false
+            // And a digest still being written for the thread the reviewer just left is a digest
+            // nobody will read, so it is stopped rather than left running on the battery.
+            environment.threadDigests.cancel(for: previous)
         }
     }
 
@@ -849,6 +862,19 @@ struct ThreadPopover: View {
                     .foregroundStyle(Theme.textMuted)
             }
             Spacer(minLength: 4)
+            if canSummarise {
+                Button {
+                    requestThreadDigest()
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "text.line.first.and.arrowtriangle.forward")
+                            .font(.system(size: 10, weight: .bold))
+                        Text(String(localized: "Summarise"))
+                    }
+                }
+                .buttonStyle(SecondaryButtonStyle(height: 24))
+                .help(String(localized: "Summarise this thread on this Mac"))
+            }
             if thread.isOutdated {
                 ChipView(text: String(localized: "outdated"), color: Theme.pending, size: 10)
             }
@@ -960,6 +986,41 @@ struct ThreadPopover: View {
                 forThreadComments: comments,
                 replies: replies
             )
+        }
+    }
+
+    // MARK: - Thread digest
+
+    /// The card's state for this thread, or `nil` when there is no card yet (plan §3.G).
+    private var digestState: ThreadDigestState? {
+        environment.threadDigests.state(for: thread.id, comments: thread.comments)
+    }
+
+    /// Whether *Summarise* is offered at all.
+    ///
+    /// Three conditions, and each one removes the button rather than disabling it. A short thread
+    /// does not need a summary — the reviewer reads six comments faster than a summary of them
+    /// plus the six. A Mac without the on-device model cannot produce one, and tier 2 is the only
+    /// tier allowed to see somebody else's comments (ADR 0007's amendment). And once the card is
+    /// on screen the button has nothing left to ask for.
+    private var canSummarise: Bool {
+        thread.comments.count >= ThreadDigestCoordinator.minimumCommentCount
+            && environment.threadDigests.isAvailable
+            && digestState == nil
+    }
+
+    /// Spends the one on-device run behind the button.
+    ///
+    /// Values are read out of the view before the task, so the closure captures a `Sendable`
+    /// thread id, a `Sendable` array of comments and the `@MainActor` coordinator rather than the
+    /// view — the same shape ``requestSavedReplySuggestions()`` uses beside it.
+    private func requestThreadDigest() {
+        let threadID = thread.id
+        let comments = thread.comments
+        let isResolved = thread.isResolved
+        let coordinator = environment.threadDigests
+        Task {
+            await coordinator.digest(for: threadID, comments: comments, isResolved: isResolved)
         }
     }
 

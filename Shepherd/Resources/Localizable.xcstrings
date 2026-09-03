@@ -1521,6 +1521,16 @@
         }
       }
     },
+    "Agreed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einig"
+          }
+        }
+      }
+    },
     "All checks passed": {
       "localizations": {
         "de": {
@@ -1977,6 +1987,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Basis-URL"
+          }
+        }
+      }
+    },
+    "Blocked": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blockiert"
           }
         }
       }
@@ -2797,6 +2817,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Diesen Pull Request als gereviewt zählen und zum nächsten gehen. Approve, Request Changes und Merge tun das von selbst."
+          }
+        }
+      }
+    },
+    "Covers the last %lld of %lld comments": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erfasst die letzten %lld von %lld Kommentaren"
           }
         }
       }
@@ -5361,6 +5391,16 @@
         }
       }
     },
+    "Open": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offen"
+          }
+        }
+      }
+    },
     "Open Pull Request": {
       "localizations": {
         "de": {
@@ -6051,6 +6091,16 @@
         }
       }
     },
+    "Reading the thread…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thread wird gelesen…"
+          }
+        }
+      }
+    },
     "Rebase and merge": {
       "localizations": {
         "de": {
@@ -6587,6 +6637,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "SPOTLIGHT"
+          }
+        }
+      }
+    },
+    "STILL OPEN": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NOCH OFFEN"
           }
         }
       }
@@ -7521,6 +7581,36 @@
         }
       }
     },
+    "Summarise": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zusammenfassen"
+          }
+        }
+      }
+    },
+    "Summarise this thread on this Mac": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diesen Thread auf diesem Mac zusammenfassen"
+          }
+        }
+      }
+    },
+    "Summarised on-device": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On-Device zusammengefasst"
+          }
+        }
+      }
+    },
     "Sync": {
       "localizations": {
         "de": {
@@ -7637,6 +7727,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "AUFGABE FÜR DEN AGENTEN"
+          }
+        }
+      }
+    },
+    "THREAD DIGEST": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "THREAD-ZUSAMMENFASSUNG"
           }
         }
       }
