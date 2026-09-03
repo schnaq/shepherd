@@ -120,6 +120,15 @@ final class AppEnvironment {
     /// digests wants, which is to be keyed by the thread and to outlive the panel. Nothing it
     /// holds is persisted or synced: these are colleagues' comments (ADR 0020's argument).
     let threadDigests = ThreadDigestCoordinator()
+    /// Notices that the reviewer has written the same finding three times on one repository
+    /// (ADR 0029, ADR 0019's embedder reused once more).
+    ///
+    /// Created inert, like the two coordinators above it: it reads no comment, loads no model and
+    /// holds no vector until a sweep has landed rows. Owned here rather than by the review screen
+    /// because the pass is per *account* — it reads the last thirty days of the reviewer's own
+    /// review comments across every repository at once — and because the vector cache and the
+    /// dismissals must outlive a trip to the inbox and back.
+    let recurringFindings = RecurringFindingCoordinator()
     /// Keeps the pull requests in the inbox visible to macOS Spotlight (ADR 0021).
     ///
     /// Created inert, like the search index beside it: it writes nothing until the first inbox
@@ -323,6 +332,11 @@ final class AppEnvironment {
         // *outside* the database `eraseAllData()` just emptied: the system index is not Shepherd's
         // to leave behind (ADR 0021).
         spotlight.reset()
+        // And the recurring findings, dismissals included: they name findings the leaving account
+        // wrote, and the comments they were computed from went with `eraseAllData()` above. The
+        // dismissal set is the same kind of device-local automation state the auto-delegation
+        // ledger is, and it is cleared here for the same reason (ADR 0029).
+        recurringFindings.reset()
     }
 
     private func startSession(for account: Account) async throws {
@@ -361,6 +375,20 @@ final class AppEnvironment {
                 // after an indexing pass would depend on the semantic-search toggle for its
                 // quality (`TriageCoordinator` argues it).
                 self.triage.considerClassifying(rows: rows, database: database)
+                // The fifth consumer of the same rows (ADR 0029), and a peer of the two above for
+                // the same reason. It is the one that reads none of them: it needs the *moment* a
+                // sweep landed, and then reads the reviewer's own review comments instead. The
+                // login comes from the local session rather than from a row, because "the
+                // reviewer's own words" is the whole licence this unattended pass runs under. Read
+                // through `self.session` for the same reason the database is: capturing the local
+                // session here would be a retain cycle.
+                if let login = self.session?.account.login {
+                    self.recurringFindings.considerScanning(
+                        rows: rows,
+                        database: database,
+                        viewerLogin: login
+                    )
+                }
             }
         )
         // A `shepherd://` link may have arrived while the app was still launching or signed

@@ -21,6 +21,7 @@ struct RepliesSettingsTab: View {
         SettingsPage {
             repliesCard
             templatesCard
+            recurringFindingsCard
         }
         .sheet(item: $editingReply) { reply in
             SavedReplyEditor(reply: reply) { edited in
@@ -123,6 +124,99 @@ struct RepliesSettingsTab: View {
                     editingTemplate = ReviewTemplate(pattern: "", body: "")
                 }
                 .buttonStyle(SecondaryButtonStyle(height: 28))
+            }
+        }
+    }
+
+    // MARK: - Recurring findings
+
+    /// What Shepherd has noticed the reviewer keeps writing, per repository (ADR 0029).
+    ///
+    /// It belongs on this tab rather than on Delegation or Intelligence for the reason the tab
+    /// exists at all: these are the reviewer's own review sentences, which is what every other
+    /// card here is about. It is a *list*, not a setting — there is nothing to configure, the
+    /// thresholds are documented constants in `ShepherdCore`, and the only control is the one that
+    /// undoes a dismissal.
+    ///
+    /// Read-only otherwise, and deliberately: the button that turns a finding into a rule lives on
+    /// the review screen, where the pull request that becomes the agent's worktree is on screen.
+    /// Settings has no pull request, so a *Draft a rule* here would have nothing to delegate
+    /// against.
+    private var recurringFindingsCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                CardTitle(String(localized: "RECURRING FINDINGS"))
+                Text(String(
+                    localized: "A review comment you have written at least three times in the last thirty days, on at least two pull requests of the same repository. Shepherd finds these on this Mac, from your own comments only, and never sends them anywhere. On the review screen each one offers to draft a rule for that repository's agent instructions."
+                ))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+
+                let findings = environment.recurringFindings.everyFinding
+                if findings.isEmpty {
+                    Text(String(localized: "Nothing yet."))
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textMuted)
+                }
+
+                ForEach(findings) { finding in
+                    findingRow(finding)
+                }
+            }
+        }
+    }
+
+    /// One finding: the repository, the exemplar, how often, and whether it is hidden.
+    @ViewBuilder
+    private func findingRow(_ finding: RecurringFinding) -> some View {
+        let isDismissed = environment.recurringFindings.isDismissed(finding)
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(finding.repo.fullName)
+                        .font(Theme.mono(12))
+                        .foregroundStyle(Theme.text)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    // Not localised: a count and a multiplication sign read the same in every
+                    // language Shepherd speaks, and a plural rule for "3×" would be inventing a
+                    // problem.
+                    ChipView(
+                        text: "\(finding.count)×",
+                        color: Theme.prioritySecondary,
+                        size: 10
+                    )
+                    if isDismissed {
+                        ChipView(
+                            text: String(localized: "hidden"),
+                            color: Theme.textMuted,
+                            size: 10
+                        )
+                    }
+                }
+                // The reviewer's own sentence, so the non-localising `Text` overload.
+                Text(finding.exemplar)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textMuted)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            Spacer(minLength: 6)
+            if isDismissed {
+                Button(String(localized: "Show again")) {
+                    environment.recurringFindings.showAgain(finding)
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.accentText)
+            } else {
+                Button(String(localized: "Hide")) {
+                    environment.recurringFindings.dismiss(finding)
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textSecondary)
             }
         }
     }

@@ -351,6 +351,75 @@ extension DatabaseManager {
         }
     }
 
+    // MARK: - The reviewer's own review comments
+
+    /// Reads the review comments the signed-in user wrote, oldest first (ADR 0029).
+    ///
+    /// The one read the feedback loop needs, and it is deliberately narrow in three ways:
+    ///
+    /// - **The viewer's own comments only.** `authorLogin` is matched case-insensitively, because
+    ///   GitHub treats a login that way and a casing difference between the account record and a
+    ///   stored comment would silently return nothing. Nobody else's comment is returned at all,
+    ///   so the feature *cannot* cluster a colleague's words even by accident (ADR 0020's
+    ///   reasoning).
+    /// - **Posted comments only.** A row with a `pendingLocalID` is a comment the reviewer has
+    ///   written into a pending review and not sent yet; it is not something they have said, and
+    ///   counting it would also double-count it the moment it is posted under its real node id.
+    /// - **A time floor the caller states.** The window belongs to
+    ///   ``ShepherdCore/RecurringFindingDetector``, not to SQL, but pushing the floor into the
+    ///   query is what keeps a first sweep after a long absence from embedding a year of review.
+    ///
+    /// - Parameters:
+    ///   - login: The signed-in user's login.
+    ///   - since: The earliest `createdAt` to return.
+    /// - Returns: The comments, oldest first, with the pull request each belongs to.
+    public func viewerReviewComments(
+        login: String,
+        since: Date
+    ) async throws -> [ViewerReviewComment] {
+        let trimmed = login.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        let floor = since.timeIntervalSince1970
+        return try await writer.read { db in
+            let rows = try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT c.id AS id, c.bodyMarkdown AS body, c.createdAt AS createdAt,
+                           p.id AS prID, p.number AS number, p.repoFullName AS repoFullName
+                    FROM review_comments c
+                    JOIN review_threads t ON t.id = c.threadID
+                    JOIN pull_requests p ON p.id = t.prID
+                    WHERE c.authorLogin = ? COLLATE NOCASE
+                      AND c.pendingLocalID IS NULL
+                      AND c.createdAt >= ?
+                    ORDER BY c.createdAt ASC, c.id ASC
+                    """,
+                arguments: [trimmed, floor]
+            )
+            return rows.compactMap { row -> ViewerReviewComment? in
+                guard let id: String = row["id"],
+                      let prID: String = row["prID"],
+                      let fullName: String = row["repoFullName"],
+                      let number: Int = row["number"],
+                      let body: String = row["body"],
+                      let createdAt: Double = row["createdAt"]
+                else { return nil }
+                return ViewerReviewComment(
+                    id: id,
+                    // The same tolerant parse ``PullRequestRecord/summary`` uses, so a stored
+                    // `repoFullName` without a slash degrades to a readable reference instead of
+                    // dropping the row.
+                    repo: RepoRef.parse(fullName: fullName)
+                        ?? RepoRef(owner: fullName, name: fullName),
+                    prID: prID,
+                    number: number,
+                    body: body,
+                    createdAt: Date(timeIntervalSince1970: createdAt)
+                )
+            }
+        }
+    }
+
     // MARK: - Sync state
 
     /// Reads a scalar sync-state value.

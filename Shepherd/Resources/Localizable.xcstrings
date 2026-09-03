@@ -1311,6 +1311,16 @@
         }
       }
     },
+    "A review comment you have written at least three times in the last thirty days, on at least two pull requests of the same repository. Shepherd finds these on this Mac, from your own comments only, and never sends them anywhere. On the review screen each one offers to draft a rule for that repository's agent instructions.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Review-Kommentar, den du in den letzten dreißig Tagen mindestens dreimal geschrieben hast, auf mindestens zwei Pull Requests desselben Repositories. Shepherd findet das auf diesem Mac, nur aus deinen eigenen Kommentaren, und sendet nichts irgendwohin. Im Review-Screen bietet jeder davon an, eine Regel für die Agent-Anweisungen dieses Repositories zu entwerfen."
+          }
+        }
+      }
+    },
     "A review was submitted": {
       "localizations": {
         "de": {
@@ -4211,6 +4221,16 @@
         }
       }
     },
+    "Hide": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausblenden"
+          }
+        }
+      }
+    },
     "Hide translation": {
       "localizations": {
         "de": {
@@ -5611,6 +5631,16 @@
         }
       }
     },
+    "Nothing yet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch nichts."
+          }
+        }
+      }
+    },
     "Nothing yet. Every automatic merge is recorded here, on this Mac only.": {
       "localizations": {
         "de": {
@@ -6527,6 +6557,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reiht für jeden davon ein zustimmendes Review ohne Kommentar ein."
+          }
+        }
+      }
+    },
+    "RECURRING FINDINGS": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WIEDERKEHRENDE BEFUNDE"
           }
         }
       }
@@ -7807,6 +7847,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Inbox anzeigen"
+          }
+        }
+      }
+    },
+    "Show again": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wieder anzeigen"
           }
         }
       }
@@ -10417,6 +10467,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Heuristiken"
+          }
+        }
+      }
+    },
+    "hidden": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ausgeblendet"
           }
         }
       }
