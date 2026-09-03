@@ -156,8 +156,11 @@ struct OnDeviceClaimExtractor: ClaimExtracting {
         }
         // An empty list is a *successful* answer and never an error: the patterns having caught
         // everything is the common case, and the failure line the card would show for it would be
-        // reporting a problem that did not happen.
-        return ClaimList(generated)
+        // reporting a problem that did not happen. A claim whose quote is not in the description
+        // is dropped here, at the one place that has both the answer and the text it was read
+        // from: the instructions ask for the sentence verbatim, and `quoted(in:)` is what makes
+        // that a rule instead of a request.
+        return ClaimList(generated).quoted(in: body)
     }
 
     // MARK: - Prompt and knobs

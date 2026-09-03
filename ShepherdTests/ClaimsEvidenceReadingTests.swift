@@ -418,6 +418,28 @@ final class ClaimsEvidenceReadingTests: XCTestCase {
         XCTAssertEqual(model.state.report, before)
     }
 
+    func testCollapsingTheCardCancelsThePassThroughTheViewsOwnTask() async {
+        // The card's `.task(id:)` is what stops a pass when the card collapses: the id goes to
+        // `nil`, SwiftUI cancels the task, and that cancellation has to reach the pass itself.
+        let extractor = FakeExtractor(
+            list: list(ExtractedClaim(kind: .fixesIssue(number: 7), quote: "Closes #7.")),
+            isHeld: true
+        )
+        let current = detail()
+        let model = loaded(extractor: extractor)
+        let before = model.state.report
+
+        let viewTask = Task { await model.readWithModel(detail: current) }
+        await extractor.waitUntilStarted()
+        XCTAssertTrue(model.state.isReading)
+        viewTask.cancel()
+        await extractor.releaseHold()
+        await viewTask.value
+
+        XCTAssertFalse(model.state.isReading, "a spinner nobody is filling comes down")
+        XCTAssertEqual(model.state.report, before, "nothing is folded into a card that was closed")
+    }
+
     // MARK: - The merge, at this layer
 
     func testMergingKeepsThePatternLinesAndChecksOnlyTheNewOnes() throws {

@@ -139,6 +139,36 @@ public struct ClaimList: Codable, Sendable, Hashable {
         claims = raw.compactMap { $0.claim }
     }
 
+    /// The claims whose quote actually occurs in the description, and nothing else.
+    ///
+    /// The prompt tells the model to copy the sentence word for word; this is the check that
+    /// makes that a rule rather than a request. The card shows the quote as *the author's own
+    /// words* next to a diff, so a paraphrase — or a sentence the model made up — would be an
+    /// accusation Shepherd wrote itself and attributed to somebody else. A claim whose quote is
+    /// not in the body is therefore dropped, not corrected: there is no way to know which sentence
+    /// the model meant.
+    ///
+    /// The comparison folds runs of whitespace to one space and ignores case, because a model
+    /// reflowing a line break or lowering a capital has still quoted the description; anything
+    /// beyond that — dropped Markdown, a shortened sentence — is a rewrite, and a rewrite fails.
+    /// - Parameter body: The description the model was given, as Markdown source.
+    /// - Returns: The list with the unquotable claims removed, in the same order.
+    public func quoted(in body: String) -> ClaimList {
+        let haystack = ClaimList.folded(body)
+        return ClaimList(claims: claims.filter { claim in
+            let needle = ClaimList.folded(claim.quote)
+            return !needle.isEmpty && haystack.contains(needle)
+        })
+    }
+
+    /// Whitespace folded to single spaces, trimmed and lowercased — the form both sides of
+    /// ``quoted(in:)`` are compared in.
+    static func folded(_ text: String) -> String {
+        text.split(whereSeparator: { $0.isWhitespace || $0.isNewline })
+            .joined(separator: " ")
+            .lowercased()
+    }
+
     /// The deterministic claims with the model's additions after them, in the card's own order.
     ///
     /// Three rules, and they are the whole of what "additive" means (ADR 0026's amendment):

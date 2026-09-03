@@ -232,6 +232,34 @@ final class ClaimListTests: XCTestCase {
         XCTAssertTrue(list.merged(into: []).isEmpty)
     }
 
+    // MARK: - Quoted from the description
+
+    func testAQuoteThatIsNotInTheDescriptionIsDropped() {
+        let list = ClaimList(claims: [
+            ExtractedClaim(kind: .testsAdded, quote: "Tests were added for the parser."),
+            ExtractedClaim(kind: .noBreakingChanges, quote: "There are no breaking changes."),
+        ])
+        let quoted = list.quoted(in: "Tests were added for the parser. Nothing else moved.")
+        XCTAssertEqual(quoted.claims.map(\.kind), [.testsAdded])
+    }
+
+    func testAQuoteSurvivesReflowedWhitespaceAndCase() {
+        let list = ClaimList(claims: [
+            ExtractedClaim(kind: .scopeLimited(module: "Sources/Parser"), quote: "only the parser  changed"),
+        ])
+        let quoted = list.quoted(in: "Only the\nparser changed.\n\nFixes #4.")
+        XCTAssertEqual(quoted.claims.count, 1)
+        XCTAssertEqual(quoted.claims.first?.quote, "only the parser  changed", "the quote itself is left as the model wrote it")
+    }
+
+    func testAShortenedSentenceIsARewriteAndFails() {
+        let list = ClaimList(claims: [
+            ExtractedClaim(kind: .testsAdded, quote: "Tests added for the parser and the uploader."),
+        ])
+        XCTAssertTrue(list.quoted(in: "Tests added for the parser.").isEmpty)
+        XCTAssertTrue(ClaimList.empty.quoted(in: "anything").isEmpty)
+    }
+
     // MARK: - The flat vocabulary
 
     func testEveryShapeHasANameAndComesBackFromIt() {

@@ -591,7 +591,21 @@ final class ClaimsEvidenceModel {
             self?.finishReading(list, for: detail)
         }
         readTask = task
-        await task.value
+        // The pass is its own task so that `cancelReading()` has something to cancel, and this
+        // handler is what ties it back to the caller: the card's `.task(id:)` is cancelled when
+        // the reviewer collapses the card or the pull request changes, and an unstructured child
+        // would otherwise finish on the battery and fold its answer into a card nobody opened.
+        await withTaskCancellationHandler {
+            await task.value
+        } onCancel: {
+            task.cancel()
+        }
+        if Task.isCancelled, readTask == task {
+            // Cancelled from outside, so nothing was folded in and nothing was really spent: the
+            // spinner comes down, and the next expansion earns a new pass.
+            cancelReading()
+            readFrom = nil
+        }
     }
 
     /// Stops the pass in flight, if there is one.
@@ -633,6 +647,8 @@ final class ClaimsEvidenceModel {
         state.isReading = false
         guard let list, !list.isEmpty else { return }
         state.report = ClaimsEvidenceModel.merging(list, into: state.report, of: detail)
+        // A model claim about an issue this screen has already read gets that issue's answer too.
+        applyIssueEvidence()
     }
 
     /// The report with the model's claims added, and only the new lines checked.

@@ -56,7 +56,9 @@ protocol ClaimExtracting: Sendable {
     /// Reads the claims the patterns may have missed out of one description.
     /// - Parameter body: The pull request's description, as Markdown source.
     /// - Returns: What the model read, which may be empty — "the patterns already had
-    ///   everything" is a real answer.
+    ///   everything" is a real answer. Every quote in it occurs in `body`; an implementation
+    ///   applies ``ShepherdCore/ClaimList/quoted(in:)`` before returning, because the card draws
+    ///   the quote as the author's own words.
     /// - Throws: ``IntelligenceError`` when the model is unavailable, declined the content, or
     ///   the description did not fit the context window.
     func extract(from body: String) async throws -> ClaimList

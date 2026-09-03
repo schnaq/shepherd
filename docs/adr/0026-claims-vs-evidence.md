@@ -135,6 +135,13 @@ which is what puts a *Read by the model* tag beside that line's label. `Claim.or
 origin and means what it always meant. A Mac with the model therefore shows a **superset** of the
 same card, and that is a test rather than a comment.
 
+**A quote is a quote.** The instructions ask for the sentence word for word, and
+`ClaimList.quoted(in:)` (pure, in `ShepherdCore`, Linux-tested) is the check behind the request:
+the extractor drops any claim whose quote does not occur in the description, whitespace folded and
+case ignored, before the list leaves it. A paraphrase or an invented sentence beside a diff would be
+an accusation Shepherd wrote itself and attributed to the author, and there is no way to repair
+one — so it is dropped, never corrected.
+
 **The evidence is not amended.** A model claim goes through `EvidenceChecker.check(_:in:)` — the
 same function, the same rules, the same facts with the same links into the diff. "Evidence is the
 diff and CI" was never a statement about where the claim came from. There is still no score, still
