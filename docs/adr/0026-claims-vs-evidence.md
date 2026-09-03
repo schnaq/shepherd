@@ -67,6 +67,9 @@ needs the issue body cached in GRDB first. So the issue line is *always* ? and i
 the issue is not fetched". Reporting a ✓ because a reference exists would be the card claiming
 something it did not check.
 
+*Superseded by the amendment below, which grants exactly the read this paragraph withheld and
+keeps the sentence it withheld it for: a line that says what it checked.*
+
 ### Tiers
 
 **Tier 1 only, and complete at tier 1.** No model is involved: the card opens unattended on every
@@ -77,6 +80,33 @@ nothing in the tier-1 path depends on it. It is **on-device only, never a cloud 
 bulk**, for the reason [ADR 0020](0020-apple-native-text-intelligence.md) and ADR 0007's
 thread-digest amendment give about third-party prose: the description is somebody else's text and
 this card is not something the reviewer clicked.
+
+## Consequences
+
+- `ShepherdCore/Claims/` is Foundation only and tested on Linux: a thirty-fixture
+  corpus of realistic agent and human descriptions for the extractor, and one case per documented
+  evidence rule. Patterns are `NSRegularExpression`, compiled once into statics behind a small
+  `ClaimPattern` value, because that is the one engine that behaves identically on a Mac and on the
+  Linux runner.
+- Evidence facts are **English sentences produced in `ShepherdCore`**, like `FilePrioritizer`'s
+  review reasons and for the same reason: they are assembled from paths, counts and code snippets,
+  and a catalog key per shape would be a key per sentence template. The card's own chrome — header,
+  labels, buttons, captions — goes through `String(localized:)` with a German row
+  ([ADR 0022](0022-german-localisation.md)). Localising the facts is a follow-up, not a hole.
+- `FilePrioritizer` gained one public function, `isLockfile(_:)`, so "a lockfile changed" can be its
+  own fact without a second copy of the lockfile name list.
+- The card adds **no network read, no write, no setting and no persistence**. It is recomputed from
+  the local rows each time the review screen opens, like the CI diagnosis card and the thread
+  digest, and it is rebuilt only when the pull request's data actually changes. (The 2026-09-03
+  amendment below adds exactly one read — the referenced issue, once, while the card is open — and
+  leaves the other three halves of this sentence standing.)
+- The tier-2 half is three files and one property: `ShepherdCore/Claims/ClaimList.swift` (the
+  `Codable` twin plus the merge), `Intelligence/ClaimExtracting.swift` (the seam and its
+  availability value), `Intelligence/OnDeviceClaimExtractor.swift` (the `@Generable` mirror, the
+  `.tagging` model, the measured pre-flight) and `Claim.origin`. A further tier for this card is
+  not a case in `IntelligenceProvider`; it is a new ADR.
+- Anything that would turn these lines into a number, gate an action on them, or send the
+  description to a configured cloud endpoint has to overturn this decision rather than widen it.
 
 ## Amendment (2026-09-03): the tier-2 extraction, attended and additive
 
@@ -136,27 +166,56 @@ comment*, into a field the reviewer edits.
 Turning this into a bulk pass, into a cloud pass, or into anything that lets tier 2 *correct* a
 tier-1 claim has to overturn the paragraphs above rather than widen them.
 
-## Consequences
+## Amendment (2026-09-03): the issue read — one GET, ETag-cached, only while the card is open
 
-- `ShepherdCore/Claims/` is Foundation only and tested on Linux: a thirty-fixture
-  corpus of realistic agent and human descriptions for the extractor, and one case per documented
-  evidence rule. Patterns are `NSRegularExpression`, compiled once into statics behind a small
-  `ClaimPattern` value, because that is the one engine that behaves identically on a Mac and on the
-  Linux runner.
-- Evidence facts are **English sentences produced in `ShepherdCore`**, like `FilePrioritizer`'s
-  review reasons and for the same reason: they are assembled from paths, counts and code snippets,
-  and a catalog key per shape would be a key per sentence template. The card's own chrome — header,
-  labels, buttons, captions — goes through `String(localized:)` with a German row
-  ([ADR 0022](0022-german-localisation.md)). Localising the facts is a follow-up, not a hole.
-- `FilePrioritizer` gained one public function, `isLockfile(_:)`, so "a lockfile changed" can be its
-  own fact without a second copy of the lockfile name list.
-- The card adds **no network read, no write, no setting and no persistence**. It is recomputed from
-  the local rows each time the review screen opens, like the CI diagnosis card and the thread
-  digest, and it is rebuilt only when the pull request's data actually changes.
-- The tier-2 half is three files and one property: `ShepherdCore/Claims/ClaimList.swift` (the
-  `Codable` twin plus the merge), `Intelligence/ClaimExtracting.swift` (the seam and its
-  availability value), `Intelligence/OnDeviceClaimExtractor.swift` (the `@Generable` mirror, the
-  `.tagging` model, the measured pre-flight) and `Claim.origin`. A further tier for this card is
-  not a case in `IntelligenceProvider`; it is a new ADR.
-- Anything that would turn these lines into a number, gate an action on them, or send the
-  description to a configured cloud endpoint has to overturn this decision rather than widen it.
+The paragraph above refused the `fixes #N` line an issue read for two reasons, and one of them was
+wrong. It was right that a read on **every** pull request is not affordable; it was wrong that the
+body has to be in GRDB first. So the read exists now, and it is bounded by *when* rather than by a
+table.
+
+- **`GitHubClient.issue(repo:number:)`**, one `GET /repos/{o}/{r}/issues/{n}`, REST for the reason
+  ADR 0005 gives for `/pulls/{n}` and `/check-runs`: GraphQL earns its keep on the inbox *sweep*,
+  a single resource by number is one request either way, and the REST URL is what makes the
+  conditional-request cache work at all, since `cacheKey(for:)` keys on the URL and every GraphQL
+  document shares one. The URL is immutable, so — unlike `/check-runs` — it leaves exactly one
+  cache row behind however often it is read, and the second open of the same card pays a `304`.
+- **Only while the card is open, and only for a line that references an issue.** A collapsed card
+  costs nothing, a description with no `#N` in it costs nothing, and a signed-out window costs
+  nothing. The read is per *pull request*, cancelled when the reviewer moves to another one, and
+  never made by the sweep — nothing about the inbox touches this.
+- **No table, and that is the decision this amendment makes.** An issue body is worth having while
+  the reviewer is reading the card and worthless afterwards: a row would be stale the next time it
+  was read, and would bring a "delete on sign out" obligation with it. So the cache is a dictionary
+  on `ClaimsEvidenceModel` plus the client's own ETag cache — the same shape the CI diagnosis and
+  the thread digest already have, and the reason migration **v7** is not part of this feature. The
+  §2.A plan said "cached in GRDB"; this overrules that sentence and nothing else in it.
+- **The reference is always repository-local.** `#N` is resolved against the pull request's own
+  repository and `owner/repo#N` is not resolved at all, so the read can never reach a repository
+  the reviewer did not open.
+
+What the line then says is decided by `AcceptanceCriteria` and `AcceptanceMatcher`, both pure and
+both tested on Linux. Bullets come from the issue body in three documented passes — checkboxes
+wherever they are, else the first list under a heading naming acceptance criteria, else the first
+list at all — and each is matched against the pull request's description, changed paths and commit
+messages by keyword overlap (≥ 40 % of the bullet's distinctive words, ≥ 4 characters, minus a
+small stop list), with the on-device embedding cosine (≥ 0.6, ADR 0019's embedder reused once
+more) as a second pass for a bullet the words miss. The hunks are deliberately **not** in the
+evidence text: a diff's identifiers are not the words a requirement is written in, and feeding
+them in would mark every bullet as mentioned.
+
+**An unmentioned bullet is never a contradiction.** The line is ✓ when every bullet is mentioned,
+? when some or none are, and ✗ is unreachable — asserted by a test, not just written here. The
+reason is the third bullet-extraction pass: with no checkbox and no heading, Shepherd is *guessing*
+which list is the criteria, and a ✗ over a guess would show Shepherd's mistake as the author's.
+Matching words says the pull request talks about the same thing as the bullet; it cannot say the
+work was not done. A ✓ here therefore means less than the other three lines' ✓ — every bullet is
+mentioned, not the issue is resolved — which is why the facts, one per bullet with the matched
+words in them, are what the card actually shows.
+
+When the issue cannot be read — a `404`, a token that cannot see it, an offline Mac, no session at
+all — the old two facts stay exactly as they were and a third names the reason. That is the
+paragraph above's rule kept: the line still says what it checked and what it did not.
+
+Everything else in this decision is untouched. There is still no score and no aggregate, still no
+model in this card, still no write, no setting and no persistence, and still no new host: the
+issue read is `api.github.com`, the endpoint already on `CONTRIBUTING.md`'s list.

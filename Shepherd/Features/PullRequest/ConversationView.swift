@@ -57,6 +57,14 @@ struct ConversationView: View {
     /// tier and does not go through ``AIDraftFieldState`` — what it does borrow is that type's
     /// rule, asked inside the card, that a non-empty field is never overwritten silently. It is
     /// read through a closure so that typing in that field does not re-render this tab.
+    ///
+    /// The one network read the card makes (ADR 0026's amendment) hangs here rather than inside
+    /// the card: the fetcher is the signed-in session's client, which is what
+    /// ``AppEnvironment/issueFetcher`` hands over — `nil` when signed out, and then the issue line
+    /// says the criteria were not checked, exactly as it did before the read existed. The task's
+    /// id is the model's own ``ClaimsEvidenceModel/acceptanceLoadKey``, so it starts when the
+    /// reviewer opens the card and is cancelled when they move to another pull request, and a
+    /// keystroke in the review summary does not restart it.
     @ViewBuilder
     private var claimsCard: some View {
         ClaimsEvidenceCard(
@@ -71,6 +79,9 @@ struct ConversationView: View {
         )
         .task(id: claimsReadTrigger) {
             await claims.readWithModel(detail: model.detail)
+        }
+        .task(id: claims.acceptanceLoadKey) {
+            await claims.loadAcceptanceCriteria(using: environment.issueFetcher)
         }
     }
 

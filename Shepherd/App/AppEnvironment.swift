@@ -179,6 +179,15 @@ final class AppEnvironment {
         return nil
     }
 
+    /// How the claims card reads the issue a `fixes #N` claim points at (ADR 0026's amendment).
+    ///
+    /// The signed-in session's client, or `nil` when there is no session — which is a state and
+    /// not a failure: without it the card's issue line says the acceptance criteria were not
+    /// checked, which is what it said before there was an issue read at all. Read at click time
+    /// rather than captured when a screen is built, like the router the CI diagnosis asks with,
+    /// so a card can never hold a client from a session the user has signed out of.
+    var issueFetcher: (any IssueFetching)? { session?.github }
+
     /// Creates the container.
     /// - Parameters:
     ///   - settings: The preference store.

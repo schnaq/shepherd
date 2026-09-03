@@ -205,13 +205,29 @@ struct ClaimsEvidenceCard: View {
     }
 
     /// One fact: the sentence, then whatever there is to open.
+    ///
+    /// A fact carrying a ``ShepherdCore/EvidenceFact/mark`` is one acceptance bullet of the
+    /// referenced issue, and it gets the glyph in front of it so eight of them read as a checklist
+    /// rather than as eight sentences (ADR 0026's amendment). The glyph is ✓ or a dot — never ✗,
+    /// because an unmentioned bullet is a question and not a contradiction.
     @ViewBuilder
     private func factRow(_ fact: EvidenceFact) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(fact.text)
-                .font(.system(size: 11.5))
-                .foregroundStyle(Theme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .top, spacing: 5) {
+                if let mark = fact.mark {
+                    Image(systemName: ClaimsEvidenceCard.markGlyph(mark))
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(ClaimsEvidenceCard.markColour(mark))
+                        .frame(width: 10)
+                        .padding(.top, 2)
+                        .accessibilityLabel(ClaimsEvidenceCard.markLabel(mark))
+                }
+                Text(fact.text)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
             if let path = fact.path {
                 Button {
                     onOpenFile(path, fact.line)
@@ -375,6 +391,41 @@ struct ClaimsEvidenceCard: View {
         case .ok: return String(localized: "supported by the evidence")
         case .contradicted: return String(localized: "contradicted by the evidence")
         case .unclear: return String(localized: "not enough evidence")
+        }
+    }
+
+    /// ✓ and · for one acceptance bullet of the referenced issue.
+    ///
+    /// Deliberately not the ✗ of a contradicted line: a bullet nobody mentioned is a question, and
+    /// borrowing the glyph the card uses for "the diff says otherwise" would make it read as an
+    /// accusation (ADR 0026's amendment).
+    /// - Parameter mark: The bullet's answer.
+    static func markGlyph(_ mark: EvidenceFact.Mark) -> String {
+        switch mark {
+        case .mentioned: return "checkmark"
+        case .notMentioned: return "circlebadge"
+        }
+    }
+
+    /// The colour of a bullet's glyph: the card's green, or the muted grey of a line nothing has
+    /// been established about.
+    /// - Parameter mark: The bullet's answer.
+    static func markColour(_ mark: EvidenceFact.Mark) -> Color {
+        switch mark {
+        case .mentioned: return Theme.success
+        case .notMentioned: return Theme.textMuted
+        }
+    }
+
+    /// What a bullet's glyph means, for VoiceOver.
+    /// - Parameter mark: The bullet's answer.
+    /// - Returns: The already-localized label.
+    static func markLabel(_ mark: EvidenceFact.Mark) -> String {
+        switch mark {
+        case .mentioned:
+            return String(localized: "mentioned in this pull request")
+        case .notMentioned:
+            return String(localized: "not mentioned in this pull request")
         }
     }
 

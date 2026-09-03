@@ -46,7 +46,9 @@ Packages/ShepherdKit/          # SPM package, NO AppKit/SwiftUI imports
                                #     `Claude-Session:` return address and the message a
                                #     finding becomes (ADR 0030)
       Claims/                  #     claims read from the description + evidence over the diff
-                               #     and CI, one line per claim, no score (ADR 0026)
+                               #     and CI, one line per claim, no score (ADR 0026); the
+                               #     acceptance bullets of a referenced issue and the matcher
+                               #     over them (ADR 0026's amendment)
       Review/                  #     saved replies, per-repo review templates + matching rule,
                                #     recurring-finding clustering over the reviewer's own
                                #     comments (ADR 0029)
@@ -162,6 +164,22 @@ Pure logic in `ShepherdCore` (all unit-tested):
   `ClaimList.merged(into:)` is what makes that pass *additive*: the pattern claims come out
   unchanged, a model claim repeating one of them is dropped by the same `dedupKey`, and what
   survives is marked `Claim.origin == .model` (ADR 0026's tier-2 amendment).
+- `AcceptanceCriteria` / `AcceptanceMatcher` (`Claims/`) — the `fixes #N` half of the card, as
+  values (ADR 0026's amendment). `AcceptanceCriteria.bullets(from:) -> [AcceptanceBullet]` reads an
+  issue body in three documented passes: `- [ ]`/`- [x]` checkboxes wherever they are, else the
+  first list under a heading (or a `…:` label) containing *acceptance* / *criteria* / *done* /
+  *todo* / *requirements*, else the first list in the body — capped at 12, decoration stripped,
+  duplicates dropped. `AcceptanceMatcher.match(bullets:against:vectors:) -> [AcceptanceMatch]`
+  decides *mentioned* or *not mentioned* per bullet: keyword overlap over `SearchText.tokens`
+  (≥ 4 characters, minus a small stop list, ≥ 40 % of the bullet's distinctive words present) with
+  `SearchVector.cosineSimilarity` ≥ 0.6 as a second pass when the app supplied vectors.
+  `evidenceText(for:)` is the haystack — description, changed paths, commit messages, clamped to
+  20 KB, and deliberately **not** the hunks. `EvidenceChecker.check(_:in:issue:matches:failure:)`
+  turns the matches into one fact per bullet (`EvidenceFact.mark`) and derives ✓ only when every
+  bullet is mentioned; ✗ is unreachable for this claim, which is a test rather than a comment.
+  `IssueLookupFailure` holds the four sentences a failed read contributes.
+- `IssueSummary` (`Models/`) — number, title, body, state and the `isPullRequest` marker; nothing
+  else, and nothing persisted.
 - `BulkTriagePlan` (`Triage/`) — the whole of bulk triage's judgement as a value (ADR 0015):
   `make(action:pullRequests:) -> BulkTriagePlan` partitions a selection into entries carrying
   either the `steps` to write (`.approve` / `.merge`, in send order) or a `skipReason`, plus
@@ -291,6 +309,12 @@ Pure logic in `ShepherdCore` (all unit-tested):
     fetch. The paged one is conditionally cached under a key the client names itself (repository,
     window, cursor), because a GraphQL request cannot be keyed on its URL; the single one is not
     cached at all, for the reason `/check-runs` is not
+  - `issue(repo:number:) async throws -> IssueSummary` — one REST
+    `GET /repos/{o}/{r}/issues/{n}` for the claims card's `fixes #N` line (ADR 0026's amendment).
+    REST, not GraphQL, precisely so the conditional-request cache can key on the URL; the URL is
+    immutable, so — unlike `/check-runs` — it leaves one row per issue however often it is read.
+    The endpoint serves pull requests too, and `IssueSummary.isPullRequest` reports that rather
+    than the read refusing
   - `submitReview(_ draft: ReviewDraft, on:) async throws` — REST
     `POST /pulls/{n}/reviews` with full `comments` array; maps verdict to `event`
   - `replyToComment/resolveThread/unresolveThread/mergePullRequest/markReadyForReview…`
@@ -684,6 +708,19 @@ borrows that type's rule — a non-empty field is never overwritten silently, so
 *replace / append / discard* first and appends through
 `ShepherdCore/SavedReply.inserting(_:into:)`. There is no path from the card to `submitReview`, to
 the outbox or to a saved draft comment.
+
+**The one network read** is the issue behind a `fixes #N` claim (ADR 0026's amendment). It goes
+through the `IssueFetching` seam declared beside the model — `GitHubClient.issue(repo:number:)` is
+the single production conformance, and `AppEnvironment.issueFetcher` hands the signed-in session's
+client to `ConversationView`'s `task(id: claims.acceptanceLoadKey)`, so a signed-out window passes
+`nil` and the line reads exactly as it did before the feature. `ClaimsEvidenceModel` holds the
+issues, the failures and the matches in three dictionaries keyed by issue number: they are cleared
+when the reviewer moves to another pull request (which also cancels the read in flight) and the
+matches alone when the head commit changes, so a fix round is re-matched without a second request.
+The embeddings are optional and go through ADR 0019's `EmbeddingProviding`; without them the
+matcher is its keyword pass, which is the whole behaviour rather than a degraded one. **Nothing
+about the issue is persisted and there is no migration for it** — the body is worth having while
+the card is open and stale afterwards, so the client's ETag cache is the only durable half.
 
 Evidence facts are English sentences built in `ShepherdCore`, like `FilePrioritizer`'s reasons; the
 card's own chrome goes through `String(localized:)` with a German row (ADR 0022).
@@ -1539,6 +1576,12 @@ recognised agent and collapsed for a person *and* for an unrecognised bot, the r
 surviving a background refresh, the comment text's assembly, and the replace/append/discard
 question over a summary that already has text in it — the extractor, the evidence rules and the
 report are tested in `ShepherdCoreTests`, so they run on the Linux runner);
+the card's issue read (ADR 0026's amendment: a collapsed card, a description with no `#N` and a
+signed-out window each costing zero reads, one open being one read and a second open none, a 404
+keeping the "not checked" fact and adding why, a pull-request reference producing no bullets, a new
+head re-matching without a second read, and moving to another pull request cancelling the read in
+flight — the bullet extraction, the matcher's thresholds and the status derivation are tested in
+`ShepherdCoreTests` and the read itself in `GitHubKitTests`, so those run on the Linux runner);
 the feedback loop's app half (ADR 0029: the third comment producing a card, a colleague's comment
 never being *read* even though its vector would have joined the cluster, a comment outside the
 window costing not one embedding, a repeated body costing none, an unchanged sweep costing none, no

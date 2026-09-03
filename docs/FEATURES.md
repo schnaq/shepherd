@@ -220,8 +220,9 @@ to the evidence for it, one line each:
   ".github/workflows/ci.yml" is outside "Sources/Parser".*
 - **No breaking changes** — ✗ *"Sources/GitHubKit/GitHubClient.swift" removes or changes an exported
   declaration at line 214.*
-- **Fixes issue #142** — ? *Issue #142 of schnaq/review is referenced. Acceptance criteria not
-  checked — the issue is not fetched.*
+- **Fixes issue #142** — ? *Issue #142 “Uploads fail silently” is open and lists 3 acceptance
+  bullets. 2 of 3 acceptance bullets are mentioned in the pull request's description, changed paths
+  or commit messages.* — with a ✓ or a · in front of each bullet.
 
 Every fact is a sentence and every fact with a file behind it is a link: one click puts you on that
 line in the diff. A ✗ line also offers **Turn into a comment**, which drops the claim and the facts
@@ -232,12 +233,24 @@ The most useful line is the one that catches a green CI: a hunk that deletes an 
 an `XCTSkip` makes the suite pass, so "tests added" is marked ✗ *with the line* even when every
 check is green.
 
+The `fixes #N` line is the one that looks beyond the diff. When you open the card, Shepherd reads
+that issue once, finds its acceptance criteria — a `- [ ]` checklist, or the list under a heading
+called "Acceptance criteria" or "Definition of done" — and marks each bullet ✓ when the pull
+request mentions it and · when it does not, naming the words that matched. The line is ✓ only when
+every bullet is mentioned, and it is **never ✗**: matching words can tell you that the pull request
+talks about a bullet, and it cannot tell you a bullet was not done, so an unmentioned bullet is a
+prompt to open the issue rather than a finding against the author. If the issue cannot be read — it
+does not exist, you cannot see it, you are offline — the line says the criteria were not checked
+and why. Nothing about the issue is stored: it is read while the card is open and forgotten with
+the screen.
+
 **There is no score, and there never will be** — no number, no badge, no "looks safe". The card
 lists what the description claims and what the diff and CI show, and the judgement is yours
-([ADR 0026](adr/0026-claims-vs-evidence.md)). It runs entirely on data Shepherd already fetched:
-no network read, nothing stored. On an agent's pull request it opens expanded; on a person's it is
-a header you can open ([ADR 0008](adr/0008-agent-provenance-first-class.md)). A description that
-claims nothing gets no card at all.
+([ADR 0026](adr/0026-claims-vs-evidence.md)). Apart from that one issue read it runs entirely on
+data Shepherd already fetched: nothing stored. On an agent's pull request it opens
+expanded; on a person's it is a header you can open
+([ADR 0008](adr/0008-agent-provenance-first-class.md)). A description that claims nothing gets no
+card at all.
 
 Opening the card also lets Apple's on-device model read that same description once, for the
 phrasings the patterns miss. A line it found carries a small **Read by the model** tag and is

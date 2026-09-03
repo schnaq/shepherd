@@ -22,10 +22,29 @@ public struct EvidenceFact: Sendable, Codable, Hashable, Identifiable {
     public var line: Int?
     /// A link out of the app, for a fact whose subject is not in the diff at all.
     ///
-    /// Currently only the issue reference, which is a GitHub URL rather than a file — Shepherd
-    /// does not read issues (ADR 0026), so the honest thing a fact about `#142` can offer is the
-    /// address of `#142`.
+    /// Only the issue reference, which is a GitHub URL rather than a file: `#142`'s own page is
+    /// where a reviewer checks what `#142` asked for, and it is the one place the card sends
+    /// somebody outside the app.
     public var url: URL?
+    /// Whether this fact is one item of a checklist Shepherd matched, and how it came out.
+    ///
+    /// `nil` for every fact about the diff and CI, and that is the distinction it exists to draw:
+    /// those facts are statements about the pull request, while a marked fact is one *line of the
+    /// referenced issue* with the answer to "is this mentioned" beside it. The card renders the
+    /// mark as a glyph so a list of eight bullets reads as a list rather than as eight sentences
+    /// (ADR 0026's amendment).
+    ///
+    /// There is deliberately no third case. A bullet nobody mentioned is not a contradiction —
+    /// Shepherd matched words, and a missing word is a question, not a finding.
+    public var mark: Mark?
+
+    /// The two answers a matched checklist item can carry.
+    public enum Mark: String, Sendable, Codable, Hashable, CaseIterable {
+        /// The pull request mentions this item. ✓
+        case mentioned
+        /// It does not. ·
+        case notMentioned
+    }
 
     /// Creates a fact.
     /// - Parameters:
@@ -33,11 +52,19 @@ public struct EvidenceFact: Sendable, Codable, Hashable, Identifiable {
     ///   - path: The changed file it is about, if any.
     ///   - line: The head-side line it names, if any.
     ///   - url: An external link, if any.
-    public init(text: String, path: String? = nil, line: Int? = nil, url: URL? = nil) {
+    ///   - mark: The checklist answer, for a fact that is one matched acceptance bullet.
+    public init(
+        text: String,
+        path: String? = nil,
+        line: Int? = nil,
+        url: URL? = nil,
+        mark: Mark? = nil
+    ) {
         self.text = text
         self.path = path
         self.line = line
         self.url = url
+        self.mark = mark
     }
 
     /// A fact is identified by what it says and where.
@@ -85,23 +112,88 @@ public struct EvidenceVerdict: Sendable, Codable, Hashable {
     }
 }
 
+/// Why the referenced issue could not be read.
+///
+/// A closed set of four, and the sentences live here rather than in the app for the reason
+/// ADR 0026 gives about every other evidence fact: they are prose assembled beside the facts they
+/// sit next to, and a catalog key per shape would be a key per sentence template. The app's job
+/// is to classify its own transport error into one of these — it is the only layer that can, since
+/// `ShepherdCore` cannot see `GitHubKit`'s error type — and the sentence comes back from here.
+public enum IssueLookupFailure: String, Sendable, Codable, Hashable, CaseIterable {
+    /// GitHub answered `404`: no issue with that number in this repository.
+    case notFound
+    /// GitHub refused: the token cannot see this issue, or the account is not signed in.
+    case noPermission
+    /// The request never reached GitHub.
+    case offline
+    /// Anything else — a rate limit, a malformed body, a server error.
+    case failed
+
+    /// The fact this failure contributes, as one sentence.
+    public var sentence: String {
+        switch self {
+        case .notFound:
+            return "The issue could not be read: GitHub has no issue with that number in this repository."
+        case .noPermission:
+            return "The issue could not be read: this account cannot see it."
+        case .offline:
+            return "The issue could not be read: GitHub could not be reached."
+        case .failed:
+            return "The issue could not be read."
+        }
+    }
+}
+
 /// Looks for evidence of one claim in a pull request's diff and CI — pure, deterministic, and
 /// testable without a Mac (tier 1 of ADR 0007, ADR 0026).
 ///
-/// Nothing here reads the network. The inputs are exactly what ``PullRequestDetail`` already
-/// holds after a detail fetch: the changed files with their patches, the check runs, and the
-/// pull request's own row. That is a decision, not a limitation of the current code — a card that
-/// opens on every pull request must cost nothing, and the one thing it would need a network for
-/// (the referenced issue's acceptance bullets) is left explicitly unchecked and *says so*.
+/// Nothing here reads the network, and that is still the rule. The inputs are what
+/// ``PullRequestDetail`` already holds after a detail fetch: the changed files with their patches,
+/// the check runs, and the pull request's own row. The **one** exception is passed *in* rather
+/// than fetched here — the referenced issue and the acceptance bullets matched against it
+/// (ADR 0026's amendment) — so this type stays a pure function of values a Linux test can write
+/// by hand, and the app decides when the single `GET` behind them is worth making.
 public enum EvidenceChecker {
     // MARK: - Entry point
 
-    /// Checks one claim.
+    /// Checks one claim against the diff and CI alone.
+    ///
+    /// The shape every claim but `fixes #N` needs, and a wrapper over
+    /// ``check(_:in:issue:matches:failure:)`` so there is one implementation of each rule. An
+    /// issue line checked this way says the criteria were not checked, which is what it said
+    /// before there was an issue read at all.
     /// - Parameters:
     ///   - claim: The claim to look for evidence of.
     ///   - detail: Everything Shepherd knows about the pull request.
     /// - Returns: The status and the facts behind it.
     public static func check(_ claim: Claim, in detail: PullRequestDetail) -> EvidenceVerdict {
+        check(claim, in: detail, issue: nil, matches: nil)
+    }
+
+    /// Checks one claim, with the referenced issue when the app has fetched it.
+    ///
+    /// The hook ADR 0026's amendment adds. Only ``Claim/Kind/fixesIssue(number:)`` reads the
+    /// three extra arguments; the other three claims are answered from `detail` exactly as
+    /// before, so a caller with an issue in hand can use this entry point for every line of the
+    /// card without branching.
+    /// - Parameters:
+    ///   - claim: The claim to look for evidence of.
+    ///   - detail: Everything Shepherd knows about the pull request.
+    ///   - issue: The referenced issue, or `nil` when it was not fetched, could not be fetched, or
+    ///     this claim is not about an issue.
+    ///   - matches: One match per acceptance bullet, from
+    ///     ``AcceptanceMatcher/match(bullets:against:vectors:)``. An empty array means the issue
+    ///     was read and holds no checklist — which is a different answer from `nil`, and the card
+    ///     says so.
+    ///   - failure: Why the issue could not be read, when it could not.
+    /// - Returns: The status and the facts behind it.
+    public static func check(
+        _ claim: Claim,
+        in detail: PullRequestDetail,
+        issue: IssueSummary?,
+        matches: [AcceptanceMatch]?,
+        failure: IssueLookupFailure? = nil
+    ) -> EvidenceVerdict {
         switch claim.kind {
         case .testsAdded:
             return checkTests(in: detail)
@@ -110,7 +202,13 @@ public enum EvidenceChecker {
         case .noBreakingChanges:
             return checkBreakingChanges(in: detail)
         case .fixesIssue(let number):
-            return checkIssue(number: number, in: detail)
+            return checkIssue(
+                number: number,
+                in: detail,
+                issue: issue,
+                matches: matches,
+                failure: failure
+            )
         }
     }
 
@@ -422,27 +520,112 @@ public enum EvidenceChecker {
 
     /// Evidence for "fixes #N".
     ///
-    /// **Always unclear, and that is the feature.** The reference is a fact — it exists, and here
-    /// is where it points. Whether the pull request does what `#142` asks for is a question about
-    /// `#142`'s acceptance bullets, and Shepherd does not fetch issues: `GitHubKit` has no issue
-    /// read (ADR 0026), so this line says what it checked and what it did not, rather than
-    /// implying the reference is enough. Adding the read is an additive later step; a ✓ here today
-    /// would be a claim Shepherd cannot make.
-    private static func checkIssue(number: Int, in detail: PullRequestDetail) -> EvidenceVerdict {
+    /// The reference itself is always a fact — it exists, and here is where it points. What can be
+    /// said beyond that depends on whether the app fetched `#142`, and there are four answers:
+    ///
+    /// | Input | Facts | Status |
+    /// | --- | --- | --- |
+    /// | no issue | the reference, "acceptance criteria not checked", and why when there is a why | ? unclear |
+    /// | the reference is a pull request | the reference, and that a pull request has no criteria | ? unclear |
+    /// | an issue with no checklist | the reference, and that the body holds no list | ? unclear |
+    /// | an issue with a checklist | the reference, the issue, the tally, one fact per bullet | ✓ when every bullet is mentioned, ? otherwise |
+    ///
+    /// **✗ is unreachable here, deliberately.** ``AcceptanceMatcher`` matches *words*: it can say
+    /// that a pull request talks about a bullet, and it cannot say that a bullet was not done. A
+    /// contradiction Shepherd cannot substantiate is the one thing ADR 0026 forbids, and an
+    /// unmentioned bullet is exactly that — so the strongest thing this line does with one is
+    /// leave the status at ? and name the bullet, which is the reviewer's cue to open the issue.
+    ///
+    /// **A ✓ still means less than the other three lines' ✓.** It means every bullet is mentioned
+    /// somewhere in the description, the paths or the commit messages — not that the issue is
+    /// resolved. The facts say which words matched, which is why the status is never on its own.
+    private static func checkIssue(
+        number: Int,
+        in detail: PullRequestDetail,
+        issue: IssueSummary?,
+        matches: [AcceptanceMatch]?,
+        failure: IssueLookupFailure?
+    ) -> EvidenceVerdict {
         let repo = detail.summary.repo
-        let url = URL(string: "https://github.com/\(repo.owner)/\(repo.name)/issues/\(number)")
-        return EvidenceVerdict(
-            status: .unclear,
-            facts: [
+        let url = issue?.url
+            ?? URL(string: "https://github.com/\(repo.owner)/\(repo.name)/issues/\(number)")
+        var facts: [EvidenceFact] = [
+            EvidenceFact(text: "Issue #\(number) of \(repo.fullName) is referenced.", url: url)
+        ]
+
+        guard let issue else {
+            facts.append(
+                EvidenceFact(text: "Acceptance criteria not checked — the issue is not fetched.")
+            )
+            if let failure {
+                facts.append(EvidenceFact(text: failure.sentence))
+            }
+            return EvidenceVerdict(status: .unclear, facts: facts)
+        }
+
+        if issue.isPullRequest {
+            facts.append(
                 EvidenceFact(
-                    text: "Issue #\(number) of \(repo.fullName) is referenced.",
-                    url: url
-                ),
+                    text: "#\(number) is a pull request rather than an issue, so it has no acceptance criteria."
+                )
+            )
+            return EvidenceVerdict(status: .unclear, facts: facts)
+        }
+
+        let bullets = matches ?? []
+        guard !bullets.isEmpty else {
+            facts.append(
                 EvidenceFact(
-                    text: "Acceptance criteria not checked — the issue is not fetched."
-                ),
-            ]
+                    text: "Acceptance criteria not checked — the issue body holds no checklist or list Shepherd could read."
+                )
+            )
+            return EvidenceVerdict(status: .unclear, facts: facts)
+        }
+
+        facts.append(EvidenceFact(text: issueFact(for: issue, bulletCount: bullets.count)))
+        let mentioned = bullets.filter(\.mentioned).count
+        facts.append(
+            EvidenceFact(
+                text: mentioned == bullets.count
+                    ? "Every acceptance bullet is mentioned in the pull request's description, changed paths or commit messages."
+                    : "\(mentioned) of \(bullets.count) acceptance bullets are mentioned in the pull request's description, changed paths or commit messages."
+            )
         )
+        for match in bullets {
+            let mark: EvidenceFact.Mark = match.mentioned ? .mentioned : .notMentioned
+            facts.append(
+                EvidenceFact(
+                    text: "\(quoted(match.bullet.text)) — \(match.reason)",
+                    mark: mark
+                )
+            )
+        }
+        return EvidenceVerdict(
+            status: mentioned == bullets.count ? .ok : .unclear,
+            facts: facts
+        )
+    }
+
+    /// "Issue #142 “Retry flaky uploads” is open and lists 3 acceptance bullets."
+    ///
+    /// The state is named only when GitHub reported one Shepherd models: "was read" would be a
+    /// sentence about Shepherd rather than about the issue.
+    private static func issueFact(for issue: IssueSummary, bulletCount: Int) -> String {
+        let listed = bulletCount == 1
+            ? "lists 1 acceptance bullet"
+            : "lists \(bulletCount) acceptance bullets"
+        let title = issue.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let named = title.isEmpty
+            ? "Issue #\(issue.number)"
+            : "Issue #\(issue.number) \(quoted(title))"
+        switch issue.state {
+        case .open:
+            return "\(named) is open and \(listed)."
+        case .closed:
+            return "\(named) is closed and \(listed)."
+        case .unknown:
+            return "\(named) \(listed)."
+        }
     }
 
     // MARK: - Shared facts

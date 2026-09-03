@@ -11281,6 +11281,16 @@
         }
       }
     },
+    "mentioned in this pull request": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "in diesem Pull Request erwähnt"
+          }
+        }
+      }
+    },
     "merge": {
       "localizations": {
         "de": {
@@ -11427,6 +11437,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "nicht genug Belege"
+          }
+        }
+      }
+    },
+    "not mentioned in this pull request": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "in diesem Pull Request nicht erwähnt"
           }
         }
       }

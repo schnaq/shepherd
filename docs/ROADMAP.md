@@ -287,10 +287,11 @@ order. Everything here is tier 1 first (deterministic, local); a model only ever
 - [x] Claims vs. Evidence — what the description says ("tests added", "only X changed", "no
       breaking changes", "fixes #N") beside what the diff and CI show, line by line, no score
       (ADR 0026). Tier 1 is complete: the extractor, the evidence over the diff and CI, and the
-      card above the description — and so is the optional on-device pass over the same
-      description, spent when the reviewer opens the card, additive, its lines marked *Read by
-      the model*. Still open on top of it: matching a referenced issue's acceptance bullets,
-      which needs an issue read GitHubKit does not have yet
+      card above the description. `fixes #N` checks the referenced issue's acceptance bullets
+      too — one ETag-cached issue read while the card is open, keyword overlap plus the on-device
+      cosine, ✓ only when every bullet is mentioned and never ✗ — and the optional on-device pass
+      over the same description is in as well, spent when the reviewer opens the card, additive,
+      its lines marked *Read by the model* (ADR 0026's two amendments)
 - [x] Track record and trust lanes — closed pull requests of the last 90 days backfilled once per
       repository; **Short look** only when CI is green and the diff is small, history informs the
       badge and the sort, never the lane (ADR 0027)

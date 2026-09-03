@@ -1,4 +1,5 @@
 import Foundation
+import GitHubKit
 import Observation
 import ShepherdCore
 
@@ -169,6 +170,34 @@ struct ClaimsEvidenceCardState: Equatable, Sendable {
     }
 }
 
+/// How the claims card reads the issue a `fixes #N` claim points at (ADR 0026's amendment).
+///
+/// The ``JobLogFetching`` / ``WebhookPosting`` seam once more, and it exists for the same three
+/// reasons:
+///
+/// - **The card stays testable.** Every other line of this card is a pure function of a
+///   `PullRequestDetail`; the issue line is the one that needs a GitHub call, and a test of
+///   "what does the card say when the issue is a 404" must not need a token or a network.
+/// - **No fetcher is a state, not a failure.** The parameter is optional wherever it is passed, so
+///   a signed-out window produces a card whose issue line says the criteria were not checked —
+///   which is exactly what it said before this read existed.
+/// - **The seam adds nothing.** The one production conformance is ``GitHubKit/GitHubClient``,
+///   whose `issue(repo:number:)` this method *is*: the ETag cache, the retry policy and the
+///   error mapping all live there, and a seam that transformed the answer on the way through
+///   would be a second place for them to live.
+protocol IssueFetching: Sendable {
+    /// Reads one issue of one repository.
+    /// - Parameters:
+    ///   - repo: The pull request's own repository.
+    ///   - number: The issue number.
+    /// - Returns: The issue, with its body as Markdown source.
+    /// - Throws: Whatever the read failed with; the model turns it into one sentence on the card.
+    func issue(repo: RepoRef, number: Int) async throws -> IssueSummary
+}
+
+/// The live issue read: GitHub's own, with nothing in between.
+extension GitHubClient: IssueFetching {}
+
 /// Holds one pull request's claims card for as long as the review screen is open.
 ///
 /// It exists for one reason: ``ShepherdCore/ClaimsEvidenceReport/build(detail:summary:)`` walks
@@ -202,6 +231,25 @@ struct ClaimsEvidenceCardState: Equatable, Sendable {
 /// - **Nothing it produces acts, and nothing it fails at is reported.** A tier-2 failure leaves
 ///   the tier-1 card exactly as it was: the reviewer did not press a button labelled *read this*,
 ///   so an error line would be an apology for a question they never asked.
+///
+/// **The acceptance-criteria read is the one thing here that touches the network** (ADR 0026's
+/// amendment), and four rules bound it:
+///
+/// - **Only while the card is open, and only for a line that references an issue.** A collapsed
+///   card and a description with no `fixes #N` in it cost nothing — ``loadAcceptanceCriteria(using:)``
+///   returns before it reaches the fetcher.
+/// - **Once per pull request.** The fetched issues and the failures are held in memory here, keyed
+///   by number, and cleared when the reviewer moves to a different pull request. Together with the
+///   client's own ETag cache that is the whole of the caching story, and it is why ADR 0026's
+///   amendment adds **no table**: an issue body is needed while the card is open and is worthless
+///   afterwards, so a migration would buy a row that is stale the next time it is read and a
+///   "delete on sign out" obligation to go with it.
+/// - **Cancellable, and cancelled when the detail changes.** A reviewer who clicks through five
+///   pull requests must not leave five reads running, and a read that lands after the screen has
+///   moved on must not write into the new pull request's card.
+/// - **The embedder is optional.** With no on-device model — or with none supplied —
+///   ``ShepherdCore/AcceptanceMatcher`` runs its keyword pass alone, which is the complete
+///   behaviour rather than a degraded one.
 @MainActor
 @Observable
 final class ClaimsEvidenceModel {
@@ -231,8 +279,40 @@ final class ClaimsEvidenceModel {
     /// The ask itself while it is in flight, so two expansions ask once.
     @ObservationIgnored private var availabilityTask: Task<ClaimExtractorAvailability, Never>?
 
-    /// Creates an empty model. No report is built until ``refresh(detail:extractor:)`` is called.
-    init() {}
+    /// The issue read, when one was injected at construction time.
+    private let issues: (any IssueFetching)?
+    /// The embedding seam, for the matcher's optional cosine pass.
+    private let embedder: (any EmbeddingProviding)?
+
+    /// The issues this screen has read, keyed by number. Cleared when the pull request changes.
+    private var issuesByNumber: [Int: IssueSummary] = [:]
+    /// Why an issue could not be read, keyed by number. A failure is remembered so the read is
+    /// not retried on every redraw.
+    private var failuresByNumber: [Int: IssueLookupFailure] = [:]
+    /// The matches, keyed by issue number. Cleared when the head commit changes, because the
+    /// evidence text is built from the description, the paths and the commit messages.
+    private var matchesByNumber: [Int: [AcceptanceMatch]] = [:]
+    /// The embedder's answer about this Mac, once it has been asked.
+    private var cachedEmbeddingAvailability: EmbeddingAvailability?
+    /// The read in flight, so a detail change can cancel it.
+    private var loadTask: Task<Void, Never>?
+
+    /// Creates a model.
+    /// - Parameters:
+    ///   - issues: The issue read. `nil` — the default — is a card that never fetches, which is
+    ///     what every screen without a signed-in session gets; a screen with one hands its client
+    ///     to ``loadAcceptanceCriteria(using:)`` instead, because the session does not exist yet
+    ///     when SwiftUI builds the `@State`.
+    ///   - embedder: The embedding seam for the matcher's cosine pass. The default is the
+    ///     on-device model — the same actor ⌘K search uses — and it loads nothing until a bullet
+    ///     is actually embedded.
+    init(
+        issues: (any IssueFetching)? = nil,
+        embedder: (any EmbeddingProviding)? = NaturalLanguageEmbedder()
+    ) {
+        self.issues = issues
+        self.embedder = embedder
+    }
 
     /// Rebuilds the report when the pull request's data changed, and does nothing when it did not.
     /// - Parameters:
@@ -244,12 +324,28 @@ final class ClaimsEvidenceModel {
         // request is on screen, and that has to reach the next expansion.
         self.extractor = extractor
         guard builtFrom != detail else { return }
+        let previous = builtFrom
         builtFrom = detail
         // A pass for a pull request that is gone: nobody will ever see its answer, so it is
         // stopped rather than left to finish on the battery, and the pull request that arrived
         // gets its own pass when the reviewer opens the card.
         cancelReading()
         readFrom = nil
+
+        // A different pull request: the issue this screen read belongs to the old one, and the
+        // read in flight for it has nowhere to land.
+        if detail?.id != previous?.id {
+            loadTask?.cancel()
+            loadTask = nil
+            issuesByNumber.removeAll()
+            failuresByNumber.removeAll()
+            matchesByNumber.removeAll()
+        } else if detail?.summary.headRefOid != previous?.summary.headRefOid {
+            // Same pull request, new head: the issue is still the issue, but what the pull
+            // request says about itself has changed, so the matches have to be recomputed.
+            matchesByNumber.removeAll()
+        }
+
         let report = detail.map { current in
             ClaimsEvidenceReport.build(detail: current, summary: current.summary)
         } ?? .empty
@@ -266,6 +362,197 @@ final class ClaimsEvidenceModel {
         // Whether this Mac has the model is a property of the Mac and not of the pull request.
         next.modelUnavailableReason = state.modelUnavailableReason
         state = next
+        applyIssueEvidence()
+    }
+
+    // MARK: - The acceptance criteria
+
+    /// Identifies the work ``loadAcceptanceCriteria(using:)`` would do, for a view's `task(id:)`.
+    ///
+    /// The pull request, its head commit and whether the card is open — the three things a change
+    /// in which means the read has to be reconsidered. Everything else about the screen (the diff
+    /// tab, a keystroke in the summary field, a redraw) leaves it alone, which is what keeps a
+    /// `task(id:)` from restarting the read for no reason.
+    var acceptanceLoadKey: String {
+        guard let detail = builtFrom else { return "-" }
+        return "\(detail.id)|\(detail.summary.headRefOid)|\(state.isExpanded)"
+    }
+
+    /// The issue numbers the report references, in the report's order and without duplicates.
+    var referencedIssueNumbers: [Int] {
+        var seen: Set<Int> = []
+        var result: [Int] = []
+        for line in state.lines {
+            guard case .fixesIssue(let number) = line.claim.kind else { continue }
+            guard seen.insert(number).inserted else { continue }
+            result.append(number)
+        }
+        return result
+    }
+
+    /// Reads the referenced issues and matches their acceptance bullets against the pull request.
+    ///
+    /// Awaits the read, so a caller — a view's `task`, or a test — can act on the state that comes
+    /// out of it rather than polling for one. Returns immediately, having asked GitHub nothing,
+    /// when the card is collapsed, when the description references no issue, when there is no
+    /// fetcher, or when every referenced issue has already been read or already failed on this
+    /// screen.
+    /// - Parameter fetcher: The screen's issue read. Wins over the one injected at construction
+    ///   time, because it is how a view hands over the signed-in session's client — `nil` falls
+    ///   back to the injected one, which is how a test drives this without a view.
+    func loadAcceptanceCriteria(using fetcher: (any IssueFetching)? = nil) async {
+        guard state.isExpanded, let detail = builtFrom else { return }
+        guard let reader = fetcher ?? issues else { return }
+        let numbers = referencedIssueNumbers
+        guard !numbers.isEmpty else { return }
+        // An issue that already failed is not asked about again on this screen; one that was read
+        // but not yet matched still needs the matcher, which is how a new head commit gets a
+        // fresh answer without a second network read.
+        let outstanding = numbers.filter { number in
+            guard failuresByNumber[number] == nil else { return false }
+            return issuesByNumber[number] == nil || matchesByNumber[number] == nil
+        }
+        guard !outstanding.isEmpty else { return }
+
+        loadTask?.cancel()
+        let task = Task { [weak self] in
+            await self?.load(outstanding, in: detail, using: reader)
+        }
+        loadTask = task
+        await task.value
+    }
+
+    /// Reads and matches one issue at a time, updating the card after each.
+    ///
+    /// One at a time rather than in a group: a description references one issue in all but a
+    /// handful of cases, and the reviewer sees the first line resolve while the second is still
+    /// being read. Every step checks for cancellation, because the answer belongs to the pull
+    /// request this call started on and to no other.
+    private func load(
+        _ numbers: [Int],
+        in detail: PullRequestDetail,
+        using reader: any IssueFetching
+    ) async {
+        for number in numbers {
+            guard !Task.isCancelled else { return }
+
+            if issuesByNumber[number] == nil, failuresByNumber[number] == nil {
+                do {
+                    let summary = try await reader.issue(repo: detail.repo, number: number)
+                    guard !Task.isCancelled else { return }
+                    issuesByNumber[number] = summary
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    failuresByNumber[number] = ClaimsEvidenceModel.failure(for: error)
+                }
+            }
+
+            if let issue = issuesByNumber[number], matchesByNumber[number] == nil {
+                // A pull request has no acceptance criteria, and a task list in one is not a
+                // checklist of them: no bullets, and the card says why.
+                let bullets: [AcceptanceBullet] = issue.isPullRequest
+                    ? []
+                    : AcceptanceCriteria.bullets(from: issue.bodyMarkdown)
+                if bullets.isEmpty {
+                    matchesByNumber[number] = []
+                } else {
+                    let evidence = AcceptanceMatcher.evidenceText(for: detail)
+                    let vectors = await self.vectors(for: bullets, evidenceText: evidence)
+                    guard !Task.isCancelled else { return }
+                    matchesByNumber[number] = AcceptanceMatcher.match(
+                        bullets: bullets,
+                        against: evidence,
+                        vectors: vectors
+                    )
+                }
+            }
+
+            guard !Task.isCancelled else { return }
+            applyIssueEvidence()
+        }
+    }
+
+    /// Embeds the bullets and the evidence text, when this Mac can.
+    ///
+    /// `nil` is a normal outcome with a single meaning — the matcher runs its keyword pass alone —
+    /// and there is deliberately nothing to report and nothing to print: a card that appeared with
+    /// a warning in it because an embedding did not happen would be a worse card.
+    private func vectors(
+        for bullets: [AcceptanceBullet],
+        evidenceText: String
+    ) async -> AcceptanceVectors? {
+        guard let embedder else { return nil }
+        let availability: EmbeddingAvailability
+        if let cached = cachedEmbeddingAvailability {
+            availability = cached
+        } else {
+            availability = await embedder.availability()
+            cachedEmbeddingAvailability = availability
+        }
+        guard case .available = availability else { return nil }
+        guard let evidence = await embedder.vector(for: evidenceText) else { return nil }
+
+        var byBulletText: [String: SearchVector] = [:]
+        for bullet in bullets {
+            guard !Task.isCancelled else { return nil }
+            // A bullet the model has nothing to say about is skipped rather than stored as a zero
+            // vector: a zero would be comparable to everything and rank as related to nothing.
+            guard let vector = await embedder.vector(for: bullet.text) else { continue }
+            byBulletText[bullet.text] = vector
+        }
+        guard !byBulletText.isEmpty else { return nil }
+        return AcceptanceVectors(evidence: evidence, byBulletText: byBulletText)
+    }
+
+    /// Rewrites every issue line of the current report from what this screen has read.
+    ///
+    /// Only the verdict of an issue line is replaced, and nothing else about the state is touched:
+    /// a reviewer looking at the replace-or-append question when the issue lands must not have it
+    /// taken away, and the three other claims' evidence has not changed.
+    ///
+    /// A line is rewritten only once its answer is *complete* — a failure, or an issue **and** its
+    /// matches. An issue that has been read but not yet matched (which is the state for a moment
+    /// after a fix round invalidates the matches) keeps the "not fetched" line rather than briefly
+    /// claiming the issue holds no checklist.
+    private func applyIssueEvidence() {
+        guard let detail = builtFrom else { return }
+        guard !issuesByNumber.isEmpty || !failuresByNumber.isEmpty else { return }
+        for index in state.report.lines.indices {
+            let line = state.report.lines[index]
+            guard case .fixesIssue(let number) = line.claim.kind else { continue }
+            let hasAnswer = failuresByNumber[number] != nil
+                || (issuesByNumber[number] != nil && matchesByNumber[number] != nil)
+            guard hasAnswer else { continue }
+            state.report.lines[index].verdict = EvidenceChecker.check(
+                line.claim,
+                in: detail,
+                issue: issuesByNumber[number],
+                matches: matchesByNumber[number],
+                failure: failuresByNumber[number]
+            )
+        }
+    }
+
+    /// Which of ``ShepherdCore/IssueLookupFailure``'s four sentences a failed read gets.
+    ///
+    /// The mapping lives here because this is the only layer that can see both types: the
+    /// sentences are `ShepherdCore` prose (ADR 0026's rule about evidence facts) and the error is
+    /// `GitHubKit`'s. A rate limit is `failed` rather than `offline` — GitHub was reached and
+    /// answered, and "could not be reached" would be the wrong sentence to put on the card.
+    /// - Parameter error: Whatever the read threw.
+    /// - Returns: The classification.
+    static func failure(for error: any Error) -> IssueLookupFailure {
+        guard let github = error as? GitHubError else { return .failed }
+        switch github {
+        case .notFound:
+            return .notFound
+        case .forbidden, .unauthorized, .missingToken:
+            return .noPermission
+        case .transport:
+            return .offline
+        default:
+            return .failed
+        }
     }
 
     // MARK: - The optional on-device pass

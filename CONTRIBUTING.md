@@ -120,7 +120,9 @@ bumping a dependency that ships inside the app also means a line in
 - No telemetry, ever. The complete list of hosts Shepherd may contact:
   - api.github.com / github.com. The track record's read of **closed** pull requests (ADR 0027)
     is the same `api.github.com` GraphQL endpoint as the inbox sweep, with `is:closed` in place of
-    `is:open` — one more search on the host already on this list, and no new one;
+    `is:open` — one more search on the host already on this list, and no new one; the claims card's
+    read of the issue a `fixes #N` claim points at (ADR 0026's amendment) is one ETag-cached
+    `GET /repos/…/issues/{n}` on that same host, made only while the card is open;
   - only when the user configures a key: api.anthropic.com, or the OpenAI-compatible endpoint
     they chose themselves (a preset's base URL is still their choice). What travels there is the
     tier-1 digest — title, description excerpt, file list, top hunks — and, when you use AI
