@@ -301,10 +301,12 @@ final class TrackRecordBackfillTests: XCTestCase {
             now: { SyncFixtures.date(0) }
         )
         // Cancelled from inside its own task, before the first `await`, so the assertion does not
-        // depend on how fast the pager gets going.
+        // depend on how fast the pager gets going. The repositories are copied out first: the
+        // closure is sent to another task, and `self` (the test case) must not travel with it.
+        let repos = [repo, other]
         let result = await Task {
             withUnsafeCurrentTask { $0?.cancel() }
-            return await backfill.run(repos: [repo, other])
+            return await backfill.run(repos: repos)
         }.value
 
         XCTAssertTrue(result.wasCancelled)
