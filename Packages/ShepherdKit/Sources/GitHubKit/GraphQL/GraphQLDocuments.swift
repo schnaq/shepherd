@@ -477,6 +477,38 @@ public enum GraphQLDocuments {
     }
     """
 
+    /// The issues one pull request will close — the other direction of ADR 0032's link.
+    ///
+    /// `closingIssuesReferences` is the pull-request side of the *Development panel*: the issues
+    /// GitHub itself resolved out of the description's `closes #123` / `fixes #123` keywords. It
+    /// is a long-stable, documented field that needs no preview header — unlike its issue-side
+    /// counterpart, which is why that one keeps a fallback mapper and this one does not.
+    ///
+    /// Read **beside** ``reviewThreads`` on the same detail fetch rather than as a screen of its
+    /// own, for the reason `closedByPullRequestsReferences` sits inside the issues sweep: the
+    /// round trip is already being made, and the answer is four scalars per issue.
+    ///
+    /// Ten is the cap because the section lists every issue it gets and a description that names
+    /// an eleventh is a release note, not a link. `totalCount` is selected so a future "and three
+    /// more" line needs no second document; nothing reads it yet.
+    public static let pullRequestClosingIssues = """
+    query ShepherdPullRequestClosingIssues($owner: String!, $name: String!, $number: Int!) {
+      repository(owner: $owner, name: $name) {
+        pullRequest(number: $number) {
+          closingIssuesReferences(first: 10) {
+            totalCount
+            nodes {
+              number
+              title
+              state
+              repository { name owner { login } }
+            }
+          }
+        }
+      }
+    }
+    """
+
     /// The cheapest possible staleness probe: the current head SHA of one pull request.
     /// Used before submitting a review draft (ADR 0006's conflict rule).
     public static let pullRequestHead = """

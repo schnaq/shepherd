@@ -19,8 +19,10 @@ public enum MergeMethod: String, Sendable, Codable, Hashable, CaseIterable {
 ///
 /// - **Reads of the inbox** go through one GraphQL `search` sweep per facet.
 /// - **Detail reads** combine REST (`/pulls/{n}`, `/files`, `/commits`, `/reviews`,
-///   `/check-runs`) with a GraphQL query for review threads, because thread ids — and the
-///   mutations that resolve them — exist only in GraphQL.
+///   `/check-runs`) with two GraphQL queries: review threads, because thread ids — and the
+///   mutations that resolve them — exist only in GraphQL, and the issues the pull request
+///   closes, because REST carries the description's `closes #123` text but not the references
+///   GitHub resolved out of it (ADR 0032).
 /// - **Writes** are REST, except thread resolution and "ready for review", which are
 ///   GraphQL-only.
 public actor GitHubClient {
@@ -219,6 +221,16 @@ public actor GitHubClient {
         let commitList = try await commits(repo: repo, number: number)
         let reviewList = try await reviews(repo: repo, number: number)
         let threadList = try await reviewThreads(repo: repo, number: number)
+        // The one read of this fetch whose failure is tolerated (ADR 0032, Sprint 3). Everything
+        // else here is the review screen: without the files, the commits or the threads there is
+        // nothing to review, so those errors travel. The closing issues are a section *above* the
+        // description, and a pull request whose links GitHub declined to resolve — a token that
+        // cannot see the issues' repository, one field erroring inside an otherwise fine
+        // response — is still a pull request worth reviewing. The attempt is not lost either: it
+        // is in the in-app request log like every other request, through
+        // ``GitHubConfiguration/requestLogger``, which is this package's only logging channel
+        // (Foundation-only, Linux-tested, no `os.log`).
+        let closingIssueList = (try? await closingIssues(repo: repo, number: number)) ?? []
         let headSHA = pullDTO.head?.sha ?? ""
         var checkList: [CheckRun] = []
         if !headSHA.isEmpty {
@@ -254,8 +266,43 @@ public actor GitHubClient {
                 reviews: reviewList,
                 detector: detector
             ),
-            checks: checkList
+            checks: checkList,
+            closingIssues: closingIssueList
         )
+    }
+
+    /// Fetches the issues GitHub says merging this pull request will close (ADR 0032).
+    ///
+    /// GraphQL-only, like ``reviewThreads(repo:number:)`` beside which it is read: REST's pull
+    /// request carries the description's `closes #123` text but not the *resolved* references,
+    /// and resolving them in the app would mean re-implementing GitHub's keyword parsing and
+    /// still getting cross-repository references wrong.
+    ///
+    /// One page of ten and no pagination: the section lists what it gets, and a description that
+    /// names an eleventh issue is a release note rather than a link.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - number: The pull request number.
+    /// - Returns: The references, in GitHub's own order. Empty when the pull request closes
+    ///   nothing.
+    /// - Throws: Any ``GitHubError`` the request maps to. ``pullRequestDetail(repo:number:)``
+    ///   tolerates every one of them and shows no section; a caller that asks on its own gets
+    ///   the error.
+    public func closingIssues(
+        repo: RepoRef,
+        number: Int
+    ) async throws -> [LinkedIssueReference] {
+        let data: PullRequestClosingIssuesData = try await graphQL(
+            document: GraphQLDocuments.pullRequestClosingIssues,
+            variables: [
+                "owner": .string(repo.owner),
+                "name": .string(repo.name),
+                "number": .int(number),
+            ],
+            resource: "\(repo.fullName)#\(number) closing issues",
+            isIdempotent: true
+        )
+        return ResponseMapping.closingIssues(from: data)
     }
 
     /// Derives an aggregate review decision from the review listing.

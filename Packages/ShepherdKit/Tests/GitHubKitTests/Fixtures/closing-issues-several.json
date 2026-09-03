@@ -1,0 +1,37 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "closingIssuesReferences": {
+          "totalCount": 4,
+          "nodes": [
+            {
+              "number": 142,
+              "title": "Uploads fail silently",
+              "state": "OPEN",
+              "repository": { "name": "review", "owner": { "login": "schnaq" } }
+            },
+            {
+              "number": 7,
+              "title": "Token refresh logs the user out",
+              "state": "CLOSED",
+              "repository": { "name": "shepherd-web", "owner": { "login": "schnaq" } }
+            },
+            {
+              "number": 9,
+              "title": "",
+              "state": "SOMETHING_NEW",
+              "repository": { "name": "review", "owner": { "login": "schnaq" } }
+            },
+            {
+              "number": null,
+              "title": "A node with no number at all",
+              "state": "OPEN",
+              "repository": { "name": "review", "owner": { "login": "schnaq" } }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -152,6 +152,38 @@ struct ReviewCommentDTO: Decodable {
     var author: GraphQLActorDTO?
 }
 
+// MARK: - Closing issues (ADR 0032, the pull-request side of the link)
+
+/// The payload of ``GraphQLDocuments/pullRequestClosingIssues``.
+///
+/// Shaped exactly like ``ReviewThreadsData``, because it is the same nesting on the same node:
+/// the document is read beside that one on the same detail fetch.
+struct PullRequestClosingIssuesData: Decodable {
+    struct Repository: Decodable {
+        struct PullRequest: Decodable {
+            struct IssueConnection: Decodable {
+                var totalCount: Int?
+                var nodes: [ClosingIssueNodeDTO?]?
+            }
+            var closingIssuesReferences: IssueConnection?
+        }
+        var pullRequest: PullRequest?
+    }
+    var repository: Repository?
+}
+
+/// One issue as `closingIssuesReferences` carries it.
+///
+/// Four optional fields for ``LinkedPullRequestNodeDTO``'s reason — a response is trusted for
+/// what it contains and not for what it ought to contain — and no author: this is the mirror of
+/// the issue-side link, and a provenance chip is a question about a pull request.
+struct ClosingIssueNodeDTO: Decodable {
+    var number: Int?
+    var title: String?
+    var state: String?
+    var repository: GraphQLRepositoryDTO?
+}
+
 // MARK: - Head probe and mutations
 
 /// The payload of ``GraphQLDocuments/pullRequestHead``.

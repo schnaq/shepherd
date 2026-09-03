@@ -1,0 +1,19 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "closingIssuesReferences": {
+          "totalCount": 1,
+          "nodes": [
+            {
+              "number": 142,
+              "title": "Uploads fail silently",
+              "state": "OPEN",
+              "repository": { "name": "review", "owner": { "login": "schnaq" } }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

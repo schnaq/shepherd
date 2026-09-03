@@ -371,6 +371,49 @@ public enum ResponseMapping {
         }
     }
 
+    // MARK: - Closing issues (ADR 0032, the pull-request side of the link)
+
+    /// Maps one `closingIssuesReferences` node onto a reference.
+    ///
+    /// ``linkedPullRequest(from:detector:)``'s mirror image, and it drops a node the same way:
+    /// without a number and a repository there is nothing the "Closes" row could name or open.
+    /// The state, unlike the pull-request side's, is *parsed* rather than kept raw — the issue
+    /// vocabulary is two words plus `unknown` (``ShepherdCore/IssueSummary/State``) and the row
+    /// draws a glyph from it, where a linked pull request's `MERGED` is only ever printed.
+    /// - Parameter dto: The issue node.
+    /// - Returns: The reference, or `nil`.
+    static func closingIssue(from dto: ClosingIssueNodeDTO) -> LinkedIssueReference? {
+        guard let number = dto.number,
+              let repoName = dto.repository?.name,
+              let repoOwner = dto.repository?.owner?.login
+        else { return nil }
+        return LinkedIssueReference(
+            repo: RepoRef(owner: repoOwner, name: repoName),
+            number: number,
+            title: dto.title ?? "",
+            state: dto.state.map { IssueSummary.State.fromAPI($0) } ?? .unknown
+        )
+    }
+
+    /// Maps the whole `closingIssuesReferences` connection, in GitHub's own order.
+    ///
+    /// A pull request that closes nothing, one that GitHub answered for with no `pullRequest`
+    /// node at all, and one whose nodes were all malformed produce the same empty list: the
+    /// section is simply not drawn, and there is no state between "none" and "unknown" a reader
+    /// could act on.
+    /// - Parameter data: The response payload.
+    /// - Returns: The references, deduplicated by `owner/name#number`.
+    static func closingIssues(from data: PullRequestClosingIssuesData) -> [LinkedIssueReference] {
+        let nodes = data.repository?.pullRequest?.closingIssuesReferences?.nodes ?? []
+        var result: [LinkedIssueReference] = []
+        var seen = Set<String>()
+        for reference in nodes.compactMap({ $0 }).compactMap(closingIssue(from:)) {
+            guard seen.insert(reference.id).inserted else { continue }
+            result.append(reference)
+        }
+        return result
+    }
+
     // MARK: - Detail
 
     /// Maps `GET /pulls/{number}` onto an inbox row.
