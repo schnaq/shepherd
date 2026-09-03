@@ -194,7 +194,7 @@ struct OnDeviceProvider: IntelligenceProvider {
 
     func summarizePullRequest(_ digest: PullRequestDigest) async throws -> PRSummary {
         let prompt = IntelligencePrompt.body(for: digest)
-        let session = try OnDeviceProvider.preflight(
+        let session = try await OnDeviceProvider.preflight(
             useCase: .prose,
             instructions: IntelligencePrompt.summaryInstructions,
             prompt: prompt,
@@ -221,7 +221,7 @@ struct OnDeviceProvider: IntelligenceProvider {
     func suggestReviewFocus(_ digest: PullRequestDigest) async throws -> [FocusHint] {
         let prompt = IntelligencePrompt.body(for: digest)
         let knownPaths = Set(digest.files.map(\.path))
-        let session = try OnDeviceProvider.preflight(
+        let session = try await OnDeviceProvider.preflight(
             useCase: .prose,
             instructions: IntelligencePrompt.focusInstructions,
             prompt: prompt,
@@ -286,7 +286,7 @@ struct OnDeviceProvider: IntelligenceProvider {
 
     /// One drafting request, awaited to the end.
     private func draft(instructions: String, prompt: String, estimate: Int) async throws -> String {
-        let session = try OnDeviceProvider.preflight(
+        let session = try await OnDeviceProvider.preflight(
             useCase: .prose,
             instructions: instructions,
             prompt: prompt,
@@ -318,7 +318,7 @@ struct OnDeviceProvider: IntelligenceProvider {
         estimate: Int
     ) -> AsyncThrowingStream<String, Error> {
         IntelligenceStreaming.stream { continuation in
-            let session = try OnDeviceProvider.preflight(
+            let session = try await OnDeviceProvider.preflight(
                 useCase: .prose,
                 instructions: instructions,
                 prompt: prompt,
@@ -332,7 +332,7 @@ struct OnDeviceProvider: IntelligenceProvider {
                     options: OnDeviceGeneration.draft
                 )
                 for try await partial in responses {
-                    let text = OnDeviceProvider.draftText(in: partial)
+                    let text = OnDeviceProvider.draftText(in: partial.content)
                     guard !text.isEmpty, text != latest else { continue }
                     latest = text
                     continuation.yield(text)
@@ -367,9 +367,14 @@ struct OnDeviceProvider: IntelligenceProvider {
     /// - Returns: The measurement closure and the model's context window in tokens.
     @available(macOS 26.4, *)
     private static func measuredContext(
-        of model: SystemLanguageModel
-    ) -> (measure: (String) -> Int?, contextSize: Int) {
-        ({ text in try? model.tokenCount(for: text) }, model.contextSize)
+        of model: SystemLanguageModel,
+        measuring text: String
+    ) async -> (measure: (String) -> Int?, contextSize: Int) {
+        // The count is taken once, here, because the framework tokenises asynchronously and
+        // ``ShepherdCore/TokenBudget/measured(_:using:)`` wants a synchronous closure; the
+        // closure then answers for that one string and declines for any other.
+        let count = try? await model.tokenCount(for: text)
+        return ({ candidate in candidate == text ? count : nil }, model.contextSize)
     }
 
     /// The draft inside one partially generated snapshot.
@@ -442,7 +447,7 @@ struct OnDeviceProvider: IntelligenceProvider {
         instructions: String,
         prompt: String,
         estimate: Int
-    ) throws -> LanguageModelSession {
+    ) async throws -> LanguageModelSession {
         let model = useCase.model()
         if let reason = unavailabilityReason(of: model) {
             throw IntelligenceError.unavailable(reason)
@@ -455,7 +460,7 @@ struct OnDeviceProvider: IntelligenceProvider {
         if #available(macOS 26.4, *) {
             // Both halves of the comparison come from the same measurement, or this would be a
             // real token count against a limit that was only ever a guess about the window.
-            let context = measuredContext(of: model)
+            let context = await measuredContext(of: model, measuring: text)
             budget = budget.limited(
                 toContextSize: context.contextSize,
                 reservedForResponse: OnDeviceGeneration.reservedResponseTokens
