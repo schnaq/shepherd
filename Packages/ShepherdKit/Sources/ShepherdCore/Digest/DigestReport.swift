@@ -3,17 +3,22 @@ import Foundation
 /// One kind of line a morning digest can carry.
 ///
 /// The declaration order *is* the reading order of the digest, and it is a priority order rather
-/// than a chronological one: what somebody else is waiting for comes first, then the work that is
-/// one click from done, then the user's own blocked pull requests, and last the one section that is
-/// about Shepherd itself — reviews it could not send.
+/// than a chronological one: what somebody else is waiting for comes first — a review request,
+/// then an issue somebody put your name on — then the work that is one click from done and the
+/// work an agent finished, then the user's own blocked pull requests, and last the one section
+/// that is about Shepherd itself: reviews it could not send.
 ///
 /// A closed vocabulary on purpose. The digest is assembled by walking ``allCases``, so a new kind
 /// is one case plus one branch of an exhaustive switch, and it cannot be silently forgotten.
 public enum DigestSectionKind: String, Sendable, Codable, Hashable, CaseIterable {
     /// Pull requests that asked for the user's review inside the digest's window.
     case newReviewRequests
+    /// Issues assigned to the user that moved inside the digest's window (ADR 0032).
+    case issuesAssignedToYou
     /// Green, agent-authored pull requests that only need an approval or a merge.
     case greenAgentPullRequests
+    /// Issues an agent's pull request closed as completed (ADR 0032).
+    case agentPullRequestsThatClosedAnIssue
     /// The user's own pull requests with red CI or a change request on them.
     case ownPullRequestsNeedingAttention
     /// Queued reviews the outbox parked because the pull request moved on (ADR 0006).
@@ -22,13 +27,29 @@ public enum DigestSectionKind: String, Sendable, Codable, Hashable, CaseIterable
     /// Whether the section is about a *change* inside the digest's window rather than about
     /// standing state.
     ///
-    /// Only one section is windowed, and the asymmetry is deliberate — see
-    /// ``DigestReport/make(pullRequests:parkedReviewCount:windowStart:now:maxItemsPerSection:)``.
+    /// Two of the six are windowed, and the asymmetry is deliberate — see
+    /// ``DigestReport/make(pullRequests:issues:parkedReviewCount:windowStart:now:maxItemsPerSection:)``.
     public var isWindowed: Bool {
         switch self {
-        case .newReviewRequests:
+        case .newReviewRequests, .issuesAssignedToYou:
             return true
-        case .greenAgentPullRequests, .ownPullRequestsNeedingAttention, .parkedReviews:
+        case .greenAgentPullRequests, .agentPullRequestsThatClosedAnIssue,
+             .ownPullRequestsNeedingAttention, .parkedReviews:
+            return false
+        }
+    }
+
+    /// Whether the section names issues rather than pull requests.
+    ///
+    /// Read by the presentation layer, which has one destination for each: a section of issues
+    /// hands the inbox's content-kind picker over rather than applying a rail state that means
+    /// nothing on that side.
+    public var isAboutIssues: Bool {
+        switch self {
+        case .issuesAssignedToYou, .agentPullRequestsThatClosedAnIssue:
+            return true
+        case .newReviewRequests, .greenAgentPullRequests, .ownPullRequestsNeedingAttention,
+             .parkedReviews:
             return false
         }
     }
@@ -43,8 +64,8 @@ public enum DigestSectionKind: String, Sendable, Codable, Hashable, CaseIterable
 ///
 /// Two properties are load-bearing:
 ///
-/// - **It is tier 1.** Every number here comes out of ``PullRequestSummary`` values the sweep
-///   already wrote to SQLite. There is no network call anywhere in this file and none anywhere in
+/// - **It is tier 1.** Every number here comes out of ``PullRequestSummary`` and
+///   ``IssueRowSummary`` values the two sweeps already wrote to SQLite. There is no network call anywhere in this file and none anywhere in
 ///   the digest's path: the feature runs while nobody is watching, so a digest that phoned an
 ///   endpoint would be exactly the kind of unattended traffic CONTRIBUTING.md forbids.
 /// - **An empty report is a real answer.** ``isEmpty`` is what stops the app from posting "good
@@ -86,7 +107,18 @@ public struct DigestReport: Sendable, Equatable {
             )
         }
 
-        /// `Item` is identified by its pull request.
+        /// The item as one row of the digest, built from an issue row (ADR 0032).
+        ///
+        /// ``prID`` carries the **issue's** node id here. The field is reused generically, the
+        /// way ``OutboxItem``'s three target fields are and for the same reason: renaming it
+        /// would touch every existing digest call site for no behavioural change, and the two
+        /// kinds are already told apart by ``DigestSectionKind/isAboutIssues``.
+        /// - Parameter issue: The issue row to name.
+        public init(_ issue: IssueRowSummary) {
+            self.init(prID: issue.id, slug: issue.slug, title: issue.title)
+        }
+
+        /// `Item` is identified by its target.
         public var id: String { prID }
     }
 
@@ -94,7 +126,7 @@ public struct DigestReport: Sendable, Equatable {
     public struct Section: Sendable, Equatable, Identifiable {
         /// Which kind of line this is.
         public let kind: DigestSectionKind
-        /// How many pull requests (or parked reviews) the line counts.
+        /// How many pull requests, issues or parked reviews the line counts.
         public let count: Int
         /// The first few, in the digest's order. Empty for ``DigestSectionKind/parkedReviews``,
         /// which counts outbox rows rather than pull requests.
@@ -176,16 +208,29 @@ public struct DigestReport: Sendable, Equatable {
     /// the most common overnight shape of all — somebody adding you as a reviewer to a pull request
     /// that is a week old. The price is that a pull request which only got a comment overnight also
     /// appears; it is still one that needs your review and still moved, so the line remains true.
+    /// The two issue sections (ADR 0032) split the same way, and the second one is the more
+    /// interesting half. "An issue was assigned to you" is an event and is windowed on
+    /// `updatedAt`, exactly as the review requests are — GitHub moves `updatedAt` when somebody
+    /// assigns you, so `createdAt` would miss the common shape of an old issue handed over this
+    /// morning. "An agent's pull request closed one of these as completed" is a **state**, and is
+    /// therefore not windowed at all: a digest that dropped it on the second morning would go
+    /// quiet precisely because nothing had been done about it. It cannot repeat itself for long
+    /// either, and that is a property of the data rather than a cap: the issues sweep searches
+    /// `is:open`, so a closed row is pruned on the next pass.
     /// - Parameters:
     ///   - pullRequests: Every row the local inbox holds. Not filtered by the rail's facets: a
     ///     digest is about the account, not about whichever filter was left selected last night.
+    ///   - issues: Every issue row the local database holds, closed ones included (ADR 0032).
+    ///     Defaults to none, which is how a caller that predates the issues inbox builds a
+    ///     report — and what it gets is the report it always got.
     ///   - parkedReviewCount: How many outbox rows are parked as conflicted (ADR 0006).
     ///   - windowStart: The start of the span, from ``DigestSchedule/window(now:lastDeliveredAt:calendar:)``.
     ///   - now: The clock.
-    ///   - maxItemsPerSection: How many pull requests a section names.
+    ///   - maxItemsPerSection: How many rows a section names.
     /// - Returns: The report. ``isEmpty`` when there is nothing to say.
     public static func make(
         pullRequests: [PullRequestSummary],
+        issues: [IssueRowSummary] = [],
         parkedReviewCount: Int,
         windowStart: Date,
         now: Date = Date(),
@@ -203,11 +248,27 @@ public struct DigestReport: Sendable, Equatable {
                     },
                     limit: maxItemsPerSection
                 )
+            case .issuesAssignedToYou:
+                append(
+                    &sections,
+                    kind,
+                    issues: issues.filter {
+                        $0.myRelation.contains(.assigned) && $0.updatedAt >= windowStart
+                    },
+                    limit: maxItemsPerSection
+                )
             case .greenAgentPullRequests:
                 append(
                     &sections,
                     kind,
                     rows: BulkTriagePlan.greenAgentPullRequests(in: pullRequests),
+                    limit: maxItemsPerSection
+                )
+            case .agentPullRequestsThatClosedAnIssue:
+                append(
+                    &sections,
+                    kind,
+                    issues: issues.filter(wasClosedByAnAgent),
                     limit: maxItemsPerSection
                 )
             case .ownPullRequestsNeedingAttention:
@@ -244,6 +305,28 @@ public struct DigestReport: Sendable, Equatable {
         return pullRequest.reviewDecision == .changesRequested
     }
 
+    /// Whether an agent's pull request closed this issue as completed (ADR 0032).
+    ///
+    /// Three conditions and no fourth. `stateReason` is GitHub's own raw word, compared
+    /// case-insensitively and never branched on beyond this one equality — the type keeps it raw
+    /// precisely so a vocabulary GitHub grows costs nothing. `completed` rather than any closed
+    /// state, because "not planned" is a decision somebody took *instead* of the work, and
+    /// reporting it as an agent's success would be a lie.
+    ///
+    /// The agent half is ``IssueRowSummary/hasAgentPullRequest``, which reads the linked pull
+    /// requests' own provenance — so this line, the rail's facet and the chip beside the link
+    /// cannot disagree, and it can only ever understate: the sweep sees at most five links.
+    /// - Parameter issue: The issue row to test.
+    /// - Returns: `true` when the row belongs in
+    ///   ``DigestSectionKind/agentPullRequestsThatClosedAnIssue``.
+    public static func wasClosedByAnAgent(_ issue: IssueRowSummary) -> Bool {
+        guard issue.state == .closed else { return false }
+        guard let reason = issue.stateReason,
+              reason.caseInsensitiveCompare("completed") == .orderedSame
+        else { return false }
+        return issue.hasAgentPullRequest
+    }
+
     /// Appends a section for a set of rows, or nothing at all when the set is empty.
     ///
     /// The order inside a section is ``InboxGrouper/sorted(_:)`` — the inbox's own recency order,
@@ -257,6 +340,36 @@ public struct DigestReport: Sendable, Equatable {
     ) {
         guard !rows.isEmpty else { return }
         let ordered = InboxGrouper.sorted(rows)
+        sections.append(
+            Section(
+                kind: kind,
+                count: ordered.count,
+                items: ordered.prefix(max(0, limit)).map { Item($0) }
+            )
+        )
+    }
+
+    /// The same, for a set of issue rows (ADR 0032).
+    ///
+    /// The order is the issues section's own — most recently updated first, tie-broken on
+    /// repository and number — rather than ``InboxGrouper/sorted(_:)``, which takes pull
+    /// requests. It is spelled out here because it has to be *total*: two digests built from the
+    /// same data must name the same three issues in the same order, and `updatedAt` alone is not
+    /// enough for that when a sweep writes several rows in one second.
+    private static func append(
+        _ sections: inout [Section],
+        _ kind: DigestSectionKind,
+        issues: [IssueRowSummary],
+        limit: Int
+    ) {
+        guard !issues.isEmpty else { return }
+        let ordered = issues.sorted { left, right in
+            if left.updatedAt != right.updatedAt { return left.updatedAt > right.updatedAt }
+            if left.repo.fullName != right.repo.fullName {
+                return left.repo.fullName < right.repo.fullName
+            }
+            return left.number < right.number
+        }
         sections.append(
             Section(
                 kind: kind,

@@ -831,6 +831,26 @@
         }
       }
     },
+    "%lld issues assigned to you": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Issues dir zugewiesen"
+          }
+        }
+      }
+    },
+    "%lld issues closed by agent pull requests": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Issues durch Agent-Pull-Requests geschlossen"
+          }
+        }
+      }
+    },
     "%lld m": {
       "localizations": {
         "de": {
@@ -1607,6 +1627,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "1 grüner Agent-Pull-Request bereit"
+          }
+        }
+      }
+    },
+    "1 issue assigned to you": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 Issue dir zugewiesen"
+          }
+        }
+      }
+    },
+    "1 issue closed by an agent pull request": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 Issue durch einen Agent-Pull-Request geschlossen"
           }
         }
       }
@@ -9267,6 +9307,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pull Requests in Spotlight zeigen"
+          }
+        }
+      }
+    },
+    "Show the issues section of the inbox": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den Issues-Bereich der Inbox zeigen"
+          }
+        }
+      }
+    },
+    "Show the issues section, where the closed ones still are": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den Issues-Bereich zeigen, wo die geschlossenen noch stehen"
           }
         }
       }

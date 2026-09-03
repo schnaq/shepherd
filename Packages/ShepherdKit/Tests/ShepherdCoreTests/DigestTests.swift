@@ -68,15 +68,59 @@ final class DigestTests: XCTestCase {
 
     private func report(
         _ rows: [PullRequestSummary],
+        issues: [IssueRowSummary] = [],
         parked: Int = 0,
         windowStart: TimeInterval = -3_600,
         now: TimeInterval = 0
     ) -> DigestReport {
         DigestReport.make(
             pullRequests: rows,
+            issues: issues,
             parkedReviewCount: parked,
             windowStart: Fixtures.date(windowStart),
             now: Fixtures.date(now)
+        )
+    }
+
+    /// One issue row (ADR 0032). Assigned to the user by default, because that is what the
+    /// windowed line asks about.
+    private func issue(
+        id: String,
+        number: Int = 1,
+        title: String = "The login flow drops the session",
+        updatedAt: TimeInterval = 0,
+        relations: Set<IssueRelation> = [.assigned],
+        state: IssueSummary.State = .open,
+        stateReason: String? = nil,
+        links: [LinkedPullRequestReference] = []
+    ) -> IssueRowSummary {
+        IssueRowSummary(
+            id: id,
+            repo: Fixtures.repo,
+            number: number,
+            title: title,
+            author: ShepherdCore.Actor(login: "octocat", kind: .human),
+            createdAt: Fixtures.date(-86_400),
+            updatedAt: Fixtures.date(updatedAt),
+            closedAt: state == .closed ? Fixtures.date(updatedAt) : nil,
+            state: state,
+            stateReason: stateReason,
+            myRelation: relations,
+            linkedPullRequests: links
+        )
+    }
+
+    /// One linked pull request, machine-authored by default.
+    private func link(
+        number: Int = 90,
+        author: ShepherdCore.Actor = DigestTests.agentAuthor
+    ) -> LinkedPullRequestReference {
+        LinkedPullRequestReference(
+            repo: Fixtures.repo,
+            number: number,
+            title: "fix: the session drop",
+            state: "MERGED",
+            author: author
         )
     }
 
@@ -220,22 +264,201 @@ final class DigestTests: XCTestCase {
             greenAgent(id: "PR_green", updatedAt: -120),
             waiting(id: "PR_waiting", updatedAt: -180),
         ]
+        let issues = [
+            issue(id: "I_assigned", number: 5, updatedAt: -60),
+            issue(
+                id: "I_done",
+                number: 6,
+                updatedAt: -600,
+                relations: [.authored],
+                state: .closed,
+                stateReason: "COMPLETED",
+                links: [link()]
+            ),
+        ]
         XCTAssertEqual(
-            report(rows, parked: 1).sections.map(\.kind),
+            report(rows, issues: issues, parked: 1).sections.map(\.kind),
             [
                 .newReviewRequests,
+                .issuesAssignedToYou,
                 .greenAgentPullRequests,
+                .agentPullRequestsThatClosedAnIssue,
                 .ownPullRequestsNeedingAttention,
                 .parkedReviews,
             ]
         )
     }
 
-    func testOnlyTheReviewRequestLineIsWindowed() {
+    func testOnlyTheTwoEventShapedLinesAreWindowed() {
         XCTAssertEqual(
             DigestSectionKind.allCases.filter(\.isWindowed),
-            [.newReviewRequests]
+            [.newReviewRequests, .issuesAssignedToYou]
         )
+        XCTAssertEqual(
+            DigestSectionKind.allCases.filter(\.isAboutIssues),
+            [.issuesAssignedToYou, .agentPullRequestsThatClosedAnIssue]
+        )
+    }
+
+    // MARK: - Issues assigned to you (the second windowed section, ADR 0032)
+
+    func testOnlyIssuesAssignedToYouInsideTheWindowAreReported() throws {
+        let rows = [
+            issue(id: "I_fresh", number: 1, updatedAt: -600),
+            issue(id: "I_stale", number: 2, updatedAt: -7_200),
+            // Opened by the user, but nobody assigned it to them.
+            issue(id: "I_mine", number: 3, updatedAt: -600, relations: [.authored]),
+        ]
+        let section = try XCTUnwrap(report([], issues: rows).section(.issuesAssignedToYou))
+        XCTAssertEqual(section.count, 1)
+        XCTAssertEqual(section.items.map(\.prID), ["I_fresh"])
+        XCTAssertEqual(section.items.map(\.slug), ["schnaq/review#1"])
+    }
+
+    func testAnIssueExactlyOnTheWindowBoundaryCounts() throws {
+        let section = try XCTUnwrap(
+            report([], issues: [issue(id: "I_edge", updatedAt: -3_600)])
+                .section(.issuesAssignedToYou)
+        )
+        XCTAssertEqual(section.count, 1)
+    }
+
+    func testQuietOnTheSecondMorningIsTheCorrectAnswerForTheAssignedLine() {
+        // Nothing happened overnight: the issue is still assigned, still open, and was last
+        // touched before this digest's window. A line about it would be the same line as
+        // yesterday's, which is what a windowed section exists to avoid.
+        let rows = [issue(id: "I_yesterday", updatedAt: -90_000)]
+        XCTAssertNil(report([], issues: rows).section(.issuesAssignedToYou))
+    }
+
+    func testTheAssignedLineNamesTheMostRecentlyUpdatedFirstAndCountsTheRest() throws {
+        let rows = [
+            issue(id: "I_c", number: 3, updatedAt: -900),
+            issue(id: "I_a", number: 1, updatedAt: -60),
+            issue(id: "I_b", number: 2, updatedAt: -300),
+            issue(id: "I_d", number: 4, updatedAt: -1_200),
+        ]
+        let section = try XCTUnwrap(report([], issues: rows).section(.issuesAssignedToYou))
+        XCTAssertEqual(section.count, 4)
+        XCTAssertEqual(section.items.map(\.prID), ["I_a", "I_b", "I_c"])
+        XCTAssertEqual(section.overflow, 1)
+    }
+
+    func testTwoIssuesUpdatedInTheSameSecondKeepAStableOrder() throws {
+        let rows = [
+            issue(id: "I_two", number: 12, updatedAt: -60),
+            issue(id: "I_one", number: 11, updatedAt: -60),
+        ]
+        let section = try XCTUnwrap(report([], issues: rows).section(.issuesAssignedToYou))
+        XCTAssertEqual(
+            section.items.map(\.prID),
+            ["I_one", "I_two"],
+            "the tie-break is repository then number, so two digests agree"
+        )
+    }
+
+    // MARK: - Issues an agent closed (the state-shaped section, ADR 0032)
+
+    func testAnIssueAnAgentPullRequestClosedAsCompletedIsReported() throws {
+        let rows = [
+            issue(
+                id: "I_done",
+                number: 7,
+                updatedAt: -600,
+                state: .closed,
+                stateReason: "COMPLETED",
+                links: [link()]
+            )
+        ]
+        let section = try XCTUnwrap(
+            report([], issues: rows).section(.agentPullRequestsThatClosedAnIssue)
+        )
+        XCTAssertEqual(section.count, 1)
+        XCTAssertEqual(section.items.map(\.prID), ["I_done"])
+    }
+
+    func testThatStateSurvivesTheNight() {
+        // Closed long before this digest's window, and still reported: it is a state, not an
+        // event, so a windowed version would go quiet exactly because nothing had been done
+        // about it. It stops repeating by itself — the sweep searches `is:open` and prunes the
+        // row on its next pass.
+        let rows = [
+            issue(
+                id: "I_old",
+                number: 8,
+                updatedAt: -900_000,
+                state: .closed,
+                stateReason: "completed",
+                links: [link()]
+            )
+        ]
+        XCTAssertNotNil(
+            report([], issues: rows).section(.agentPullRequestsThatClosedAnIssue)
+        )
+    }
+
+    func testNotPlannedIsNotAnAgentsSuccessAndNeitherIsAHumansFix() {
+        let notPlanned = issue(
+            id: "I_wontfix",
+            number: 9,
+            state: .closed,
+            stateReason: "not_planned",
+            links: [link()]
+        )
+        let humanFix = issue(
+            id: "I_human",
+            number: 10,
+            state: .closed,
+            stateReason: "completed",
+            links: [link(number: 91, author: Fixtures.makeActor("octocat", kind: .human))]
+        )
+        let stillOpen = issue(
+            id: "I_open",
+            number: 11,
+            stateReason: "completed",
+            links: [link(number: 92)]
+        )
+        let noLinks = issue(id: "I_none", number: 12, state: .closed, stateReason: "completed")
+        XCTAssertNil(
+            report([], issues: [notPlanned, humanFix, stillOpen, noLinks])
+                .section(.agentPullRequestsThatClosedAnIssue)
+        )
+        XCTAssertFalse(DigestReport.wasClosedByAnAgent(notPlanned))
+        XCTAssertFalse(DigestReport.wasClosedByAnAgent(humanFix))
+        XCTAssertFalse(DigestReport.wasClosedByAnAgent(stillOpen))
+        XCTAssertFalse(DigestReport.wasClosedByAnAgent(noLinks))
+    }
+
+    func testTheClosedReasonIsMatchedCaseInsensitivelyBecauseItIsGitHubsRawWord() {
+        for spelling in ["COMPLETED", "completed", "Completed"] {
+            let row = issue(
+                id: "I_\(spelling)",
+                number: 13,
+                state: .closed,
+                stateReason: spelling,
+                links: [link()]
+            )
+            XCTAssertTrue(DigestReport.wasClosedByAnAgent(row), "\(spelling) is closed as done")
+        }
+    }
+
+    func testAnAccountWithIssuesAndNothingToSayAboutThemStaysSilent() {
+        XCTAssertTrue(
+            report([], issues: [issue(id: "I_quiet", updatedAt: -90_000, relations: [.mentioned])])
+                .isEmpty
+        )
+    }
+
+    func testAReportBuiltWithoutIssuesIsTheReportItAlwaysWas() {
+        // The `issues:` parameter defaults to none, which is what keeps every call site that
+        // predates the issues inbox both compiling and correct.
+        let built = DigestReport.make(
+            pullRequests: [waiting(id: "PR_1", updatedAt: -60)],
+            parkedReviewCount: 0,
+            windowStart: Fixtures.date(-3_600),
+            now: Fixtures.date(0)
+        )
+        XCTAssertEqual(built.sections.map(\.kind), [.newReviewRequests])
     }
 
     // MARK: - Schedule fixtures

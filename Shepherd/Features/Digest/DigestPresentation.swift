@@ -31,10 +31,18 @@ enum DigestPresentation {
             return count == 1
                 ? String(localized: "1 new review request")
                 : String(localized: "\(count) new review requests")
+        case .issuesAssignedToYou:
+            return count == 1
+                ? String(localized: "1 issue assigned to you")
+                : String(localized: "\(count) issues assigned to you")
         case .greenAgentPullRequests:
             return count == 1
                 ? String(localized: "1 green agent pull request ready")
                 : String(localized: "\(count) green agent pull requests ready")
+        case .agentPullRequestsThatClosedAnIssue:
+            return count == 1
+                ? String(localized: "1 issue closed by an agent pull request")
+                : String(localized: "\(count) issues closed by agent pull requests")
         case .ownPullRequestsNeedingAttention:
             return count == 1
                 ? String(localized: "1 of your pull requests needs attention")
@@ -52,8 +60,12 @@ enum DigestPresentation {
         switch kind {
         case .newReviewRequests:
             return String(localized: "Show the pull requests waiting for your review")
+        case .issuesAssignedToYou:
+            return String(localized: "Show the issues section of the inbox")
         case .greenAgentPullRequests:
             return String(localized: "Select the green agent pull requests, ready for bulk triage")
+        case .agentPullRequestsThatClosedAnIssue:
+            return String(localized: "Show the issues section, where the closed ones still are")
         case .ownPullRequestsNeedingAttention:
             return String(localized: "Show your own pull requests")
         case .parkedReviews:
@@ -66,7 +78,9 @@ enum DigestPresentation {
     static func systemImage(for kind: DigestSectionKind) -> String {
         switch kind {
         case .newReviewRequests: return "tray.and.arrow.down"
+        case .issuesAssignedToYou: return "smallcircle.circle"
         case .greenAgentPullRequests: return "checkmark.circle"
+        case .agentPullRequestsThatClosedAnIssue: return "checkmark.circle.badge.checkmark"
         case .ownPullRequestsNeedingAttention: return "exclamationmark.triangle"
         case .parkedReviews: return "tray.full"
         }
@@ -77,7 +91,9 @@ enum DigestPresentation {
     static func tint(for kind: DigestSectionKind) -> Color {
         switch kind {
         case .newReviewRequests: return Theme.accentText
+        case .issuesAssignedToYou: return Theme.accentText
         case .greenAgentPullRequests: return Theme.success
+        case .agentPullRequestsThatClosedAnIssue: return Theme.success
         case .ownPullRequestsNeedingAttention: return Theme.failure
         case .parkedReviews: return Theme.pending
         }

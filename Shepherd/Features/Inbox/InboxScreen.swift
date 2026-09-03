@@ -226,6 +226,12 @@ struct InboxScreen: View {
         switch kind {
         case .newReviewRequests:
             model.apply(.needsMyReview)
+        case .issuesAssignedToYou, .agentPullRequestsThatClosedAnIssue:
+            // The picker, and nothing else. There is no "assigned to me" rail state on the issues
+            // side — the whole section is already the three relations the sweep searches — and
+            // inventing a facet for one digest line would be a second vocabulary nobody asked
+            // for (ADR 0032).
+            contentKind = .issues
         case .greenAgentPullRequests:
             // "Involved" first, because an agent's pull request that is green and unmerged is
             // usually not one that asked for a review — the "Needs my review" rail would show an

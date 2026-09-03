@@ -9,15 +9,25 @@ import ShepherdCore
 struct DigestInputs: Sendable, Equatable {
     /// Every row the local inbox holds (``SignedInSession/inboxRows``).
     var pullRequests: [PullRequestSummary]
+    /// Every issue row the local database holds (``SignedInSession/issueRows``), closed ones
+    /// included — which is why that observation is the wide one (ADR 0032).
+    var issues: [IssueRowSummary]
     /// How many outbox rows are parked as conflicted (``SignedInSession/conflictedOutboxCount``).
     var parkedReviewCount: Int
 
     /// Creates the inputs.
     /// - Parameters:
     ///   - pullRequests: Every cached inbox row.
+    ///   - issues: Every cached issue row. Defaults to none, so a caller that predates the issues
+    ///     inbox builds the inputs it always built.
     ///   - parkedReviewCount: How many mutations are parked as conflicted.
-    init(pullRequests: [PullRequestSummary], parkedReviewCount: Int) {
+    init(
+        pullRequests: [PullRequestSummary],
+        issues: [IssueRowSummary] = [],
+        parkedReviewCount: Int
+    ) {
         self.pullRequests = pullRequests
+        self.issues = issues
         self.parkedReviewCount = parkedReviewCount
     }
 }
@@ -27,7 +37,7 @@ struct DigestInputs: Sendable, Equatable {
 ///
 /// The division of labour is ``AutoDelegationCoordinator``'s: the *decisions* are pure functions in
 /// `ShepherdCore` — ``ShepherdCore/DigestSchedule/window(now:lastDeliveredAt:calendar:)`` for "is it
-/// due" and ``ShepherdCore/DigestReport/make(pullRequests:parkedReviewCount:windowStart:now:maxItemsPerSection:)``
+/// due" and ``ShepherdCore/DigestReport/make(pullRequests:issues:parkedReviewCount:windowStart:now:maxItemsPerSection:)``
 /// for "what does it say" — and this type only supplies the inputs, records the delivery, and tells
 /// the user.
 ///
@@ -189,6 +199,7 @@ final class DigestCoordinator {
     ) -> DigestReport? {
         let built = DigestReport.make(
             pullRequests: inputs.pullRequests,
+            issues: inputs.issues,
             parkedReviewCount: inputs.parkedReviewCount,
             windowStart: window.start,
             now: moment
