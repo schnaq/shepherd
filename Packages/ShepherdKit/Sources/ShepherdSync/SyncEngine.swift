@@ -85,6 +85,8 @@ public actor SyncEngine {
     private let snapshots: (any ReviewSnapshotWriting)?
     /// Where a disappeared pull request's outcome goes, when the app wired one up (ADR 0027).
     private let outcomes: OutcomeCapture?
+    /// Where the issues sweep reads and writes, when the app wired it up (ADR 0032).
+    private let issues: IssueCapture?
     private let configuration: SyncConfiguration
     private let sleeper: any Sleeping
     private let now: @Sendable () -> Date
@@ -105,6 +107,12 @@ public actor SyncEngine {
     /// Whether the loops are running.
     public private(set) var isRunning = false
 
+    /// What the most recent issues sweep learned, or `nil` when none has run (ADR 0032).
+    ///
+    /// The engine's own bookkeeping, kept because the issues sweep emits no event of its own —
+    /// see ``IssueSweepDelta``.
+    private(set) var lastIssueSweep: IssueSweepDelta?
+
     /// Creates an engine.
     /// - Parameters:
     ///   - github: The GitHub façade.
@@ -115,6 +123,9 @@ public actor SyncEngine {
     ///   - outcomes: Where the outcome of a pull request that left the inbox is read and written
     ///     (ADR 0027). `nil` — the default — means no track record is kept, and the sweep then
     ///     behaves exactly as it did before: no extra request, no extra query.
+    ///   - issues: Where the issues sweep reads and writes (ADR 0032). `nil` — the default —
+    ///     means the cycle runs the pull-request sweep alone, which is how every caller that
+    ///     predates the issues inbox builds an engine.
     ///   - configuration: Tunables.
     ///   - sleeper: The delay abstraction; tests inject one that does not wait.
     ///   - now: Clock injection point for tests.
@@ -123,6 +134,7 @@ public actor SyncEngine {
         store: any SyncStoring,
         snapshots: (any ReviewSnapshotWriting)? = nil,
         outcomes: OutcomeCapture? = nil,
+        issues: IssueCapture? = nil,
         configuration: SyncConfiguration = SyncConfiguration(),
         sleeper: any Sleeping = SystemSleeper(),
         now: @escaping @Sendable () -> Date = { Date() }
@@ -131,6 +143,7 @@ public actor SyncEngine {
         self.store = store
         self.snapshots = snapshots
         self.outcomes = outcomes
+        self.issues = issues
         self.configuration = configuration
         self.sleeper = sleeper
         self.now = now
@@ -389,6 +402,12 @@ public actor SyncEngine {
         // slow request delays the diffs rather than the notification.
         await captureOutcomes(for: departed)
 
+        // The second sweep of the same cycle (ADR 0032): no second timer and no second cadence
+        // setting, because the two sections are read together and a user who refreshes expects
+        // both to move. Before the detail fetches, so a busy diff round does not hold the issues
+        // section back — it is inbox data, and nobody is waiting on a diff the same way.
+        await runIssueSweep()
+
         try await fetchDetails(for: needsDetail)
         try Task.checkCancellation()
         try? await store.setSyncState(
@@ -518,6 +537,94 @@ public actor SyncEngine {
             } catch {
                 continue
             }
+        }
+    }
+
+    // MARK: - Issues sweep (ADR 0032)
+
+    /// What the last issues sweep learned, for the sweep's own tests.
+    ///
+    /// Deliberately **not** a ``SyncEvent``. The roadmap's digest line reads stored rows the way
+    /// `DigestReport.make`'s review-request section already does — off `updatedAt` against a
+    /// window start — so nothing needs an event to work, and no notification bullet asks for one.
+    /// A "new issue assignment" notification would be a new event *then*, added with the feature
+    /// that wants it rather than in advance.
+    ///
+    /// Internal, so it is the engine's own bookkeeping and not API: what the app renders is the
+    /// database.
+    struct IssueSweepDelta: Sendable, Hashable {
+        /// The issues this sweep saw for the first time.
+        var newIssueIDs: [String] = []
+        /// The issues the prune actually removed.
+        var departedIssueIDs: [String] = []
+    }
+
+    /// Runs the issues sweep, when the engine was built with the ports for it.
+    ///
+    /// ``runSweep()``'s delta logic, on the other kind of row: the cached rows are the "before",
+    /// the three facet searches are the "after", first sightings and departures are the
+    /// difference, and the prune is the store's — guarded by
+    /// ``ShepherdPersistence/DatabaseManager/issuePruneGuardSQL``, so an issue the user has a
+    /// queued mutation for stays.
+    ///
+    /// Three things differ from the pull-request sweep, and each one is a decision:
+    ///
+    /// - **No detail fetches.** An issue's body is fetched when somebody opens it; there is no
+    ///   diff to stagger and nothing on the row that a detail read would keep fresh, so the
+    ///   sweep is one round of searches and one write.
+    /// - **It cannot fail the cycle.** This method does not `throw`: a failure becomes a
+    ///   ``SyncEvent/syncFailed(_:)`` on the sweep stage — the same way the pull-request sweep's
+    ///   own errors surface — and the caller carries on. The alternative would let a GitHub
+    ///   account without issues enabled, or one search that timed out, take the review inbox
+    ///   down with it, and the review inbox is what Shepherd is for. It is *reported* rather than
+    ///   swallowed, unlike the track record's capture, because the user asked for this section
+    ///   and an inbox that is quietly two days stale is worse than a line saying so.
+    /// - **"Departed" is what the prune removed**, not what the search stopped returning: an
+    ///   issue held open by the guard is deliberately kept, and it is not gone.
+    ///
+    /// The previous and remaining reads both ask for closed issues too. The sweep only searches
+    /// open ones, so a stored closed row exists exactly when the guard kept it, and a delta blind
+    /// to those rows would announce the same issue as a first sighting on every pass.
+    @discardableResult
+    func runIssueSweep() async -> IssueSweepDelta {
+        guard let issues else { return IssueSweepDelta() }
+        let everything = IssueFilter(includeClosed: true)
+        do {
+            let previous = try await issues.store.fetchIssues(filter: everything)
+            let previousIDs = Set(previous.map(\.id))
+
+            let current = try await issues.fetcher.searchOpenIssues(queries: issues.queries)
+            let currentIDs = Set(current.map(\.id))
+            let firstSightings = current.map(\.id).filter { !previousIDs.contains($0) }
+
+            // Every write is preceded by a cancellation check, as in the pull-request sweep: a
+            // sweep stopped because the user signed out must not repopulate tables the erase has
+            // already emptied.
+            try Task.checkCancellation()
+            try await issues.store.saveIssueSummaries(current, pruneMissing: true)
+
+            let remaining = Set(
+                try await issues.store.fetchIssues(filter: everything).map(\.id)
+            )
+            let departed = previous
+                .map(\.id)
+                .filter { !currentIDs.contains($0) && !remaining.contains($0) }
+
+            let delta = IssueSweepDelta(
+                newIssueIDs: firstSightings,
+                departedIssueIDs: departed
+            )
+            lastIssueSweep = delta
+            return delta
+        } catch is CancellationError {
+            return IssueSweepDelta()
+        } catch {
+            emit(
+                .syncFailed(
+                    SyncFailure(stage: .sweep, message: "issue sweep: \(describe(error))")
+                )
+            )
+            return IssueSweepDelta()
         }
     }
 

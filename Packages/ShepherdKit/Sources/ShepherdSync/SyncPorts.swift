@@ -163,3 +163,64 @@ public struct OutcomeCapture: Sendable {
         self.store = store
     }
 }
+
+/// The slice of ``GitHubKit/GitHubClient`` the issues sweep reads through (ADR 0032).
+///
+/// A port of its own rather than one more requirement on ``PullRequestFetching``, for
+/// ``ClosedPullRequestReading``'s reason: the inbox port is what the engine's loops need in order
+/// to *run*, and every double in every test implements all of it. One read that only the issues
+/// section makes belongs behind a protocol only that section's tests have to satisfy.
+public protocol IssueFetching: Sendable {
+    /// Runs the issues sweep.
+    func searchOpenIssues(queries: [IssueQuery]) async throws -> [IssueRowSummary]
+}
+
+/// `GitHubClient` already has exactly this shape; the conformance is the contract check.
+extension GitHubClient: IssueFetching {}
+
+/// The slice of ``ShepherdPersistence/DatabaseManager`` the issues sweep writes through
+/// (ADR 0032).
+public protocol IssueSyncStoring: Sendable {
+    /// Stores the result of one issues sweep.
+    func saveIssueSummaries(_ summaries: [IssueRowSummary], pruneMissing: Bool) async throws
+    /// Reads the cached issues — the "before" side of delta detection.
+    func fetchIssues(filter: IssueFilter) async throws -> [IssueRowSummary]
+}
+
+/// `DatabaseManager` already has exactly this shape; the conformance is the contract check.
+extension DatabaseManager: IssueSyncStoring {}
+
+/// The two ports the issues sweep needs, handed to the engine as one value.
+///
+/// One initialiser parameter instead of two, for ``OutcomeCapture``'s reason: neither half is any
+/// use without the other, and an engine that could search issues but not store them would spend
+/// three search calls a cycle and throw the answers away. It is also what makes the second sweep
+/// *optional* — an engine built without it behaves exactly as it did before: no extra request, no
+/// extra query, no new table touched.
+public struct IssueCapture: Sendable {
+    /// Where the issues are read from.
+    public let fetcher: any IssueFetching
+    /// Where the rows are written.
+    public let store: any IssueSyncStoring
+    /// The facet queries the issues sweep runs.
+    ///
+    /// Carried here rather than in ``SyncConfiguration``, because it is meaningless without the
+    /// pair: a configuration field for a sweep the engine may not be running is a setting that
+    /// can be wrong without anything reading it.
+    public let queries: [IssueQuery]
+
+    /// Creates the pair.
+    /// - Parameters:
+    ///   - fetcher: The GitHub side.
+    ///   - store: The database side.
+    ///   - queries: The facet queries. Defaults to ``GitHubKit/IssueQuery/defaultSweep``.
+    public init(
+        fetcher: any IssueFetching,
+        store: any IssueSyncStoring,
+        queries: [IssueQuery] = IssueQuery.defaultSweep
+    ) {
+        self.fetcher = fetcher
+        self.store = store
+        self.queries = queries
+    }
+}

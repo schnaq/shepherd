@@ -464,3 +464,99 @@ extension SyncFixtures {
         )
     }
 }
+
+/// A scripted stand-in for the issues half of ``GitHubKit/GitHubClient`` (ADR 0032).
+///
+/// Its own double rather than more scripting on ``MockGitHub``, mirroring the port split: the
+/// issues sweep hangs off ``IssueFetching``, so only the tests that care about it have to satisfy
+/// anything. It records the facet strings it was asked for, because "the same connection with one
+/// word changed" is a claim worth asserting from the engine's side too.
+actor MockIssueGitHub: IssueFetching {
+    /// One entry per sweep, consumed in order. The last entry repeats.
+    private var results: [[IssueRowSummary]] = []
+    private var error: GitHubError?
+    private var last: [IssueRowSummary] = []
+
+    /// How many sweeps the engine ran.
+    private(set) var callCount = 0
+    /// The raw query strings of every sweep, in order.
+    private(set) var requestedQueries: [[String]] = []
+
+    init() {}
+
+    func setResults(_ results: [[IssueRowSummary]]) {
+        self.results = results
+    }
+
+    func setError(_ error: GitHubError?) {
+        self.error = error
+    }
+
+    func searchOpenIssues(queries: [IssueQuery]) async throws -> [IssueRowSummary] {
+        callCount += 1
+        requestedQueries.append(queries.map(\.rawQuery))
+        if let error { throw error }
+        if results.isEmpty { return last }
+        let result = results.count > 1 ? results.removeFirst() : results[0]
+        last = result
+        return result
+    }
+}
+
+extension SyncFixtures {
+    /// A machine that opens pull requests, for the "has an agent pull request" facet.
+    static func machine() -> ShepherdCore.Actor {
+        ShepherdCore.Actor(
+            login: "dependabot[bot]",
+            displayName: nil,
+            avatarURL: nil,
+            kind: .agent(
+                AgentIdentity(id: "dependabot", displayName: "Dependabot", matchedBy: .login)
+            )
+        )
+    }
+
+    /// One issue row, for the issues sweep's tests.
+    /// - Parameters:
+    ///   - id: The node id.
+    ///   - number: The issue number.
+    ///   - updatedAt: When it was last updated, as an offset from the fixture epoch.
+    ///   - relations: How the user relates to it.
+    ///   - links: The pull requests that will close it.
+    static func issue(
+        id: String,
+        number: Int,
+        updatedAt: TimeInterval = 0,
+        relations: Set<IssueRelation> = [.assigned],
+        links: [LinkedPullRequestReference] = []
+    ) -> IssueRowSummary {
+        IssueRowSummary(
+            id: id,
+            repo: repo,
+            number: number,
+            title: "Issue \(number)",
+            author: ShepherdCore.Actor(login: "octocat", kind: .human),
+            createdAt: date(-3_600),
+            updatedAt: date(updatedAt),
+            state: .open,
+            labels: ["bug"],
+            myRelation: relations,
+            commentCount: 1,
+            linkedPullRequests: links
+        )
+    }
+
+    /// One linked pull request, machine-authored by default so the facet has something to read.
+    static func link(
+        number: Int,
+        author: ShepherdCore.Actor = SyncFixtures.machine()
+    ) -> LinkedPullRequestReference {
+        LinkedPullRequestReference(
+            repo: repo,
+            number: number,
+            title: "fix: issue \(number)",
+            state: "OPEN",
+            author: author
+        )
+    }
+}
