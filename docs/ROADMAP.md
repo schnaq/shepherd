@@ -208,6 +208,8 @@ The next big block, settled in the founder interview of 2026-09-02. Today Shephe
 pull request; the founder's day starts one step earlier, at the issue an agent should pick up. The
 v1.1 theme is to move that first step into the app without turning Shepherd into an agent
 orchestrator (non-goal, below): Shepherd *assigns* and *watches*, the agent still runs where it runs.
+The engineering plan — four sprints, migration v7, ADR 0032 — is
+[`docs/plans/issues-inbox.md`](plans/issues-inbox.md).
 
 - [ ] Issues as a first-class inbox section (new ADR): a second sweep beside the pull-request one
       — issues assigned to you, issues you opened, issues mentioning you — in the same GraphQL
