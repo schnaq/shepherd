@@ -1,0 +1,21 @@
+{
+  "id": 2874120099,
+  "node_id": "PR_kwDOAgentTwo",
+  "number": 7,
+  "title": "Retry a dropped upload",
+  "state": "closed",
+  "html_url": "https://github.com/schnaq/review/pull/7",
+  "user": {
+    "login": "claude[bot]",
+    "avatar_url": "https://avatars.githubusercontent.com/in/1?v=4",
+    "type": "Bot"
+  },
+  "created_at": "2026-08-28T09:00:00Z",
+  "updated_at": "2026-08-29T09:00:00Z",
+  "body": "- [ ] this list is a task list in a pull request, not acceptance criteria\n",
+  "pull_request": {
+    "url": "https://api.github.com/repos/schnaq/review/pulls/7",
+    "html_url": "https://github.com/schnaq/review/pull/7",
+    "merged_at": "2026-08-29T09:00:00Z"
+  }
+}

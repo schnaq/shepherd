@@ -310,6 +310,51 @@ public actor GitHubClient {
         return result
     }
 
+    // MARK: - Issue (ADR 0026's amendment)
+
+    /// Fetches one referenced issue, so the claims card can check `fixes #N` against its
+    /// acceptance bullets.
+    ///
+    /// **One `GET`, conditionally cached, and only when a reviewer opens the card.** REST rather
+    /// than GraphQL for the reason ADR 0005 gives for `/pulls/{n}` and `/check-runs`: GraphQL
+    /// earns its keep on the inbox *sweep*, where one query replaces fifty requests, and a single
+    /// resource by number is one request either way — while the REST URL is what makes the
+    /// conditional-request cache work at all, since ``cacheKey(for:)`` keys on the URL and every
+    /// GraphQL document shares one. The URL is immutable (`/repos/o/r/issues/142`), so unlike
+    /// `/check-runs` it leaves exactly one cache row behind however often it is read, and the
+    /// second reviewer to open the same card pays a `304`.
+    ///
+    /// The endpoint answers for pull requests too; the result carries
+    /// ``ShepherdCore/IssueSummary/isPullRequest`` so the caller can tell, rather than this
+    /// method refusing — `#142` pointing at a pull request is a normal description and the card
+    /// has something honest to say about it.
+    /// - Parameters:
+    ///   - repo: The repository. Always the pull request's own: a `fixes #N` reference is
+    ///     repository-local and Shepherd does not resolve `owner/repo#N`.
+    ///   - number: The issue number.
+    /// - Returns: The issue, with its body as Markdown source.
+    /// - Throws: Any ``GitHubError`` the request maps to — ``GitHubError/notFound(resource:)`` for
+    ///   an issue that does not exist, ``GitHubError/forbidden(message:)`` for one this token
+    ///   cannot see. Both are ordinary answers for a reference somebody typed, and the card turns
+    ///   them into a sentence rather than a toast.
+    public func issue(repo: RepoRef, number: Int) async throws -> IssueSummary {
+        let response = try await performREST(
+            method: "GET",
+            path: "/repos/\(repo.owner)/\(repo.name)/issues/\(number)",
+            queryItems: [],
+            body: nil,
+            useCache: true,
+            resource: "\(repo.fullName)#\(number) issue"
+        )
+        let dto: RESTIssueDTO = try RESTJSON.decode(response.body)
+        guard let summary = ResponseMapping.issueSummary(from: dto, repo: repo) else {
+            throw GitHubError.decoding(
+                message: "\(repo.fullName)#\(number) came back without an issue number"
+            )
+        }
+        return summary
+    }
+
     // MARK: - Closed pull requests (ADR 0027)
 
     /// How many closed pull requests one page asks for. GitHub caps `search` at 100.

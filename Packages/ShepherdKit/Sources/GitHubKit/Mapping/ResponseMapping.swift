@@ -293,6 +293,29 @@ public enum ResponseMapping {
         )
     }
 
+    /// Maps one referenced issue (ADR 0026's amendment).
+    ///
+    /// The repository is passed in rather than read from the payload: a `fixes #N` reference is
+    /// repository-local, the client asked *that* repository's endpoint, and taking the answer's
+    /// own repository would let a redirect quietly change which repository the card is talking
+    /// about.
+    /// - Parameters:
+    ///   - dto: The decoded response.
+    ///   - repo: The repository the read was made against.
+    /// - Returns: The issue, or `nil` when the payload carried no number to identify it by.
+    static func issueSummary(from dto: RESTIssueDTO, repo: RepoRef) -> IssueSummary? {
+        guard let number = dto.number else { return nil }
+        return IssueSummary(
+            repo: repo,
+            number: number,
+            title: dto.title ?? "",
+            bodyMarkdown: dto.body ?? "",
+            state: IssueSummary.State.fromAPI(dto.state ?? ""),
+            isPullRequest: dto.pullRequest != nil,
+            url: dto.htmlUrl.flatMap { URL(string: $0) }
+        )
+    }
+
     /// Maps one review thread, including its comments.
     static func reviewThread(from dto: ReviewThreadDTO, detector: AgentDetector) -> ReviewThread? {
         guard let id = dto.id else { return nil }

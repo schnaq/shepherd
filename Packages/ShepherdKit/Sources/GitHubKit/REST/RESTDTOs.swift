@@ -91,6 +91,26 @@ struct RESTReviewDTO: Decodable {
     var commitId: String?
 }
 
+/// `GET /repos/{owner}/{repo}/issues/{number}`.
+///
+/// The endpoint serves pull requests as well as issues, and the only thing that tells them apart
+/// is the presence of the `pull_request` object — GitHub's own documented marker. Everything here
+/// is optional because a body Shepherd cannot read is a `nil` field rather than a thrown error:
+/// an issue with no description is ordinary.
+struct RESTIssueDTO: Decodable {
+    /// Present only when the resource is actually a pull request.
+    struct PullRequestMarker: Decodable {
+        var htmlUrl: String?
+    }
+
+    var number: Int?
+    var title: String?
+    var body: String?
+    var state: String?
+    var htmlUrl: String?
+    var pullRequest: PullRequestMarker?
+}
+
 /// `GET /repos/{owner}/{repo}/commits/{ref}/check-runs`.
 struct RESTCheckRunsDTO: Decodable {
     struct Run: Decodable {
