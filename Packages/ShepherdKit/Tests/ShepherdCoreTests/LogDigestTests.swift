@@ -40,10 +40,11 @@ final class LogDigestTests: XCTestCase {
     /// whatever directory `swift test` was run from.
     private func fixtureDirectory() -> URL {
         URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent() // ShepherdCoreTests
-            .deletingLastPathComponent() // Tests
-            .deletingLastPathComponent() // ShepherdKit
-            .deletingLastPathComponent() // Packages
+            .deletingLastPathComponent() // …/Tests/ShepherdCoreTests
+            .deletingLastPathComponent() // …/Tests
+            .deletingLastPathComponent() // …/ShepherdKit
+            .deletingLastPathComponent() // …/Packages
+            .deletingLastPathComponent() // the repository root
             .appendingPathComponent("Tests/Fixtures/eval")
     }
 
