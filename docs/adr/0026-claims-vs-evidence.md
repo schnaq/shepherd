@@ -78,9 +78,67 @@ bulk**, for the reason [ADR 0020](0020-apple-native-text-intelligence.md) and AD
 thread-digest amendment give about third-party prose: the description is somebody else's text and
 this card is not something the reviewer clicked.
 
+## Amendment (2026-09-03): the tier-2 extraction, attended and additive
+
+Additive, and inside the decision above rather than beside it: the four claim shapes, the evidence
+rules, the no-score rule and the "on-device only, never a cloud pass" line are all unchanged. What
+lands is the optional pass the **Tiers** section above already describes as a later step, and it is
+in this ADR rather than in one of its own because it changes nothing about what the card *is* — it
+only adds rows to it.
+
+**Attended by the expansion, and by nothing else.** The pass runs when the reviewer opens or
+expands the card, once per pull request, and there is no button: a control labelled *read this*
+beside a card that is already complete would be asking the reviewer to decide something they have
+no way to judge, and the expansion is the click. Nothing calls it from a sweep, from the sync pass
+or from bulk triage. That is the whole of the difference between this and the model feature the
+Context section refuses: a card that opens unattended on every pull request still costs no model
+call, because a *collapsed* card reads nothing and an agent's expanded card is one the reviewer is
+looking at.
+
+**Additive, and provably so.** `ClaimList.merged(into:)` (pure, in `ShepherdCore`, Linux-tested)
+takes the deterministic claims and returns them **unchanged** — same kinds, same quotes, same
+verdicts once the report is recomposed — with the model's additions in the card's own order. A
+model claim whose `Kind.dedupKey` matches a pattern claim is dropped, so the card never asks the
+reviewer to read one piece of evidence twice, and what survives is marked `Claim.origin == .model`,
+which is what puts a *Read by the model* tag beside that line's label. `Claim.origin` defaults to
+`.pattern`, so every call site and every test written before this amendment says nothing about
+origin and means what it always meant. A Mac with the model therefore shows a **superset** of the
+same card, and that is a test rather than a comment.
+
+**The evidence is not amended.** A model claim goes through `EvidenceChecker.check(_:in:)` — the
+same function, the same rules, the same facts with the same links into the diff. "Evidence is the
+diff and CI" was never a statement about where the claim came from. There is still no score, still
+no aggregate field, and the tag is not a confidence: the on-device schema carries no confidence
+field at all, because a number beside a claim would be the first number on this card.
+
+**One tier, and no way to reach a second.** The seam is `ClaimExtracting`, whose one production
+implementation is `Intelligence/OnDeviceClaimExtractor.swift`; `ClaimsEvidenceModel` takes that
+seam and nothing else — no router, no base URL, no key — and no request type for claim extraction
+exists on `IntelligenceProvider`, so the two cloud providers are untouched by this and cannot be
+reached from it. This is the unreachability form ADR 0007's thread-digest amendment and ADR 0020
+both use, and the reason is the same one the Tiers section gives: the description is a colleague's
+text, and there is no version of "your colleague's sentence reached the endpoint you configured"
+that is an informed choice by the person who wrote the sentence.
+
+**When the model is not there, nothing is there.** No disabled control, no tooltip and no error
+line: the availability answer is asked once per screen, and until it says yes the card is the
+tier-1 card exactly as it has always been. A pass that *fails* — a guardrail refusal, a description
+that outgrew the window — is not retried and not reported, for the same reason: the reviewer did
+not ask a question, so there is nothing to answer. The budget stays the hard error it always was;
+the body alone is what travels, and the only description that cannot fit is one that is a pasted
+log.
+
+**Nothing new is stored and nothing new acts.** The merged report lives exactly as long as the
+review screen, like the tier-1 one — no `UserDefaults`, no GRDB table, no field in
+`SyncedSettingsDocument` — and the added rows have the same single exit the others do: *Turn into a
+comment*, into a field the reviewer edits.
+
+Turning this into a bulk pass, into a cloud pass, or into anything that lets tier 2 *correct* a
+tier-1 claim has to overturn the paragraphs above rather than widen them.
+
 ## Consequences
 
-- `ShepherdCore/Claims/` is four files, Foundation only, and tested on Linux: a thirty-fixture
+- `ShepherdCore/Claims/` is Foundation only and tested on Linux: a thirty-fixture
   corpus of realistic agent and human descriptions for the extractor, and one case per documented
   evidence rule. Patterns are `NSRegularExpression`, compiled once into statics behind a small
   `ClaimPattern` value, because that is the one engine that behaves identically on a Mac and on the
@@ -95,5 +153,10 @@ this card is not something the reviewer clicked.
 - The card adds **no network read, no write, no setting and no persistence**. It is recomputed from
   the local rows each time the review screen opens, like the CI diagnosis card and the thread
   digest, and it is rebuilt only when the pull request's data actually changes.
+- The tier-2 half is three files and one property: `ShepherdCore/Claims/ClaimList.swift` (the
+  `Codable` twin plus the merge), `Intelligence/ClaimExtracting.swift` (the seam and its
+  availability value), `Intelligence/OnDeviceClaimExtractor.swift` (the `@Generable` mirror, the
+  `.tagging` model, the measured pre-flight) and `Claim.origin`. A further tier for this card is
+  not a case in `IntelligenceProvider`; it is a new ADR.
 - Anything that would turn these lines into a number, gate an action on them, or send the
   description to a configured cloud endpoint has to overturn this decision rather than widen it.

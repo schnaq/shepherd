@@ -157,7 +157,11 @@ Pure logic in `ShepherdCore` (all unit-tested):
   assertion drift and for removed exported declarations per language. Every fact is a sentence with
   an optional `path`/`line`; the status (`ok` / `contradicted` / `unclear`) is *derived from the
   facts* by rules documented per claim. `ClaimsEvidenceReport.build(detail:summary:)` composes the
-  lines and has **no aggregate field at all** — a score would be a verdict.
+  lines and has **no aggregate field at all** — a score would be a verdict. `ClaimList` /
+  `ExtractedClaim` are the `Codable` twin of the optional on-device pass, and
+  `ClaimList.merged(into:)` is what makes that pass *additive*: the pattern claims come out
+  unchanged, a model claim repeating one of them is dropped by the same `dedupKey`, and what
+  survives is marked `Claim.origin == .model` (ADR 0026's tier-2 amendment).
 - `BulkTriagePlan` (`Triage/`) — the whole of bulk triage's judgement as a value (ADR 0015):
   `make(action:pullRequests:) -> BulkTriagePlan` partitions a selection into entries carrying
   either the `steps` to write (`.approve` / `.merge`, in send order) or a `skipReason`, plus
@@ -613,7 +617,8 @@ localised.
 
 Each tier drives the loop in its own shape and they agree on everything that matters:
 `OnDeviceToolBridge` (`FoundationModels` is imported only by the `OnDevice*.swift` files in
-`Intelligence/` — the provider, this bridge, the triage classifier and the thread digester) wraps
+`Intelligence/` — the provider, this bridge, the triage classifier, the thread digester and the
+claim extractor) wraps
 the three tools in `FoundationModels.Tool` conformances with `@Generable` argument structs, and the framework
 drives the calls — so the hop cap lives in the wrappers and the trace is collected by a shared
 `ToolTraceRecorder` actor; `AnthropicProvider` keeps a `tool_use`/`tool_result` transcript, echoing
@@ -656,7 +661,7 @@ the tool's own `resultContent`; the cloud question appears only for a budget fai
 hypothesis"*, no author because the sentence is Shepherd's) and opens the delegation sheet, where
 Run stays the reviewer's click. Nothing is persisted.
 
-### Claims vs. Evidence (tier 1 only, ADR 0026)
+### Claims vs. Evidence (tier 1, plus one optional on-device pass, ADR 0026)
 
 `Features/Review/ClaimsEvidenceModel.swift` and `ClaimsEvidenceCard.swift`; the card hangs above
 the description in `Features/PullRequest/ConversationView.swift`.
@@ -682,6 +687,24 @@ the outbox or to a saved draft comment.
 
 Evidence facts are English sentences built in `ShepherdCore`, like `FilePrioritizer`'s reasons; the
 card's own chrome goes through `String(localized:)` with a German row (ADR 0022).
+
+**The optional tier-2 pass** (ADR 0026's amendment) hangs off the *expansion* and nothing else.
+`ClaimExtracting` is the seam and `Intelligence/OnDeviceClaimExtractor.swift` its one
+implementation — the `.contentTagging` model, a `@Generable` enum for the four shapes so the
+vocabulary is enforced by guided decoding, `""`/`0` for the two payload fields the way
+`OnDeviceCIDiagnosis` does it, low temperature, a measured pre-flight over the **body alone**, and
+the two `IntelligenceError` cases for a guardrail refusal and a context overflow. **There is
+deliberately no cloud implementation and there may not be one:** the description is a colleague's
+text, so nothing here takes a router, a base URL or a key, and no request type for it exists on
+`IntelligenceProvider`. `AppEnvironment.claimExtractor` is rebuilt beside `intelligence` and is
+`nil` while the tiers are off; `ConversationView` hands it to `ClaimsEvidenceModel.refresh(detail:extractor:)`
+and drives `readWithModel(detail:)` from a `.task(id:)` whose id is `nil` while the card is
+collapsed. The model spends the pass once per `PullRequestDetail` — a failure is not retried
+(ADR 0007's rule) — cancels one whose pull request has gone, folds the answer in through
+`ClaimList.merged(into:)` and runs `EvidenceChecker` for the *new* lines only, so a pattern line's
+verdict is the same value it was. The card's whole visible share of it is a `Read by the model`
+chip on those lines and one caption (`Read on-device`, or a spinner while reading). Nothing is
+persisted, nothing is reported when the model is absent or declines, and nothing acts.
 
 ## UI conventions
 

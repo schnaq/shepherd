@@ -235,9 +235,16 @@ check is green.
 **There is no score, and there never will be** — no number, no badge, no "looks safe". The card
 lists what the description claims and what the diff and CI show, and the judgement is yours
 ([ADR 0026](adr/0026-claims-vs-evidence.md)). It runs entirely on data Shepherd already fetched:
-no model, no network read, nothing stored. On an agent's pull request it opens expanded; on a
-person's it is a header you can open ([ADR 0008](adr/0008-agent-provenance-first-class.md)). A
-description that claims nothing gets no card at all.
+no network read, nothing stored. On an agent's pull request it opens expanded; on a person's it is
+a header you can open ([ADR 0008](adr/0008-agent-provenance-first-class.md)). A description that
+claims nothing gets no card at all.
+
+Opening the card also lets Apple's on-device model read that same description once, for the
+phrasings the patterns miss. A line it found carries a small **Read by the model** tag and is
+checked against the diff and CI exactly like every other line — same glyph, same facts, same links,
+still no score. The description never leaves the Mac, nothing is read on a card you have not
+opened, and on a Mac without the model there is no tag, no caption and no error: the card is
+complete without it.
 ### Since your review — only what changed in the fix round
 
 The agent pushes a fix round, and the review screen opens on **Since your review** instead of on the
