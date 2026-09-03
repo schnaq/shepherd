@@ -237,6 +237,15 @@ public struct PullRequestDetail: Sendable, Codable, Hashable, Identifiable {
     public var timeline: [TimelineEvent]
     /// Check runs of the head commit.
     public var checks: [CheckRun]
+    /// The issues GitHub says merging this pull request will close (ADR 0032, Sprint 3).
+    ///
+    /// `closingIssuesReferences`, capped at ten, read as one more field on the same detail fetch
+    /// the review threads come from. Empty means one of two things and the screen treats them
+    /// alike, because a reader cannot act on the difference: the pull request closes nothing, or
+    /// that one field of the fetch failed and was tolerated
+    /// (`GitHubClient.pullRequestDetail(repo:number:)`) — the "Closes" section is simply not
+    /// drawn either way.
+    public var closingIssues: [LinkedIssueReference]
 
     /// Creates a detail record.
     public init(
@@ -246,7 +255,8 @@ public struct PullRequestDetail: Sendable, Codable, Hashable, Identifiable {
         files: [ChangedFile] = [],
         threads: [ReviewThread] = [],
         timeline: [TimelineEvent] = [],
-        checks: [CheckRun] = []
+        checks: [CheckRun] = [],
+        closingIssues: [LinkedIssueReference] = []
     ) {
         self.summary = summary
         self.bodyMarkdown = bodyMarkdown
@@ -255,6 +265,40 @@ public struct PullRequestDetail: Sendable, Codable, Hashable, Identifiable {
         self.threads = threads
         self.timeline = timeline
         self.checks = checks
+        self.closingIssues = closingIssues
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case summary
+        case bodyMarkdown
+        case commits
+        case files
+        case threads
+        case timeline
+        case checks
+        case closingIssues
+    }
+
+    /// Decodes a detail record, tolerating every list being absent.
+    ///
+    /// ``Claim/init(from:)``'s rule applied to a bigger type: the ``summary`` *is* the pull
+    /// request and is required, and every list is a list of things a fetch may not have learned
+    /// anything about — so an absent one decodes as empty rather than failing the whole record.
+    /// ``closingIssues`` is the reason the initialiser exists at all: a value encoded before that
+    /// field existed carries no key for it, and a synthesised initialiser would refuse it.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        summary = try container.decode(PullRequestSummary.self, forKey: .summary)
+        bodyMarkdown = try container.decodeIfPresent(String.self, forKey: .bodyMarkdown) ?? ""
+        commits = try container.decodeIfPresent([CommitInfo].self, forKey: .commits) ?? []
+        files = try container.decodeIfPresent([ChangedFile].self, forKey: .files) ?? []
+        threads = try container.decodeIfPresent([ReviewThread].self, forKey: .threads) ?? []
+        timeline = try container.decodeIfPresent([TimelineEvent].self, forKey: .timeline) ?? []
+        checks = try container.decodeIfPresent([CheckRun].self, forKey: .checks) ?? []
+        closingIssues = try container.decodeIfPresent(
+            [LinkedIssueReference].self,
+            forKey: .closingIssues
+        ) ?? []
     }
 
     /// `PullRequestDetail` shares the identity of its ``summary``.

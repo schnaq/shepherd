@@ -66,6 +66,53 @@ public struct LinkedPullRequestReference: Sendable, Codable, Hashable, Identifia
     public var slug: String { id }
 }
 
+/// An issue that GitHub says a pull request will close.
+///
+/// ``LinkedPullRequestReference``'s mirror image, and deliberately its own type rather than a
+/// second ``IssueRowSummary``: `closingIssuesReferences` carries four fields, the issue may live
+/// in another repository, and it may be an issue the issues sweep never returned at all — the
+/// user is not assigned to it, did not open it and is not mentioned in it. So this is what the
+/// pull request's own detail fetch saw, stored by value beside the pull request, exactly as the
+/// links on the issue side are stored beside the issue (ADR 0032).
+///
+/// There is no author here where the pull-request side has one: a provenance chip answers "did a
+/// machine write this", which is a question about a pull request and not about an issue.
+public struct LinkedIssueReference: Sendable, Codable, Hashable, Identifiable {
+    /// The repository the issue lives in.
+    ///
+    /// Stored rather than inherited from the pull request: `closingIssuesReferences` may
+    /// perfectly well name an issue in another repository, and the reference is about what the
+    /// detail fetch saw.
+    public var repo: RepoRef
+    /// The issue number within its repository.
+    public var number: Int
+    /// The issue title.
+    public var title: String
+    /// Whether the issue is open or closed — ``IssueSummary/State``, reused rather than
+    /// re-declared, for the reason ``IssueRowSummary/state`` reuses it: the open/closed/unknown
+    /// vocabulary is the one thing every issue-shaped type in Shepherd shares.
+    public var state: IssueSummary.State
+
+    /// Creates a reference.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - number: The issue number.
+    ///   - title: The issue title.
+    ///   - state: Whether it is open or closed.
+    public init(repo: RepoRef, number: Int, title: String, state: IssueSummary.State) {
+        self.repo = repo
+        self.number = number
+        self.title = title
+        self.state = state
+    }
+
+    /// A reference is identified by its repository and number.
+    public var id: String { "\(repo.fullName)#\(number)" }
+
+    /// `owner/name#number`, the shorthand used in rows and logs.
+    public var slug: String { id }
+}
+
 /// One row of the issues inbox.
 ///
 /// The issue-side twin of ``PullRequestSummary``: everything the list view needs comes from a
