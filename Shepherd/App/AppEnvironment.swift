@@ -158,6 +158,21 @@ final class AppEnvironment {
     /// The provider router, rebuilt whenever the intelligence settings change.
     private(set) var intelligence: IntelligenceRouter = .disabled
 
+    /// The optional tier-2 reader behind the claims card, or `nil` when the tiers are off
+    /// (ADR 0026's amendment).
+    ///
+    /// Rebuilt beside ``intelligence`` rather than stored once, because "the tiers are off" is a
+    /// setting the user can change while a review screen is open, and a seam captured at launch
+    /// would keep reading descriptions after they switched the model off. There is no router, no
+    /// base URL and no key in it: the description is somebody else's text, so the *only*
+    /// implementation of ``ClaimExtracting`` is the on-device one and there may not be another
+    /// (ADR 0026, ADR 0007's on-device-only amendment).
+    ///
+    /// It is on for both model-bearing modes rather than only for `.onDevice`: the mode chooses
+    /// whether a *cloud* rung exists, and this feature has none, so `.onDeviceAndCloud` means
+    /// the same thing here as `.onDevice`.
+    private(set) var claimExtractor: (any ClaimExtracting)?
+
     /// The signed-in session, when there is one.
     var session: SignedInSession? {
         if case .signedIn(let session) = phase { return session }
@@ -813,6 +828,9 @@ final class AppEnvironment {
             : KeychainSecretStore.Key.openAICompatibleAPIKey
         configuration.cloudAPIKey = ((try? secretStore.secret(for: key)) ?? nil) ?? ""
         intelligence = IntelligenceRouter(configuration: configuration)
+        // Created here rather than held from launch, and created *inert*: nothing is loaded and
+        // no session exists until a reviewer expands a claims card (ADR 0026's amendment).
+        claimExtractor = settings.intelligenceMode == .off ? nil : OnDeviceClaimExtractor()
     }
 
     /// Assembles the surfaces encrypted settings sync needs (ADR 0014).

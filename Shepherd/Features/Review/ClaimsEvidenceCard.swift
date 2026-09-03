@@ -23,6 +23,12 @@ import SwiftUI
 /// - **Collapsed for people, expanded for agents.** ADR 0008's provenance facet: on a human pull
 ///   request the card is a header the reviewer can open, on an agent's it is the first thing they
 ///   read.
+/// - **A claim the on-device model added says so, and nothing else changes.** Opening the card
+///   also spends the optional tier-2 pass (ADR 0026's amendment), and the only marks it leaves
+///   are a *Read by the model* tag beside that line's label and one caption under the rows. The
+///   pattern lines are byte-for-byte the lines they were, the model's line carries the same
+///   glyph, the same facts and the same *Turn into a comment* button as any other, and on a Mac
+///   without the model there is no tag, no caption and no error — just this card.
 struct ClaimsEvidenceCard: View {
     /// What to draw and what the buttons do.
     let model: ClaimsEvidenceModel
@@ -58,6 +64,7 @@ struct ClaimsEvidenceCard: View {
                         } else if model.state.didInsertIntoSummary {
                             insertedConfirmation
                         }
+                        readingCaption
                         footnote
                     }
                 }
@@ -130,10 +137,22 @@ struct ClaimsEvidenceCard: View {
                     .frame(width: 13)
                     .accessibilityLabel(ClaimsEvidenceCard.statusLabel(line.verdict.status))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(ClaimsEvidenceCard.claimLabel(line.claim.kind))
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Theme.textStrong)
-                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(alignment: .firstTextBaseline, spacing: 5) {
+                        Text(ClaimsEvidenceCard.claimLabel(line.claim.kind))
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Theme.textStrong)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if line.claim.origin == .model {
+                            ChipView(
+                                text: String(localized: "Read by the model"),
+                                color: Theme.textMuted,
+                                size: 9.5
+                            )
+                            .help(String(
+                                localized: "Shepherd's patterns did not find this sentence; the on-device model did. Its evidence is checked exactly like every other line's."
+                            ))
+                        }
+                    }
                     Text(line.claim.quote)
                         .font(.system(size: 11.5))
                         .foregroundStyle(Theme.textSecondary)
@@ -264,6 +283,33 @@ struct ClaimsEvidenceCard: View {
         }
         .font(.system(size: 11))
         .foregroundStyle(Theme.accentText)
+    }
+
+    /// The one line the optional on-device pass is allowed to draw (ADR 0026's amendment).
+    ///
+    /// A spinner while the model is reading, then *Read on-device* for as long as the card holds
+    /// a claim it found — and **nothing at all** in every other case: with no model on this Mac,
+    /// with the tiers switched off, or when the patterns already had everything. There is no
+    /// button here and no failure line: the reviewer opened a card, not a model, and the card
+    /// below this line is complete without the pass. "Read on-device" is a statement about
+    /// privacy rather than a badge, exactly like ``ThreadDigestCard``'s caption: the description
+    /// is somebody else's text, and this is where a reviewer finds out it did not travel.
+    @ViewBuilder
+    private var readingCaption: some View {
+        if model.state.showsReadingCaption {
+            HStack(spacing: 5) {
+                if model.state.isReading {
+                    ProgressView().controlSize(.small)
+                    Text(String(localized: "Reading the description on-device…"))
+                } else {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 9))
+                    Text(String(localized: "Read on-device"))
+                }
+            }
+            .font(.system(size: 10.5))
+            .foregroundStyle(Theme.textMuted)
+        }
     }
 
     private var footnote: some View {

@@ -7111,6 +7111,26 @@
         }
       }
     },
+    "Read by the model": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vom Modell gelesen"
+          }
+        }
+      }
+    },
+    "Read on-device": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On-device gelesen"
+          }
+        }
+      }
+    },
     "Read the diff of one file": {
       "localizations": {
         "de": {
@@ -7147,6 +7167,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Die letzten Zeilen eines Job-Logs gelesen"
+          }
+        }
+      }
+    },
+    "Reading the description on-device…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beschreibung wird on-device gelesen…"
           }
         }
       }
@@ -8337,6 +8367,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Shepherd — nichts zu reviewen"
+          }
+        }
+      }
+    },
+    "Shepherd's patterns did not find this sentence; the on-device model did. Its evidence is checked exactly like every other line's.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherds Muster haben diesen Satz nicht gefunden, das On-Device-Modell schon. Die Belege dazu werden genau wie bei jeder anderen Zeile geprüft."
           }
         }
       }

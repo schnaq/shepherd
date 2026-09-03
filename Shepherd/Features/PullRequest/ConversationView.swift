@@ -24,7 +24,9 @@ struct ConversationView: View {
     /// The claims-vs-evidence card above the description (ADR 0026).
     ///
     /// One per review screen, holding the report so that walking every hunk of every file does not
-    /// happen on every redraw; it draws nothing at all when the description claims nothing.
+    /// happen on every redraw; it draws nothing at all when the description claims nothing. It
+    /// also owns the optional on-device pass over the same description, which is spent when the
+    /// reviewer *opens* the card and never otherwise (ADR 0026's amendment).
     @State private var claims = ClaimsEvidenceModel()
 
     var body: some View {
@@ -44,7 +46,7 @@ struct ConversationView: View {
         }
         .background(Theme.background)
         .onChange(of: model.detail, initial: true) { _, detail in
-            claims.refresh(detail: detail)
+            claims.refresh(detail: detail, extractor: environment.claimExtractor)
         }
     }
 
@@ -67,6 +69,20 @@ struct ConversationView: View {
                 model.summaryText = text
             }
         )
+        .task(id: claimsReadTrigger) {
+            await claims.readWithModel(detail: model.detail)
+        }
+    }
+
+    /// What has to change before the optional on-device pass is worth attempting again.
+    ///
+    /// `nil` while the card is collapsed, which is the whole of "the pass is attended": the
+    /// reviewer expanding the card is what starts it, and there is no button because the
+    /// expansion *is* the click (ADR 0026's amendment). A new pull request — or new data for the
+    /// same one — is the other half, and the model refuses a second pass for the same detail
+    /// itself, so a collapse and re-open costs nothing.
+    private var claimsReadTrigger: PullRequestDetail? {
+        claims.state.isExpanded ? model.detail : nil
     }
 
     /// "You have said this three times." — the feedback loop's card (ADR 0029).
