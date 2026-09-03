@@ -180,7 +180,10 @@ struct IssueSidebar: View {
     @ViewBuilder
     private var ageFacet: some View {
         let facets = model.ageFacets
-        if facets.count > 1 {
+        // Present whenever any bucket is populated, like LABELS and REPOSITORIES: a backlog that
+        // is all "Older" still deserves the row that says so. Only the two-valued agent facet
+        // hides itself when it could not split the list.
+        if !facets.isEmpty {
             VStack(alignment: .leading, spacing: 2) {
                 RailSectionHeader(title: String(localized: "AGE"))
                 ForEach(facets) { facet in

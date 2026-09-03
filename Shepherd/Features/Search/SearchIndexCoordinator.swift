@@ -676,6 +676,10 @@ final class SearchIndexCoordinator {
                 if Task.isCancelled { break }
                 next = self.takePendingIssueRows()
             }
+            // Unconditionally, as the pull-request pass does: a cancel that lands mid-batch
+            // returns out of `runIssuePass` before its own reset, and the Settings card would
+            // otherwise say "Indexing…" for as long as semantic search stays off.
+            self.status.isIndexing = false
             self.issuePassTask = nil
         }
     }

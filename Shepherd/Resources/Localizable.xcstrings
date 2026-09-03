@@ -5211,42 +5211,12 @@
         }
       }
     },
-    "Indexing %lld pull requests…": {
+    "Indexing %lld pull requests and %lld issues…": {
       "localizations": {
         "de": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld Pull Request wird indexiert…"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld Pull Requests werden indexiert…"
-                }
-              }
-            }
-          }
-        },
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "Indexing %lld pull request…"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "Indexing %lld pull requests…"
-                }
-              }
-            }
+          "stringUnit": {
+            "state": "translated",
+            "value": "Indexiere %lld Pull Requests und %lld Issues …"
           }
         }
       }

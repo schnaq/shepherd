@@ -969,7 +969,7 @@ struct IntelligenceSettingsTab: View {
         )
         guard let last = status.lastIndexedAt else {
             guard status.isIndexing else { return String(localized: "Nothing indexed yet.") }
-            return String(localized: "Indexing \(status.documentCount) pull requests…")
+            return String(localized: "Indexing \(status.documentCount) pull requests and \(status.issueDocumentCount) issues…")
         }
         return String(
             localized: "\(status.embeddedCount) of \(status.documentCount) pull requests and \(status.issueEmbeddedCount) of \(status.issueDocumentCount) issues indexed · \(sizeText) · last updated \(RelativeDate.long(last))."
