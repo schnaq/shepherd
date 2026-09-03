@@ -62,6 +62,12 @@ new events and new `details` keys are additive and stay at `v: 1`. Every key is 
 present — a value that does not apply is `null`, never omitted. Key *order* is alphabetical as
 an artefact of canonical encoding; JSON objects are unordered, so do not depend on it.
 
+One event — `issue.closed` — is about an **issue** rather than a pull request, and its envelope
+carries an `issue` object where the others carry `pullRequest`. Nothing else changes, and no
+event that existed before it gained, lost or renamed a key, so it stays at `v: 1`. Switch on
+`event` (or the `X-Shepherd-Event` header) and you already know which of the two you are getting;
+there is never both and never an empty one.
+
 ```json
 {
   "v": 1,
@@ -108,6 +114,35 @@ an artefact of canonical encoding; JSON objects are unordered, so do not depend 
 `authorKind: "unknown"` with empty strings happens in one narrow case: a merge that succeeds
 just after the inbox sweep pruned the row, leaving nothing to describe it with. The shape does
 not change — only `owner`, `repo`, `number`, `nodeId` and `url` are populated.
+
+### The `issue` object
+
+`issue.closed` carries this instead of `pullRequest`:
+
+```json
+{
+  "owner": "schnaq",
+  "repo": "review",
+  "number": 128,
+  "nodeId": "I_kwDOexample",
+  "title": "The login flow drops the session",
+  "url": "https://github.com/schnaq/review/issues/128",
+  "author": "octocat",
+  "authorKind": "human",
+  "isAgentAuthored": false,
+  "agentId": null
+}
+```
+
+Ten keys, and deliberately not eighteen: an issue has no branch, no base branch, no head SHA, no
+draft flag and no diff counts, so it carries none of them rather than nulling them. It also
+carries no body, no labels and no comment count — the payload says *what happened*, and the `url`
+is where the substance is.
+
+`authorKind: "unknown"` with empty strings has the same meaning here as above, and it is a
+**more likely** answer: closing an issue is exactly what makes the next sweep drop its row, so a
+slow POST can outlive the local copy. `owner`, `repo`, `number`, `nodeId` and `url` are always
+populated.
 
 ## Events
 
@@ -200,6 +235,28 @@ outbox drain once the merge really reached GitHub — so an automatic merge prod
 and a merge that was parked because somebody pushed in between produces only this one. Correlate
 them on `pullRequest.nodeId` plus `pullRequest.headSha`, not on `id`, which is per delivery.
 
+### `issue.closed`
+
+An issue Shepherd closed reached GitHub. Fires from the outbox drain, like `review.submitted`
+and `pr.merged`, and for the same reason: a close still waiting out a retry has closed nothing.
+The envelope carries an [`issue` object](#the-issue-object), **not** a `pullRequest`.
+
+```json
+{ "reason": "completed" }
+```
+
+| Key | Values |
+| --- | --- |
+| `reason` | `"completed"` · `"not_planned"` — GitHub's own `state_reason`, unmapped. |
+
+Only the *close* is an event. Shepherd also queues issue comments, labels, assignees and reopens
+through the same outbox, and those are deliberately mapped to nothing: v1 promised no event for
+them, and adding one later is additive.
+
+This fires only for issues **Shepherd** closed. An issue somebody closed on github.com simply
+leaves the inbox on the next sweep, and the sweep cannot tell you why it went — the same
+reasoning that keeps `pr.merged` to merges Shepherd performed.
+
 ### `shepherd.test`
 
 Sent only by the *Send test event* button, so you can wire a workflow up before any real event
@@ -256,3 +313,5 @@ server-side one.
 | Nothing arrives, no status line | The event is not ticked, or the toggle is off. A gated event is never an attempt. |
 | Signature never matches | The HMAC must be over the raw body bytes, and the secret must be byte-identical. |
 | No `pr.merged` for a pull request somebody else merged | By design; see above. |
+| `$json.pullRequest` is undefined | The event is `issue.closed`, which carries `issue` instead. Route on `event` first. |
+| No `issue.closed` for an issue closed on github.com | By design; see above. |

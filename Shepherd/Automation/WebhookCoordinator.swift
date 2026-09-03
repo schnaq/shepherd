@@ -13,11 +13,20 @@ struct WebhookPlan: Sendable, Equatable {
     var kind: WebhookEventKind
     /// The event-specific payload.
     var details: WebhookEventDetails
-    /// How to name (or look up) the pull request.
+    /// How to name (or look up) the target.
+    ///
+    /// Named for the pull request it usually is; an issue-shaped event reuses the same three
+    /// fields for the issue's node id, repository and number, exactly as
+    /// ``ShepherdCore/OutboxItem`` reuses its own (ADR 0032).
     var identity: WebhookPullRequest.Identity
     /// The pull request, when the internal event already carried it. When `nil`, the
     /// coordinator reads it out of the local database before sending.
     var summary: PullRequestSummary?
+    /// The issue, when the internal event already carried it. Only ever set for a plan whose
+    /// ``WebhookEventKind/isAboutAnIssue`` is `true`; `nil` there means the coordinator reads the
+    /// row out of the local database before sending, and falls back to the identity when the
+    /// sweep has already pruned it.
+    var issue: WebhookIssue?
     /// When the thing happened.
     var occurredAt: Date
 }
@@ -40,6 +49,10 @@ struct WebhookPlan: Sendable, Equatable {
 /// - `pr.auto_merge_queued` is the single, deliberate exception (ADR 0018): it reports that
 ///   Shepherd *decided* to merge something unattended, which is a fact at the enqueue. The merge
 ///   reaching GitHub is still reported separately, by `pr.merged` from the drain.
+/// - `issue.closed` comes from `mutationSent` too (ADR 0032's Sprint 4a amendment), which is why
+///   it is the *close* that is an event and not the comment, the label, the assignee or the
+///   reopen queued beside it: those four are sent by the same drain and are deliberately mapped
+///   to nothing, because v1 promised no event for them and adding one later is additive.
 ///
 /// Everything else — thread replies, resolves, "ready for review", CI failures, sync
 /// failures, generic updates — is not an event this version promises, and mapping it later is
@@ -149,16 +162,30 @@ final class WebhookCoordinator {
         // captured by value so the task carries the settings as they were when the event
         // happened, rather than reading them again after the fact.
         Task { [dispatcher, configuration] in
-            var summary = plan.summary
-            if summary == nil, let database {
-                summary = try? await database.fetchPullRequestSummary(id: plan.identity.prID)
+            let subject: WebhookEvent.Subject
+            if plan.kind.isAboutAnIssue {
+                var issue = plan.issue
+                if issue == nil, let database,
+                   let row = try? await database.fetchIssueSummary(id: plan.identity.prID) {
+                    issue = WebhookIssue(summary: row)
+                }
+                // Closing an issue is exactly what makes the next sweep prune its row, so the
+                // fallback here is a normal path rather than a defensive one.
+                subject = .issue(issue ?? WebhookIssue(identity: plan.identity))
+            } else {
+                var summary = plan.summary
+                if summary == nil, let database {
+                    summary = try? await database.fetchPullRequestSummary(id: plan.identity.prID)
+                }
+                subject = .pullRequest(
+                    summary.map(WebhookPullRequest.init(summary:))
+                        ?? WebhookPullRequest(identity: plan.identity)
+                )
             }
-            let pullRequest = summary.map(WebhookPullRequest.init(summary:))
-                ?? WebhookPullRequest(identity: plan.identity)
             await dispatcher.deliver(
                 WebhookEvent(
                     event: plan.kind,
-                    pullRequest: pullRequest,
+                    subject: subject,
                     details: plan.details,
                     occurredAt: plan.occurredAt
                 ),
@@ -221,7 +248,23 @@ final class WebhookCoordinator {
                     summary: nil,
                     occurredAt: sent.sentAt
                 )
-            case .replyPosted, .threadResolved, .threadUnresolved, .markedReadyForReview:
+            case .issueClosed(let reason):
+                return WebhookPlan(
+                    kind: .issueClosed,
+                    details: .issueClosed(reason: reason),
+                    // The identity's three fields name the *issue* here.
+                    identity: identity,
+                    summary: nil,
+                    // Looked up rather than carried: the drain announces a node id, and the row
+                    // is still in the database at this moment more often than not.
+                    issue: nil,
+                    occurredAt: sent.sentAt
+                )
+            case .replyPosted, .threadResolved, .threadUnresolved, .markedReadyForReview,
+                 .issueCommentAdded, .issueLabelAdded, .issueAssigneeAdded, .issueReopened:
+                // Sent, and deliberately not events this version promises. A comment, a label,
+                // an assignee and a reopen are the issue-side twins of the four pull-request
+                // writes above them, and mapping any of them later is an additive change.
                 return nil
             }
 

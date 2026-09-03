@@ -160,6 +160,7 @@ final class WebhookTests: XCTestCase {
             [
                 "delegation.finished",
                 "inbox.new_review_request",
+                "issue.closed",
                 "pr.auto_merge_queued",
                 "pr.merged",
                 "review.submitted",
@@ -168,7 +169,13 @@ final class WebhookTests: XCTestCase {
         )
         // The test event is delivered by a button, never subscribed to.
         XCTAssertFalse(WebhookEventKind.userSelectable.contains(.test))
-        XCTAssertEqual(WebhookEventKind.userSelectable.count, 5)
+        XCTAssertEqual(WebhookEventKind.userSelectable.count, 6)
+        // Exactly one event describes an issue; every other one describes a pull request, and
+        // the two shapes are the whole vocabulary.
+        XCTAssertEqual(
+            WebhookEventKind.allCases.filter(\.isAboutAnIssue),
+            [.issueClosed]
+        )
         for kind in WebhookEventKind.allCases {
             XCTAssertFalse(kind.title.isEmpty)
             XCTAssertFalse(kind.explanation.isEmpty)
@@ -803,5 +810,170 @@ final class WebhookTests: XCTestCase {
 
     private func mutation(_ kind: SentMutation.Kind) -> SentMutation {
         SentMutation(prID: "PR_1", repo: repo, number: 42, kind: kind, sentAt: occurredAt)
+    }
+
+    // MARK: - The issue object and `issue.closed` (ADR 0032's Sprint 4a amendment)
+
+    private func issueRow(
+        author: ShepherdCore.Actor? = nil
+    ) -> IssueRowSummary {
+        IssueRowSummary(
+            id: "I_kwDOissue",
+            repo: repo,
+            number: 128,
+            title: "The login flow drops the session",
+            author: author
+                ?? ShepherdCore.Actor(
+                    login: "example-agent[bot]",
+                    displayName: nil,
+                    avatarURL: nil,
+                    kind: .agent(
+                        AgentIdentity(
+                            id: "example-agent",
+                            displayName: "Example Agent",
+                            matchedBy: .login
+                        )
+                    )
+                ),
+            createdAt: occurredAt,
+            updatedAt: occurredAt,
+            state: .closed,
+            stateReason: "COMPLETED",
+            labels: ["bug"]
+        )
+    }
+
+    private func issueEvent(
+        details: WebhookEventDetails = .issueClosed(reason: "completed"),
+        issue: WebhookIssue? = nil
+    ) -> WebhookEvent {
+        WebhookEvent(
+            event: .issueClosed,
+            issue: issue ?? WebhookIssue(summary: issueRow()),
+            details: details,
+            occurredAt: occurredAt,
+            deliveryID: deliveryID
+        )
+    }
+
+    func testAnIssueEnvelopeCarriesAnIssueObjectWhereAPullRequestOneCarriesAPullRequest() throws {
+        let json = try object(issueEvent())
+
+        XCTAssertEqual(
+            json.keys.sorted(),
+            ["details", "event", "id", "issue", "occurredAt", "source", "v"],
+            "one subject key or the other, never both and never an empty one"
+        )
+        XCTAssertNil(json["pullRequest"], "a receiver must not have to guard an empty object")
+        XCTAssertEqual(json["v"] as? Int, 1, "additive: no existing event changed shape")
+        XCTAssertEqual(json["event"] as? String, "issue.closed")
+    }
+
+    func testTheIssueObjectSaysWhereItIsAndWhoWroteItAndNothingElse() throws {
+        let json = try nested(try object(issueEvent()), "issue")
+
+        XCTAssertEqual(
+            json.keys.sorted(),
+            [
+                "agentId", "author", "authorKind", "isAgentAuthored", "nodeId", "number",
+                "owner", "repo", "title", "url",
+            ],
+            "no body, no labels, no comment count: the payload says what happened"
+        )
+        XCTAssertEqual(json["owner"] as? String, "schnaq")
+        XCTAssertEqual(json["repo"] as? String, "review")
+        XCTAssertEqual(json["number"] as? Int, 128)
+        XCTAssertEqual(json["nodeId"] as? String, "I_kwDOissue")
+        XCTAssertEqual(json["title"] as? String, "The login flow drops the session")
+        XCTAssertEqual(json["url"] as? String, "https://github.com/schnaq/review/issues/128")
+        XCTAssertEqual(json["authorKind"] as? String, "agent")
+        XCTAssertEqual(json["isAgentAuthored"] as? Bool, true)
+        XCTAssertEqual(json["agentId"] as? String, "example-agent")
+    }
+
+    func testAHumanAuthoredIssueNullsTheAgentIdExplicitly() throws {
+        let human = ShepherdCore.Actor(
+            login: "octocat",
+            displayName: nil,
+            avatarURL: nil,
+            kind: .human
+        )
+        let json = try nested(
+            try object(issueEvent(issue: WebhookIssue(summary: issueRow(author: human)))),
+            "issue"
+        )
+        XCTAssertEqual(json["authorKind"] as? String, "human")
+        XCTAssertEqual(json["isAgentAuthored"] as? Bool, false)
+        XCTAssertTrue(json["agentId"] is NSNull, "a missing key and a null key are not the same")
+    }
+
+    func testAnIssueTheSweepAlreadyPrunedStillProducesTheFullShape() throws {
+        // The likely case rather than a defensive one: closing the issue is exactly what makes
+        // the next sweep drop its row.
+        let pruned = WebhookIssue(
+            identity: WebhookPullRequest.Identity(
+                prID: "I_gone",
+                repo: repo,
+                number: 128
+            )
+        )
+        let json = try nested(try object(issueEvent(issue: pruned)), "issue")
+        XCTAssertEqual(
+            json.keys.sorted(),
+            [
+                "agentId", "author", "authorKind", "isAgentAuthored", "nodeId", "number",
+                "owner", "repo", "title", "url",
+            ]
+        )
+        XCTAssertEqual(json["authorKind"] as? String, "unknown")
+        XCTAssertEqual(json["title"] as? String, "")
+        XCTAssertEqual(json["url"] as? String, "https://github.com/schnaq/review/issues/128")
+    }
+
+    func testTheCloseDetailsCarryGitHubsOwnReasonWord() throws {
+        let json = try nested(
+            try object(issueEvent(details: .issueClosed(reason: "not_planned"))),
+            "details"
+        )
+        XCTAssertEqual(json.keys.sorted(), ["reason"])
+        XCTAssertEqual(json["reason"] as? String, "not_planned")
+    }
+
+    func testAClosedIssueBecomesAnIssueClosedEvent() throws {
+        let plan = try XCTUnwrap(
+            WebhookCoordinator.plan(for: .mutationSent(issueMutation(.issueClosed(reason: "completed"))))
+        )
+        XCTAssertEqual(plan.kind, .issueClosed)
+        XCTAssertEqual(plan.details, .issueClosed(reason: "completed"))
+        XCTAssertEqual(plan.identity.prID, "I_kwDOissue", "the identity names the issue")
+        XCTAssertEqual(plan.identity.number, 128)
+        XCTAssertEqual(plan.occurredAt, occurredAt)
+        XCTAssertNil(plan.summary)
+        XCTAssertNil(plan.issue, "the event only names the issue; it is looked up")
+    }
+
+    func testTheOtherFourIssueWritesAreSentButAreNotEventsThisVersionPromises() {
+        let ignored: [SentMutation.Kind] = [
+            .issueCommentAdded,
+            .issueLabelAdded(name: "needs-triage"),
+            .issueAssigneeAdded(login: "octocat"),
+            .issueReopened,
+        ]
+        for kind in ignored {
+            XCTAssertNil(
+                WebhookCoordinator.plan(for: .mutationSent(issueMutation(kind))),
+                "\(kind) reached GitHub, but v1 promises no event for it"
+            )
+        }
+    }
+
+    private func issueMutation(_ kind: SentMutation.Kind) -> SentMutation {
+        SentMutation(
+            prID: "I_kwDOissue",
+            repo: repo,
+            number: 128,
+            kind: kind,
+            sentAt: occurredAt
+        )
     }
 }

@@ -2381,6 +2381,16 @@
         }
       }
     },
+    "An issue was closed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Issue wurde geschlossen"
+          }
+        }
+      }
+    },
     "Answered: %@": {
       "localizations": {
         "de": {
@@ -4757,6 +4767,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Filter"
+          }
+        }
+      }
+    },
+    "Fires when GitHub confirmed the close, with the reason. The payload describes the issue, not a pull request.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird gesendet, wenn GitHub das Schließen bestätigt hat, mit dem Grund. Die Nutzdaten beschreiben das Issue, nicht einen Pull Request."
           }
         }
       }

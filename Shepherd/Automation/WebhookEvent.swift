@@ -23,10 +23,24 @@ enum WebhookEventKind: String, CaseIterable, Sendable, Codable, Hashable, Identi
     /// ``pullRequestMerged``, once the drain has sent it — so an automatic merge produces two
     /// events, and a merge that was parked because the head moved produces only the first.
     case autoMergeQueued = "pr.auto_merge_queued"
+    /// An issue Shepherd closed reached GitHub (ADR 0032's Sprint 4a amendment).
+    ///
+    /// Fired from the outbox drain's `mutationSent`, the same hook ``reviewSubmitted`` and
+    /// ``pullRequestMerged`` use, and for the same reason: a close that is still waiting out a
+    /// backoff has closed nothing. It is the one event whose envelope carries an `issue` object
+    /// in place of `pullRequest` — see ``WebhookEvent/Subject``.
+    case issueClosed = "issue.closed"
     /// The "Send test event" button in Settings. Never emitted on its own.
     case test = "shepherd.test"
 
     var id: String { rawValue }
+
+    /// Whether this event's envelope describes an issue rather than a pull request.
+    ///
+    /// The subject key is part of the wire contract, so this is the single place that decides
+    /// it: a kind added later either says `true` here and carries an `issue`, or says `false`
+    /// and carries a `pullRequest`. There is no third shape.
+    var isAboutAnIssue: Bool { self == .issueClosed }
 
     /// The kinds the user can subscribe to in Settings.
     ///
@@ -44,6 +58,7 @@ enum WebhookEventKind: String, CaseIterable, Sendable, Codable, Hashable, Identi
         case .delegationFinished: return String(localized: "A delegation finished")
         case .newReviewRequest: return String(localized: "A new review was requested from me")
         case .autoMergeQueued: return String(localized: "An automatic merge was queued")
+        case .issueClosed: return String(localized: "An issue was closed")
         case .test: return String(localized: "Test event")
         }
     }
@@ -61,6 +76,8 @@ enum WebhookEventKind: String, CaseIterable, Sendable, Codable, Hashable, Identi
             return String(localized: "Fires when a sweep finds a pull request waiting for your review.")
         case .autoMergeQueued:
             return String(localized: "Fires when an auto-merge rule queued a merge — at the moment Shepherd decided, not when GitHub confirmed. The merge itself still sends \"A pull request was merged\".")
+        case .issueClosed:
+            return String(localized: "Fires when GitHub confirmed the close, with the reason. The payload describes the issue, not a pull request.")
         case .test:
             return String(localized: "Sent only when you press the button below.")
         }
@@ -230,6 +247,106 @@ struct WebhookPullRequest: Encodable, Sendable, Equatable {
     )
 }
 
+/// The `issue` object an issue-shaped event carries in place of ``WebhookPullRequest``.
+///
+/// A second type rather than three optional fields on the pull-request object, and the reason is
+/// the same one ADR 0032 gives for `IssueRowSummary` beside `PullRequestSummary`: an issue has no
+/// branch, no base branch, no head SHA, no draft flag and no diff counts, and a receiver that had
+/// to guard every one of them would be reading a shape the producer never fills in.
+///
+/// Deliberately small — exactly what the plan's §5.3 names: where it is, what it is called, who
+/// wrote it and with what provenance. No body, no labels, no comment count, no linked pull
+/// requests. ADR 0012's rule is that the payload says *what happened* and the receiver follows
+/// the `url` for the substance.
+struct WebhookIssue: Encodable, Sendable, Equatable {
+    /// The repository owner.
+    var owner: String
+    /// The repository name, without the owner.
+    var repo: String
+    /// The issue number.
+    var number: Int
+    /// The GraphQL node id — Shepherd's primary key, useful for de-duplication downstream.
+    var nodeID: String
+    /// The issue title.
+    var title: String
+    /// The issue on github.com.
+    var url: URL
+    /// The author's login.
+    var author: String
+    /// `"human"`, `"bot"` or `"agent"` (ADR 0008).
+    var authorKind: String
+    /// Whether the author is a recognised coding agent.
+    var isAgentAuthored: Bool
+    /// The registry id of the agent, e.g. `"example-agent"`; `null` for humans and plain bots.
+    var agentID: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case owner, repo, number
+        case nodeID = "nodeId"
+        case title, url, author, authorKind, isAgentAuthored
+        case agentID = "agentId"
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(owner, forKey: .owner)
+        try container.encode(repo, forKey: .repo)
+        try container.encode(number, forKey: .number)
+        try container.encode(nodeID, forKey: .nodeID)
+        try container.encode(title, forKey: .title)
+        try container.encode(url, forKey: .url)
+        try container.encode(author, forKey: .author)
+        try container.encode(authorKind, forKey: .authorKind)
+        try container.encode(isAgentAuthored, forKey: .isAgentAuthored)
+        // `encode` rather than `encodeIfPresent`: an unknown agent is an explicit null, exactly
+        // as it is on the pull-request object.
+        try container.encode(agentID, forKey: .agentID)
+    }
+
+    /// Describes an issue Shepherd still has the row for.
+    /// - Parameter summary: The cached issue row.
+    init(summary: IssueRowSummary) {
+        self.owner = summary.repo.owner
+        self.repo = summary.repo.name
+        self.number = summary.number
+        self.nodeID = summary.id
+        self.title = summary.title
+        self.url = AppConfig.issueURL(
+            owner: summary.repo.owner,
+            name: summary.repo.name,
+            number: summary.number
+        )
+        self.author = summary.author.login
+        self.authorKind = WebhookPullRequest.wireAuthorKind(summary.author.kind)
+        self.isAgentAuthored = summary.author.kind.agentIdentity != nil
+        self.agentID = summary.author.kind.agentIdentity?.id
+    }
+
+    /// Describes an issue the local cache can no longer supply in full.
+    ///
+    /// A real case rather than a defensive one, and a more likely one here than on the
+    /// pull-request side: closing an issue is exactly what makes the next sweep prune its row,
+    /// so a slow POST can perfectly well outlive it. The shape does not change — every key is
+    /// still there, with the cached-only fields empty.
+    /// - Parameter identity: What the event itself carried.
+    init(identity: WebhookPullRequest.Identity) {
+        self.owner = identity.repo.owner
+        self.repo = identity.repo.name
+        self.number = identity.number
+        self.nodeID = identity.prID
+        self.title = ""
+        self.url = AppConfig.issueURL(
+            owner: identity.repo.owner,
+            name: identity.repo.name,
+            number: identity.number
+        )
+        self.author = ""
+        self.authorKind = "unknown"
+        self.isAgentAuthored = false
+        self.agentID = nil
+    }
+}
+
 /// The per-event `details` object.
 ///
 /// Deliberately small. No review text, no comment bodies, no diff content and no agent output
@@ -262,6 +379,12 @@ enum WebhookEventDetails: Encodable, Sendable, Equatable {
     /// when the rule required none). The head commit the merge is pinned to is already in the
     /// envelope's `pullRequest.headSha`.
     case autoMergeQueued(mergeMethod: String, checkCount: Int, matchedLabels: [String])
+    /// ``WebhookEventKind/issueClosed`` (ADR 0032).
+    ///
+    /// One key: GitHub's own `state_reason` word, `"completed"` or `"not_planned"`. Deliberately
+    /// raw and unmapped — a receiver that routes on "was this actually fixed" wants the word
+    /// GitHub records, not a vocabulary Shepherd invented.
+    case issueClosed(reason: String)
     /// ``WebhookEventKind/test``.
     case test(note: String)
 
@@ -271,6 +394,7 @@ enum WebhookEventDetails: Encodable, Sendable, Equatable {
         case status, agent, durationSeconds, changedFileCount, message, automatic
         case relations, reviewDecision, checks
         case checkCount, matchedLabels
+        case reason
         case note
     }
 
@@ -297,6 +421,8 @@ enum WebhookEventDetails: Encodable, Sendable, Equatable {
             try container.encode(method, forKey: .mergeMethod)
             try container.encode(checkCount, forKey: .checkCount)
             try container.encode(matchedLabels, forKey: .matchedLabels)
+        case .issueClosed(let reason):
+            try container.encode(reason, forKey: .reason)
         case .test(let note):
             try container.encode(note, forKey: .note)
         }
@@ -323,6 +449,21 @@ struct WebhookEvent: Encodable, Sendable, Equatable {
     /// The `source` field, so a receiver fed by several producers can tell them apart.
     static let source = "shepherd"
 
+    /// What one envelope is *about*: a pull request, or — since ADR 0032's Sprint 4a amendment —
+    /// an issue.
+    ///
+    /// The two encode under different top-level keys, and that is the whole of the schema change:
+    /// no event that existed before this amendment gained, lost or renamed a key, so it is
+    /// additive under `"v": 1` in the strictest sense. A receiver switching on `event` already
+    /// knows which shape it is getting, and ``WebhookEventKind/isAboutAnIssue`` is the single
+    /// place that decides.
+    enum Subject: Sendable, Equatable {
+        /// The envelope carries a `pullRequest` object.
+        case pullRequest(WebhookPullRequest)
+        /// The envelope carries an `issue` object.
+        case issue(WebhookIssue)
+    }
+
     /// Which event this is.
     var event: WebhookEventKind
     /// A per-event id, stable across the delivery's retries — the idempotency key a receiver
@@ -330,16 +471,16 @@ struct WebhookEvent: Encodable, Sendable, Equatable {
     var deliveryID: UUID
     /// When the thing happened (not when the POST is attempted).
     var occurredAt: Date
-    /// The pull request the event is about.
-    var pullRequest: WebhookPullRequest
+    /// What the event is about.
+    var subject: Subject
     /// The event-specific payload.
     var details: WebhookEventDetails
 
     private enum CodingKeys: String, CodingKey {
-        case v, event, id, occurredAt, source, pullRequest, details
+        case v, event, id, occurredAt, source, pullRequest, issue, details
     }
 
-    /// Creates an envelope.
+    /// Creates an envelope about a pull request.
     /// - Parameters:
     ///   - event: Which event this is.
     ///   - pullRequest: The pull request it is about.
@@ -353,8 +494,54 @@ struct WebhookEvent: Encodable, Sendable, Equatable {
         occurredAt: Date = Date(),
         deliveryID: UUID = UUID()
     ) {
+        self.init(
+            event: event,
+            subject: .pullRequest(pullRequest),
+            details: details,
+            occurredAt: occurredAt,
+            deliveryID: deliveryID
+        )
+    }
+
+    /// Creates an envelope about an issue (ADR 0032).
+    /// - Parameters:
+    ///   - event: Which event this is.
+    ///   - issue: The issue it is about.
+    ///   - details: The event-specific payload.
+    ///   - occurredAt: When it happened.
+    ///   - deliveryID: The idempotency key; defaults to a fresh one.
+    init(
+        event: WebhookEventKind,
+        issue: WebhookIssue,
+        details: WebhookEventDetails,
+        occurredAt: Date = Date(),
+        deliveryID: UUID = UUID()
+    ) {
+        self.init(
+            event: event,
+            subject: .issue(issue),
+            details: details,
+            occurredAt: occurredAt,
+            deliveryID: deliveryID
+        )
+    }
+
+    /// The designated initialiser.
+    /// - Parameters:
+    ///   - event: Which event this is.
+    ///   - subject: What it is about.
+    ///   - details: The event-specific payload.
+    ///   - occurredAt: When it happened.
+    ///   - deliveryID: The idempotency key.
+    init(
+        event: WebhookEventKind,
+        subject: Subject,
+        details: WebhookEventDetails,
+        occurredAt: Date = Date(),
+        deliveryID: UUID = UUID()
+    ) {
         self.event = event
-        self.pullRequest = pullRequest
+        self.subject = subject
         self.details = details
         self.occurredAt = occurredAt
         self.deliveryID = deliveryID
@@ -370,7 +557,15 @@ struct WebhookEvent: Encodable, Sendable, Equatable {
         // changed out from under the schema by an encoder setting.
         try container.encode(GitHubTimestamp.string(from: occurredAt), forKey: .occurredAt)
         try container.encode(Self.source, forKey: .source)
-        try container.encode(pullRequest, forKey: .pullRequest)
+        // One key or the other, never both and never an empty one: an event is about exactly one
+        // thing, and a `"pullRequest": null` beside an `issue` would be a shape every receiver
+        // then has to guard.
+        switch subject {
+        case .pullRequest(let pullRequest):
+            try container.encode(pullRequest, forKey: .pullRequest)
+        case .issue(let issue):
+            try container.encode(issue, forKey: .issue)
+        }
         try container.encode(details, forKey: .details)
     }
 
