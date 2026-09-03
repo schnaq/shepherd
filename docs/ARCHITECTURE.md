@@ -53,11 +53,13 @@ Packages/ShepherdKit/          # SPM package, NO AppKit/SwiftUI imports
                                #     recurring-finding clustering over the reviewer's own
                                #     comments (ADR 0029)
       Routing/                 #     shepherd:// grammar + CLI argument grammar (ADR 0013)
-      Triage/                  #     bulk-triage partition + intended writes (ADR 0015)
+      Triage/                  #     bulk-triage partition + intended writes (ADR 0015); the
+                               #     issues rail's age buckets (ADR 0032)
       Automation/              #     auto-delegation rules, ledger and policy (ADR 0016);
                                #     auto-merge rules, ledger/audit log and policy (ADR 0018)
       Digest/                  #     morning-digest report + delivery schedule
-      Search/                  #     search document, lexical ranker, vector value (ADR 0019)
+      Search/                  #     search document, lexical ranker, vector value (ADR 0019);
+                               #     the issue document and its ranker beside them (ADR 0032)
       Intelligence/            #     the tool contract a model may call, the trace of a
                                #     tool-calling turn, and the Codable twins of the
                                #     generated types — Foundation only, no provider
@@ -186,6 +188,20 @@ Pure logic in `ShepherdCore` (all unit-tested):
   sentence.
 - `IssueSummary` (`Models/`) — number, title, body, state and the `isPullRequest` marker; nothing
   else, and nothing persisted.
+- `IssueRowSummary` / `IssueDetail` / `IssueRelation` / `LinkedPullRequestReference`
+  (`Models/Issue.swift`) — the *persisted* issue, and deliberately not the type above (ADR 0032).
+  The row is the issues inbox's `PullRequestSummary`: node id, repository, number, title, author,
+  `createdAt`/`updatedAt`/`closedAt`, `IssueSummary.State` (reused, not re-declared), GitHub's raw
+  `stateReason`, labels, the relation set the three facets imply, the comment count, and the pull
+  requests GitHub says will close it — each stored by value, repository included, because a linked
+  pull request may not be in the local inbox at all. `hasAgentPullRequest` is *derived* from those
+  links' own `ActorKind.isMachine`, so the facet, the chip and the denormalised column in `issues`
+  cannot disagree. `IssueDetail` is the row plus `bodyMarkdown` and nothing else: the detail panel
+  shows title, body, labels and links, so there is no `PullRequestDetail.timeline` twin.
+- `IssueAgeBucket` (`Triage/`) — `today`/`thisWeek`/`thisMonth`/`older`, bucketed off `createdAt`
+  against a moment the caller states (ADR 0032). Elapsed spans rather than calendar edges, so the
+  answer needs no locale and is the same on both of a user's Macs; the rail, `IssueFilter` and the
+  test all read this one function.
 - `BulkTriagePlan` (`Triage/`) — the whole of bulk triage's judgement as a value (ADR 0015):
   `make(action:pullRequests:) -> BulkTriagePlan` partitions a selection into entries carrying
   either the `steps` to write (`.approve` / `.merge`, in send order) or a `skipReason`, plus
@@ -240,6 +256,16 @@ Pure logic in `ShepherdCore` (all unit-tested):
   that matches nothing returns nothing, and a total order. `SearchVector` is the `Float32` value —
   cosine, mean-pooling, alignment-safe BLOB coding — and the *only* embedding-shaped thing in the
   package: what produces one is Apple-only and therefore lives in the app target.
+- `IssueSearchDocument` / `IssueSearchRanker` (`Search/`) — the same two values for the issues half
+  of ⌘K, as **siblings** rather than a generalisation (ADR 0032). Four fields where the pull
+  request has eight — `title` (3), `identity` (3), `labels` (2.5), `body` (1), the same weights
+  those fields carry there — because an issue has no branch, no paths and no diff, and no author
+  field because the rail answers "whose issues" with a facet. The ranker duplicates the BM25 loop,
+  the exact-reference override and the similarity floor, and shares `SearchRankingOptions`, the two
+  standard constants and `SearchQuery`'s parser, so one query cannot be scored on two curves
+  depending on which half of the palette answers it. One divergence: a query that is nothing but a
+  `risk:`/`kind:` token returns nothing here, because a triage verdict is a statement about a pull
+  request. `SearchDocument` and `SearchRanker` are untouched.
 - `Interdiff` / `FindingState` / `ReviewFindings` / `UnifiedPatch` (`Review/`) — the whole of
   "since my review" as pure text work (ADR 0028). `UnifiedPatch.reconstruct(after:)` rebuilds the
   *head* side of a unified patch as lines, padding the gaps between hunks so a 1-based index is
@@ -315,6 +341,13 @@ Pure logic in `ShepherdCore` (all unit-tested):
     fetch. The paged one is conditionally cached under a key the client names itself (repository,
     window, cursor), because a GraphQL request cannot be keyed on its URL; the single one is not
     cached at all, for the reason `/check-runs` is not
+  - `searchOpenIssues(queries:) async throws -> [IssueRowSummary]` — the issues sweep (ADR 0032).
+    The *same* `search(type: ISSUE)` connection as the inbox sweep with `is:issue` in place of
+    `is:pr`, three facets (`assignee`/`author`/`mentions:@me`), the same five-page cap, the same
+    merge-by-id — and `closedByPullRequestsReferences(first: 5, includeClosedPrs: true)` selected
+    inside the page, so the links are not a second round trip. The `timelineItems`
+    (`CROSS_REFERENCED_EVENT`, `CONNECTED_EVENT`) shape is kept as a fixture-tested fallback
+    document and mapper that the client does not send, so a schema regression is a one-line switch
   - `issue(repo:number:) async throws -> IssueSummary` — one REST
     `GET /repos/{o}/{r}/issues/{n}` for the claims card's `fixes #N` line (ADR 0026's amendment).
     REST, not GraphQL, precisely so the conditional-request cache can key on the URL; the URL is
@@ -347,8 +380,9 @@ Pure logic in `ShepherdCore` (all unit-tested):
 Tables mirror core models (`repos`, `pull_requests`, `changed_files`, `review_threads`,
 `review_comments`, `review_drafts`, `draft_comments`, `check_runs`, `sync_state`, `outbox`,
 `etags`, `viewed_files`, `agent_registry_overrides`, `search_index`, `triage_verdicts`,
-`review_snapshots`, `pull_request_outcomes`).
-Append-only migrator — currently `v1` through `v6`. `v3` is the search index (ADR 0019: one
+`review_snapshots`, `pull_request_outcomes`, `issues`, `issue_search_index`,
+`issue_linked_pull_requests`, `pull_request_closing_issues`).
+Append-only migrator — currently `v1` through `v7`. `v3` is the search index (ADR 0019: one
 row per pull request holding the document hash, the model identifier and a `Float32` vector, pruned
 by an `ON DELETE CASCADE` onto `pull_requests` rather than by a sweep of its own); `v4` is
 `triage_verdicts` (ADR 0023: one row per pull request holding `kind`, `risk`, the one-sentence
@@ -369,6 +403,26 @@ and no cascade**: a row is written exactly when a pull request *leaves* the inbo
 the other three rely on would delete every row the feature is made of. One index,
 `(repoFullName, agentName, closedAt)`, which is the badge's own query. Read by the badge and by the
 inbox's secondary sort, and by nothing else — the automation paths cannot even see the types).
+`v7` is the issues inbox (ADR 0032: four tables in one migration). `issues` follows
+`pull_requests`' exact column shape for the author, the agent, the relations and the labels — so
+`IssueRecord` and `PullRequestRecord` share `ColumnCoding`'s helpers — plus a body and a
+`detailFetchedAt` stamp, and two **denormalised** columns, `linkedPullRequestCount` and
+`hasAgentLinkedPullRequest`, re-derived from the links on every write because the "has an agent
+pull request" facet filters the whole inbox on every click. `issue_linked_pull_requests` holds the
+full list for the detail panel and has **no foreign key onto `pull_requests`** (the linked pull
+request may be somebody else's, or never fetched, so the row is about what the sweep saw);
+`pull_request_closing_issues` is the other direction and *does* cascade with `pull_requests`, like
+`changed_files` — it lands with this migration so the linking sprint needs none of its own, and
+nothing writes it yet. `issue_search_index` copies `search_index` field for field, cascade included.
+Because `repos` is now the parent of two cascading tables, the repository prune is shared by both
+sweeps (`pruneOrphanedRepos`): a prune that looked only at `pull_requests` would delete a repository
+the user has issues but no open pull requests in, and cascade every one of those issues away.
+`IssueStore.swift` is `InboxStore`'s twin — `IssueFilter` (the inbox filter's axes plus
+`hasLinkedAgentPullRequest`, `ageBucket` and `includeClosed`), `saveIssueSummaries(_:pruneMissing:)`,
+`fetchIssues(filter:)`, `fetchIssueSummary(id:)`, `saveIssueDetail(_:)`, `fetchIssueDetail(id:)`,
+`observeIssues(filter:)` — and `issuePruneGuardSQL` is the pull-request guard's `outbox` half and
+only that half, because an issue has no review to draft. `IssueSearchIndexStore.swift` mirrors
+`SearchIndexStore` operation for operation and reports through the same `SearchIndexStatistics`.
 `DatabaseManager.changedFilePaths(prIDs:)` reads the cached diffs' paths and statuses **without**
 their patches, which is all the trust lane's sensitive-path exclusion needs.
 `ValueObservation` publishers feed the UI. The **outbox** stores every outbound mutation (submit review, reply,
@@ -399,6 +453,19 @@ built without them sweeps exactly as it did before. The store is asked before Gi
 request that already has a row costs no request; the reads are sequential; and **every failure is
 swallowed**, not even reported as a `syncFailed`, because the user did not ask for this and a badge
 one pull request behind is worth less than a sweep that claims to be broken.
+The cycle has a **second sweep** of its own: `runIssueSweep()` (ADR 0032), called from
+`runSweep()` in the same pass — no second timer and no second cadence setting, because the two
+sections are read together. It repeats the delta logic on the other kind of row (cached rows as
+"before", the three facet searches as "after", first sightings and departures as the difference,
+the prune guarded by `issuePruneGuardSQL`), fetches no details — an issue's body arrives when
+somebody opens it — and goes through two ports of its own (`IssueFetching` and `IssueSyncStoring`,
+handed over together as `IssueCapture` in `SyncPorts.swift`) so the engine keeps building and
+testing on Linux against fakes and an engine built without them sweeps exactly as it did before.
+It cannot fail the cycle: the method does not throw, and a failure becomes one
+`SyncEvent.syncFailed` on the sweep stage — *reported* rather than swallowed, unlike the track
+record's capture, because the user asked for this section. There is no new `SyncEvent` case and no
+new setting.
+
 `TrackRecordBackfill` (also in ShepherdSync) is the one-time pager behind Settings → Automation:
 one repository at a time, at most 500 pull requests each, cancellable between pages, reporting
 progress and one line per repository it could not read.

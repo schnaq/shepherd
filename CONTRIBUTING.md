@@ -122,7 +122,12 @@ bumping a dependency that ships inside the app also means a line in
     is the same `api.github.com` GraphQL endpoint as the inbox sweep, with `is:closed` in place of
     `is:open` — one more search on the host already on this list, and no new one; the claims card's
     read of the issue a `fixes #N` claim points at (ADR 0026's amendment) is one ETag-cached
-    `GET /repos/…/issues/{n}` on that same host, made only while the card is open;
+    `GET /repos/…/issues/{n}` on that same host, made only while the card is open; the **issues
+    inbox**'s sweep (ADR 0032) is three more searches on that same GraphQL endpoint —
+    `is:issue is:open archived:false` with `assignee:`/`author:`/`mentions:@me`, beside the
+    pull-request sweep's five, in the same cycle and at the same cadence — and the pull requests
+    that will close an issue come back inside those pages rather than as reads of their own, so it
+    is the host already on this list and no new one;
   - only when the user configures a key: api.anthropic.com, or the OpenAI-compatible endpoint
     they chose themselves (a preset's base URL is still their choice). What travels there is the
     tier-1 digest — title, description excerpt, file list, top hunks — and, when you use AI
@@ -194,7 +199,10 @@ bumping a dependency that ships inside the app also means a line in
   also implement.
 - **⌘K search stays on the device.** The semantic search index (ADR 0019) is built from rows the
   sweep and the review screen already wrote — `ShepherdCore/Search/`, `Features/Search/` — and its
-  embeddings come from Apple's on-device `NLEmbedding` and nowhere else. The BYOK endpoint is
+  embeddings come from Apple's on-device `NLEmbedding` and nowhere else. The issues index beside it
+  (ADR 0032) is the same rule with the same words: a second corpus built from rows the issues sweep
+  already wrote, ranked by a sibling of the same lexical ranker, embedded by the same on-device
+  provider or by nothing at all. The BYOK endpoint is
   **never** used for it, even when the user has configured one and switched the AI tiers on, and
   that is a rule rather than a default: search runs on every keystroke and over every pull request
   in the inbox, so a provider-backed embedding would ship the whole inbox — titles, descriptions,
