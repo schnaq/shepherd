@@ -78,6 +78,42 @@ final class DeepLinkParsingTests: XCTestCase {
         XCTAssertNil(parse("shepherd://reboot"))
     }
 
+    // MARK: - Issues (ADR 0032)
+
+    func testParsesIssue() {
+        XCTAssertEqual(
+            parse("shepherd://issue/schnaq/review/128"),
+            .issue(repo: RepoRef(owner: "schnaq", name: "review"), number: 128)
+        )
+        XCTAssertEqual(
+            parse("shepherd://ISSUE/Schnaq/Review/7"),
+            .issue(repo: RepoRef(owner: "Schnaq", name: "Review"), number: 7)
+        )
+        XCTAssertEqual(
+            parse("shepherd:issue/schnaq/review/3"),
+            .issue(repo: RepoRef(owner: "schnaq", name: "review"), number: 3)
+        )
+    }
+
+    func testIssueLinksAreValidatedExactlyLikePullRequestLinks() {
+        XCTAssertNil(parse("shepherd://issue/schnaq/review"))
+        XCTAssertNil(parse("shepherd://issue/schnaq/review/128/comments"))
+        XCTAssertNil(parse("shepherd://issue/schnaq/review/0"))
+        XCTAssertNil(parse("shepherd://issue/sch%2Fnaq/review/1"))
+        XCTAssertNil(parse("shepherd://issue/-schnaq/review/1"))
+        XCTAssertNil(parse("shepherd://issue/%D1%95chnaq/review/1"))
+        XCTAssertNil(parse("shepherd://issue/schnaq/review/9999999999"))
+        XCTAssertNil(parse("shepherd://issues/schnaq/review/1"))
+    }
+
+    func testTheIssuesFilterTokenParses() {
+        XCTAssertEqual(parse("shepherd://inbox?filter=issues"), .inbox(filter: .issues))
+        XCTAssertEqual(parse("shepherd://inbox?filter=ISSUES"), .inbox(filter: .issues))
+        // A near miss is a rejection, not an approximate match.
+        XCTAssertNil(parse("shepherd://inbox?filter=issue"))
+        XCTAssertNil(parse("shepherd://inbox?filter=issues:open"))
+    }
+
     // MARK: - Inbox
 
     func testParsesInboxWithAndWithoutFilter() {
@@ -145,6 +181,14 @@ final class DeepLinkParsingTests: XCTestCase {
                 .urlString,
             "shepherd://pr/schnaq/review/42"
         )
+        XCTAssertEqual(
+            DeepLink.issue(repo: RepoRef(owner: "schnaq", name: "review"), number: 128).urlString,
+            "shepherd://issue/schnaq/review/128"
+        )
+        XCTAssertEqual(
+            DeepLink.inbox(filter: .issues).urlString,
+            "shepherd://inbox?filter=issues"
+        )
         XCTAssertEqual(DeepLink.inbox(filter: nil).urlString, "shepherd://inbox")
         XCTAssertEqual(
             DeepLink.inbox(filter: .agent(id: "claude-code")).urlString,
@@ -166,6 +210,8 @@ final class DeepLinkParsingTests: XCTestCase {
         let links: [DeepLink] = [
             .pullRequest(repo: RepoRef(owner: "schnaq", name: "review.swift"), number: 1),
             .pullRequest(repo: RepoRef(owner: "a-b", name: "c_d.e"), number: 999_999_999),
+            .issue(repo: RepoRef(owner: "schnaq", name: "review.swift"), number: 1),
+            .issue(repo: RepoRef(owner: "a-b", name: "c_d.e"), number: 999_999_999),
             .inbox(filter: nil),
             .inbox(filter: .needsMyReview),
             .inbox(filter: .myPullRequests),
@@ -175,6 +221,7 @@ final class DeepLinkParsingTests: XCTestCase {
             .inbox(filter: .bots),
             .inbox(filter: .agent(id: "claude-code")),
             .inbox(filter: .repository(RepoRef(owner: "schnaq", name: "review"))),
+            .inbox(filter: .issues),
             .sync,
         ] + SettingsDeepLinkTab.allCases.map { DeepLink.settings(tab: $0) }
 
@@ -238,6 +285,53 @@ final class ShepherdCommandLineTests: XCTestCase {
         ] {
             XCTAssertThrowsError(try invocation("open", reference), reference)
         }
+    }
+
+    func testIssueAcceptsEverySpellingAndRefusesAPullRequestURL() throws {
+        let expected = ShepherdCommandLine.Invocation.open(
+            .issue(repo: RepoRef(owner: "schnaq", name: "review"), number: 128)
+        )
+        XCTAssertEqual(try invocation("issue", "schnaq/review#128"), expected)
+        XCTAssertEqual(try invocation("issue", "schnaq/review/128"), expected)
+        XCTAssertEqual(
+            try invocation("issue", "https://github.com/schnaq/review/issues/128"),
+            expected
+        )
+        XCTAssertEqual(
+            try invocation("issue", "https://www.github.com/schnaq/review/issues/128#issue-1"),
+            expected
+        )
+        XCTAssertThrowsError(try invocation("issue"))
+        XCTAssertThrowsError(try invocation("issue", "schnaq/review#128", "extra"))
+        for reference in [
+            "schnaq",
+            "schnaq/review",
+            "schnaq/review#",
+            "schnaq/review#abc",
+            "https://github.com/schnaq/review/pull/128",
+            "https://example.com/schnaq/review/issues/128",
+        ] {
+            XCTAssertThrowsError(try invocation("issue", reference), reference)
+        }
+    }
+
+    func testInboxIssuesIsTheContentKindShorthand() throws {
+        XCTAssertEqual(try invocation("inbox", "issues"), .open(.inbox(filter: .issues)))
+        XCTAssertEqual(
+            try invocation("inbox", "--filter", "issues"),
+            .open(.inbox(filter: .issues))
+        )
+    }
+
+    func testUsageNamesTheIssueVerbAndTheIssuesFilter() {
+        // The grammar is a public interface (ADR 0013), so the help text is part of the change
+        // rather than a follow-up.
+        XCTAssertTrue(ShepherdCommandLine.usage.contains("shepherd issue <issue>"))
+        XCTAssertTrue(ShepherdCommandLine.usage.contains("shepherd issue schnaq/review#128"))
+        XCTAssertTrue(ShepherdCommandLine.usage.contains("shepherd inbox issues"))
+        XCTAssertTrue(
+            ShepherdCommandLine.usage.contains("https://github.com/owner/repo/issues/123")
+        )
     }
 
     func testInbox() throws {

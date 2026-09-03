@@ -12,6 +12,7 @@ import Foundation
 ///
 /// ```
 /// shepherd://pr/<owner>/<repo>/<number>
+/// shepherd://issue/<owner>/<repo>/<number>
 /// shepherd://inbox
 /// shepherd://inbox?filter=<token>
 /// shepherd://sync
@@ -29,6 +30,14 @@ import Foundation
 public enum DeepLink: Hashable, Sendable {
     /// Open the full-window review screen for one pull request.
     case pullRequest(repo: RepoRef, number: Int)
+    /// Show one issue in the inbox's issues section (ADR 0032).
+    ///
+    /// Parsed and serialised exactly like ``pullRequest`` — the same three validated segments,
+    /// the same closed command word — because GitHub numbers issues and pull requests from one
+    /// sequence and a reader who can write one link can write the other. What it *does* is the
+    /// app's business, and it is the pull-request link's rule too: the local cache first, then a
+    /// fetch of that one issue.
+    case issue(repo: RepoRef, number: Int)
     /// Show the inbox, optionally with one rail filter applied.
     case inbox(filter: InboxDeepLinkFilter?)
     /// Run one sweep now.
@@ -66,6 +75,15 @@ public enum DeepLink: Hashable, Sendable {
                   let number = DeepLinkValidation.number(rest[2])
             else { return nil }
             return .pullRequest(repo: RepoRef(owner: owner, name: name), number: number)
+
+        case "issue":
+            // `issue/<owner>/<repo>/<number>`, validated exactly as `pr` is (ADR 0032).
+            guard rest.count == 3,
+                  let owner = DeepLinkValidation.owner(rest[0]),
+                  let name = DeepLinkValidation.repositoryName(rest[1]),
+                  let number = DeepLinkValidation.number(rest[2])
+            else { return nil }
+            return .issue(repo: RepoRef(owner: owner, name: name), number: number)
 
         case "inbox":
             guard rest.isEmpty else { return nil }
@@ -140,6 +158,10 @@ public enum DeepLink: Hashable, Sendable {
             let owner = DeepLink.encode(repo.owner)
             let name = DeepLink.encode(repo.name)
             return "\(DeepLink.scheme)://pr/\(owner)/\(name)/\(number)"
+        case .issue(let repo, let number):
+            let owner = DeepLink.encode(repo.owner)
+            let name = DeepLink.encode(repo.name)
+            return "\(DeepLink.scheme)://issue/\(owner)/\(name)/\(number)"
         case .inbox(let filter):
             guard let filter else { return "\(DeepLink.scheme)://inbox" }
             return "\(DeepLink.scheme)://inbox?filter=\(DeepLink.encode(filter.token))"
@@ -169,6 +191,11 @@ public enum DeepLink: Hashable, Sendable {
 /// and repository facets. Which state each one produces is the app's decision (a facet filter
 /// widens the smart view to "Involved", so `filter=bots` shows *every* bot pull request rather
 /// than only the ones that also asked for a review).
+///
+/// ``issues`` is the odd one and deliberately so (ADR 0032): it names the inbox *section* rather
+/// than a rail state, so it moves the content-kind picker and narrows nothing. That is what keeps
+/// the grammar additive — one more token in a vocabulary that already existed, instead of a
+/// second `shepherd://` command word for a screen that is the same screen.
 public enum InboxDeepLinkFilter: Hashable, Sendable {
     /// Pull requests that asked for the user's review.
     case needsMyReview
@@ -186,6 +213,8 @@ public enum InboxDeepLinkFilter: Hashable, Sendable {
     case agent(id: String)
     /// Pull requests from one repository.
     case repository(RepoRef)
+    /// The issues section of the inbox, unnarrowed (ADR 0032).
+    case issues
 
     /// The token used in the URL.
     public var token: String {
@@ -198,6 +227,7 @@ public enum InboxDeepLinkFilter: Hashable, Sendable {
         case .bots: return "bots"
         case .agent(let id): return "agent:\(id)"
         case .repository(let repo): return "repo:\(repo.fullName)"
+        case .issues: return "issues"
         }
     }
 
@@ -232,13 +262,14 @@ public enum InboxDeepLinkFilter: Hashable, Sendable {
         case "approved-by-me": self = .approvedByMe
         case "humans": self = .humans
         case "bots": self = .bots
+        case "issues": self = .issues
         default: return nil
         }
     }
 
     /// The tokens without an argument, in the order the documentation lists them.
     public static let keywordTokens = [
-        "needs-my-review", "mine", "involved", "approved-by-me", "humans", "bots",
+        "needs-my-review", "mine", "involved", "approved-by-me", "humans", "bots", "issues",
     ]
 }
 
@@ -314,7 +345,9 @@ enum DeepLinkValidation {
         return RepoRef(owner: owner, name: name)
     }
 
-    /// A pull-request number: 1–9 ASCII digits, greater than zero.
+    /// A pull-request or issue number: 1–9 ASCII digits, greater than zero.
+    ///
+    /// One rule for both, because GitHub draws them from one sequence per repository.
     static func number(_ raw: String) -> Int? {
         guard (1...9).contains(raw.count),
               raw.allSatisfy({ $0.isASCII && $0.isNumber }),

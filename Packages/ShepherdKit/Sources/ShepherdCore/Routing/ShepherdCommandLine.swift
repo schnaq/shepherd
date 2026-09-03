@@ -12,6 +12,9 @@ import Foundation
 /// shepherd open <owner>/<repo>#<number>
 /// shepherd open <owner>/<repo>/<number>
 /// shepherd open https://github.com/<owner>/<repo>/pull/<number>
+/// shepherd issue <owner>/<repo>#<number>
+/// shepherd issue <owner>/<repo>/<number>
+/// shepherd issue https://github.com/<owner>/<repo>/issues/<number>
 /// shepherd inbox [<filter> | --filter <filter>]
 /// shepherd sync
 /// shepherd settings [<tab>]
@@ -43,6 +46,12 @@ public enum ShepherdCommandLine {
         case unknownOption(String)
         /// The pull-request reference is not `owner/repo#number` or a github.com pull URL.
         case invalidPullRequestReference(String)
+        /// The issue reference is not `owner/repo#number` or a github.com issue URL.
+        ///
+        /// A case of its own rather than a reused one, because the two messages have to name
+        /// different example URLs: somebody who typed a `/pull/` link at `shepherd issue`
+        /// needs to be told which of the two verbs they wanted.
+        case invalidIssueReference(String)
         /// The inbox filter is not one of the known tokens.
         case invalidInboxFilter(String)
         /// The settings tab is not one of the known tabs.
@@ -62,6 +71,11 @@ public enum ShepherdCommandLine {
                 return """
                     Could not read “\(reference)” as a pull request. Use owner/repo#123, \
                     owner/repo/123, or a https://github.com/owner/repo/pull/123 URL.
+                    """
+            case .invalidIssueReference(let reference):
+                return """
+                    Could not read “\(reference)” as an issue. Use owner/repo#123, \
+                    owner/repo/123, or a https://github.com/owner/repo/issues/123 URL.
                     """
             case .invalidInboxFilter(let filter):
                 return """
@@ -84,6 +98,7 @@ public enum ShepherdCommandLine {
 
         USAGE
           shepherd open <pull request>     Open a pull request in Shepherd's review screen
+          shepherd issue <issue>           Open an issue in Shepherd's issues inbox
           shepherd inbox [<filter>]        Show the inbox, optionally filtered
           shepherd sync                    Sweep every repository now
           shepherd settings [<tab>]        Open Settings on a tab
@@ -94,8 +109,13 @@ public enum ShepherdCommandLine {
           owner/repo/123
           https://github.com/owner/repo/pull/123
 
+        ISSUE
+          owner/repo#123
+          owner/repo/123
+          https://github.com/owner/repo/issues/123
+
         INBOX FILTERS
-          needs-my-review, mine, involved, approved-by-me
+          needs-my-review, mine, involved, approved-by-me, issues
           humans, bots, agent:<id>, repo:<owner>/<name>
 
         SETTINGS TABS
@@ -103,6 +123,8 @@ public enum ShepherdCommandLine {
 
         EXAMPLES
           shepherd open schnaq/review#42
+          shepherd issue schnaq/review#128
+          shepherd inbox issues
           shepherd inbox needs-my-review
           shepherd inbox --filter agent:claude-code
           shepherd sync
@@ -133,6 +155,20 @@ public enum ShepherdCommandLine {
             if let extra = rest.dropFirst().first { throw Failure.unexpectedArgument(extra) }
             guard let link = pullRequestLink(for: reference) else {
                 throw Failure.invalidPullRequestReference(reference)
+            }
+            return .open(link)
+
+        case "issue":
+            // The same three spellings `open` takes, with `/issues/` in place of `/pull/` in the
+            // browser form (ADR 0032). A verb of its own rather than a flag on `open`, because
+            // the grammar is a public interface and `shepherd open --issue` would make the
+            // existing verb's meaning depend on an option (ADR 0013: additive only).
+            guard let reference = rest.first else {
+                throw Failure.missingArgument(command: "issue", expected: "an issue")
+            }
+            if let extra = rest.dropFirst().first { throw Failure.unexpectedArgument(extra) }
+            guard let link = issueLink(for: reference) else {
+                throw Failure.invalidIssueReference(reference)
             }
             return .open(link)
 
@@ -197,29 +233,63 @@ public enum ShepherdCommandLine {
     /// Pure string work: the github.com form is accepted because that is what a browser puts on
     /// the clipboard, not because the CLI ever fetches it.
     static func pullRequestLink(for reference: String) -> DeepLink? {
+        nodeLink(for: reference, browserSegment: "pull") {
+            DeepLink.pullRequest(repo: $0, number: $1)
+        }
+    }
+
+    /// Reads the three accepted spellings of an issue reference (ADR 0032).
+    ///
+    /// The pull-request reader with two things changed: the browser form's `/pull/` becomes
+    /// `/issues/`, and the value built at the end is ``DeepLink/issue(repo:number:)``. Sharing
+    /// the body rather than copying it is what keeps `shepherd issue` from accidentally
+    /// accepting a slightly different set of references than `shepherd open` — a `#` with no
+    /// number, a third path segment, a non-ASCII owner all have to be refused identically.
+    static func issueLink(for reference: String) -> DeepLink? {
+        nodeLink(for: reference, browserSegment: "issues") {
+            DeepLink.issue(repo: $0, number: $1)
+        }
+    }
+
+    /// The shared reader behind ``pullRequestLink(for:)`` and ``issueLink(for:)``.
+    /// - Parameters:
+    ///   - reference: What the user typed.
+    ///   - browserSegment: The github.com path segment that identifies the kind — `pull` or
+    ///     `issues`. It is matched exactly, so a `/pull/` link handed to `shepherd issue` is a
+    ///     refusal with a message naming the right verb rather than a link to the wrong screen.
+    ///   - make: Builds the link once the repository and number have been validated.
+    private static func nodeLink(
+        for reference: String,
+        browserSegment: String,
+        make: (RepoRef, Int) -> DeepLink
+    ) -> DeepLink? {
         let trimmed = reference.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return nil }
 
         let lowered = trimmed.lowercased()
         if lowered.hasPrefix("https://") || lowered.hasPrefix("http://") {
-            return gitHubPullRequestLink(for: trimmed)
+            return gitHubLink(for: trimmed, browserSegment: browserSegment, make: make)
         }
 
         // owner/repo#123
         if let hash = trimmed.lastIndex(of: "#") {
             let fullName = String(trimmed[trimmed.startIndex..<hash])
             let numberText = String(trimmed[trimmed.index(after: hash)...])
-            return link(fullName: fullName, number: numberText)
+            return link(fullName: fullName, number: numberText, make: make)
         }
         // owner/repo/123
         let parts = trimmed.split(separator: "/", omittingEmptySubsequences: false)
         guard parts.count == 3 else { return nil }
-        return link(fullName: "\(parts[0])/\(parts[1])", number: String(parts[2]))
+        return link(fullName: "\(parts[0])/\(parts[1])", number: String(parts[2]), make: make)
     }
 
-    /// `https://github.com/<owner>/<repo>/pull/<number>`, with anything after the number
+    /// `https://github.com/<owner>/<repo>/<pull|issues>/<number>`, with anything after the number
     /// (`/files`, a query, a comment anchor) ignored.
-    private static func gitHubPullRequestLink(for reference: String) -> DeepLink? {
+    private static func gitHubLink(
+        for reference: String,
+        browserSegment: String,
+        make: (RepoRef, Int) -> DeepLink
+    ) -> DeepLink? {
         guard let components = URLComponents(string: reference),
               let host = components.host?.lowercased(),
               host == "github.com" || host == "www.github.com"
@@ -227,14 +297,18 @@ public enum ShepherdCommandLine {
         let segments = components.percentEncodedPath
             .split(separator: "/", omittingEmptySubsequences: true)
             .compactMap { String($0).removingPercentEncoding }
-        guard segments.count >= 4, segments[2].lowercased() == "pull" else { return nil }
-        return link(fullName: "\(segments[0])/\(segments[1])", number: segments[3])
+        guard segments.count >= 4, segments[2].lowercased() == browserSegment else { return nil }
+        return link(fullName: "\(segments[0])/\(segments[1])", number: segments[3], make: make)
     }
 
-    private static func link(fullName: String, number: String) -> DeepLink? {
+    private static func link(
+        fullName: String,
+        number: String,
+        make: (RepoRef, Int) -> DeepLink
+    ) -> DeepLink? {
         guard let repo = DeepLinkValidation.repository(fullName: fullName),
               let number = DeepLinkValidation.number(number)
         else { return nil }
-        return .pullRequest(repo: repo, number: number)
+        return make(repo, number)
     }
 }
