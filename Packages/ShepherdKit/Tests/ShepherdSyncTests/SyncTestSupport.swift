@@ -79,6 +79,11 @@ actor MockGitHub: PullRequestFetching {
         headOids["\(repo.fullName)#\(number)"] = oid
     }
 
+    /// Scripts the detail one pull request comes back with, instead of the synthesised one.
+    func setDetail(_ detail: PullRequestDetail, repo: RepoRef, number: Int) {
+        details["\(repo.fullName)#\(number)"] = detail
+    }
+
     func setNotificationPages(_ pages: [NotificationsPage]) {
         notificationPages = pages
     }
@@ -284,5 +289,38 @@ enum SyncFixtures {
             repo: repo,
             pullRequestNumber: type == "PullRequest" ? number : nil
         )
+    }
+}
+
+/// A counting stand-in for the interdiff's baseline store (ADR 0028).
+///
+/// The real store is `DatabaseManager`, which the drain tests already use as their `store`;
+/// this one is here so a test can assert *what the drain asked for* — the pull request, the
+/// head, and how often — without reading SQLite back.
+actor FakeReviewSnapshotWriter: ReviewSnapshotWriting {
+    /// Every capture the engine asked for, in order.
+    private(set) var captures: [(prID: String, head: String, reviewedAt: Date)] = []
+    /// The heads that already have a baseline.
+    private var existing: Set<String> = []
+    /// What ``captureReviewSnapshot(prID:reviewedHeadOid:reviewedAt:)`` reports back.
+    private var result = true
+
+    init(existing: [(prID: String, head: String)] = [], result: Bool = true) {
+        for entry in existing { self.existing.insert("\(entry.prID):\(entry.head)") }
+        self.result = result
+    }
+
+    func hasReviewSnapshot(prID: String, reviewedHeadOid: String) async throws -> Bool {
+        existing.contains("\(prID):\(reviewedHeadOid)")
+    }
+
+    func captureReviewSnapshot(
+        prID: String,
+        reviewedHeadOid: String,
+        reviewedAt: Date
+    ) async throws -> Bool {
+        captures.append((prID: prID, head: reviewedHeadOid, reviewedAt: reviewedAt))
+        existing.insert("\(prID):\(reviewedHeadOid)")
+        return result
     }
 }

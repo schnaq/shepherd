@@ -200,6 +200,28 @@ lists what the description claims and what the diff and CI show, and the judgeme
 no model, no network read, nothing stored. On an agent's pull request it opens expanded; on a
 person's it is a header you can open ([ADR 0008](adr/0008-agent-provenance-first-class.md)). A
 description that claims nothing gets no card at all.
+### Since your review — only what changed in the fix round
+
+The agent pushes a fix round, and the review screen opens on **Since your review** instead of on the
+whole pull request again: only the files and hunks that differ from the head you actually reviewed,
+in the same risk order the full list uses. The other segment, **All files**, is one click away and
+is what a first review still opens on — the control only appears once there is a round to compare
+against.
+
+Under it, your findings from that round, each with what became of it: **Addressed** when the lines
+your comment hangs on changed, **Unchanged** when neither the lines nor the thread moved, **Moved**
+when the file was renamed or the lines around it shifted, **Replied** when somebody answered you.
+Click one to jump to the file and line. "Addressed" says the lines changed and nothing more —
+Shepherd has not judged the fix, the thread stays open, and resolving it is still your button. The
+inbox row carries the short version before you open anything: *"3 rounds · 2 findings unchanged"*.
+
+This works because Shepherd keeps the diff you reviewed. The moment a review of yours reaches
+GitHub, the pull request's patches are stored locally as *the head you reviewed*, and the
+comparison is computed on your Mac from that snapshot. So a force-push — the normal thing on an
+agent branch — cannot take the baseline away, it works offline, and no compare API is called. A
+review you submitted on github.com is picked up too, as long as the pull request is still on the
+commit you reviewed; after that there is nothing honest to compare, and the control stays away
+rather than guessing ([ADR 0028](adr/0028-since-my-review-interdiff.md)).
 
 ### Where does this long thread stand?
 

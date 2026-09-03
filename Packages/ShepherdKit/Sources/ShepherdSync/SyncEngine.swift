@@ -20,6 +20,14 @@ public struct SyncConfiguration: Sendable {
     public var maxConcurrentDetailFetches: Int
     /// How many outbox rows one drain attempts.
     public var outboxBatchSize: Int
+    /// The signed-in user's login, when the engine is allowed to recognise their own reviews.
+    ///
+    /// Read by exactly one thing: the retroactive interdiff baseline (ADR 0028). A review
+    /// submitted on github.com carries the head it was made against, and a detail fetch that
+    /// sees one by *this* user while the pull request is still on that commit may write the
+    /// snapshot the outbox drain never got to write. `nil` switches that off, which is what
+    /// every test that does not care about it gets.
+    public var viewerLogin: String?
 
     /// Creates a configuration.
     public init(
@@ -29,7 +37,8 @@ public struct SyncConfiguration: Sendable {
         minimumNotificationsInterval: TimeInterval = 30,
         failureBackoff: TimeInterval = 30,
         maxConcurrentDetailFetches: Int = 5,
-        outboxBatchSize: Int = 20
+        outboxBatchSize: Int = 20,
+        viewerLogin: String? = nil
     ) {
         self.queries = queries
         self.sweepInterval = sweepInterval
@@ -38,6 +47,7 @@ public struct SyncConfiguration: Sendable {
         self.failureBackoff = failureBackoff
         self.maxConcurrentDetailFetches = max(1, maxConcurrentDetailFetches)
         self.outboxBatchSize = max(1, outboxBatchSize)
+        self.viewerLogin = viewerLogin
     }
 }
 
@@ -71,6 +81,8 @@ public actor SyncEngine {
 
     private let github: any PullRequestFetching
     private let store: any SyncStoring
+    /// Where a submitted review's baseline goes, when the app wired one up (ADR 0028).
+    private let snapshots: (any ReviewSnapshotWriting)?
     private let configuration: SyncConfiguration
     private let sleeper: any Sleeping
     private let now: @Sendable () -> Date
@@ -95,18 +107,23 @@ public actor SyncEngine {
     /// - Parameters:
     ///   - github: The GitHub façade.
     ///   - store: The local database.
+    ///   - snapshots: Where the interdiff's baseline is written when a review is sent
+    ///     (ADR 0028). `nil` — the default — means no baseline is kept, which is how every
+    ///     caller that does not care about the review screen builds an engine.
     ///   - configuration: Tunables.
     ///   - sleeper: The delay abstraction; tests inject one that does not wait.
     ///   - now: Clock injection point for tests.
     public init(
         github: any PullRequestFetching,
         store: any SyncStoring,
+        snapshots: (any ReviewSnapshotWriting)? = nil,
         configuration: SyncConfiguration = SyncConfiguration(),
         sleeper: any Sleeping = SystemSleeper(),
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.github = github
         self.store = store
+        self.snapshots = snapshots
         self.configuration = configuration
         self.sleeper = sleeper
         self.now = now
@@ -374,6 +391,8 @@ public actor SyncEngine {
         guard !summaries.isEmpty else { return }
         let github = self.github
         let store = self.store
+        let snapshots = self.snapshots
+        let viewerLogin = configuration.viewerLogin
         let chunkSize = configuration.maxConcurrentDetailFetches
 
         var index = 0
@@ -398,6 +417,24 @@ public actor SyncEngine {
                             // write its patches back into a database that was just erased.
                             try Task.checkCancellation()
                             try await store.savePullRequestDetail(detail)
+                            // A review of *this* head by the viewer that Shepherd never sent
+                            // itself can still be a baseline, but only while the head has not
+                            // moved and only when there is no baseline for it yet (ADR 0028).
+                            if let snapshots, let viewerLogin,
+                               let baseline = SyncEngine.retroactiveBaseline(
+                                   detail: detail,
+                                   viewerLogin: viewerLogin
+                               ),
+                               (try? await snapshots.hasReviewSnapshot(
+                                   prID: detail.id,
+                                   reviewedHeadOid: baseline.headRefOid
+                               )) == false {
+                                _ = try? await snapshots.captureReviewSnapshot(
+                                    prID: detail.id,
+                                    reviewedHeadOid: baseline.headRefOid,
+                                    reviewedAt: baseline.reviewedAt
+                                )
+                            }
                             return nil
                         } catch is CancellationError {
                             return nil
@@ -560,6 +597,7 @@ public actor SyncEngine {
                 }
             }
             _ = try await github.submitReview(draft, repo: item.repo, number: item.number)
+            await captureBaseline(for: item, draft: draft)
             try await store.deleteDraft(prID: item.prID)
             return .sent
 
@@ -597,6 +635,69 @@ public actor SyncEngine {
     }
 
     // MARK: - Helpers
+
+    /// Stores the diff the review that was just sent was written against (ADR 0028).
+    ///
+    /// The head is the draft's own ``ShepherdCore/ReviewDraft/basedOnHeadOid`` — the commit the
+    /// staleness check above just re-validated, so it is the head the reviewer really saw. A
+    /// draft that carries none (a summary-only review queued before any detail fetch) falls
+    /// back to the head at drain time; that leaves a small window in which a push between the
+    /// review being written and the drain running would label the *new* head as reviewed, which
+    /// is why the fallback is second and not first.
+    ///
+    /// Failures are swallowed on purpose: the mutation has already reached GitHub, and a
+    /// baseline that could not be written must not turn a sent review into a retried one. The
+    /// cost of losing it is that the review screen offers no "Since your review" tab.
+    /// - Parameters:
+    ///   - item: The outbox row that was just sent.
+    ///   - draft: The submitted review.
+    private func captureBaseline(for item: OutboxItem, draft: ReviewDraft) async {
+        guard let snapshots else { return }
+        var head = draft.basedOnHeadOid
+        if head.isEmpty {
+            head = (try? await github.headRefOid(repo: item.repo, number: item.number)) ?? ""
+        }
+        guard !head.isEmpty else { return }
+        _ = try? await snapshots.captureReviewSnapshot(
+            prID: item.prID,
+            reviewedHeadOid: head,
+            reviewedAt: now()
+        )
+    }
+
+    /// The head a review by the viewer was submitted against, when the pull request is *still*
+    /// on that commit.
+    ///
+    /// The retroactive baseline (ADR 0028): a review submitted on github.com, or by a Shepherd
+    /// on another Mac, leaves a timeline event carrying its commit. While the pull request has
+    /// not moved on, the diff Shepherd holds now *is* the diff that was reviewed, so a snapshot
+    /// written from it is exact rather than a guess. The moment the head moves the chance is
+    /// gone and nothing is written — the plan's "unavailable" case, in which the review screen
+    /// shows no tab at all.
+    ///
+    /// Pure and `static` so the rule is unit-tested without an engine.
+    /// - Parameters:
+    ///   - detail: The freshly fetched detail.
+    ///   - viewerLogin: The signed-in user's login.
+    /// - Returns: The commit and the review's timestamp, or `nil` when there is no such review.
+    static func retroactiveBaseline(
+        detail: PullRequestDetail,
+        viewerLogin: String
+    ) -> (headRefOid: String, reviewedAt: Date)? {
+        let head = detail.summary.headRefOid
+        guard !head.isEmpty, !viewerLogin.isEmpty, !detail.files.isEmpty else { return nil }
+        let reviews = detail.timeline.filter { event in
+            switch event.kind {
+            case .reviewApproved, .reviewChangesRequested, .reviewCommented:
+                return event.commitOid == head
+                    && event.author.login.caseInsensitiveCompare(viewerLogin) == .orderedSame
+            default:
+                return false
+            }
+        }
+        guard let newest = reviews.map(\.createdAt).max() else { return nil }
+        return (head, newest)
+    }
 
     /// The ``SentMutation/Kind`` an outbox action amounts to once it has been sent.
     ///

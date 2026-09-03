@@ -342,7 +342,8 @@ public enum ResponseMapping {
                 author: commit.author
                     ?? ShepherdCore.Actor(login: "ghost", kind: .human),
                 createdAt: commit.committedDate,
-                summary: commit.messageHeadline
+                summary: commit.messageHeadline,
+                commitOid: commit.oid
             )
         }
 
@@ -370,7 +371,11 @@ public enum ResponseMapping {
                     kind: kind,
                     author: makeActor(from: review.user, detector: detector),
                     createdAt: submittedAt,
-                    summary: summary
+                    summary: summary,
+                    // The head the review was submitted against. Carried so that a review
+                    // submitted outside Shepherd can still become an interdiff baseline while
+                    // the pull request is still on that commit (ADR 0028).
+                    commitOid: review.commitId
                 )
             )
         }

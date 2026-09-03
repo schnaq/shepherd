@@ -81,3 +81,23 @@ public protocol SyncStoring: Sendable {
 
 /// `DatabaseManager` already has exactly this shape; the conformance is the contract check.
 extension DatabaseManager: SyncStoring {}
+
+/// The slice of ``ShepherdPersistence/DatabaseManager`` that keeps the interdiff's baseline.
+///
+/// A port of its own rather than two more requirements on ``SyncStoring``, for two reasons: the
+/// drain's snapshot hook is the *only* thing in the engine that writes it, so a test can hand
+/// the engine a counting double while the store stays the real database; and an engine built
+/// without one — which is every existing test — behaves exactly as it did before (ADR 0028).
+public protocol ReviewSnapshotWriting: Sendable {
+    /// Whether a baseline for one reviewed head is already stored.
+    func hasReviewSnapshot(prID: String, reviewedHeadOid: String) async throws -> Bool
+    /// Stores the pull request's current diff as the head that was reviewed.
+    func captureReviewSnapshot(
+        prID: String,
+        reviewedHeadOid: String,
+        reviewedAt: Date
+    ) async throws -> Bool
+}
+
+/// `DatabaseManager` already has exactly this shape; the conformance is the contract check.
+extension DatabaseManager: ReviewSnapshotWriting {}

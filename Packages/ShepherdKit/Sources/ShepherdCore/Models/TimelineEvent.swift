@@ -39,13 +39,32 @@ public struct TimelineEvent: Sendable, Codable, Hashable, Identifiable {
     public var createdAt: Date
     /// A short, already human-readable description of the event.
     public var summary: String
+    /// The commit this event is about, when it is about one.
+    ///
+    /// For a ``Kind/commit`` it is the commit itself; for a review it is the head commit the
+    /// review was submitted against, which is what makes a review event usable as a *baseline*
+    /// (ADR 0028: a snapshot can be written retroactively for a review submitted elsewhere, but
+    /// only while the current head still is that commit). `nil` for everything else, and for a
+    /// review GitHub did not report a commit for.
+    ///
+    /// Additive and optional: the timeline is stored as JSON in `pull_requests.timelineJSON`,
+    /// so a row written by an older Shepherd decodes with this field absent.
+    public var commitOid: String?
 
     /// Creates a timeline event.
-    public init(id: String, kind: Kind, author: Actor, createdAt: Date, summary: String) {
+    public init(
+        id: String,
+        kind: Kind,
+        author: Actor,
+        createdAt: Date,
+        summary: String,
+        commitOid: String? = nil
+    ) {
         self.id = id
         self.kind = kind
         self.author = author
         self.createdAt = createdAt
         self.summary = summary
+        self.commitOid = commitOid
     }
 }

@@ -161,6 +161,16 @@
         }
       }
     },
+    "%@, was line %lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@, war Zeile %lld"
+          }
+        }
+      }
+    },
     "%@. %@": {
       "localizations": {
         "de": {
@@ -921,6 +931,26 @@
         }
       }
     },
+    "%lld rounds": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Runden"
+          }
+        }
+      }
+    },
+    "%lld rounds · %lld findings unchanged": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Runden · %lld Anmerkungen unverändert"
+          }
+        }
+      }
+    },
     "%lld s": {
       "localizations": {
         "de": {
@@ -1521,6 +1551,16 @@
         }
       }
     },
+    "Addressed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bearbeitet"
+          }
+        }
+      }
+    },
     "Addressing": {
       "localizations": {
         "de": {
@@ -1597,6 +1637,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Alle Checks bestanden"
+          }
+        }
+      }
+    },
+    "All files": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle Dateien"
           }
         }
       }
@@ -4861,6 +4911,16 @@
         }
       }
     },
+    "Moved": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verschoben"
+          }
+        }
+      }
+    },
     "My Agent": {
       "localizations": {
         "de": {
@@ -4927,6 +4987,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Braucht mein Review"
+          }
+        }
+      }
+    },
+    "Neither the anchored lines nor the thread has changed since you reviewed.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weder die verankerten Zeilen noch der Thread haben sich seit deinem Review geändert."
           }
         }
       }
@@ -5037,6 +5107,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Auf diesem Mac wurde noch kein Digest ausgeliefert."
+          }
+        }
+      }
+    },
+    "No file changed since the head you reviewed.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seit dem von dir geprüften Head hat sich keine Datei geändert."
           }
         }
       }
@@ -5357,6 +5437,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nichts braucht dein Review."
+          }
+        }
+      }
+    },
+    "Nothing new": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nichts Neues"
           }
         }
       }
@@ -6581,6 +6671,16 @@
         }
       }
     },
+    "Replied": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beantwortet"
+          }
+        }
+      }
+    },
     "Replies": {
       "localizations": {
         "de": {
@@ -6887,6 +6987,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Risikohinweise aus den geänderten Dateien, ohne Modell ermittelt."
+          }
+        }
+      }
+    },
+    "Round": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runde"
+          }
+        }
+      }
+    },
+    "Rounds you have reviewed on this Mac": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runden, die du auf diesem Mac geprüft hast"
           }
         }
       }
@@ -7521,6 +7641,16 @@
         }
       }
     },
+    "Show only the files and hunks that changed since the head you reviewed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur die Dateien und Hunks zeigen, die sich seit dem von dir geprüften Head geändert haben"
+          }
+        }
+      }
+    },
     "Show pull requests in Spotlight": {
       "localizations": {
         "de": {
@@ -7711,6 +7841,16 @@
         }
       }
     },
+    "Since your review": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Seit deinem Review"
+          }
+        }
+      }
+    },
     "Skim": {
       "localizations": {
         "de": {
@@ -7737,6 +7877,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld Pull Requests übersprungen, die nicht mehr in deiner Inbox sind."
+          }
+        }
+      }
+    },
+    "Somebody answered in this thread after you wrote in it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nach deinem Beitrag hat jemand in diesem Thread geantwortet."
           }
         }
       }
@@ -8441,6 +8591,16 @@
         }
       }
     },
+    "The file was renamed, or the lines around this comment shifted.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Datei wurde umbenannt, oder die Zeilen um diesen Kommentar haben sich verschoben."
+          }
+        }
+      }
+    },
     "The head commit has no checks at all, so there is nothing green to rely on.": {
       "localizations": {
         "de": {
@@ -8457,6 +8617,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Der Schlüssel liegt in deinem Schlüsselbund, neben dem GitHub-Token, und wird nur an den Endpunkt oben gesendet."
+          }
+        }
+      }
+    },
+    "The lines this comment is anchored to changed in the new round. It does not say the change is right — the thread stays open until you resolve it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Zeilen, an denen dieser Kommentar hängt, haben sich in der neuen Runde geändert. Das heißt nicht, dass die Änderung richtig ist — der Thread bleibt offen, bis du ihn auflöst."
           }
         }
       }
@@ -9211,6 +9381,16 @@
         }
       }
     },
+    "Unchanged": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unverändert"
+          }
+        }
+      }
+    },
     "Unnamed reply": {
       "localizations": {
         "de": {
@@ -9651,6 +9831,16 @@
         }
       }
     },
+    "Your findings": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Anmerkungen"
+          }
+        }
+      }
+    },
     "Your settings and your secrets are encrypted on this Mac with a passphrase you choose, then stored as one object in a bucket you own. The bucket operator — and anyone who can read the bucket — sees ciphertext only.": {
       "localizations": {
         "de": {
@@ -9807,6 +9997,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "von den Belegen widerlegt"
+          }
+        }
+      }
+    },
+    "conversation": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konversation"
           }
         }
       }
@@ -10037,6 +10237,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "mit %@ gelabelt"
+          }
+        }
+      }
+    },
+    "last %lld of %lld lines of %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "letzte %lld von %lld Zeilen von %@"
           }
         }
       }
@@ -10737,6 +10947,16 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "· %lld from the round you reviewed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "· %lld aus der geprüften Runde"
           }
         }
       }

@@ -110,7 +110,14 @@ final class SignedInSession {
         let engine = SyncEngine(
             github: github,
             store: database,
-            configuration: SyncConfiguration(sweepInterval: sweepInterval)
+            // The same database, through the narrow port the drain writes the interdiff's
+            // baseline with (ADR 0028), and the login that lets a detail fetch recognise a
+            // review the user submitted elsewhere.
+            snapshots: database,
+            configuration: SyncConfiguration(
+                sweepInterval: sweepInterval,
+                viewerLogin: account.login
+            )
         )
 
         return SignedInSession(

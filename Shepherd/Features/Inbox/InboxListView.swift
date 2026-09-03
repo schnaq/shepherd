@@ -142,6 +142,7 @@ struct InboxListView: View {
                                         showsMarkColumn: model.hasMarks,
                                         isMarked: model.markedIDs.contains(row.id),
                                         triage: model.triageSummary(for: row.id),
+                                        rounds: model.reviewRounds(for: row.id),
                                         onToggleMark: { model.toggleMark(row.id) }
                                     )
                                     .id(row.id)
@@ -363,6 +364,11 @@ struct InboxRowView: View {
     /// reason: a row is a value renderer, and a row that fetched its own chip would make the list
     /// depend on a coordinator it otherwise knows nothing about.
     var triage: TriageRowSummary?
+    /// What this row says about its review rounds, or `nil` when it has none (ADR 0028).
+    ///
+    /// Passed in for ``triage``'s reason: a row is a value renderer, and the numbers come from
+    /// the model that read them.
+    var rounds: ReviewRoundsSummary?
     /// Ticks or unticks this row.
     var onToggleMark: (() -> Void)?
 
@@ -416,6 +422,19 @@ struct InboxRowView: View {
             if row.isDraft {
                 ChipView(text: String(localized: "Draft"), color: Theme.textMuted)
                     .layoutPriority(1)
+            }
+
+            // "3 rounds · 2 findings unchanged": the one thing a reviewer wants to know before
+            // opening a pull request they have already reviewed once (ADR 0028).
+            if let text = rounds?.chipText {
+                ChipView(
+                    text: text,
+                    color: (rounds?.unchangedFindingCount ?? 0) > 0
+                        ? Theme.pending
+                        : Theme.textSecondary
+                )
+                .layoutPriority(1)
+                .help(String(localized: "Rounds you have reviewed on this Mac"))
             }
 
             Spacer(minLength: 8)

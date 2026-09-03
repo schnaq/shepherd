@@ -206,6 +206,24 @@ Pure logic in `ShepherdCore` (all unit-tested):
   that matches nothing returns nothing, and a total order. `SearchVector` is the `Float32` value —
   cosine, mean-pooling, alignment-safe BLOB coding — and the *only* embedding-shaped thing in the
   package: what produces one is Apple-only and therefore lives in the app target.
+- `Interdiff` / `FindingState` / `ReviewFindings` / `UnifiedPatch` (`Review/`) — the whole of
+  "since my review" as pure text work (ADR 0028). `UnifiedPatch.reconstruct(after:)` rebuilds the
+  *head* side of a unified patch as lines, padding the gaps between hunks so a 1-based index is
+  GitHub's own line number; the app-target `PatchReconstructor` stays where it is, because it also
+  produces the viewer's commentable-line sets. `Interdiff.compute(before:after:)` pairs the two
+  rounds' `ChangedFile` lists by path (a rename by `previousPath`), diffs the reconstructions line
+  by line — common prefix/suffix by scanning, the middle by LCS, with a cell cap past which the
+  region becomes one replacing hunk — and returns one `InterdiffFile` per file that differs, each
+  carrying its hunks *and* a synthesized unified patch in GitHub's own shape, so the Monaco viewer
+  renders a round through the existing `loadFile` message. Identical files are omitted; a rename is
+  listed even when its content did not change.
+  `FindingState.classify(thread:interdiff:viewerLogin:)` maps one thread's anchor — `line` on the
+  current side, `originalLine` on the reviewed side for an outdated thread, never backfilled from
+  one another — onto those hunks and answers `addressed` / `moved` / `replied` / `unchanged` in
+  that fixed precedence. Every state is a claim about lines and comments, never about correctness.
+- `ReviewSnapshot` (`Review/`) — the diff a review was written against: `prID`,
+  `reviewedHeadOid`, `reviewedAt`, `files: [ChangedFile]` (patches included). The interdiff's
+  baseline, kept locally because GitHub cannot be asked for a force-pushed head's patches.
 - `DeepLink` (`Routing/`) — the whole `shepherd://` grammar as a value: `parse(URL) -> DeepLink?`
   and `urlString` in the other direction, round-trip tested. Strict by construction (closed
   vocabularies, GitHub's own character rules, decoding *after* the path split), because a URL is
@@ -244,15 +262,21 @@ Pure logic in `ShepherdCore` (all unit-tested):
 
 Tables mirror core models (`repos`, `pull_requests`, `changed_files`, `review_threads`,
 `review_comments`, `review_drafts`, `draft_comments`, `check_runs`, `sync_state`, `outbox`,
-`etags`, `viewed_files`, `agent_registry_overrides`, `search_index`, `triage_verdicts`).
-Append-only migrator — currently `v1`, `v2`, `v3` and `v4`. `v3` is the search index (ADR 0019: one
+`etags`, `viewed_files`, `agent_registry_overrides`, `search_index`, `triage_verdicts`,
+`review_snapshots`).
+Append-only migrator — currently `v1`, `v2`, `v3`, `v4` and `v5`. `v3` is the search index (ADR 0019: one
 row per pull request holding the document hash, the model identifier and a `Float32` vector, pruned
 by an `ON DELETE CASCADE` onto `pull_requests` rather than by a sweep of its own); `v4` is
 `triage_verdicts` (ADR 0023: one row per pull request holding `kind`, `risk`, the one-sentence
 `reason`, the same `documentHash` gate, the model identifier and `classifiedAt`, pruned by the same
 cascade — deliberately the search index's shape, because the two rows answer the same two questions
-about the same pull request). `ValueObservation`
-publishers feed the UI. The **outbox** stores every outbound mutation (submit review, reply,
+about the same pull request). `v5` is `review_snapshots` (ADR 0028: one row per *reviewed head* —
+`(prID, reviewedHeadOid)` is the primary key, so `COUNT(*)` is the number of rounds the inbox row
+reports — holding `reviewedAt` and the pull request's `changed_files` rows, patches included, as
+one `filesJSON` blob, pruned by the same cascade. Written by the outbox drain when a
+`submitReview` succeeds, read by the interdiff, and never queried *into*: the whole value is read
+at once, and keeping the patches is the point, because a force-push makes them unfetchable).
+`ValueObservation` publishers feed the UI. The **outbox** stores every outbound mutation (submit review, reply,
 resolve, merge) as a row with retry/backoff state so writes survive crash/offline.
 
 ## ShepherdSync
@@ -263,6 +287,18 @@ only when `updatedAt`/`headRefOid` changed or the user opens it. Emits `SyncEven
 (`.newReviewRequest`, `.checksFailedOnOwnPR`, `.prMerged`, …) that the app maps to macOS
 notifications. Also drains the outbox with staleness re-validation (draft's `basedOnHeadOid`
 vs current head → surface conflict instead of blind submit).
+
+The drain has exactly one side effect that is not a GitHub write: when a `submitReview` mutation
+is acknowledged, the pull request's current `changed_files` rows are snapshotted as the head the
+review was written against (ADR 0028). The head is the draft's own `basedOnHeadOid` — the commit
+the staleness check just re-validated — with the head at drain time as a documented fallback for a
+draft that carries none. It goes through a port of its own (`ReviewSnapshotWriting`, beside
+`SyncStoring` in `SyncPorts.swift`) so the engine keeps building and testing on Linux against a
+fake, and a failure to write it never fails the sent review: the mutation has already reached
+GitHub, and the cost is that the review screen offers no "Since your review" tab. The same port
+carries the retroactive case — a detail fetch that sees a review *by the viewer*
+(`SyncConfiguration.viewerLogin`) on a head the pull request is still on, with no baseline for that
+head yet, writes one from the files it just stored.
 
 One `SyncEvent` is not about telling the user anything: `.mutationSent(SentMutation)` is yielded
 by the drain **after** a row is recorded as sent, and it is the only place in the system where

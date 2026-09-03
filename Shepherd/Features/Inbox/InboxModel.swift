@@ -282,6 +282,12 @@ final class InboxModel {
     var triage: TriageCoordinator?
     /// Whether a detail refresh is in flight.
     private(set) var isRefreshingDetail = false
+    /// What each row says about the rounds it has been reviewed in (ADR 0028).
+    ///
+    /// Keyed by node id and filled in in the background: the numbers come from the local
+    /// snapshots table and an interdiff computed on this Mac, so a list with none of them is a
+    /// list nobody has reviewed twice yet, not a list that is still loading.
+    private(set) var reviewRoundsByID: [String: ReviewRoundsSummary] = [:]
 
     /// The two-keystroke state machine (`r a`, `g r`, …).
     var keySequence = KeySequenceState()
@@ -289,6 +295,9 @@ final class InboxModel {
     private var observationTask: Task<Void, Never>?
     private var detailTask: Task<Void, Never>?
     private var intelligenceTask: Task<Void, Never>?
+    private var roundsTask: Task<Void, Never>?
+    /// The rows the rounds chips were last computed for, as `id:head` pairs.
+    private var roundsSignature = ""
 
     /// Creates the model.
     /// - Parameters:
@@ -311,6 +320,7 @@ final class InboxModel {
                 self.allRows = rows
                 self.hasLoaded = true
                 self.clampSelection()
+                self.refreshReviewRounds()
             }
         }
     }
@@ -323,6 +333,38 @@ final class InboxModel {
         detailTask = nil
         intelligenceTask?.cancel()
         intelligenceTask = nil
+        roundsTask?.cancel()
+        roundsTask = nil
+    }
+
+    /// Recomputes the rounds chips, but only when the rows they describe have moved.
+    ///
+    /// The inbox observation speaks on every write, and the interdiff is real work; the
+    /// signature is the cheap gate — a chip can only change when a pull request appears,
+    /// disappears or gets a new head (ADR 0028).
+    private func refreshReviewRounds() {
+        let signature = allRows.map { "\($0.id):\($0.headRefOid)" }.joined(separator: ",")
+        guard signature != roundsSignature else { return }
+        roundsSignature = signature
+        let rows = allRows
+        let database = session.database
+        let viewerLogin = session.account.login
+        roundsTask?.cancel()
+        roundsTask = Task { [weak self] in
+            let rounds = await SinceReviewLoader.rounds(
+                database: database,
+                rows: rows,
+                viewerLogin: viewerLogin
+            )
+            guard let self, !Task.isCancelled else { return }
+            self.reviewRoundsByID = rounds
+        }
+    }
+
+    /// What one row shows about its review rounds, or `nil` when it has never been reviewed here.
+    /// - Parameter id: The pull request's node id.
+    func reviewRounds(for id: String) -> ReviewRoundsSummary? {
+        reviewRoundsByID[id]
     }
 
     // MARK: - Derived state

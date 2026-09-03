@@ -105,6 +105,16 @@ final class ReviewModel {
     private(set) var revealLine: Int?
     /// Which tab is showing.
     var tab: Tab = .files
+    /// Which round the file list and the diff viewer are showing (ADR 0028).
+    private(set) var roundView: RoundView = .all
+    /// What changed since the head this reviewer last reviewed, when a baseline exists.
+    private(set) var round: SinceReviewRound?
+    /// Review priorities of the interdiff's files.
+    ///
+    /// The same prioritiser the full file list uses, run over the synthesized round files, so
+    /// "Since your review" orders and buckets its list the way the reviewer is used to instead
+    /// of inventing a second order.
+    private(set) var interdiffPriorities: [FilePriority] = []
     /// The composer request currently open, if any.
     var composerRequest: ComposerRequest?
     /// The thread whose conversation popover is open, if any.
@@ -145,9 +155,16 @@ final class ReviewModel {
     /// the user had deliberately cleared.
     private var hasOfferedTemplate = false
 
+    /// Whether the reviewer picked a round view themselves.
+    ///
+    /// Once they have, a background refresh must not move them back: the default is only a
+    /// default, and it is decided once per opened review.
+    private var hasChosenRoundView = false
+
     private var draftTask: Task<Void, Never>?
     private var loadTask: Task<Void, Never>?
     private var intelligenceTask: Task<Void, Never>?
+    private var roundTask: Task<Void, Never>?
 
     /// Called after a detail fetch has been stored, with the pull request's node id.
     ///
@@ -184,6 +201,8 @@ final class ReviewModel {
         loadTask = nil
         intelligenceTask?.cancel()
         intelligenceTask = nil
+        roundTask?.cancel()
+        roundTask = nil
     }
 
     /// Reloads from the cache and from GitHub.
@@ -261,12 +280,97 @@ final class ReviewModel {
             context: PrioritizationContext(totalChangedLines: detail.summary.churn)
         )
         viewedPaths = Set(detail.files.filter(\.isViewed).map(\.path))
-        if selectedPath == nil || !detail.files.contains(where: { $0.path == selectedPath }) {
-            selectedPath = priorities.first?.file.path
-        }
+        clampSelection()
         requestFocusHints(for: detail)
+        loadRound(for: detail)
         // The repository only becomes known here, and the draft observation may already have run.
         applyReviewTemplateIfNeeded()
+    }
+
+    /// Keeps ``selectedPath`` on a file the current round view actually lists.
+    private func clampSelection() {
+        if selectedPath == nil
+            || !visiblePriorities.contains(where: { $0.file.path == selectedPath }) {
+            selectedPath = visiblePriorities.first?.file.path
+        }
+    }
+
+    // MARK: - Since your review (ADR 0028)
+
+    /// Reads the baseline and computes the interdiff for the detail that just arrived.
+    ///
+    /// Off the main actor because it reads SQLite and diffs text; the result is applied back
+    /// here. Nothing is fetched — the baseline is local, which is the whole point of storing it
+    /// at submit time.
+    /// - Parameter detail: The pull request as it is now.
+    private func loadRound(for detail: PullRequestDetail) {
+        roundTask?.cancel()
+        let database = session.database
+        let viewerLogin = session.account.login
+        roundTask = Task { [weak self] in
+            let computed = await SinceReviewLoader.load(
+                database: database,
+                detail: detail,
+                viewerLogin: viewerLogin
+            )
+            guard let self, !Task.isCancelled else { return }
+            self.apply(round: computed)
+        }
+    }
+
+    private func apply(round computed: SinceReviewRound?) {
+        self.round = computed
+        interdiffPriorities = FilePrioritizer.prioritize(
+            computed?.changedFiles ?? [],
+            context: PrioritizationContext(
+                totalChangedLines: (computed?.changedFiles ?? []).reduce(0) { $0 + $1.churn }
+            )
+        )
+        if !hasChosenRoundView {
+            roundView = ReviewModel.defaultRoundView(for: computed)
+        } else if roundView == .sinceReview, computed?.isOffered != true {
+            // The tab the reviewer chose stopped existing — the pull request was reset to the
+            // head they reviewed, or the baseline became unreadable.
+            roundView = .all
+        }
+        clampSelection()
+    }
+
+    /// Which round view a review opens on.
+    ///
+    /// "Since your review" whenever there is something to show there — a stored baseline *and*
+    /// a head that has moved past it — because that is the question a fix round poses; the whole
+    /// pull request otherwise, which is every first review (ADR 0028).
+    ///
+    /// Pure and `static` so the default is unit-tested rather than inferred from task ordering.
+    /// - Parameter round: The computed round, or `nil` when there is no baseline.
+    /// - Returns: The view to open on.
+    static func defaultRoundView(for round: SinceReviewRound?) -> RoundView {
+        round?.isOffered == true ? .sinceReview : .all
+    }
+
+    /// Switches the file list and the diff viewer between the rounds.
+    /// - Parameter view: The view the reviewer picked.
+    func setRoundView(_ view: RoundView) {
+        guard view != roundView else { return }
+        hasChosenRoundView = true
+        roundView = view
+        clampSelection()
+    }
+
+    /// Shows one finding: its file and line, or the conversation when the anchor is gone.
+    ///
+    /// An outdated finding's line is a number in the head that was reviewed, so it is not used
+    /// to scroll the current diff — the conversation view is where a thread that lost its anchor
+    /// belongs, and it says where it came from.
+    /// - Parameter finding: The finding the reviewer clicked.
+    func jump(to finding: ReviewFinding) {
+        guard let path = finding.path, let line = finding.line, !finding.isLineOutdated else {
+            tab = .conversation
+            activeThreadID = finding.threadID
+            return
+        }
+        reveal(path: path, line: line)
     }
 
     private func requestFocusHints(for detail: PullRequestDetail) {
@@ -289,20 +393,55 @@ final class ReviewModel {
     /// The pull request's inbox row.
     var summary: PullRequestSummary? { detail?.summary }
 
-    /// The file list, grouped into priority buckets.
-    var buckets: [(bucket: PriorityBucket, files: [FilePriority])] {
-        FilePrioritizer.bucketed(priorities)
+    /// The priorities the file list shows in the current round view.
+    var visiblePriorities: [FilePriority] {
+        roundView == .sinceReview ? interdiffPriorities : priorities
     }
 
-    /// The currently selected changed file.
-    var selectedFile: ChangedFile? {
+    /// The file list, grouped into priority buckets.
+    var buckets: [(bucket: PriorityBucket, files: [FilePriority])] {
+        FilePrioritizer.bucketed(visiblePriorities)
+    }
+
+    /// Whether the "Since your review" segment is offered at all (ADR 0028).
+    var isSinceReviewOffered: Bool { round?.isOffered == true }
+
+    /// The reviewer's findings from the round they reviewed, with their states.
+    var findings: [ReviewFinding] { round?.findings ?? [] }
+
+    /// What changed since the reviewed head, or `nil` when there is no baseline.
+    var interdiff: [InterdiffFile]? { round?.interdiff }
+
+    /// The pull request's own changed file at the selection, whatever the round view.
+    ///
+    /// The anchor validation and the commentable-line gate use this rather than
+    /// ``selectedFile``: GitHub accepts an inline comment only on a line of the *pull
+    /// request's* diff, which the interdiff's synthesized patch is not.
+    var currentFile: ChangedFile? {
         guard let selectedPath else { return nil }
         return detail?.files.first { $0.path == selectedPath }
     }
 
-    /// The reconstruction of the selected file's patch, or `nil` when GitHub sent no patch.
+    /// The currently selected changed file — the round's version of it in
+    /// ``RoundView/sinceReview``.
+    var selectedFile: ChangedFile? {
+        guard let selectedPath else { return nil }
+        if roundView == .sinceReview,
+           let file = interdiff?.first(where: { $0.path == selectedPath }) {
+            return file.changedFile(isViewed: viewedPaths.contains(selectedPath))
+        }
+        return currentFile
+    }
+
+    /// The reconstruction of the selected file's patch, or `nil` when there is no patch.
     var selectedReconstruction: PatchReconstructor.Reconstruction? {
         guard let file = selectedFile else { return nil }
+        return PatchReconstructor.reconstruct(file)
+    }
+
+    /// The reconstruction of the *pull request's* patch at the selection.
+    var currentReconstruction: PatchReconstructor.Reconstruction? {
+        guard let file = currentFile else { return nil }
         return PatchReconstructor.reconstruct(file)
     }
 
@@ -316,10 +455,32 @@ final class ReviewModel {
             language: MonacoLanguage.id(for: file),
             original: reconstruction.original,
             modified: reconstruction.modified,
-            commentableLines: BridgeCommentableLines(
+            commentableLines: commentableLines(in: reconstruction)
+        )
+    }
+
+    /// Which lines the viewer may arm its gutter on.
+    ///
+    /// In ``RoundView/all`` this is simply what the patch contained. In
+    /// ``RoundView/sinceReview`` the document is a synthesized diff of two heads: its right-hand
+    /// side shares the current head's line numbers, so a comment there is meaningful, but only
+    /// on a line the pull request's *own* patch also contains — GitHub rejects an entire review
+    /// when one `comments[].line` is not part of the diff. The left-hand side is the head that
+    /// was reviewed and has no valid anchors at all, so it is empty rather than omitted.
+    /// - Parameter reconstruction: The reconstruction being shown.
+    private func commentableLines(
+        in reconstruction: PatchReconstructor.Reconstruction
+    ) -> BridgeCommentableLines {
+        guard roundView == .sinceReview else {
+            return BridgeCommentableLines(
                 left: reconstruction.commentableOriginalLines.sorted(),
                 right: reconstruction.commentableModifiedLines.sorted()
             )
+        }
+        let allowed = currentReconstruction?.commentableModifiedLines ?? []
+        return BridgeCommentableLines(
+            left: [],
+            right: reconstruction.commentableModifiedLines.intersection(allowed).sorted()
         )
     }
 
@@ -354,8 +515,15 @@ final class ReviewModel {
     /// Markdown is rendered to sanitized HTML **here**, on the native side: that is the
     /// bridge's `bodyHTML` contract.
     var bridgeThreads: [BridgeThread] {
-        threadsForSelectedFile.compactMap { thread in
+        // In "Since your review" the document only holds the lines that changed between the
+        // rounds; everything else is padding, and mounting a thread on padding would park a
+        // conversation on a blank line.
+        let visibleLines = roundView == .sinceReview
+            ? selectedReconstruction?.commentableModifiedLines
+            : nil
+        return threadsForSelectedFile.compactMap { thread in
             guard let line = thread.line, line >= 1 else { return nil }
+            if let visibleLines, !visibleLines.contains(line) { return nil }
             return BridgeThread(
                 id: thread.id,
                 line: line,
@@ -577,7 +745,7 @@ final class ReviewModel {
         // Only the selected file has a reconstruction to check against; a request for any
         // other path cannot be produced by the viewer.
         guard request.path == selectedPath,
-              let commentable = selectedReconstruction?.commentableLines(on: request.side)
+              let commentable = currentReconstruction?.commentableLines(on: request.side)
         else { return }
         for line in [request.startLine, request.line].compactMap({ $0 }) {
             guard commentable.contains(line) else {
@@ -645,7 +813,13 @@ final class ReviewModel {
     ///   - path: The file to show.
     ///   - line: The head-side line to scroll to, when the diagnosis named one.
     func reveal(path: String, line: Int?) {
-        guard detail?.files.contains(where: { $0.path == path }) == true else { return }
+        if !visiblePriorities.contains(where: { $0.file.path == path }) {
+            // The file is not in the round the reviewer is looking at. Showing the whole pull
+            // request is the honest way to show it, rather than selecting a file the list does
+            // not contain.
+            guard detail?.files.contains(where: { $0.path == path }) == true else { return }
+            setRoundView(.all)
+        }
         selectedPath = path
         tab = .files
         revealLine = line

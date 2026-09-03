@@ -293,8 +293,8 @@ order. Everything here is tier 1 first (deterministic, local); a model only ever
 - [ ] Track record and trust lanes — closed pull requests of the last 90 days backfilled once per
       repository; **Short look** only when CI is green and the diff is small, history informs the
       badge and the sort, never the lane
-- [ ] Since my review — a snapshot of the reviewed head at submit time, the interdiff computed
-      locally, each finding marked addressed / unchanged / moved / replied
+- [x] Since my review — a snapshot of the reviewed head at submit time, the interdiff computed
+      locally, each finding marked addressed / unchanged / moved / replied (ADR 0028)
 - [ ] Feedback loop — a finding the reviewer has written three times becomes a drafted `CLAUDE.md`
       rule in the delegation sheet; the local agent opens the pull request
 - [ ] Session back-channel — a finding goes to the Claude Code session named in the head commits'

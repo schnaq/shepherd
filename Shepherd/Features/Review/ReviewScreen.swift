@@ -129,6 +129,13 @@ struct ReviewScreen: View {
         VStack(spacing: 0) {
             ReviewFileHeader(model: model, actions: actions)
             Divider().overlay(Theme.border)
+            // Under the round picker, and only while it is showing that round: the findings are
+            // the other half of "since your review" — the diff says what the agent changed, the
+            // list says what became of what you asked for (ADR 0028).
+            if model.tab == .files, model.roundView == .sinceReview, !model.findings.isEmpty {
+                SinceReviewFindingsView(model: model)
+                Divider().overlay(Theme.border)
+            }
             Group {
                 switch model.tab {
                 case .files:
@@ -168,6 +175,12 @@ struct ReviewScreen: View {
                 systemImage: "doc.text.magnifyingglass",
                 title: String(localized: "No files"),
                 message: String(localized: "GitHub reported no changed files for this pull request.")
+            )
+        } else if model.roundView == .sinceReview, model.visiblePriorities.isEmpty {
+            EmptyStateView(
+                systemImage: "checkmark.circle",
+                title: String(localized: "Nothing new"),
+                message: String(localized: "No file changed since the head you reviewed.")
             )
         } else if let content = model.selectedContent {
             DiffViewerView(

@@ -8,13 +8,13 @@ struct ReviewFileListView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if model.priorities.isEmpty {
+            if model.visiblePriorities.isEmpty {
                 EmptyStateView(
                     systemImage: "doc.on.doc",
-                    title: String(localized: "No files yet"),
-                    message: model.isRefreshing
-                        ? String(localized: "Fetching the diff…")
-                        : String(localized: "This pull request has no changed files.")
+                    title: model.roundView == .sinceReview
+                        ? String(localized: "Nothing new")
+                        : String(localized: "No files yet"),
+                    message: emptyMessage
                 )
             } else {
                 ScrollView {
@@ -32,6 +32,15 @@ struct ReviewFileListView: View {
             focusHintFooter
         }
         .background(Theme.panel)
+    }
+
+    private var emptyMessage: String {
+        if model.roundView == .sinceReview {
+            return String(localized: "No file changed since the head you reviewed.")
+        }
+        return model.isRefreshing
+            ? String(localized: "Fetching the diff…")
+            : String(localized: "This pull request has no changed files.")
     }
 
     private func bucketHeader(_ bucket: PriorityBucket, count: Int) -> some View {
@@ -162,6 +171,22 @@ struct ReviewFileHeader: View {
             .labelsHidden()
             .frame(width: 200)
 
+            // Offered only when there is a stored baseline *and* the head has moved past it,
+            // so a first review looks exactly as it always has (ADR 0028).
+            if model.tab == .files, model.isSinceReviewOffered {
+                Picker(String(localized: "Round"), selection: roundBinding) {
+                    ForEach(RoundView.allCases) { round in
+                        Text(round.title).tag(round)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 214)
+                .help(
+                    String(localized: "Show only the files and hunks that changed since the head you reviewed")
+                )
+            }
+
             if model.tab == .files, let file = model.selectedFile {
                 Text(file.path)
                     .font(Theme.mono(12))
@@ -210,6 +235,10 @@ struct ReviewFileHeader: View {
 
     private var tabBinding: Binding<ReviewModel.Tab> {
         Binding(get: { model.tab }, set: { model.tab = $0 })
+    }
+
+    private var roundBinding: Binding<RoundView> {
+        Binding(get: { model.roundView }, set: { model.setRoundView($0) })
     }
 
     private var layoutBinding: Binding<Bool> {
