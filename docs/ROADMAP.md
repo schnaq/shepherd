@@ -236,13 +236,17 @@ The engineering plan — four sprints, migration v7, ADR 0032 — is
       Delegation Center; opening the pull request the agent made is the human's click. A
       **rule** that assigns unattended ("every issue with label `agent-ok`") is a separate, later
       opt-in under ADR 0016's shape — condition enum plus checkbox — not part of the first cut
-- [ ] Issue triage writes: label, assign, close as completed / not planned, comment — each one
-      outbox row, each with the same staleness precondition the review writes have (ADR 0006)
+- [x] Issue triage writes: label, assign, close as completed / not planned, comment — each one an
+      outbox row, each with the same staleness precondition the review writes have (ADR 0006).
+      The probe is the issue's own `updatedAt`, the label and assignee endpoints are the additive
+      ones so two queued writes cannot race each other into a lost update, and a parked write is
+      counted where every other parked write is (ADR 0032's Sprint 4a amendment)
 - [ ] Webhook events `issue.assigned_to_agent` and `issue.closed`, additive under `"v": 1`
       (ADR 0012), and `shepherd://issue/{owner}/{repo}/{number}` plus an `issues` inbox filter
-      (ADR 0013, additive)
-- [ ] Morning digest gains one line: issues assigned to you since the last digest, and agent
-      pull requests that closed one (tier 1, no network — the rule of the digest stands)
+      (ADR 0013, additive) (`issue.closed` done, `issue.assigned_to_agent` with Sprint 4b)
+- [x] Morning digest gains one line: issues assigned to you since the last digest, and agent
+      pull requests that closed one (tier 1, no network — the rule of the digest stands). The
+      first is windowed on `updatedAt`, the second is a state that survives the night
 
 ## Intelligence v2 (ADR 0007 follow-ups)
 

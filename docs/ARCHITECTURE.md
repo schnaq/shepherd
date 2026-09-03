@@ -245,14 +245,21 @@ Pure logic in `ShepherdCore` (all unit-tested):
   and a matching template with a body — so a template can only ever fill a new review and can
   never overwrite review work (ADR 0006).
 - `DigestReport` / `DigestSchedule` (`Digest/`) — the morning digest, as two pure values.
-  `DigestReport.make(pullRequests:parkedReviewCount:windowStart:now:)` turns cached inbox rows plus
-  the parked-outbox count into ordered sections with a count and up to three named pull requests
-  each; an empty report is the signal for "say nothing at all". The predicates are *borrowed*, not
-  restated: `PullRequestSummary.needsMyReview`, `BulkTriagePlan.greenAgentPullRequests(in:)`
-  (ADR 0015) and `AutoDelegationPolicy.isOwn(_:)` (ADR 0016). Only the review-request section is
-  windowed (`DigestSectionKind.isWindowed`) — the other two are standing state, because a green
-  agent PR nobody merged is exactly what a morning brief is for and a windowed version would go
-  quiet on the second morning. `DigestSchedule.window(now:lastDeliveredAt:calendar:)` is the whole
+  `DigestReport.make(pullRequests:issues:parkedReviewCount:windowStart:now:)` turns cached inbox
+  rows, cached issue rows and the parked-outbox count into ordered sections with a count and up to
+  three named rows each; an empty report is the signal for "say nothing at all". The predicates are
+  *borrowed*, not restated: `PullRequestSummary.needsMyReview`,
+  `BulkTriagePlan.greenAgentPullRequests(in:)` (ADR 0015), `AutoDelegationPolicy.isOwn(_:)`
+  (ADR 0016) and `IssueRowSummary.hasAgentPullRequest` (ADR 0032). Two of the six sections are
+  windowed (`DigestSectionKind.isWindowed`) — the review requests and the issues assigned to you,
+  both on `updatedAt`, because that is the field GitHub moves when somebody hands you something.
+  The other four are standing state, because a green agent PR nobody merged is exactly what a
+  morning brief is for and a windowed version would go quiet on the second morning; the same
+  argument makes `agentPullRequestsThatClosedAnIssue` a state, and it stops repeating by itself
+  because the issues sweep searches `is:open` and prunes a closed row on its next pass.
+  `issues:` defaults to none, so a caller predating the issues inbox gets the report it always got,
+  and `Item.prID` carries the issue's node id for an issue row — the generic reuse `OutboxItem`
+  makes, with `DigestSectionKind.isAboutIssues` telling a reader which it is holding. `DigestSchedule.window(now:lastDeliveredAt:calendar:)` is the whole
   due rule — off/not-yet/weekend/already-delivered, in that fixed order — and returns the span to
   report on: the previous delivery, a 16 h look-back on the first run, capped at seven days.
 - `SearchDocument` / `SearchRanker` / `SearchVector` (`Search/`) — the whole of ⌘K search's
@@ -373,6 +380,17 @@ Pure logic in `ShepherdCore` (all unit-tested):
     immutable, so — unlike `/check-runs` — it leaves one row per issue however often it is read.
     The endpoint serves pull requests too, and `IssueSummary.isPullRequest` reports that rather
     than the read refusing
+  - `issueState(repo:number:) async throws -> IssueState` — the issue staleness probe (ADR 0032's
+    Sprint 4a amendment), `issue(number:) { id updatedAt closed }`. `headRefOid`'s twin for the
+    other kind of node, and GraphQL rather than the REST issue read above it precisely because
+    that one is ETag-cached on its URL: a probe answerable from a cache is not a probe
+  - `addIssueComment/addIssueLabels/addIssueAssignees/setIssueState` — the four issue triage
+    writes (ADR 0032's Sprint 4a amendment), all REST on `api.github.com`. The labels and
+    assignees endpoints are the **additive** `POST .../labels` and `POST .../assignees` rather
+    than the full-replace `PATCH`, so two writes queued a second apart cannot race each other into
+    a lost update; `setIssueState` sends `state` and `state_reason` and nothing else, because that
+    endpoint would otherwise happily rewrite the title, body, labels and assignees somebody else
+    just changed
   - `submitReview(_ draft: ReviewDraft, on:) async throws` — REST
     `POST /pulls/{n}/reviews` with full `comments` array; maps verdict to `event`
   - `replyToComment/resolveThread/unresolveThread/mergePullRequest/markReadyForReview…`
@@ -450,7 +468,11 @@ a node id, and it exists because a link is written the way GitHub writes it, `ow
 `DatabaseManager.changedFilePaths(prIDs:)` reads the cached diffs' paths and statuses **without**
 their patches, which is all the trust lane's sensitive-path exclusion needs.
 `ValueObservation` publishers feed the UI. The **outbox** stores every outbound mutation (submit review, reply,
-resolve, merge) as a row with retry/backoff state so writes survive crash/offline.
+resolve, merge — and, since ADR 0032's Sprint 4a amendment, comment on / label / assign / close /
+reopen an *issue*) as a row with retry/backoff state so writes survive crash/offline. There is no
+schema change for the issue actions: `outbox.payload` is an opaque blob of the whole
+`OutboxAction`, and `prID`/`repo`/`number` are reused generically as the target's node id,
+repository and number — which is the question `issuePruneGuardSQL` was already asking.
 
 One read crosses tables rather than serving a screen: `viewerReviewComments(login:since:)` joins
 `review_comments → review_threads → pull_requests` and returns the signed-in user's own posted
@@ -467,6 +489,16 @@ only when `updatedAt`/`headRefOid` changed or the user opens it. Emits `SyncEven
 (`.newReviewRequest`, `.checksFailedOnOwnPR`, `.prMerged`, …) that the app maps to macOS
 notifications. Also drains the outbox with staleness re-validation (draft's `basedOnHeadOid`
 vs current head → surface conflict instead of blind submit).
+
+The same rule on the other kind of node (ADR 0032's Sprint 4a amendment): every issue action
+carries `basedOnUpdatedAt`, and the drain reads `issueState` before it sends anything. A mismatch
+parks the row as `conflicted` and emits **no** `draftConflict` — that event promises a draft the
+user can re-apply, and an issue write has none, so the standing `conflictedOutboxCount()` and the
+panel's per-issue line are the surface. A probe that could not be *made* is a plain failure and
+therefore a backoff, because an unreachable network says nothing about the issue. The writes go
+through a third port, `IssueWriting`, handed to the engine as its own optional parameter beside
+`IssueCapture` — the sweep and the drain are different moments, and a drain that sends a queued
+comment needs no sweep.
 
 The sweep has one side effect of its own beyond writing the inbox: the pull requests the prune
 actually removed — the same list `SyncEvent.prMerged` is emitted from — are read once each and
@@ -1007,14 +1039,24 @@ duplicate the toolbar, the digest card, the Settings sheet and the palette overl
   body through the same `AttributedString` renderer the pull-request description uses, plus
   "Linked pull requests" from `IssueRowSummary.linkedPullRequests` at zero extra GitHub calls. A
   row opens the review when the pull request is in the local inbox and github.com when it is not.
-  `IssueLinkedPullRequestRow` carries an empty, commented `badge` slot for the CI/review badge a
-  later sprint passes in from its own file.
+  `IssueLinkedPullRequestRow` carries a `badge` slot the CI/review badge is passed into from its
+  own file.
+- **The panel writes, through the ordinary outbox** (ADR 0032's Sprint 4a amendment): an actions
+  row with a comment composer sheet (`IssueCommentSheet`), a label picker, *Assign to me*, close as
+  completed / not planned, and reopen. Each one calls an `IssueInboxModel` method that enqueues an
+  `OutboxItem` and asks the engine to drain — nothing in `Features/Inbox/` calls `GitHubClient` for
+  a mutation, which is the same rule `PullRequestActions` states below. The label picker is fed by
+  the labels the section has already seen in that repository (a `GET /repos/…/labels` would be a
+  new request on every panel for a list the sweep already wrote), and the panel shows the two
+  outbox states the pull-request side shows — waiting to be sent, and parked — about this one
+  issue. No new global shortcuts: the issues section already refuses `r a`, `m` and `x`.
 
 ### Morning digest (opt-in, local, no scheduler)
 
-Once a day, at a time the user picks, Shepherd says what came in: new review requests, green agent
-pull requests that only need an approval or a merge, the user's own pull requests with red CI or a
-change request, and reviews the outbox could not send. It arrives as a macOS notification and as a
+Once a day, at a time the user picks, Shepherd says what came in: new review requests, issues
+assigned to you, green agent pull requests that only need an approval or a merge, issues an agent's
+pull request closed as completed, the user's own pull requests with red CI or a change request, and
+reviews the outbox could not send. It arrives as a macOS notification and as a
 dismissible card above the inbox list. **Off by default** (Settings → Sync).
 
 `Features/Digest/` is three files and holds no judgement: `DigestCoordinator` (the loop and the
@@ -1142,7 +1184,11 @@ layer is only placement.
 `PullRequestActions` is the single write surface (`submitReview`, `reply`, `setThread`,
 `merge`, `markReadyForReview`). Every one of them enqueues an `OutboxItem` and then asks the
 sync engine to drain, so a queued approval survives a crash, a quit or an offline period. The
-app never calls a `GitHubClient` mutation directly. `SyncEvent.draftConflict` surfaces as an
+app never calls a `GitHubClient` mutation directly. The issue triage writes (ADR 0032's Sprint 4a
+amendment) are the same rule on the other kind of node, through `IssueInboxModel`'s own
+`comment`/`addLabel`/`assignToMe`/`close`/`reopen` — a second surface rather than a widened
+`PullRequestActions` because that type is built from a `SignedInSession` and the issues model
+deliberately is not. `SyncEvent.draftConflict` surfaces as an
 alert offering to re-open the review rather than submitting against the wrong commit — one alert
 per parked review, queued in `DraftConflictQueue` so a drain that parks several shows all of them,
 with `conflictedOutboxCount()` behind the standing count in Settings → Sync and the title bar.

@@ -67,6 +67,15 @@ would close this issue, each with its state and who wrote it. One keystroke open
 about — the review screen when it is a pull request you already have, its GitHub page when it is
 somebody else's. That list costs no extra request: the sweep already saw it.
 
+And you can act on one without leaving the panel. *Comment…* opens a small composer, *Label* offers
+the labels Shepherd has already seen in that repository, *Assign to me* adds you without removing
+anybody, and *Close* asks the one question GitHub asks: completed, or not planned. A closed issue
+offers *Reopen* instead. Every one of those is queued locally first and sent in the background, the
+same way an approval is — so it works in a tunnel — and every one of them is checked against the
+issue before it goes out: if somebody relabelled, commented on or closed the issue between your
+click and the send, Shepherd parks the write and tells you rather than overwriting what they did.
+The panel says what is still waiting and what is parked.
+
 And it is drivable from outside like everything else: `shepherd issue schnaq/review#128` opens one,
 `shepherd inbox issues` opens the section, and `shepherd://issue/…` does the same from a script or
 a Raycast command ([ADR 0013](adr/0013-deep-links-and-cli.md)). An issue a colleague sends you that
@@ -172,9 +181,10 @@ on working, because they never read it.
 ### A morning digest, built on your Mac
 
 Switch it on and once a day — nine o'clock by default, weekdays only if you like — Shepherd tells
-you what came in since the last one: new review requests, green agent pull requests that only need
-an approval or a merge, your own pull requests with red CI or a change request, and reviews it
-could not send. One notification that opens the inbox, plus the same summary as a dismissible card
+you what came in since the last one: new review requests, issues somebody assigned to you, green
+agent pull requests that only need an approval or a merge, issues an agent's pull request closed
+for you overnight, your own pull requests with red CI or a change request, and reviews it could not
+send. One notification that opens the inbox, plus the same summary as a dismissible card
 above the list, where each line has a *Show* that takes you to it. Off by default.
 
 It is assembled entirely from the local database — no GitHub call, no AI, nothing sent anywhere,

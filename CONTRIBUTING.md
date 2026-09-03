@@ -139,7 +139,16 @@ bumping a dependency that ships inside the app also means a line in
     once for the body when the panel opens an issue whose cached body is older than the row, and
     one `repository { issue(number:) }` GraphQL query when a `shepherd://issue/…` link names an
     issue the local cache does not have. Both are reads, both are `api.github.com`, and typing in
-    ⌘K still cannot produce either — the search index is built from rows that are already stored;
+    ⌘K still cannot produce either — the search index is built from rows that are already stored.
+    The issue **writes** (ADR 0032's Sprint 4a amendment) are the first thing on that side that is
+    not a read, and they are four REST calls on the same host with the same token, each one an
+    ordinary outbox row: `POST /repos/…/issues/{n}/comments`, `POST …/issues/{n}/labels` (the
+    additive endpoint, so two queued label writes cannot race each other into a lost update),
+    `POST …/issues/{n}/assignees`, and `PATCH …/issues/{n}` carrying `state` and `state_reason`
+    and nothing else. Before every one of them the drain makes one more read on that same GraphQL
+    endpoint — `issue(number:) { id updatedAt closed }`, the staleness probe — and parks the write
+    rather than sending it when the issue moved on. Five calls, one host, and it is the host that
+    was already on this list;
   - only when the user configures a key: api.anthropic.com, or the OpenAI-compatible endpoint
     they chose themselves (a preset's base URL is still their choice). What travels there is the
     tier-1 digest — title, description excerpt, file list, top hunks — and, when you use AI

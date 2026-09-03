@@ -402,3 +402,180 @@ bug to fix. `issue_linked_pull_requests` is what the *issues sweep* saw, capped 
 `pull_request_closing_issues` is what a *pull request's detail fetch* saw, capped at ten; neither
 is derived from the other, and an issue nobody assigned to the user is in the second table and
 never in the first. A join between them would have to invent an authority that does not exist.
+
+---
+
+## Amendment, 2026-09-03 — Sprint 4a: issue writes, the `issue.closed` event and the digest lines
+
+The section reads. This amendment records what it may now *write*, and the three decisions that
+took: what a queued issue write is re-validated against, which GitHub endpoint each one uses, and
+what the morning digest is allowed to say about issues.
+
+It is deliberately **half** of the plan's Sprint 4. The other half — assigning an issue to a local
+agent — waits on the owner's answer to the ground-rule question ADR 0011 raises
+(`docs/plans/issues-inbox.md` §10: may an issue-origin delegation commit, push and open a pull
+request with the agent's own credentials?). Nothing here anticipates that answer:
+`DelegationContext.Origin` is unchanged, `DelegationPrompt`'s preamble is unchanged, there is no
+new `GitWorktree` entry point, there is no "Assign to agent" button, and the second webhook event
+the roadmap names — `issue.assigned_to_agent` — is **not** here. Everything below stands on its
+own whichever way that decision goes.
+
+### Five outbox actions, and no migration
+
+`OutboxAction` gains `addIssueComment`, `addIssueLabel`, `addIssueAssignee`, `closeIssue` and
+`reopenIssue`. `outbox.payload` already stores the whole enum as an opaque blob, so a new case is
+additive to the Swift type and to nothing else — the same shape a new `WebhookEvent` case had —
+and a row an older build wrote still decodes because its discriminator is still one of the cases.
+There is no schema change in this sprint at all.
+
+`OutboxItem.prID`, `.repo` and `.number` are reused **generically** as the target's node id,
+repository and number, documented on the type and at every call site that fills them in, rather
+than renamed. A mechanical rename would touch every existing pull-request write for no behavioural
+change, and the one place that already asked the generic question — `issuePruneGuardSQL`, "is
+something queued against this id" — was written that way in Sprint 1 precisely because the answer
+was going to have to serve both kinds.
+
+`closeIssue` carries a small `IssueCloseReason` enum rather than `merge`'s raw string, and the
+asymmetry is the point: a merge method is one of three words GitHub may grow, while "completed or
+not planned" is the *whole* of the choice the button offers and the two halves read differently in
+the UI. A row from a build that knew a third reason simply fails to decode, which
+`claimReadyOutboxItems` already skips rather than letting it poison the queue.
+
+### The precondition is `updatedAt`, and a failed probe is not a conflict
+
+Every one of the five carries `basedOnUpdatedAt`, and the drain re-reads the issue before it sends
+anything: `GraphQLDocuments.issueState` (`id updatedAt closed`), `pullRequestHead`'s shape with the
+other node in it. A mismatch parks the row as `conflicted`. This is `ReviewDraft.basedOnHeadOid`'s
+rule on the field an issue actually has — GitHub moves `updatedAt` for every edit, label,
+assignment, comment and state change, and an issue has no head commit to compare.
+
+Three details are decisions:
+
+- **It is GraphQL, not the REST `GET /repos/…/issues/{n}` the claims card makes.** That read is
+  ETag-cached on its URL (ADR 0026's amendment), and a probe that can be answered out of a cache is
+  not a probe.
+- **A parked issue row emits no `SyncEvent.draftConflict`.** That event promises something an issue
+  write cannot offer: a review draft still on disk that the user can re-apply against the new head,
+  and an alert that says so. A parked issue write is parked, counted by `conflictedOutboxCount()`
+  beside every other parked row, shown per issue in the detail panel, and left for the user — which
+  is the whole of what ADR 0006 asks for.
+- **A probe that could not be *made* is a plain failure and therefore a backoff**, not a conflict.
+  The two are genuinely different: a conflict is a fact about the issue that will not change by
+  waiting, while an unreachable network says nothing about the issue at all. Parking on it would
+  turn every tunnel into a pile of rows somebody has to clear by hand.
+
+The comparison has a one-second tolerance rather than being an exact `!=`. GitHub's timestamps are
+second-precision ISO-8601 and the stored row holds the same parsed value, so a sub-second
+difference cannot be a real edit — while an exact comparison would be at the mercy of any future
+encoder that wrote a fractional second.
+
+The writes go through a **third port**, `IssueWriting`, beside the sweep's `IssueFetching` and
+`IssueSyncStoring`. `ClosedPullRequestReading`'s argument, a third time: the sweep's port is what
+every sweep test already implements, and the drain is a different moment with a different failure
+mode. It is handed to the engine as its own optional parameter rather than as a field on
+`IssueCapture`, because that value's own reasoning — "neither half is any use without the other" —
+is not true here: a drain that sends a queued comment needs no sweep.
+
+### The label endpoint is the additive one
+
+- `POST /repos/{o}/{r}/issues/{n}/comments`
+- `POST …/issues/{n}/labels` — **additive**, never the full-replace `PATCH` with a `labels` array
+- `POST …/issues/{n}/assignees` — additive for the same reason
+- `PATCH …/issues/{n}` carrying `state` and `state_reason` and **nothing else**
+
+The additive endpoints are the interesting choice. Two label writes queued a second apart would
+each carry the list as it was when they were composed, so a full-replace `PATCH` would let the
+second silently undo the first — a lost update the staleness probe cannot catch, because both
+writes are perfectly fresh. `POST .../labels` cannot lose one. The same argument makes the state
+`PATCH` carry two keys: that endpoint would happily rewrite the title, the body, the labels and the
+assignees, and a body that mentioned them would overwrite whatever somebody else changed in the
+meantime.
+
+All four are `api.github.com`, through the client that already holds the token, the retry policy
+and the rate-limit backoff. **No new host**, and `CONTRIBUTING.md` gains one bullet naming them
+rather than a new entry.
+
+### `issue.closed`, and an envelope with a second subject
+
+One webhook event, fired from the outbox drain's `mutationSent` — the hook `review.submitted` and
+`pr.merged` already use, and for their reason: a close still waiting out a retry has closed
+nothing. It fires only for issues **Shepherd** closed; an issue closed on github.com merely leaves
+the inbox on the next sweep, and a sweep of open issues cannot say why one went, which is exactly
+the reasoning that keeps `pr.merged` to merges Shepherd performed.
+
+Its envelope carries an `issue` object where every other event carries `pullRequest`. That is a
+second *subject*, not a widened one: an issue has no branch, no base branch, no head SHA, no draft
+flag and no diff counts, and nulling five keys on every one of them would make a receiver guard a
+shape the producer never fills in — the argument this ADR already makes for `IssueRowSummary`
+beside `PullRequestSummary`. It stays at `"v": 1` in the strictest sense, because no event that
+existed before it gained, lost or renamed a key.
+
+Ten keys: where it is, what it is called, who wrote it and with what provenance. No body, no
+labels, no comment count, no linked pull requests — ADR 0012's rule that the payload describes what
+happened and the receiver follows the `url` for the substance. `details` is `{ "reason": … }`,
+GitHub's own raw `state_reason` word, unmapped.
+
+The four other writes — comment, label, assignee, reopen — reach GitHub through the same drain and
+are deliberately mapped to **nothing**. v1 promised no event for them, and adding one later is
+additive.
+
+### Two digest lines, one an event and one a state
+
+`DigestSectionKind` gains `issuesAssignedToYou` and `agentPullRequestsThatClosedAnIssue`, both
+tier 1 and both reading rows the two sweeps already wrote. Nothing in the digest's path calls
+GitHub, an endpoint or a model, and that rule is unchanged.
+
+The split between them is the same one the existing four make. "An issue was assigned to you" is an
+**event** and is windowed on `updatedAt` — GitHub moves `updatedAt` when somebody assigns you, so
+`createdAt` would miss the commonest overnight shape of all, an old issue handed over this morning.
+"An agent's pull request closed one of these as completed" is a **state**, and is therefore not
+windowed at all: a windowed version would go quiet on the second morning precisely because nothing
+had been done about it, which is the failure the green-agent-pull-request line was shaped to avoid.
+
+The plan's own §5.4 spells that second predicate with a `closedAt >= windowStart` clause while also
+calling it "not windowed — a state, like the green-agent-PR line", and §5.5 asks for a *"state
+survives the night"* test. The two cannot both hold, and this amendment resolves it in favour of
+the state: the section is `state == .closed`, `stateReason == "completed"` (case-insensitively —
+the field is raw and this is the one equality anything performs on it) and
+`IssueRowSummary.hasAgentPullRequest`. It cannot repeat itself for long, and that is a property of
+the data rather than a cap somebody added: the issues sweep searches `is:open`, so a closed row is
+pruned on the next pass. `pull_request_closing_issues` is not read — the links on the issue's own
+row are what the facet, the chip and this line all already agree on, so a second source could only
+disagree.
+
+`completed` and not any closed state, because "not planned" is a decision somebody took *instead*
+of the work, and reporting it as an agent's success would be a lie.
+
+Two consequences worth stating:
+
+- **`DigestReport.make` gains `issues:` with a default of none**, so every existing call site both
+  compiles and keeps producing the report it produced. `DigestReport.Item.prID` carries the issue's
+  node id for an issue row — the same generic reuse `OutboxItem`'s three fields make, for the same
+  reason, and `DigestSectionKind.isAboutIssues` is what tells a reader which it is holding.
+- **The session's issue observation is now the wide one** (`includeClosed: true`). The second line
+  is a statement about a closed row, and the section's own observation deliberately shows only open
+  ones. Nothing on screen changes — `IssueInboxModel` keeps its own, narrower observation — and the
+  extra rows exist only between a close and the next sweep. ⌘K's second corpus reads the same
+  source and can therefore find an issue that was closed minutes ago, which is a better answer than
+  "no results".
+
+### The panel writes, and it writes the way everything else does
+
+`IssueDetailPanel` gains an actions row — comment through a small composer sheet, a label picker, a
+single *Assign to me*, close as completed or not planned, reopen — and every button enqueues an
+`OutboxItem` and asks the engine to drain. Nothing in `Features/Inbox/` calls `GitHubClient` for a
+mutation, which is ADR 0006's rule and `PullRequestActions`' shape.
+
+Three smaller decisions:
+
+- **The label picker is fed by the labels the section has already seen** in that repository, minus
+  the ones the row carries. A `GET /repos/{o}/{r}/labels` would be a new request on every panel for
+  a list Shepherd is holding anyway; the menu says what it is offering, and github.com is one click
+  away for a label nothing here carries.
+- **No new global shortcuts.** The issues section already refuses `r a`, `m` and `x` with one line
+  (Sprint 2's amendment); giving the issue writes keys of their own would be a second verb
+  vocabulary beside `ShortcutAction`, and nothing asks for one.
+- **The panel shows the two outbox states the pull-request side shows** — waiting to be sent, and
+  parked — about this one issue. The standing counts in Settings → Sync and the title bar are
+  unchanged and already cover these rows whichever kind of node they target; the per-issue line is
+  what makes them findable from where they were queued.
