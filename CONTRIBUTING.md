@@ -126,7 +126,11 @@ bumping a dependency that ships inside the app also means a line in
     the inline comments already in your pending review — and, when you ask that endpoint to
     **explain** a selection, that same diff excerpt and nothing else, cut by the same builder
     against the same budget (ADR 0007's 2026-09-03 amendment), so an explanation sends no kind of
-    content a drafted comment does not. So: yes, pull-request *code* reaches that
+    content a drafted comment does not. When the endpoint's optional **sovereignty policy** fields
+    are set (Settings → Intelligence: a country list, "require zero retention"), those two values
+    travel as part of the request body as well — they are the only thing Shepherd adds to a request
+    that the user did not type into a composer, they are sent only while they are set, and they
+    carry no pull-request content. So: yes, pull-request *code* reaches that
     endpoint, only that endpoint, only for the pull request you are looking at, and only after you
     configured it and clicked. Everything is capped against an explicit token budget before it is
     sent. When a cloud provider answers *"why is CI red?"* (ADR 0024), what travels is the failing

@@ -230,6 +230,10 @@ final class SettingsSyncTests: XCTestCase {
             anthropicModel: "some-model",
             openAICompatibleBaseURL: "https://api.example.eu/v1",
             openAICompatibleModel: "some-open-model",
+            // Non-default means *set* here: the policy ships empty and off, and an empty policy
+            // is never put on the wire (plan §3.K).
+            openAICompatibleSovereigntyCountries: ["DE", "FR"],
+            openAICompatibleZeroRetention: true,
             // Non-default means *off* here: structured triage ships on, because it is on-device
             // and costs nothing but CPU (plan §0.5).
             structuredTriageEnabled: false
@@ -696,6 +700,11 @@ final class SettingsSyncTests: XCTestCase {
         // And the third such default: a document written before structured triage existed says
         // nothing about it, which must not read as "switched off" either (plan §0.5).
         XCTAssertTrue(document.intelligence.structuredTriageEnabled)
+        // A document written before the sovereignty policy existed says nothing about it, which
+        // must read as "no policy" — an empty list is never sent, and a `false` zero-retention
+        // flag is not a constraint (plan §3.K).
+        XCTAssertTrue(document.intelligence.openAICompatibleSovereigntyCountries.isEmpty)
+        XCTAssertFalse(document.intelligence.openAICompatibleZeroRetention)
         // A document written before diagnostics existed leaves them off rather than on.
         XCTAssertEqual(document.diagnostics, SyncedSettingsDocument.DiagnosticsGroup())
         XCTAssertFalse(document.diagnostics.isEnabled)
@@ -1047,6 +1056,10 @@ final class SettingsSyncTests: XCTestCase {
         // and this one is nobody's preset.
         XCTAssertEqual(settings.openAICompatiblePreset, .custom)
         XCTAssertEqual(settings.openAICompatibleModel, "some-open-model")
+        // The sovereignty policy is part of what the request is, so it travels with the endpoint
+        // (plan §3.K).
+        XCTAssertEqual(settings.openAICompatibleSovereigntyCountries, ["DE", "FR"])
+        XCTAssertTrue(settings.openAICompatibleZeroRetention)
         XCTAssertEqual(settings.anthropicModel, "some-model")
         // The switch travels; the verdicts it produces never do — they are rebuildable device
         // state, like the search vectors (plan §3.A).

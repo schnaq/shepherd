@@ -51,6 +51,25 @@ enum IntelligenceEndpointPreset: String, CaseIterable, Sendable, Codable, Identi
         }
     }
 
+    /// What this endpoint does with the optional sovereignty policy, when it does anything.
+    ///
+    /// The single place a preset may show extra UI (ADR 0007's 2026-09-03 amendment), and it is
+    /// deliberately only *copy*: the two policy fields are generic request-body content that
+    /// every endpoint receives the same way, and a preset saying "this one understands them" adds
+    /// no code path, no request shape and no branch anywhere in
+    /// ``OpenAICompatibleProvider``. `nil` means Shepherd has nothing to promise about the fields
+    /// for this endpoint — which is the honest answer for a URL the user typed.
+    var sovereigntyNote: String? {
+        switch self {
+        case .konduitEU:
+            return String(
+                localized: "This gateway reads both fields: it picks a deployment in one of those countries, and — with zero retention asked for — one that stores neither your prompt nor the answer. It refuses the request rather than serving it from somewhere else, and the answer says which operator ran it."
+            )
+        case .ollamaLocal, .custom:
+            return nil
+        }
+    }
+
     /// Where the user creates a key, for endpoints that issue them.
     var consoleURL: URL? {
         switch self {

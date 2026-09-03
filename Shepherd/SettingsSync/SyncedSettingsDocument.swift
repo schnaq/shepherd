@@ -165,6 +165,15 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         var openAICompatibleBaseURL: String
         /// The model name sent to the OpenAI-compatible endpoint.
         var openAICompatibleModel: String
+        /// ISO 3166-1 alpha-2 countries the OpenAI-compatible endpoint may serve a request from.
+        ///
+        /// It travels for the reason the base URL does: it is part of *what the request is*, so
+        /// two Macs that disagree about it would send different requests to the same endpoint —
+        /// and one of them would be sending a prompt to a country its owner asked it to stay out
+        /// of. Empty by default, and an empty policy is never put on the wire (plan §3.K).
+        var openAICompatibleSovereigntyCountries: [String]
+        /// Whether that endpoint must pick an operator that retains neither prompt nor answer.
+        var openAICompatibleZeroRetention: Bool
         /// Whether the on-device classifier may give each pull request a kind and a risk.
         ///
         /// A field of this group rather than of ``SearchGroup``, even though it is as on-device
@@ -182,6 +191,8 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
             anthropicModel: String = "",
             openAICompatibleBaseURL: String = "",
             openAICompatibleModel: String = "",
+            openAICompatibleSovereigntyCountries: [String] = [],
+            openAICompatibleZeroRetention: Bool = false,
             structuredTriageEnabled: Bool = true
         ) {
             self.mode = mode
@@ -189,12 +200,15 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
             self.anthropicModel = anthropicModel
             self.openAICompatibleBaseURL = openAICompatibleBaseURL
             self.openAICompatibleModel = openAICompatibleModel
+            self.openAICompatibleSovereigntyCountries = openAICompatibleSovereigntyCountries
+            self.openAICompatibleZeroRetention = openAICompatibleZeroRetention
             self.structuredTriageEnabled = structuredTriageEnabled
         }
 
         private enum CodingKeys: String, CodingKey {
             case mode, cloudProviderKind, anthropicModel
             case openAICompatibleBaseURL, openAICompatibleModel
+            case openAICompatibleSovereigntyCountries, openAICompatibleZeroRetention
             case structuredTriageEnabled
         }
 
@@ -208,6 +222,17 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
             anthropicModel = container.syncedValue(.anthropicModel, default: "")
             openAICompatibleBaseURL = container.syncedValue(.openAICompatibleBaseURL, default: "")
             openAICompatibleModel = container.syncedValue(.openAICompatibleModel, default: "")
+            // Both default to "no policy", which is what a document written before the fields
+            // existed means: an absent country list must not read as a constraint, and an absent
+            // zero-retention flag must not read as one either (plan §3.K).
+            openAICompatibleSovereigntyCountries = container.syncedValue(
+                .openAICompatibleSovereigntyCountries,
+                default: [String]()
+            )
+            openAICompatibleZeroRetention = container.syncedValue(
+                .openAICompatibleZeroRetention,
+                default: false
+            )
             // Defaults to `true`, matching ``AppSettings/structuredTriageEnabled``: an upload
             // from a build that predates this field must not read as "the user switched it off".
             structuredTriageEnabled = container.syncedValue(

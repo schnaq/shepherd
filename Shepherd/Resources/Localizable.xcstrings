@@ -2911,6 +2911,16 @@
         }
       }
     },
+    "Countries": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Länder"
+          }
+        }
+      }
+    },
     "Covers the last %lld of %lld comments": {
       "localizations": {
         "de": {
@@ -5701,6 +5711,16 @@
         }
       }
     },
+    "Optional. Two-letter country codes, comma-separated. Both fields are sent as part of the request — only endpoints that understand them can act on them, and an endpoint that cannot meet them refuses the request rather than answering from somewhere else. Left empty and off, nothing extra is sent.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optional. Zweibuchstabige Ländercodes, durch Kommas getrennt. Beide Felder werden als Teil der Anfrage mitgesendet — nur Endpunkte, die sie kennen, können sie umsetzen, und ein Endpunkt, der sie nicht erfüllen kann, lehnt die Anfrage ab, statt sie von anderswo zu beantworten. Leer und ausgeschaltet wird nichts zusätzlich gesendet."
+          }
+        }
+      }
+    },
     "Overwrite settings": {
       "localizations": {
         "de": {
@@ -6517,6 +6537,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Änderungen an %@ angefordert."
+          }
+        }
+      }
+    },
+    "Require zero retention": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Speicherung verlangen"
           }
         }
       }
@@ -8717,6 +8747,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dieser Endpunkt kann keine Tools aufrufen und daher nicht nachsehen, warum die CI rot ist."
+          }
+        }
+      }
+    },
+    "This gateway reads both fields: it picks a deployment in one of those countries, and — with zero retention asked for — one that stores neither your prompt nor the answer. It refuses the request rather than serving it from somewhere else, and the answer says which operator ran it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Gateway liest beide Felder: Es wählt ein Deployment in einem dieser Länder und — wenn keine Speicherung verlangt ist — eines, das weder deine Eingabe noch die Antwort speichert. Es lehnt die Anfrage ab, statt sie von anderswo zu beantworten, und die Antwort nennt den Betreiber, der das Modell ausgeführt hat."
           }
         }
       }

@@ -77,6 +77,10 @@ enum SettingsSyncApplier {
             anthropicModel: settings.anthropicModel,
             openAICompatibleBaseURL: settings.openAICompatibleBaseURL,
             openAICompatibleModel: settings.openAICompatibleModel,
+            // The sovereignty policy travels with the endpoint it belongs to: it is part of what
+            // the request *is*, so two Macs must not disagree about it (plan §3.K).
+            openAICompatibleSovereigntyCountries: settings.openAICompatibleSovereigntyCountries,
+            openAICompatibleZeroRetention: settings.openAICompatibleZeroRetention,
             // The switch, never the verdicts: a classification is derived from local rows and is
             // re-derived when the pull request changes, so it is device state like the search
             // vectors (plan §3.A, ADR 0019's argument).
@@ -194,6 +198,12 @@ enum SettingsSyncApplier {
         // so there is nothing further to apply here.
         settings.openAICompatibleBaseURL = document.intelligence.openAICompatibleBaseURL
         settings.openAICompatibleModel = document.intelligence.openAICompatibleModel
+        // The mirror of the capture above. Nothing further has to happen either: the router is
+        // rebuilt from the settings after a document is applied, exactly as it is after the
+        // endpoint fields change in Settings (plan §3.K).
+        settings.openAICompatibleSovereigntyCountries = document.intelligence
+            .openAICompatibleSovereigntyCountries
+        settings.openAICompatibleZeroRetention = document.intelligence.openAICompatibleZeroRetention
         // Only the flag is applied, and nothing else has to happen: nothing reads it yet, and
         // when the classifier exists it will re-consider the inbox on the next indexing pass —
         // the same one route the search index takes (ADR 0019).

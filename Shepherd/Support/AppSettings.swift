@@ -102,6 +102,10 @@ final class AppSettings {
         self.anthropicModel = defaults.string(forKey: Keys.anthropicModel) ?? "claude-haiku-4-5"
         self.openAICompatibleBaseURL = defaults.string(forKey: Keys.openAIBaseURL) ?? ""
         self.openAICompatibleModel = defaults.string(forKey: Keys.openAIModel) ?? ""
+        self.openAICompatibleSovereigntyCountries = defaults
+            .stringArray(forKey: Keys.openAISovereigntyCountries) ?? []
+        self.openAICompatibleZeroRetention = defaults
+            .object(forKey: Keys.openAIZeroRetention) as? Bool ?? false
         self.structuredTriageEnabled = defaults
             .object(forKey: Keys.structuredTriage) as? Bool ?? true
         self.groupBy = Self.read(defaults, Keys.groupBy, default: InboxFacet.provenance)
@@ -265,6 +269,36 @@ final class AppSettings {
     /// The model name to send to the OpenAI-compatible endpoint.
     var openAICompatibleModel: String {
         didSet { defaults.set(openAICompatibleModel, forKey: Keys.openAIModel) }
+    }
+
+    /// ISO 3166-1 alpha-2 countries the OpenAI-compatible endpoint may serve a request from.
+    ///
+    /// The optional half of the sovereignty policy (plan §3.K), and **empty on a fresh install**
+    /// — which is what makes it safe to have at all: an empty list is not sent, so a request to
+    /// an endpoint that has never heard of the field is byte-identical to the request Shepherd
+    /// sent before this setting existed.
+    ///
+    /// It is not a per-endpoint feature switch and there is no per-preset code path behind it:
+    /// the two values travel as `provider.countries` / `provider.zero_retention` in the request
+    /// body, an endpoint that understands them honours them, and one that does not refuses the
+    /// request in its own words — which is the honest outcome for a constraint the user asked
+    /// for and the endpoint cannot meet. Non-secret, so `UserDefaults` (ADR 0007) and the
+    /// encrypted sync document (ADR 0014) both carry it.
+    var openAICompatibleSovereigntyCountries: [String] {
+        didSet {
+            defaults.set(
+                openAICompatibleSovereigntyCountries,
+                forKey: Keys.openAISovereigntyCountries
+            )
+        }
+    }
+
+    /// Whether the OpenAI-compatible endpoint must pick an operator that retains nothing.
+    ///
+    /// Sent only when `true`, for the field's own reason: `false` and absent mean the same thing,
+    /// so there is no reading of `false` as "prefer an operator that does retain".
+    var openAICompatibleZeroRetention: Bool {
+        didSet { defaults.set(openAICompatibleZeroRetention, forKey: Keys.openAIZeroRetention) }
     }
 
     /// Which known endpoint the OpenAI-compatible base URL belongs to.
@@ -737,6 +771,8 @@ final class AppSettings {
         static let anthropicModel = "intelligence.anthropic.model"
         static let openAIBaseURL = "intelligence.openaiCompatible.baseURL"
         static let openAIModel = "intelligence.openaiCompatible.model"
+        static let openAISovereigntyCountries = "intelligence.openaiCompatible.sovereigntyCountries"
+        static let openAIZeroRetention = "intelligence.openaiCompatible.zeroRetention"
         static let structuredTriage = "intelligence.structuredTriageEnabled"
         static let groupBy = "inbox.groupBy"
         static let sortOrder = "inbox.sortOrder"

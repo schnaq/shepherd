@@ -653,7 +653,11 @@ final class AppEnvironment {
             cloudKind: settings.cloudProviderKind,
             anthropicModel: settings.anthropicModel,
             openAIBaseURL: settings.openAICompatibleBaseURL,
-            openAIModel: settings.openAICompatibleModel
+            openAIModel: settings.openAICompatibleModel,
+            // Empty and `false` on a fresh install, and not sent at all in that state — see
+            // `AppSettings.openAICompatibleSovereigntyCountries` (plan §3.K).
+            openAISovereigntyCountries: settings.openAICompatibleSovereigntyCountries,
+            openAIZeroRetention: settings.openAICompatibleZeroRetention
         )
         let key = settings.cloudProviderKind == .anthropic
             ? KeychainSecretStore.Key.anthropicAPIKey

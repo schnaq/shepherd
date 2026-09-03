@@ -33,6 +33,15 @@ final class SettingsModel {
     private(set) var testState: AsyncActionState = .idle
     /// The model-discovery state.
     private(set) var modelListState: ModelListState = .idle
+    /// What the endpoint published beside each model id it listed, keyed by id.
+    ///
+    /// Kept beside ``modelListState`` rather than inside it, because it is optional in the
+    /// strongest sense: the documented OpenAI shape carries an id and nothing else, so for most
+    /// endpoints this stays empty and the picker is exactly what it was. A gateway that publishes
+    /// sovereignty per model fills it, and the picker shows one short badge per row (plan §3.K).
+    /// Cleared with the list, for the reason the list is cleared: metadata from the previous
+    /// endpoint would describe models the new one does not serve.
+    private(set) var modelSovereigntyBadges: [String: String] = [:]
 
     /// The webhook signing secret currently in the editor (ADR 0012).
     ///
@@ -42,6 +51,16 @@ final class SettingsModel {
     private(set) var hasStoredWebhookSecret = false
     /// The result of the last "Send test event" run.
     private(set) var webhookTestState: AsyncActionState = .idle
+
+    /// The country list of the sovereignty policy, as the text the field edits (plan §3.K).
+    ///
+    /// The *text* lives here and the parsed list lives in `AppSettings`, the same split the
+    /// agent-registry draft fields use — and for a sharper reason: a binding that re-derived this
+    /// string from the array on every keystroke would delete the comma the moment it was typed,
+    /// because `["DE"]` renders as `DE` whether the user has finished or not. Seeded from the
+    /// settings when the tab appears; ``applySovereigntyCountries(_:settings:)`` keeps the two in
+    /// step after that.
+    var sovereigntyCountriesField = ""
 
     /// Draft fields for a new agent-registry entry.
     var newAgentID = ""
@@ -132,6 +151,7 @@ final class SettingsModel {
         apiKeyField = stored ?? ""
         testState = .idle
         modelListState = .idle
+        modelSovereigntyBadges = [:]
     }
 
     /// Writes the editor's key to the Keychain (or removes it when empty).
@@ -148,6 +168,41 @@ final class SettingsModel {
         } catch {
             return (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
+    }
+
+    // MARK: - The optional sovereignty policy (plan §3.K)
+
+    /// Seeds the country field from what is stored, so the tab opens showing the real policy.
+    /// - Parameter settings: The current preferences.
+    func loadSovereigntyPolicy(settings: AppSettings) {
+        sovereigntyCountriesField = settings.openAICompatibleSovereigntyCountries
+            .joined(separator: ", ")
+    }
+
+    /// Takes what the user typed and stores the policy it means.
+    ///
+    /// The text is kept verbatim — half-typed commas and all — while the *setting* is the parsed
+    /// list, so the request only ever carries codes and the field only ever shows what was typed.
+    /// - Parameters:
+    ///   - text: The field's new contents.
+    ///   - settings: The current preferences.
+    func applySovereigntyCountries(_ text: String, settings: AppSettings) {
+        sovereigntyCountriesField = text
+        settings.openAICompatibleSovereigntyCountries = SettingsModel.countryCodes(in: text)
+    }
+
+    /// The ISO 3166-1 alpha-2 codes one line of text means.
+    ///
+    /// Uppercased, so `de, fr` and `DE,FR` are the same policy — the field's own placeholder
+    /// promises that — and blanks dropped, so a trailing comma is not a country. Nothing here
+    /// validates that a code *exists*: the endpoint is the authority on which countries it can
+    /// serve from, and a client-side allow-list would go stale and refuse a real one.
+    /// - Parameter text: The comma-separated line.
+    /// - Returns: The codes, in the order they were typed.
+    static func countryCodes(in text: String) -> [String] {
+        text.split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
+            .filter { !$0.isEmpty }
     }
 
     /// The Keychain account name for a provider kind.
@@ -270,7 +325,16 @@ final class SettingsModel {
         guard settings.cloudProviderKind == .openAICompatible else { return }
         modelListState = .loading
         do {
-            let models = try await lister.availableModels()
+            // The entries rather than the bare ids, so the ids and whatever the endpoint
+            // published beside them can only ever come from one fetch (plan §3.K). An endpoint
+            // that publishes nothing yields entries with nothing in them, which is the shape the
+            // picker has always rendered.
+            let entries = try await lister.availableModelEntries()
+            let models = entries.compactMap(\.id)
+            modelSovereigntyBadges = entries.reduce(into: [String: String]()) { badges, entry in
+                guard let id = entry.id, let badge = entry.sovereigntyBadge else { return }
+                badges[id] = badge
+            }
             modelListState = .loaded(models)
             // Only ever *offer* a model; an existing choice is never overwritten.
             let configured = settings.openAICompatibleModel
@@ -279,6 +343,7 @@ final class SettingsModel {
                 settings.openAICompatibleModel = first
             }
         } catch {
+            modelSovereigntyBadges = [:]
             modelListState = .failed(
                 (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             )
@@ -305,6 +370,29 @@ final class SettingsModel {
     /// the new one does not have.
     func forgetLoadedModels() {
         modelListState = .idle
+        modelSovereigntyBadges = [:]
+    }
+
+    /// The sovereignty badge to show for one model id, when the endpoint published one.
+    ///
+    /// Trimmed on the way in so a hand-typed id with a stray space still finds its badge — the
+    /// picker's own selection is trimmed the same way in ``modelOptions(selected:)``.
+    /// - Parameter id: The model id.
+    /// - Returns: The badge, e.g. `FR · zero retention · eu`, or `nil` when there is none.
+    func sovereigntyBadge(for id: String) -> String? {
+        modelSovereigntyBadges[id.trimmingCharacters(in: .whitespacesAndNewlines)]
+    }
+
+    /// One row of the model picker: the id, plus its badge when the endpoint published one.
+    ///
+    /// The badge is in the row rather than only under the picker because the choice is *between*
+    /// models — a country shown only for the model already selected would not help anybody pick a
+    /// different one. Already localized by the badge itself; the id is not translatable text.
+    /// - Parameter id: The model id.
+    /// - Returns: The row's label.
+    func modelPickerLabel(for id: String) -> String {
+        guard let badge = sovereigntyBadge(for: id) else { return id }
+        return "\(id) — \(badge)"
     }
 
     /// The model ids to offer in the picker.

@@ -776,6 +776,7 @@ struct IntelligenceSettingsTab: View {
                             )
                             modelField
                             endpointNote
+                            sovereigntyPolicyFields
                         } else {
                             LabeledField(
                                 label: String(localized: "Model"),
@@ -876,6 +877,8 @@ struct IntelligenceSettingsTab: View {
                 kind: environment.settings.cloudProviderKind,
                 store: environment.secretStore
             )
+            // The country field shows the stored policy rather than an empty line (plan §3.K).
+            model.loadSovereigntyPolicy(settings: environment.settings)
             await model.loadModelsIfConfigured(settings: environment.settings)
         }
         .onChange(of: environment.settings.cloudProviderKind) { _, kind in
@@ -1154,6 +1157,12 @@ struct IntelligenceSettingsTab: View {
     }
 
     /// The model row: a picker once the endpoint's list is loaded, the free-text field otherwise.
+    ///
+    /// A picker row carries the endpoint's own sovereignty badge when it published one —
+    /// `FR · zero retention · eu` — because "where does this model run" is the question somebody
+    /// on this tier is most likely picking a model *by*, and it is published per model rather
+    /// than per endpoint (plan §3.K). A plain OpenAI endpoint publishes nothing and the row is
+    /// the id, exactly as before.
     @ViewBuilder
     private var modelField: some View {
         if modelOptions.isEmpty {
@@ -1170,7 +1179,7 @@ struct IntelligenceSettingsTab: View {
                     .frame(width: 74, alignment: .leading)
                 Picker(String(localized: "Model"), selection: openAIModelBinding) {
                     ForEach(modelOptions, id: \.self) { option in
-                        Text(option).tag(option)
+                        Text(model.modelPickerLabel(for: option)).tag(option)
                     }
                 }
                 .labelsHidden()
@@ -1179,7 +1188,74 @@ struct IntelligenceSettingsTab: View {
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.accentText)
             }
+            if let badge = model.sovereigntyBadge(for: environment.settings.openAICompatibleModel) {
+                Text(badge)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
+    }
+
+    // MARK: - The optional sovereignty policy (plan §3.K)
+
+    /// The two fields that pin a request to a country set and to a zero-retention operator.
+    ///
+    /// Under the endpoint section, because that is what they are about — and with the copy that
+    /// makes them honest: they are **part of the request body**, so an endpoint that understands
+    /// them honours them and an endpoint that does not refuses the request in its own words.
+    /// There is no probing, no capability list and no per-endpoint behaviour behind them; the one
+    /// endpoint-specific thing on screen is the preset's own sentence saying what it does with
+    /// them, which is copy rather than a code path (ADR 0007's 2026-09-03 amendment).
+    ///
+    /// Both fields ship empty and off, and in that state nothing about the request changes at
+    /// all — which is why they can sit here without an opt-in toggle above them.
+    @ViewBuilder
+    private var sovereigntyPolicyFields: some View {
+        Divider().padding(.vertical, 2)
+        LabeledField(
+            label: String(localized: "Countries"),
+            placeholder: "DE, FR",
+            text: sovereigntyCountriesBinding
+        )
+        Toggle(String(localized: "Require zero retention"), isOn: zeroRetentionBinding)
+        Text(String(
+            localized: "Optional. Two-letter country codes, comma-separated. Both fields are sent as part of the request — only endpoints that understand them can act on them, and an endpoint that cannot meet them refuses the request rather than answering from somewhere else. Left empty and off, nothing extra is sent."
+        ))
+        .font(.system(size: 11))
+        .foregroundStyle(Theme.textMuted)
+        .fixedSize(horizontal: false, vertical: true)
+        if let note = preset.sovereigntyNote {
+            Text(note)
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// The country list as the comma-separated text the field edits.
+    ///
+    /// The text is the model's and the parsed list is the setting's — see
+    /// ``SettingsModel/sovereigntyCountriesField``, which explains why a binding that re-derived
+    /// the string from the array would eat the comma as it was typed.
+    private var sovereigntyCountriesBinding: Binding<String> {
+        Binding(
+            get: { model.sovereigntyCountriesField },
+            set: { text in
+                model.applySovereigntyCountries(text, settings: environment.settings)
+                environment.refreshIntelligence()
+            }
+        )
+    }
+
+    private var zeroRetentionBinding: Binding<Bool> {
+        Binding(
+            get: { environment.settings.openAICompatibleZeroRetention },
+            set: { isOn in
+                environment.settings.openAICompatibleZeroRetention = isOn
+                environment.refreshIntelligence()
+            }
+        )
     }
 
     /// What the last model-discovery run produced.
