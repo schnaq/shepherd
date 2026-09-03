@@ -420,7 +420,8 @@ final class ClaimsEvidenceModel {
 
         loadTask?.cancel()
         let task = Task { [weak self] in
-            await self?.load(outstanding, in: detail, using: reader)
+            guard let self else { return }
+            await self.load(outstanding, in: detail, using: reader)
         }
         loadTask = task
         await task.value
