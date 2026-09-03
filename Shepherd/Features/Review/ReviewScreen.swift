@@ -178,6 +178,9 @@ struct ReviewScreen: View {
                 fontSize: model.settings.diffFontSize,
                 threads: model.bridgeThreads,
                 draftComments: model.bridgeDraftComments,
+                // Set only by the CI diagnosis card's `file:line` link (plan §3.F); the viewer
+                // acts on a change of it and ignores it otherwise.
+                revealLine: model.revealLine,
                 onEvent: { event in model.handle(event) }
             )
         } else if let path = model.selectedPath {

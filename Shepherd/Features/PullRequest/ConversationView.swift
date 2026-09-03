@@ -14,6 +14,13 @@ struct ConversationView: View {
     /// leaving the pull request throws all of it away.
     @State private var translations = TranslationCoordinator()
 
+    /// The state behind **Why?** on a red check (plan §3.F).
+    ///
+    /// One per review screen and created inert: no model session exists, and no card is drawn,
+    /// until a reviewer clicks. It holds a log tail while the card is up and is thrown away with
+    /// the screen — nothing about a diagnosis is persisted (ADR 0024).
+    @State private var diagnosis = CIDiagnosisModel()
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -146,11 +153,94 @@ struct ConversationView: View {
                                 }
                                 .help(String(localized: "Open the check on GitHub"))
                             }
+                            if canDiagnose(check) {
+                                Button(String(localized: "Why?")) { ask(check) }
+                                    .buttonStyle(SecondaryButtonStyle(height: 22))
+                                    .disabled(diagnosis.isAsking)
+                                    .help(String(
+                                        localized: "Asks a model why this check is red. It can only read — the checks, the log, the diff."
+                                    ))
+                            }
                         }
                     }
                 }
             }
         }
+        if let state = diagnosis.state {
+            diagnosisCard(state)
+        }
+    }
+
+    // MARK: - "Why is CI red?" (plan §3.F)
+
+    /// Whether the **Why?** button is drawn on one check.
+    ///
+    /// Only on a red one, and only when a tier could take the question at all
+    /// (``IntelligenceRouter/canDraft``) — a button that is always there and always fails would be
+    /// worse than no button (ADR 0007: no feature hard-depends on a tier). A cancelled or
+    /// timed-out check counts as red, because that is what a reviewer is looking at when they ask.
+    /// - Parameter check: The check the row is drawing.
+    private func canDiagnose(_ check: CheckRun) -> Bool {
+        check.rollupContribution == .failure && model.intelligence.canDraft
+    }
+
+    /// Asks a tier why one check is red.
+    ///
+    /// The router and the log reader are read *here*, at click time, rather than captured when
+    /// the screen was built: the router is a value snapshot that a settings change replaces, and
+    /// a card must not ask a tier the user switched off since.
+    /// - Parameters:
+    ///   - check: The red check.
+    ///   - preferCloud: `true` only from the card's own "ask <provider> with the full log?"
+    ///     button. ADR 0024: this is the one click that lets a CI log leave the Mac.
+    private func ask(_ check: CheckRun, preferCloud: Bool = false) {
+        guard let detail = model.detail, let summary = model.summary else { return }
+        Task {
+            await diagnosis.diagnose(
+                check: check,
+                detail: detail,
+                summary: summary,
+                router: model.intelligence,
+                jobLog: model.session.github,
+                preferCloud: preferCloud
+            )
+        }
+    }
+
+    /// The card under the checks list.
+    @ViewBuilder
+    private func diagnosisCard(_ state: CIDiagnosisState) -> some View {
+        CIDiagnosisCard(
+            state: state,
+            checkName: diagnosis.checkName,
+            isFileInDiff: { path in
+                model.detail?.files.contains { $0.path == path } == true
+            },
+            cloudBadge: model.intelligence.cloudBadge,
+            onOpenFile: { path, line in
+                model.reveal(path: path, line: line)
+            },
+            onAskCloud: {
+                // The same check, found again by name: the card holds the name rather than the
+                // run, and the second rung must be about the check the reviewer asked about.
+                guard let name = diagnosis.checkName,
+                      let check = model.detail?.checks.first(where: { $0.name == name })
+                else { return }
+                ask(check, preferCloud: true)
+            },
+            onDraftBrief: {
+                guard let summary = model.summary,
+                      let context = diagnosis.briefContext(
+                          summary: summary,
+                          focusReasons: model.delegationFocusReasons
+                      )
+                else { return }
+                // Opens the sheet — with feature E's drafter attached — and stops there. Run is
+                // the reviewer's click (ADR 0011's amendment).
+                environment.startDelegation(context)
+            },
+            onClose: { diagnosis.dismiss() }
+        )
     }
 
     @ViewBuilder

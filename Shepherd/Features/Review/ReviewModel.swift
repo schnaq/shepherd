@@ -97,6 +97,12 @@ final class ReviewModel {
 
     /// The file being shown in the diff viewer.
     var selectedPath: String?
+    /// A line the viewer should scroll to once it has the file.
+    ///
+    /// Set by ``reveal(path:line:)`` — the CI diagnosis card's `file:line` link — and by nothing
+    /// else. It is deliberately not cleared afterwards: the viewer only acts on a *change* of
+    /// this value, so clearing it would either do nothing or cost a second command for no reason.
+    private(set) var revealLine: Int?
     /// Which tab is showing.
     var tab: Tab = .files
     /// The composer request currently open, if any.
@@ -621,6 +627,28 @@ final class ReviewModel {
             return
         }
         self.selectedPath = paths[min(max(0, index + offset), paths.count - 1)]
+    }
+
+    /// Shows one file in the diff viewer, scrolled to a line.
+    ///
+    /// The CI diagnosis card's `file:line` link (plan §3.F): a model that named
+    /// `ShepherdTests/LocalizationTests.swift:231` should cost one click to check, not a hunt
+    /// through the file list. Both halves are the viewer's existing plumbing —
+    /// ``selectedPath`` picks the file, and `DiffViewerView`'s `revealLine` sends the same
+    /// `revealLine` command a thread anchor uses — so this is one place that sets them together.
+    ///
+    /// A path the pull request does not contain is ignored rather than selected: `selectedPath`
+    /// drives the viewer, and pointing it at a file with no patch would blank the diff. The card
+    /// does not draw a link in that case either, so this is the second gate rather than the only
+    /// one.
+    /// - Parameters:
+    ///   - path: The file to show.
+    ///   - line: The head-side line to scroll to, when the diagnosis named one.
+    func reveal(path: String, line: Int?) {
+        guard detail?.files.contains(where: { $0.path == path }) == true else { return }
+        selectedPath = path
+        tab = .files
+        revealLine = line
     }
 
     /// Submits the pending review through the outbox.

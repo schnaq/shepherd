@@ -1851,6 +1851,36 @@
         }
       }
     },
+    "Ask %@ with the full log?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ mit dem vollen Log fragen?"
+          }
+        }
+      }
+    },
+    "Asking the model…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Modell wird gefragt…"
+          }
+        }
+      }
+    },
+    "Asks a model why this check is red. It can only read — the checks, the log, the diff.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fragt ein Modell, warum dieser Check rot ist. Es kann nur lesen — die Checks, das Log, den Diff."
+          }
+        }
+      }
+    },
     "At": {
       "localizations": {
         "de": {
@@ -2147,6 +2177,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "CI rot wird"
+          }
+        }
+      }
+    },
+    "CI: %@ — %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CI: %@ — %@"
           }
         }
       }
@@ -2497,6 +2537,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Schließen"
+          }
+        }
+      }
+    },
+    "Close the diagnosis": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagnose schließen"
           }
         }
       }
@@ -3071,6 +3121,26 @@
         }
       }
     },
+    "Diagnosed by %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagnostiziert von %@"
+          }
+        }
+      }
+    },
+    "Diagnosed on-device": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf dem Gerät diagnostiziert"
+          }
+        }
+      }
+    },
     "Discard": {
       "localizations": {
         "de": {
@@ -3167,6 +3237,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Draft"
+          }
+        }
+      }
+    },
+    "Draft an agent brief": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent-Briefing entwerfen"
           }
         }
       }
@@ -5531,6 +5611,16 @@
         }
       }
     },
+    "Open this line in the diff": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Zeile im Diff öffnen"
+          }
+        }
+      }
+    },
     "OpenAI-compatible": {
       "localizations": {
         "de": {
@@ -5567,6 +5657,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Deine Review-Inbox wird geöffnet…"
+          }
+        }
+      }
+    },
+    "Opens the delegation sheet with this finding — you still press Run": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnet das Delegations-Sheet mit diesem Befund — Run drückst du selbst"
           }
         }
       }
@@ -6091,12 +6191,42 @@
         }
       }
     },
+    "Read the diff of one file": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diff einer Datei gelesen"
+          }
+        }
+      }
+    },
     "Read the docs": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Dokumentation lesen"
+          }
+        }
+      }
+    },
+    "Read the failing checks": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fehlgeschlagene Checks gelesen"
+          }
+        }
+      }
+    },
+    "Read the last lines of a job log": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die letzten Zeilen eines Job-Logs gelesen"
           }
         }
       }
@@ -6907,6 +7037,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Testereignis senden"
+          }
+        }
+      }
+    },
+    "Sends the reduced log, the failing checks and the diff Shepherd reads to the endpoint you configured": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sendet das reduzierte Log, die fehlgeschlagenen Checks und den gelesenen Diff an den Endpunkt, den du konfiguriert hast"
           }
         }
       }
@@ -8081,6 +8221,16 @@
         }
       }
     },
+    "The log did not fit the on-device model, and no cloud provider is configured.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Log passt nicht in das Modell auf diesem Gerät, und es ist kein Cloud-Anbieter konfiguriert."
+          }
+        }
+      }
+    },
     "The model asked to read more than Shepherd allows for one diagnosis.": {
       "localizations": {
         "de": {
@@ -8561,6 +8711,16 @@
         }
       }
     },
+    "This step recorded no content.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für diesen Schritt wurde kein Inhalt aufgezeichnet."
+          }
+        }
+      }
+    },
     "This tier cannot draft a brief for a coding agent.": {
       "localizations": {
         "de": {
@@ -8941,6 +9101,16 @@
         }
       }
     },
+    "WHAT IT READ · %lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GELESEN · %lld"
+          }
+        }
+      }
+    },
     "WHAT SHEPHERD MERGED": {
       "localizations": {
         "de": {
@@ -8957,6 +9127,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "WAS WEBHOOKS NIE SENDEN"
+          }
+        }
+      }
+    },
+    "WHY IS CI RED?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WARUM IST CI ROT?"
           }
         }
       }
@@ -9047,6 +9227,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Warum dieser Pull Request so eingeordnet wurde"
+          }
+        }
+      }
+    },
+    "Why?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warum?"
           }
         }
       }
@@ -9481,6 +9671,16 @@
         }
       }
     },
+    "high confidence": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hohe Konfidenz"
+          }
+        }
+      }
+    },
     "in the description": {
       "localizations": {
         "de": {
@@ -9591,6 +9791,16 @@
         }
       }
     },
+    "low confidence": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "niedrige Konfidenz"
+          }
+        }
+      }
+    },
     "macOS asks for permission the first time Shepherd actually needs to post one.": {
       "localizations": {
         "de": {
@@ -9617,6 +9827,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "macOS kann dieses Sprachpaar auf diesem Mac nicht übersetzen."
+          }
+        }
+      }
+    },
+    "medium confidence": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "mittlere Konfidenz"
           }
         }
       }
@@ -10101,6 +10321,16 @@
         }
       }
     },
+    "the failing check": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "der fehlgeschlagene Check"
+          }
+        }
+      }
+    },
     "the log of %@ could not be read": {
       "localizations": {
         "de": {
@@ -10217,6 +10447,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "· %lld angezeigt"
+          }
+        }
+      }
+    },
+    "· not in this diff": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "· nicht in diesem Diff"
           }
         }
       }
