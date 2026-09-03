@@ -57,11 +57,22 @@ final class SignedInSession {
     /// the one reader that has to tell them apart: a digest built from the second one would report
     /// a quiet night and then mark itself delivered for the day.
     private(set) var hasLoadedInbox = false
+    /// Every issue row the local database holds, for the surfaces that outlive a screen
+    /// (ADR 0032).
+    ///
+    /// Here rather than on ``IssueInboxModel`` for ``inboxRows``' reason, and it is the same
+    /// reason twice over: the issues model is owned by `InboxScreen` and stops observing when the
+    /// review screen replaces it, while ⌘K has to be able to answer with an issue from the review
+    /// screen as well. So the observation belongs to the session, and the model observes again for
+    /// its own filtered view — one more local `SELECT` per write, which is cheaper than letting a
+    /// screen's lifetime decide whether the palette can find an issue.
+    var issueRows: [IssueRowSummary] = []
 
     private var eventTask: Task<Void, Never>?
     private var outboxTask: Task<Void, Never>?
     private var conflictTask: Task<Void, Never>?
     private var inboxTask: Task<Void, Never>?
+    private var issuesTask: Task<Void, Never>?
 
     private init(
         account: Account,
@@ -118,6 +129,14 @@ final class SignedInSession {
             // pull request's outcome with (ADR 0027): the client reads it once, the database
             // stores it, and a failure on either side is swallowed rather than failing a sweep.
             outcomes: OutcomeCapture(reader: github, store: database),
+            // And the pair of ports the second sweep of the same cycle runs through (ADR 0032).
+            // This one line is the whole switch: with it the cycle also searches
+            // `is:issue is:open archived:false` for the three relations and writes the rows the
+            // issues section renders from, without it the engine sweeps exactly as it did
+            // before — no extra request, no extra query. It cannot fail the cycle
+            // (`runIssueSweep()` does not throw), which is what makes turning it on safe for the
+            // review inbox Shepherd is actually for.
+            issues: IssueCapture(fetcher: github, store: database),
             configuration: SyncConfiguration(
                 sweepInterval: sweepInterval,
                 viewerLogin: account.login
@@ -143,11 +162,18 @@ final class SignedInSession {
     ///     green — does not change a pull request's `updatedAt`, so no ``ShepherdSync/SyncEvent``
     ///     reports it and the rows the sweep persisted are the honest source. It fires for every
     ///     inbox write, and the consumer is required to be idempotent.
+    ///   - onIssueRows: Called on the main actor every time the issues observation speaks, with
+    ///     the rows it just wrote to ``issueRows`` (ADR 0032). The issues sweep emits no
+    ///     ``ShepherdSync/SyncEvent`` of its own, deliberately, so the rows are the only
+    ///     announcement there is — and they are the honest one: ⌘K's second index pass is about
+    ///     the *content* of the issues section, which is exactly what a write to it changes. It
+    ///     fires for every issue write, and the consumer is required to be idempotent.
     func start(
         settings: AppSettings,
         notifications: NotificationManager,
         onEvent: @escaping @MainActor (SyncEvent) -> Void,
-        onInboxRows: @escaping @MainActor ([PullRequestSummary]) -> Void = { _ in }
+        onInboxRows: @escaping @MainActor ([PullRequestSummary]) -> Void = { _ in },
+        onIssueRows: @escaping @MainActor ([IssueRowSummary]) -> Void = { _ in }
     ) {
         guard eventTask == nil else { return }
 
@@ -182,6 +208,15 @@ final class SignedInSession {
                 self.inboxRows = rows
                 self.hasLoadedInbox = true
                 onInboxRows(rows)
+            }
+        }
+
+        let issues = database.observeIssues()
+        issuesTask = Task { [weak self] in
+            for await rows in issues {
+                guard let self else { return }
+                self.issueRows = rows
+                onIssueRows(rows)
             }
         }
 
@@ -226,6 +261,8 @@ final class SignedInSession {
         conflictTask = nil
         inboxTask?.cancel()
         inboxTask = nil
+        issuesTask?.cancel()
+        issuesTask = nil
         await syncEngine.shutdown()
     }
 
