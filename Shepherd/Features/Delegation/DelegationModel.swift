@@ -117,6 +117,14 @@ final class DelegationModel: Identifiable {
     /// saying where it came from.
     let isAutomatic: Bool
 
+    /// How the sheet's ✨ button drafts the task text, or `nil` when nothing can (plan §3.E).
+    ///
+    /// `nil` for a rule-started run, by construction rather than by check:
+    /// ``DelegationCenter/startAutomatically(context:task:settings:toasts:onDidPush:onDidFinish:)``
+    /// has no parameter to pass one, so an unattended delegation keeps its fixed template and can
+    /// never receive generated text (ADR 0016, ADR 0011's amendment).
+    let brief: AgentBriefDrafter?
+
     /// The editable task text. Shepherd's preamble is prepended when the run starts.
     var task: String
     /// The state machine.
@@ -168,6 +176,8 @@ final class DelegationModel: Identifiable {
     ///   - toasts: Where failures are surfaced.
     ///   - onDidPush: Called after a successful push, so the app can re-sync the pull request.
     ///   - onDidFinish: Called once when the run reaches a terminal state (ADR 0012).
+    ///   - brief: How the ✨ button drafts the task text (plan §3.E). Left out — and therefore
+    ///     `nil` — for every run a rule started.
     init(
         context: DelegationContext,
         configuration: AgentCLIConfiguration,
@@ -177,7 +187,8 @@ final class DelegationModel: Identifiable {
         isAutomatic: Bool = false,
         toasts: ToastCenter? = nil,
         onDidPush: (@MainActor () async -> Void)? = nil,
-        onDidFinish: (@MainActor (DelegationOutcome) -> Void)? = nil
+        onDidFinish: (@MainActor (DelegationOutcome) -> Void)? = nil,
+        brief: AgentBriefDrafter? = nil
     ) {
         self.context = context
         self.configuration = configuration
@@ -189,6 +200,7 @@ final class DelegationModel: Identifiable {
         self.toasts = toasts
         self.onDidPush = onDidPush
         self.onDidFinish = onDidFinish
+        self.brief = brief
         self.task = DelegationPrompt.defaultTask(for: context)
     }
 
@@ -206,6 +218,17 @@ final class DelegationModel: Identifiable {
     var canStart: Bool {
         guard readiness == .ready, worktree != nil, !isBusy else { return false }
         return !task.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// Whether the sheet offers the ✨ button next to the task field (plan §3.E).
+    ///
+    /// Three conditions, all of them known before the click: a drafter exists (so this is not a
+    /// rule-started run), a tier could answer, and nothing is running. The last one is what keeps
+    /// the button from writing into a field that is disabled because an agent is already working
+    /// from the text that is in it.
+    var canDraftBrief: Bool {
+        guard let brief, brief.canDraft else { return false }
+        return !isBusy
     }
 
     /// Whether the finished run left anything to commit.
@@ -226,6 +249,21 @@ final class DelegationModel: Identifiable {
             parts.append(String(localized: "no spend cap"))
         }
         return parts.joined(separator: " · ")
+    }
+
+    // MARK: - Drafting the task (plan §3.E)
+
+    /// Asks the intelligence layer for a brief, streamed (plan §3.E).
+    ///
+    /// Returns the outcome instead of writing anywhere: the field belongs to the sheet, and what
+    /// happens to a draft that arrives over text the reviewer already wrote is
+    /// ``AIDraftFieldState``'s decision. Nothing about this call starts an agent — it does not
+    /// touch ``state``, ``task`` or ``canStart``, and ``start()`` still reads whatever text is in
+    /// the field at the moment the reviewer presses the button.
+    /// - Returns: A labelled stream, or why there is none.
+    func streamBrief() async -> IntelligenceStreamOutcome {
+        guard let brief else { return .disabled }
+        return await brief.stream(context)
     }
 
     // MARK: - Running

@@ -47,3 +47,36 @@ Verified facts (docs.claude.com / code.claude.com, 2026-09):
 - Policy risk is contained: if Anthropic's third-party auth rules shift, Shepherd is
   unaffected because it never brokered auth in the first place.
 - Pulled into v1 (2026-09-01) at the founder's request.
+
+## Amendment (2026-09-03): drafted briefs, attended only
+
+Additive, and inside the decision above: the worktree, the guardrails, the "Shepherd never pushes"
+rule and the configurable command template are unchanged. What is new is where the *task text*
+comes from (`docs/plans/apple-intelligence-v2.md` §3.E).
+
+- **Shepherd drafts the brief on request.** A ✨ button beside the delegation sheet's task field
+  asks the intelligence layer for the brief the agent is handed, streamed into the field as
+  cumulative Markdown in three sections — goal, constraints, acceptance. It is drafted from what
+  Shepherd already has: the `DelegationContext` (slug, head commit, origin, the ranking reasons,
+  the finding's comments) plus the tier-1 `PullRequestDigest`, with the comments' share of the
+  token budget reserved before the digest is built, exactly as a review-summary draft reserves it
+  for the reviewer's notes (ADR 0007's budget rule).
+- **Run is the human's.** The brief is text in a field. There is no code path from a drafted brief
+  to a started agent, to a commit or to a push: the reviewer reads it, edits it, and presses the
+  button — and a draft that is arriving, stopped, appended or discarded changes only what a run
+  *would* say, never whether one happens. The ADR 0007 amendment's field rules apply unchanged (the
+  replace-or-append question comes before the request, a keystroke wins over the stream, what
+  arrived stays and stays labelled with the tier that wrote it).
+- **Unattended rules never get one.** An automatic delegation (ADR 0016) keeps its own fixed,
+  user-editable template. The entry point that starts one takes no drafter at all, so this is a
+  missing argument rather than a check: nothing generated can reach a run nobody pressed a button
+  for.
+- **A colleague's comment does not travel.** A brief that quotes a review comment somebody else
+  wrote is refused the cloud rung and answered on-device only — the ladder skips the rung rather
+  than asking a provider not to look. The reviewer's own words and the digest already travel under
+  the ADR 0007 amendment; a comment whose author never chose this Mac's endpoint does not (ADR
+  0020's reasoning). No new host.
+
+Consequence: the delegation feature gains one request type, one provider method with a default
+implementation that declines, and one router call. A tier without a brief-shaped call says so in
+one line under the field instead of answering out of a different prompt.

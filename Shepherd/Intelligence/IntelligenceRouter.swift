@@ -179,6 +179,15 @@ struct IntelligenceTiers: Sendable {
     ) async throws -> IntelligenceToolRun<CIDiagnosis> = {
         try await $0.diagnoseFailingChecks($1, tools: $2)
     }
+    /// How an agent brief is streamed out of a tier (plan §3.E).
+    ///
+    /// The same kind of seam as ``summaryStream``, and needed for one thing the other two cannot
+    /// show: that a brief quoting a colleague's comment never reaches the cloud rung. A test
+    /// scripts this closure per tier and reads back *which* tier answered, which is the whole of
+    /// the privacy rule expressed as an assertion.
+    var briefStream: @Sendable (
+        any IntelligenceProvider, AgentBriefRequest
+    ) -> AsyncThrowingStream<String, Error> = { $0.streamAgentBrief($1) }
 
     /// The real tiers.
     static let live = IntelligenceTiers(
@@ -567,7 +576,14 @@ struct IntelligenceRouter: Sendable {
     /// one rule streams need: a tier has "answered" only once its first element exists. Until
     /// then the ladder may still step down, and after that it may not — a half-written draft the
     /// reviewer is watching must not be replaced by another tier's attempt at the same thing.
+    /// - Parameters:
+    ///   - allowsCloud: Whether the cloud rung may see this request at all. `false` is not a
+    ///     preference but a rule: the delegation brief passes it when the request carries a
+    ///     colleague's comment (ADR 0020's reasoning), and a ladder that skips the rung is a
+    ///     stronger guarantee than a prompt asking a provider not to look.
+    ///   - operation: How one tier is asked, given its token budget.
     private func runStream(
+        allowsCloud: Bool = true,
         operation: @escaping @Sendable (any IntelligenceProvider, TokenBudget)
             -> AsyncThrowingStream<String, Error>
     ) async -> IntelligenceStreamOutcome {
@@ -575,7 +591,7 @@ struct IntelligenceRouter: Sendable {
 
         var lastFailure: String?
 
-        if let cloud = cloudProvider {
+        if allowsCloud, let cloud = cloudProvider {
             switch await IntelligenceRouter.start(
                 operation(cloud, AnthropicProvider.budget),
                 kind: cloud.kind
@@ -724,5 +740,54 @@ struct IntelligenceRouter: Sendable {
 
     private static func describe(_ error: any Error) -> String {
         (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+    }
+
+    // MARK: - Delegation brief (plan §3.E)
+
+    /// Drafts the task for a coding agent as a stream of cumulative Markdown (plan §3.E).
+    ///
+    /// The same ladder and the same four answers as the two drafting streams, with one rule of
+    /// its own: **a brief that quotes somebody else's comment does not use the cloud rung.** The
+    /// digest and the reviewer's own words already travel under the ADR 0007 amendment, but a
+    /// colleague's review comment has an author who never chose the reviewer's endpoint (ADR
+    /// 0020's reasoning), and the honest place for that rule is the ladder — a request built with
+    /// ``AgentBriefRequest/onDeviceOnly`` simply never gets offered to a cloud provider, so no
+    /// future caller can opt out of it by passing a flag.
+    ///
+    /// Nothing here starts anything. The stream fills the sheet's task field; Run stays the
+    /// reviewer's click (ADR 0011 amendment), and an automatic delegation never calls this at all
+    /// (ADR 0016 — its rules keep their fixed template).
+    /// - Parameters:
+    ///   - context: What the delegation is about — the slug, the worktree's commit, the finding
+    ///     and its comments.
+    ///   - digest: The tier-1 digest, built with
+    ///     ``AgentBriefRequest/digest(for:budget:)`` so the finding comments' share of the budget
+    ///     is already reserved. It is built once, for the smallest tier that may answer, which is
+    ///     also what keeps a cloud rung from ever seeing *more* than the on-device rung would
+    ///     have.
+    ///   - viewerLogin: The signed-in user's login, when there is one. It decides which quoted
+    ///     comments count as the reviewer's own.
+    /// - Returns: A labelled stream, or why there is none.
+    func streamAgentBrief(
+        for context: DelegationContext,
+        digest: PullRequestDigest,
+        viewerLogin: String? = nil
+    ) async -> IntelligenceStreamOutcome {
+        let tiers = self.tiers
+        let onDeviceOnly = AgentBriefRequest.requiresOnDevice(
+            context: context,
+            viewerLogin: viewerLogin
+        )
+        return await runStream(allowsCloud: !onDeviceOnly) { provider, budget in
+            tiers.briefStream(
+                provider,
+                AgentBriefRequest.build(
+                    context: context,
+                    digest: digest,
+                    budget: budget,
+                    viewerLogin: viewerLogin
+                )
+            )
+        }
     }
 }

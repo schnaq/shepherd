@@ -32,6 +32,15 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
     var focusReasons: [String]
     /// The comments of the review thread, as Markdown source.
     var findingComments: [String]
+    /// Who wrote each of ``findingComments``, positionally, when the caller knows.
+    ///
+    /// Empty, or shorter than ``findingComments``, is allowed and means "not known here" — the
+    /// task text built by ``DelegationPrompt`` never needed an author, and a caller that only has
+    /// bodies must not be forced to invent one. It exists for the *brief* (plan §3.E): a drafted
+    /// brief quoting a colleague's comment may only be produced on-device (ADR 0020's reasoning),
+    /// and that decision cannot be made from bodies alone. A comment with no author here counts
+    /// as the reviewer's own, because that is what a pending review's comments are.
+    var findingCommentAuthors: [String]
 
     /// One sheet per pull request.
     var id: String { prID }
@@ -49,7 +58,8 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
         headRefOid: String,
         origin: Origin = .pullRequest,
         focusReasons: [String] = [],
-        findingComments: [String] = []
+        findingComments: [String] = [],
+        findingCommentAuthors: [String] = []
     ) {
         self.prID = prID
         self.repo = repo
@@ -60,6 +70,7 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
         self.origin = origin
         self.focusReasons = focusReasons
         self.findingComments = findingComments
+        self.findingCommentAuthors = findingCommentAuthors
     }
 
     /// A context for a whole pull request.
@@ -101,7 +112,10 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
                 path: thread.path ?? String(localized: "the pull request"),
                 line: thread.line ?? thread.originalLine
             ),
-            findingComments: thread.comments.map(\.bodyMarkdown)
+            findingComments: thread.comments.map(\.bodyMarkdown),
+            // Positional, so the two arrays are read as pairs. Carried for the brief's privacy
+            // rule only (see ``findingCommentAuthors``); the task text ignores it.
+            findingCommentAuthors: thread.comments.map(\.author.login)
         )
     }
 }

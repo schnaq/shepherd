@@ -473,11 +473,38 @@ final class AppEnvironment {
             settings: settings,
             toasts: toasts,
             onDidPush: onDidPush,
-            onDidFinish: onDidFinish
+            onDidFinish: onDidFinish,
+            // Only the attended path gets one (plan §3.E): the sheet's ✨ button drafts the task
+            // text, and the reviewer still presses Run.
+            brief: agentBriefDrafter()
         )
         if let task, !model.isBusy {
             model.task = task
         }
+    }
+
+    /// Builds the delegation sheet's brief drafter from the current tiers and session (plan §3.E).
+    ///
+    /// The three pieces are read *here*, on the main actor, and captured as values — the router
+    /// is a `Sendable` snapshot, the database is a `Sendable` class, the login is a string — so
+    /// the drafter's closure never reaches back into this class from a background task.
+    /// - Returns: The drafter, or `nil` when no account is signed in (there is no database to
+    ///   read the pull request from, so there would be nothing to draft from either).
+    private func agentBriefDrafter() -> AgentBriefDrafter? {
+        guard let session else { return nil }
+        let database = session.database
+        return AgentBriefDrafter.live(
+            router: intelligence,
+            viewerLogin: session.account.login,
+            detail: { prID in
+                // The cached row, never a fetch: the brief is drafted from what the reviewer
+                // already has on screen, and a sheet must not wait on the network to offer it.
+                guard let detail = try? await database.fetchPullRequestDetail(id: prID) else {
+                    return nil
+                }
+                return detail
+            }
+        )
     }
 
     /// Applies the stored appearance preference to the whole app.

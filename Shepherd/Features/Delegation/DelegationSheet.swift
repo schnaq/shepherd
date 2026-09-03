@@ -10,6 +10,21 @@ struct DelegationSheet: View {
     /// The delegation.
     let model: DelegationModel
 
+    /// The task field's AI-drafting state (plan §3.E, the ADR 0011 amendment).
+    ///
+    /// The same value the two review composers use, so the rules the reviewer has already learned
+    /// there hold here: the replace-or-append question is asked *before* the request, a keystroke
+    /// takes the field back, what arrived stays and stays labelled, and every failure is one line
+    /// of the tier's own words.
+    @State private var briefDraft = AIDraftFieldState()
+    /// The task producing the streamed brief, while one runs.
+    ///
+    /// Held because a stream has three ways to end that are not "the model stopped talking": the
+    /// stop button, Escape, and the reviewer typing. All three have to end the *request* as well
+    /// as the field's claim on it — cancelling this task cancels the router's relay, which cancels
+    /// the provider's own work.
+    @State private var briefTask: Task<Void, Never>?
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -20,6 +35,22 @@ struct DelegationSheet: View {
         }
         .frame(width: 720, height: 620)
         .background(Theme.background)
+        .onChange(of: model.task) { _, text in
+            let wasStreaming = briefDraft.streamingDraft != nil
+            briefDraft.fieldChanged(to: text)
+            // The reviewer's keystroke won the field, so the request has to stop too: snapshots
+            // that would be refused anyway are tokens a Mac is still generating.
+            if wasStreaming, briefDraft.streamingDraft == nil {
+                briefTask?.cancel()
+                briefTask = nil
+            }
+        }
+        // The sheet closing is a stop as well. There is no field left to write into, and an
+        // on-device session that outlives its window is battery spent on nothing.
+        .onDisappear {
+            briefTask?.cancel()
+            briefTask = nil
+        }
     }
 
     // MARK: - Header
@@ -98,9 +129,26 @@ struct DelegationSheet: View {
     private var promptCard: some View {
         Card {
             VStack(alignment: .leading, spacing: 8) {
-                CardTitle(String(localized: "TASK FOR THE AGENT"))
+                HStack(spacing: 8) {
+                    CardTitle(String(localized: "TASK FOR THE AGENT"))
+                    Spacer(minLength: 4)
+                    if model.canDraftBrief {
+                        // Absent rather than disabled when no tier could answer: with
+                        // intelligence off, this card is exactly the card it was before the
+                        // brief existed (ADR 0007: no feature hard-depends on a model).
+                        AIDraftButton(
+                            isDrafting: briefDraft.isDrafting,
+                            isStreaming: briefDraft.streamingDraft != nil
+                        ) {
+                            toggleBriefDraft()
+                        }
+                    }
+                }
                 TextEditor(text: taskBinding)
                     .font(.system(size: 12.5))
+                    // The growing brief is drawn in the caption colour, so the reviewer can see
+                    // which words are the model's while they are still arriving.
+                    .foregroundStyle(briefDraft.streamingDraft == nil ? Theme.text : Theme.accentText)
                     // The instructions handed to the agent are prose the user writes under time
                     // pressure, so proofreading and rewriting belong here too (ADR 0020). Nothing
                     // is sent by Writing Tools; the text still waits for the Run button.
@@ -114,6 +162,13 @@ struct DelegationSheet: View {
                     )
                     .disabled(model.isBusy)
                     .opacity(model.isBusy ? 0.6 : 1)
+                AIDraftStatusView(
+                    state: briefDraft,
+                    confirmationTitle: String(localized: "Replace the task for the agent?"),
+                    onReplace: { resolveBriefDraft(.replace) },
+                    onAppend: { resolveBriefDraft(.append) },
+                    onDiscard: { briefDraft.discardPendingDraft() }
+                )
                 Text(String(
                     localized: "Shepherd prepends its own instructions: the agent is told it works in a detached worktree, must not push, and should keep the change minimal."
                 ))
@@ -401,6 +456,15 @@ struct DelegationSheet: View {
                     .help(worktree.directory.path)
             }
             Spacer(minLength: 8)
+            if briefDraft.isDrafting {
+                // Escape, while text is arriving, means *stop the draft* — not "throw the sheet
+                // away". This is the only control carrying `.cancelAction`, and it exists only
+                // while there is a draft to stop, so there is nothing ambiguous about where the
+                // key goes; everything the brief produced stays in the field.
+                Button(String(localized: "Stop drafting")) { stopBriefDraft() }
+                    .buttonStyle(SecondaryButtonStyle(height: 30))
+                    .keyboardShortcut(.cancelAction)
+            }
             footerActions
         }
         .padding(.horizontal, 18)
@@ -459,6 +523,112 @@ struct DelegationSheet: View {
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(!model.canStart)
         }
+    }
+
+    // MARK: - Drafting the task (plan §3.E)
+
+    /// The ✨ button, and ⇧⌘D: start a brief, or stop the one that is running.
+    ///
+    /// One entry point for both directions so the button and the shortcut cannot disagree about
+    /// what they do.
+    @MainActor
+    private func toggleBriefDraft() {
+        if briefDraft.isDrafting {
+            stopBriefDraft()
+        } else {
+            requestBriefDraft()
+        }
+    }
+
+    /// Asks the intelligence layer for a brief, streamed.
+    ///
+    /// Its only effect is on the text field. The Run button reads ``DelegationModel/task`` when it
+    /// is pressed and nothing else, so a brief that is arriving, stopped, appended or discarded
+    /// changes what a run *would* say and never whether one happens (ADR 0011's amendment).
+    /// When the field already holds text this only *asks*: the request is made by
+    /// ``resolveBriefDraft(_:)`` once the reviewer has said replace or append, so a discarded
+    /// question sends nothing to any provider.
+    @MainActor
+    private func requestBriefDraft() {
+        switch briefDraft.prepareStream(existingText: model.task) {
+        case .askFirst:
+            break
+        case .ready(let base):
+            briefTask = Task { await runBriefStream(base: base) }
+        }
+    }
+
+    /// Stops the running draft, keeping every word that arrived.
+    ///
+    /// The field is settled here rather than in the task, so a stop is *immediate*. Everything it
+    /// touches is idempotent, so the task doing the same thing again when it wakes is a no-op.
+    @MainActor
+    private func stopBriefDraft() {
+        briefTask?.cancel()
+        briefTask = nil
+        // Exactly one of these two does anything: the first before the first token has arrived,
+        // the second once text is in the field.
+        briefDraft.cancelDrafting()
+        applyBriefDraft(briefDraft.cancelStream())
+    }
+
+    /// Applies the reviewer's answer to the replace-or-append question.
+    @MainActor
+    private func resolveBriefDraft(_ choice: AIDraftFieldState.Choice) {
+        switch briefDraft.resolve(choice, existingText: model.task) {
+        case .write(let text):
+            model.task = text
+        case .startStream(let base):
+            briefTask = Task { await runBriefStream(base: base) }
+        case .nothing:
+            break
+        }
+    }
+
+    /// Runs one streamed brief into the task field.
+    ///
+    /// Every element is the whole brief so far, so each one is simply written; the state decides
+    /// whether it may be (it may not, once the reviewer has typed).
+    /// - Parameter base: What the brief grows after — empty, or the reviewer's own text plus a
+    ///   blank line when they chose *append*.
+    @MainActor
+    private func runBriefStream(base: String) async {
+        let outcome = await model.streamBrief()
+        // Stopped while the ladder was still choosing a tier: ``stopBriefDraft()`` has already put
+        // the field back, and reporting this outcome would answer a question nobody is asking.
+        guard !Task.isCancelled else { return }
+        guard let stream = outcome.stream else {
+            applyBriefDraft(
+                briefDraft.finish(outcome.failure ?? .disabled, existingText: model.task)
+            )
+            return
+        }
+        briefDraft.streamStarted(kind: stream.kind, base: base)
+        do {
+            for try await partial in stream.text {
+                applyBriefDraft(briefDraft.streamed(partial))
+            }
+            // A cancelled task ends the iteration *without* an error, so a stop has to be
+            // recognised here as well, or a stopped stream would file itself as one that ran to
+            // completion — which, with nothing arrived, puts a failure line under a field the
+            // reviewer just stopped.
+            if Task.isCancelled {
+                applyBriefDraft(briefDraft.cancelStream())
+            } else {
+                applyBriefDraft(briefDraft.finishStream())
+            }
+        } catch is CancellationError {
+            applyBriefDraft(briefDraft.cancelStream())
+        } catch {
+            applyBriefDraft(briefDraft.failStream(AIDraftFailure.describe(error)))
+        }
+    }
+
+    /// Writes text the drafting state produced into the field, when it produced any.
+    @MainActor
+    private func applyBriefDraft(_ text: String?) {
+        guard let text else { return }
+        model.task = text
     }
 
     // MARK: - Plumbing

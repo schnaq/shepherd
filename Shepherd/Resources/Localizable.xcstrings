@@ -6171,6 +6171,16 @@
         }
       }
     },
+    "Replace the task for the agent?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufgabe für den Agenten ersetzen?"
+          }
+        }
+      }
+    },
     "Replace this comment?": {
       "localizations": {
         "de": {
@@ -6927,6 +6937,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Shepherd hat den Link „%@“ nicht verstanden."
+          }
+        }
+      }
+    },
+    "Shepherd has not fetched this pull request yet, so there is nothing to draft a brief from.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd hat diesen Pull Request noch nicht geladen – es gibt also keine Grundlage für einen Entwurf."
           }
         }
       }
@@ -8417,6 +8437,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dieses Review wurde nicht gesendet"
+          }
+        }
+      }
+    },
+    "This tier cannot draft a brief for a coding agent.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Stufe kann keine Aufgabenbeschreibung für einen Coding-Agenten entwerfen."
           }
         }
       }

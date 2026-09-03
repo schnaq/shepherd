@@ -706,4 +706,26 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
         }
         var choices: [Choice]
     }
+
+    // MARK: - Delegation brief (plan §3.E)
+
+    /// Drafts the task for a coding agent, streamed as cumulative Markdown (plan §3.E).
+    ///
+    /// The same streamed plain-text path the two drafting calls use, with the brief's own
+    /// instructions and its Markdown contract — including the finished-answer pass through
+    /// ``IntelligenceJSON/draft(from:)``, which on this tier is worth keeping for the reason it
+    /// was added: "whatever speaks the chat-completions shape" is exactly the population that
+    /// wraps an answer in a JSON envelope it was asked not to send. Markdown that merely
+    /// *contains* braces is left alone, because the envelope has to decode and carry a `draft`
+    /// key before it is believed.
+    ///
+    /// A request marked ``AgentBriefRequest/onDeviceOnly`` never reaches this method: the router
+    /// refuses the cloud rung for it (ADR 0020's reasoning).
+    func streamAgentBrief(_ request: AgentBriefRequest) -> AsyncThrowingStream<String, Error> {
+        streamDraft(
+            system: IntelligencePrompt.agentBriefInstructions + "\n"
+                + IntelligencePrompt.agentBriefMarkdownContract,
+            user: IntelligencePrompt.body(for: request)
+        )
+    }
 }

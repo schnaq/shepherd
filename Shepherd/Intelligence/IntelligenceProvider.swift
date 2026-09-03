@@ -153,6 +153,25 @@ protocol IntelligenceProvider: Sendable {
         _ request: CIDiagnosisRequest,
         tools: any IntelligenceToolExecuting
     ) async throws -> IntelligenceToolRun<CIDiagnosis>
+
+    // MARK: - Delegation brief (plan §3.E)
+
+    /// Drafts the task for a coding agent as a stream of **cumulative** Markdown (plan §3.E).
+    ///
+    /// Same streaming contract as ``streamReviewSummaryDraft(_:)`` — every element is the whole
+    /// brief so far, never a delta — and the same product rule: the Markdown lands in the
+    /// delegation sheet's task field, the reviewer edits it, and **Run is still their click**.
+    /// There is no path from here to a started agent, and the auto-delegation rules never see a
+    /// drafted brief at all (ADR 0011 amendment, ADR 0016).
+    ///
+    /// Markdown rather than prose because the brief has a shape an agent reads better than a
+    /// paragraph: goal, constraints, acceptance — the three headings
+    /// ``ShepherdCore/AgentBrief`` names.
+    /// - Parameter request: The delegation's own material plus the digest, already inside the
+    ///   tier's token budget.
+    /// - Returns: A stream of ever-longer briefs. It throws the tier's own error when the tier
+    ///   cannot answer, and cancelling the consuming task ends the request.
+    func streamAgentBrief(_ request: AgentBriefRequest) -> AsyncThrowingStream<String, Error>
 }
 
 /// Streaming, for tiers that do not stream.
@@ -209,6 +228,25 @@ extension IntelligenceProvider {
         tools: any IntelligenceToolExecuting
     ) async throws -> IntelligenceToolRun<CIDiagnosis> {
         throw IntelligenceError.toolsUnsupported
+    }
+
+    // MARK: - Delegation brief (plan §3.E)
+
+    /// Drafting an agent brief, for a tier that has no brief-shaped call.
+    ///
+    /// It declines, for the reason ``diagnoseFailingChecks(_:tools:)``'s default declines rather
+    /// than improvising: a brief is text a reviewer hands to an agent that will change their
+    /// code, and a tier that answered it out of the *review-summary* prompt would produce six
+    /// sentences of review prose that look exactly like a brief in the field. One stated sentence
+    /// the reviewer can read beats a plausible answer to a question that was not asked. A tier
+    /// that means to draft briefs implements the method; the router shows this reason for one
+    /// that does not, exactly as it shows every other tier failure.
+    func streamAgentBrief(_ request: AgentBriefRequest) -> AsyncThrowingStream<String, Error> {
+        IntelligenceStreaming.stream { (_: AsyncThrowingStream<String, Error>.Continuation) -> Void in
+            throw IntelligenceError.unavailable(
+                String(localized: "This tier cannot draft a brief for a coding agent.")
+            )
+        }
     }
 }
 
@@ -651,6 +689,109 @@ enum IntelligencePrompt {
         if overflow > 0 {
             text += "\n- (and \(overflow) more files, not listed here)"
         }
+        return text
+    }
+
+    // MARK: - Delegation brief (plan §3.E)
+
+    /// The English name of the language the reviewer reads, for a prompt to ask the answer in.
+    ///
+    /// `Locale.current` rather than a setting: it is the language the app's own UI is in, so it
+    /// is also the language the reviewer is going to *edit* the brief in. Named in English
+    /// (`en_US`) rather than in itself, because "Deutsch" is a word a model has to recognise
+    /// while "German" is the word it was trained to follow. Falls back to the language code, and
+    /// then to English, so this can never produce an empty instruction.
+    static var answerLanguageName: String {
+        let code = Locale.current.language.languageCode?.identifier ?? "en"
+        return Locale(identifier: "en_US").localizedString(forLanguageCode: code) ?? code
+    }
+
+    /// The system/instructions text for a drafted agent brief (plan §3.E).
+    ///
+    /// The wording carries the product rule the way ``draftSummaryInstructions`` does: the model
+    /// is writing a *task* for a reviewer who edits it and presses Run themselves, so it never
+    /// says the work is done and never widens the scope. "Keep to what the review asks for" is
+    /// the sentence that matters most — an agent handed a brief that invites refactoring produces
+    /// a diff nobody wants to read, and ADR 0011's guardrails are about the *worktree*, not about
+    /// the size of the change.
+    ///
+    /// Computed rather than stored, because one sentence of it depends on the machine: a German
+    /// reviewer's brief should be German, and the language is read from ``answerLanguageName``
+    /// rather than guessed from the input, which is usually an English diff either way.
+    static var agentBriefInstructions: String {
+        """
+        You write the task brief a senior engineer hands to a coding agent that works in a \
+        detached git worktree of one pull request. The engineer reads your text, edits it and \
+        starts the agent themselves — you never start anything and nothing you write is sent \
+        anywhere on its own. Say what has to change and why, name only files the input names, \
+        and keep the scope to what the review actually asks for: no refactoring, no reformatting, \
+        no rewrites the input does not ask for. Use only what the input states; write that \
+        something is unclear rather than guessing at intent, and never claim anything was built, \
+        run or tested. Write in \(answerLanguageName).
+        """
+    }
+
+    /// The Markdown shape a streamed brief is asked for.
+    ///
+    /// Markdown rather than the JSON envelope the non-streamed drafts use, for the reason
+    /// ``draftPlainTextContract`` exists: half of `{"goal": "Fix the retry` is not text anybody
+    /// can read, and this one grows in a field the reviewer is watching. The three headings are
+    /// interpolated from ``ShepherdCore/AgentBrief`` so the prompt and the renderer cannot drift
+    /// onto two spellings of the same section.
+    static var agentBriefMarkdownContract: String {
+        """
+        Answer with Markdown and nothing else — no JSON, no code fence, no preamble, no closing \
+        remark — in exactly these three sections, in this order: \
+        \(AgentBrief.goalHeading) with one or two sentences, \
+        \(AgentBrief.constraintsHeading) with short bullets, and \
+        \(AgentBrief.acceptanceHeading) with short bullets naming what the engineer should be \
+        able to see when the work is done.
+        """
+    }
+
+    /// Renders an agent-brief request: which delegation this is, then the digest.
+    ///
+    /// The delegation's own facts come first and the digest after them, the other way round from
+    /// ``body(for:)`` for a summary draft. That is deliberate: the brief's subject is the *task*,
+    /// and a model that reads forty files of statistics before it is told what it is being asked
+    /// for writes a description of the pull request instead of a brief.
+    /// - Parameter request: The request.
+    static func body(for request: AgentBriefRequest) -> String {
+        var text = """
+            Pull request: \(request.slug) — \(request.pullRequestTitle)
+            Worktree: branch \(request.headRefName), checked out at commit \(request.headRefOid)
+            """
+        if let path = request.findingPath {
+            if let line = request.findingLine {
+                text += "\nStarted from a review finding in \(path), line \(line)."
+            } else {
+                text += "\nStarted from a review finding in \(path)."
+            }
+        } else {
+            text += "\nStarted from the pull request as a whole, not from one finding."
+        }
+        if !request.focusReasons.isEmpty {
+            text += "\n\nShepherd ranked these files as the riskiest:"
+            for reason in request.focusReasons {
+                text += "\n- \(reason)"
+            }
+        }
+        if request.findings.isEmpty {
+            // Said plainly rather than left out: with no finding to act on, the brief is written
+            // from the diff and the ranking, and a model should know that is all it has.
+            text += "\n\nNo review comment is attached to this delegation."
+        } else {
+            text += "\n\nThe review comments this delegation is about."
+                + " They are the task; quote what they ask for, do not repeat them word for word:"
+            for finding in request.findings {
+                if let author = finding.author {
+                    text += "\n- \(author): \(finding.body)"
+                } else {
+                    text += "\n- \(finding.body)"
+                }
+            }
+        }
+        text += "\n\n" + body(for: request.digest)
         return text
     }
 }

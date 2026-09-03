@@ -227,6 +227,22 @@ turn and budget caps. The command template is configurable for other agent CLIs.
 touches agent auth and never pushes: you review the result and push it yourself
 ([ADR 0011](adr/0011-delegate-to-local-agent-cli.md)).
 
+### Let Shepherd write the brief
+
+The delegation sheet has a ✨ button next to the task field. Press it and Shepherd drafts the
+brief for the agent out of what it already knows — the pull request's tier-1 digest, the branch and
+commit the worktree sits on, the files its heuristics ranked riskiest, and the review comments the
+finding is made of — as three Markdown sections: **Goal**, **Constraints**, **Acceptance**. The text
+streams into the field word by word with a caption naming the tier that wrote it, and you edit it
+like any other text.
+
+**Run is still your click.** Nothing about a draft starts an agent, and a brief that would quote a
+colleague's review comment stays on your Mac: that request is never offered to a configured cloud
+endpoint, only to the on-device model. Automatic delegation rules keep their own fixed template —
+an unattended run never receives a generated brief
+([ADR 0011](adr/0011-delegate-to-local-agent-cli.md), [ADR 0007](adr/0007-layered-intelligence.md)).
+With no model configured the button is simply absent.
+
 ### Optional: let it start itself when CI goes red
 
 Switch on an auto-delegation rule and the moment CI *turns* red on one of your pull requests — or,

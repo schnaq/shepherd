@@ -47,6 +47,9 @@ final class DelegationCenter {
     ///   - toasts: Where failures are surfaced.
     ///   - onDidPush: Called after a successful push so the caller can re-sync.
     ///   - onDidFinish: Called once when the run reaches a terminal state (ADR 0012).
+    ///   - brief: How the sheet's ✨ button drafts the task text (plan §3.E), when a tier could
+    ///     take it. Only the *attended* entry point takes one — see
+    ///     ``startAutomatically(context:task:settings:toasts:onDidPush:onDidFinish:)``.
     /// - Returns: The model now on screen.
     @discardableResult
     func open(
@@ -54,7 +57,8 @@ final class DelegationCenter {
         settings: AppSettings,
         toasts: ToastCenter,
         onDidPush: (@MainActor () async -> Void)? = nil,
-        onDidFinish: (@MainActor (DelegationOutcome) -> Void)? = nil
+        onDidFinish: (@MainActor (DelegationOutcome) -> Void)? = nil,
+        brief: AgentBriefDrafter? = nil
     ) -> DelegationModel {
         if let existing = models[context.prID], existing.isBusy {
             presented = existing
@@ -67,7 +71,8 @@ final class DelegationCenter {
             toasts: toasts,
             isAutomatic: false,
             onDidPush: onDidPush,
-            onDidFinish: onDidFinish
+            onDidFinish: onDidFinish,
+            brief: brief
         )
         models[context.prID] = model
         presented = model
@@ -76,10 +81,14 @@ final class DelegationCenter {
 
     /// Starts a delegation the user did not ask for (ADR 0016).
     ///
-    /// Two differences from ``open(context:settings:toasts:onDidPush:onDidFinish:)``, and nothing
-    /// else: no sheet is presented — an unexpected modal in front of whatever the user is doing
-    /// would be worse than the notification that announces the start — and the model is marked
-    /// automatic, which is what the badge and the webhook payload read.
+    /// Two differences from ``open(context:settings:toasts:onDidPush:onDidFinish:brief:)``, and
+    /// nothing else: no sheet is presented — an unexpected modal in front of whatever the user is
+    /// doing would be worse than the notification that announces the start — and the model is
+    /// marked automatic, which is what the badge and the webhook payload read.
+    ///
+    /// It also takes **no brief drafter**, and that omission is load-bearing: a rule-started run
+    /// gets the task text its template rendered and nothing else, so there is no code path from a
+    /// generated brief to an agent nobody pressed a button for (ADR 0016, ADR 0011's amendment).
     /// - Parameters:
     ///   - context: What the delegation is about.
     ///   - task: The rendered task text; replaces the prefilled default.
@@ -107,7 +116,9 @@ final class DelegationCenter {
             toasts: toasts,
             isAutomatic: true,
             onDidPush: onDidPush,
-            onDidFinish: onDidFinish
+            onDidFinish: onDidFinish,
+            // No drafter: see above.
+            brief: nil
         )
         model.task = task
         // Nothing is remembered unless it actually runs: a model parked in "no checkout" that
@@ -130,7 +141,8 @@ final class DelegationCenter {
         toasts: ToastCenter,
         isAutomatic: Bool,
         onDidPush: (@MainActor () async -> Void)?,
-        onDidFinish: (@MainActor (DelegationOutcome) -> Void)?
+        onDidFinish: (@MainActor (DelegationOutcome) -> Void)?,
+        brief: AgentBriefDrafter?
     ) -> DelegationModel {
         let configuration = settings.agentCLI
         let executable = AgentCLILocator.locate(configuration: configuration)
@@ -161,7 +173,8 @@ final class DelegationCenter {
             isAutomatic: isAutomatic,
             toasts: toasts,
             onDidPush: onDidPush,
-            onDidFinish: onDidFinish
+            onDidFinish: onDidFinish,
+            brief: brief
         )
     }
 }

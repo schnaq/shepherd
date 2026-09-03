@@ -593,4 +593,24 @@ struct AnthropicProvider: IntelligenceProvider {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         }
     }
+
+    // MARK: - Delegation brief (plan §3.E)
+
+    /// Drafts the task for a coding agent, streamed as cumulative Markdown (plan §3.E).
+    ///
+    /// The same streamed plain-text path the two drafting calls use, with the brief's own
+    /// instructions and its Markdown contract: this tier has no reason to treat a brief
+    /// differently from a draft, because it *is* a draft — text for a field the reviewer edits
+    /// before anything runs.
+    ///
+    /// A request marked ``AgentBriefRequest/onDeviceOnly`` never reaches this method: the router
+    /// refuses the cloud rung for it (ADR 0020's reasoning), so the rule is enforced by the
+    /// ladder rather than by a check here that a second caller could forget.
+    func streamAgentBrief(_ request: AgentBriefRequest) -> AsyncThrowingStream<String, Error> {
+        streamDraft(
+            system: IntelligencePrompt.agentBriefInstructions + "\n"
+                + IntelligencePrompt.agentBriefMarkdownContract,
+            user: IntelligencePrompt.body(for: request)
+        )
+    }
 }
