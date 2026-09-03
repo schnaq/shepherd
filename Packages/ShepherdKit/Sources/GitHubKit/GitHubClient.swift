@@ -313,7 +313,7 @@ public actor GitHubClient {
     // MARK: - Closed pull requests (ADR 0027)
 
     /// How many closed pull requests one page asks for. GitHub caps `search` at 100.
-    static let closedPullRequestPageSize = 100
+    public static let closedPullRequestPageSize = 100
 
     /// One page of a repository's closed pull requests, for the track-record backfill.
     ///
