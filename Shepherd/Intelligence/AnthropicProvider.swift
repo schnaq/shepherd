@@ -283,6 +283,13 @@ struct AnthropicProvider: IntelligenceProvider {
     /// The loop ends in exactly three ways: the model stops asking (its text is the answer), the
     /// hop cap fires, or the endpoint fails. There is no "answer with what you have" fallback —
     /// see ``IntelligenceError/toolLoopExceeded``.
+    ///
+    /// The cap counts **attempted** calls, not recorded hops. The trace only takes a step for a
+    /// tool the registry knows — a name the model invented was refused rather than run, so there
+    /// is nothing typed to record — and counting the trace therefore capped nothing at all for
+    /// the one model that most needs capping: one that keeps asking for `runTests` reads a
+    /// refusal, asks again, and loops for as long as the endpoint keeps answering. A call the
+    /// model got wrong still cost a round trip, so it still costs a hop.
     /// - Parameters:
     ///   - request: What is red and what may be read.
     ///   - tools: The reads, already bound to this pull request.
@@ -305,6 +312,9 @@ struct AnthropicProvider: IntelligenceProvider {
             ),
         ]
         var trace = IntelligenceTrace()
+        // Every call the model asked for, valid or not. Local to the loop, because it is the
+        // *turn* that is capped and a turn is exactly what this loop is.
+        var attemptedHops = 0
         var answer = ""
 
         while true {
@@ -329,7 +339,8 @@ struct AnthropicProvider: IntelligenceProvider {
             answer = decoded.text
             let calls = decoded.toolUseBlocks
             guard decoded.stopReason == "tool_use", !calls.isEmpty else { break }
-            guard trace.count + calls.count <= IntelligenceToolLoop.maximumHops else {
+            attemptedHops += calls.count
+            guard attemptedHops <= IntelligenceToolLoop.maximumHops else {
                 throw IntelligenceError.toolLoopExceeded
             }
 

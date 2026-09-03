@@ -38,6 +38,11 @@ enum IntelligenceToolLoop {
     /// between two reads forever, spending the reviewer's battery and, on a cloud tier, their
     /// money. It is a hard stop rather than a nudge in the prompt, because a prompt is a request
     /// and this has to be a guarantee.
+    ///
+    /// Counted per **attempted** call, on every tier. A call the model got wrong comes back as a
+    /// refusal rather than as a step in the typed trace (``ShepherdCore/IntelligenceTrace`` holds
+    /// validated calls only), so counting what was *recorded* would leave the one turn that
+    /// cannot converge — a model asking over and over for a tool nobody declared — uncapped.
     static let maximumHops = 6
 
     /// Whether an endpoint's error message is about tool calling.

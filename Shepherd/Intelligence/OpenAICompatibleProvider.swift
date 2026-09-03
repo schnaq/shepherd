@@ -370,6 +370,13 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
     /// The loop is tolerant in one place: a server that fills `tool_calls` but forgets
     /// `finish_reason` is still asking for a tool. This tier is "whatever speaks the shape", and
     /// treating a present, non-empty call list as the request it obviously is costs nothing.
+    ///
+    /// It is not tolerant about the cap, which counts **attempted** calls rather than recorded
+    /// hops. The trace only takes a step for a tool the registry knows — an invented name is
+    /// refused rather than run, so there is nothing typed to record — and counting the trace
+    /// therefore capped nothing for the model that most needs capping: one that keeps asking for
+    /// a tool nobody declared, reads the refusal, and asks again. A call the model got wrong
+    /// still cost a round trip, so it still costs a hop.
     /// - Parameters:
     ///   - request: What is red and what may be read.
     ///   - tools: The reads, already bound to this pull request.
@@ -394,6 +401,9 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
             ToolMessage(role: "user", content: IntelligencePrompt.body(for: request)),
         ]
         var trace = IntelligenceTrace()
+        // Every call the model asked for, valid or not. Local to the loop, because it is the
+        // *turn* that is capped and a turn is exactly what this loop is.
+        var attemptedHops = 0
         var answer = ""
 
         while true {
@@ -417,7 +427,8 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
             let calls = choice.message?.toolCalls ?? []
             guard !calls.isEmpty, choice.finishReason == "tool_calls" || choice.finishReason == nil
             else { break }
-            guard trace.count + calls.count <= IntelligenceToolLoop.maximumHops else {
+            attemptedHops += calls.count
+            guard attemptedHops <= IntelligenceToolLoop.maximumHops else {
                 throw IntelligenceError.toolLoopExceeded
             }
 

@@ -405,6 +405,33 @@ final class IntelligenceToolLoopTests: XCTestCase {
         )
     }
 
+    func testAnthropicCountsACallItCannotValidateAgainstTheHopCapAllTheSame() async throws {
+        // A model that keeps naming a tool nobody declared. Every call is *refused* rather than
+        // run, so the typed trace stays empty — and a cap measured against the trace would let
+        // this turn go round for as long as the endpoint kept answering.
+        let answer = ScriptedTransport.Answer(
+            body: #"""
+                {"stop_reason": "tool_use", "content": [
+                  {"type": "tool_use", "id": "call_n", "name": "runTests", "input": {}}
+                ]}
+                """#
+        )
+        let transport = ScriptedTransport(Array(repeating: answer, count: 7))
+        let provider = AnthropicProvider(apiKey: "k", model: "m", transport: transport)
+
+        await assertThrows(.toolLoopExceeded) {
+            _ = try await provider.diagnoseFailingChecks(self.request(), tools: self.executor())
+        }
+        // The script holds exactly seven answers, so a loop that had *not* stopped would have
+        // failed on an exhausted transport instead — the count is the assertion.
+        let requests = await transport.bodies
+        XCTAssertEqual(
+            requests.count,
+            IntelligenceToolLoop.maximumHops + 1,
+            "six refused reads happened, and the request that asked for a seventh is the stop"
+        )
+    }
+
     func testAnthropicMapsA400AboutToolsToAnEndpointThatCannotDoThis() async throws {
         let transport = ScriptedTransport([
             ScriptedTransport.Answer(
@@ -550,6 +577,32 @@ final class IntelligenceToolLoopTests: XCTestCase {
         await assertThrows(.toolLoopExceeded) {
             _ = try await provider.diagnoseFailingChecks(self.request(), tools: self.executor())
         }
+    }
+
+    func testTheOpenAILoopCountsACallItCannotValidateAgainstTheHopCapAllTheSame() async throws {
+        // The same non-converging model in the other wire shape: an invented tool name, refused
+        // every time, recorded never, and stopped by the cap regardless.
+        let answer = ScriptedTransport.Answer(
+            body: #"""
+                {"choices": [{"finish_reason": "tool_calls", "message": {"tool_calls": [
+                  {"id": "call_n", "type": "function",
+                   "function": {"name": "runTests", "arguments": "{}"}}
+                ]}}]}
+                """#
+        )
+        let transport = ScriptedTransport(Array(repeating: answer, count: 7))
+        let provider = OpenAICompatibleProvider(
+            baseURL: "https://api.example.eu/v1",
+            model: "m",
+            apiKey: "",
+            transport: transport
+        )
+
+        await assertThrows(.toolLoopExceeded) {
+            _ = try await provider.diagnoseFailingChecks(self.request(), tools: self.executor())
+        }
+        let requests = await transport.bodies
+        XCTAssertEqual(requests.count, IntelligenceToolLoop.maximumHops + 1)
     }
 
     func testAnEndpointThatRejectsToolsIsReportedAsSuchRatherThanAsA400() async throws {
