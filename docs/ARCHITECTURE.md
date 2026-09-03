@@ -1013,7 +1013,7 @@ value, and the two views.
 
 The data flow is the point, and it is deliberately not a new one:
 
-- The rows come from **`SignedInSession.inboxRows`**, a third `ValueObservation` beside the two
+- The rows come from **`SignedInSession.inboxRows`**, one more `ValueObservation` beside the three
   outbox counts. It is on the session rather than in the inbox because `InboxModel` is owned by
   `InboxScreen` and stops observing when that screen goes away (the review screen replaces it),
   while the badge has to stay true with no window open at all. Same source, same table, no fetch
