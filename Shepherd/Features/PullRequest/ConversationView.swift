@@ -34,6 +34,7 @@ struct ConversationView: View {
             VStack(alignment: .leading, spacing: 16) {
                 claimsCard
                 recurringFinding
+                closingIssues
                 description
                 timeline
                 commits
@@ -120,6 +121,26 @@ struct ConversationView: View {
                 }
             )
         }
+    }
+
+    /// The issues this pull request closes, above the description (ADR 0032's Sprint 3
+    /// amendment).
+    ///
+    /// Read straight off the cached `PullRequestDetail`: the closing references arrive on the
+    /// same detail fetch as the review threads, so this section costs no request of its own and
+    /// draws nothing at all when the list is empty.
+    ///
+    /// Activating a row opens the issue on github.com. There is no `DeepLink.issue` case in this
+    /// build — the `shepherd://issue/…` grammar lands with the issues inbox — and this is the one
+    /// call site to point at `AppEnvironment.openIssue` once that hook exists; the card hands the
+    /// whole reference back for exactly that reason.
+    @ViewBuilder
+    private var closingIssues: some View {
+        ClosingIssuesCard(
+            issues: model.detail?.closingIssues ?? [],
+            repo: model.summary?.repo,
+            onOpen: { issue in ClosingIssuesCard.openOnGitHub(issue) }
+        )
     }
 
     @ViewBuilder

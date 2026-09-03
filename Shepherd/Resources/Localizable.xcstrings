@@ -2971,6 +2971,46 @@
         }
       }
     },
+    "CLOSES %lld ISSUES": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "SCHLIESST %lld ISSUE"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "SCHLIESST %lld ISSUES"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "CLOSES %lld ISSUE"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "CLOSES %lld ISSUES"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "COMMITS · %lld": {
       "localizations": {
         "de": {
@@ -3357,6 +3397,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Diagnose schließen"
+          }
+        }
+      }
+    },
+    "Closed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geschlossen"
+          }
+        }
+      }
+    },
+    "Closes #%lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schließt #%lld"
           }
         }
       }
@@ -9281,6 +9341,16 @@
         }
       }
     },
+    "State unknown": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Status unbekannt"
+          }
+        }
+      }
+    },
     "Stop": {
       "localizations": {
         "de": {
@@ -10287,6 +10357,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Die Einstellungen wurden entschlüsselt, aber ihr Inhalt war nicht lesbar."
+          }
+        }
+      }
+    },
+    "The state this pull request has in your inbox. Shepherd did not fetch anything for this list.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Status, den dieser Pull Request in deiner Inbox hat. Shepherd hat für diese Liste nichts geladen."
           }
         }
       }
