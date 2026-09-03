@@ -460,10 +460,12 @@ you are signed out is remembered and opens right after sign-in.
 Shepherd's commands are **App Intents**, so they show up in the Shortcuts app with typed
 parameters, in Spotlight's actions, and in Siri: *"Open my review queue in Shepherd"*, *"What needs
 my review in Shepherd"*, *"Sync Shepherd"*, *"Start a review session in Shepherd"*, *"Summarise my
-next review in Shepherd"*. An *Open Pull Request* action takes a pull request you pick — or search
-for, using the same on-device ⌘K ranker — and a *Get Pull Requests Needing Review* action answers
-with the count and the list from the local database, with no GitHub call, so it is safe on a
-five-minute automation.
+next review in Shepherd"*. On a German Mac you say them in German — *"Öffne meine Review-Queue in
+Shepherd"*, *"Fasse meinen nächsten Review in Shepherd zusammen"* — one German utterance per
+English phrase ([ADR 0022](adr/0022-german-localisation.md)). An *Open Pull Request* action takes a
+pull request you pick — or search for, using the same on-device ⌘K ranker — and a *Get Pull
+Requests Needing Review* action answers with the count and the list from the local database, with
+no GitHub call, so it is safe on a five-minute automation.
 
 Ask *"summarise my next review"* and Siri reads out the on-device summary of the pull request at
 the top of your queue and shows a card with the title, the slug, the overview and up to three risk

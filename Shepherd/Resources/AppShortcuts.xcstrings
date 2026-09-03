@@ -1,0 +1,96 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "How many pull requests need me in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie viele Pull Requests brauchen mich in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Open my review queue in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffne meine Review-Queue in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Show my review queue in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeig meine Review-Queue in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Start a review session in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Starte eine Review-Session in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Summarise my next review in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fasse meinen nächsten Review in ${applicationName} zusammen"
+          }
+        }
+      }
+    },
+    "Summarize my next review in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zusammenfassung meines nächsten Reviews in ${applicationName}"
+          }
+        }
+      }
+    },
+    "Sync ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Synchronisiere ${applicationName}"
+          }
+        }
+      }
+    },
+    "What needs my review in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was steht in meiner Review-Queue in ${applicationName}"
+          }
+        }
+      }
+    },
+    "What's my next review about in ${applicationName}": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Worum geht es in meinem nächsten Review in ${applicationName}"
+          }
+        }
+      }
+    }
+  },
+  "version": "1.0"
+}

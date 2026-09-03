@@ -245,3 +245,36 @@ Also untranslated, each for a stated reason rather than by omission:
 - A second language is now cheap and is *only* values: the same 859 keys, one more language in the
   catalog, one more element in the checker's `REQUIRED_LANGUAGE`. Nothing about the mechanism
   changes, which is the property this ADR was trying to buy.
+
+## Amendment (2026-09-03): German Siri phrases
+
+The follow-up this ADR parked above — *"The four Siri phrases … a small separate task, listed in
+the roadmap"* — is done, and it stayed the small separate task it was described as. The German
+phrases live in `Shepherd/Resources/AppShortcuts.xcstrings`, a second String Catalog in the same
+shape as the first (`sourceLanguage: en`, keys that *are* the English strings, one `de`
+`stringUnit` each), added to the app target in `project.yml` exactly the way `Localizable.xcstrings`
+is. The file name is not a preference: the App Intents metadata processor reads the phrases out of
+`ShepherdShortcuts` at build time and looks their translations up in a catalog called
+`AppShortcuts.xcstrings`, which is why this could never have been more rows in the existing one.
+
+What is in it: **nine keys, one German utterance each** — the five `AppShortcut`s carry nine
+English phrases between them, because Siri matches a phrase literally and an intent worth speaking
+to is worth several ways of asking (the count above said "four" from ADR 0021's era and is left as
+written; the phrase list in `ShepherdShortcuts` is the count that matters). The mapping is one to
+one on purpose: a German utterance per English phrase and nothing else, so the two catalogs stay
+comparable by eye and a phrase added in Swift shows up as exactly one missing row. Each German
+phrase keeps `${applicationName}` — the placeholder Xcode writes for `\(.applicationName)` in a
+phrase catalog — in the position German word order wants it, which for the *summarise* phrase means
+mid-sentence ("Fasse meinen nächsten Review in ${applicationName} zusammen") rather than at the
+end. The review vocabulary this ADR keeps in English is kept here too: *pull request*, *review*,
+*Review-Queue*, *merge*. A German user says "Öffne meine Review-Queue in Shepherd", not
+"Warteschlange", for the same reason the inbox says *Review* on screen.
+
+**It is outside `Scripts/check-localization.py` by design**, and the checker now says so at
+`CATALOG_PATH`. The checker gates one catalog against the app's `String(localized:)` and
+`Text(…)`-shaped call sites; Siri phrase keys are produced by neither, so every one of its four
+findings would be a check against the wrong source of truth — "missing from the catalog" for keys
+it cannot see, "stale catalog entry" for every phrase that is in fact live. The safety net for this
+file is the other one: a phrase with no German row falls back to the English phrase, which works on
+a German Mac today, so the failure mode is the one this ADR already accepted for the main catalog
+rather than a broken build or a dead Siri command.

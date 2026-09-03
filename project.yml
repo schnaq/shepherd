@@ -38,6 +38,7 @@ targets:
           - "Resources/DiffViewer"
           - "Resources/DiffViewer/**"
           - "Resources/Localizable.xcstrings"
+          - "Resources/AppShortcuts.xcstrings"
       # The String Catalog (ADR 0022), named explicitly with its build phase rather than left to
       # the glob above. XcodeGen infers a file's phase from its extension, and `.xcstrings` is a
       # young enough type that "which XcodeGen is on the runner" would decide whether the catalog
@@ -45,6 +46,14 @@ targets:
       # error, and CI installs XcodeGen from Homebrew rather than pinning it. Saying it here
       # costs one line and removes the question.
       - path: Shepherd/Resources/Localizable.xcstrings
+        buildPhase: resources
+      # The Siri phrase catalog (ADR 0022 § Amendment), here for the same reason and named the
+      # same way. It is a second `.xcstrings` rather than more rows in the first one because App
+      # Shortcut phrases are not `Localizable` keys: the App Intents metadata processor reads the
+      # phrases out of `ShepherdShortcuts` and looks their translations up in a file that has to
+      # be called `AppShortcuts.xcstrings` — the name is the contract, which is also why
+      # `Scripts/check-localization.py` does not look at it.
+      - path: Shepherd/Resources/AppShortcuts.xcstrings
         buildPhase: resources
       # The built web bundle goes in as a *folder reference* so `index.html` keeps its
       # relative `./viewer.js` / `./viewer.css` links and `loadFileURL(_:allowingReadAccessTo:)`

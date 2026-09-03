@@ -45,6 +45,12 @@ import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOURCE_DIR = os.path.join(REPO_ROOT, "Shepherd")
+#: The one catalog this script gates, by path rather than by glob. Its sibling
+#: ``Shepherd/Resources/AppShortcuts.xcstrings`` (ADR 0022 § Amendment) is deliberately not
+#: checked here and must not be: its keys are Siri phrases the App Intents metadata processor
+#: extracts from ``ShepherdShortcuts``, not ``String(localized:)`` call sites, so every check
+#: below — "the source produces this key", "no call site produces it any more" — would be a
+#: check against the wrong source of truth and would fail on a correct file.
 CATALOG_PATH = os.path.join(REPO_ROOT, "Shepherd", "Resources", "Localizable.xcstrings")
 
 #: Directories under ``Shepherd/`` that hold no Swift source. ``Resources`` carries the built web
