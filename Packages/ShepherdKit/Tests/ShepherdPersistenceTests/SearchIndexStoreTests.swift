@@ -27,7 +27,7 @@ final class SearchIndexStoreTests: XCTestCase {
     }
 
     func testTheSchemaGainsV3AndStaysAppendOnly() async throws {
-        XCTAssertEqual(DatabaseManager.migrator.migrations, ["v1", "v2", "v3"])
+        XCTAssertEqual(DatabaseManager.migrator.migrations, ["v1", "v2", "v3", "v4"])
         let database = try DatabaseManager.inMemory()
         try await database.writer.read { db in
             let columns = try db.columns(in: "search_index").map(\.name)

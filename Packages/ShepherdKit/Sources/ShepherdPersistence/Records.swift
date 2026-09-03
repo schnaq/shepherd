@@ -639,3 +639,55 @@ struct SearchIndexRecord: Codable, FetchableRecord, PersistableRecord {
         )
     }
 }
+
+/// A row of `triage_verdicts` (ADR 0023).
+///
+/// The verdict is flattened into three plain columns rather than stored as JSON, for
+/// ``PullRequestRecord``'s reason: `kind` and `risk` are closed vocabularies that SQL can be
+/// asked about, and a JSON blob would make "how many high-risk pull requests are there" a
+/// question only Swift could answer.
+///
+/// The enums travel as their raw values and are mapped by hand, which is the convention in this
+/// file — the twin's *lenient* decoding exists for what a model writes, and nothing a model wrote
+/// reaches this table without having been through it once already.
+struct TriageVerdictRecord: Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = "triage_verdicts"
+
+    var prID: String
+    var documentHash: String
+    var kind: String
+    var risk: String
+    var reason: String
+    var modelIdentifier: String
+    var classifiedAt: Double
+
+    init(entry: TriageVerdictEntry) {
+        self.prID = entry.prID
+        self.documentHash = entry.documentHash
+        self.kind = entry.verdict.kind.rawValue
+        self.risk = entry.verdict.risk.rawValue
+        self.reason = entry.verdict.reason
+        self.modelIdentifier = entry.modelIdentifier
+        self.classifiedAt = entry.classifiedAt.timeIntervalSince1970
+    }
+
+    /// Rebuilds the entry, or `nil` when the row's vocabulary is not this version's.
+    ///
+    /// `nil` rather than a thrown error and rather than a substituted default: the table is a
+    /// cache of locally computed opinions, so the honest response to a row Shepherd can no longer
+    /// read is to show no chip and classify that pull request again on the next pass. Inventing a
+    /// kind would present a guess as the model's verdict, which is the one thing
+    /// ``ShepherdCore/TriageVerdict``'s decoding refuses to do.
+    var entry: TriageVerdictEntry? {
+        guard let decodedKind = TriageVerdict.Kind(rawValue: kind),
+              let decodedRisk = TriageVerdict.Risk(rawValue: risk)
+        else { return nil }
+        return TriageVerdictEntry(
+            prID: prID,
+            documentHash: documentHash,
+            verdict: TriageVerdict(kind: decodedKind, risk: decodedRisk, reason: reason),
+            modelIdentifier: modelIdentifier,
+            classifiedAt: Date(timeIntervalSince1970: classifiedAt)
+        )
+    }
+}

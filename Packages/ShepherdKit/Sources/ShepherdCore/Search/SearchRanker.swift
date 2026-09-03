@@ -28,14 +28,16 @@ public enum SearchReference: Sendable, Hashable {
 
 /// What the user typed, parsed once (ADR 0019).
 ///
-/// A value rather than a string passed around, because three different decisions are made from
+/// A value rather than a string passed around, because four different decisions are made from
 /// one query and each of them would otherwise re-derive its own answer: which documents to rank,
-/// whether an exact row was named, and whether the pull-request section belongs *above* the
-/// commands (a prose query is a search; a one-word query is usually the start of a command name).
+/// which are eligible at all (the triage tokens, plan §3.A), whether an exact row was named, and
+/// whether the pull-request section belongs *above* the commands (a prose query is a search; a
+/// one-word query is usually the start of a command name).
 public struct SearchQuery: Sendable, Hashable {
     /// What the user typed, verbatim.
     public let text: String
-    /// The trimmed query — what the embedder is asked about.
+    /// The trimmed query with its `risk:`/`kind:` tokens removed — what the embedder is asked
+    /// about, and what the lexical ranker scores.
     public let normalizedText: String
     /// The lower-cased tokens, in order.
     public let tokens: [String]
@@ -43,27 +45,47 @@ public struct SearchQuery: Sendable, Hashable {
     public let distinctTokens: [String]
     /// An explicit pull-request reference, when the query is one.
     public let reference: SearchReference?
+    /// The structured-triage tokens the query carried, if any (plan §3.A).
+    ///
+    /// Parsed here, applied by the caller: the ranker sees documents, and a verdict is stored
+    /// beside a document rather than in it, so *narrowing* the candidate set is the one decision
+    /// this type cannot make on its own.
+    public let triage: TriageFilter
 
     /// Whether there is nothing to search for.
-    public var isEmpty: Bool { tokens.isEmpty && reference == nil }
+    ///
+    /// A query of nothing but `risk:high` is **not** empty: it is a perfectly good question about
+    /// the inbox, and the answer is a listing rather than a ranking (``SearchRanker/rank(query:documents:vectors:options:)``).
+    public var isEmpty: Bool { !hasSearchTerms && !triage.isActive }
+
+    /// Whether anything is left to *rank* — words, or an explicit reference.
+    public var hasSearchTerms: Bool { !tokens.isEmpty || reference != nil }
 
     /// Whether the query reads like a sentence rather than the beginning of a command.
     ///
     /// Two tokens is the threshold, and it is the whole heuristic: "sync" is somebody reaching
     /// for *Sync all repositories now*, "flaky login test" is nobody's command name. An explicit
-    /// reference counts as prose too — `#128` is unambiguously about a pull request.
-    public var looksLikeProse: Bool { reference != nil || tokens.count >= 2 }
+    /// reference counts as prose too — `#128` is unambiguously about a pull request — and so does
+    /// a triage token, because `risk:high` is not the beginning of any command name.
+    public var looksLikeProse: Bool {
+        reference != nil || tokens.count >= 2 || triage.isActive
+    }
 
     /// Parses a query.
     /// - Parameter text: What the user typed.
     public init(text: String) {
         self.text = text
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.normalizedText = trimmed
-        self.tokens = SearchText.tokens(in: trimmed)
+        // The filter tokens come out *before* anything else looks at the text, so `risk:high`
+        // neither ranks as the word "risk" nor gets embedded as part of the sentence.
+        let extracted = TriageFilter.extract(from: trimmed)
+        self.triage = extracted.filter
+        let remainder = extracted.remainder
+        self.normalizedText = remainder
+        self.tokens = SearchText.tokens(in: remainder)
         var seen = Set<String>()
         self.distinctTokens = tokens.filter { seen.insert($0).inserted }
-        self.reference = SearchQuery.parseReference(trimmed)
+        self.reference = SearchQuery.parseReference(remainder)
     }
 
     /// Recognises `owner/name#number` and `#number`, and nothing else.
@@ -217,6 +239,11 @@ public enum SearchRanker {
         options: SearchRankingOptions = .standard
     ) -> [SearchResult] {
         guard !query.isEmpty, !documents.isEmpty else { return [] }
+        // A query of nothing but `risk:high kind:dependency` has no words to score. It still has
+        // an answer — the caller has already narrowed `documents` to the pull requests whose
+        // verdict matches — so it is *listed* rather than ranked. Scoring it would be pretending
+        // to have an opinion about an order that the query did not ask for.
+        guard query.hasSearchTerms else { return listing(documents, options: options) }
 
         // Document frequency over the *candidate* set, which is the whole local inbox. A corpus
         // this small has no room for a global IDF table and needs none: the inbox is the corpus.
@@ -293,6 +320,39 @@ public enum SearchRanker {
             return left.prID < right.prID
         }
         return Array(results.prefix(max(0, options.limit)))
+    }
+
+    /// The answer to a query that filters but does not search.
+    ///
+    /// The order is `owner/name` ascending, then number **descending**: a listing is read like a
+    /// list of pull requests rather than like a ranking, and within one repository the newest
+    /// number is the one a reviewer is most likely to be after. Node id breaks the last tie so
+    /// the order is total, which is the promise every other path here makes too.
+    /// - Parameters:
+    ///   - documents: The candidates, already narrowed by the caller's filter.
+    ///   - options: Only ``SearchRankingOptions/limit`` is read; there is nothing to weight.
+    /// - Returns: The candidates, in listing order.
+    private static func listing(
+        _ documents: [SearchDocument],
+        options: SearchRankingOptions
+    ) -> [SearchResult] {
+        let ordered = documents.sorted { left, right in
+            if left.repoFullName != right.repoFullName {
+                return left.repoFullName < right.repoFullName
+            }
+            if left.number != right.number { return left.number > right.number }
+            return left.prID < right.prID
+        }
+        return ordered.prefix(max(0, options.limit)).map { document in
+            SearchResult(
+                prID: document.prID,
+                score: 0,
+                lexicalScore: 0,
+                similarity: nil,
+                isExactReference: false,
+                reason: nil
+            )
+        }
     }
 
     /// Picks the one thing worth telling the user about the match.

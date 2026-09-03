@@ -58,6 +58,7 @@ public final class DatabaseManager: Sendable {
         migrator.registerMigration("v1", migrate: DatabaseSchema.createV1)
         migrator.registerMigration("v2", migrate: DatabaseSchema.addV2)
         migrator.registerMigration("v3", migrate: DatabaseSchema.addV3)
+        migrator.registerMigration("v4", migrate: DatabaseSchema.addV4)
         return migrator
     }
 
@@ -147,6 +148,7 @@ enum DatabaseSchema {
         "etags",
         "agent_registry_overrides",
         "search_index",
+        "triage_verdicts",
     ]
 
     static func createV1(_ db: Database) throws {
@@ -396,6 +398,43 @@ enum DatabaseSchema {
                 dimensions INTEGER NOT NULL DEFAULT 0,
                 vector BLOB,
                 indexedAt REAL NOT NULL
+            )
+            """)
+    }
+
+    /// The v4 addition: one structured-triage verdict per pull request (ADR 0023).
+    ///
+    /// Append-only once more — `createV1`, `addV2` and `addV3` are never edited.
+    ///
+    /// Deliberately shaped like `search_index`, because it is the same kind of row about the same
+    /// pull request: a locally computed opinion, keyed by node id, invalidated by a document
+    /// hash, stamped with the model that produced it, and pruned by the same foreign key. Four
+    /// decisions live in the DDL:
+    ///
+    /// - **`ON DELETE CASCADE` *is* the pruning.** A pull request that leaves the inbox takes its
+    ///   verdict with it inside the sweep's own transaction, with nothing to remember and no
+    ///   second sweep to schedule. `foreignKeysEnabled` is on for every connection Shepherd
+    ///   opens, so the cascade is not optional.
+    /// - **`prID` is the primary key**, so re-classifying is an upsert and the table cannot hold
+    ///   two opinions about one pull request.
+    /// - **`kind` and `risk` are the twin's raw values, `reason` is free text.** They are read
+    ///   back through ``ShepherdCore/TriageVerdict``'s lenient decoding, so a row written by a
+    ///   Shepherd whose vocabulary was different fails *that one row* rather than the fetch.
+    /// - **Nothing here is an approval.** There is no column a rules engine could read as
+    ///   permission, and by ADR 0023's rule the bulk-triage, auto-merge and auto-delegation paths
+    ///   do not read this table at all: a verdict sorts and filters the inbox and does nothing
+    ///   else. `reason` carries the one sentence the "why?" popover shows.
+    static func addV4(_ db: Database) throws {
+        try db.execute(sql: """
+            CREATE TABLE triage_verdicts (
+                prID TEXT PRIMARY KEY NOT NULL
+                    REFERENCES pull_requests(id) ON DELETE CASCADE,
+                documentHash TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                risk TEXT NOT NULL,
+                reason TEXT NOT NULL DEFAULT '',
+                modelIdentifier TEXT NOT NULL DEFAULT '',
+                classifiedAt REAL NOT NULL
             )
             """)
     }
