@@ -310,6 +310,147 @@ public actor GitHubClient {
         return result
     }
 
+    // MARK: - Job logs (plan §3.F)
+
+    /// The most bytes a job log may have before it is refused.
+    ///
+    /// Two megabytes is generous for a log whose *failing region* is what gets used — the tier-1
+    /// `LogDigest` reduces it to about a thousand tokens — and it is the point past which
+    /// downloading more would only be to throw it away. It is a refusal rather than a silent
+    /// prefix because a truncated log's *end* is where a failure summary lives: a digest of the
+    /// first two megabytes of a ten-megabyte log would be a confident answer about the wrong
+    /// part of the run.
+    public static let maximumJobLogBytes = 2 * 1024 * 1024
+
+    /// Downloads the log of one GitHub Actions job (plan §3.F).
+    ///
+    /// `GET /repos/{owner}/{repo}/actions/jobs/{id}/logs` does not answer with a log: it answers
+    /// `302` with a `Location` pointing at a short-lived blob on GitHub's own storage host. Two
+    /// things about that shape are decisions rather than mechanics, and both are why this read
+    /// does not go through ``perform(method:url:body:accept:useCache:resource:extraHeaders:isIdempotent:)``
+    /// like every other one:
+    ///
+    /// - **The token does not follow the redirect.** The blob URL carries its own signed
+    ///   credentials in its query string, so the `Authorization` header is not needed there — and
+    ///   a bearer token sent to a host that does not need it is a token in one more place than
+    ///   it has to be. A transport that follows redirects itself (``URLSessionTransport`` does,
+    ///   because `URLSession` does) answers here with the blob already fetched and nothing is
+    ///   re-sent; a transport that does not answers with the `302`, and the second request this
+    ///   method makes carries no credentials at all. Either way the redirect is followed exactly
+    ///   once: a `Location` that points at another redirect is refused rather than chased.
+    /// - **It is not ETag-cached.** The URL is keyed by an immutable job id, so every cached
+    ///   entry is one more row that can never be replayed — the reason
+    ///   ``cacheKey(for:)`` already refuses to cache `/check-runs` — and here each row would hold
+    ///   up to ``maximumJobLogBytes`` of log.
+    ///
+    /// The body is decoded UTF-8 **lossily**: a log is bytes a hundred tools wrote, some of it
+    /// binary from a tool that printed a control sequence, and a diagnosis must not fail because
+    /// one byte in a megabyte was not valid UTF-8.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - jobID: The Actions job id, from ``ShepherdCore/CheckRun/actionsJobID``.
+    /// - Returns: The log as text. Empty when GitHub answered with an empty body.
+    /// - Throws: ``GitHubError/responseTooLarge(resource:bytes:limit:)`` when the log is larger
+    ///   than ``maximumJobLogBytes``, or any other ``GitHubError`` the status maps to.
+    public func jobLog(repo: RepoRef, jobID: Int) async throws -> String {
+        let resource = "\(repo.fullName) log of job \(jobID)"
+        guard var components = URLComponents(
+            url: configuration.apiBaseURL,
+            resolvingAgainstBaseURL: false
+        ) else {
+            throw GitHubError.invalidURL(configuration.apiBaseURL.absoluteString)
+        }
+        let path = "/repos/\(repo.owner)/\(repo.name)/actions/jobs/\(jobID)/logs"
+        components.path = (components.path == "/" ? "" : components.path) + path
+        guard let url = components.url else {
+            throw GitHubError.invalidURL(configuration.apiBaseURL.absoluteString + path)
+        }
+
+        var response = try await performLogRequest(url: url, authorized: true, resource: resource)
+        if let location = response.header("location").flatMap({ URL(string: $0) }),
+           (300..<400).contains(response.statusCode) {
+            response = try await performLogRequest(
+                url: location,
+                authorized: false,
+                resource: resource
+            )
+        }
+        guard response.isSuccess else {
+            throw Self.mapFailure(response, resource: resource, now: now())
+        }
+        guard response.body.count <= Self.maximumJobLogBytes else {
+            throw GitHubError.responseTooLarge(
+                resource: resource,
+                bytes: response.body.count,
+                limit: Self.maximumJobLogBytes
+            )
+        }
+        return String(decoding: response.body, as: UTF8.self)
+    }
+
+    /// One request of the job-log read: no cache, no retry, and credentials only where they are
+    /// needed.
+    ///
+    /// It still records the rate-limit snapshot and the request log, because a log download is a
+    /// GitHub request like any other from the Settings screen's point of view — the blob host
+    /// simply sends no rate-limit headers, so the snapshot is `nil` there and the counters keep
+    /// whatever the API request left them at.
+    /// - Parameters:
+    ///   - url: The API URL, or the blob URL the redirect named.
+    ///   - authorized: Whether to send the bearer token. `false` for the blob.
+    ///   - resource: What is being read, for the error and the log entry.
+    /// - Returns: The response, whatever its status — non-`2xx` is mapped by the caller.
+    private func performLogRequest(
+        url: URL,
+        authorized: Bool,
+        resource: String
+    ) async throws -> HTTPResponse {
+        var headers: [String: String] = [
+            "Accept": "application/vnd.github+json",
+            "User-Agent": configuration.userAgent,
+            "X-GitHub-Api-Version": "2022-11-28",
+        ]
+        if authorized {
+            headers["Authorization"] = "Bearer \(try await tokenProvider.accessToken())"
+        }
+        let startedAt = now()
+        let response: HTTPResponse
+        do {
+            response = try await transport.data(
+                for: HTTPRequest(method: "GET", url: url, headers: headers, body: nil)
+            )
+        } catch {
+            configuration.requestLogger?(
+                GitHubRequestLogEntry(
+                    method: "GET",
+                    url: url,
+                    statusCode: nil,
+                    duration: now().timeIntervalSince(startedAt),
+                    wasNotModified: false,
+                    rateLimit: nil,
+                    startedAt: startedAt
+                )
+            )
+            throw (error as? GitHubError) ?? GitHubError.transport(message: String(describing: error))
+        }
+        let snapshot = RateLimitSnapshot.parse(from: response, observedAt: now())
+        if let snapshot {
+            latestRateLimit = snapshot
+        }
+        configuration.requestLogger?(
+            GitHubRequestLogEntry(
+                method: "GET",
+                url: url,
+                statusCode: response.statusCode,
+                duration: now().timeIntervalSince(startedAt),
+                wasNotModified: false,
+                rateLimit: snapshot,
+                startedAt: startedAt
+            )
+        )
+        return response
+    }
+
     /// Fetches the review threads of a pull request, following pagination.
     ///
     /// GraphQL-only: thread ids do not exist in REST, and without them threads cannot be

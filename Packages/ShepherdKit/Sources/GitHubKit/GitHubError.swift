@@ -32,6 +32,12 @@ public enum GitHubError: Error, Sendable, Equatable, Hashable {
     case graphQL(messages: [String])
     /// A response body did not match the expected shape.
     case decoding(message: String)
+    /// A response was larger than the caller is willing to hold in memory.
+    ///
+    /// Only the job-log read produces one (``GitHubClient/jobLog(repo:jobID:)``): a log is the
+    /// one GitHub response with no useful upper bound, and refusing is honest where a silent
+    /// prefix would be a digest of the wrong part of the run.
+    case responseTooLarge(resource: String, bytes: Int, limit: Int)
     /// Any other non-success status code.
     case server(status: Int, message: String)
     /// The user rejected the device-flow authorisation request.
@@ -51,8 +57,11 @@ public enum GitHubError: Error, Sendable, Equatable, Hashable {
         case .transport, .rateLimited, .server:
             return true
         case .invalidURL, .unauthorized, .forbidden, .notFound, .validationFailed,
-             .notMergeable, .staleHead, .conflict, .graphQL, .decoding, .deviceFlowDenied,
-             .deviceFlowExpired, .deviceFlowError, .tokenRefreshFailed, .missingToken:
+             .notMergeable, .staleHead, .conflict, .graphQL, .decoding, .responseTooLarge,
+             .deviceFlowDenied, .deviceFlowExpired, .deviceFlowError, .tokenRefreshFailed,
+             .missingToken:
+            // `responseTooLarge` is not retryable for the reason it exists: the same request
+            // would answer with the same oversized body.
             return false
         }
     }
@@ -92,6 +101,8 @@ extension GitHubError: LocalizedError {
             return "GraphQL error: \(messages.joined(separator: "; "))"
         case .decoding(let message):
             return "Unexpected response from GitHub: \(message)"
+        case .responseTooLarge(let resource, let bytes, let limit):
+            return "\(resource) is \(bytes / 1_048_576) MB, more than the \(limit / 1_048_576) MB Shepherd reads."
         case .server(let status, let message):
             return "GitHub returned \(status): \(message)"
         case .deviceFlowDenied:
