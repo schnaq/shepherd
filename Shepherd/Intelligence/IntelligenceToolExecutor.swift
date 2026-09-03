@@ -12,7 +12,9 @@ import ShepherdCore
 ///
 /// `Sendable` because a provider calls it from whatever task the request is on, and `async throws`
 /// because the reads behind it are I/O. Throwing is for a failure of the *machinery* — a cancelled
-/// task, later a network read that died — never for a call the model got wrong: a refused or
+/// task — never for a call the model got wrong, and never for a read that failed on its own: a
+/// job log that could not be fetched comes back as a result saying so, because a turn that could
+/// still answer from the check's summary and the diff must not end on it. A refused or
 /// impossible call comes back as a result whose text says so, so the model can correct itself and
 /// the reviewer sees the hop in the trace. A crash, or an error that ends the turn, would turn a
 /// model's typo into a missing card.
@@ -106,7 +108,8 @@ enum IntelligenceToolLoop {
 /// Every answer is **budgeted before it exists**. That is the plan's rule that the model never
 /// sees a raw log or a raw file, and it is enforced here rather than in the providers, because the
 /// tool is the only thing that knows what its own content is worth cutting: a check summary is
-/// capped per check, a diff is windowed around the line the model named.
+/// capped per check, a diff is windowed around the line the model named, and a job log is reduced
+/// to its failing region by ``ShepherdCore/LogDigest`` before it exists as a result at all.
 ///
 /// The content handed to the model is English, like every prompt in this layer: it is input to a
 /// model, not text on screen. The one-line summaries beside it are the reviewer's, so those are
