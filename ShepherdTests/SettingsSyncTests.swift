@@ -243,6 +243,11 @@ final class SettingsSyncTests: XCTestCase {
         cli.maxTurns = 42
         cli.maxBudgetUSD = nil
         cli.permissionMode = .plan
+        // The session back-channel's two commands travel with the rest of the invocation
+        // (ADR 0030). Non-default in both directions here: the local one replaced, and the
+        // remote one *set*, which is the field that ships empty.
+        cli.sessionResumeTemplate = "/usr/local/bin/my-agent resume {sessionID} {message}"
+        cli.remoteSessionTemplate = "/usr/local/bin/my-agent remote {sessionURL} {message}"
         document.delegation = SyncedSettingsDocument.DelegationGroup(
             agentCLI: cli,
             localCheckouts: ["schnaq/review": "/Users/someone/code/review"],
@@ -679,6 +684,14 @@ final class SettingsSyncTests: XCTestCase {
         // A group that is absent entirely is the local default.
         XCTAssertEqual(document.notifications, SyncedSettingsDocument.NotificationGroup())
         XCTAssertEqual(document.delegation.agentCLI, AgentCLIConfiguration())
+        // A document written before the session back-channel existed brings the *defaults* for
+        // its two commands — not an empty local one, which would read as "the other Mac switched
+        // the local button off" (ADR 0030).
+        XCTAssertEqual(
+            document.delegation.agentCLI.sessionResumeTemplate,
+            AgentCLIConfiguration.defaultSessionResumeTemplate
+        )
+        XCTAssertTrue(document.delegation.agentCLI.remoteSessionTemplate.isEmpty)
         XCTAssertEqual(document.delegation.autoDelegation, AutoDelegationRules())
         // A document written before saved replies existed carries neither list, and an absent list
         // is empty rather than a decoding failure.
@@ -1067,6 +1080,15 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertEqual(settings.agentCLI.maxTurns, 42)
         XCTAssertNil(settings.agentCLI.maxBudgetUSD)
         XCTAssertEqual(settings.agentCLI.permissionMode, .plan)
+        // Both session commands arrive; neither is a credential, which is why they may (ADR 0030).
+        XCTAssertEqual(
+            settings.agentCLI.sessionResumeTemplate,
+            "/usr/local/bin/my-agent resume {sessionID} {message}"
+        )
+        XCTAssertEqual(
+            settings.agentCLI.remoteSessionTemplate,
+            "/usr/local/bin/my-agent remote {sessionURL} {message}"
+        )
         XCTAssertEqual(settings.localCheckouts["schnaq/review"], "/Users/someone/code/review")
         // The rules travel (ADR 0016); the ledger of what a rule already did deliberately does
         // not — it is one Mac's automation state.

@@ -297,8 +297,14 @@ order. Everything here is tier 1 first (deterministic, local); a model only ever
       locally, each finding marked addressed / unchanged / moved / replied (ADR 0028)
 - [ ] Feedback loop — a finding the reviewer has written three times becomes a drafted `CLAUDE.md`
       rule in the delegation sheet; the local agent opens the pull request
-- [ ] Session back-channel — a finding goes to the Claude Code session named in the head commits'
-      `Claude-Session:` trailer, through the user's own CLI (ADR 0011: no Shepherd-held credentials)
+- [x] Session back-channel — a finding goes to the Claude Code session named in the head commits'
+      `Claude-Session:` trailer, through the user's own CLI (ADR 0011: no Shepherd-held
+      credentials; ADR 0030). The local path ships: the second button beside "Add comment", the
+      confirmation sheet with the exact message, the resume command template, the inbox glyph.
+      The **remote** path is still a spike — whether the installed CLI can address a
+      `claude.ai/code` session at all is written up with the three commands that settle it in
+      `docs/plans/session-back-channel-spike.md`, and until it is answered the remote button
+      links to the session instead of running anything
 
 ## v1.x
 

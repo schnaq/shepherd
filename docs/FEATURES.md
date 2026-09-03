@@ -317,6 +317,30 @@ an unattended run never receives a generated brief
 ([ADR 0011](adr/0011-delegate-to-local-agent-cli.md), [ADR 0007](adr/0007-layered-intelligence.md)).
 With no model configured the button is simply absent.
 
+### Answer the session that wrote the code
+
+Claude Code stamps every commit it makes with the session it came from
+(`Claude-Session: https://claude.ai/code/session_…`). When a pull request's head commits carry one,
+every inline finding and the review summary gain a second button beside *Add comment*: **Send to
+the session**. A sheet shows the exact message first — the file and line, your text verbatim, the
+pull request link, the review round if there has been one — and Send runs it: your own installed
+CLI, `claude --resume <session-id> -p "<message>"` by default, in the pull request's worktree,
+streaming into the same delegation panel. A small session glyph on the inbox row marks the pull
+requests that have a return address.
+
+**It is not a review action.** The comment is still saved to your pending review exactly as *Add
+comment* saves it — the thread stays the record — and sending resolves no thread, approves nothing,
+submits nothing and starts no automatic delegation. And it needs no account: Shepherd holds no
+Anthropic credentials, no API key and no token, it invokes the CLI you installed with the login
+that CLI already has, and it never pushes what the session changes
+([ADR 0030](adr/0030-session-back-channel.md), [ADR 0011](adr/0011-delegate-to-local-agent-cli.md)).
+
+For a session that lives on `claude.ai/code`, the button reads **Open the session** and links to
+it: whether the installed CLI can address a remote session at all is an open question, written up
+with the commands that settle it in
+[`docs/plans/session-back-channel-spike.md`](plans/session-back-channel-spike.md). Both commands
+are editable in Settings → Delegation.
+
 ### Optional: let it start itself when CI goes red
 
 Switch on an auto-delegation rule and the moment CI *turns* red on one of your pull requests — or,

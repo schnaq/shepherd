@@ -16,7 +16,8 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
     Review/                    #   review composer, pending review UI, thread views,
                                #   focus review session (frozen queue + session bar)
     DiffViewer/                #   WKWebView host + bridge (Swift side)
-    Delegation/                #   delegate-to-local-agent model + sheet (ADR 0011, 0016)
+    Delegation/                #   delegate-to-local-agent model + sheet (ADR 0011, 0016);
+                               #   session back-channel: decisions + confirmation (ADR 0030)
     Search/                    #   ⌘K semantic search: on-device embedder, index coordinator,
                                #   result row (ADR 0019)
     Settings/                  #   accounts (+ updates, local diagnostics), sync (+ encrypted
@@ -41,6 +42,9 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
 Packages/ShepherdKit/          # SPM package, NO AppKit/SwiftUI imports
   Sources/
     ShepherdCore/              #   domain models, agent detection, heuristics, drafts
+      Agents/                  #     provenance detection + registry (ADR 0008); the
+                               #     `Claude-Session:` return address and the message a
+                               #     finding becomes (ADR 0030)
       Claims/                  #     claims read from the description + evidence over the diff
                                #     and CI, one line per claim, no score (ADR 0026)
       Review/                  #     saved replies, per-repo review templates + matching rule
@@ -1029,6 +1033,35 @@ child inherits the environment verbatim, nothing added, nothing removed, and the
 credential field anywhere in the Delegation settings tab; **nothing is ever pushed
 automatically** — the agent works in a detached worktree and "Commit & push" is a button, using
 the user's own git credentials rather than Shepherd's GitHub token.
+
+#### The session back-channel (ADR 0030)
+
+The same engine again, addressed at a *conversation* instead of a task. The pure half is
+`ShepherdCore/Agents/SessionReference.swift` (`parse(trailers:)` over `Claude-Session:` lines →
+id, URL, host, `local`/`remote`; `mostRecent(in:)` = the last commit's, because a second fix round
+may come from a second session) and `SessionMessage.compose` (one template: location, the
+reviewer's text verbatim, the pull request link, the round). Both are Linux-tested; the message is
+deliberately unlocalised, because it is a prompt shown verbatim before sending and not chrome.
+
+The app half is three small pieces. `Features/Delegation/SessionBackChannel.swift` decides
+everything the two composers render: `action(session:configuration:)` returns `.send` when a
+command is configured for that kind of session, `.open` when only the trailer's URL is available,
+and `nil` when there is nothing to offer; `plan(…)` builds the message **once** and the
+`DelegationContext` that carries it, so the confirmation sheet
+(`Features/Delegation/SessionSendSheet.swift`) and the run receive the same string.
+`AgentCLIConfiguration.sessionInvocation(message:session:worktree:executable:)` builds the argv
+from the second template (`{message}`, `{sessionID}`, `{sessionURL}`, `{worktree}`), split by
+`ShellWords` first and substituted after, so the message is one argv element.
+
+Two seams already there carry it: `DelegationContext.session` (a field, not a fourth `Origin` case
+— the origin of a session send *is* a review finding) makes `AgentCLIRunner` pick the session
+template, and makes `DelegationPrompt.full` send the confirmed message with no preamble in front
+of it. `AppEnvironment.sendToSession` opens the run through the same `DelegationCenter` a button
+press uses — not automatic, no brief drafter — so the one-run-per-pull-request rule, the worktree,
+the transcript and "never pushes" are literally the same code. What a send is *not* is enforced by
+what it does not call: no `PullRequestActions.setThread`, no `submit`, no
+`AutoDelegationCoordinator`. The inbox glyph comes from `SessionReturnAddressLoader`, a capped
+local read over the cached details of machine-authored rows only — never a fetch.
 
 #### Automatic delegation (ADR 0016)
 

@@ -24,6 +24,7 @@ struct DelegationSettingsTab: View {
         SettingsPage {
             agentCard
             guardrailCard
+            sessionCard
             checkoutCard
             automaticCard
             policyCard
@@ -151,6 +152,45 @@ struct DelegationSettingsTab: View {
                 )
                 Text(String(
                     localized: "Passed to --allowedTools. The default allows reading, editing and git, but no other shell command."
+                ))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    // MARK: - The session back-channel (ADR 0030)
+
+    private var sessionCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                CardTitle(String(localized: "SESSION BACK-CHANNEL"))
+                Text(String(
+                    localized: "When a pull request's commits carry a `Claude-Session:` trailer, every review finding gains a second button that sends it to that session. The command below is what runs: your own installed CLI, with its own login. Shepherd holds no account, no API key and no token for it, and it never pushes what the session changes."
+                ))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+
+                LabeledField(
+                    label: String(localized: "Local"),
+                    placeholder: AgentCLIConfiguration.defaultSessionResumeTemplate,
+                    text: sessionResumeBinding
+                )
+                LabeledField(
+                    label: String(localized: "Remote"),
+                    placeholder: String(localized: "empty — the button opens the session instead"),
+                    text: remoteSessionBinding
+                )
+                Text(String(
+                    localized: "{message} becomes exactly one argument, {sessionID} and {sessionURL} come from the trailer, {worktree} is the worktree path — split like a shell would, but no shell ever runs it. A bare command name is only resolved when it is the CLI above; write a full path otherwise. Leave a field empty to switch that button off; the remote field is empty by default, because whether the CLI can address a remote session at all is still an open question (docs/plans/session-back-channel-spike.md)."
+                ))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                Text(String(
+                    localized: "Add --output-format stream-json --verbose to see the run line by line in the delegation panel; add --max-turns and --max-budget-usd to cap it like a task run."
                 ))
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textMuted)
@@ -448,6 +488,20 @@ struct DelegationSettingsTab: View {
                     ?? AgentCLIConfiguration.defaultMaxBudgetUSD
             },
             set: { environment.settings.agentCLI.maxBudgetUSD = max(0, $0) }
+        )
+    }
+
+    private var sessionResumeBinding: Binding<String> {
+        Binding(
+            get: { environment.settings.agentCLI.sessionResumeTemplate },
+            set: { environment.settings.agentCLI.sessionResumeTemplate = $0 }
+        )
+    }
+
+    private var remoteSessionBinding: Binding<String> {
+        Binding(
+            get: { environment.settings.agentCLI.remoteSessionTemplate },
+            set: { environment.settings.agentCLI.remoteSessionTemplate = $0 }
         )
     }
 

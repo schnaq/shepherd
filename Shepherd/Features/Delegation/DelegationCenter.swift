@@ -168,7 +168,14 @@ final class DelegationCenter {
             context: context,
             configuration: configuration,
             readiness: readiness,
-            runner: AgentCLIRunner(configuration: configuration, executable: executable),
+            // The session travels into the runner, which is the one place that decides which
+            // template builds the command (ADR 0030). Everything else about the run — worktree,
+            // guardrails, transcript, "never pushes" — is the same code either way.
+            runner: AgentCLIRunner(
+                configuration: configuration,
+                executable: executable,
+                session: context.session
+            ),
             worktree: worktree,
             isAutomatic: isAutomatic,
             toasts: toasts,

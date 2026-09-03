@@ -1501,6 +1501,16 @@
         }
       }
     },
+    "Add --output-format stream-json --verbose to see the run line by line in the delegation panel; add --max-turns and --max-budget-usd to cap it like a task run.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit --output-format stream-json --verbose erscheint der Lauf Zeile für Zeile im Delegationsfenster; mit --max-turns und --max-budget-usd wird er begrenzt wie ein Aufgabenlauf."
+          }
+        }
+      }
+    },
     "Add a saved reply": {
       "localizations": {
         "de": {
@@ -4691,6 +4701,16 @@
         }
       }
     },
+    "Local": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokal"
+          }
+        }
+      }
+    },
     "Logins": {
       "localizations": {
         "de": {
@@ -5137,6 +5157,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Für diesen Commit sind keine Checks eingerichtet."
+          }
+        }
+      }
+    },
+    "No command is configured for this kind of session. Set one in Settings → Delegation.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für diese Art von Session ist kein Befehl konfiguriert. Lege einen unter Einstellungen → Delegation fest."
           }
         }
       }
@@ -6651,6 +6681,26 @@
         }
       }
     },
+    "Remote": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remote"
+          }
+        }
+      }
+    },
+    "Remote session": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remote-Session"
+          }
+        }
+      }
+    },
     "Remove": {
       "localizations": {
         "de": {
@@ -7131,6 +7181,16 @@
         }
       }
     },
+    "SESSION BACK-CHANNEL": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RÜCKKANAL ZUR SESSION"
+          }
+        }
+      }
+    },
     "SIGN IN WITH GITHUB": {
       "localizations": {
         "de": {
@@ -7391,6 +7451,16 @@
         }
       }
     },
+    "Send": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Senden"
+          }
+        }
+      }
+    },
     "Send events to a webhook": {
       "localizations": {
         "de": {
@@ -7417,6 +7487,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Testereignis senden"
+          }
+        }
+      }
+    },
+    "Send to the session": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An die Session schicken"
           }
         }
       }
@@ -7607,6 +7687,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Shepherd führt deine eigene Installation aus und kümmert sich nie um deren Anmeldung."
+          }
+        }
+      }
+    },
+    "Shepherd runs your own installed %@ with the command from Settings → Delegation. It holds no account and no credentials for it, and it never pushes what the session changes.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd startet dein eigenes installiertes %@ mit dem Befehl aus Einstellungen → Delegation. Es besitzt dafür kein Konto und keine Zugangsdaten und pusht nie, was die Session ändert."
           }
         }
       }
@@ -8331,6 +8421,16 @@
         }
       }
     },
+    "THE MESSAGE": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DIE NACHRICHT"
+          }
+        }
+      }
+    },
     "THREAD DIGEST": {
       "localizations": {
         "de": {
@@ -8887,6 +8987,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dieselbe Methode, die auch das Merge-Fenster und die Sammel-Triage nutzen — die, mit der du zuletzt gemergt hast. Änderst du sie hier, ändert sie sich auch dort."
+          }
+        }
+      }
+    },
+    "The session command must contain {message} so Shepherd knows where the message goes.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Session-Befehl muss {message} enthalten, damit Shepherd weiß, wohin die Nachricht gehört."
           }
         }
       }
@@ -9721,6 +9831,16 @@
         }
       }
     },
+    "When a pull request's commits carry a `Claude-Session:` trailer, every review finding gains a second button that sends it to that session. The command below is what runs: your own installed CLI, with its own login. Shepherd holds no account, no API key and no token for it, and it never pushes what the session changes.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tragen die Commits eines Pull Requests einen `Claude-Session:`-Trailer, bekommt jeder Befund einen zweiten Knopf, der ihn an diese Session schickt. Ausgeführt wird der Befehl unten: deine eigene installierte CLI mit ihrer eigenen Anmeldung. Shepherd besitzt dafür kein Konto, keinen API-Schlüssel und kein Token und pusht nie, was die Session ändert."
+          }
+        }
+      }
+    },
     "When the model looks something up, it can only read — the checks, a log, a file. It cannot comment, approve, merge or start an agent.": {
       "localizations": {
         "de": {
@@ -10147,6 +10267,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dauer"
+          }
+        }
+      }
+    },
+    "empty — the button opens the session instead": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "leer – der Knopf öffnet stattdessen die Session"
           }
         }
       }
@@ -10947,6 +11077,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "keine Speicherung"
+          }
+        }
+      }
+    },
+    "{message} becomes exactly one argument, {sessionID} and {sessionURL} come from the trailer, {worktree} is the worktree path — split like a shell would, but no shell ever runs it. A bare command name is only resolved when it is the CLI above; write a full path otherwise. Leave a field empty to switch that button off; the remote field is empty by default, because whether the CLI can address a remote session at all is still an open question (docs/plans/session-back-channel-spike.md).": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{message} wird immer genau ein Argument, {sessionID} und {sessionURL} kommen aus dem Trailer, {worktree} ist der Pfad des Worktrees – zerlegt wie eine Shell es täte, ausgeführt aber ohne jede Shell. Ein bloßer Befehlsname wird nur aufgelöst, wenn es die CLI von oben ist; sonst schreibe den vollen Pfad. Ein leeres Feld schaltet den jeweiligen Knopf ab; das Remote-Feld ist standardmäßig leer, weil noch offen ist, ob die CLI eine Remote-Session überhaupt ansprechen kann (docs/plans/session-back-channel-spike.md)."
           }
         }
       }

@@ -493,6 +493,47 @@ final class AppEnvironment {
         }
     }
 
+    /// Sends one confirmed message to the session that wrote the code (ADR 0030).
+    ///
+    /// The same ``DelegationCenter`` a button press goes through, so the one-run-per-pull-request
+    /// rule, the worktree isolation, the transcript and "Shepherd never pushes" are the same code
+    /// — and the run is *not* automatic: the reviewer pressed Send in a sheet that showed the
+    /// message verbatim, which is the press ADR 0011 asks for. Nothing else happens: no thread is
+    /// resolved, no review is submitted, no automatic-delegation rule is consulted or recorded.
+    ///
+    /// No brief drafter is passed, and the omission is the point: the text is the reviewer's own
+    /// words, already confirmed, and there is nothing here for a model to write.
+    /// - Parameters:
+    ///   - context: The finding, with its return address in ``DelegationContext/session``.
+    ///   - message: The message, exactly as the confirmation sheet showed it.
+    /// - Returns: The delegation now on screen, or `nil` when one was already running for this
+    ///   pull request and was revealed instead.
+    @discardableResult
+    func sendToSession(_ context: DelegationContext, message: String) -> DelegationModel? {
+        let onDidPush: @MainActor () async -> Void = { [weak self] in
+            await self?.syncNow()
+        }
+        let onDidFinish: @MainActor (DelegationOutcome) -> Void = { [weak self] outcome in
+            guard let self else { return }
+            self.webhookCoordinator.handle(outcome, database: self.session?.database)
+        }
+        let model = delegation.open(
+            context: context,
+            settings: settings,
+            toasts: toasts,
+            onDidPush: onDidPush,
+            onDidFinish: onDidFinish,
+            // See above: a confirmed message is not a field to draft into.
+            brief: nil
+        )
+        // A run already in flight for this pull request owns its prompt and its transcript; the
+        // centre revealed it rather than replacing it, and this message is not sent twice.
+        guard !model.isBusy else { return nil }
+        model.task = message
+        model.start()
+        return model
+    }
+
     /// Builds the delegation sheet's brief drafter from the current tiers and session (plan §3.E).
     ///
     /// The three pieces are read *here*, on the main actor, and captured as values — the router

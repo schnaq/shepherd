@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import ShepherdCore
 
 /// One live agent run.
 ///
@@ -42,6 +43,14 @@ struct AgentCLIRunner: AgentRunning {
     var configuration: AgentCLIConfiguration
     /// The located binary; `nil` for a custom template, which names its own.
     var executable: URL?
+    /// The session this run continues, when it continues one (ADR 0030).
+    ///
+    /// Set — from ``DelegationContext/session`` — the command comes from the session templates
+    /// instead of the task ones, and the "prompt" is the message the reviewer confirmed. It is a
+    /// property of the *runner* rather than a second protocol method so that everything else
+    /// about a run stays literally the same code: the same worktree, the same stream decoding,
+    /// the same cancellation, the same transcript, the same "Shepherd never pushes".
+    var session: SessionReference?
     /// How long a cancelled process gets to exit on `SIGTERM` before `SIGKILL`.
     var terminationGrace: TimeInterval = 5
 
@@ -49,23 +58,36 @@ struct AgentCLIRunner: AgentRunning {
     /// - Parameters:
     ///   - configuration: The guardrails and command shape.
     ///   - executable: The located binary.
+    ///   - session: The session to continue, when this run continues one (ADR 0030).
     ///   - terminationGrace: Seconds between `SIGTERM` and `SIGKILL`.
     init(
         configuration: AgentCLIConfiguration,
         executable: URL?,
+        session: SessionReference? = nil,
         terminationGrace: TimeInterval = 5
     ) {
         self.configuration = configuration
         self.executable = executable
+        self.session = session
         self.terminationGrace = terminationGrace
     }
 
     func run(prompt: String, in worktree: URL) throws -> AgentSession {
-        let invocation = try configuration.invocation(
-            prompt: prompt,
-            worktree: worktree,
-            executable: executable
-        )
+        let invocation: AgentInvocation
+        if let session {
+            invocation = try configuration.sessionInvocation(
+                message: prompt,
+                session: session,
+                worktree: worktree,
+                executable: executable
+            )
+        } else {
+            invocation = try configuration.invocation(
+                prompt: prompt,
+                worktree: worktree,
+                executable: executable
+            )
+        }
 
         let process = Process()
         process.executableURL = invocation.executable

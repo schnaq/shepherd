@@ -246,6 +246,13 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
     /// start a delegation unattended (ADR 0016).
     struct DelegationGroup: Codable, Sendable, Equatable {
         /// The command shape and its guardrails. Carries no credential by construction.
+        ///
+        /// The two session-back-channel templates ride inside it (ADR 0030), for the reason the
+        /// custom command template does: they are part of *how the CLI is invoked on this
+        /// account*, they are edited on the same Settings card, and one key keeps the
+        /// tolerant-decoding story in one place — a document written before they existed decodes
+        /// to their defaults rather than to an empty local template that would silently switch
+        /// the feature off on the other Mac. They are commands, never credentials.
         var agentCLI: AgentCLIConfiguration
         /// Repository full name → local clone path.
         var localCheckouts: [String: String]

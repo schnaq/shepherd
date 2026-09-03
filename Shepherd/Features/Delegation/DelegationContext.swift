@@ -42,6 +42,21 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
     /// as the reviewer's own, because that is what a pending review's comments are.
     var findingCommentAuthors: [String]
 
+    /// The session this delegation answers, when it answers one (ADR 0030).
+    ///
+    /// A field beside ``origin`` rather than a fourth ``Origin`` case, on purpose: the origin of
+    /// a session send *is* a review finding — the same path, the same line, the same commit
+    /// message if it ever pushed — and a new case would have forced every exhaustive switch over
+    /// `Origin` (the task text, the commit message, the CI diagnosis card, the brief) to answer
+    /// a question it has no new answer for. What is genuinely new is only the *return address*,
+    /// and that is what this holds.
+    ///
+    /// When it is set, two things change and nothing else: the command comes from the session
+    /// templates (``AgentCLIConfiguration/sessionInvocation(message:session:worktree:executable:)``),
+    /// and the prompt is the confirmed message with no preamble in front of it — see
+    /// ``DelegationPrompt/full(for:task:)``.
+    var session: SessionReference?
+
     /// One sheet per pull request.
     var id: String { prID }
 
@@ -59,7 +74,8 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
         origin: Origin = .pullRequest,
         focusReasons: [String] = [],
         findingComments: [String] = [],
-        findingCommentAuthors: [String] = []
+        findingCommentAuthors: [String] = [],
+        session: SessionReference? = nil
     ) {
         self.prID = prID
         self.repo = repo
@@ -71,6 +87,7 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
         self.focusReasons = focusReasons
         self.findingComments = findingComments
         self.findingCommentAuthors = findingCommentAuthors
+        self.session = session
     }
 
     /// A context for a whole pull request.
@@ -116,6 +133,40 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
             // Positional, so the two arrays are read as pairs. Carried for the brief's privacy
             // rule only (see ``findingCommentAuthors``); the task text ignores it.
             findingCommentAuthors: thread.comments.map(\.author.login)
+        )
+    }
+
+    /// A context for a finding addressed to the session that wrote the code (ADR 0030).
+    ///
+    /// The finding is the reviewer's own text, which is why ``findingCommentAuthors`` stays
+    /// empty: an empty author means "the reviewer's own" everywhere it is read, and nobody
+    /// else's words travel in a session send.
+    /// - Parameters:
+    ///   - summary: The pull request the finding is on.
+    ///   - session: The return address from the head commits.
+    ///   - path: The anchored file, or `nil` for a review summary.
+    ///   - line: The anchored line, when there is one.
+    ///   - text: Exactly what the reviewer typed.
+    static func sessionFinding(
+        _ summary: PullRequestSummary,
+        session: SessionReference,
+        path: String?,
+        line: Int?,
+        text: String
+    ) -> DelegationContext {
+        DelegationContext(
+            prID: summary.id,
+            repo: summary.repo,
+            number: summary.number,
+            title: summary.title,
+            headRefName: summary.headRefName,
+            headRefOid: summary.headRefOid,
+            origin: .reviewFinding(
+                path: path ?? String(localized: "the pull request"),
+                line: line
+            ),
+            findingComments: [text],
+            session: session
         )
     }
 }
@@ -185,11 +236,19 @@ enum DelegationPrompt {
     }
 
     /// Joins the preamble and the user's task into the prompt that is actually sent.
+    ///
+    /// A delegation that answers a session (ADR 0030) gets **no preamble**: the message was
+    /// shown to the reviewer verbatim in the confirmation sheet, and what is sent has to be that
+    /// string and nothing else. The session it goes to already knows where it is — it wrote the
+    /// branch — and Shepherd's ground rules reach that run as the run's own guardrails (the
+    /// worktree it is spawned in, the transcript, the fact that nothing is ever pushed for it),
+    /// not as sentences appended to somebody's review comment.
     /// - Parameters:
     ///   - context: What the delegation is about.
     ///   - task: The user's editable text.
     static func full(for context: DelegationContext, task: String) -> String {
         let trimmed = task.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard context.session == nil else { return trimmed }
         return preamble(for: context) + "\n\n---\n\n" + String(localized: "Task from the reviewer:") + "\n" + trimmed
     }
 }
