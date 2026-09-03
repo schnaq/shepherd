@@ -57,7 +57,7 @@ final class OutboxSurfacesTests: XCTestCase {
     func testTheElevenActionsAreToldApartFromEachOther() {
         // A row says "octocat/review#182 · <this>", so two actions sharing a phrase would make
         // two different failures look like the same one.
-        let names = everyAction.map(SyncSettingsTab.actionName)
+        let names = everyAction.map { SyncSettingsTab.actionName($0) }
         XCTAssertEqual(Set(names).count, everyAction.count)
     }
 
