@@ -309,6 +309,7 @@ public enum RecurringFindingDetector {
         for seedIndex in candidates.indices where !isTaken[seedIndex] {
             isTaken[seedIndex] = true
             var members = [candidates[seedIndex]]
+            var memberIndices: [Int] = []
             for index in candidates.indices where index > seedIndex && !isTaken[index] {
                 // `nil` — mismatched dimensions, or a zero-length vector — is "this question has
                 // no answer", never "these are unrelated"; such a comment simply does not join
@@ -317,11 +318,15 @@ public enum RecurringFindingDetector {
                     .cosineSimilarity(to: candidates[index].vector)
                 else { continue }
                 guard cosine >= similarity else { continue }
-                isTaken[index] = true
+                memberIndices.append(index)
                 members.append(candidates[index])
             }
 
+            // A seed that attracted too few comments claims none of them: a comment that matched
+            // this seed by chance may be the first of a real cluster further down, and locking it
+            // here would leave that cluster one short of the count the whole feature is about.
             guard members.count >= minimumCount else { continue }
+            for index in memberIndices { isTaken[index] = true }
             let clusterComments = members.map {
                 RecurringFindingComment(
                     id: $0.id,

@@ -83,6 +83,25 @@ final class RecurringFindingDetectorTests: XCTestCase {
         XCTAssertEqual(findings.first?.comments.map(\.number), [11, 12, 12])
     }
 
+    func testASeedThatAttractsTooFewCommentsDoesNotLockThemAwayFromARealCluster() {
+        // The oldest comment happens to sit exactly at the floor against `b` and nowhere near `c`
+        // and `d`; `b`, `c` and `d` are a genuine trio. A greedy pass that claimed `b` for the
+        // discarded pair would leave the trio one short — the count this feature is about.
+        let stray = SearchVector([1, 0, 0])
+        let b = SearchVector([3, 4, 0]) // cos(stray, b) = 0.6, the inclusive floor
+        let c = SearchVector([0, 1, 0]) // cos(stray, c) = 0, cos(b, c) = 0.8
+        let d = SearchVector([1, 4, 0]) // cos(stray, d) ≈ 0.24, cos(b, d) ≈ 0.92
+        let comments = [
+            candidate("s", "Please rename this variable.", pr: 10, daysAgo: 25, vector: stray),
+            candidate("b", "Add a test for the error path.", pr: 11, daysAgo: 20, vector: b),
+            candidate("c", "Needs a test for the failure branch.", pr: 12, daysAgo: 10, vector: c),
+            candidate("d", "Add a test covering the error path.", pr: 12, daysAgo: 2, vector: d),
+        ]
+        let findings = RecurringFindingDetector.detect(repo: repo, comments: comments, now: now)
+        XCTAssertEqual(findings.count, 1)
+        XCTAssertEqual(findings.first?.comments.map(\.id), ["b", "c", "d"])
+    }
+
     func testTheExemplarIsTheShortestComment() {
         let findings = RecurringFindingDetector.detect(
             repo: repo,

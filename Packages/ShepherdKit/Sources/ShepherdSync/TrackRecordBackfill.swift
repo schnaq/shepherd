@@ -259,7 +259,9 @@ public actor TrackRecordBackfill {
         // pairs the badge's "2 reverted" is made of. `known` is what is already on disk — which
         // includes everything this pass just wrote — so a revert whose target the *last* run
         // imported is linked too.
-        if !collected.isEmpty {
+        // Not after a stop: "the pager stops between pages" is the promise, and the links can
+        // wait for the next run, which reads everything on disk anyway.
+        if !collected.isEmpty, !outcome.wasCancelled {
             let known = try await store.mergedClosedPullRequests(repo: repo, since: since)
             let links = RevertDetector.links(candidates: collected, known: known)
             outcome.revertsLinked = try await store.applyRevertLinks(links)

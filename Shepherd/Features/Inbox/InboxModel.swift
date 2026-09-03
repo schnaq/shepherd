@@ -446,6 +446,10 @@ final class InboxModel {
     /// neither reaches the inbox observation.
     func refreshTrustLanes() {
         guard !allRows.isEmpty else {
+            // An empty inbox has nothing to lane, and a pass still running for the rows that just
+            // left must not repopulate what this line clears.
+            trustTask?.cancel()
+            trustTask = nil
             trust = .empty
             return
         }

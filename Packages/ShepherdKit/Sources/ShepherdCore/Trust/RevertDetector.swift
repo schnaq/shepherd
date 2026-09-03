@@ -162,7 +162,7 @@ public enum RevertDetector {
             if let oid = target.mergeCommitOid?.lowercased(), !oid.isEmpty {
                 byCommit[oid] = target
             }
-            byNumber["\(target.outcome.repo.fullName)#\(target.number)"] = target
+            byNumber["\(target.outcome.repo.fullName.lowercased())#\(target.number)"] = target
             let title = normalized(target.title)
             if !title.isEmpty { byTitle[key(repo: target.outcome.repo, title: title)] = target }
         }
@@ -182,7 +182,7 @@ public enum RevertDetector {
                 match = byCommit[oid] ?? byCommit.first { $0.key.hasPrefix(oid) }?.value
             }
             if match == nil, let number = reference.revertedNumber {
-                match = byNumber["\(candidate.outcome.repo.fullName)#\(number)"]
+                match = byNumber["\(candidate.outcome.repo.fullName.lowercased())#\(number)"]
             }
             if match == nil, let title = reference.revertedTitle {
                 match = byTitle[key(repo: candidate.outcome.repo, title: normalized(title))]

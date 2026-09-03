@@ -216,6 +216,10 @@ final class RecurringFindingCoordinator {
         // Nothing in the inbox means nothing to have commented on, and the findings would be
         // about pull requests the database no longer holds.
         guard !rows.isEmpty else {
+            // A pass still running for the rows that just left must not write its result over
+            // the cleared table, nor keep the next legitimate scan waiting on `passTask == nil`.
+            passTask?.cancel()
+            passTask = nil
             findingsByRepo = [:]
             lastFingerprint = nil
             return
