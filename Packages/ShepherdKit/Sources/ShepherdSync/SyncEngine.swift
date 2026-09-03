@@ -83,6 +83,8 @@ public actor SyncEngine {
     private let store: any SyncStoring
     /// Where a submitted review's baseline goes, when the app wired one up (ADR 0028).
     private let snapshots: (any ReviewSnapshotWriting)?
+    /// Where a disappeared pull request's outcome goes, when the app wired one up (ADR 0027).
+    private let outcomes: OutcomeCapture?
     private let configuration: SyncConfiguration
     private let sleeper: any Sleeping
     private let now: @Sendable () -> Date
@@ -110,6 +112,9 @@ public actor SyncEngine {
     ///   - snapshots: Where the interdiff's baseline is written when a review is sent
     ///     (ADR 0028). `nil` — the default — means no baseline is kept, which is how every
     ///     caller that does not care about the review screen builds an engine.
+    ///   - outcomes: Where the outcome of a pull request that left the inbox is read and written
+    ///     (ADR 0027). `nil` — the default — means no track record is kept, and the sweep then
+    ///     behaves exactly as it did before: no extra request, no extra query.
     ///   - configuration: Tunables.
     ///   - sleeper: The delay abstraction; tests inject one that does not wait.
     ///   - now: Clock injection point for tests.
@@ -117,6 +122,7 @@ public actor SyncEngine {
         github: any PullRequestFetching,
         store: any SyncStoring,
         snapshots: (any ReviewSnapshotWriting)? = nil,
+        outcomes: OutcomeCapture? = nil,
         configuration: SyncConfiguration = SyncConfiguration(),
         sleeper: any Sleeping = SystemSleeper(),
         now: @escaping @Sendable () -> Date = { Date() }
@@ -124,6 +130,7 @@ public actor SyncEngine {
         self.github = github
         self.store = store
         self.snapshots = snapshots
+        self.outcomes = outcomes
         self.configuration = configuration
         self.sleeper = sleeper
         self.now = now
@@ -370,9 +377,17 @@ public actor SyncEngine {
         // is deliberately kept, and re-announcing it as merged on every sweep would be a
         // notification every two minutes for as long as the draft lives.
         let remaining = Set(try await store.fetchInbox(filter: InboxFilter()).map(\.id))
+        var departed: [PullRequestSummary] = []
         for old in previous where !currentIDs.contains(old.id) && !remaining.contains(old.id) {
+            departed.append(old)
             emit(.prMerged(old))
         }
+
+        // The same list, for the track record: a pull request that has left the inbox is the one
+        // moment its final state can be read, and it is read once (ADR 0027). Deliberately
+        // *after* the event above and before the detail fetches, so a capture that hangs on a
+        // slow request delays the diffs rather than the notification.
+        await captureOutcomes(for: departed)
 
         try await fetchDetails(for: needsDetail)
         try Task.checkCancellation()
@@ -455,6 +470,53 @@ public actor SyncEngine {
 
             for failure in failures {
                 emit(.syncFailed(failure))
+            }
+        }
+    }
+
+    // MARK: - Track record (ADR 0027)
+
+    /// Reads and stores the final state of the pull requests that just left the inbox.
+    ///
+    /// Four properties, and each one is a decision:
+    ///
+    /// - **Once per pull request.** The store is asked first, and a pull request that already has
+    ///   a row — from the backfill, or from an earlier sweep that saw the same disappearance —
+    ///   costs one local `SELECT` and no request.
+    /// - **One request each, sequentially.** A disappearance is rare (a merge, a close, a facet
+    ///   that stopped matching) and nobody is waiting on the answer, so there is no task group
+    ///   here: a Monday-morning sweep that sees eight merges spends eight requests over a second
+    ///   rather than eight at once against the secondary rate limit.
+    /// - **A failure is never the sync's failure.** Every error is swallowed — not even a
+    ///   ``SyncEvent/syncFailed(_:)`` — because the user did not ask for this and a badge that is
+    ///   one pull request behind is worth nothing next to a sweep that reported itself broken.
+    ///   The row is simply written on some later sweep, or by the backfill.
+    /// - **Reverts are linked immediately.** A revert is a pull request like any other and closes
+    ///   like any other, so the moment its own outcome is stored is the moment it can be matched
+    ///   against the merged pull requests already on disk.
+    /// - Parameter departed: The rows the prune actually removed.
+    private func captureOutcomes(for departed: [PullRequestSummary]) async {
+        guard let outcomes, !departed.isEmpty else { return }
+        for summary in departed {
+            if Task.isCancelled { return }
+            do {
+                if try await outcomes.store.hasPullRequestOutcome(prID: summary.id) { continue }
+                guard let closed = try await outcomes.reader.closedPullRequest(
+                    repo: summary.repo,
+                    number: summary.number
+                ) else { continue }
+                _ = try await outcomes.store.savePullRequestOutcomes([closed])
+                let since = TrackRecord.windowStart(from: closed.outcome.closedAt)
+                let known = try await outcomes.store.mergedClosedPullRequests(
+                    repo: closed.outcome.repo,
+                    since: since
+                )
+                let links = RevertDetector.links(candidates: [closed], known: known)
+                _ = try await outcomes.store.applyRevertLinks(links)
+            } catch is CancellationError {
+                return
+            } catch {
+                continue
             }
         }
     }

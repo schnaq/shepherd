@@ -241,6 +241,30 @@ Pure logic in `ShepherdCore` (all unit-tested):
 - `ReviewSnapshot` (`Review/`) — the diff a review was written against: `prID`,
   `reviewedHeadOid`, `reviewedAt`, `files: [ChangedFile]` (patches included). The interdiff's
   baseline, kept locally because GitHub cannot be asked for a force-pushed head's patches.
+- `TrustLane` / `TrustLaneInput` / `TrustLaneConfiguration` / `TrustSensitivePaths` (`Trust/`) —
+  the whole of "how much attention does this deserve" as pure values (ADR 0027).
+  `TrustLane.classify(_:configuration:)` takes a `TrustLaneInput` — check state, changed files,
+  changed lines, one `sensitivePaths` flag — and answers `shortLook` or `fullReview`. The *type* is
+  the rule: there is nowhere in it for a history, and `ShepherdCoreTests` asserts that reflectively.
+  A short look needs all three of a `success` rollup, both thresholds and no sensitive path; the
+  flag is `true` when the answer is unknown, so a pull request whose diff has not been fetched is a
+  full review. `TrustSensitivePaths` names the exclusion over `FilePrioritizer`'s own
+  classifications (its `securityPathHints` and `category(of:)`) plus workflows and migrations, so
+  the lane and the file order cannot disagree about a path. `TrustLaneConfiguration` clamps both
+  thresholds (`1...100` files, `1...5000` lines) on construction and decodes tolerantly.
+- `PullRequestOutcome` / `ClosedPullRequest` / `TrackRecord` / `TrackRecordSubject` /
+  `RevertDetector` (`Trust/`) — the track record as pure counting (ADR 0027).
+  `TrackRecord.compute(outcomes:subject:repo:since:)` tallies merged, closed-unmerged, reverted, the
+  first-push-green rate and the median number of change-requesting rounds, for one author in one
+  repository since one date; every optional is `nil` rather than a substituted zero when its
+  denominator is empty, because a rate with no denominator would be invented. A reverted pull
+  request is still counted as merged. `TrackRecord.windowDays` is the single definition of the
+  ninety days three surfaces quote. `RevertDetector.revertedTarget(title:body:)` reads
+  `Revert "…"` titles, `This reverts commit <sha>` bodies and `Reverts #n` phrases;
+  `links(candidates:known:)` pairs them with the merged pull requests they undo — by merge commit,
+  then number, then exact title, only inside one repository and only backwards in time.
+  `ClosedPullRequest` is the outcome plus the number, title and merge commit that revert detection
+  matches on, which is why those three are stored although nothing counts them.
 - `DeepLink` (`Routing/`) — the whole `shepherd://` grammar as a value: `parse(URL) -> DeepLink?`
   and `urlString` in the other direction, round-trip tested. Strict by construction (closed
   vocabularies, GitHub's own character rules, decoding *after* the path split), because a URL is
@@ -254,6 +278,15 @@ Pure logic in `ShepherdCore` (all unit-tested):
   - `searchOpenPullRequests(queries:) async throws -> [PullRequestSummary]` (GraphQL search,
     ADR 0005)
   - `pullRequestDetail(repo:number:) async throws -> PullRequestDetail`
+  - `searchClosedPullRequests(repo:since:cursor:pageSize:) async throws -> ClosedPullRequestPage`
+    and `closedPullRequest(repo:number:) async throws -> ClosedPullRequest?` — the track record's
+    two reads (ADR 0027). The first is the *same* `search(type: ISSUE)` connection as the sweep
+    with `is:closed` in place of `is:open`, one repository at a time; the second is one GraphQL
+    read of one pull request, carrying `merged`, `closedAt`, the change-requesting review count,
+    the **first** commit's rollup and the text revert detection needs — so neither is a detail
+    fetch. The paged one is conditionally cached under a key the client names itself (repository,
+    window, cursor), because a GraphQL request cannot be keyed on its URL; the single one is not
+    cached at all, for the reason `/check-runs` is not
   - `submitReview(_ draft: ReviewDraft, on:) async throws` — REST
     `POST /pulls/{n}/reviews` with full `comments` array; maps verdict to `event`
   - `replyToComment/resolveThread/unresolveThread/mergePullRequest/markReadyForReview…`
@@ -280,8 +313,8 @@ Pure logic in `ShepherdCore` (all unit-tested):
 Tables mirror core models (`repos`, `pull_requests`, `changed_files`, `review_threads`,
 `review_comments`, `review_drafts`, `draft_comments`, `check_runs`, `sync_state`, `outbox`,
 `etags`, `viewed_files`, `agent_registry_overrides`, `search_index`, `triage_verdicts`,
-`review_snapshots`).
-Append-only migrator — currently `v1`, `v2`, `v3`, `v4` and `v5`. `v3` is the search index (ADR 0019: one
+`review_snapshots`, `pull_request_outcomes`).
+Append-only migrator — currently `v1` through `v6`. `v3` is the search index (ADR 0019: one
 row per pull request holding the document hash, the model identifier and a `Float32` vector, pruned
 by an `ON DELETE CASCADE` onto `pull_requests` rather than by a sweep of its own); `v4` is
 `triage_verdicts` (ADR 0023: one row per pull request holding `kind`, `risk`, the one-sentence
@@ -293,6 +326,17 @@ reports — holding `reviewedAt` and the pull request's `changed_files` rows, pa
 one `filesJSON` blob, pruned by the same cascade. Written by the outbox drain when a
 `submitReview` succeeds, read by the interdiff, and never queried *into*: the whole value is read
 at once, and keeping the patches is the point, because a force-push makes them unfetchable).
+`v6` is `pull_request_outcomes` (ADR 0027: one row per **closed** pull request — `prID` is the
+primary key, so both writers upsert — holding the repository by value, `openedAt`/`closedAt`,
+`merged`, `revertedByPRID`, a **nullable** `firstPushCIGreen` (red and unknown are different
+facts), `reviewRounds`, `changedLines`, `source` (`sync` | `backfill`), and the `number`, `title`
+and `mergeCommitOid` revert detection matches on. It is the one derived table with **no foreign key
+and no cascade**: a row is written exactly when a pull request *leaves* the inbox, so the pruning
+the other three rely on would delete every row the feature is made of. One index,
+`(repoFullName, agentName, closedAt)`, which is the badge's own query. Read by the badge and by the
+inbox's secondary sort, and by nothing else — the automation paths cannot even see the types).
+`DatabaseManager.changedFilePaths(prIDs:)` reads the cached diffs' paths and statuses **without**
+their patches, which is all the trust lane's sensitive-path exclusion needs.
 `ValueObservation` publishers feed the UI. The **outbox** stores every outbound mutation (submit review, reply,
 resolve, merge) as a row with retry/backoff state so writes survive crash/offline.
 
@@ -311,6 +355,19 @@ only when `updatedAt`/`headRefOid` changed or the user opens it. Emits `SyncEven
 (`.newReviewRequest`, `.checksFailedOnOwnPR`, `.prMerged`, …) that the app maps to macOS
 notifications. Also drains the outbox with staleness re-validation (draft's `basedOnHeadOid`
 vs current head → surface conflict instead of blind submit).
+
+The sweep has one side effect of its own beyond writing the inbox: the pull requests the prune
+actually removed — the same list `SyncEvent.prMerged` is emitted from — are read once each and
+stored as track-record outcomes (ADR 0027). It goes through two ports of its own
+(`OutcomeRecording` and `ClosedPullRequestReading`, handed over together as `OutcomeCapture` in
+`SyncPorts.swift`) so the engine keeps building and testing on Linux against fakes, and an engine
+built without them sweeps exactly as it did before. The store is asked before GitHub is, so a pull
+request that already has a row costs no request; the reads are sequential; and **every failure is
+swallowed**, not even reported as a `syncFailed`, because the user did not ask for this and a badge
+one pull request behind is worth less than a sweep that claims to be broken.
+`TrackRecordBackfill` (also in ShepherdSync) is the one-time pager behind Settings → Automation:
+one repository at a time, at most 500 pull requests each, cancellable between pages, reporting
+progress and one line per repository it could not read.
 
 The drain has exactly one side effect that is not a GitHub write: when a `submitReview` mutation
 is acknowledged, the pull request's current `changed_files` rows are snapshotted as the head the

@@ -90,6 +90,14 @@ final class AppEnvironment {
     let autoMergeStore: AutoMergeStore
     /// Decides whether the rows a sweep wrote contain anything to merge on its own (ADR 0018).
     let autoMerge: AutoMergeCoordinator
+    /// Owns the track-record backfill and the stored history (ADR 0027).
+    ///
+    /// Created inert, like the two coordinators below it: it reads nothing and asks GitHub
+    /// nothing until somebody presses *Load track record* in Settings → Automation. Owned here
+    /// rather than by a screen because a backfill outlives the Settings sheet that started it,
+    /// and because the inbox reads its ``TrackRecordCoordinator/historyVersion`` to know when to
+    /// recount the badges.
+    let trackRecord = TrackRecordCoordinator()
     /// Keeps the on-device ⌘K search index current and answers the palette's queries (ADR 0019).
     ///
     /// Created inert: it holds no corpus and loads no model until the first inbox observation
@@ -337,6 +345,10 @@ final class AppEnvironment {
         // dismissal set is the same kind of device-local automation state the auto-delegation
         // ledger is, and it is cleared here for the same reason (ADR 0029).
         recurringFindings.reset()
+        // And the track record's run state. The rows went with `eraseAllData()` above — they are
+        // the leaving account's closed pull requests — and this drops the progress line and the
+        // last run's summary, which name that account's repositories (ADR 0027).
+        trackRecord.reset()
     }
 
     private func startSession(for account: Account) async throws {

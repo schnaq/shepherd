@@ -99,6 +99,12 @@ enum SettingsSyncApplier {
         // The rules only. The ledger — which is also the audit log — is device state for the same
         // reason `AutoDelegationLedger` is: it records what *this* Mac already queued (ADR 0018).
         document.autoMerge = SyncedSettingsDocument.AutoMergeGroup(rules: settings.autoMerge)
+        // The thresholds only. The ninety days of closed pull requests behind the badges are
+        // device state for the search index's reason: rebuildable from a read any Mac can make,
+        // and far too large to put in a settings object (ADR 0027).
+        document.trust = SyncedSettingsDocument.TrustGroup(
+            laneConfiguration: settings.trustLaneConfiguration
+        )
         // The switch, never the index: the vectors are device state that a local pass rebuilds
         // from local rows (ADR 0019).
         document.search = SyncedSettingsDocument.SearchGroup(
@@ -222,6 +228,13 @@ enum SettingsSyncApplier {
         // automatic merging on takes effect on the next sweep — and one that switches it off
         // stops the very next pass (ADR 0018).
         settings.autoMerge = document.autoMerge.rules
+
+        // The mirror of the capture. Nothing further has to happen: the inbox recomputes the
+        // lanes whenever the thresholds change, so a document that widens "small" moves rows
+        // between the two headers as soon as it is applied (ADR 0027). The two stored properties
+        // are written rather than the value, because the value is the clamped view of them.
+        settings.trustLaneMaxFiles = document.trust.laneConfiguration.maxFiles
+        settings.trustLaneMaxChangedLines = document.trust.laneConfiguration.maxChangedLines
 
         // Only the flag is applied. Building or dropping the index is the window's job, driven by
         // `onChange(of: settings.semanticSearchEnabled)` in `ShepherdApp` — the same one route the

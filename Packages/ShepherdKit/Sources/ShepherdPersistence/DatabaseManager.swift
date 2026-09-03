@@ -60,6 +60,7 @@ public final class DatabaseManager: Sendable {
         migrator.registerMigration("v3", migrate: DatabaseSchema.addV3)
         migrator.registerMigration("v4", migrate: DatabaseSchema.addV4)
         migrator.registerMigration("v5", migrate: DatabaseSchema.addV5)
+        migrator.registerMigration("v6", migrate: DatabaseSchema.addV6)
         return migrator
     }
 
@@ -151,6 +152,7 @@ enum DatabaseSchema {
         "search_index",
         "triage_verdicts",
         "review_snapshots",
+        "pull_request_outcomes",
     ]
 
     static func createV1(_ db: Database) throws {
@@ -474,6 +476,67 @@ enum DatabaseSchema {
                 filesJSON BLOB NOT NULL,
                 PRIMARY KEY (prID, reviewedHeadOid)
             )
+            """)
+    }
+
+    /// The v6 addition: what became of the pull requests that closed (ADR 0027).
+    ///
+    /// Append-only once more — `createV1` through `addV5` are never edited. This is the
+    /// track-record half of the agent-fleet plan's feature B, which ADR 0028 split off `v5`.
+    ///
+    /// Five decisions live in the DDL, and the first one is the one that makes this table
+    /// unlike every other one added since `v1`:
+    ///
+    /// - **There is no foreign key onto `pull_requests`, and therefore no cascade.** Every other
+    ///   derived table — `search_index`, `triage_verdicts`, `review_snapshots` — is *about* a pull
+    ///   request in the inbox and is pruned with it. This one is about pull requests that have
+    ///   **left**: a row is written precisely when the sweep stops seeing one, and deleting it
+    ///   when the pull request disappears would delete every row this feature exists to count.
+    ///   The repository is stored by value (owner, name and `owner/name`) for the same reason.
+    /// - **`prID` is the primary key**, so both writers upsert: a pull request the backfill
+    ///   imported and the sweep later saw close again is one row, and running the backfill twice
+    ///   changes nothing.
+    /// - **One index, `(repoFullName, agentName, closedAt)`**, which is exactly the badge's
+    ///   query: "this agent, in this repository, since ninety days ago".
+    /// - **`number`, `title` and `mergeCommitOid` are stored beside the outcome**, and they are
+    ///   the only columns that are not counted by anything. Revert detection is text — `Revert
+    ///   "…"` in a title, `This reverts commit <sha>` in a body — and a revert that closes today
+    ///   pointing at a pull request last month's backfill imported can only be linked if the
+    ///   three things a title or a body can name are still on disk. Keeping them is what makes
+    ///   "or already stored" work instead of "or in the same page".
+    /// - **`merged` and `firstPushCIGreen` are `INTEGER`, and the second one is nullable**, which
+    ///   is load-bearing: "the first push was red" and "nothing is known about the first push"
+    ///   are different facts, and a `0` for the second would put a red push on somebody's badge.
+    ///   Timestamps are `DATETIME` holding Unix epoch seconds, as everywhere in this schema.
+    ///
+    /// Nothing here is an approval, and nothing reads it but the badge and the inbox's sort:
+    /// auto-merge (ADR 0018), bulk triage (ADR 0015) and auto-delegation (ADR 0016) do not touch
+    /// this table, and a test asserts that their inputs cannot even see the types it holds.
+    static func addV6(_ db: Database) throws {
+        try db.execute(sql: """
+            CREATE TABLE pull_request_outcomes (
+                prID TEXT PRIMARY KEY NOT NULL,
+                repoFullName TEXT NOT NULL,
+                repoOwner TEXT NOT NULL,
+                repoName TEXT NOT NULL,
+                number INTEGER NOT NULL DEFAULT 0,
+                title TEXT NOT NULL DEFAULT '',
+                agentName TEXT,
+                authorLogin TEXT NOT NULL DEFAULT '',
+                openedAt DATETIME NOT NULL,
+                closedAt DATETIME NOT NULL,
+                merged INTEGER NOT NULL DEFAULT 0,
+                mergeCommitOid TEXT,
+                revertedByPRID TEXT,
+                firstPushCIGreen INTEGER,
+                reviewRounds INTEGER NOT NULL DEFAULT 0,
+                changedLines INTEGER NOT NULL DEFAULT 0,
+                source TEXT NOT NULL DEFAULT 'sync'
+            )
+            """)
+        try db.execute(sql: """
+            CREATE INDEX idx_pull_request_outcomes_repo_agent_closedAt
+            ON pull_request_outcomes(repoFullName, agentName, closedAt)
             """)
     }
 }

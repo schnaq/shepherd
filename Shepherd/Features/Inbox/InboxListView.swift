@@ -47,6 +47,7 @@ struct InboxListView: View {
                     model.provenanceFilter = nil
                     model.repoFilter = nil
                     model.riskFilter = nil
+                    model.laneFilter = nil
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 11))
@@ -144,6 +145,7 @@ struct InboxListView: View {
                                         triage: model.triageSummary(for: row.id),
                                         rounds: model.reviewRounds(for: row.id),
                                         hasSession: model.sessionReference(for: row.id) != nil,
+                                        trackRecord: model.trackRecord(for: row.id),
                                         onToggleMark: { model.toggleMark(row.id) }
                                     )
                                     .id(row.id)
@@ -242,6 +244,9 @@ struct InboxListView: View {
 
     private var activeFilterLabel: String? {
         if let repo = model.repoFilter { return repo.fullName }
+        // The lane before the two claims below it, because it is the coarsest of the three and
+        // the one the reviewer chose a *mode of reading* with (ADR 0027).
+        if let lane = model.laneFilter { return lane.facetTitle }
         // Risk before provenance, because it is the narrower claim of the two: a rail with both
         // selected is showing "this agent's high-risk pull requests", and the surprising half of
         // that sentence is the risk.
@@ -256,7 +261,8 @@ struct InboxListView: View {
     }
 
     private var emptyMessage: String {
-        if model.provenanceFilter != nil || model.repoFilter != nil || model.riskFilter != nil {
+        if model.provenanceFilter != nil || model.repoFilter != nil || model.riskFilter != nil
+            || model.laneFilter != nil {
             return String(localized: "No pull request matches this filter. Clear it to see everything again.")
         }
         switch model.smartView {
@@ -376,6 +382,11 @@ struct InboxRowView: View {
     /// read, and a row that went looking for it itself would make the list depend on the
     /// database.
     var hasSession = false
+    /// The author's track record in this repository, or `nil` when there is no history (ADR 0027).
+    ///
+    /// Passed in for ``triage``'s reason once more. A row with none renders exactly as it did
+    /// before this feature: no badge, and the provenance chip in the agent palette's own colour.
+    var trackRecord: TrackRecord?
     /// Ticks or unticks this row.
     var onToggleMark: (() -> Void)?
 
@@ -415,7 +426,10 @@ struct InboxRowView: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
 
-            ProvenanceChip(actor: row.author)
+            // The chip is tinted by the track record when there is one — that is ADR 0027's
+            // "colours the provenance chip" — and keeps the agent palette's colour when there is
+            // not.
+            ProvenanceChip(actor: row.author, tint: trackRecord?.chipColor)
                 .layoutPriority(1)
 
             // Beside the provenance chip, because it says the same kind of thing: this pull
@@ -427,6 +441,12 @@ struct InboxRowView: View {
                     .layoutPriority(1)
                     .help(String(localized: "Has a session to answer to"))
                     .accessibilityLabel(Text(String(localized: "Has a session to answer to")))
+            }
+            // Beside the chip it describes, and before the triage chip, so the row reads
+            // "who · how they have done · what this is".
+            if let trackRecord {
+                TrackRecordBadge(authorName: badgeAuthorName, record: trackRecord)
+                    .layoutPriority(1)
             }
 
             // Beside the provenance chip, because the two say the same kind of thing about the
@@ -484,6 +504,16 @@ struct InboxRowView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(accessibilityText))
+    }
+
+    /// The name the badge and its popover use for this row's author.
+    ///
+    /// The agent's display name where there is one, so the badge reads "Claude Code" rather than
+    /// "claude[bot]" — it is the name the track record is *counted* under
+    /// (``ShepherdCore/TrackRecordSubject``), and the two must agree or the popover would explain
+    /// somebody else's numbers.
+    private var badgeAuthorName: String {
+        row.author.kind.agentIdentity?.displayName ?? row.author.login
     }
 
     /// The row's spoken label, with the tick state in front when the column is showing.

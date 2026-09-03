@@ -191,3 +191,75 @@ struct MarkReadyData: Decodable {
     }
     var markPullRequestReadyForReview: Payload?
 }
+
+// MARK: - Closed pull requests (ADR 0027)
+
+/// The `search` connection returned by ``GraphQLDocuments/searchClosedPullRequests``.
+struct SearchClosedPullRequestsData: Decodable {
+    struct Search: Decodable {
+        var issueCount: Int?
+        var pageInfo: PageInfoDTO?
+        var nodes: [ClosedPullRequestNodeDTO?]?
+    }
+    var search: Search?
+}
+
+/// The payload of ``GraphQLDocuments/closedPullRequest``.
+struct ClosedPullRequestData: Decodable {
+    struct Repository: Decodable {
+        var pullRequest: ClosedPullRequestNodeDTO?
+    }
+    var repository: Repository?
+}
+
+/// One closed pull request as the track-record read selects it.
+///
+/// Every field is optional for ``SearchNodeDTO``'s reason: a `search(type: ISSUE)` connection may
+/// contain plain issues, which carry only `__typename`. `closedAt` being `nil` is therefore not a
+/// malformed row — it is a pull request that is not closed — and the mapper drops it rather than
+/// inventing a close date.
+struct ClosedPullRequestNodeDTO: Decodable {
+    struct MergeCommit: Decodable {
+        var oid: String?
+    }
+
+    struct ReviewConnection: Decodable {
+        var totalCount: Int?
+    }
+
+    struct CommitConnection: Decodable {
+        struct Node: Decodable {
+            struct Commit: Decodable {
+                var oid: String?
+                var statusCheckRollup: SearchNodeDTO.StatusCheckRollupDTO?
+            }
+            var commit: Commit?
+        }
+        var nodes: [Node?]?
+    }
+
+    var typename: String?
+    var id: String?
+    var number: Int?
+    var title: String?
+    var body: String?
+    var createdAt: String?
+    var closedAt: String?
+    var merged: Bool?
+    var mergeCommit: MergeCommit?
+    var additions: Int?
+    var deletions: Int?
+    var changedFiles: Int?
+    var headRefName: String?
+    var repository: GraphQLRepositoryDTO?
+    var author: GraphQLActorDTO?
+    var reviews: ReviewConnection?
+    var commits: CommitConnection?
+
+    private enum CodingKeys: String, CodingKey {
+        case typename = "__typename"
+        case id, number, title, body, createdAt, closedAt, merged, mergeCommit
+        case additions, deletions, changedFiles, headRefName
+        case repository, author, reviews, commits
+    }
+}

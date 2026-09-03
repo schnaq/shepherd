@@ -70,6 +70,18 @@ struct InboxScreen: View {
         .onChange(of: environment.intelligence.configuration) { _, _ in
             model.intelligence = environment.intelligence
         }
+        // Three inputs of the lanes and the badges that no inbox write reports (ADR 0027): the
+        // two thresholds, which move in Settings without touching a row, and the stored history,
+        // which a backfill or *Clear history* replaces wholesale.
+        .onChange(of: environment.settings.trustLaneMaxFiles) { _, _ in
+            model.refreshTrustLanes()
+        }
+        .onChange(of: environment.settings.trustLaneMaxChangedLines) { _, _ in
+            model.refreshTrustLanes()
+        }
+        .onChange(of: environment.trackRecord.historyVersion) { _, _ in
+            model.refreshTrustLanes()
+        }
         .onDisappear {
             model.stopObserving()
         }

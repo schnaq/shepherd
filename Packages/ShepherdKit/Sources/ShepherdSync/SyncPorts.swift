@@ -101,3 +101,65 @@ public protocol ReviewSnapshotWriting: Sendable {
 
 /// `DatabaseManager` already has exactly this shape; the conformance is the contract check.
 extension DatabaseManager: ReviewSnapshotWriting {}
+
+/// The slice of ``ShepherdPersistence/DatabaseManager`` that keeps the track record (ADR 0027).
+///
+/// A port of its own for ``ReviewSnapshotWriting``'s two reasons: the sweep's capture is the
+/// *only* thing in the engine that writes it, so a test can hand the engine a counting double
+/// while the store stays the real database; and an engine built without one — which is every
+/// existing test — behaves exactly as it did before.
+public protocol OutcomeRecording: Sendable {
+    /// Whether one pull request already has a stored outcome.
+    func hasPullRequestOutcome(prID: String) async throws -> Bool
+    /// Writes outcomes, replacing any row for the same pull request.
+    func savePullRequestOutcomes(_ closed: [ClosedPullRequest]) async throws -> Int
+    /// The stored merged pull requests a revert could be pointing at.
+    func mergedClosedPullRequests(repo: RepoRef, since: Date) async throws -> [ClosedPullRequest]
+    /// Records that some stored pull requests were reverted.
+    func applyRevertLinks(_ links: [String: String]) async throws -> Int
+}
+
+/// `DatabaseManager` already has exactly this shape; the conformance is the contract check.
+extension DatabaseManager: OutcomeRecording {}
+
+/// The slice of ``GitHubKit/GitHubClient`` the track record reads through (ADR 0027).
+///
+/// Separate from ``PullRequestFetching`` rather than two more requirements on it, and
+/// deliberately so: the inbox port is what the engine's loops need to *run*, and every double in
+/// every test implements all of it. Two reads that only one optional feature makes belong behind
+/// a protocol only that feature's tests have to satisfy.
+public protocol ClosedPullRequestReading: Sendable {
+    /// Reads the final state of one pull request by number.
+    func closedPullRequest(repo: RepoRef, number: Int) async throws -> ClosedPullRequest?
+    /// Reads one page of a repository's closed pull requests.
+    func searchClosedPullRequests(
+        repo: RepoRef,
+        since: Date,
+        cursor: String?,
+        pageSize: Int
+    ) async throws -> ClosedPullRequestPage
+}
+
+/// `GitHubClient` already has exactly this shape; the conformance is the contract check.
+extension GitHubClient: ClosedPullRequestReading {}
+
+/// The two ports the track record needs, handed to the engine as one value.
+///
+/// One initialiser parameter instead of two, because neither half is any use without the other:
+/// an engine that could read a closed pull request but not store it would spend a request per
+/// disappearance and throw the answer away.
+public struct OutcomeCapture: Sendable {
+    /// Where a closed pull request is read from.
+    public let reader: any ClosedPullRequestReading
+    /// Where the outcome is written.
+    public let store: any OutcomeRecording
+
+    /// Creates the pair.
+    /// - Parameters:
+    ///   - reader: The GitHub side.
+    ///   - store: The database side.
+    public init(reader: any ClosedPullRequestReading, store: any OutcomeRecording) {
+        self.reader = reader
+        self.store = store
+    }
+}

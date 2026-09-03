@@ -31,6 +31,7 @@ founder interview (2026-08-31) combined with three research reports (see
 | 0023 | [Structured triage: one on-device verdict per pull request](0023-structured-triage.md) | Accepted (v1.x) |
 | 0024 | [Tool calling for "why is CI red?": three reads, one card](0024-tool-calling-ci-diagnosis.md) | Accepted (v1.x) |
 | 0026 | [Claims vs. Evidence: the description beside the diff, no score](0026-claims-vs-evidence.md) | Accepted (v1.2) |
+| 0027 | [Track record and trust lanes: the gate is CI, size and sensitive paths](0027-track-record-and-trust-lanes.md) | Accepted (v1.2) |
 | 0028 | [Since my review: a local snapshot at submit time, the interdiff computed on the Mac](0028-since-my-review-interdiff.md) | Accepted (v1.2) |
 | 0029 | [The feedback loop: a recurring finding becomes a drafted agent rule](0029-feedback-loop-agent-rules.md) | Accepted (v1.2) |
 | 0030 | [The session back-channel: a finding addressed to the session that wrote the code, through the user's own CLI](0030-session-back-channel.md) | Accepted (v1.2) |

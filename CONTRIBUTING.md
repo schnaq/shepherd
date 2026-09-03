@@ -118,7 +118,9 @@ bumping a dependency that ships inside the app also means a line in
 - Secrets go in the Keychain, never in `UserDefaults` and never in the database. That includes
   anything new: the sync document is encrypted, but `UserDefaults` is not.
 - No telemetry, ever. The complete list of hosts Shepherd may contact:
-  - api.github.com / github.com;
+  - api.github.com / github.com. The track record's read of **closed** pull requests (ADR 0027)
+    is the same `api.github.com` GraphQL endpoint as the inbox sweep, with `is:closed` in place of
+    `is:open` — one more search on the host already on this list, and no new one;
   - only when the user configures a key: api.anthropic.com, or the OpenAI-compatible endpoint
     they chose themselves (a preset's base URL is still their choice). What travels there is the
     tier-1 digest — title, description excerpt, file list, top hunks — and, when you use AI

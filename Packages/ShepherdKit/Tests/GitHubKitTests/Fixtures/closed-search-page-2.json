@@ -1,0 +1,59 @@
+{
+  "data": {
+    "search": {
+      "issueCount": 3,
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": null
+      },
+      "nodes": [
+        {
+          "__typename": "PullRequest",
+          "id": "PR_kwDOClosedOlder",
+          "number": 100,
+          "title": "feat(parser): accept trailing commas",
+          "body": "",
+          "createdAt": "2026-07-01T08:00:00Z",
+          "closedAt": "2026-07-02T08:00:00Z",
+          "merged": true,
+          "mergeCommit": {
+            "oid": "bbbb000011112222333344445555666677778888"
+          },
+          "additions": 30,
+          "deletions": 2,
+          "changedFiles": 2,
+          "headRefName": "claude/trailing-commas",
+          "repository": {
+            "name": "review",
+            "owner": {
+              "login": "schnaq"
+            }
+          },
+          "author": {
+            "__typename": "Bot",
+            "login": "claude[bot]",
+            "avatarUrl": null
+          },
+          "reviews": {
+            "totalCount": 0
+          },
+          "commits": {
+            "nodes": [
+              {
+                "commit": {
+                  "oid": "4444444444444444444444444444444444444444",
+                  "statusCheckRollup": {
+                    "state": "PENDING",
+                    "contexts": {
+                      "totalCount": 1
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

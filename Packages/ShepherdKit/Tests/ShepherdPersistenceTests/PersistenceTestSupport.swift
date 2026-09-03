@@ -215,3 +215,64 @@ enum PersistenceFixtures {
         )
     }
 }
+
+/// Fixtures for the track-record table (ADR 0027).
+///
+/// Its own namespace rather than more functions on ``PersistenceFixtures``: an outcome describes
+/// a pull request that has *left* the inbox, so it shares none of that type's summary-shaped
+/// defaults and would only be confusing beside them.
+enum OutcomeFixtures {
+    /// One closed pull request, ready to store.
+    /// - Parameters:
+    ///   - prID: The node id.
+    ///   - number: The pull request number.
+    ///   - repo: The repository.
+    ///   - agentName: The agent's display name, or `nil` for a human.
+    ///   - login: The author's login.
+    ///   - title: The title, which revert detection matches on.
+    ///   - merged: Whether it was merged.
+    ///   - mergeCommitOid: The merge commit, which revert detection matches on.
+    ///   - revertedBy: The node id of the pull request that reverted it.
+    ///   - firstPushGreen: Whether the first push's checks were green.
+    ///   - reviewRounds: How many reviews requested changes.
+    ///   - changedLines: Added plus deleted lines.
+    ///   - closedAt: The close time, as an offset from the fixture epoch.
+    ///   - source: Which writer produced it.
+    static func closed(
+        prID: String,
+        number: Int,
+        repo: RepoRef = PersistenceFixtures.repo,
+        agentName: String? = "Claude Code",
+        login: String = "claude[bot]",
+        title: String = "feat: something",
+        merged: Bool,
+        mergeCommitOid: String? = nil,
+        revertedBy: String? = nil,
+        firstPushGreen: Bool? = true,
+        reviewRounds: Int = 1,
+        changedLines: Int = 42,
+        closedAt: TimeInterval = 0,
+        source: PullRequestOutcomeSource = .backfill
+    ) -> ClosedPullRequest {
+        ClosedPullRequest(
+            outcome: PullRequestOutcome(
+                prID: prID,
+                repo: repo,
+                agentName: agentName,
+                authorLogin: login,
+                openedAt: PersistenceFixtures.date(closedAt - 3_600),
+                closedAt: PersistenceFixtures.date(closedAt),
+                merged: merged,
+                revertedByPRID: revertedBy,
+                firstPushCIGreen: firstPushGreen,
+                reviewRounds: reviewRounds,
+                changedLines: changedLines,
+                source: source
+            ),
+            number: number,
+            title: title,
+            bodyMarkdown: "",
+            mergeCommitOid: mergeCommitOid
+        )
+    }
+}

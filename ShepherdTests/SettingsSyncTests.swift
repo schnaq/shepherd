@@ -272,6 +272,12 @@ final class SettingsSyncTests: XCTestCase {
                 requiredLabels: ["automerge"]
             )
         )
+        // Non-default in both thresholds, and deliberately in opposite directions: a wider file
+        // ceiling with a narrower line ceiling proves the two travel independently rather than as
+        // one "small" knob (ADR 0027).
+        document.trust = SyncedSettingsDocument.TrustGroup(
+            laneConfiguration: TrustLaneConfiguration(maxFiles: 9, maxChangedLines: 60)
+        )
         // Non-default means *off* here: the index ships on, because it is on-device and costs
         // nothing but CPU (ADR 0019).
         document.search = SyncedSettingsDocument.SearchGroup(
@@ -1122,6 +1128,12 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertEqual(settings.savedReplies.first?.body, "Please add a test.")
         XCTAssertEqual(settings.reviewTemplates.map(\.pattern), ["schnaq/*"])
         XCTAssertEqual(settings.reviewTemplates.first?.body, "## Checklist\n- [ ] tests")
+        // The lane thresholds travel; the ninety days of outcomes behind the badges never do —
+        // they are rebuildable device state, like the search vectors (ADR 0027).
+        XCTAssertEqual(settings.trustLaneMaxFiles, 9)
+        XCTAssertEqual(settings.trustLaneMaxChangedLines, 60)
+        XCTAssertEqual(settings.trustLaneConfiguration.maxFiles, 9)
+        XCTAssertEqual(settings.trustLaneConfiguration.maxChangedLines, 60)
         // The switch travels; the vectors it produces never do — they are rebuildable device
         // state (ADR 0019).
         XCTAssertFalse(settings.semanticSearchEnabled)

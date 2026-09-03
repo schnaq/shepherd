@@ -249,6 +249,16 @@ final class InboxModel {
     var riskFilter: TriageVerdict.Risk? {
         didSet { clampSelection() }
     }
+    /// The selected trust lane, if any (ADR 0027).
+    ///
+    /// A fifth rail filter, composing with the four above exactly as the risk facet does: "the
+    /// short looks in this repository" is the question the lane exists for. Unlike the risk
+    /// facet, a row with nothing computed for it is *kept* rather than filtered out — the lane
+    /// has no unknown state, because ``TrustLaneSnapshot/lane(for:)`` answers "full review" for
+    /// anything it has not classified.
+    var laneFilter: TrustLane? {
+        didSet { clampSelection() }
+    }
     /// The selected row's pull request id — the keyboard cursor, always exactly one row.
     var selectedID: String?
     /// The rows ticked for a bulk action (ADR 0015).
@@ -294,6 +304,12 @@ final class InboxModel {
     /// snapshots table and an interdiff computed on this Mac, so a list with none of them is a
     /// list nobody has reviewed twice yet, not a list that is still loading.
     private(set) var reviewRoundsByID: [String: ReviewRoundsSummary] = [:]
+    /// The lanes and the track records the list is currently showing (ADR 0027).
+    ///
+    /// One value, replaced whole, for ``TrustLaneSnapshot``'s reason: the lanes and the badges are
+    /// read off the same rows in the same render, and half of one refresh beside half of another
+    /// would put a pull request under a header its badge was not counted for.
+    private(set) var trust: TrustLaneSnapshot = .empty
 
     /// The two-keystroke state machine (`r a`, `g r`, …).
     var keySequence = KeySequenceState()
@@ -303,6 +319,7 @@ final class InboxModel {
     private var intelligenceTask: Task<Void, Never>?
     private var roundsTask: Task<Void, Never>?
     private var sessionsTask: Task<Void, Never>?
+    private var trustTask: Task<Void, Never>?
     /// The rows the rounds chips were last computed for, as `id:head` pairs.
     private var roundsSignature = ""
     /// The rows the session glyphs were last read for, as `id:head` pairs.
@@ -331,6 +348,7 @@ final class InboxModel {
                 self.clampSelection()
                 self.refreshReviewRounds()
                 self.refreshSessionReferences()
+                self.refreshTrustLanes()
             }
         }
     }
@@ -347,6 +365,8 @@ final class InboxModel {
         roundsTask = nil
         sessionsTask?.cancel()
         sessionsTask = nil
+        trustTask?.cancel()
+        trustTask = nil
     }
 
     /// Recomputes the rounds chips, but only when the rows they describe have moved.
@@ -407,6 +427,55 @@ final class InboxModel {
         reviewRoundsByID[id]
     }
 
+    /// Recomputes the lanes and the badges.
+    ///
+    /// Deliberately **without** the signature gate ``refreshReviewRounds()`` has, and the
+    /// difference is the inputs rather than the cost. A rounds chip is a function of the rows and
+    /// their heads, so a signature over those is exact. A lane is a function of the rows *and* of
+    /// `changed_files` — the sensitive-path exclusion is about paths — and a detail fetch that
+    /// stores a diff changes nothing a ``ShepherdCore/PullRequestSummary`` can describe. A
+    /// signature over the rows would therefore go stale at exactly the moment the lane finally
+    /// becomes knowable, and a pull request would sit under *Full review* until its next push.
+    ///
+    /// Recomputing instead costs two indexed `SELECT`s and some counting in Swift, with the
+    /// previous pass cancelled — which is affordable on every inbox write in a way an interdiff
+    /// is not.
+    ///
+    /// Also called by the screen when a threshold moves in Settings and when the stored history
+    /// is replaced by a backfill or by *Clear history*: neither of those touches a row, so
+    /// neither reaches the inbox observation.
+    func refreshTrustLanes() {
+        guard !allRows.isEmpty else {
+            trust = .empty
+            return
+        }
+        let rows = allRows
+        let database = session.database
+        let configuration = settings.trustLaneConfiguration
+        trustTask?.cancel()
+        trustTask = Task { [weak self] in
+            let snapshot = await TrustLaneLoader.load(
+                database: database,
+                rows: rows,
+                configuration: configuration
+            )
+            guard let self, !Task.isCancelled else { return }
+            self.trust = snapshot
+        }
+    }
+
+    /// The lane of one row (ADR 0027).
+    /// - Parameter id: The pull request's node id.
+    func lane(for id: String) -> TrustLane {
+        trust.lane(for: id)
+    }
+
+    /// The track record behind one row's badge, or `nil` when the author has no history here.
+    /// - Parameter id: The pull request's node id.
+    func trackRecord(for id: String) -> TrackRecord? {
+        trust.record(for: id)
+    }
+
     // MARK: - Derived state
 
     /// The rows the centre list shows, after every rail filter.
@@ -421,6 +490,9 @@ final class InboxModel {
             // no verdict — is filtered *out* rather than kept: the facet is a claim about risk,
             // and "we do not know" is not one of its levels.
             if let riskFilter, triage?.risk(for: row.id) != riskFilter { return false }
+            // No "we do not know" case, unlike the risk facet above: every row has a lane, and a
+            // row nothing has been computed for is a full review (ADR 0027).
+            if let laneFilter, trust.lane(for: row.id) != laneFilter { return false }
             return true
         }
     }
@@ -506,6 +578,18 @@ final class InboxModel {
         return triage.riskFacets(for: ids)
     }
 
+    /// The lanes present in the current smart view, with counts (ADR 0027).
+    ///
+    /// Counted over the smart view rather than over the filtered list, exactly as the risk, agent
+    /// and repository facets are: a facet whose counts changed when you selected one of its own
+    /// rows could not be used to compare them.
+    var laneFacets: [TrustLaneFacet] {
+        TrustLaneLoader.facets(
+            rows: allRows.filter { smartView.matches($0) },
+            snapshot: trust
+        )
+    }
+
     /// What one row shows beside its title, or `nil` when there is nothing to show.
     /// - Parameter id: The pull request's node id.
     func triageSummary(for id: String) -> TriageRowSummary? {
@@ -529,12 +613,82 @@ final class InboxModel {
     private func order(_ rows: [PullRequestSummary]) -> [PullRequestSummary] {
         switch settings.sortOrder {
         case .recentlyUpdated:
-            return InboxGrouper.sorted(rows)
+            // The primary key is recency, so the track record only ever reorders rows that were
+            // updated at the same instant.
+            return trackRecordOrdered(InboxGrouper.sorted(rows)) { $0.updatedAt == $1.updatedAt }
         case .oldestFirst:
-            return Array(InboxGrouper.sorted(rows).reversed())
+            return trackRecordOrdered(Array(InboxGrouper.sorted(rows).reversed())) {
+                $0.updatedAt == $1.updatedAt
+            }
         case .priority:
-            return InboxModel.prioritySorted(rows)
+            // The primary key is the urgency score; the record slots in underneath it, ahead of
+            // the recency tie-break `prioritySorted` applies.
+            return trackRecordOrdered(InboxModel.prioritySorted(rows)) {
+                InboxModel.priorityScore($0) == InboxModel.priorityScore($1)
+            }
         }
+    }
+
+    /// Re-orders rows by the author's merged count, descending, **as a secondary key**
+    /// (ADR 0027).
+    ///
+    /// The whole of what a track record does to the list, and three properties make it safe to
+    /// slot underneath any of the three primary orders:
+    ///
+    /// - **It only ever reorders rows the primary order tied.** `rows` arrives already sorted;
+    ///   this walks it, cuts it into runs of rows `isTied` calls equal, and sorts each run on its
+    ///   own. A row can therefore never overtake one the primary key put in front of it —
+    ///   recency stays recency, and urgency stays urgency.
+    /// - **Each run is sorted stably**, position as the last tie-breaker, so two agents with the
+    ///   same number of merges keep the order the primary sort gave them.
+    /// - **It never moves a row across a lane, because it does not know about lanes.** The lanes
+    ///   are the rail's filter; this sorts inside whatever list it is handed.
+    ///
+    /// Rows whose author has no history count as zero merged, which puts a brand-new agent below
+    /// an established one at equal urgency — not because it is less trustworthy, but because
+    /// there is nothing to read yet and a reviewer's attention is better spent on the row that
+    /// has numbers beside it.
+    /// - Parameters:
+    ///   - rows: The rows in their primary order.
+    ///   - isTied: Whether two rows have the same primary key.
+    /// - Returns: The rows, with tied ones ordered by merged count.
+    private func trackRecordOrdered(
+        _ rows: [PullRequestSummary],
+        isTied: (PullRequestSummary, PullRequestSummary) -> Bool
+    ) -> [PullRequestSummary] {
+        guard !trust.records.isEmpty, rows.count > 1 else { return rows }
+        var result: [PullRequestSummary] = []
+        result.reserveCapacity(rows.count)
+        var run: [PullRequestSummary] = [rows[0]]
+        for row in rows.dropFirst() {
+            if let last = run.last, isTied(last, row) {
+                run.append(row)
+                continue
+            }
+            result.append(contentsOf: sortedByMergedCount(run))
+            run = [row]
+        }
+        result.append(contentsOf: sortedByMergedCount(run))
+        return result
+    }
+
+    /// One run of equally urgent rows, most-merged first, stable on position.
+    private func sortedByMergedCount(
+        _ run: [PullRequestSummary]
+    ) -> [PullRequestSummary] {
+        guard run.count > 1 else { return run }
+        return run.enumerated()
+            .map { (index: $0.offset, row: $0.element, merged: mergedCount(for: $0.element)) }
+            .sorted { lhs, rhs in
+                if lhs.merged != rhs.merged { return lhs.merged > rhs.merged }
+                return lhs.index < rhs.index
+            }
+            .map(\.row)
+    }
+
+    /// How many pull requests this row's author has merged in this repository, or zero.
+    private func mergedCount(for row: PullRequestSummary) -> Int {
+        trust.record(for: row.id)?.merged ?? 0
     }
 
     /// The rows in the deterministic "what should I look at first" order.
@@ -586,6 +740,8 @@ final class InboxModel {
         // facet left selected from before would silently narrow what the link asked for — and an
         // empty list looks like a broken link, which is the argument the whole mapping makes.
         riskFilter = nil
+        // The same for the lane facet, which ADR 0027 did not add a token for either.
+        laneFilter = nil
     }
 
     // MARK: - Selection

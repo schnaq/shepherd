@@ -324,3 +324,143 @@ actor FakeReviewSnapshotWriter: ReviewSnapshotWriting {
         return result
     }
 }
+
+/// A recording stand-in for the track record's two ports (ADR 0027).
+///
+/// One double for both halves rather than two, because every test that cares asserts on the
+/// *pair*: what the engine read, and what it then stored. It also keeps the interesting
+/// scripting in one place — how many pages a repository has, and which pull request the read
+/// refuses.
+actor FakeOutcomeStore: OutcomeRecording, ClosedPullRequestReading {
+    /// The rows on disk, keyed by node id.
+    private(set) var stored: [String: ClosedPullRequest] = [:]
+    /// Every `closedPullRequest(repo:number:)` the engine made, in order.
+    private(set) var singleReads: [String] = []
+    /// Every `searchClosedPullRequests` the pager made, as `repo|cursor`.
+    private(set) var pageReads: [String] = []
+    /// The links that were applied, merged.
+    private(set) var links: [String: String] = [:]
+
+    /// What the single read answers with, keyed by `owner/name#number`. A missing key answers
+    /// `nil`, which is the "it is still open" case.
+    private var singleResults: [String: ClosedPullRequest] = [:]
+    /// The pages one repository answers with, in order, keyed by `owner/name`.
+    private var pages: [String: [ClosedPullRequestPage]] = [:]
+    private var readError: GitHubError?
+
+    init() {}
+
+    // MARK: - Scripting
+
+    func setSingleResult(_ closed: ClosedPullRequest?, repo: RepoRef, number: Int) {
+        let key = "\(repo.fullName)#\(number)"
+        if let closed {
+            singleResults[key] = closed
+        } else {
+            singleResults.removeValue(forKey: key)
+        }
+    }
+
+    func setPages(_ pages: [ClosedPullRequestPage], repo: RepoRef) {
+        self.pages[repo.fullName] = pages
+    }
+
+    func setReadError(_ error: GitHubError?) {
+        readError = error
+    }
+
+    // MARK: - OutcomeRecording
+
+    func hasPullRequestOutcome(prID: String) async throws -> Bool {
+        stored[prID] != nil
+    }
+
+    func savePullRequestOutcomes(_ closed: [ClosedPullRequest]) async throws -> Int {
+        for entry in closed {
+            stored[entry.outcome.prID] = entry
+        }
+        return closed.count
+    }
+
+    func mergedClosedPullRequests(
+        repo: RepoRef,
+        since: Date
+    ) async throws -> [ClosedPullRequest] {
+        stored.values
+            .filter {
+                $0.outcome.merged
+                    && $0.outcome.repo.isSameRepository(as: repo)
+                    && $0.outcome.closedAt >= since
+            }
+            .sorted { $0.outcome.closedAt < $1.outcome.closedAt }
+    }
+
+    func applyRevertLinks(_ links: [String: String]) async throws -> Int {
+        var applied = 0
+        for (target, reverting) in links where stored[target]?.outcome.merged == true {
+            self.links[target] = reverting
+            stored[target]?.outcome.revertedByPRID = reverting
+            applied += 1
+        }
+        return applied
+    }
+
+    // MARK: - ClosedPullRequestReading
+
+    func closedPullRequest(repo: RepoRef, number: Int) async throws -> ClosedPullRequest? {
+        singleReads.append("\(repo.fullName)#\(number)")
+        if let readError { throw readError }
+        return singleResults["\(repo.fullName)#\(number)"]
+    }
+
+    func searchClosedPullRequests(
+        repo: RepoRef,
+        since: Date,
+        cursor: String?,
+        pageSize: Int
+    ) async throws -> ClosedPullRequestPage {
+        pageReads.append("\(repo.fullName)|\(cursor ?? "-")")
+        if let readError { throw readError }
+        var remaining = pages[repo.fullName] ?? []
+        guard !remaining.isEmpty else {
+            return ClosedPullRequestPage(pullRequests: [], totalCount: 0)
+        }
+        let page = remaining.removeFirst()
+        pages[repo.fullName] = remaining
+        return page
+    }
+}
+
+extension SyncFixtures {
+    /// One closed pull request, for the track record's tests.
+    static func closed(
+        prID: String,
+        number: Int,
+        repo: RepoRef = SyncFixtures.repo,
+        title: String = "feat: something",
+        body: String = "",
+        merged: Bool = true,
+        mergeCommitOid: String? = nil,
+        closedAt: TimeInterval = 0
+    ) -> ClosedPullRequest {
+        ClosedPullRequest(
+            outcome: PullRequestOutcome(
+                prID: prID,
+                repo: repo,
+                agentName: "Claude Code",
+                authorLogin: "claude[bot]",
+                openedAt: SyncFixtures.date(closedAt - 3_600),
+                closedAt: SyncFixtures.date(closedAt),
+                merged: merged,
+                firstPushCIGreen: true,
+                reviewRounds: 1,
+                changedLines: 42,
+                source: .backfill
+            ),
+            number: number,
+            title: title,
+            bodyMarkdown: body,
+            mergeCommitOid: mergeCommitOid
+        )
+    }
+}

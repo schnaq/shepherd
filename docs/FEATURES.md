@@ -93,6 +93,44 @@ and the facet fall back to the risk hints Shepherd computes without any model at
 auth", "deletes tests", "only a lockfile"), and Settings → Intelligence says so in one line. The
 switch is under Semantic Search, on by default, and switching it off deletes every stored verdict.
 
+### Two lanes: what deserves a glance, and what deserves a read
+
+The rail gains a LANES section with two rows. A pull request is a **Short look** only when three
+things are true at once: CI is green, the diff is small (five files and a hundred and twenty
+changed lines by default, both adjustable), and nothing sensitive is in it — no CI workflow, no
+auth or secret path, no schema migration, no deleted test. Everything else is a **Full review**.
+Click either row and the list filters to it.
+
+That is the whole gate, and it is deliberately not clever. A pull request whose diff Shepherd has
+not fetched yet is a full review, because "short look" is a promise and Shepherd will not make it
+about a diff it has never seen.
+
+Beside each agent's name, a track record:
+`Claude Code · this repo · 23 merged · 2 reverted · CI green first push 78 %`. It tints the
+provenance chip — amber if something had to be taken back out, green for a settled record — and
+orders rows inside a lane, so the agent with numbers beside it comes first when everything else is
+equal. Click it and a popover gives you the rest: how many closed without merging, the median
+number of rounds of changes you asked for, and the line that says where the numbers come from —
+*this repo · last 90 days · on this Mac*. A pull request from somebody with no history gets no
+badge at all.
+
+**The record never moves a pull request between the lanes.** The lane is CI, size and paths; the
+record is a badge and a sort order. That is a rule with a test behind it — the classifier's input
+type cannot even express a history, and adding one to the automatic-merge, bulk-triage or
+automatic-delegation inputs fails CI, exactly as it does for a triage verdict
+([ADR 0027](adr/0027-track-record-and-trust-lanes.md)).
+
+The numbers come from the pull requests your repositories **closed**, which Shepherd otherwise
+never looks at. Settings → Automation → *Load track record* reads the last ninety days once per
+repository — at most five hundred each, one repository at a time, with a progress line and a Stop
+button — and from then on the sync keeps it current by itself: when a pull request disappears from
+the inbox, Shepherd reads its final state once. Reverts are found by reading titles and
+descriptions (`Revert "…"`, `This reverts commit …`), never by asking GitHub about commits.
+
+The two thresholds travel to your other Macs; the history does not — it is rebuilt by a button
+there, which is why the popover says *on this Mac*. *Clear history* empties it, and the lanes carry
+on working, because they never read it.
+
 ### A morning digest, built on your Mac
 
 Switch it on and once a day — nine o'clock by default, weekdays only if you like — Shepherd tells

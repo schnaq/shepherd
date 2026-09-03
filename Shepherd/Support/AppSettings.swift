@@ -138,6 +138,11 @@ final class AppSettings {
             Keys.autoMerge,
             default: AutoMergeRules()
         )
+        self.trustLaneMaxFiles = defaults.object(forKey: Keys.trustLaneMaxFiles) as? Int
+            ?? TrustLaneConfiguration.default.maxFiles
+        self.trustLaneMaxChangedLines = defaults
+            .object(forKey: Keys.trustLaneMaxChangedLines) as? Int
+            ?? TrustLaneConfiguration.default.maxChangedLines
         self.semanticSearchEnabled = defaults
             .object(forKey: Keys.semanticSearch) as? Bool ?? true
         self.spotlightExportEnabled = defaults
@@ -466,6 +471,37 @@ final class AppSettings {
     /// the same argument ``UpdateController/checksAutomatically`` makes about Sparkle's flag.
     var autoMergeMethod: MergeMethod { defaultMergeMethod }
 
+    // MARK: - Trust lanes (ADR 0027)
+
+    /// The largest number of changed files a *short look* may have.
+    ///
+    /// Two plain `Int`s rather than one JSON blob like ``autoMerge``, and the reason is what edits
+    /// them: these are two steppers, each written on its own, and a blob would mean re-encoding
+    /// both every time one moved. They are read back through
+    /// ``ShepherdCore/TrustLaneConfiguration``, which clamps them, so a value a hostile or a
+    /// hand-edited `defaults` write put out of range cannot empty the short lane.
+    var trustLaneMaxFiles: Int {
+        didSet { defaults.set(trustLaneMaxFiles, forKey: Keys.trustLaneMaxFiles) }
+    }
+
+    /// The largest number of added-plus-deleted lines a *short look* may have.
+    var trustLaneMaxChangedLines: Int {
+        didSet { defaults.set(trustLaneMaxChangedLines, forKey: Keys.trustLaneMaxChangedLines) }
+    }
+
+    /// The two thresholds as the pure classifier wants them.
+    ///
+    /// The one place the lane's inputs are assembled from settings, so the inbox, the rail's
+    /// counts and the Settings card's own preview cannot disagree about what "small" means. The
+    /// initialiser clamps, which is why this is the accessor everything reads rather than the two
+    /// stored properties.
+    var trustLaneConfiguration: TrustLaneConfiguration {
+        TrustLaneConfiguration(
+            maxFiles: trustLaneMaxFiles,
+            maxChangedLines: trustLaneMaxChangedLines
+        )
+    }
+
     // MARK: - Semantic ⌘K search (ADR 0019)
 
     /// Whether Shepherd keeps an on-device semantic index of the pull requests in the inbox.
@@ -787,6 +823,8 @@ final class AppSettings {
         static let localCheckouts = "delegation.localCheckouts"
         static let autoDelegation = "delegation.autoRules"
         static let autoMerge = "automation.autoMergeRules"
+        static let trustLaneMaxFiles = "trust.laneMaxFiles"
+        static let trustLaneMaxChangedLines = "trust.laneMaxChangedLines"
         static let semanticSearch = "search.semanticIndexEnabled"
         static let spotlightExport = "search.spotlightExportEnabled"
         static let savedReplies = "review.savedReplies"

@@ -114,6 +114,10 @@ final class SignedInSession {
             // baseline with (ADR 0028), and the login that lets a detail fetch recognise a
             // review the user submitted elsewhere.
             snapshots: database,
+            // The same two things again, through the pair of ports the sweep captures a closed
+            // pull request's outcome with (ADR 0027): the client reads it once, the database
+            // stores it, and a failure on either side is swallowed rather than failing a sweep.
+            outcomes: OutcomeCapture(reader: github, store: database),
             configuration: SyncConfiguration(
                 sweepInterval: sweepInterval,
                 viewerLogin: account.login

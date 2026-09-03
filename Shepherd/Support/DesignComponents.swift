@@ -272,9 +272,15 @@ struct ProvenanceChip: View {
     let actor: ShepherdCore.Actor
     /// The font size.
     var size: CGFloat = 11
+    /// A colour that replaces the agent palette's, when the caller has something to say about
+    /// this author (ADR 0027: the track record *colours* the provenance chip).
+    ///
+    /// `nil` — the default — is the palette colour, which is what every existing caller gets and
+    /// what a row with no history keeps.
+    var tint: Color?
 
     var body: some View {
-        ChipView(text: label, color: AgentPalette.color(for: actor.kind), size: size)
+        ChipView(text: label, color: tint ?? AgentPalette.color(for: actor.kind), size: size)
             .help(helpText)
     }
 

@@ -24,6 +24,15 @@ public struct InboxQuery: Sendable, Hashable {
     /// The common prefix every inbox facet shares.
     public static let openPullRequestPrefix = "is:pr is:open archived:false"
 
+    /// The prefix of the *closed* search, which is the only read in Shepherd that looks past the
+    /// open inbox (ADR 0027).
+    ///
+    /// It is the open prefix with one word changed, and that is deliberate: the track-record
+    /// backfill is the same `search(type: ISSUE)` machinery the sweep uses, on the same host,
+    /// through the same client, so it inherits the paging, the retry, the rate-limit backoff and
+    /// the conditional-request cache rather than growing a second read path.
+    public static let closedPullRequestPrefix = "is:pr is:closed archived:false"
+
     /// Pull requests whose review was explicitly requested from the user.
     public static let reviewRequested = InboxQuery(
         rawQuery: "\(openPullRequestPrefix) review-requested:@me",
@@ -57,6 +66,43 @@ public struct InboxQuery: Sendable, Hashable {
     public static let defaultSweep: [InboxQuery] = [
         .reviewRequested, .authored, .assigned, .mentioned, .involves,
     ]
+
+    /// The closed-pull-request query for one repository since one date (ADR 0027).
+    ///
+    /// `closed:>YYYY-MM-DD` rather than a timestamp: GitHub's search index resolves the qualifier
+    /// to whole days anyway, and a date is what the ninety-day window means to the person who
+    /// pressed the button. The extra hours a `>` on the boundary day lets in are counted and then
+    /// filtered out by ``ShepherdCore/TrackRecord/compute(outcomes:subject:repo:since:)``, whose
+    /// `since` is exact.
+    /// - Parameters:
+    ///   - repo: The repository to read.
+    ///   - since: The oldest close date to include.
+    ///   - calendar: The calendar the date is formatted in. UTC by default, because GitHub's
+    ///     search qualifier is interpreted in UTC unless an offset is given.
+    /// - Returns: The search expression.
+    public static func closedPullRequests(
+        in repo: RepoRef,
+        since: Date,
+        calendar: Calendar = InboxQuery.utcCalendar
+    ) -> String {
+        let components = calendar.dateComponents([.year, .month, .day], from: since)
+        let year = components.year ?? 1970
+        let month = components.month ?? 1
+        let day = components.day ?? 1
+        let stamp = String(format: "%04d-%02d-%02d", year, month, day)
+        return "\(closedPullRequestPrefix) repo:\(repo.fullName) closed:>\(stamp)"
+    }
+
+    /// The calendar the closed-search date is formatted in: Gregorian, UTC.
+    ///
+    /// Built here rather than taken from `Calendar.current` so the query a Mac in Berlin sends is
+    /// byte-identical to the one a Mac in Auckland sends, which is also what makes the
+    /// conditional-request cache key stable.
+    public static let utcCalendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+        return calendar
+    }()
 
     /// Returns the query narrowed to a single organisation, for very large accounts.
     /// - Parameter organization: The organisation login.
@@ -109,6 +155,101 @@ public enum GraphQLDocuments {
                     state
                     contexts(first: 100) { totalCount }
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    """
+
+    /// The closed-pull-request read behind the track record (ADR 0027).
+    ///
+    /// One page of the same `search(type: ISSUE)` connection the inbox sweep uses, selecting the
+    /// handful of extra fields a *closed* pull request has and the sweep therefore does not ask
+    /// for: `closedAt`, `merged`, the merge commit, the number of change-requesting reviews, and
+    /// the check rollup of the **first** commit rather than the last.
+    ///
+    /// `commits(first: 1)` is the one selection worth explaining. The sweep asks for
+    /// `commits(last: 1)` because it wants the head; this asks for the first because
+    /// "did the agent's first push go green" is the question, and it is a question about the
+    /// commit the branch started on. `reviews(states: CHANGES_REQUESTED)` is selected for its
+    /// `totalCount` only — the reviews themselves are nobody's business here.
+    ///
+    /// Everything needed for one stored outcome is in this single request: no detail fetch, no
+    /// per-pull-request round trip, and no second host.
+    public static let searchClosedPullRequests = """
+    query ShepherdClosedPullRequests($q: String!, $first: Int!, $after: String) {
+      search(query: $q, type: ISSUE, first: $first, after: $after) {
+        issueCount
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          __typename
+          ... on PullRequest {
+            id
+            number
+            title
+            body
+            createdAt
+            closedAt
+            merged
+            mergeCommit { oid }
+            additions
+            deletions
+            changedFiles
+            headRefName
+            repository { name owner { login } }
+            author { __typename login avatarUrl }
+            reviews(states: CHANGES_REQUESTED) { totalCount }
+            commits(first: 1) {
+              nodes {
+                commit {
+                  oid
+                  statusCheckRollup {
+                    state
+                    contexts(first: 1) { totalCount }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    """
+
+    /// The same fields for **one** pull request, read by number.
+    ///
+    /// What the sweep uses when an open pull request disappears from the inbox: one request, one
+    /// pull request, and the same shape the backfill's pages carry so both writers produce
+    /// identical rows (ADR 0027).
+    public static let closedPullRequest = """
+    query ShepherdClosedPullRequest($owner: String!, $name: String!, $number: Int!) {
+      repository(owner: $owner, name: $name) {
+        pullRequest(number: $number) {
+          id
+          number
+          title
+          body
+          createdAt
+          closedAt
+          merged
+          mergeCommit { oid }
+          additions
+          deletions
+          changedFiles
+          headRefName
+          repository { name owner { login } }
+          author { __typename login avatarUrl }
+          reviews(states: CHANGES_REQUESTED) { totalCount }
+          commits(first: 1) {
+            nodes {
+              commit {
+                oid
+                statusCheckRollup {
+                  state
+                  contexts(first: 1) { totalCount }
                 }
               }
             }

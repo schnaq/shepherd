@@ -386,6 +386,77 @@ public enum ResponseMapping {
         }
     }
 
+    // MARK: - Closed pull requests (ADR 0027)
+
+    /// Maps one closed-pull-request node onto the value both track-record writers store.
+    ///
+    /// Returns `nil` for a node that is not a pull request, for one that is missing a field the
+    /// outcome cannot do without, and — deliberately — for one that is **not closed**: a `nil`
+    /// `closedAt` is a normal answer from the single-pull-request read (the sweep lost sight of a
+    /// pull request that is still open, because the user's search facets stopped matching it),
+    /// and inventing a close date for it would put a fabricated outcome on a badge.
+    /// - Parameters:
+    ///   - node: The pull-request node.
+    ///   - detector: The agent detector, which decides whether the row carries an agent name.
+    ///   - source: Which writer is asking, stored as-is.
+    /// - Returns: The closed pull request, or `nil`.
+    static func closedPullRequest(
+        from node: ClosedPullRequestNodeDTO,
+        detector: AgentDetector,
+        source: PullRequestOutcomeSource
+    ) -> ClosedPullRequest? {
+        guard node.typename == nil || node.typename == "PullRequest" else { return nil }
+        guard let id = node.id,
+              let number = node.number,
+              let repoName = node.repository?.name,
+              let repoOwner = node.repository?.owner?.login,
+              let openedAt = node.createdAt.flatMap(GitHubTimestamp.parse),
+              let closedAt = node.closedAt.flatMap(GitHubTimestamp.parse)
+        else { return nil }
+
+        let headRefName = node.headRefName ?? ""
+        let author = makeActor(from: node.author, detector: detector, branchName: headRefName)
+        // The check rollup of the *first* commit, mapped to three states rather than two: a
+        // pending or absent rollup says nothing about the first push, and `nil` is how the badge
+        // leaves the clause out instead of printing a percentage nobody measured.
+        let firstRollup = node.commits?.nodes?
+            .compactMap { $0 }
+            .first?
+            .commit?
+            .statusCheckRollup
+        let firstPushCIGreen: Bool?
+        switch rollupState(firstRollup?.state) {
+        case .some(.success): firstPushCIGreen = true
+        case .some(.failure): firstPushCIGreen = false
+        // `.some(.none)` is a rollup that reported no checks at all; `nil` is a rollup GitHub did
+        // not send. Spelled with `.some(…)` throughout because `CheckRollup.State` has a case
+        // called `none` of its own, and the bare spelling would read as the optional's.
+        case .some(.pending), .some(.none), nil: firstPushCIGreen = nil
+        }
+
+        let outcome = PullRequestOutcome(
+            prID: id,
+            repo: RepoRef(owner: repoOwner, name: repoName),
+            agentName: author.kind.agentIdentity?.displayName,
+            authorLogin: author.login,
+            openedAt: openedAt,
+            closedAt: closedAt,
+            merged: node.merged ?? false,
+            revertedByPRID: nil,
+            firstPushCIGreen: firstPushCIGreen,
+            reviewRounds: max(0, node.reviews?.totalCount ?? 0),
+            changedLines: max(0, node.additions ?? 0) + max(0, node.deletions ?? 0),
+            source: source
+        )
+        return ClosedPullRequest(
+            outcome: outcome,
+            number: number,
+            title: node.title ?? "",
+            bodyMarkdown: node.body ?? "",
+            mergeCommitOid: node.mergeCommit?.oid
+        )
+    }
+
     // MARK: - Notifications
 
     /// Maps one notification thread.

@@ -358,6 +358,46 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         }
     }
 
+    /// What counts as a *short look* (ADR 0027).
+    ///
+    /// A group of its own rather than two fields of ``AutomationGroup``, and for
+    /// ``SearchGroup``'s reason: that group is the webhook — a URL, a secret's absence and an
+    /// event list, all of it about sending something somewhere — and the two numbers here send
+    /// nothing anywhere. They decide which of two headers a row appears under.
+    ///
+    /// The **thresholds** travel, because "small" is a claim about the repositories a person
+    /// works in and belongs on both their Macs. The **history** does not, for the reason the
+    /// search index does not (ADR 0019): it is device state rebuilt from a read that any Mac can
+    /// make, it can be several hundred rows, and a bucket object carrying one Mac's ninety days
+    /// of closed pull requests would be absurd. So a second Mac gets the same lanes and its own
+    /// badges — which is also why the popover says "on this Mac".
+    struct TrustGroup: Codable, Sendable, Equatable {
+        /// The lane thresholds.
+        var laneConfiguration: TrustLaneConfiguration
+
+        /// Creates the group.
+        /// - Parameter laneConfiguration: The thresholds.
+        init(laneConfiguration: TrustLaneConfiguration = TrustLaneConfiguration()) {
+            self.laneConfiguration = laneConfiguration
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case laneConfiguration
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            // Tolerant twice over: an unreadable value falls back to the defaults here, and
+            // `TrustLaneConfiguration`'s own decoding falls back per threshold and clamps both —
+            // so a document from a newer build that widened the range cannot make this one's
+            // short lane unreachable.
+            laneConfiguration = container.syncedValue(
+                .laneConfiguration,
+                default: TrustLaneConfiguration()
+            )
+        }
+    }
+
     /// Whether the on-device ⌘K search index is kept (ADR 0019).
     ///
     /// A group of its own rather than a field of ``IntelligenceGroup``, and the reason is the one
@@ -664,6 +704,8 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
     var automation: AutomationGroup
     /// The opt-in automatic-merge rules.
     var autoMerge: AutoMergeGroup
+    /// What counts as a short look.
+    var trust: TrustGroup
     /// Whether the on-device search index is kept.
     var search: SearchGroup
     /// Theme, inbox ordering, diff chrome.
@@ -690,6 +732,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         delegation: DelegationGroup = DelegationGroup(),
         automation: AutomationGroup = AutomationGroup(),
         autoMerge: AutoMergeGroup = AutoMergeGroup(),
+        trust: TrustGroup = TrustGroup(),
         search: SearchGroup = SearchGroup(),
         appearance: AppearanceGroup = AppearanceGroup(),
         triage: TriageGroup = TriageGroup(),
@@ -707,6 +750,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         self.delegation = delegation
         self.automation = automation
         self.autoMerge = autoMerge
+        self.trust = trust
         self.search = search
         self.appearance = appearance
         self.triage = triage
@@ -719,6 +763,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case v, sync, notifications, digest, agents, intelligence, delegation, automation
         case autoMerge
+        case trust
         case search
         case appearance, triage, composer, diagnostics, account, secrets
     }
@@ -742,6 +787,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         delegation = container.syncedValue(.delegation, default: DelegationGroup())
         automation = container.syncedValue(.automation, default: AutomationGroup())
         autoMerge = container.syncedValue(.autoMerge, default: AutoMergeGroup())
+        trust = container.syncedValue(.trust, default: TrustGroup())
         search = container.syncedValue(.search, default: SearchGroup())
         appearance = container.syncedValue(.appearance, default: AppearanceGroup())
         triage = container.syncedValue(.triage, default: TriageGroup())

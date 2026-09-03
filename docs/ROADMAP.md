@@ -290,9 +290,9 @@ order. Everything here is tier 1 first (deterministic, local); a model only ever
       card above the description. Still open on top of it: matching a referenced issue's
       acceptance bullets, which needs an issue read GitHubKit does not have yet, and the optional
       on-device claim extraction for phrasings the patterns miss
-- [ ] Track record and trust lanes — closed pull requests of the last 90 days backfilled once per
+- [x] Track record and trust lanes — closed pull requests of the last 90 days backfilled once per
       repository; **Short look** only when CI is green and the diff is small, history informs the
-      badge and the sort, never the lane
+      badge and the sort, never the lane (ADR 0027)
 - [x] Since my review — a snapshot of the reviewed head at submit time, the interdiff computed
       locally, each finding marked addressed / unchanged / moved / replied (ADR 0028)
 - [x] Session back-channel — a finding goes to the Claude Code session named in the head commits'

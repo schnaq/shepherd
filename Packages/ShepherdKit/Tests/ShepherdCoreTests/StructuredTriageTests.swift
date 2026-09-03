@@ -273,6 +273,81 @@ final class StructuredTriageTests: XCTestCase {
         )
     }
 
+    /// The same rule for the track record and the trust lane (ADR 0027).
+    ///
+    /// A second assertion over the *same* inputs rather than a second mechanism: ADR 0027 makes
+    /// the identical promise ADR 0023 makes — the numbers sort and filter the inbox and nothing
+    /// else — so the failure mode is identical too. The moment somebody hangs a
+    /// ``ShepherdCore/TrackRecord``, a ``ShepherdCore/PullRequestOutcome`` or a lane off one of
+    /// these values, a rules engine underneath it *can* read a history, and merging on a track
+    /// record is exactly the "Shepherd forms a verdict" line ADR 0018 refuses to cross.
+    func testNoAutomationInputCanSeeATrackRecord() {
+        let summary = Fixtures.summary(id: "PR_1")
+        assertNoHistoryOrLane(in: summary, label: "PullRequestSummary")
+        assertNoHistoryOrLane(
+            in: BulkTriagePlan.make(action: .approveAndMerge, pullRequests: [summary]),
+            label: "BulkTriagePlan"
+        )
+        assertNoHistoryOrLane(in: AutoMergeRules(isEnabled: true), label: "AutoMergeRules")
+        assertNoHistoryOrLane(in: AutoMergeLedger(), label: "AutoMergeLedger")
+        assertNoHistoryOrLane(
+            in: AutoDelegationSignal(
+                trigger: .checksFailed,
+                pullRequest: summary,
+                isTransition: true
+            ),
+            label: "AutoDelegationSignal"
+        )
+        assertNoHistoryOrLane(
+            in: AutoDelegationContext(
+                rules: AutoDelegationRules(isEnabled: true),
+                isConfigured: true,
+                hasRunningDelegation: false,
+                runningAutomaticCount: 0,
+                ledger: AutoDelegationLedger(),
+                now: Fixtures.date(0),
+                timeZone: TimeZone(identifier: "UTC") ?? .current
+            ),
+            label: "AutoDelegationContext"
+        )
+    }
+
+    /// Fails when any value reachable from `value` is a track-record or trust-lane type.
+    ///
+    /// Names rather than types, for ``assertNoVerdict(in:label:depth:file:line:)``'s reason. The
+    /// history families are ``TrustLaneTests/isHistoryType(_:)``'s, so the two suites cannot come
+    /// to different conclusions about what counts as history; the lane types are named here.
+    private func assertNoHistoryOrLane(
+        in value: Any,
+        label: String,
+        depth: Int = 0,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        guard depth < 6 else { return }
+        let mirror = Mirror(reflecting: value)
+        for child in mirror.children {
+            let typeName = "\(type(of: child.value))"
+            XCTAssertFalse(
+                TrustLaneTests.isHistoryType(typeName) || typeName.contains("TrustLane"),
+                """
+                \(label) reached a \(typeName) through \(child.label ?? "?"). ADR 0027: a track \
+                record informs the badge and the sort — no automation input may read one, and no \
+                automation input may read a lane either.
+                """,
+                file: file,
+                line: line
+            )
+            assertNoHistoryOrLane(
+                in: child.value,
+                label: "\(label).\(child.label ?? "?")",
+                depth: depth + 1,
+                file: file,
+                line: line
+            )
+        }
+    }
+
     /// Fails when any value reachable from `value` is a triage type.
     ///
     /// The names are matched rather than the types, because that is what a reflective walk has:

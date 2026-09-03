@@ -201,6 +201,16 @@
         }
       }
     },
+    "%@: %lld of about %lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: %lld von etwa %lld"
+          }
+        }
+      }
+    },
     "%lld added, %lld deleted": {
       "localizations": {
         "de": {
@@ -324,6 +334,126 @@
                 "stringUnit": {
                   "state": "translated",
                   "value": "%lld checks green"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld closed pull requests read": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld geschlossener Pull Request gelesen"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld geschlossene Pull Requests gelesen"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld closed pull request read"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld closed pull requests read"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld closed pull requests stored on this Mac. This history is not synced.": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld geschlossener Pull Request auf diesem Mac gespeichert. Diese Historie wird nicht synchronisiert."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld geschlossene Pull Requests auf diesem Mac gespeichert. Diese Historie wird nicht synchronisiert."
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld closed pull request stored on this Mac. This history is not synced."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld closed pull requests stored on this Mac. This history is not synced."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld closed without merging": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld ohne Merge geschlossen"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld ohne Merge geschlossen"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld closed without merging"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld closed without merging"
                 }
               }
             }
@@ -577,6 +707,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld m %lld s"
+          }
+        }
+      }
+    },
+    "%lld merged": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld gemergt"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld gemergt"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld merged"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld merged"
+                }
+              }
+            }
           }
         }
       }
@@ -957,6 +1127,126 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld Berichte gespeichert; die %lld neuesten werden behalten."
+          }
+        }
+      }
+    },
+    "%lld repositories hit the 500 cap": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Repository hat die Grenze von 500 erreicht"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Repositories haben die Grenze von 500 erreicht"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld repository hit the 500 cap"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld repositories hit the 500 cap"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld reverted": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld zurückgenommen"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld zurückgenommen"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld reverted"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld reverted"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld reverts matched": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Revert zugeordnet"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Reverts zugeordnet"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld revert matched"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld reverts matched"
+                }
+              }
+            }
           }
         }
       }
@@ -2271,6 +2561,16 @@
         }
       }
     },
+    "Both numbers travel to your other Macs. A track record never moves a pull request between the lanes — it only colours the chip and orders rows inside a lane.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beide Zahlen werden auf deine anderen Macs übertragen. Eine Erfolgsbilanz verschiebt einen Pull Request nie zwischen den Spuren — sie färbt nur den Chip und sortiert Zeilen innerhalb einer Spur."
+          }
+        }
+      }
+    },
     "Bots": {
       "localizations": {
         "de": {
@@ -2387,6 +2687,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "CI fehlgeschlagen"
+          }
+        }
+      }
+    },
+    "CI green first push %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CI beim ersten Push grün %@"
+          }
+        }
+      }
+    },
+    "CI green on the first push: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CI beim ersten Push grün: %@"
           }
         }
       }
@@ -2747,6 +3067,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Filter löschen"
+          }
+        }
+      }
+    },
+    "Clear history": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historie löschen"
           }
         }
       }
@@ -3127,6 +3457,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Diesen Pull Request als gereviewt zählen und zum nächsten gehen. Approve, Request Changes und Merge tun das von selbst."
+          }
+        }
+      }
+    },
+    "Counted from closed pull requests, and read by nothing but this badge and the order of the list. It never decides a lane.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aus geschlossenen Pull Requests gezählt und von nichts außer diesem Abzeichen und der Sortierung der Liste gelesen. Sie entscheidet nie über eine Spur."
           }
         }
       }
@@ -3751,6 +4091,16 @@
         }
       }
     },
+    "Everything else: a red or running build, a diff over the thresholds, or a workflow, auth, secret, migration or deleted-test file.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alles andere: ein roter oder laufender Build, ein Diff über den Grenzwerten oder eine Workflow-, Auth-, Secret-, Migrations- oder gelöschte Testdatei."
+          }
+        }
+      }
+    },
     "Explain these lines": {
       "localizations": {
         "de": {
@@ -3991,6 +4341,16 @@
         }
       }
     },
+    "Full review": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vollständige Review"
+          }
+        }
+      }
+    },
     "GUARDRAILS": {
       "localizations": {
         "de": {
@@ -4171,6 +4531,16 @@
         }
       }
     },
+    "Green CI, a small diff and no sensitive path. A track record never puts a pull request in this lane.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grüne CI, ein kleines Diff und kein sensibler Pfad. Eine Erfolgsbilanz bringt einen Pull Request nie in diese Spur."
+          }
+        }
+      }
+    },
     "Group": {
       "localizations": {
         "de": {
@@ -4327,6 +4697,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Klartext: Shepherd erledigt einen Pull Request von selbst per %@, wenn %@. Alles andere — der Pull Request eines Menschen, ein roter Check, ein Pull Request, den niemand approved hat — bleibt bei dir."
+          }
+        }
+      }
+    },
+    "In plain words: a green pull request touching at most %lld files and %lld changed lines, with nothing sensitive in it, is a short look. Everything else is a full review.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Im Klartext: Ein grüner Pull Request mit höchstens %lld Dateien und %lld geänderten Zeilen, in dem nichts Sensibles steckt, ist ein kurzer Blick. Alles andere ist eine vollständige Review."
           }
         }
       }
@@ -4601,6 +4981,16 @@
         }
       }
     },
+    "LANES": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SPUREN"
+          }
+        }
+      }
+    },
     "LOCAL CHECKOUTS": {
       "localizations": {
         "de": {
@@ -4741,6 +5131,16 @@
         }
       }
     },
+    "Lines": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeilen"
+          }
+        }
+      }
+    },
     "Load models": {
       "localizations": {
         "de": {
@@ -4761,6 +5161,16 @@
         }
       }
     },
+    "Load track record": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erfolgsbilanz laden"
+          }
+        }
+      }
+    },
     "Loading checks…": {
       "localizations": {
         "de": {
@@ -4777,6 +5187,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pull Request wird geladen…"
+          }
+        }
+      }
+    },
+    "Loads the pull requests your repositories closed in the last 90 days, so each agent's chip can say how much of its work was merged and how much came back out. At most 500 per repository, read once and kept up to date by the sync from then on.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lädt die Pull Requests, die deine Repositories in den letzten 90 Tagen geschlossen haben, damit der Chip jedes Agents sagen kann, wie viel seiner Arbeit gemergt wurde und wie viel wieder herausgeflogen ist. Höchstens 500 pro Repository, einmal gelesen und danach von der Synchronisierung aktuell gehalten."
           }
         }
       }
@@ -4867,6 +5287,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Max. Turns"
+          }
+        }
+      }
+    },
+    "Median rounds of changes requested: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Median der Runden mit Änderungswünschen: %@"
           }
         }
       }
@@ -5637,6 +6067,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Noch nichts synchronisiert. Drücke ⌘R, um jetzt zu synchronisieren."
+          }
+        }
+      }
+    },
+    "Nothing to load yet: sync an inbox first.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch nichts zu laden: synchronisiere zuerst einen Eingang."
           }
         }
       }
@@ -6727,6 +7167,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Thread wird gelesen…"
+          }
+        }
+      }
+    },
+    "Reads the last 90 days of closed pull requests, one repository at a time.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liest die letzten 90 Tage geschlossener Pull Requests, ein Repository nach dem anderen."
           }
         }
       }
@@ -7891,6 +8341,16 @@
         }
       }
     },
+    "Short look": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kurzer Blick"
+          }
+        }
+      }
+    },
     "Show": {
       "localizations": {
         "de": {
@@ -8311,6 +8771,16 @@
         }
       }
     },
+    "Stop": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stoppen"
+          }
+        }
+      }
+    },
     "Stop drafting": {
       "localizations": {
         "de": {
@@ -8601,6 +9071,16 @@
         }
       }
     },
+    "TRACK RECORD": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ERFOLGSBILANZ"
+          }
+        }
+      }
+    },
     "TRANSCRIPT": {
       "localizations": {
         "de": {
@@ -8617,6 +9097,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "AUF DIESEM MAC ÜBERSETZT"
+          }
+        }
+      }
+    },
+    "TRUST LANES": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VERTRAUENSSPUREN"
           }
         }
       }
@@ -8937,6 +9427,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Der Head-Commit hat überhaupt keine Checks, es gibt also kein Grün, auf das man sich stützen könnte."
+          }
+        }
+      }
+    },
+    "The inbox splits into Short look and Full review. A pull request is a short look only when CI is green, the diff is within both numbers below, and it touches no workflow, auth, secret, migration or deleted-test file.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Eingang teilt sich in Kurzer Blick und Vollständige Review. Ein Pull Request ist nur dann ein kurzer Blick, wenn die CI grün ist, das Diff innerhalb der beiden Zahlen unten liegt und er keine Workflow-, Auth-, Secret-, Migrations- oder gelöschte Testdatei berührt."
           }
         }
       }
@@ -11011,6 +11511,16 @@
         }
       }
     },
+    "repository %lld of %lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository %lld von %lld"
+          }
+        }
+      }
+    },
     "request changes": {
       "localizations": {
         "de": {
@@ -11231,6 +11741,16 @@
         }
       }
     },
+    "stopped early": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "vorzeitig gestoppt"
+          }
+        }
+      }
+    },
     "supported by the evidence": {
       "localizations": {
         "de": {
@@ -11287,6 +11807,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "der Tool-Aufruf wurde abgelehnt"
+          }
+        }
+      }
+    },
+    "this repo": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dieses Repo"
+          }
+        }
+      }
+    },
+    "this repo · last 90 days · on this Mac": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dieses Repo · letzte 90 Tage · auf diesem Mac"
           }
         }
       }

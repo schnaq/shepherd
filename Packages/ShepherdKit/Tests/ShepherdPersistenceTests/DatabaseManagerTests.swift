@@ -32,7 +32,70 @@ final class MigrationTests: XCTestCase {
     func testTheSchemaIsAppendOnly() async throws {
         // v1 is frozen; every change is a new migration. Locking the *order* here means an
         // edit to `createV1` — which would silently skip on existing installs — fails CI.
-        XCTAssertEqual(DatabaseManager.migrator.migrations, ["v1", "v2", "v3", "v4", "v5"])
+        XCTAssertEqual(
+            DatabaseManager.migrator.migrations,
+            ["v1", "v2", "v3", "v4", "v5", "v6"]
+        )
+    }
+
+    func testV6AddsThePullRequestOutcomesTableWithItsIndex() async throws {
+        let database = try DatabaseManager.inMemory()
+        try await database.writer.read { db in
+            let columns = try db.columns(in: "pull_request_outcomes").map(\.name)
+            XCTAssertEqual(
+                columns,
+                [
+                    "prID", "repoFullName", "repoOwner", "repoName", "number", "title",
+                    "agentName", "authorLogin", "openedAt", "closedAt", "merged",
+                    "mergeCommitOid", "revertedByPRID", "firstPushCIGreen", "reviewRounds",
+                    "changedLines", "source",
+                ]
+            )
+            // `prID` alone, so both writers upsert and the table cannot hold two opinions about
+            // one pull request (ADR 0027).
+            let primaryKey = try db.primaryKey("pull_request_outcomes")
+            XCTAssertEqual(primaryKey.columns, ["prID"])
+            let indexes = try String.fetchAll(
+                db,
+                sql: """
+                    SELECT name FROM sqlite_master
+                    WHERE type = 'index' AND tbl_name = 'pull_request_outcomes'
+                    """
+            )
+            XCTAssertTrue(indexes.contains("idx_pull_request_outcomes_repo_agent_closedAt"))
+        }
+    }
+
+    func testTheOutcomeTableHasNoForeignKeyOntoPullRequests() async throws {
+        // The one derived table that deliberately has no cascade: a row is written exactly when
+        // the pull request leaves the inbox, so a cascade would delete every row the track record
+        // is made of (ADR 0027).
+        let database = try DatabaseManager.inMemory()
+        try await database.writer.read { db in
+            let count = try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM pragma_foreign_key_list('pull_request_outcomes')"
+            ) ?? -1
+            XCTAssertEqual(count, 0)
+        }
+    }
+
+    func testAnOutcomeSurvivesThePullRequestLeavingTheInbox() async throws {
+        let database = try DatabaseManager.inMemory()
+        let summary = PersistenceFixtures.summary()
+        try await database.savePullRequestSummaries([summary])
+        try await database.savePullRequestOutcomes([
+            OutcomeFixtures.closed(prID: summary.id, number: summary.number, merged: true)
+        ])
+
+        // The sweep prunes the pull request, exactly as it does when a merge lands.
+        try await database.savePullRequestSummaries([], pruneMissing: true)
+
+        XCTAssertTrue(try await database.fetchInbox().isEmpty)
+        let outcomes = try await database.pullRequestOutcomes(
+            since: PersistenceFixtures.date(-10_000)
+        )
+        XCTAssertEqual(outcomes.map(\.prID), [summary.id])
     }
 
     func testV5AddsTheReviewSnapshotsTable() async throws {

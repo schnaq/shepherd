@@ -729,3 +729,94 @@ struct ReviewSnapshotRecord: Codable, FetchableRecord, PersistableRecord {
         )
     }
 }
+
+/// A row of `pull_request_outcomes` (ADR 0027).
+///
+/// The only record in this file whose pull request is deliberately *gone*: there is no foreign
+/// key onto `pull_requests` and no cascade, because the row is written at the moment the pull
+/// request leaves the inbox. So the repository travels by value, exactly as it does in
+/// ``RepoRecord``, and the row survives every prune.
+///
+/// It carries three columns the counting never reads — `number`, `title` and `mergeCommitOid` —
+/// because revert detection is text: a `Revert "…"` opened today has to be able to find the pull
+/// request a backfill imported last month, and a title or a `This reverts commit <sha>` line can
+/// only be matched against something still on disk.
+struct PullRequestOutcomeRecord: Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = "pull_request_outcomes"
+
+    var prID: String
+    var repoFullName: String
+    var repoOwner: String
+    var repoName: String
+    var number: Int
+    var title: String
+    var agentName: String?
+    var authorLogin: String
+    var openedAt: Double
+    var closedAt: Double
+    var merged: Bool
+    var mergeCommitOid: String?
+    var revertedByPRID: String?
+    var firstPushCIGreen: Bool?
+    var reviewRounds: Int
+    var changedLines: Int
+    var source: String
+
+    init(closed: ClosedPullRequest) {
+        let outcome = closed.outcome
+        self.prID = outcome.prID
+        self.repoFullName = outcome.repo.fullName
+        self.repoOwner = outcome.repo.owner
+        self.repoName = outcome.repo.name
+        self.number = closed.number
+        self.title = closed.title
+        self.agentName = outcome.agentName
+        self.authorLogin = outcome.authorLogin
+        self.openedAt = outcome.openedAt.timeIntervalSince1970
+        self.closedAt = outcome.closedAt.timeIntervalSince1970
+        self.merged = outcome.merged
+        self.mergeCommitOid = closed.mergeCommitOid
+        self.revertedByPRID = outcome.revertedByPRID
+        self.firstPushCIGreen = outcome.firstPushCIGreen
+        self.reviewRounds = outcome.reviewRounds
+        self.changedLines = outcome.changedLines
+        self.source = outcome.source.rawValue
+    }
+
+    /// The row as the badge counts it.
+    ///
+    /// A `source` this version does not know degrades to ``ShepherdCore/PullRequestOutcomeSource/sync``
+    /// rather than failing the fetch: the column says which writer produced the row, nothing
+    /// counts on it, and losing a whole repository's history to one unfamiliar word would be a
+    /// far worse answer than reading it as the commoner of the two.
+    var outcome: PullRequestOutcome {
+        PullRequestOutcome(
+            prID: prID,
+            repo: RepoRef(owner: repoOwner, name: repoName),
+            agentName: agentName,
+            authorLogin: authorLogin,
+            openedAt: Date(timeIntervalSince1970: openedAt),
+            closedAt: Date(timeIntervalSince1970: closedAt),
+            merged: merged,
+            revertedByPRID: revertedByPRID,
+            firstPushCIGreen: firstPushCIGreen,
+            reviewRounds: reviewRounds,
+            changedLines: changedLines,
+            source: PullRequestOutcomeSource(rawValue: source) ?? .sync
+        )
+    }
+
+    /// The row as revert detection needs it: the outcome plus the three text columns.
+    var closedPullRequest: ClosedPullRequest {
+        ClosedPullRequest(
+            outcome: outcome,
+            number: number,
+            title: title,
+            // Bodies are deliberately not stored — they are the largest field of a closed pull
+            // request and the only thing they are read for is the `This reverts commit` line,
+            // which the *reverting* pull request carries and which is therefore always in hand.
+            bodyMarkdown: "",
+            mergeCommitOid: mergeCommitOid
+        )
+    }
+}

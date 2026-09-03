@@ -310,6 +310,109 @@ public actor GitHubClient {
         return result
     }
 
+    // MARK: - Closed pull requests (ADR 0027)
+
+    /// How many closed pull requests one page asks for. GitHub caps `search` at 100.
+    static let closedPullRequestPageSize = 100
+
+    /// One page of a repository's closed pull requests, for the track-record backfill.
+    ///
+    /// The same `search(type: ISSUE)` connection the inbox sweep runs, with `is:closed` in place
+    /// of `is:open` and one repository at a time (``InboxQuery/closedPullRequests(in:since:calendar:)``).
+    /// So it inherits everything the sweep has — the retry, the `Retry-After` backoff, the
+    /// rate-limit snapshot, the request log — and adds no host: this is `api.github.com`, the
+    /// host Shepherd already talks to.
+    ///
+    /// **Conditional requests.** Unlike every other read in this client, a GraphQL request cannot
+    /// be keyed on its URL: there is one endpoint and one URL for every document. So this read
+    /// names its own cache key — the repository, the window and the cursor, which is exactly what
+    /// makes two runs of the backfill ask the same question — and the entry is stored only when
+    /// GitHub actually sends a validator. A page whose `ETag` comes back unchanged is answered
+    /// from the local cache and costs no rate-limit budget; a page GitHub sends no validator for
+    /// simply is not cached, which is a missed optimisation and never a wrong answer.
+    ///
+    /// - Parameters:
+    ///   - repo: The repository to read.
+    ///   - since: The oldest close date to include; the window the user asked for.
+    ///   - cursor: The `endCursor` of the previous page, or `nil` for the first.
+    ///   - pageSize: How many pull requests to ask for. Clamped to `1...100`.
+    /// - Returns: The page, with the cursor for the next one when there is one.
+    /// - Throws: Any ``GitHubError`` the request maps to.
+    public func searchClosedPullRequests(
+        repo: RepoRef,
+        since: Date,
+        cursor: String? = nil,
+        pageSize: Int = GitHubClient.closedPullRequestPageSize
+    ) async throws -> ClosedPullRequestPage {
+        let query = InboxQuery.closedPullRequests(in: repo, since: since)
+        let size = min(100, max(1, pageSize))
+        var variables: [String: GraphQLValue] = [
+            "q": .string(query),
+            "first": .int(size),
+        ]
+        variables["after"] = cursor.map { GraphQLValue.string($0) } ?? .null
+
+        let data: SearchClosedPullRequestsData = try await graphQL(
+            document: GraphQLDocuments.searchClosedPullRequests,
+            variables: variables,
+            resource: "\(repo.fullName) closed pull requests",
+            isIdempotent: true,
+            cacheKey: "graphql:closedPullRequests:\(query):\(size):\(cursor ?? "-")"
+        )
+        let nodes = (data.search?.nodes ?? []).compactMap { $0 }
+        let closed = nodes.compactMap {
+            ResponseMapping.closedPullRequest(from: $0, detector: detector, source: .backfill)
+        }
+        return ClosedPullRequestPage(
+            pullRequests: closed,
+            totalCount: data.search?.issueCount ?? closed.count,
+            hasNextPage: data.search?.pageInfo?.hasNextPage ?? false,
+            endCursor: data.search?.pageInfo?.endCursor
+        )
+    }
+
+    /// The final state of one pull request, read by number.
+    ///
+    /// What the sweep uses when an open pull request disappears from the inbox: **one** GraphQL
+    /// request, not a detail fetch — the six REST reads `pullRequestDetail(repo:number:)` makes
+    /// would be five too many for a pull request nobody is going to open, and none of them
+    /// carries `merged` or `closedAt` anyway.
+    ///
+    /// Not conditionally cached: a closed pull request is read once and then never again, so a
+    /// cache entry could only ever be an unreachable row holding a response body — the argument
+    /// ``cacheKey(for:)`` already makes about `/check-runs`.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - number: The pull request number.
+    /// - Returns: The closed pull request, or `nil` when GitHub says it is still open — which is
+    ///   a normal answer: a pull request can leave the inbox because the user's search facets
+    ///   stopped matching it.
+    /// - Throws: Any ``GitHubError`` the request maps to, including
+    ///   ``GitHubError/notFound(resource:)`` for a pull request that no longer exists.
+    public func closedPullRequest(
+        repo: RepoRef,
+        number: Int
+    ) async throws -> ClosedPullRequest? {
+        let data: ClosedPullRequestData = try await graphQL(
+            document: GraphQLDocuments.closedPullRequest,
+            variables: [
+                "owner": .string(repo.owner),
+                "name": .string(repo.name),
+                "number": .int(number),
+            ],
+            resource: "\(repo.fullName)#\(number) outcome",
+            isIdempotent: true
+        )
+        guard let node = data.repository?.pullRequest else {
+            throw GitHubError.notFound(resource: "\(repo.fullName)#\(number)")
+        }
+        return ResponseMapping.closedPullRequest(
+            from: node,
+            detector: detector,
+            source: .sync
+        )
+    }
+
     // MARK: - Job logs (plan §3.F)
 
     /// The most bytes a job log may have before it is refused.
@@ -752,7 +855,8 @@ public actor GitHubClient {
         document: String,
         variables: [String: GraphQLValue],
         resource: String,
-        isIdempotent: Bool
+        isIdempotent: Bool,
+        cacheKey: String? = nil
     ) async throws -> Payload {
         let body = try RESTJSON.encodeGraphQL(
             GraphQLRequestBody(query: document, variables: variables)
@@ -762,10 +866,11 @@ public actor GitHubClient {
             url: configuration.graphQLURL,
             body: body,
             accept: "application/json",
-            useCache: false,
+            useCache: cacheKey != nil,
             resource: resource,
             extraHeaders: [:],
-            isIdempotent: isIdempotent
+            isIdempotent: isIdempotent,
+            cacheKeyOverride: cacheKey
         )
         let envelope: GraphQLEnvelope<Payload> = try RESTJSON.decodeGraphQL(response.body)
         if let errors = envelope.errors, !errors.isEmpty {
@@ -863,9 +968,14 @@ public actor GitHubClient {
         useCache: Bool,
         resource: String,
         extraHeaders: [String: String],
-        isIdempotent: Bool
+        isIdempotent: Bool,
+        cacheKeyOverride: String? = nil
     ) async throws -> HTTPResponse {
-        let cacheKey = Self.cacheKey(for: url)
+        // Every REST read is keyed by its URL. A GraphQL read cannot be — one endpoint, one
+        // URL, every document — so the *caller* names the key when it wants a conditional
+        // request, and only then (`useCache` follows the key). See
+        // ``searchClosedPullRequests(repo:since:cursor:pageSize:)``.
+        let cacheKey = cacheKeyOverride ?? Self.cacheKey(for: url)
         var attempt = 0
 
         while true {

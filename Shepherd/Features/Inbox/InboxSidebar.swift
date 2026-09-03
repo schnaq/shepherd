@@ -1,8 +1,8 @@
 import ShepherdCore
 import SwiftUI
 
-/// The left rail: smart views, the RISK facet, the AGENTS facet, the REPOSITORIES facet,
-/// Settings.
+/// The left rail: smart views, the LANES facet, the RISK facet, the AGENTS facet, the
+/// REPOSITORIES facet, Settings.
 struct InboxSidebar: View {
     /// The inbox model.
     let model: InboxModel
@@ -13,6 +13,7 @@ struct InboxSidebar: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 smartViews
+                laneFacet
                 riskFacet
                 agentsFacet
                 repositoriesFacet
@@ -42,6 +43,37 @@ struct InboxSidebar: View {
                     model.smartView = view
                 }
                 .help(helpText(for: view))
+            }
+        }
+    }
+
+    /// The LANES facet (ADR 0027).
+    ///
+    /// Directly under the smart views and above RISK, because it answers the question a
+    /// maintainer with thirty agent pull requests asks first: which of these can I get through
+    /// quickly. It is absent entirely when every row is in one lane — a rail row that filters to
+    /// nothing is a dead control, which is the rule the three facets below it follow too.
+    ///
+    /// The tooltip is the honest part, and it is the same promise ADR 0027 makes: the gate is CI,
+    /// size and sensitive paths, and a track record never moves a pull request between these two
+    /// rows.
+    @ViewBuilder
+    private var laneFacet: some View {
+        let facets = model.laneFacets
+        if facets.count > 1 {
+            VStack(alignment: .leading, spacing: 2) {
+                RailSectionHeader(title: String(localized: "LANES"))
+                ForEach(facets) { facet in
+                    RailRow(
+                        title: facet.lane.facetTitle,
+                        dotColor: facet.lane.chipColor,
+                        count: facet.count,
+                        isSelected: model.laneFilter == facet.lane
+                    ) {
+                        model.laneFilter = model.laneFilter == facet.lane ? nil : facet.lane
+                    }
+                    .help(facet.lane.railHelp)
+                }
             }
         }
     }
