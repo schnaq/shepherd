@@ -597,8 +597,13 @@ public actor SyncEngine {
     ///   issue held open by the guard is deliberately kept, and it is not gone.
     ///
     /// The previous and remaining reads both ask for closed issues too. The sweep only searches
-    /// open ones, so a stored closed row exists exactly when the guard kept it, and a delta blind
-    /// to those rows would announce the same issue as a first sighting on every pass.
+    /// open ones, so a stored closed row exists exactly when it was captured or the guard kept it,
+    /// and a delta blind to those rows would announce the same issue as a first sighting on every
+    /// pass.
+    ///
+    /// An issue the search stopped returning is **not** simply pruned any more: it goes through
+    /// ``captureIssueOutcomes(for:)`` first, which is what makes the digest's
+    /// "an agent's pull request closed one of these" line able to fire at all.
     @discardableResult
     func runIssueSweep() async -> IssueSweepDelta {
         guard let issues else { return IssueSweepDelta() }
@@ -611,11 +616,19 @@ public actor SyncEngine {
             let currentIDs = Set(current.map(\.id))
             let firstSightings = current.map(\.id).filter { !previousIDs.contains($0) }
 
+            // What the search no longer returns: closed, retained from an earlier close, or
+            // merely out of the user's facets. One read each decides which, and the rows that
+            // come back are written *beside* the search's own — the write is also the prune, so
+            // a row that is not in this array is a row that goes.
+            let retained = await captureIssueOutcomes(
+                for: previous.filter { !currentIDs.contains($0.id) }
+            )
+
             // Every write is preceded by a cancellation check, as in the pull-request sweep: a
             // sweep stopped because the user signed out must not repopulate tables the erase has
             // already emptied.
             try Task.checkCancellation()
-            try await issues.store.saveIssueSummaries(current, pruneMissing: true)
+            try await issues.store.saveIssueSummaries(current + retained, pruneMissing: true)
 
             let remaining = Set(
                 try await issues.store.fetchIssues(filter: everything).map(\.id)
@@ -640,6 +653,131 @@ public actor SyncEngine {
             )
             return IssueSweepDelta()
         }
+    }
+
+    /// How long a closed issue stays on disk after it was closed.
+    ///
+    /// Fourteen days, and the number is a compromise between the two things the row is kept for:
+    /// the morning digest's "an agent's pull request closed one of these as completed" line, which
+    /// is a *state* and must survive more than one night (ADR 0032's Sprint 4a amendment), and
+    /// ⌘K's second corpus, which should still answer for something closed last week rather than
+    /// saying "no results". It is also what stops `issues` growing without bound: the sweep
+    /// searches `is:open`, so nothing else would ever take a closed row away.
+    ///
+    /// Measured from ``ShepherdCore/IssueRowSummary/closedAt``, falling back to `updatedAt` for a
+    /// row GitHub reported closed without one — a missing timestamp must not mean "keep forever".
+    static let closedIssueRetention: TimeInterval = 14 * 24 * 60 * 60
+
+    /// How many disappeared issues one sweep is allowed to read.
+    ///
+    /// The pull-request outcome capture's "one request each, sequentially" with a hard stop on
+    /// top, because the two disappearances are not equally rare: a pull request leaves the inbox
+    /// when it is merged or closed, while an issue also leaves it when the user is unassigned from
+    /// twenty of them at once. Rows over the cap are **kept**, not pruned, so the next sweep reads
+    /// the next few — the queue drains at this rate instead of the whole batch hitting GitHub's
+    /// secondary rate limit in one pass.
+    static let maxIssueOutcomeReadsPerSweep = 10
+
+    /// Reads the final state of the issues the search stopped returning, and decides which rows
+    /// survive the prune (ADR 0032's 2026-09-03 amendment).
+    ///
+    /// ADR 0027's outcome capture, on the other kind of row and with one difference that matters:
+    /// a pull request's outcome goes into a table of its own that outlives the pull request, while
+    /// an issue has no such table — so the outcome is written **onto the row**, and the row is
+    /// what has to stay. Everything this returns is handed to
+    /// ``ShepherdPersistence/DatabaseManager/saveIssueSummaries(_:pruneMissing:)`` beside the
+    /// search's own results, where being in the array is exactly what keeps a row from being
+    /// pruned.
+    ///
+    /// Four answers, and each one is a decision:
+    ///
+    /// - **Closed on GitHub** → the row is updated in place with `state`, `stateReason`,
+    ///   `closedAt`, `updatedAt` and the links the by-number query already selects, and kept until
+    ///   ``closedIssueRetention`` runs out. Its relations are the stored ones: the by-number read
+    ///   claims none, deliberately (`GitHubClient.issueRow`), and the store's own rule keeps what
+    ///   the sweep saw.
+    /// - **Still open on GitHub** → it merely left the user's facets (unassigned, mention
+    ///   removed), so it is pruned exactly as it was before this existed. So is an issue GitHub no
+    ///   longer answers for at all.
+    /// - **The read failed** → the row is kept *unchanged* and read again on the next sweep. A
+    ///   tunnel says nothing about the issue, and pruning on it would throw away the one moment
+    ///   the outcome could have been learned.
+    /// - **Already stored closed** → no read at all. The outcome was captured on the sweep that
+    ///   saw it go; this pass only asks whether the window has run out.
+    ///
+    /// Like the track record's capture the reads are sequential and their failures are swallowed
+    /// rather than reported: nobody is waiting on the answer, and a sweep that announced itself
+    /// broken because one extra read timed out would be worse than a row updated one pass later.
+    /// - Parameter missing: The stored rows this sweep's search did not return.
+    /// - Returns: The rows to write back, and therefore to keep.
+    private func captureIssueOutcomes(for missing: [IssueRowSummary]) async -> [IssueRowSummary] {
+        guard let issues, !missing.isEmpty else { return [] }
+        let moment = now()
+        var retained: [IssueRowSummary] = []
+        var reads = 0
+        for row in missing {
+            if Task.isCancelled { return retained }
+            guard row.state != .closed else {
+                // Captured already: the only question left is how old it is.
+                if SyncEngine.isWithinClosedIssueRetention(row, now: moment) {
+                    retained.append(row)
+                }
+                continue
+            }
+            guard reads < SyncEngine.maxIssueOutcomeReadsPerSweep else {
+                retained.append(row)
+                continue
+            }
+            reads += 1
+            do {
+                guard let fresh = try await issues.fetcher.issueRow(
+                    repo: row.repo,
+                    number: row.number
+                ) else { continue }
+                guard fresh.state == .closed else { continue }
+                let captured = SyncEngine.captured(row, from: fresh)
+                if SyncEngine.isWithinClosedIssueRetention(captured, now: moment) {
+                    retained.append(captured)
+                }
+            } catch is CancellationError {
+                return retained
+            } catch {
+                retained.append(row)
+            }
+        }
+        return retained
+    }
+
+    /// The stored row with the five fields the outcome read is allowed to change.
+    ///
+    /// Deliberately not the fetched row itself: that one carries no relations (a by-number read
+    /// cannot know them) and was never told how the user relates to the issue, while the stored row
+    /// is the one the facets, the search index and the digest have been reading all along.
+    /// - Parameters:
+    ///   - stored: The row on disk.
+    ///   - fresh: What the by-number read answered.
+    /// - Returns: The row to write back.
+    static func captured(
+        _ stored: IssueRowSummary,
+        from fresh: IssueRowSummary
+    ) -> IssueRowSummary {
+        var row = stored
+        row.state = fresh.state
+        row.stateReason = fresh.stateReason
+        row.closedAt = fresh.closedAt
+        row.updatedAt = fresh.updatedAt
+        row.linkedPullRequests = fresh.linkedPullRequests
+        return row
+    }
+
+    /// Whether a closed row is still inside ``closedIssueRetention``.
+    /// - Parameters:
+    ///   - row: The closed row.
+    ///   - now: The moment to measure against.
+    /// - Returns: `true` while the row is worth keeping.
+    static func isWithinClosedIssueRetention(_ row: IssueRowSummary, now: Date) -> Bool {
+        let closedAt = row.closedAt ?? row.updatedAt
+        return now.timeIntervalSince(closedAt) < closedIssueRetention
     }
 
     // MARK: - Outbox

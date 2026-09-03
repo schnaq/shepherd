@@ -148,7 +148,13 @@ bumping a dependency that ships inside the app also means a line in
     and nothing else. Before every one of them the drain makes one more read on that same GraphQL
     endpoint — `issue(number:) { id updatedAt closed }`, the staleness probe — and parks the write
     rather than sending it when the issue moved on. Five calls, one host, and it is the host that
-    was already on this list;
+    was already on this list. The sweep makes one more read of its own since ADR 0032's
+    2026-09-03 amendment: when an issue the sweep was tracking stops coming back from the search,
+    one `repository { issue(number:) }` GraphQL query on that same endpoint asks whether it closed
+    or merely left the user's facets, so the closed row can be kept — and it is **capped** at ten
+    such reads per sweep, with the rest read on the next one. One read per disappearance, on the
+    host already on this list, and a row that came back closed then costs nothing further: it is
+    kept for fourteen days and pruned;
   - only when the user configures a key: api.anthropic.com, or the OpenAI-compatible endpoint
     they chose themselves (a preset's base URL is still their choice). What travels there is the
     tier-1 digest — title, description excerpt, file list, top hunks — and, when you use AI

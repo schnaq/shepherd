@@ -579,3 +579,86 @@ Three smaller decisions:
   parked — about this one issue. The standing counts in Settings → Sync and the title bar are
   unchanged and already cover these rows whichever kind of node they target; the per-issue line is
   what makes them findable from where they were queued.
+
+---
+
+## Amendment, 2026-09-03 — closed issues outlive the sweep
+
+Sprint 4a's second digest line — *"an agent's pull request closed one of these as completed"* —
+could not fire, and the reason is one sentence: the sweep searches `is:open` and prunes every row
+the search stopped returning, so an issue that closes **vanishes** on the next pass, two minutes
+later. The row was never marked closed, `closedAt` and `stateReason` were never learned, and a
+line that reads `state == .closed` off stored rows was reading rows that no longer existed. The
+same sentence is in that amendment, phrased as a virtue — "it cannot repeat itself for long,
+because the sweep searches `is:open`, so a closed row is pruned on the next pass" — and it was
+wrong: the row is not pruned *after* the line has been said, it is pruned *instead*.
+
+This amendment fixes it the way ADR 0027 already fixes the same problem for pull requests, and
+takes three decisions.
+
+### One read per disappearance, on the row that is going
+
+`runIssueSweep()` no longer hands the search's results straight to the prune. The rows the search
+stopped returning go through `captureIssueOutcomes(for:)` first, which is `captureOutcomes(for:)`
+with the same shape and the same manners: **sequential**, one request each, **swallowed**
+failures. The read is `GitHubClient.issueRow(repo:number:)` — Sprint 2's by-number query, already
+written, already selecting `closedByPullRequestsReferences` — reached through one more requirement
+on the existing `IssueFetching` port rather than through a port of its own, because unlike
+`ClosedPullRequestReading` it reads the *same shape* the sweep does, through the same mapper, from
+the same client.
+
+Four answers, and the answer decides the row's fate:
+
+| What the read says | What happens |
+|---|---|
+| Closed | `state`, `stateReason`, `closedAt`, `updatedAt` and `linkedPullRequests` are written onto the **stored** row, which is kept |
+| Still open | pruned, exactly as today: it left the user's facets (unassigned, mention edited away), and an issue that is nobody's business here is not inbox data |
+| No such issue | pruned, for the same reason |
+| The read failed | the row is kept **unchanged** and read again next sweep |
+
+The captured row is the stored one with five fields replaced, not the fetched one: a by-number read
+claims no relation (`GitHubClient.issueRow`'s own decision), and the stored row is what the facets,
+the search index and the digest have been reading all along. `saveIssueSummaries`' existing rule —
+an empty relation set keeps what the sweep saw — makes that a belt beside the braces.
+
+Writing the outcome **onto the row** rather than into an outcome table is the one place this
+diverges from ADR 0027, and it is forced: `pull_request_outcomes` exists because a track record is
+about pull requests that have left, while everything that reads a closed issue — the digest line,
+⌘K's second corpus, the panel a `shepherd://issue/…` link opens — reads `issues`. A second table
+would be a second source for one fact, which is the thing this ADR keeps refusing.
+
+The reads are **capped at ten per sweep** (`SyncEngine.maxIssueOutcomeReadsPerSweep`). The
+pull-request capture needs no cap because a disappearance there is a merge or a close; an issue
+also disappears when somebody unassigns the user from twenty of them at once, and twenty extra
+requests in one cycle is how a sweep meets the secondary rate limit. Rows over the cap are *kept*,
+not pruned, so the next sweep reads the next ten and the queue drains at that rate.
+
+### Closed rows are kept for fourteen days, and then they go
+
+`SyncEngine.closedIssueRetention` is 14 days, measured from `closedAt` (falling back to `updatedAt`
+for a row GitHub reported closed without one — a missing timestamp must not mean "keep forever").
+A closed row older than that is not written back, and the sweep's own prune therefore takes it.
+
+Fourteen days is a compromise between the two things the row is kept for. The digest line is a
+**state**, not an event (Sprint 4a), so it has to survive more than one night — a retention of one
+day would reintroduce exactly the failure that amendment argued against. ⌘K's second corpus reads
+the same rows, and "the issue you closed last Tuesday" is a better answer than *no results*.
+Against that: `issues` has no other reaper at all, because the sweep only ever searches open ones,
+so without a window the table grows for as long as the app is installed. Two weeks of closed issues
+is a few hundred rows at worst, and a number in a constant with a name is a number somebody can
+change.
+
+This is the second table that outlives what created it, and it now has the same obligation
+`pull_request_outcomes` has: it is swept by hand, and the hand is in `runIssueSweep()`.
+
+### Nothing on screen changes
+
+The section's own observation (`IssueInboxModel.startObserving`) is `IssueFilter()` — `includeClosed`
+defaults to `false` — so the issues list, the four facets and the counts are exactly what they were.
+The session's observation is the wide one already (`includeClosed: true`, Sprint 4a), so the digest
+and ⌘K see the retained rows without a line of their own, and the ⌘K corpus indexes them for the
+window exactly as that amendment says it should.
+
+The cost is one more `repository { issue(number:) }` GraphQL read on `api.github.com` per
+disappearance, capped at ten per sweep, on the host that is already on `CONTRIBUTING.md`'s list.
+No new host, no new table, no new setting and no new `SyncEvent`.

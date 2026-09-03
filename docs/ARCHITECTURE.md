@@ -256,7 +256,9 @@ Pure logic in `ShepherdCore` (all unit-tested):
   The other four are standing state, because a green agent PR nobody merged is exactly what a
   morning brief is for and a windowed version would go quiet on the second morning; the same
   argument makes `agentPullRequestsThatClosedAnIssue` a state, and it stops repeating by itself
-  because the issues sweep searches `is:open` and prunes a closed row on its next pass.
+  because a closed row is kept only for the sweep's retention window (14 days) and pruned after it.
+  That the row exists at all is the sweep's outcome capture: the search asks for open issues only,
+  so without it a closed issue would vanish before any digest could read it.
   `issues:` defaults to none, so a caller predating the issues inbox gets the report it always got,
   and `Item.prID` carries the issue's node id for an issue row — the generic reuse `OutboxItem`
   makes, with `DigestSectionKind.isAboutIssues` telling a reader which it is holding. `DigestSchedule.window(now:lastDeliveredAt:calendar:)` is the whole
@@ -374,6 +376,11 @@ Pure logic in `ShepherdCore` (all unit-tested):
     inside the page, so the links are not a second round trip. The `timelineItems`
     (`CROSS_REFERENCED_EVENT`, `CONNECTED_EVENT`) shape is kept as a fixture-tested fallback
     document and mapper that the client does not send, so a schema regression is a one-line switch
+  - `issueRow(repo:number:) async throws -> IssueRowSummary?` — the same `... on Issue` field set
+    under `repository { issue(number:) }`, so a row it produces cannot be shaped differently from a
+    swept one, and it claims no relation. Two callers, both of them "one issue nobody swept": a
+    `shepherd://issue/…` link the cache does not have (ADR 0032's Sprint 2 amendment), and the
+    sweep's outcome read for an issue that left the search (its 2026-09-03 amendment)
   - `issue(repo:number:) async throws -> IssueSummary` — one REST
     `GET /repos/{o}/{r}/issues/{n}` for the claims card's `fixes #N` line (ADR 0026's amendment).
     REST, not GraphQL, precisely so the conditional-request cache can key on the URL; the URL is
@@ -521,6 +528,20 @@ It cannot fail the cycle: the method does not throw, and a failure becomes one
 `SyncEvent.syncFailed` on the sweep stage — *reported* rather than swallowed, unlike the track
 record's capture, because the user asked for this section. There is no new `SyncEvent` case and no
 new setting.
+
+A row the search stopped returning is **not** simply pruned: `captureIssueOutcomes(for:)` (ADR
+0032's 2026-09-03 amendment) is the track record's capture applied to issues, and it is what makes
+the digest's "an agent's pull request closed one of these" line able to fire at all. One
+`GitHubClient.issueRow(repo:number:)` read each — sequential, failures swallowed, capped at
+`maxIssueOutcomeReadsPerSweep` (10) a sweep with the rest kept for the next one — and the answer
+decides the row's fate: closed writes `state`, `stateReason`, `closedAt`, `updatedAt` and the links
+onto the **stored** row (relations untouched: a by-number read claims none) and keeps it; still
+open, or no such issue, prunes it exactly as before; a read that failed keeps the row unchanged and
+tries again next sweep. The outcome goes onto the row rather than into a table of its own — unlike
+`pull_request_outcomes` — because everything that reads a closed issue reads `issues`. A closed row
+is then kept for `closedIssueRetention` (14 days from `closedAt`, falling back to `updatedAt`) and
+pruned by the sweep once older, which is the table's only reaper: the search only ever asks for open
+issues, so nothing else would take it away.
 
 `TrackRecordBackfill` (also in ShepherdSync) is the one-time pager behind Settings → Automation:
 one repository at a time, at most 500 pull requests each, cancellable between pages, reporting

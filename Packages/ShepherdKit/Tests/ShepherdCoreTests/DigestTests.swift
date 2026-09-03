@@ -380,8 +380,9 @@ final class DigestTests: XCTestCase {
     func testThatStateSurvivesTheNight() {
         // Closed long before this digest's window, and still reported: it is a state, not an
         // event, so a windowed version would go quiet exactly because nothing had been done
-        // about it. It stops repeating by itself — the sweep searches `is:open` and prunes the
-        // row on its next pass.
+        // about it. It stops repeating by itself because the row does not live forever: the
+        // sweep captures the close onto it and prunes it once its retention window runs out
+        // (ADR 0032's 2026-09-03 amendment).
         let rows = [
             issue(
                 id: "I_old",

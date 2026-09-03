@@ -173,6 +173,24 @@ public struct OutcomeCapture: Sendable {
 public protocol IssueFetching: Sendable {
     /// Runs the issues sweep.
     func searchOpenIssues(queries: [IssueQuery]) async throws -> [IssueRowSummary]
+    /// Reads one issue as an inbox row, by repository and number.
+    ///
+    /// The outcome read of the issues sweep (ADR 0032's 2026-09-03 amendment), and the reason it
+    /// is a second requirement on *this* port rather than a port of its own: it is the same
+    /// document the sweep pages, mapped by the same mapper into the same row, and the same
+    /// `GitHubClient` answers both. ``ClosedPullRequestReading``'s split exists because the track
+    /// record reads a *different* shape (`ClosedPullRequest`) than the sweep; there is no such
+    /// difference here, and a fourth issue port would be one more thing every sweep double has to
+    /// satisfy for nothing.
+    ///
+    /// It is asked exactly once per issue that left the search — see
+    /// ``SyncEngine/runIssueSweep()`` — and the answer decides whether the row is updated in
+    /// place or pruned.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - number: The issue number.
+    /// - Returns: The row, or `nil` when the repository has no issue with that number.
+    func issueRow(repo: RepoRef, number: Int) async throws -> IssueRowSummary?
 }
 
 /// `GitHubClient` already has exactly this shape; the conformance is the contract check.

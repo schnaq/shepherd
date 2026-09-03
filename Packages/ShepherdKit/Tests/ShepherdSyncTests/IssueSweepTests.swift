@@ -5,8 +5,9 @@ import ShepherdPersistence
 import XCTest
 @testable import ShepherdSync
 
-/// The second sweep of the same cycle (ADR 0032): first sightings, the prune, the guard, and the
-/// promise that none of it can take the review inbox down with it.
+/// The second sweep of the same cycle (ADR 0032): first sightings, the prune, the guard, the
+/// outcome of a row that left the search (its 2026-09-03 amendment), and the promise that none of
+/// it can take the review inbox down with it.
 final class IssueSweepTests: XCTestCase {
     private let repo = SyncFixtures.repo
 
@@ -206,6 +207,230 @@ final class IssueSweepTests: XCTestCase {
         XCTAssertTrue(issues.isEmpty, "no port, no query, no rows")
         let delta = await engine.lastIssueSweep
         XCTAssertNil(delta)
+    }
+
+    // MARK: - The outcome of a disappeared issue (ADR 0032's 2026-09-03 amendment)
+
+    func testAnIssueThatClosedIsCapturedOntoItsRowRatherThanPruned() async throws {
+        let github = MockGitHub()
+        await github.setSearchResults([[]])
+        let issueGitHub = MockIssueGitHub()
+        await issueGitHub.setResults([
+            [SyncFixtures.issue(id: "I_1", number: 41)],
+            [],
+        ])
+        // What the by-number read answers with: closed, completed, and with the agent pull
+        // request that closed it — the three facts the digest's second line is made of.
+        await issueGitHub.setRow(
+            SyncFixtures.issue(
+                id: "I_1",
+                number: 41,
+                updatedAt: 60,
+                relations: [],
+                links: [SyncFixtures.link(number: 7)],
+                state: .closed,
+                stateReason: "COMPLETED",
+                closedAt: 60
+            ),
+            repo: repo,
+            number: 41
+        )
+        let store = try DatabaseManager.inMemory()
+        let engine = makeEngine(github: github, issues: issueGitHub, store: store)
+
+        try await engine.syncNow()
+        try await engine.syncNow()
+
+        let stored = try await store.fetchIssues(filter: IssueFilter(includeClosed: true))
+        let row = try XCTUnwrap(stored.first { $0.id == "I_1" }, "the row outlives the sweep")
+        XCTAssertEqual(row.state, .closed)
+        XCTAssertEqual(row.stateReason, "COMPLETED")
+        XCTAssertEqual(row.closedAt, SyncFixtures.date(60))
+        XCTAssertEqual(row.updatedAt, SyncFixtures.date(60))
+        XCTAssertEqual(row.linkedPullRequests.map(\.number), [7])
+        XCTAssertTrue(row.hasAgentPullRequest)
+        // The by-number read claims no relation; the stored facets are the ones the sweep saw.
+        XCTAssertEqual(row.myRelation, [.assigned])
+
+        // The digest line this whole capture exists for now has something to say.
+        let report = DigestReport.make(
+            pullRequests: [],
+            issues: stored,
+            parkedReviewCount: 0,
+            windowStart: SyncFixtures.date(-3_600),
+            now: SyncFixtures.date(120)
+        )
+        let section = try XCTUnwrap(report.section(.agentPullRequestsThatClosedAnIssue))
+        XCTAssertEqual(section.items.map(\.prID), ["I_1"])
+
+        // The section's own observation is open-only, so nothing on screen changed.
+        let open = try await store.fetchIssues()
+        XCTAssertTrue(open.isEmpty)
+
+        // One read, and only for the issue that went.
+        let reads = await issueGitHub.rowReads
+        XCTAssertEqual(reads, ["schnaq/review#41"])
+    }
+
+    func testAnIssueThatIsStillOpenOnGitHubIsPrunedAsBefore() async throws {
+        let github = MockGitHub()
+        await github.setSearchResults([[]])
+        let issueGitHub = MockIssueGitHub()
+        await issueGitHub.setResults([
+            [SyncFixtures.issue(id: "I_1", number: 41)],
+            [],
+        ])
+        // Still open: it left the user's facets — unassigned, or the mention was edited away.
+        await issueGitHub.setRow(
+            SyncFixtures.issue(id: "I_1", number: 41, relations: []),
+            repo: repo,
+            number: 41
+        )
+        let store = try DatabaseManager.inMemory()
+        let engine = makeEngine(github: github, issues: issueGitHub, store: store)
+
+        try await engine.syncNow()
+        try await engine.syncNow()
+
+        let stored = try await store.fetchIssues(filter: IssueFilter(includeClosed: true))
+        XCTAssertTrue(stored.isEmpty, "an issue that is not this user's business is still pruned")
+        let delta = await engine.lastIssueSweep
+        XCTAssertEqual(delta?.departedIssueIDs, ["I_1"])
+    }
+
+    func testAFailedOutcomeReadKeepsTheRowUnchangedAndTriesAgain() async throws {
+        let github = MockGitHub()
+        await github.setSearchResults([[]])
+        let issueGitHub = MockIssueGitHub()
+        await issueGitHub.setResults([
+            [SyncFixtures.issue(id: "I_1", number: 41)],
+            [],
+        ])
+        await issueGitHub.setRowError(.transport(message: "the tunnel"))
+        let store = try DatabaseManager.inMemory()
+        let engine = makeEngine(github: github, issues: issueGitHub, store: store)
+
+        try await engine.syncNow()
+        let collected = try await events(from: engine) {
+            try await engine.syncNow()
+            // A third sweep is the retry: the row is still there and still missing from the
+            // search, so it is asked about again.
+            try await engine.syncNow()
+        }
+
+        let stored = try await store.fetchIssues(filter: IssueFilter(includeClosed: true))
+        XCTAssertEqual(stored.map(\.id), ["I_1"])
+        XCTAssertEqual(stored.first?.state, .open, "nothing was learned, so nothing changed")
+        let reads = await issueGitHub.rowReads
+        XCTAssertEqual(reads, ["schnaq/review#41", "schnaq/review#41"])
+        let delta = await engine.lastIssueSweep
+        XCTAssertEqual(delta?.departedIssueIDs, [], "a row that is still there has not departed")
+        // Swallowed like the track record's capture: nobody asked for this read.
+        XCTAssertFalse(collected.contains { event in
+            guard case .syncFailed = event else { return false }
+            return true
+        })
+    }
+
+    func testAClosedRowIsPrunedOnceTheRetentionWindowHasRunOut() async throws {
+        let github = MockGitHub()
+        await github.setSearchResults([[]])
+        let issueGitHub = MockIssueGitHub()
+        await issueGitHub.setResults([[]])
+        let store = try DatabaseManager.inMemory()
+        // Two rows already on disk, both closed and neither in the search: one closed an hour
+        // ago, one three weeks ago.
+        try await store.saveIssueSummaries(
+            [
+                SyncFixtures.issue(
+                    id: "I_fresh",
+                    number: 41,
+                    state: .closed,
+                    stateReason: "COMPLETED",
+                    closedAt: -3_600
+                ),
+                SyncFixtures.issue(
+                    id: "I_ancient",
+                    number: 42,
+                    state: .closed,
+                    stateReason: "COMPLETED",
+                    closedAt: -21 * 24 * 3_600
+                ),
+            ],
+            pruneMissing: false
+        )
+        let engine = makeEngine(github: github, issues: issueGitHub, store: store)
+
+        try await engine.syncNow()
+
+        let stored = try await store.fetchIssues(filter: IssueFilter(includeClosed: true))
+        XCTAssertEqual(stored.map(\.id), ["I_fresh"])
+        // A row that was already captured costs no second read.
+        let reads = await issueGitHub.rowReads
+        XCTAssertTrue(reads.isEmpty)
+    }
+
+    func testTheOutcomeReadsAreCappedPerSweepAndTheRestAreKept() async throws {
+        let github = MockGitHub()
+        await github.setSearchResults([[]])
+        let issueGitHub = MockIssueGitHub()
+        let many = (1...12).map { SyncFixtures.issue(id: "I_\($0)", number: $0) }
+        await issueGitHub.setResults([many, []])
+        let store = try DatabaseManager.inMemory()
+        let engine = makeEngine(github: github, issues: issueGitHub, store: store)
+
+        try await engine.syncNow()
+        try await engine.syncNow()
+
+        let reads = await issueGitHub.rowReads
+        XCTAssertEqual(reads.count, 10, "the cap, not the batch")
+        // The two nobody got to are kept rather than pruned, so the next sweep can read them.
+        let stored = try await store.fetchIssues(filter: IssueFilter(includeClosed: true))
+        XCTAssertEqual(stored.count, 2)
+
+        try await engine.syncNow()
+        let afterThird = await issueGitHub.rowReads
+        XCTAssertEqual(afterThird.count, 12)
+        let remaining = try await store.fetchIssues(filter: IssueFilter(includeClosed: true))
+        XCTAssertTrue(remaining.isEmpty, "read, still open, pruned")
+    }
+
+    func testThePruneGuardStillHoldsARowWithAPendingWriteAfterTheOutcomeRead() async throws {
+        let github = MockGitHub()
+        await github.setSearchResults([[]])
+        let issueGitHub = MockIssueGitHub()
+        await issueGitHub.setResults([
+            [SyncFixtures.issue(id: "I_1", number: 41)],
+            [],
+        ])
+        // Still open on GitHub, so the capture wants it pruned — and the guard says no.
+        await issueGitHub.setRow(
+            SyncFixtures.issue(id: "I_1", number: 41, relations: []),
+            repo: repo,
+            number: 41
+        )
+        let store = try DatabaseManager.inMemory()
+        let engine = makeEngine(github: github, issues: issueGitHub, store: store)
+
+        try await engine.syncNow()
+        try await store.enqueue(
+            OutboxItem(
+                prID: "I_1",
+                repo: repo,
+                number: 41,
+                action: .addIssueComment(
+                    body: "on it",
+                    basedOnUpdatedAt: SyncFixtures.date(0)
+                )
+            )
+        )
+
+        try await engine.syncNow()
+
+        let stored = try await store.fetchIssues(filter: IssueFilter(includeClosed: true))
+        XCTAssertEqual(stored.map(\.id), ["I_1"], "the prune guard still holds it")
+        let delta = await engine.lastIssueSweep
+        XCTAssertEqual(delta?.departedIssueIDs, [])
     }
 
     func testAPullRequestSweepDoesNotPruneARepositoryTheIssuesNeed() async throws {

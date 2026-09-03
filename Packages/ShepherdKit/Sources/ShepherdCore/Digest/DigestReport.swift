@@ -215,8 +215,10 @@ public struct DigestReport: Sendable, Equatable {
     /// morning. "An agent's pull request closed one of these as completed" is a **state**, and is
     /// therefore not windowed at all: a digest that dropped it on the second morning would go
     /// quiet precisely because nothing had been done about it. It cannot repeat itself for long
-    /// either, and that is a property of the data rather than a cap: the issues sweep searches
-    /// `is:open`, so a closed row is pruned on the next pass.
+    /// either, and that is a property of the data rather than a cap: the issues sweep captures the
+    /// close onto the row and keeps it only for its retention window, then prunes it (ADR 0032's
+    /// 2026-09-03 amendment). That capture is also what puts a closed row in front of this section
+    /// at all — a sweep that searches `is:open` and prunes on sight leaves nothing to read.
     /// - Parameters:
     ///   - pullRequests: Every row the local inbox holds. Not filtered by the rail's facets: a
     ///     digest is about the account, not about whichever filter was left selected last night.

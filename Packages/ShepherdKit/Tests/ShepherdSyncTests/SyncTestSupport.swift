@@ -476,11 +476,18 @@ actor MockIssueGitHub: IssueFetching {
     private var results: [[IssueRowSummary]] = []
     private var error: GitHubError?
     private var last: [IssueRowSummary] = []
+    /// What the by-number outcome read answers with, keyed by `owner/name#number`. A missing key
+    /// answers `nil`, which is what "GitHub does not have that issue any more" looks like.
+    private var rows: [String: IssueRowSummary] = [:]
+    private var rowError: GitHubError?
 
     /// How many sweeps the engine ran.
     private(set) var callCount = 0
     /// The raw query strings of every sweep, in order.
     private(set) var requestedQueries: [[String]] = []
+    /// `owner/name#number` for every outcome read, in order — the cap and the "read once" claim
+    /// are both assertions about this array.
+    private(set) var rowReads: [String] = []
 
     init() {}
 
@@ -492,6 +499,21 @@ actor MockIssueGitHub: IssueFetching {
         self.error = error
     }
 
+    /// Scripts what the by-number outcome read answers for one issue.
+    func setRow(_ row: IssueRowSummary?, repo: RepoRef, number: Int) {
+        let key = "\(repo.fullName)#\(number)"
+        if let row {
+            rows[key] = row
+        } else {
+            rows.removeValue(forKey: key)
+        }
+    }
+
+    /// Scripts an outcome read that cannot be made at all — the offline case.
+    func setRowError(_ error: GitHubError?) {
+        rowError = error
+    }
+
     func searchOpenIssues(queries: [IssueQuery]) async throws -> [IssueRowSummary] {
         callCount += 1
         requestedQueries.append(queries.map(\.rawQuery))
@@ -500,6 +522,12 @@ actor MockIssueGitHub: IssueFetching {
         let result = results.count > 1 ? results.removeFirst() : results[0]
         last = result
         return result
+    }
+
+    func issueRow(repo: RepoRef, number: Int) async throws -> IssueRowSummary? {
+        rowReads.append("\(repo.fullName)#\(number)")
+        if let rowError { throw rowError }
+        return rows["\(repo.fullName)#\(number)"]
     }
 }
 
@@ -606,12 +634,18 @@ extension SyncFixtures {
     ///   - updatedAt: When it was last updated, as an offset from the fixture epoch.
     ///   - relations: How the user relates to it.
     ///   - links: The pull requests that will close it.
+    ///   - state: Whether it is open or closed — closed is what an outcome read answers with.
+    ///   - stateReason: GitHub's raw word for *why* it closed.
+    ///   - closedAt: When it closed, as an offset from the fixture epoch.
     static func issue(
         id: String,
         number: Int,
         updatedAt: TimeInterval = 0,
         relations: Set<IssueRelation> = [.assigned],
-        links: [LinkedPullRequestReference] = []
+        links: [LinkedPullRequestReference] = [],
+        state: IssueSummary.State = .open,
+        stateReason: String? = nil,
+        closedAt: TimeInterval? = nil
     ) -> IssueRowSummary {
         IssueRowSummary(
             id: id,
@@ -621,7 +655,9 @@ extension SyncFixtures {
             author: ShepherdCore.Actor(login: "octocat", kind: .human),
             createdAt: date(-3_600),
             updatedAt: date(updatedAt),
-            state: .open,
+            closedAt: closedAt.map { date($0) },
+            state: state,
+            stateReason: stateReason,
             labels: ["bug"],
             myRelation: relations,
             commentCount: 1,
