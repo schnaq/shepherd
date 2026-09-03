@@ -127,7 +127,12 @@ bumping a dependency that ships inside the app also means a line in
     `is:issue is:open archived:false` with `assignee:`/`author:`/`mentions:@me`, beside the
     pull-request sweep's five, in the same cycle and at the same cadence — and the pull requests
     that will close an issue come back inside those pages rather than as reads of their own, so it
-    is the host already on this list and no new one;
+    is the host already on this list and no new one; the other direction of that link, the issues
+    a pull request **closes** (ADR 0032's Sprint 3 amendment), is one more *field* on the detail
+    fetch a pull request already makes — `closingIssuesReferences` on the same GraphQL endpoint,
+    beside the review-threads query, so it is neither a new host nor a new request — and the CI
+    state the issue's list shows for a linked pull request is read out of the local database by
+    `(repo, number)`, never fetched;
   - only when the user configures a key: api.anthropic.com, or the OpenAI-compatible endpoint
     they chose themselves (a preset's base URL is still their choice). What travels there is the
     tier-1 digest — title, description excerpt, file list, top hunks — and, when you use AI

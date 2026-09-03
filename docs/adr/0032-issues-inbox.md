@@ -207,3 +207,54 @@ in answer would be an opinion nobody asked for.
 - **The linking tables exist before anything writes them.** `pull_request_closing_issues` is an
   empty table with a record type and no writer until the linking sprint lands. An empty table is
   cheap; a migration ordered after the feature that needs it is not.
+
+### Sprint 3 — linking
+
+The link is read in **both directions**, and each direction is read where the round trip already
+happens.
+
+**Issue → pull request is the sweep's own nested field, not a per-issue fetch.**
+`closedByPullRequestsReferences` was already selected inside `searchIssues` (above); this sprint is
+what *stores* it — `saveIssueSummaries` replaces `issue_linked_pull_requests` and re-derives the two
+denormalised columns from the list on every write — and what draws it. A per-issue detail fetch for
+the links would have cost one request per row of a section that redraws whenever a sweep lands, to
+learn something the page being paged anyway already carries. `fetchLinkedPullRequests(issueID:)` is
+the narrow read for the panel that lists them, and it is the honest read after a *detail*-shaped
+write, where `saveIssueDetail` deliberately leaves the stored links alone because an empty list
+there means "this fetch learned nothing about them".
+
+**Pull request → issue is one more field on the existing detail fetch.**
+`GraphQLDocuments.pullRequestClosingIssues` (`closingIssuesReferences(first: 10)`) is sent from
+inside `GitHubClient.fetchDetail(repo:number:)`, beside the `reviewThreads` call that is already
+GraphQL, and maps onto `LinkedIssueReference` — `repo`, `number`, `title`, `state` — carried on
+`PullRequestDetail.closingIssues` and stored in `pull_request_closing_issues`, replaced on every
+`savePullRequestDetail` exactly as `changed_files` is. Three details are decisions:
+
+- **It is the one read of that fetch whose failure is tolerated.** Without the files, the commits
+  or the threads there is nothing to review, so those errors travel; the closing issues are a
+  section *above* the description, and a token that cannot see the issues' repository must cost the
+  section rather than the review. The attempt is still in the request log, which is this package's
+  only logging channel.
+- **Empty means "no section", whichever way it got there.** A pull request that closes nothing and
+  one whose links GitHub declined to resolve are the same blank, because a reader cannot act on the
+  difference and a "could not read the links" line on every pull request would be noise.
+- **`PullRequestDetail` decodes tolerantly.** Every list defaults to empty on the way in and the
+  summary stays required, so a record encoded before this field existed is still a record. That is
+  `Claim`'s rule, applied to a bigger type.
+
+**CI state on a linked pull request is a local join, never a second fetch.** The sweep's link
+carries a number, a title, a raw state and an author, and nothing about checks or reviews. So
+`LinkedPullRequestStatus` (app target) looks the pull request up in `pull_requests` by
+`(repo, number)` — `fetchPullRequestSummary(repo:number:)`, the store's only lookup without a node
+id, on `idx_pull_requests_repo_number` — and shows the *cached* `checkRollup` and `reviewDecision`
+through the inbox row's own components. When the pull request is not cached, which is what
+somebody else's fix looks like, the badge draws **nothing**: an absent rollup is not a grey dot,
+and "unknown" is not "no checks". The whole feature therefore adds **no GitHub request** beyond the
+one field above, and no host — this is ADR 0006's "the UI renders from the database", and the
+reasoning the digest gives for reading inbox rows rather than fetching state of its own.
+
+One consequence worth stating: the two directions can disagree, and that is correct rather than a
+bug to fix. `issue_linked_pull_requests` is what the *issues sweep* saw, capped at five;
+`pull_request_closing_issues` is what a *pull request's detail fetch* saw, capped at ten; neither
+is derived from the other, and an issue nobody assigned to the user is in the second table and
+never in the first. A join between them would have to invent an authority that does not exist.

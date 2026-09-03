@@ -261,6 +261,23 @@ checked against the diff and CI exactly like every other line — same glyph, sa
 still no score. The description never leaves the Mac, nothing is read on a card you have not
 opened, and on a Mac without the model there is no tag, no caption and no error: the card is
 complete without it.
+
+### What this pull request closes
+
+Above the description sits a short **Closes** section: one row per issue GitHub resolved out of the
+description's `closes #123`, with the issue's number, its title and whether it is still open — and
+a repository beside it when the reference points at another one, which `closes owner/repo#1` does.
+One keystroke (⇧⌘I) or a click opens the issue. A pull request that closes nothing has no section
+at all.
+
+It is the same read as the rest of the screen and not a new one: the closing references arrive with
+the pull request's own detail fetch, on the host Shepherd already talks to. The other direction is
+the same link seen from the issue — an issue in the issues inbox lists the pull requests that will
+close it, each with the CI dot and review decision Shepherd already has for it *from your inbox*.
+Where a fix comes from somebody whose pull request has never been in your inbox, that row simply
+carries no dot: Shepherd shows the state it has rather than fetching one pull request at a time
+([ADR 0032](adr/0032-issues-inbox.md)).
+
 ### Since your review — only what changed in the fix round
 
 The agent pushes a fix round, and the review screen opens on **Since your review** instead of on the

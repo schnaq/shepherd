@@ -120,7 +120,14 @@ Names are normative; fields listed are the required minimum.
   apart
 - `PullRequestDetail` — summary + `bodyMarkdown`, `commits: [CommitInfo]`,
   `files: [ChangedFile]`, `threads: [ReviewThread]`, `timeline: [TimelineEvent]`,
-  `checks: [CheckRun]`
+  `checks: [CheckRun]`, `closingIssues: [LinkedIssueReference]`. Its decoding is tolerant of
+  every list being absent and of the summary alone being present, which is what lets a record
+  encoded before a field existed still decode (ADR 0032's Sprint 3 amendment)
+- `LinkedIssueReference` (`Models/Issue.swift`) — an issue a pull request will close: `repo`,
+  `number`, `title`, `state: IssueSummary.State`. `LinkedPullRequestReference`'s mirror image and
+  deliberately not an `IssueRowSummary` — `closingIssuesReferences` carries four fields, the issue
+  may live in another repository, and it may be an issue no facet of the issues sweep returns. No
+  author, because a provenance chip is a question about a pull request
 - `ChangedFile` — `path`, `previousPath?`, `status` (`.added/.modified/.removed/.renamed`),
   `additions`, `deletions`, `patch?` (unified diff hunk text; nil for binary/huge),
   `isViewed: Bool` (local state)
@@ -332,6 +339,14 @@ Pure logic in `ShepherdCore` (all unit-tested):
   - `searchOpenPullRequests(queries:) async throws -> [PullRequestSummary]` (GraphQL search,
     ADR 0005)
   - `pullRequestDetail(repo:number:) async throws -> PullRequestDetail`
+  - `closingIssues(repo:number:) async throws -> [LinkedIssueReference]` — the issues a pull
+    request will close (ADR 0032's Sprint 3 amendment), `closingIssuesReferences(first: 10)`.
+    GraphQL-only, for `reviewThreads`' reason: REST carries the description's `closes #123` text
+    but not the references GitHub resolved out of it. Called from inside the detail fetch beside
+    that one, and it is the single read there whose failure is **tolerated** — the files, commits
+    and threads are the review, while the closing issues are a section above the description, so a
+    token that cannot see the issues' repository costs the section and not the review. A caller
+    that asks on its own still gets the error
   - `searchClosedPullRequests(repo:since:cursor:pageSize:) async throws -> ClosedPullRequestPage`
     and `closedPullRequest(repo:number:) async throws -> ClosedPullRequest?` — the track record's
     two reads (ADR 0027). The first is the *same* `search(type: ISSUE)` connection as the sweep
@@ -412,16 +427,21 @@ pull request" facet filters the whole inbox on every click. `issue_linked_pull_r
 full list for the detail panel and has **no foreign key onto `pull_requests`** (the linked pull
 request may be somebody else's, or never fetched, so the row is about what the sweep saw);
 `pull_request_closing_issues` is the other direction and *does* cascade with `pull_requests`, like
-`changed_files` — it lands with this migration so the linking sprint needs none of its own, and
-nothing writes it yet. `issue_search_index` copies `search_index` field for field, cascade included.
+`changed_files` — it landed with this migration so the linking sprint needed none of its own, and
+`savePullRequestDetail` is its writer: the rows are replaced on every detail write, above the
+early return that keeps a checkless fetch from nulling the rollup, and read back by both detail
+reads. `issue_search_index` copies `search_index` field for field, cascade included.
 Because `repos` is now the parent of two cascading tables, the repository prune is shared by both
 sweeps (`pruneOrphanedRepos`): a prune that looked only at `pull_requests` would delete a repository
 the user has issues but no open pull requests in, and cascade every one of those issues away.
 `IssueStore.swift` is `InboxStore`'s twin — `IssueFilter` (the inbox filter's axes plus
 `hasLinkedAgentPullRequest`, `ageBucket` and `includeClosed`), `saveIssueSummaries(_:pruneMissing:)`,
 `fetchIssues(filter:)`, `fetchIssueSummary(id:)`, `saveIssueDetail(_:)`, `fetchIssueDetail(id:)`,
-`observeIssues(filter:)` — and `issuePruneGuardSQL` is the pull-request guard's `outbox` half and
-only that half, because an issue has no review to draft. `IssueSearchIndexStore.swift` mirrors
+`observeIssues(filter:)`, `fetchLinkedPullRequests(issueID:)` — and `issuePruneGuardSQL` is the
+pull-request guard's `outbox` half and only that half, because an issue has no review to draft.
+`fetchPullRequestSummary(repo:number:)` in `InboxStore.swift` is the store's only lookup *without*
+a node id, and it exists because a link is written the way GitHub writes it, `owner/name#number`;
+`idx_pull_requests_repo_number` is exactly that query's index. `IssueSearchIndexStore.swift` mirrors
 `SearchIndexStore` operation for operation and reports through the same `SearchIndexStatistics`.
 `DatabaseManager.changedFilePaths(prIDs:)` reads the cached diffs' paths and statuses **without**
 their patches, which is all the trust lane's sensitive-path exclusion needs.
@@ -821,6 +841,36 @@ collapsed. The model spends the pass once per `PullRequestDetail` — a failure 
 verdict is the same value it was. The card's whole visible share of it is a `Read by the model`
 chip on those lines and one caption (`Read on-device`, or a spinner while reading). Nothing is
 persisted, nothing is reported when the model is absent or declines, and nothing acts.
+
+### The issues a pull request closes, and the state of the pull requests an issue has (ADR 0032)
+
+`Features/PullRequest/ClosingIssuesCard.swift` is the **"Closes" section**, above the description
+in `ConversationView` and below the claims card: one row per `LinkedIssueReference` with the
+number, the title, a state glyph and — when the reference points somewhere else, which GitHub
+resolves for `closes owner/repo#1` — a repository chip. The rows come off the cached
+`PullRequestDetail`, so the section costs no request of its own, and `isHidden(for:)` is the named
+rule that it draws nothing when there are none (`ClaimsEvidenceCardState.isHidden`'s shape, for
+the same reason: it is the one thing about the section a test can assert without a window).
+
+Activating a row calls `onOpen`, which `ConversationView` points at
+`ClosingIssuesCard.openOnGitHub(_:)`; the first row also carries ⇧⌘I, as a
+`KeyboardShortcut?` on the same view rather than a second layout. There is no `DeepLink.issue`
+case in this build — that grammar arrives with the issues inbox — so the default action is
+github.com, and this is the one call site that becomes `AppEnvironment.openIssue` afterwards. The
+URL is built in that file rather than in `AppConfig`, deliberately: the issues inbox is landing in
+parallel and wants an issue URL of its own, and one duplicated four-line builder for one release
+is cheaper than two declarations of the same helper on one type.
+
+`Features/Inbox/LinkedPullRequestStatus.swift` is the other direction, and the whole of what
+"CI state by local join" means. `LinkedPullRequestStatus` is the two fields worth showing
+(`checkRollup`, `reviewDecision`) plus `isEmpty`; `LinkedPullRequestStatusLoader` is a `@MainActor`
+helper whose one function reads `DatabaseManager.fetchPullRequestSummary(repo:number:)`; and
+`LinkedPullRequestStatusBadge` resolves itself in a `task(id:)` and draws the inbox row's own
+`CheckDotView` and review-decision chip — so a linked pull request and the same pull request in the
+inbox cannot look different. Three blanks are one blank: not signed in, not in the local inbox, and
+cached but with neither a rollup nor a decision all draw nothing, because `nil` there means
+*unknown* and a grey dot would claim "no checks". Nothing in the file fetches, takes a client or
+takes a router.
 
 ## UI conventions
 

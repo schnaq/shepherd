@@ -55,9 +55,12 @@ the release workflow is run in earnest.
 
 **Review**
 - [x] PR detail: description, timeline, commits, checks detail
-- [ ] Linked issues on PR detail: closing references ("closes #123") shown with title/state,
-      one keystroke to open; issue links in PR bodies/comments resolve to previews — **moved into
-      the v1.1 issues block below**, where the issue model it needs is built once for everything
+- [x] Linked issues on PR detail: closing references ("closes #123") shown with title/state,
+      one keystroke to open — built with the v1.1 issues block below, where the issue model it
+      needs is built once for everything (ADR 0032's Sprint 3 amendment). The second half of the
+      original bullet, *issue links in PR bodies/comments resolve to previews*, is **not** built
+      and is not this: the "Closes" section shows the references GitHub itself resolved, while
+      hovering an arbitrary `#123` in somebody's comment would be a read per mention
 - [x] Monaco diff viewer: side-by-side & inline, syntax highlighting, dark/light (ADR 0003)
 - [x] File list ordered by review priority with reasons; viewed-state tracking (ADR 0007 tier 1)
 - [x] Pending review composer: inline comments (incl. multi-line), summary, verdict;
@@ -217,10 +220,14 @@ The engineering plan — four sprints, migration v7, ADR 0032 — is
       writes below, and drawn as a section with its own facets: repository, label, age, and
       *has an agent pull request* / *has none*. Same `j`/`k`, same ⌘K search over title and body
       through the ADR 0019 ranker, same provenance chip where the author is an agent
-- [ ] Issue ↔ pull request linking: GitHub's closing references (`closes #123`, the *Development*
+- [x] Issue ↔ pull request linking: GitHub's closing references (`closes #123`, the *Development*
       panel) resolved in both directions, so a pull request shows the issue it closes with title
       and state, and an issue shows the agent pull requests addressing it with their CI dot and
-      review decision. This is where the parked *linked issues on PR detail* item lands
+      review decision. This is where the parked *linked issues on PR detail* item lands. Both
+      directions are read where a round trip already happens — the issue's links inside the
+      sweep's own page, the pull request's inside its own detail fetch — and the CI dot is a local
+      join against `pull_requests`, so the whole item adds no GitHub request of its own
+      (ADR 0032's Sprint 3 amendment)
 - [ ] Assign an issue to an agent: from the issue's row, start an ADR 0011 delegation whose task
       is the issue — title, body, labels and the repository, rendered through a template the way
       auto-delegation's `{{…}}` template works — in an isolated worktree with the same turn and
