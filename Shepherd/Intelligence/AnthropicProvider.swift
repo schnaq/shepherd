@@ -40,7 +40,7 @@ struct AnthropicProvider: IntelligenceProvider {
     init(
         apiKey: String,
         model: String = AnthropicProvider.defaultModel,
-        transport: any IntelligenceTransport = URLSessionTransport()
+        transport: any IntelligenceTransport = IntelligenceURLSessionTransport()
     ) {
         self.apiKey = apiKey
         self.model = model.isEmpty ? AnthropicProvider.defaultModel : model

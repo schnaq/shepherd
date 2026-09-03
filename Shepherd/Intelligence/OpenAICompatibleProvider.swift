@@ -49,7 +49,7 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
         baseURL: String,
         model: String,
         apiKey: String,
-        transport: any IntelligenceTransport = URLSessionTransport()
+        transport: any IntelligenceTransport = IntelligenceURLSessionTransport()
     ) {
         self.baseURL = baseURL
         self.model = model

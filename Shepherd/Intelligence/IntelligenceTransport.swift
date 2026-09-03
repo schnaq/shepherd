@@ -34,7 +34,7 @@ protocol IntelligenceTransport: Sendable {
 }
 
 /// The real transport: `URLSession.shared`, which is what every other call in this layer uses.
-struct URLSessionTransport: IntelligenceTransport {
+struct IntelligenceURLSessionTransport: IntelligenceTransport {
     /// Creates the transport.
     init() {}
 
