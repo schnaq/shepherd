@@ -751,6 +751,7 @@ final class WebhookTests: XCTestCase {
         settings.setWebhookEvent(.newReviewRequest, isOn: false)
         settings.setWebhookEvent(.delegationFinished, isOn: false)
         settings.setWebhookEvent(.autoMergeQueued, isOn: false)
+        settings.setWebhookEvent(.issueClosed, isOn: false)
 
         let restored = AppSettings(defaults: defaults)
         XCTAssertTrue(restored.webhooksEnabled)
