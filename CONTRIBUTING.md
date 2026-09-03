@@ -138,19 +138,14 @@ bumping a dependency that ships inside the app also means a line in
     model asks about, and — new with that feature — the **reduced tail of the CI job log**: the
     error and failure lines with a little context, cut on this Mac against the tier's budget before
     anything is sent, never the raw log. That tier is only asked at all after the on-device model
-    reported the content too large **and** you pressed the card's own *"Ask <provider> with
-    the full log?"* button, for that one click; with no key configured the card says the log did not
-    fit and offers nothing. Downloading the log itself touches one more GitHub host, named here the
-    way the update download's is: `GET /repos/…/actions/jobs/{id}/logs` on api.github.com redirects
-    to the `*.githubusercontent.com` blob host GitHub stores job logs on. One plain `GET` of a
-    signed URL, no request body, and the redirect hop carries no `Authorization` header — the
-    transport drops it whenever a redirect leaves the host the request was made to;
     reported the content too large — or reported that it is not available on this Mac at all —
     **and** you pressed the card's own button for that one click; with no key configured the card
     says what happened and offers nothing, and with neither a key nor an on-device model the
-    *Why?* button is not drawn. Downloading the log itself adds no host: `GET /repos/…/actions/jobs/{id}/logs`
-    redirects to GitHub's own storage host for the blob, which is part of the api.github.com read
-    above and receives no credentials from Shepherd;
+    *Why?* button is not drawn. Downloading the log itself touches one more GitHub host, named here
+    the way the update download's is: `GET /repos/…/actions/jobs/{id}/logs` on api.github.com
+    redirects to the `*.githubusercontent.com` blob host GitHub stores job logs on. One plain `GET`
+    of a signed URL, no request body, and the redirect hop carries no `Authorization` header — the
+    transport drops it whenever a redirect leaves the host the request was made to;
   - only when the user enables webhooks and types a URL: **that URL** (ADR 0012). Outbound only,
     one destination, off by default, and the payload never carries review text, comment bodies,
     diffs or agent output;

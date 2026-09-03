@@ -9871,16 +9871,6 @@
         }
       }
     },
-    "last %lld of %lld lines of %@": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "letzte %lld von %lld Zeilen von %@"
-          }
-        }
-      }
-    },
     "last applied: %@": {
       "localizations": {
         "de": {
