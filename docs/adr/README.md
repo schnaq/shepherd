@@ -30,6 +30,7 @@ founder interview (2026-08-31) combined with three research reports (see
 | 0022 | [German localisation through one String Catalog, with a Python gate in CI](0022-german-localisation.md) | Accepted (v1.x) |
 | 0023 | [Structured triage: one on-device verdict per pull request](0023-structured-triage.md) | Accepted (v1.x) |
 | 0024 | [Tool calling for "why is CI red?": three reads, one card](0024-tool-calling-ci-diagnosis.md) | Accepted (v1.x) |
+| 0025 | [Private Cloud Compute as a tier between on-device and bring-your-own-key: parked, with the conditions that would unpark it](0025-private-cloud-compute.md) | Parked |
 | 0026 | [Claims vs. Evidence: the description beside the diff, no score](0026-claims-vs-evidence.md) | Accepted (v1.2) |
 | 0027 | [Track record and trust lanes: the gate is CI, size and sensitive paths](0027-track-record-and-trust-lanes.md) | Accepted (v1.2) |
 | 0028 | [Since my review: a local snapshot at submit time, the interdiff computed on the Mac](0028-since-my-review-interdiff.md) | Accepted (v1.2) |

@@ -271,6 +271,10 @@ short form.
       embedding (ADR 0019's on-device model, cached per snippet) is nearest to the thread's text are
       offered in the `text.badge.plus` menu first. No new model, no new setting, and nothing
       inserted uninvited
+- Verified and parked 2026-09-03: a **Private Cloud Compute** rung between on-device and
+  bring-your-own-key, and collapsing the providers onto Apple's `LanguageModel` protocol. Both are
+  macOS 27, and the no-cost entitlement is tied to App Store distribution; ADR 0025 records the
+  design and the three conditions that reopen it
 - Considered and rejected in the same interview, recorded so it is not proposed again: Image
   Playground / Genmoji (no image surface in a review tool), speech input (`SpeechAnalyzer` — a
   review is read, not dictated), a sentiment check on outgoing comments (tone is the reviewer's

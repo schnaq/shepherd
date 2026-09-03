@@ -14,8 +14,9 @@ GitHub PRs**. Comparing Apple Foundation Models (native Swift) vs. embedded loca
   Substantially reworked at **WWDC26** (June 2026) — the version relevant "as of today"
   (Aug 2026).
 - **OS/tooling requirement:** macOS 26 "Tahoe" + Xcode 26 (initial release); the newest
-  APIs below (context-size introspection, image input, `LanguageModel` protocol,
-  Private Cloud Compute) need **macOS 26.4+**. Apple Silicon only — Apple Intelligence
+  APIs below (context-size introspection, image input) need **macOS 26.4+**; the `LanguageModel`
+  protocol and Private Cloud Compute are **macOS 27.0+ (beta)** — corrected 2026-09-03 against
+  Apple's documentation, see ADR 0025. Apple Silicon only — Apple Intelligence
   is not available on Intel Macs, and only newer iPhone/iPad hardware qualifies on those
   platforms.
 
@@ -27,7 +28,7 @@ GitHub PRs**. Comparing Apple Foundation Models (native Swift) vs. embedded loca
   |---|---|
   | 2025 (initial release) | **4,096 tokens** (~3,000 words) — hard ceiling shared across instructions + prompt + response for the whole session |
   | 2026 update (WWDC26, macOS 26.4+) | **8,192 tokens** — doubled, plus a new `model.contextSize` / `tokenCount(for:)` API to check usage before you blow the budget |
-  | New: Private Cloud Compute (macOS 26.4+) | **32,000 tokens**, plus a `reasoningLevel` (`.light`/`.moderate`/`.deep`) — bigger model, but it's a **network call to Apple's servers**, not local inference, even though Apple markets it with the same privacy guarantees as on-device |
+  | New: Private Cloud Compute (macOS 27.0+, beta; entitlement tied to App Store distribution — ADR 0025) | **32,000 tokens**, plus a `reasoningLevel` (`.light`/`.moderate`/`.deep`) — bigger model, but it's a **network call to Apple's servers**, not local inference, even though Apple markets it with the same privacy guarantees as on-device |
 
   Even 32K is modest against real PR diffs: a moderately sized AI-agent-generated PR
   touching 10-20 files easily runs 20K-100K+ tokens of raw diff. **Neither on-device
@@ -75,7 +76,9 @@ This is the most important finding of this research and should drive the archite
   - `MLXLanguageModel` (pass a Hugging Face model id, framework handles MLX loading —
     open-weight models like Qwen2.5-Coder become a one-line swap)
   - Community packages, and **Anthropic and Google are shipping native Swift packages
-    conforming to the same protocol** — meaning `claude-haiku-4-5` could sit behind the
+    conforming to the same protocol** (verified 2026-09-03: Anthropic's is
+    `ClaudeForFoundationModels`, v0.1.0 beta, macOS 27; Google's lives inside the Firebase
+    SDK; `huggingface/AnyLanguageModel` is its own abstraction and does *not* conform) — meaning `claude-haiku-4-5` could sit behind the
     exact same `LanguageModelSession` call sites as the on-device model, with the
     provider chosen by a Swift Package Manager dependency swap rather than an app-level
     rewrite.

@@ -71,7 +71,7 @@ Platform capabilities Shepherd has **not** used yet, all in the macOS 26 SDK (se
 `streamResponse` with partially-generated snapshots, `GenerationOptions`, `SystemLanguageModel(useCase:)`
 (the `.contentTagging` model is tuned for exactly the classification below), `contextSize` /
 `tokenCount(for:)` (26.4+), multi-turn sessions with a transcript, the `LanguageModel` protocol
-with `PrivateCloudComputeLanguageModel` (32K), and Vision text recognition. Custom LoRA adapters
+with `PrivateCloudComputeLanguageModel` (32K — both macOS 27, see §I), and Vision text recognition. Custom LoRA adapters
 via Apple's adapter toolkit exist too — parked, see §5.
 
 ---
@@ -342,26 +342,45 @@ composes with Apple's own *Use Model* action, so developers script their own mor
   user-invoked intent, shown once, not stored on the entity and not exported to Spotlight.
 - **Effort:** S–M. **ADR:** amendment to 0021.
 
-### I. Private Cloud Compute as tier 2½ (verify the SDK first)
+### I. Private Cloud Compute as tier 2½ — verified 2026-09-03, parked (ADR 0025)
 
 **Story.** Users who will not bring an API key but trust Apple's stated guarantees get a 32K
 context for the same requests, selectable as `On-device + Private Cloud Compute`.
 
-- **Tier:** a new rung between 2 and 3 in `IntelligenceRouter`. **API:** `PrivateCloudCompute
-  LanguageModel` behind the `LanguageModel` protocol; `reasoningLevel: .light` for drafts,
-  `.moderate` for the CI diagnosis.
-- **Prerequisite:** confirm in the macOS 26.4 SDK that the type, its availability API and its
-  entitlement requirements are as described in `docs/research/research-ai.md`; this rung is
-  specced, not promised. It also changes the host list (Apple's PCC endpoints, not ours) and the
-  privacy copy, so it is its own ADR.
-- **Effort:** M after verification. **ADR 0025.**
+**What the verification found.** `PrivateCloudComputeLanguageModel` and the `LanguageModel`
+protocol are real, with the 32K context and the three `reasoningLevel`s as described — but both
+are **macOS 27.0+ (beta)**, not 26.4, and the no-cost entitlement Apple documents is for App Store
+Small Business Program members with apps **distributed on the App Store**. Shepherd targets
+macOS 26.0 and ships Developer-ID-signed outside the store. The hosts the framework contacts are
+not documented, so the privacy contract could not name them.
 
-### J. Collapse the providers onto Apple's `LanguageModel` protocol (evaluate, then decide)
+**Decision.** Parked in [ADR 0025](../adr/0025-private-cloud-compute.md), which also records the
+design for the day it can be built: a rung between tiers 2 and 3, attended surfaces only (drafts,
+explain, brief, CI diagnosis — never triage, digests or the Siri summary), reported in the
+served-by line, `.light`/`.moderate` reasoning counted against the budget, quota shown as a
+state. Unparked when all three hold: deployment target macOS 27+, an entitlement path for direct
+distribution (or an App Store decision of its own), documented hosts.
 
-When Anthropic's and the OpenAI-compatible Swift packages conforming to `LanguageModel` are
-stable, `AnthropicProvider`/`OpenAICompatibleProvider` shrink to configuration and the streaming,
-tool and `@Generable` plumbing above becomes one code path. Evaluate after F ships; adopt only if
-the packages support tools + streaming + structured output on macOS. No user-visible change.
+### J. Collapse the providers onto Apple's `LanguageModel` protocol — evaluated 2026-09-03, not adopted
+
+**Premise.** When Swift packages conforming to `LanguageModel` are stable, the Anthropic and
+OpenAI-compatible providers shrink to configuration and the streaming, tool and `@Generable`
+plumbing becomes one code path. No user-visible change.
+
+**What the evaluation found.** Anthropic ships `ClaudeForFoundationModels` (v0.1.0, beta,
+Apache-2.0, macOS 27 beta), conforming to `LanguageModel` with streaming, tools and `@Generable`.
+Google's conformance lives inside the Firebase SDK, which Shepherd will not take on for one
+provider. There is **no OpenAI-compatible conformance** to Apple's protocol — `AnyLanguageModel`
+is a separate abstraction of its own, not a `LanguageModel`, so konduit and every other
+OpenAI-compatible endpoint (§K) would keep the hand-written provider regardless. Apple's own
+protocol requires macOS 27.
+
+**Decision.** Not adopted. The collapse would remove one of the two cloud providers, not both, at
+the cost of a beta dependency and a deployment-target jump the app is not making. Re-evaluate when
+the deployment target is macOS 27 *and* the Anthropic package is at 1.0 *and* either an
+OpenAI-compatible conformance exists or §K has been dropped — until then the single
+`IntelligenceProvider` protocol (Phase 0.2) is the seam that keeps the three providers behaving
+alike, and it is tested on the Linux runner, which Apple's framework is not yet.
 
 ### K. konduit as the EU tier-3 endpoint, first-class but still one code path
 
@@ -423,7 +442,7 @@ Phase 0 ── groundwork (0.1 → 0.5)                                    ~1 we
    ├─ Sprint 3: F Why is CI red? (needs 0.3, E)                      ~2 weeks
    │            → the demo: red check → diagnosis → agent brief → fixed in a worktree
    │
-   └─ Sprint 4: H Siri summary · K konduit extras · I PCC rung (after SDK check) · J evaluate
+   └─ Sprint 4: H Siri summary · K konduit extras · I PCC rung (verified → parked) · J evaluated
 ```
 
 Ship after each sprint behind the release train in `docs/RELEASING.md`; each feature is
@@ -451,6 +470,9 @@ G needs 0.4 · H needs nothing new beyond an intent · I needs the SDK verificat
 - **Spotlight-RAG / system tools** offered by Foundation Models. A review tool's answers must
   come from the pull request, not the user's Mail; declining these keeps the "the model saw
   exactly this" trace truthful.
+- **Private Cloud Compute rung (§I) and the `LanguageModel` collapse (§J)** — both verified on
+  2026-09-03 and both macOS 27: parked in ADR 0025 and in §J above, with the conditions that
+  reopen them.
 - **Session reuse across requests** (one multi-turn session per review screen). Cheaper, but the
   transcript would silently carry earlier hunks into later prompts and defeat the per-request
   budget audit. Reconsider if 0.1's measured counting shows real headroom.
