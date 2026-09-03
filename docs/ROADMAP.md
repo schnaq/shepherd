@@ -274,6 +274,25 @@ short form.
   call; Writing Tools already offers a rewrite when asked), and an AI-written morning digest (the
   digest runs unattended and its lines are deterministic on purpose, see v1.x below)
 
+## v1.2 — managing the herd (interview 2026-09-03)
+
+For the maintainer whose pull requests come from Claude Code sessions, ten to forty a week. The
+engineering plan — data, rules, guardrails, ADRs — is
+[`docs/plans/agent-fleet.md`](plans/agent-fleet.md); this is the short form, in the interview's
+order. Everything here is tier 1 first (deterministic, local); a model only ever adds a hint.
+
+- [ ] Claims vs. Evidence — what the description says ("tests added", "only X changed", "no
+      breaking changes", "fixes #N") beside what the diff and CI show, line by line, no score
+- [ ] Track record and trust lanes — closed pull requests of the last 90 days backfilled once per
+      repository; **Short look** only when CI is green and the diff is small, history informs the
+      badge and the sort, never the lane
+- [ ] Since my review — a snapshot of the reviewed head at submit time, the interdiff computed
+      locally, each finding marked addressed / unchanged / moved / replied
+- [ ] Feedback loop — a finding the reviewer has written three times becomes a drafted `CLAUDE.md`
+      rule in the delegation sheet; the local agent opens the pull request
+- [ ] Session back-channel — a finding goes to the Claude Code session named in the head commits'
+      `Claude-Session:` trailer, through the user's own CLI (ADR 0011: no Shepherd-held credentials)
+
 ## v1.x
 
 - Authorization Code + PKCE loopback sign-in (nicer than device flow)
