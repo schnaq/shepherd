@@ -1561,6 +1561,16 @@
         }
       }
     },
+    "An explanation, not a review. Nothing is saved until you add a comment yourself.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Erklärung, keine Review. Nichts wird gespeichert, bis du selbst einen Kommentar hinzufügst."
+          }
+        }
+      }
+    },
     "An id is required.": {
       "localizations": {
         "de": {
@@ -3341,6 +3351,76 @@
         }
       }
     },
+    "Explain these lines": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Zeilen erklären"
+          }
+        }
+      }
+    },
+    "Explain these lines — plain language, in your language": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Zeilen erklären — verständlich, in deiner Sprache"
+          }
+        }
+      }
+    },
+    "Explained by %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erklärt von %@"
+          }
+        }
+      }
+    },
+    "Explained on-device": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf dem Gerät erklärt"
+          }
+        }
+      }
+    },
+    "Explaining on-device…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erklärung entsteht auf dem Gerät…"
+          }
+        }
+      }
+    },
+    "Explaining with %@…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erklärung entsteht mit %@…"
+          }
+        }
+      }
+    },
+    "Explains what the selected lines change. Nothing is sent and nothing is saved.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erklärt, was die ausgewählten Zeilen ändern. Es wird nichts gesendet und nichts gespeichert."
+          }
+        }
+      }
+    },
     "Exporting…": {
       "localizations": {
         "de": {
@@ -3657,6 +3737,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "GitHub hat für diese Datei keinen Diff geschickt, es gibt also nichts, woraus sich ein Kommentar entwerfen ließe."
+          }
+        }
+      }
+    },
+    "GitHub sent no diff for this file, so there is nothing to explain.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub hat für diese Datei keinen Diff geschickt, es gibt also nichts zu erklären."
           }
         }
       }
@@ -4007,6 +4097,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Einstellungen in einem S3-kompatiblen Bucket ablegen"
+          }
+        }
+      }
+    },
+    "Keeps the sentences that have already arrived.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Behält die bereits angekommenen Sätze."
           }
         }
       }
@@ -5761,6 +5861,16 @@
         }
       }
     },
+    "Puts the explanation into the comment field as a draft you edit": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setzt die Erklärung als bearbeitbaren Draft in das Kommentarfeld"
+          }
+        }
+      }
+    },
     "Queue a reply": {
       "localizations": {
         "de": {
@@ -5927,6 +6037,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dokumentation lesen"
+          }
+        }
+      }
+    },
+    "Reading the selected lines…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die ausgewählten Zeilen werden gelesen…"
           }
         }
       }
@@ -7301,6 +7421,26 @@
         }
       }
     },
+    "Stop explaining": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erklärung stoppen"
+          }
+        }
+      }
+    },
+    "Stop explaining — what has already arrived stays": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erklärung stoppen — was bereits angekommen ist, bleibt"
+          }
+        }
+      }
+    },
     "Stopping the agent…": {
       "localizations": {
         "de": {
@@ -7841,6 +7981,16 @@
         }
       }
     },
+    "The model returned an empty explanation.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Modell hat eine leere Erklärung zurückgegeben."
+          }
+        }
+      }
+    },
     "The model returned something Shepherd could not read.": {
       "localizations": {
         "de": {
@@ -8211,6 +8361,16 @@
         }
       }
     },
+    "This provider cannot explain a selection.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Anbieter kann eine Auswahl nicht erklären."
+          }
+        }
+      }
+    },
     "This pull request has no changed files.": {
       "localizations": {
         "de": {
@@ -8407,6 +8567,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Erneut versuchen"
+          }
+        }
+      }
+    },
+    "Turn into a comment": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In einen Kommentar umwandeln"
           }
         }
       }
@@ -8687,6 +8857,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nur an Wochentagen"
+          }
+        }
+      }
+    },
+    "What these lines change": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was diese Zeilen ändern"
           }
         }
       }

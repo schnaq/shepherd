@@ -385,6 +385,18 @@ struct InlineCommentComposer: View {
     @State private var suggestedReplyIDs: [SavedReply.ID] = []
     /// Whether the embeddings for this composer have already been spent.
     @State private var hasRequestedSuggestions = false
+    /// Where the "Explain these lines" popover stands (plan §3.D).
+    ///
+    /// Its own state next to ``aiDraft`` rather than a mode of it: the two answer different
+    /// questions about the same selection, and an explanation that shared the drafting phase
+    /// would have to decide what a half-arrived explanation means for the *field*, which is
+    /// exactly the coupling this feature does not need. The only thing that crosses between them
+    /// is one string, on one click.
+    @State private var explain = ExplainSelectionState()
+    /// The task producing the streamed explanation, while one runs.
+    @State private var explainTask: Task<Void, Never>?
+    /// Whether the explanation popover is up.
+    @State private var isExplainPresented = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -401,6 +413,21 @@ struct InlineCommentComposer: View {
                 }
                 Spacer(minLength: 4)
                 if model.canDraftWithAI {
+                    // The gutter gesture opened this composer, so this is where the selection
+                    // already is: "Explain" lives beside the field it can feed rather than in a
+                    // second popover the reviewer would have to find (plan §3.D).
+                    ExplainSelectionButton(isExplaining: explain.isExplaining) {
+                        toggleExplanation()
+                    }
+                    .popover(isPresented: $isExplainPresented, arrowEdge: .bottom) {
+                        ExplainSelectionPopover(
+                            state: explain,
+                            anchorDescription: anchorDescription,
+                            onStop: { stopExplanation() },
+                            onCancel: { cancelExplanation() },
+                            onTurnIntoComment: { turnExplanationIntoComment() }
+                        )
+                    }
                     AIDraftButton(
                         isDrafting: aiDraft.isDrafting,
                         isStreaming: aiDraft.streamingDraft != nil
@@ -497,6 +524,8 @@ struct InlineCommentComposer: View {
         .onDisappear {
             draftTask?.cancel()
             draftTask = nil
+            explainTask?.cancel()
+            explainTask = nil
         }
     }
 
@@ -629,6 +658,107 @@ struct InlineCommentComposer: View {
     private func apply(_ text: String?) {
         guard let text else { return }
         commentText = text
+    }
+
+    // MARK: - Explaining the selection (plan §3.D)
+
+    /// ⌥E and the magnifier button: ask what these lines change, or stop the answer coming.
+    @MainActor
+    private func toggleExplanation() {
+        if explain.isExplaining {
+            stopExplanation()
+            return
+        }
+        // Re-asked from scratch every time the button is pressed: the popover explains *this*
+        // selection, and showing the previous answer while a new one is on its way would be two
+        // explanations in one card with nothing saying which is which.
+        explain.begin()
+        isExplainPresented = true
+        explainTask = Task { await runExplanationStream() }
+    }
+
+    /// Stops the running explanation, keeping every sentence that arrived.
+    @MainActor
+    private func stopExplanation() {
+        explainTask?.cancel()
+        explainTask = nil
+        explain.stop()
+    }
+
+    /// Escape, and the Close button: the popover goes and the answer goes with it.
+    @MainActor
+    private func cancelExplanation() {
+        explainTask?.cancel()
+        explainTask = nil
+        explain.reset()
+        isExplainPresented = false
+    }
+
+    /// Runs one streamed explanation into the popover.
+    ///
+    /// The same sequence as ``runCommentStream(base:)``, including why the cancellation check
+    /// after the loop is there: a cancelled `AsyncThrowingStream` ends its iteration *without*
+    /// throwing, so a loop trusting only `CancellationError` would file a reviewer's stop as a
+    /// stream that finished empty — which is a red line under a popover they closed themselves.
+    @MainActor
+    private func runExplanationStream() async {
+        let outcome = await model.streamExplanation(for: request)
+        // Stopped before a tier answered: the popover is already back where it was.
+        guard !Task.isCancelled else { return }
+        guard let stream = outcome.stream else {
+            // `.disabled` has no message and cannot happen while the button is rendered; it would
+            // mean the settings changed mid-request, and the honest response is to say nothing.
+            if let message = outcome.failure?.message {
+                explain.fail(message)
+            } else {
+                explain.reset()
+            }
+            return
+        }
+        explain.started(kind: stream.kind)
+        do {
+            for try await partial in stream.text {
+                explain.streamed(partial)
+            }
+            if Task.isCancelled {
+                explain.stop()
+            } else {
+                explain.finish()
+            }
+        } catch is CancellationError {
+            explain.stop()
+        } catch {
+            explain.fail(AIDraftFailure.describe(error))
+        }
+    }
+
+    /// Turns the explanation into the start of an inline comment.
+    ///
+    /// **Through ``AIDraftFieldState`` and nothing else**, which is the guardrail (ADR 0007's
+    /// drafting amendment, third surface): into an empty field the text simply lands, labelled
+    /// with the tier that wrote it and captioned until the reviewer's first keystroke; over text
+    /// the reviewer has already typed it lands nowhere until they answer replace-or-append. That
+    /// is why the explanation is handed over as an ``IntelligenceOutcome`` rather than assigned
+    /// to `commentText` — the same value the drafting path produces, so it obeys the same rules
+    /// rather than a second copy of them. Nothing is submitted: "Add comment" is still a click.
+    @MainActor
+    private func turnExplanationIntoComment() {
+        guard let text = explain.explanation, let kind = explain.kind else { return }
+        // Taking the field ends whatever else was writing into it — the same rule as the reviewer
+        // typing during a stream (``AIDraftFieldState``): two generated texts must never
+        // interleave in one comment. Whatever the draft had already written counts as the
+        // reviewer's existing text below, so it is *asked* about rather than overwritten.
+        draftTask?.cancel()
+        draftTask = nil
+        explainTask?.cancel()
+        explainTask = nil
+        isExplainPresented = false
+        apply(
+            aiDraft.finish(
+                .value(IntelligenceOutput(kind: kind, value: text)),
+                existingText: commentText
+            )
+        )
     }
 
     private var existingComment: DraftComment? {
