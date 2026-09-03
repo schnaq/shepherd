@@ -114,7 +114,8 @@ final class IssueInboxModel {
     private(set) var detail: IssueDetail?
     /// Whether a body fetch is in flight.
     private(set) var isFetchingBody = false
-    /// The outbox rows that target the selected issue — queued, in flight or parked (ADR 0006).
+    /// The outbox rows that target the selected issue — queued, in flight, parked or failed
+    /// (ADR 0006).
     ///
     /// Read after every enqueue and every drain rather than observed, because it is a panel
     /// detail rather than a source of truth: the standing counts in Settings → Sync and the title
@@ -412,6 +413,18 @@ final class IssueInboxModel {
     /// - Parameter row: The issue.
     func parkedWriteCount(for row: IssueRowSummary) -> Int {
         queuedWrites(for: row).filter { $0.state == .conflicted }.count
+    }
+
+    /// How many writes for one issue were given up on.
+    ///
+    /// The third state a queued write can end in, and until now the invisible one: the drain fails
+    /// an issue row **non-retriably** when there is no `IssueWriting` port wired up, and GitHub's
+    /// own 4xx answers do the same. Such a row is neither waiting nor parked, so neither of the two
+    /// counts above sees it — and it never goes away by itself, which is exactly why it has to be
+    /// on screen rather than in a table nobody opens.
+    /// - Parameter row: The issue.
+    func failedWriteCount(for row: IssueRowSummary) -> Int {
+        queuedWrites(for: row).filter { $0.state == .failed }.count
     }
 
     /// Re-reads the outbox. Cheap: one `SELECT` of a table that holds tens of rows at most.

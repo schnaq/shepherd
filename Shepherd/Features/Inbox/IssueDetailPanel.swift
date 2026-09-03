@@ -372,15 +372,21 @@ struct IssueDetailPanel: View {
 
     /// What the outbox is holding for this issue.
     ///
-    /// The same two states the pull-request side shows — waiting to be sent, and parked because
-    /// the target moved on underneath the write (ADR 0006) — said here about one issue rather
-    /// than about the whole account. The standing counts in Settings → Sync and the title bar are
-    /// unchanged and already cover these rows; this line is what makes them findable.
+    /// The two states the pull-request side shows — waiting to be sent, and parked because the
+    /// target moved on underneath the write (ADR 0006) — plus the third one it does not: a write
+    /// the drain **gave up on**. That is not a theoretical state here. An issue row is failed
+    /// non-retriably whenever the engine was built without an `IssueWriting` port, and GitHub's
+    /// own 4xx answers end the same way; a row in it is neither waiting nor parked, so without
+    /// this line the click simply looked as though it had worked. All three are said about one
+    /// issue rather than about the whole account: the standing counts in Settings → Sync and the
+    /// title bar are unchanged, and this line is what makes them findable from where the write was
+    /// queued.
     @ViewBuilder
     private func queueStatus(_ row: IssueRowSummary) -> some View {
         let queued = model.queuedWriteCount(for: row)
         let parked = model.parkedWriteCount(for: row)
-        if queued > 0 || parked > 0 {
+        let failed = model.failedWriteCount(for: row)
+        if queued > 0 || parked > 0 || failed > 0 {
             HStack(spacing: 6) {
                 if queued > 0 {
                     Image(systemName: "tray.full")
@@ -398,11 +404,19 @@ struct IssueDetailPanel: View {
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.textSecondary)
                 }
+                if failed > 0 {
+                    Image(systemName: "xmark.octagon")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Theme.failure)
+                    Text(String(localized: "\(failed) failed — see Settings → Sync"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.failure)
+                }
                 Spacer(minLength: 0)
             }
             .help(
                 String(
-                    localized: "Shepherd writes every change to a local queue first and sends it in the background. A parked write is one the issue changed underneath; Settings → Sync lists them."
+                    localized: "Shepherd writes every change to a local queue first and sends it in the background. A parked write is one the issue changed underneath; a failed one was given up on and will not be retried. Settings → Sync lists them."
                 )
             )
         }

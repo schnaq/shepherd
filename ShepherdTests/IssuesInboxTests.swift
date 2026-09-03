@@ -527,6 +527,71 @@ final class IssuesInboxTests: XCTestCase {
         XCTAssertEqual(model.parkedWriteCount(for: second), 0)
     }
 
+    func testAWriteThatWasGivenUpOnIsCountedAndIsNotConfusedWithTheOtherTwo() async throws {
+        // The drain fails an issue row non-retriably when nothing is wired up to send it, and a
+        // 4xx does the same. Such a row is neither waiting nor parked, so before this count it
+        // was on nobody's screen.
+        let database = try DatabaseManager.inMemory()
+        try await database.saveIssueSummaries(rows)
+        let model = makeModel(database: database, issues: nil, viewerLogin: "octocat")
+        await started(model)
+        let first = try XCTUnwrap(model.allRows.first { $0.number == 1 })
+        let second = try XCTUnwrap(model.allRows.first { $0.number == 2 })
+
+        await model.addLabel("needs-triage", on: first)
+        await model.close(.completed, on: second)
+        await model.refreshPendingWrites()
+        XCTAssertEqual(model.failedWriteCount(for: first), 0)
+
+        let stored = try await database.allOutboxItems()
+        let doomed = try XCTUnwrap(stored.first { $0.prID == first.id })
+        try await database.markOutboxItemFailed(
+            id: doomed.id,
+            error: "no writer is wired up",
+            now: clock,
+            retriable: false
+        )
+        await model.refreshPendingWrites()
+
+        XCTAssertEqual(model.failedWriteCount(for: first), 1)
+        XCTAssertEqual(model.queuedWriteCount(for: first), 0, "a failed row is not waiting")
+        XCTAssertEqual(model.parkedWriteCount(for: first), 0, "and it is not parked either")
+        // Per issue, like the other two: the other row's write is untouched.
+        XCTAssertEqual(model.failedWriteCount(for: second), 0)
+        XCTAssertEqual(model.queuedWriteCount(for: second), 1)
+    }
+
+    func testTheFailedCountIsRefreshedByTheEnqueueAndDrainCycle() async throws {
+        // The panel's counters are read after every enqueue and every drain rather than observed;
+        // a drain that fails the row must therefore leave the count on screen behind it.
+        let database = try DatabaseManager.inMemory()
+        try await database.saveIssueSummaries(rows)
+        let model = makeModel(database: database, issues: nil, viewerLogin: "octocat")
+        await started(model)
+        let row = try XCTUnwrap(model.allRows.first)
+
+        model.drain = {
+            let items = (try? await database.allOutboxItems()) ?? []
+            for item in items where item.state == .pending {
+                try? await database.markOutboxItemFailed(
+                    id: item.id,
+                    error: "no writer is wired up",
+                    now: Date(),
+                    retriable: false
+                )
+            }
+        }
+
+        await model.addLabel("needs-triage", on: row)
+
+        XCTAssertEqual(
+            model.failedWriteCount(for: row),
+            1,
+            "the refresh after the drain is what puts it on screen"
+        )
+        XCTAssertEqual(model.queuedWriteCount(for: row), 0)
+    }
+
     func testTheLabelPickerOffersWhatTheSectionHasSeenInThatRepositoryAndNoMore() async throws {
         let database = try DatabaseManager.inMemory()
         try await database.saveIssueSummaries(rows)

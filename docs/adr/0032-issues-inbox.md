@@ -662,3 +662,18 @@ window exactly as that amendment says it should.
 The cost is one more `repository { issue(number:) }` GraphQL read on `api.github.com` per
 disappearance, capped at ten per sweep, on the host that is already on `CONTRIBUTING.md`'s list.
 No new host, no new table, no new setting and no new `SyncEvent`.
+
+### And the write nobody could see
+
+A second, smaller thing, fixed in the same pass because it is the other half of "the panel tells
+the truth about the outbox". Sprint 4a's panel shows the two outbox states the pull-request side
+shows — waiting to be sent, and parked. There is a third: `SyncEngine` fails an issue row
+**non-retriably** when the app was built without an `IssueWriting` port, and GitHub's own 4xx
+answers end the same way. Such a row is `failed`, which is neither `pending`/`sending` nor
+`conflicted`, so neither counter saw it and the click looked as though it had worked.
+
+`IssueInboxModel.failedWriteCount(for:)` counts it, `IssueDetailPanel` draws it in the failure
+colour beside the other two, and `DatabaseManager.failedOutboxCount()` is the standing count beside
+`pendingOutboxCount()` and `conflictedOutboxCount()`. It stays scoped to the issue panel: the
+pull-request side has the same gap, and closing it there is a change to a surface this ADR does not
+own.

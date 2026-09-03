@@ -479,7 +479,11 @@ resolve, merge — and, since ADR 0032's Sprint 4a amendment, comment on / label
 reopen an *issue*) as a row with retry/backoff state so writes survive crash/offline. There is no
 schema change for the issue actions: `outbox.payload` is an opaque blob of the whole
 `OutboxAction`, and `prID`/`repo`/`number` are reused generically as the target's node id,
-repository and number — which is the question `issuePruneGuardSQL` was already asking.
+repository and number — which is the question `issuePruneGuardSQL` was already asking. Three
+standing counts read it: `pendingOutboxCount()` (waiting or in flight), `conflictedOutboxCount()`
+(parked for the user to decide) and `failedOutboxCount()` (given up on, and therefore in neither of
+the other two) — the last one added with the issue panel's failed-write line, because a
+non-retriable failure was until then counted by nothing at all.
 
 One read crosses tables rather than serving a screen: `viewerReviewComments(login:since:)` joins
 `review_comments → review_threads → pull_requests` and returns the signed-in user's own posted
@@ -1069,8 +1073,12 @@ duplicate the toolbar, the digest card, the Settings sheet and the palette overl
   a mutation, which is the same rule `PullRequestActions` states below. The label picker is fed by
   the labels the section has already seen in that repository (a `GET /repos/…/labels` would be a
   new request on every panel for a list the sweep already wrote), and the panel shows the two
-  outbox states the pull-request side shows — waiting to be sent, and parked — about this one
-  issue. No new global shortcuts: the issues section already refuses `r a`, `m` and `x`.
+  outbox states the pull-request side shows — waiting to be sent, and parked — **plus the one it
+  does not**: a write the drain gave up on, counted by `failedWriteCount(for:)` and drawn in the
+  failure colour. An issue row fails non-retriably whenever the engine was built without an
+  `IssueWriting` port, and a 4xx from GitHub ends the same way; such a row is neither pending nor
+  conflicted, so without that line the click looked as though it had worked. No new global
+  shortcuts: the issues section already refuses `r a`, `m` and `x`.
 
 ### Morning digest (opt-in, local, no scheduler)
 

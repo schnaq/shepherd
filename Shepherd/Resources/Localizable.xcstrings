@@ -631,6 +631,46 @@
         }
       }
     },
+    "%lld failed — see Settings → Sync": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld fehlgeschlagen – siehe Einstellungen → Sync"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld fehlgeschlagen – siehe Einstellungen → Sync"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld failed — see Settings → Sync"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld failed — see Settings → Sync"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld files are uncommitted in the worktree.": {
       "localizations": {
         "de": {
@@ -9461,12 +9501,12 @@
         }
       }
     },
-    "Shepherd writes every change to a local queue first and sends it in the background. A parked write is one the issue changed underneath; Settings → Sync lists them.": {
+    "Shepherd writes every change to a local queue first and sends it in the background. A parked write is one the issue changed underneath; a failed one was given up on and will not be retried. Settings → Sync lists them.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Shepherd schreibt jede Änderung zuerst in eine lokale Warteschlange und sendet sie im Hintergrund. Zurückgestellt ist eine Änderung, unter der sich das Issue geändert hat; Einstellungen → Sync listet sie auf."
+            "value": "Shepherd schreibt jede Änderung zuerst in eine lokale Warteschlange und sendet sie im Hintergrund. Zurückgestellt ist eine Änderung, unter der sich das Issue geändert hat; eine fehlgeschlagene wurde aufgegeben und wird nicht erneut versucht. Einstellungen → Sync listet sie auf."
           }
         }
       }

@@ -260,6 +260,43 @@ final class OutboxStoreTests: XCTestCase {
         XCTAssertEqual(afterDiscard, 0)
     }
 
+    func testRowsGivenUpOnAreCountedSeparatelyFromBothOfTheOthers() async throws {
+        // The third standing count: a row that failed non-retriably is neither waiting nor
+        // parked, so before this one existed nothing counted it at all.
+        let database = try DatabaseManager.inMemory()
+        let doomed = item(action: .addIssueComment(body: "on it", basedOnUpdatedAt: now))
+        var waiting = item()
+        waiting.createdAt = now.addingTimeInterval(1)
+        try await database.enqueue(doomed)
+        try await database.enqueue(waiting)
+        let before = try await database.failedOutboxCount()
+        XCTAssertEqual(before, 0)
+
+        try await database.markOutboxItemFailed(
+            id: doomed.id,
+            error: "no writer is wired up",
+            now: now,
+            retriable: false
+        )
+
+        let failed = try await database.failedOutboxCount()
+        let pending = try await database.pendingOutboxCount()
+        let conflicted = try await database.conflictedOutboxCount()
+        XCTAssertEqual(failed, 1)
+        XCTAssertEqual(pending, 1, "the other row is untouched")
+        XCTAssertEqual(conflicted, 0, "given up on is not the same as parked")
+
+        // A retriable failure goes back to `pending` and is therefore not counted here.
+        try await database.markOutboxItemFailed(
+            id: waiting.id,
+            error: "the tunnel",
+            now: now,
+            retriable: true
+        )
+        let afterRetriable = try await database.failedOutboxCount()
+        XCTAssertEqual(afterRetriable, 1)
+    }
+
     func testDiscardingAConflictDeletesIt() async throws {
         let database = try DatabaseManager.inMemory()
         let queued = item()

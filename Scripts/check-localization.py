@@ -129,6 +129,7 @@ INTEGER_EXPRESSIONS = frozenset(
         "facet.classifiedCount",
         "facets.count - 6",
         "facets.hiddenCount",
+        "failed",
         "failedCount",
         "insideCount",
         "iterations",

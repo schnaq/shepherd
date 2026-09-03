@@ -220,6 +220,25 @@ extension DatabaseManager {
         }
     }
 
+    /// How many mutations were given up on because retrying them cannot help.
+    ///
+    /// The third standing count, beside ``pendingOutboxCount()`` and
+    /// ``conflictedOutboxCount()``, and it is the one that was missing: a write can also end in
+    /// ``ShepherdCore/OutboxState/failed`` — a 4xx from GitHub, or a port the app never wired
+    /// up — and such a row is neither waiting nor parked, so neither of the other two counts it.
+    /// Like a
+    /// parked row it never goes away by itself, which is what makes it worth showing rather than
+    /// leaving in a table nobody reads.
+    public func failedOutboxCount() async throws -> Int {
+        try await writer.read { db in
+            try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM outbox WHERE state = ?",
+                arguments: [OutboxState.failed.rawValue]
+            ) ?? 0
+        }
+    }
+
     /// Deletes a row outright — the user discarding a conflicted mutation.
     /// - Parameter id: The row's identity.
     public func deleteOutboxItem(id: UUID) async throws {
