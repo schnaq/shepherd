@@ -27,7 +27,9 @@ final class SearchIndexStoreTests: XCTestCase {
     }
 
     func testTheSchemaGainsV3AndStaysAppendOnly() async throws {
-        XCTAssertEqual(DatabaseManager.migrator.migrations, ["v1", "v2", "v3", "v4"])
+        // Append-only: v3 is still the third migration whatever came after it. The full list is
+        // asserted once, in `DatabaseManagerTests`, so a new migration is one edit and not four.
+        XCTAssertEqual(Array(DatabaseManager.migrator.migrations.prefix(3)), ["v1", "v2", "v3"])
         let database = try DatabaseManager.inMemory()
         try await database.writer.read { db in
             let columns = try db.columns(in: "search_index").map(\.name)

@@ -29,7 +29,9 @@ final class TriageVerdictStoreTests: XCTestCase {
     }
 
     func testTheSchemaGainsV4AndStaysAppendOnly() async throws {
-        XCTAssertEqual(DatabaseManager.migrator.migrations, ["v1", "v2", "v3", "v4"])
+        // Append-only: v4 is still the fourth migration whatever came after it; the full list
+        // lives in `DatabaseManagerTests`.
+        XCTAssertEqual(Array(DatabaseManager.migrator.migrations.prefix(4)), ["v1", "v2", "v3", "v4"])
         let database = try DatabaseManager.inMemory()
         try await database.writer.read { db in
             let columns = try db.columns(in: "triage_verdicts").map(\.name)
