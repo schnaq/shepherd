@@ -136,17 +136,34 @@ final class SearchIndexCoordinator {
     /// - Parameters:
     ///   - query: What the user typed.
     ///   - limit: How many rows the palette has room for.
+    ///   - verdicts: The structured-triage verdicts the `risk:`/`kind:` tokens filter against,
+    ///     keyed by node id (ADR 0023). A dictionary rather than a coordinator, so this folder
+    ///     keeps knowing nothing about triage: the palette reads both and passes one into the
+    ///     other. Empty — the default — means a query with those tokens matches nothing, which is
+    ///     the honest answer on a Mac that has classified nothing.
     /// - Returns: The best matches, best first. Empty for an empty query and for a query nothing
     ///   matches — a palette that answered every query with its six least-unrelated pull requests
     ///   would be worse than one that answered nothing.
-    func results(for query: String, limit: Int = 6) async -> [PullRequestSearchResult] {
+    func results(
+        for query: String,
+        limit: Int = 6,
+        verdicts: [String: TriageVerdict] = [:]
+    ) async -> [PullRequestSearchResult] {
         let parsed = SearchQuery(text: query)
         guard !parsed.isEmpty, !documents.isEmpty else { return [] }
-        let corpus = Array(documents.values)
+        var corpus = Array(documents.values)
+        if parsed.triage.isActive {
+            // Narrowing, before anything is scored or embedded: `risk:high login` is a search for
+            // *login* inside the high-risk pull requests, not a search over everything with the
+            // filter applied to the six that came back.
+            corpus = corpus.filter { parsed.triage.matches(verdicts[$0.prID]) }
+            guard !corpus.isEmpty else { return [] }
+        }
 
         var searchVectors: SearchVectors?
-        // An exact `owner/repo#n` is not a ranking question, so it does not spend an embedding.
-        if !vectors.isEmpty, parsed.reference == nil,
+        // An exact `owner/repo#n` is not a ranking question, so it does not spend an embedding —
+        // and neither is a query that has no words left after its filter tokens came out.
+        if !vectors.isEmpty, parsed.reference == nil, parsed.hasSearchTerms,
            let queryVector = await embedder.vector(for: parsed.normalizedText) {
             searchVectors = SearchVectors(query: queryVector, documents: vectors)
         }

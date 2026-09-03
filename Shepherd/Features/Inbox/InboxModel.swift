@@ -239,6 +239,16 @@ final class InboxModel {
     var repoFilter: RepoRef? {
         didSet { clampSelection() }
     }
+    /// The selected risk facet, if any (ADR 0023).
+    ///
+    /// A fourth rail filter beside the three above, and it composes with them rather than
+    /// replacing them: "high risk, in this repository, that needs my review" is the question the
+    /// facet exists for. It filters on ``TriageCoordinator/risk(for:)``, which is the model's
+    /// verdict where there is one and the tier-1 heuristic where there is not — so the facet
+    /// keeps working with Apple Intelligence off.
+    var riskFilter: TriageVerdict.Risk? {
+        didSet { clampSelection() }
+    }
     /// The selected row's pull request id — the keyboard cursor, always exactly one row.
     var selectedID: String?
     /// The rows ticked for a bulk action (ADR 0015).
@@ -263,6 +273,13 @@ final class InboxModel {
     private(set) var summaryOutcome: IntelligenceOutcome<PRSummary> = .disabled
     /// The provider router, refreshed by the view whenever Settings change.
     var intelligence: IntelligenceRouter = .disabled
+    /// The structured-triage verdicts, handed over by the screen (ADR 0023).
+    ///
+    /// A reference rather than a copy, and optional so the model can be built — and tested —
+    /// without one: the coordinator is owned by ``AppEnvironment`` because a verdict belongs to
+    /// the app's lifetime rather than to a screen's, and every screen that shows a chip reads the
+    /// same one. Assigned exactly where ``intelligence`` is, in ``InboxScreen``'s `task`.
+    var triage: TriageCoordinator?
     /// Whether a detail refresh is in flight.
     private(set) var isRefreshingDetail = false
 
@@ -318,6 +335,10 @@ final class InboxModel {
             // Case-insensitive: the rail always sets this from a row it is showing, but a
             // `shepherd://inbox?filter=repo:…` link carries whatever casing was typed.
             if let repoFilter, !row.repo.isSameRepository(as: repoFilter) { return false }
+            // A row with no risk at all — nobody has opened it, so there is no diff to judge and
+            // no verdict — is filtered *out* rather than kept: the facet is a claim about risk,
+            // and "we do not know" is not one of its levels.
+            if let riskFilter, triage?.risk(for: row.id) != riskFilter { return false }
             return true
         }
     }
@@ -386,6 +407,27 @@ final class InboxModel {
             result.append((.humans, String(localized: "Humans"), Theme.accent, humanCount))
         }
         return result
+    }
+
+    /// The risk levels present in the current smart view, with counts (ADR 0023).
+    ///
+    /// Counted over the smart view rather than over the filtered list, exactly as the agents and
+    /// repositories facets are: a facet whose counts changed when you selected one of its own
+    /// rows could not be used to compare them.
+    ///
+    /// The counting itself is ``ShepherdCore/TriageFacets/riskFacets(_:)`` — pure, and unit-tested
+    /// on Linux — because "how many high-risk pull requests are there" is a number the user reads
+    /// off the rail and acts on.
+    var riskFacets: [TriageRiskFacet] {
+        guard let triage else { return [] }
+        let ids = allRows.filter { smartView.matches($0) }.map(\.id)
+        return triage.riskFacets(for: ids)
+    }
+
+    /// What one row shows beside its title, or `nil` when there is nothing to show.
+    /// - Parameter id: The pull request's node id.
+    func triageSummary(for id: String) -> TriageRowSummary? {
+        triage?.row(for: id)
     }
 
     /// The repositories present in the current data, with counts.
@@ -458,6 +500,10 @@ final class InboxModel {
         smartView = selection.smartView
         provenanceFilter = selection.provenanceFilter
         repoFilter = selection.repoFilter
+        // The link's grammar has no risk token (ADR 0013 is unchanged by ADR 0023), so a risk
+        // facet left selected from before would silently narrow what the link asked for — and an
+        // empty list looks like a broken link, which is the argument the whole mapping makes.
+        riskFilter = nil
     }
 
     // MARK: - Selection

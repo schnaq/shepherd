@@ -969,19 +969,17 @@ struct IntelligenceSettingsTab: View {
 
     // MARK: - Structured triage (plan §3.A)
 
-    /// The one toggle the on-device classifier needs.
+    /// The toggle and the status line the on-device classifier needs.
     ///
     /// Directly under the search card because it is the same promise about the same kind of work:
     /// on-device, over rows Shepherd already has, going nowhere. The difference is stated rather
     /// than implied — this one *needs a model*, so with the provider above switched off it can do
     /// nothing, and the card says so instead of leaving a toggle that looks broken.
     ///
-    /// **Nothing consumes the switch yet.** The classifier, the `triage_verdicts` table and the
-    /// inbox facet are Sprint 1 (plan §3.A); the setting and its copy ship first so that they
-    /// travel between Macs and are translated in the commit that introduces them, rather than in
-    /// the commit that is busy building a classifier. So the copy is honest about what the switch
-    /// governs rather than about what it does today, and the second sentence names the fallback
-    /// that is already there — the tier-1 risk hints, which need no model at all.
+    /// There is deliberately no *Rebuild* button beside the search card's: a verdict is
+    /// invalidated by the document hash exactly as a vector is, so the only way to want one
+    /// rebuilt is to want them all rebuilt — which is what switching the toggle off and on does,
+    /// in two clicks, without a third control that means the same thing.
     private var structuredTriageCard: some View {
         Card {
             VStack(alignment: .leading, spacing: 8) {
@@ -1002,16 +1000,45 @@ struct IntelligenceSettingsTab: View {
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
+                Text(structuredTriageStatusLine)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    /// "142 of 210 pull requests classified", and the honest variants.
+    ///
+    /// Assembled from ``TriageStatus`` rather than from the database, so the line says what the
+    /// *running* classifier holds — the search card's arrangement. Three states are worth naming
+    /// and each one leaves the inbox usable: switched off, no model (or the tiers off), and a
+    /// pass in progress. The unavailability reason is shown in the model's own words, because
+    /// "Apple Intelligence is turned off in System Settings" is a sentence the user can act on
+    /// and "unavailable" is not.
+    private var structuredTriageStatusLine: String {
+        let status = environment.triage.status
+        guard environment.settings.structuredTriageEnabled else {
+            return String(localized: "Off — no verdicts are stored, and the inbox shows risk hints only.")
+        }
+        if let reason = status.unavailabilityReason {
+            return reason
+        }
+        guard status.classifiedCount > 0 else {
+            guard status.isClassifying else { return String(localized: "Nothing classified yet.") }
+            return String(localized: "Classifying \(status.rowCount) pull requests…")
+        }
+        return String(
+            localized: "\(status.classifiedCount) of \(status.rowCount) pull requests classified on this Mac."
+        )
     }
 
     private var structuredTriageBinding: Binding<Bool> {
         Binding(
             get: { environment.settings.structuredTriageEnabled },
-            // Nothing is applied here, exactly like the two switches above: the classifier reads
-            // the flag when it exists, so the toggle and an arriving settings document reach it
-            // through one route rather than two.
+            // Nothing is applied here, exactly like the two switches above: `ShepherdApp`
+            // watches the flag and calls `applyStructuredTriageSetting()`, so the toggle and an
+            // arriving settings document reach the coordinator through one route (ADR 0023).
             set: { environment.settings.structuredTriageEnabled = $0 }
         )
     }

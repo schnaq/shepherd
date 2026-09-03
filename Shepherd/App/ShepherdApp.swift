@@ -44,6 +44,12 @@ struct ShepherdApp: App {
                 .onChange(of: environment.settings.semanticSearchEnabled) { _, _ in
                     environment.applySemanticSearchSetting()
                 }
+                // And once more for structured triage (ADR 0023): the toggle in Settings and an
+                // applied settings document both land here, so there is one route from "the flag
+                // changed" to "the verdicts exist or do not".
+                .onChange(of: environment.settings.structuredTriageEnabled) { _, _ in
+                    environment.applyStructuredTriageSetting()
+                }
                 // `shepherd://` links: the terminal, Raycast, an n8n Execute Command node
                 // (ADR 0013). A link that arrives before the session exists is queued and
                 // replayed after sign-in.

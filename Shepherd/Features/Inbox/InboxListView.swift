@@ -46,6 +46,7 @@ struct InboxListView: View {
                 Button {
                     model.provenanceFilter = nil
                     model.repoFilter = nil
+                    model.riskFilter = nil
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 11))
@@ -140,6 +141,7 @@ struct InboxListView: View {
                                         isSelected: model.selectedID == row.id,
                                         showsMarkColumn: model.hasMarks,
                                         isMarked: model.markedIDs.contains(row.id),
+                                        triage: model.triageSummary(for: row.id),
                                         onToggleMark: { model.toggleMark(row.id) }
                                     )
                                     .id(row.id)
@@ -238,6 +240,10 @@ struct InboxListView: View {
 
     private var activeFilterLabel: String? {
         if let repo = model.repoFilter { return repo.fullName }
+        // Risk before provenance, because it is the narrower claim of the two: a rail with both
+        // selected is showing "this agent's high-risk pull requests", and the surprising half of
+        // that sentence is the risk.
+        if let risk = model.riskFilter { return risk.facetTitle }
         switch model.provenanceFilter {
         case .agent(let id):
             return model.provenanceFacets.first { $0.filter == .agent(id: id) }?.title ?? id
@@ -248,7 +254,7 @@ struct InboxListView: View {
     }
 
     private var emptyMessage: String {
-        if model.provenanceFilter != nil || model.repoFilter != nil {
+        if model.provenanceFilter != nil || model.repoFilter != nil || model.riskFilter != nil {
             return String(localized: "No pull request matches this filter. Clear it to see everything again.")
         }
         switch model.smartView {
@@ -351,6 +357,12 @@ struct InboxRowView: View {
     var showsMarkColumn = false
     /// Whether this row is ticked for a bulk action.
     var isMarked = false
+    /// The row's triage state, or `nil` when there is nothing to show (ADR 0023).
+    ///
+    /// Passed in rather than read from the coordinator here, for ``PullRequestSearchResult``'s
+    /// reason: a row is a value renderer, and a row that fetched its own chip would make the list
+    /// depend on a coordinator it otherwise knows nothing about.
+    var triage: TriageRowSummary?
     /// Ticks or unticks this row.
     var onToggleMark: (() -> Void)?
 
@@ -392,6 +404,14 @@ struct InboxRowView: View {
 
             ProvenanceChip(actor: row.author)
                 .layoutPriority(1)
+
+            // Beside the provenance chip, because the two say the same kind of thing about the
+            // row — where it came from, and what it is — and both are read before the title's
+            // truncation matters.
+            if let triage {
+                TriageChip(summary: triage)
+                    .layoutPriority(1)
+            }
 
             if row.isDraft {
                 ChipView(text: String(localized: "Draft"), color: Theme.textMuted)

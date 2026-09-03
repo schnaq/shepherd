@@ -309,10 +309,10 @@ final class AppSettings {
     /// the mode off the toggle is simply inert, and the inbox falls back to the tier-1 risk
     /// hints, which are always there.
     ///
-    /// **Nothing reads this yet.** The classifier, its `triage_verdicts` table and the facet are
-    /// Sprint 1; the setting ships first so it travels between Macs (ADR 0014) and is translated
-    /// (ADR 0022) in the same commit as the copy that describes it, rather than in the commit
-    /// that is busy building a classifier.
+    /// Read by ``TriageCoordinator`` and by nothing else (ADR 0023). Switching it off does not
+    /// merely stop the pass: it empties `triage_verdicts`, for the reason the search index's
+    /// switch empties its table — a switch that left its rows on disk would be lying about what
+    /// it is named after.
     var structuredTriageEnabled: Bool {
         didSet { defaults.set(structuredTriageEnabled, forKey: Keys.structuredTriage) }
     }

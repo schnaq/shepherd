@@ -651,12 +651,32 @@
         }
       }
     },
+    "%lld of %lld classified on this Mac; the rest are risk hints from the changed files.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %lld auf diesem Mac eingeordnet; der Rest sind Risikohinweise aus den geänderten Dateien."
+          }
+        }
+      }
+    },
     "%lld of %lld pull requests are still in the queue. Nothing you already queued is affected.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "%lld von %lld Pull Requests sind noch in der Warteschlange. Was du schon eingereiht hast, ist davon nicht betroffen."
+          }
+        }
+      }
+    },
+    "%lld of %lld pull requests classified on this Mac.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %lld Pull Requests auf diesem Mac eingeordnet."
           }
         }
       }
@@ -2331,12 +2351,42 @@
         }
       }
     },
+    "Classified on this Mac by the on-device model.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf diesem Mac vom On-Device-Modell eingeordnet."
+          }
+        }
+      }
+    },
+    "Classified on this Mac. Nothing was sent anywhere.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf diesem Mac eingeordnet. Nichts wurde irgendwohin gesendet."
+          }
+        }
+      }
+    },
     "Classifies each pull request on this Mac — what kind of change it is and how much it can hurt, with a one-sentence reason — so the inbox can sort and filter by it. Nothing leaves this Mac, and nothing acts on it: it never approves, merges or comments.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Ordnet jeden Pull Request auf diesem Mac ein — welche Art von Änderung er ist und wie viel Schaden er anrichten kann, mit einer Begründung in einem Satz — damit die Inbox danach sortieren und filtern kann. Nichts verlässt diesen Mac, und nichts handelt danach: Es approvt nichts, mergt nichts und kommentiert nichts."
+          }
+        }
+      }
+    },
+    "Classifying %lld pull requests…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Pull Requests werden eingeordnet…"
           }
         }
       }
@@ -3681,6 +3731,16 @@
         }
       }
     },
+    "High risk": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hohes Risiko"
+          }
+        }
+      }
+    },
     "Humans": {
       "localizations": {
         "de": {
@@ -4151,6 +4211,16 @@
         }
       }
     },
+    "Low risk": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niedriges Risiko"
+          }
+        }
+      }
+    },
     "MENU BAR": {
       "localizations": {
         "de": {
@@ -4207,6 +4277,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Max. Turns"
+          }
+        }
+      }
+    },
+    "Medium risk": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mittleres Risiko"
           }
         }
       }
@@ -4811,6 +4891,16 @@
         }
       }
     },
+    "Nothing classified yet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch nichts eingeordnet."
+          }
+        }
+      }
+    },
     "Nothing exported yet.": {
       "localizations": {
         "de": {
@@ -5017,6 +5107,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Aus — die Pull Requests von Shepherd sind nicht in Spotlight."
+          }
+        }
+      }
+    },
+    "Off — no verdicts are stored, and the inbox shows risk hints only.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aus — es werden keine Einordnungen gespeichert, und die Inbox zeigt nur Risikohinweise."
           }
         }
       }
@@ -5751,6 +5851,26 @@
         }
       }
     },
+    "RISK": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RISIKO"
+          }
+        }
+      }
+    },
+    "RISK HINTS": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RISIKOHINWEISE"
+          }
+        }
+      }
+    },
     "Re-review": {
       "localizations": {
         "de": {
@@ -6187,6 +6307,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Review · %lld offen"
+          }
+        }
+      }
+    },
+    "Risk hints from the changed files, worked out without a model.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Risikohinweise aus den geänderten Dateien, ohne Modell ermittelt."
           }
         }
       }
@@ -7631,6 +7761,16 @@
         }
       }
     },
+    "The model gave no reason for this one.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Modell hat hierfür keinen Grund genannt."
+          }
+        }
+      }
+    },
     "The model returned an empty draft.": {
       "localizations": {
         "de": {
@@ -8211,6 +8351,16 @@
         }
       }
     },
+    "Turn on Apple Intelligence above to classify pull requests. Until then the inbox shows the risk hints it works out without a model.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schalte Apple Intelligence oben ein, damit Pull Requests eingeordnet werden. Bis dahin zeigt die Inbox die Risikohinweise, die ohne Modell ermittelt werden."
+          }
+        }
+      }
+    },
     "Type a command…": {
       "localizations": {
         "de": {
@@ -8431,6 +8581,26 @@
         }
       }
     },
+    "WHY THIS RISK": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WARUM DIESES RISIKO"
+          }
+        }
+      }
+    },
+    "WHY THIS VERDICT": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WARUM DIESE EINORDNUNG"
+          }
+        }
+      }
+    },
     "WILL BE QUEUED (%lld)": {
       "localizations": {
         "de": {
@@ -8467,6 +8637,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Wenn das Modell etwas nachschaut, kann es nur lesen — die Checks, ein Log, eine Datei. Es kann nicht kommentieren, nichts approven, nichts mergen und keinen Agenten starten."
+          }
+        }
+      }
+    },
+    "Why Shepherd flagged this risk": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warum Shepherd dieses Risiko meldet"
+          }
+        }
+      }
+    },
+    "Why this pull request was classified this way": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warum dieser Pull Request so eingeordnet wurde"
           }
         }
       }
@@ -8517,6 +8707,16 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "Worked out from the changed files without a model, so there is no kind and no sentence — just what the paths and the diff say.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ohne Modell aus den geänderten Dateien ermittelt — daher gibt es keine Art und keinen Satz, nur das, was Pfade und Diff sagen."
           }
         }
       }
@@ -8721,6 +8921,16 @@
         }
       }
     },
+    "chore": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "chore"
+          }
+        }
+      }
+    },
     "commands": {
       "localizations": {
         "de": {
@@ -8771,6 +8981,26 @@
         }
       }
     },
+    "dependency": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dependency"
+          }
+        }
+      }
+    },
+    "docs": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "docs"
+          }
+        }
+      }
+    },
     "draft comments on an older commit": {
       "localizations": {
         "de": {
@@ -8807,6 +9037,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Exit %lld"
+          }
+        }
+      }
+    },
+    "feature": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "feature"
+          }
+        }
+      }
+    },
+    "fix": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "fix"
           }
         }
       }
@@ -9201,6 +9451,16 @@
         }
       }
     },
+    "refactor": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "refactor"
+          }
+        }
+      }
+    },
     "related by meaning": {
       "localizations": {
         "de": {
@@ -9237,6 +9497,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "aufgelöst"
+          }
+        }
+      }
+    },
+    "risk high": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Risiko hoch"
+          }
+        }
+      }
+    },
+    "risk low": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Risiko niedrig"
+          }
+        }
+      }
+    },
+    "risk medium": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Risiko mittel"
           }
         }
       }

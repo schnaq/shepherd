@@ -58,6 +58,10 @@ struct InboxScreen: View {
         .toolbar { toolbarContent }
         .task {
             model.intelligence = environment.intelligence
+            // The verdicts the chips and the RISK facet read (ADR 0023). Handed over here rather
+            // than at construction for ``intelligence``'s reason: the coordinator belongs to the
+            // app's lifetime, the screen is rebuilt whenever the route changes.
+            model.triage = environment.triage
             model.startObserving()
             // A deep link raised while the review screen was showing routes here first; the
             // request is waiting in the container by the time this screen appears.

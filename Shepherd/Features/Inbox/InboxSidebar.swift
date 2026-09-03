@@ -1,7 +1,8 @@
 import ShepherdCore
 import SwiftUI
 
-/// The left rail: smart views, the AGENTS facet, the REPOSITORIES facet, Settings.
+/// The left rail: smart views, the RISK facet, the AGENTS facet, the REPOSITORIES facet,
+/// Settings.
 struct InboxSidebar: View {
     /// The inbox model.
     let model: InboxModel
@@ -12,6 +13,7 @@ struct InboxSidebar: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 smartViews
+                riskFacet
                 agentsFacet
                 repositoriesFacet
             }
@@ -40,6 +42,37 @@ struct InboxSidebar: View {
                     model.smartView = view
                 }
                 .help(helpText(for: view))
+            }
+        }
+    }
+
+    /// The RISK facet (ADR 0023).
+    ///
+    /// Directly under the smart views, above the agents, because it answers the question a
+    /// reviewer asks *after* "who is waiting on me": which of these can hurt. It is absent
+    /// entirely when nothing has a risk — a fresh install, a Mac with the switch off, an inbox
+    /// nobody has opened a pull request in — which is the same rule the two facets below follow
+    /// and is what keeps the rail from carrying a section that filters to nothing.
+    ///
+    /// The tooltip is the honest part: with the on-device model off the counts come from the
+    /// tier-1 hints, and the rail says so rather than passing heuristics off as verdicts.
+    @ViewBuilder
+    private var riskFacet: some View {
+        let facets = model.riskFacets
+        if !facets.isEmpty {
+            VStack(alignment: .leading, spacing: 2) {
+                RailSectionHeader(title: String(localized: "RISK"))
+                ForEach(facets) { facet in
+                    RailRow(
+                        title: facet.risk.facetTitle,
+                        dotColor: facet.risk.chipColor,
+                        count: facet.count,
+                        isSelected: model.riskFilter == facet.risk
+                    ) {
+                        model.riskFilter = model.riskFilter == facet.risk ? nil : facet.risk
+                    }
+                    .help(helpText(for: facet))
+                }
             }
         }
     }
@@ -111,6 +144,21 @@ struct InboxSidebar: View {
             .buttonStyle(.plain)
         }
         .background(Theme.panel)
+    }
+
+    /// Says where a risk row's number came from, because the two sources are different claims.
+    private func helpText(for facet: TriageRiskFacet) -> String {
+        guard facet.classifiedCount > 0 else {
+            return String(
+                localized: "Risk hints from the changed files, worked out without a model."
+            )
+        }
+        guard facet.classifiedCount < facet.count else {
+            return String(localized: "Classified on this Mac by the on-device model.")
+        }
+        return String(
+            localized: "\(facet.classifiedCount) of \(facet.count) classified on this Mac; the rest are risk hints from the changed files."
+        )
     }
 
     private func helpText(for view: SmartView) -> String {

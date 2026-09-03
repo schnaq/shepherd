@@ -95,6 +95,12 @@ final class AppEnvironment {
     /// Created inert: it holds no corpus and loads no model until the first inbox observation
     /// hands it rows, and with the setting off it never reads a diff or spends an embedding.
     let search: SearchIndexCoordinator
+    /// Gives every pull request in the inbox an on-device triage verdict (ADR 0023).
+    ///
+    /// Created inert, like the search index beside it: it loads no model and classifies nothing
+    /// until the first inbox observation hands it rows, and with the switch off — or with the
+    /// tiers off — a pass is one `Bool` read.
+    let triage: TriageCoordinator
     /// Ranks the saved replies against the thread a reviewer is answering, so the two that fit
     /// are at the top of the insert menu (ADR 0019's embedder, reused).
     ///
@@ -185,6 +191,7 @@ final class AppEnvironment {
             }
         )
         self.search = SearchIndexCoordinator(settings: settings)
+        self.triage = TriageCoordinator(settings: settings)
         self.spotlight = SpotlightIndexer(settings: settings)
         self.digest = DigestCoordinator(
             settings: settings,
@@ -298,6 +305,10 @@ final class AppEnvironment {
         // Its table went with `eraseAllData()` above — the index is local cache in exactly the
         // sense ADR 0006 means.
         search.reset()
+        // And the verdicts, for the same two reasons: they are the leaving account's pull
+        // requests described in the model's own words, and the table went with `eraseAllData()`
+        // above (ADR 0023).
+        triage.reset()
         // And the Spotlight domain, which is the one piece of this account's data that lives
         // *outside* the database `eraseAllData()` just emptied: the system index is not Shepherd's
         // to leave behind (ADR 0021).
@@ -334,6 +345,12 @@ final class AppEnvironment {
                 self.spotlight.considerExporting(rows: rows)
                 guard let database = self.session?.database else { return }
                 self.search.considerIndexing(rows: rows, database: database)
+                // The fourth consumer of the same rows (ADR 0023), and deliberately a *peer* of
+                // the search index rather than something hanging off the end of its pass: the two
+                // features share a data source and nothing else, and a triage pass that only ran
+                // after an indexing pass would depend on the semantic-search toggle for its
+                // quality (`TriageCoordinator` argues it).
+                self.triage.considerClassifying(rows: rows, database: database)
             }
         )
         // A `shepherd://` link may have arrived while the app was still launching or signed
@@ -495,15 +512,45 @@ final class AppEnvironment {
         }
     }
 
-    /// Re-indexes one pull request because the review screen just stored its diff (ADR 0019).
+    /// Starts or stops structured triage to match the setting (ADR 0023).
     ///
-    /// Promptness only: the stored `detailFetchedAt` moves, so the next ordinary pass would pick
-    /// the pull request up regardless. The screen announcing it just means the diff is searchable
-    /// before the next sweep rather than after it.
+    /// Called whenever ``AppSettings/structuredTriageEnabled`` changes — from the toggle in
+    /// Settings, or because a downloaded settings document carried the flag from another Mac
+    /// (ADR 0014). One route for both, exactly as ``applySemanticSearchSetting()`` is.
+    ///
+    /// Switching it off empties the table rather than keeping the verdicts warm, for the search
+    /// index's reason: a switch that left a verdict per pull request on disk would be lying about
+    /// what it is named after. Re-enabling costs one local pass.
+    func applyStructuredTriageSetting() {
+        guard let session else {
+            triage.reset()
+            return
+        }
+        if settings.structuredTriageEnabled {
+            triage.considerClassifying(rows: session.inboxRows, database: session.database)
+            return
+        }
+        // The delete is a write, so it is awaited in a task of its own; only the database — which
+        // is `Sendable` — crosses into it.
+        let database = session.database
+        Task { [weak self] in
+            guard let self else { return }
+            await self.triage.disable(database: database)
+        }
+    }
+
+    /// Re-indexes and re-classifies one pull request because the review screen just stored its
+    /// diff (ADR 0019, ADR 0023).
+    ///
+    /// Promptness only, for both: the stored `detailFetchedAt` moves, so the next ordinary pass
+    /// would pick the pull request up regardless. The screen announcing it just means the diff is
+    /// searchable — and the verdict is made from the change rather than from the title — before
+    /// the next sweep rather than after it.
     /// - Parameter prID: The pull request whose detail arrived.
     func searchIndexDidLoadDetail(prID: String) {
         guard let session else { return }
         search.indexAfterDetailLoad(prID: prID, database: session.database)
+        triage.classifyAfterDetailLoad(prID: prID, database: session.database)
     }
 
     /// Throws the search index away and builds it again — the *Rebuild index* button.

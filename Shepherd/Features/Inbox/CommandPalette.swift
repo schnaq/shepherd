@@ -148,7 +148,11 @@ struct CommandPaletteView: View {
         .task(id: query) {
             pullRequestResults = await environment.search.results(
                 for: query,
-                limit: CommandPaletteView.pullRequestResultLimit
+                limit: CommandPaletteView.pullRequestResultLimit,
+                // Read here, at the one call site, rather than held by the search coordinator:
+                // `risk:high kind:dependency` is a *filter over* the ranking, and the two
+                // coordinators stay unaware of each other (ADR 0023).
+                verdicts: environment.triage.verdicts
             )
         }
     }
