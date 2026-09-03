@@ -59,6 +59,7 @@ public final class DatabaseManager: Sendable {
         migrator.registerMigration("v2", migrate: DatabaseSchema.addV2)
         migrator.registerMigration("v3", migrate: DatabaseSchema.addV3)
         migrator.registerMigration("v4", migrate: DatabaseSchema.addV4)
+        migrator.registerMigration("v5", migrate: DatabaseSchema.addV5)
         return migrator
     }
 
@@ -149,6 +150,7 @@ enum DatabaseSchema {
         "agent_registry_overrides",
         "search_index",
         "triage_verdicts",
+        "review_snapshots",
     ]
 
     static func createV1(_ db: Database) throws {
@@ -435,6 +437,42 @@ enum DatabaseSchema {
                 reason TEXT NOT NULL DEFAULT '',
                 modelIdentifier TEXT NOT NULL DEFAULT '',
                 classifiedAt REAL NOT NULL
+            )
+            """)
+    }
+
+    /// The v5 addition: the diff a review was written against (ADR 0028).
+    ///
+    /// Append-only once more — `createV1`, `addV2`, `addV3` and `addV4` are never edited. The
+    /// agent-fleet plan sketched one shared `v5` for two features; the split is deliberate and
+    /// recorded in ADR 0028: this migration is the review snapshots, and the track-record
+    /// tables of that plan's feature B become `v6`. A migration is an identifier in
+    /// `grdb_migrations`, so two features sharing one would mean neither could ship first.
+    ///
+    /// Four decisions live in the DDL:
+    ///
+    /// - **The primary key is `(prID, reviewedHeadOid)`.** One row per reviewed head, so a
+    ///   second review of the same commit overwrites its own row while a review of a *new* head
+    ///   adds one — which is what makes `COUNT(*)` the number of rounds the inbox row shows.
+    /// - **`ON DELETE CASCADE` *is* the pruning**, as in `search_index` and `triage_verdicts`: a
+    ///   pull request that leaves the inbox takes its snapshots with it inside the sweep's own
+    ///   transaction. `foreignKeysEnabled` is on for every connection Shepherd opens.
+    /// - **`filesJSON` is a BLOB holding the encoded `changed_files` rows, patches included.**
+    ///   Not a second `changed_files`-shaped table: nothing queries inside a snapshot, the whole
+    ///   value is read at once by the interdiff, and the point of the snapshot is that it keeps
+    ///   the patches a force-push has since made unfetchable.
+    /// - **`reviewedAt` is `DATETIME` but holds Unix epoch seconds**, like every other timestamp
+    ///   in this schema (`DATETIME` has NUMERIC affinity, so the `REAL` is stored as written).
+    ///   The column type documents what the number means; the value stays sortable without
+    ///   parsing.
+    static func addV5(_ db: Database) throws {
+        try db.execute(sql: """
+            CREATE TABLE review_snapshots (
+                prID TEXT NOT NULL REFERENCES pull_requests(id) ON DELETE CASCADE,
+                reviewedHeadOid TEXT NOT NULL,
+                reviewedAt DATETIME NOT NULL,
+                filesJSON BLOB NOT NULL,
+                PRIMARY KEY (prID, reviewedHeadOid)
             )
             """)
     }

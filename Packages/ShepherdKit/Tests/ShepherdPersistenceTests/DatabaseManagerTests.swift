@@ -32,7 +32,19 @@ final class MigrationTests: XCTestCase {
     func testTheSchemaIsAppendOnly() async throws {
         // v1 is frozen; every change is a new migration. Locking the *order* here means an
         // edit to `createV1` — which would silently skip on existing installs — fails CI.
-        XCTAssertEqual(DatabaseManager.migrator.migrations, ["v1", "v2", "v3", "v4"])
+        XCTAssertEqual(DatabaseManager.migrator.migrations, ["v1", "v2", "v3", "v4", "v5"])
+    }
+
+    func testV5AddsTheReviewSnapshotsTable() async throws {
+        let database = try DatabaseManager.inMemory()
+        try await database.writer.read { db in
+            let columns = try db.columns(in: "review_snapshots").map(\.name)
+            XCTAssertEqual(columns, ["prID", "reviewedHeadOid", "reviewedAt", "filesJSON"])
+            // The composite primary key is what makes one row per reviewed head, and therefore
+            // what makes `COUNT(*)` the number of rounds (ADR 0028).
+            let primaryKey = try db.primaryKey("review_snapshots")
+            XCTAssertEqual(primaryKey.columns, ["prID", "reviewedHeadOid"])
+        }
     }
 
     func testV2AddsTheETagIndexAndTheOriginalLineColumn() async throws {

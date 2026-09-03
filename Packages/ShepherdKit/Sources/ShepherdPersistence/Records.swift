@@ -691,3 +691,41 @@ struct TriageVerdictRecord: Codable, FetchableRecord, PersistableRecord {
         )
     }
 }
+
+/// A row of `review_snapshots` (ADR 0028).
+///
+/// The files travel as one JSON blob rather than as rows of a snapshot-shaped copy of
+/// `changed_files`: nothing queries inside a snapshot — the interdiff reads the whole value at
+/// once — and the blob is what keeps the patches after a force-push has made them unfetchable.
+/// `filesJSON` is `Data`, which GRDB stores as a BLOB, the same treatment ``OutboxRecord``'s
+/// payload gets.
+struct ReviewSnapshotRecord: Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = "review_snapshots"
+
+    var prID: String
+    var reviewedHeadOid: String
+    var reviewedAt: Double
+    var filesJSON: Data
+
+    init(snapshot: ReviewSnapshot) {
+        self.prID = snapshot.prID
+        self.reviewedHeadOid = snapshot.reviewedHeadOid
+        self.reviewedAt = snapshot.reviewedAt.timeIntervalSince1970
+        self.filesJSON = (try? JSONEncoder().encode(snapshot.files)) ?? Data("[]".utf8)
+    }
+
+    /// Rebuilds the snapshot.
+    ///
+    /// A blob this version cannot decode yields a snapshot with **no** files rather than a
+    /// failed fetch, and the interdiff over an empty baseline produces nothing — so the review
+    /// screen offers no "Since your review" tab, which is the honest answer to "the baseline is
+    /// unreadable" and exactly what the plan calls the unavailable case.
+    var snapshot: ReviewSnapshot {
+        ReviewSnapshot(
+            prID: prID,
+            reviewedHeadOid: reviewedHeadOid,
+            reviewedAt: Date(timeIntervalSince1970: reviewedAt),
+            files: (try? JSONDecoder().decode([ChangedFile].self, from: filesJSON)) ?? []
+        )
+    }
+}
