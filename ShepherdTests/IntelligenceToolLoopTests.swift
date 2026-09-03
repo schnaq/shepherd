@@ -25,6 +25,8 @@ final class IntelligenceToolLoopTests: XCTestCase {
 
     private static let path = "Sources/Upload.swift"
     private static let binaryPath = "Resources/icon.png"
+    /// What ``path`` was called before the rename, for the fixture that renames it.
+    private static let previousPath = "Sources/Uploader.swift"
 
     private func summary(number: Int = 42) -> PullRequestSummary {
         PullRequestSummary(
@@ -310,6 +312,55 @@ final class IntelligenceToolLoopTests: XCTestCase {
         XCTAssertTrue(body.contains("App build (macOS)"))
         XCTAssertTrue(body.contains(Self.path))
         XCTAssertTrue(body.contains("Only these paths can be read"))
+    }
+
+    func testARenamedFilesOldPathIsBothListedAndReadable() async throws {
+        // The two lists have to be one derivation. `IntelligenceToolRegistry(changedFiles:)`
+        // keeps a rename's previous path — it is in the diff — so a prompt built from
+        // `files.map(\.path)` promised less than the executor allowed, and the model was refused
+        // for naming a path the pull request does contain.
+        let renamed = PullRequestDetail(
+            summary: summary(),
+            bodyMarkdown: "Renames the uploader and retries once more.",
+            files: [
+                ChangedFile(
+                    path: Self.path,
+                    previousPath: Self.previousPath,
+                    status: .renamed,
+                    additions: 4,
+                    deletions: 4,
+                    patch: patch()
+                ),
+            ],
+            checks: checks()
+        )
+
+        let built = CIDiagnosisRequest.build(
+            detail: renamed,
+            summary: summary(),
+            budget: .onDevice
+        )
+
+        // Both paths, each once, the new one first — a stable order for a prompt.
+        XCTAssertEqual(built.changedFilePaths, [Self.path, Self.previousPath])
+        XCTAssertEqual(
+            built.registry.changedFilePaths,
+            IntelligenceToolRegistry(changedFiles: renamed.files).changedFilePaths,
+            "what the prompt lists is what the executor validates against"
+        )
+        XCTAssertTrue(IntelligencePrompt.body(for: built).contains(Self.previousPath))
+
+        // And the read itself goes through, rather than coming back as the guardrail's refusal.
+        let result = try await LocalToolExecutor(detail: renamed, budget: .onDevice).execute(
+            IntelligenceToolCall(
+                id: "c12",
+                tool: .fileDiff,
+                arguments: ["path": .string(Self.previousPath)]
+            )
+        )
+        XCTAssertFalse(result.content.contains("not one of the files"))
+        XCTAssertFalse(result.content.contains("no diff"))
+        XCTAssertTrue(result.content.contains(Self.previousPath))
     }
 
     // MARK: - Anthropic: the tool_use loop

@@ -69,6 +69,10 @@ struct CIDiagnosisRequest: Sendable, Hashable {
     /// The red checks, capped to ``maximumChecks``.
     var failingChecks: [Check]
     /// Every path this pull request changed — the list a `fileDiff` call is validated against.
+    ///
+    /// Built by ``changedPaths(in:)``, which is the only place it may come from: this list and the
+    /// executor's registry have to hold the same paths or the prompt promises a read the executor
+    /// refuses.
     var changedFilePaths: [String]
     /// The answering tier's token budget.
     var budget: TokenBudget
@@ -105,6 +109,34 @@ struct CIDiagnosisRequest: Sendable, Hashable {
     /// Derived rather than stored so it cannot disagree with ``changedFilePaths``.
     var registry: IntelligenceToolRegistry {
         IntelligenceToolRegistry(changedFilePaths: Set(changedFilePaths))
+    }
+
+    /// The paths a `fileDiff` call may name, in the order the prompt lists them.
+    ///
+    /// **Derived from the registry, not from the file list, and that is the whole point.**
+    /// ``LocalToolExecutor`` validates against `IntelligenceToolRegistry(changedFiles:)`, which
+    /// keeps a renamed file's *previous* path as well — both are in the diff, so a log naming the
+    /// old one is not the model inventing anything. Mapping `files` to `path` here left the two
+    /// disagreeing: the model was told about one list and refused against another, and the
+    /// refusal it read ("not one of the files this pull request changed") named a path the diff
+    /// does contain. One derivation, one answer.
+    ///
+    /// The order is `files`' own, with a rename's previous path directly behind its new one,
+    /// because the registry is a `Set` and a prompt whose file list is shuffled between runs is a
+    /// prompt nobody can compare two answers from.
+    /// - Parameter detail: The fetched pull request.
+    /// - Returns: Every readable path, each once, in a stable order.
+    static func changedPaths(in detail: PullRequestDetail) -> [String] {
+        let readable = IntelligenceToolRegistry(changedFiles: detail.files).changedFilePaths
+        var ordered: [String] = []
+        var seen = Set<String>()
+        for file in detail.files {
+            for path in [file.path, file.previousPath].compactMap({ $0 }) {
+                guard readable.contains(path), seen.insert(path).inserted else { continue }
+                ordered.append(path)
+            }
+        }
+        return ordered
     }
 
     /// The approximate token count of the prompt this request renders to.
@@ -147,7 +179,7 @@ struct CIDiagnosisRequest: Sendable, Hashable {
             number: summary.number,
             pullRequestTitle: String(summary.title.prefix(maximumTitleCharacters)),
             failingChecks: checks,
-            changedFilePaths: detail.files.map(\.path),
+            changedFilePaths: changedPaths(in: detail),
             budget: budget
         )
     }
