@@ -50,7 +50,11 @@ struct InboxScreen: View {
         // The database and the issue read, rather than the whole session: the narrower
         // dependency is what makes `IssueInboxModel` testable without a Keychain (ADR 0032).
         _issueModel = State(
-            initialValue: IssueInboxModel(database: session.database, issues: session.github)
+            initialValue: IssueInboxModel(
+                database: session.database,
+                issues: session.github,
+                viewerLogin: session.account.login
+            )
         )
     }
 
@@ -86,6 +90,10 @@ struct InboxScreen: View {
             // app's lifetime, the screen is rebuilt whenever the route changes.
             model.triage = environment.triage
             model.startObserving()
+            // Handed over here rather than at construction, for `model.intelligence`'s reason:
+            // the screen is rebuilt whenever the route changes, and a queued write has to reach
+            // the sync engine that outlives it.
+            issueModel.drain = { [session] in await session.drainOutbox() }
             issueModel.startObserving()
             // A deep link raised while the review screen was showing routes here first; the
             // request is waiting in the container by the time this screen appears.

@@ -1151,6 +1151,46 @@
         }
       }
     },
+    "%lld parked — the issue moved on": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld zurückgestellt – das Issue hat sich geändert"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld zurückgestellt – das Issue hat sich geändert"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld parked — the issue moved on"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld parked — the issue moved on"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld passed, %lld failed, %lld running": {
       "localizations": {
         "de": {
@@ -1537,6 +1577,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "max. %lld Turns"
+          }
+        }
+      }
+    },
+    "%lld waiting to be sent": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld wartet auf den Versand"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld warten auf den Versand"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld waiting to be sent"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld waiting to be sent"
+                }
+              }
+            }
           }
         }
       }
@@ -2181,6 +2261,16 @@
         }
       }
     },
+    "Add yourself as an assignee, without removing anyone": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dich als Zuständige:n hinzufügen, ohne jemanden zu entfernen"
+          }
+        }
+      }
+    },
     "Added to your review summary — open Submit review to edit it.": {
       "localizations": {
         "de": {
@@ -2687,6 +2777,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Fragt ein Modell, warum dieser Check rot ist. Es kann nur lesen — die Checks, das Log, den Diff."
+          }
+        }
+      }
+    },
+    "Assign to me": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mir zuweisen"
+          }
+        }
+      }
+    },
+    "Assignment queued.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zuweisung eingereiht."
           }
         }
       }
@@ -3581,6 +3691,36 @@
         }
       }
     },
+    "Close as completed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Als erledigt schließen"
+          }
+        }
+      }
+    },
+    "Close as not planned": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Als nicht geplant schließen"
+          }
+        }
+      }
+    },
+    "Close queued.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schließen eingereiht."
+          }
+        }
+      }
+    },
     "Close the diagnosis": {
       "localizations": {
         "de": {
@@ -3691,6 +3831,16 @@
         }
       }
     },
+    "Comment on %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentar zu %@"
+          }
+        }
+      }
+    },
     "Comment on line %lld": {
       "localizations": {
         "de": {
@@ -3707,6 +3857,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pull Request kommentieren"
+          }
+        }
+      }
+    },
+    "Comment queued.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentar eingereiht."
+          }
+        }
+      }
+    },
+    "Comment…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentieren …"
           }
         }
       }
@@ -3867,6 +4037,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld davon konnten nicht eingereiht werden: %@"
+          }
+        }
+      }
+    },
+    "Could not queue that — nothing was sent.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konnte das nicht einreihen – es wurde nichts gesendet."
           }
         }
       }
@@ -5691,6 +5871,26 @@
         }
       }
     },
+    "Label": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Label"
+          }
+        }
+      }
+    },
+    "Label queued.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Label eingereiht."
+          }
+        }
+      }
+    },
     "Labels": {
       "localizations": {
         "de": {
@@ -6537,6 +6737,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Niemand wartet auf dich. Neue Review-Anfragen landen hier automatisch."
+          }
+        }
+      }
+    },
+    "No other label in this repository yet": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch kein weiteres Label in diesem Repository"
           }
         }
       }
@@ -7801,6 +8011,16 @@
         }
       }
     },
+    "Queue comment": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentar einreihen"
+          }
+        }
+      }
+    },
     "Queue the review": {
       "localizations": {
         "de": {
@@ -7847,6 +8067,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@-Merge von %@ bei %@ eingereiht am %@"
+          }
+        }
+      }
+    },
+    "Queued locally and posted in the background. Markdown, as on GitHub.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird lokal eingereiht und im Hintergrund gepostet. Markdown, wie auf GitHub."
           }
         }
       }
@@ -8177,6 +8407,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Der Worktree wurde entfernt."
+          }
+        }
+      }
+    },
+    "Reopen": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wieder öffnen"
+          }
+        }
+      }
+    },
+    "Reopen queued.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wieder öffnen eingereiht."
           }
         }
       }
@@ -9207,6 +9457,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Shepherd spricht nur mit github.com — plus dem KI-Endpunkt, den du selbst konfigurierst. Alles, was geladen wird, bleibt auf diesem Mac."
+          }
+        }
+      }
+    },
+    "Shepherd writes every change to a local queue first and sends it in the background. A parked write is one the issue changed underneath; Settings → Sync lists them.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd schreibt jede Änderung zuerst in eine lokale Warteschlange und sendet sie im Hintergrund. Zurückgestellt ist eine Änderung, unter der sich das Issue geändert hat; Einstellungen → Sync listet sie auf."
           }
         }
       }
@@ -10441,6 +10701,16 @@
         }
       }
     },
+    "The labels Shepherd has already seen in this repository. A label nothing here carries is a click away on GitHub.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Labels, die Shepherd in diesem Repository schon gesehen hat. Ein Label, das hier niemand trägt, ist einen Klick entfernt auf GitHub."
+          }
+        }
+      }
+    },
     "The lines this comment is anchored to changed in the new round. It does not say the change is right — the thread stays open until you resolve it.": {
       "localizations": {
         "de": {
@@ -10977,6 +11247,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dieses Gateway liest beide Felder: Es wählt ein Deployment in einem dieser Länder und — wenn keine Speicherung verlangt ist — eines, das weder deine Eingabe noch die Antwort speichert. Es lehnt die Anfrage ab, statt sie von anderswo zu beantworten, und die Antwort nennt den Betreiber, der das Modell ausgeführt hat."
+          }
+        }
+      }
+    },
+    "This issue is already assigned to you": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Issue ist dir bereits zugewiesen"
           }
         }
       }

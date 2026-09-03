@@ -15,13 +15,22 @@ import SwiftUI
 ///   body, and there is no `PullRequestDetail.timeline` twin to keep in step with a table nobody
 ///   asked for. The row's comment *count* is the whole of what the section says about the
 ///   conversation.
-/// - **No review actions.** Approve, request changes and merge are pull-request verbs; the issue
-///   writes (label, assign, close, comment) are a later sprint's outbox actions, and a button
-///   here that queued nothing would be worse than no button.
+/// - **No review actions.** Approve, request changes and merge are pull-request verbs. The issue
+///   *triage* writes are here since ADR 0032's Sprint 4a amendment — comment, label, assign to
+///   me, close as completed or not planned, reopen — and every one of them is an ordinary outbox
+///   row (ADR 0006): queued locally, sent by the drain, re-validated against the issue's
+///   `updatedAt` before it goes out. Nothing in this file calls `GitHubClient`.
 struct IssueDetailPanel: View {
     @Environment(AppEnvironment.self) private var environment
     /// The issues model.
     let model: IssueInboxModel
+
+    /// Whether the comment composer is up, and what is in it.
+    ///
+    /// A sheet rather than a field in the panel, because an issue comment is prose and the panel
+    /// is 320 points wide — the same argument the merge sheet makes for not being a button.
+    @State private var isCommentSheetPresented = false
+    @State private var commentBody = ""
 
     var body: some View {
         Group {
@@ -51,6 +60,14 @@ struct IssueDetailPanel: View {
             }
             Divider().overlay(Theme.border)
             actionBar(row)
+        }
+        .sheet(isPresented: $isCommentSheetPresented) {
+            IssueCommentSheet(row: row, text: $commentBody) { text in
+                Task {
+                    let queued = await model.comment(text, on: row)
+                    report(queued: queued, success: String(localized: "Comment queued."))
+                }
+            }
         }
     }
 
@@ -210,32 +227,199 @@ struct IssueDetailPanel: View {
     // MARK: - Actions
 
     private func actionBar(_ row: IssueRowSummary) -> some View {
-        HStack(spacing: 8) {
-            Button {
-                NSWorkspace.shared.open(
-                    AppConfig.issueURL(
-                        owner: row.repo.owner,
-                        name: row.repo.name,
-                        number: row.number
+        VStack(alignment: .leading, spacing: 8) {
+            queueStatus(row)
+            triageRow(row)
+            HStack(spacing: 8) {
+                Button {
+                    NSWorkspace.shared.open(
+                        AppConfig.issueURL(
+                            owner: row.repo.owner,
+                            name: row.repo.name,
+                            number: row.number
+                        )
                     )
-                )
-            } label: {
-                Text(String(localized: "Open on GitHub"))
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(SecondaryButtonStyle())
+                } label: {
+                    Text(String(localized: "Open on GitHub"))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(SecondaryButtonStyle())
 
-            Button {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(row.slug, forType: .string)
-                environment.toasts.info(String(localized: "Copied \(row.slug)"))
-            } label: {
-                Text(String(localized: "Copy reference"))
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(row.slug, forType: .string)
+                    environment.toasts.info(String(localized: "Copied \(row.slug)"))
+                } label: {
+                    Text(String(localized: "Copy reference"))
+                }
+                .buttonStyle(SecondaryButtonStyle())
             }
-            .buttonStyle(SecondaryButtonStyle())
         }
         .padding(16)
         .background(Theme.panel)
+    }
+
+    /// The triage writes, in the order a triage pass performs them.
+    ///
+    /// No keyboard shortcuts. `r a`, `m` and `x` are pull-request verbs and the issues section
+    /// refuses them (ADR 0032's Sprint 2 amendment); giving the issue writes global keys of their
+    /// own would be a second verb vocabulary, which is a decision nobody has made.
+    private func triageRow(_ row: IssueRowSummary) -> some View {
+        HStack(spacing: 8) {
+            Button {
+                commentBody = ""
+                isCommentSheetPresented = true
+            } label: {
+                Text(String(localized: "Comment…"))
+            }
+            .buttonStyle(SecondaryButtonStyle())
+
+            labelMenu(row)
+
+            if let login = model.viewerLogin, !login.isEmpty {
+                Button {
+                    Task {
+                        let queued = await model.assignToMe(row)
+                        report(
+                            queued: queued,
+                            success: String(localized: "Assignment queued.")
+                        )
+                    }
+                } label: {
+                    Text(String(localized: "Assign to me"))
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .disabled(row.myRelation.contains(.assigned))
+                .help(
+                    row.myRelation.contains(.assigned)
+                        ? String(localized: "This issue is already assigned to you")
+                        : String(localized: "Add yourself as an assignee, without removing anyone")
+                )
+            }
+
+            stateMenu(row)
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    /// The label picker, fed by the labels the section has already seen.
+    @ViewBuilder
+    private func labelMenu(_ row: IssueRowSummary) -> some View {
+        let candidates = model.availableLabels(for: row)
+        Menu {
+            if candidates.isEmpty {
+                Text(String(localized: "No other label in this repository yet"))
+            } else {
+                ForEach(candidates, id: \.self) { label in
+                    Button(label) {
+                        Task {
+                            let queued = await model.addLabel(label, on: row)
+                            report(
+                                queued: queued,
+                                success: String(localized: "Label queued.")
+                            )
+                        }
+                    }
+                }
+            }
+        } label: {
+            Text(String(localized: "Label"))
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help(
+            String(
+                localized: "The labels Shepherd has already seen in this repository. A label nothing here carries is a click away on GitHub."
+            )
+        )
+    }
+
+    /// Close (with a reason) or reopen — whichever the issue's state allows.
+    @ViewBuilder
+    private func stateMenu(_ row: IssueRowSummary) -> some View {
+        if row.state == .closed {
+            Button {
+                Task {
+                    let queued = await model.reopen(row)
+                    report(queued: queued, success: String(localized: "Reopen queued."))
+                }
+            } label: {
+                Text(String(localized: "Reopen"))
+            }
+            .buttonStyle(SecondaryButtonStyle())
+        } else {
+            Menu {
+                Button(String(localized: "Close as completed")) {
+                    Task {
+                        let queued = await model.close(.completed, on: row)
+                        report(queued: queued, success: String(localized: "Close queued."))
+                    }
+                }
+                Button(String(localized: "Close as not planned")) {
+                    Task {
+                        let queued = await model.close(.notPlanned, on: row)
+                        report(queued: queued, success: String(localized: "Close queued."))
+                    }
+                }
+            } label: {
+                Text(String(localized: "Close"))
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+        }
+    }
+
+    /// What the outbox is holding for this issue.
+    ///
+    /// The same two states the pull-request side shows — waiting to be sent, and parked because
+    /// the target moved on underneath the write (ADR 0006) — said here about one issue rather
+    /// than about the whole account. The standing counts in Settings → Sync and the title bar are
+    /// unchanged and already cover these rows; this line is what makes them findable.
+    @ViewBuilder
+    private func queueStatus(_ row: IssueRowSummary) -> some View {
+        let queued = model.queuedWriteCount(for: row)
+        let parked = model.parkedWriteCount(for: row)
+        if queued > 0 || parked > 0 {
+            HStack(spacing: 6) {
+                if queued > 0 {
+                    Image(systemName: "tray.full")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Theme.pending)
+                    Text(String(localized: "\(queued) waiting to be sent"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                if parked > 0 {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Theme.failure)
+                    Text(String(localized: "\(parked) parked — the issue moved on"))
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.textSecondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .help(
+                String(
+                    localized: "Shepherd writes every change to a local queue first and sends it in the background. A parked write is one the issue changed underneath; Settings → Sync lists them."
+                )
+            )
+        }
+    }
+
+    /// One toast per queued write, which is the confirmation of the click.
+    private func report(queued: Bool, success: String) {
+        if queued {
+            environment.toasts.success(success)
+        } else {
+            environment.toasts.show(
+                Toast(
+                    message: String(localized: "Could not queue that — nothing was sent."),
+                    kind: .failure
+                )
+            )
+        }
     }
 
     /// The node id of a linked pull request that is in the local inbox, or `nil`.

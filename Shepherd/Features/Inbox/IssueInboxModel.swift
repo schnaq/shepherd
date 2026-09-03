@@ -67,6 +67,18 @@ final class IssueInboxModel {
     /// Optional because "no fetcher" is a state and not a failure: without one the panel shows
     /// whatever body the cache holds, which is exactly what it shows while offline.
     let issues: (any IssueFetching)?
+    /// The signed-in login, so *Assign to me* has somebody to assign.
+    ///
+    /// `nil` is a state and not a failure, exactly as ``issues`` is: the button is simply not
+    /// drawn, which is what a window with no session shows anyway.
+    let viewerLogin: String?
+    /// How a queued write is pushed, when there is a sync engine to push it.
+    ///
+    /// A closure rather than the session, for the same reason the model takes a database and an
+    /// issue reader rather than a `SignedInSession`: a test can assert that a write reached the
+    /// outbox without a Keychain, a token or a network. `nil` leaves the row for the next drain,
+    /// which is what an offline queue does anyway.
+    @ObservationIgnored var drain: (@MainActor () async -> Void)?
 
     /// Every issue row the database holds, most-recently-updated first.
     private(set) var allRows: [IssueRowSummary] = []
@@ -102,6 +114,13 @@ final class IssueInboxModel {
     private(set) var detail: IssueDetail?
     /// Whether a body fetch is in flight.
     private(set) var isFetchingBody = false
+    /// The outbox rows that target the selected issue — queued, in flight or parked (ADR 0006).
+    ///
+    /// Read after every enqueue and every drain rather than observed, because it is a panel
+    /// detail rather than a source of truth: the standing counts in Settings → Sync and the title
+    /// bar are the observed ones, and they already cover every row in the outbox whichever kind
+    /// of node it targets.
+    private(set) var pendingWrites: [OutboxItem] = []
 
     private let now: @MainActor () -> Date
     private var observationTask: Task<Void, Never>?
@@ -111,14 +130,17 @@ final class IssueInboxModel {
     /// - Parameters:
     ///   - database: The local database.
     ///   - issues: How to read an issue body. `nil` leaves the panel on the cached body.
+    ///   - viewerLogin: The signed-in login, for *Assign to me*. `nil` hides that one button.
     ///   - now: The clock, injectable so the age facet is assertable.
     init(
         database: DatabaseManager,
         issues: (any IssueFetching)?,
+        viewerLogin: String? = nil,
         now: @escaping @MainActor () -> Date = { Date() }
     ) {
         self.database = database
         self.issues = issues
+        self.viewerLogin = viewerLogin
         self.now = now
         self.referenceDate = now()
     }
@@ -250,7 +272,9 @@ final class IssueInboxModel {
         guard selectedID != id else { return }
         selectedID = id
         detail = nil
+        pendingWrites = []
         loadDetail()
+        Task { await refreshPendingWrites() }
     }
 
     /// Selects one issue by node id, widening the facets if they hide it (ADR 0032).
@@ -349,5 +373,135 @@ final class IssueInboxModel {
         guard cached != nil else { return true }
         // A fetch at or after the row's own `updatedAt` cannot be describing an older body.
         return fetchedAt < row.updatedAt
+    }
+
+    // MARK: - Triage writes (ADR 0006, ADR 0032's Sprint 4a amendment)
+
+    /// The labels the section has seen in one repository, minus the ones the row already carries.
+    ///
+    /// What the picker offers, and it is deliberately built from rows the sweep already wrote
+    /// rather than from `GET /repos/{o}/{r}/labels`: that would be a new request on every panel,
+    /// for a list Shepherd is holding anyway. The price is honest and stated in the menu — a
+    /// label no issue in the section carries cannot be offered, and github.com is one click away.
+    /// - Parameter row: The issue the picker is for.
+    /// - Returns: Label names, sorted case-insensitively so the menu order is stable.
+    func availableLabels(for row: IssueRowSummary) -> [String] {
+        let present = Set(row.labels)
+        var seen: Set<String> = []
+        for candidate in allRows where candidate.repo.isSameRepository(as: row.repo) {
+            seen.formUnion(candidate.labels)
+        }
+        return seen.subtracting(present).sorted {
+            $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
+        }
+    }
+
+    /// The outbox rows targeting one issue.
+    /// - Parameter row: The issue.
+    func queuedWrites(for row: IssueRowSummary) -> [OutboxItem] {
+        pendingWrites.filter { $0.prID == row.id }
+    }
+
+    /// How many writes are queued or in flight for one issue.
+    /// - Parameter row: The issue.
+    func queuedWriteCount(for row: IssueRowSummary) -> Int {
+        queuedWrites(for: row).filter { $0.state == .pending || $0.state == .sending }.count
+    }
+
+    /// How many writes the drain parked for one issue because it moved on underneath them.
+    /// - Parameter row: The issue.
+    func parkedWriteCount(for row: IssueRowSummary) -> Int {
+        queuedWrites(for: row).filter { $0.state == .conflicted }.count
+    }
+
+    /// Re-reads the outbox. Cheap: one `SELECT` of a table that holds tens of rows at most.
+    func refreshPendingWrites() async {
+        // A read failure answers "nothing is queued", which is the same answer an empty outbox
+        // gives — and the panel's pending line is a convenience, not the record.
+        pendingWrites = (try? await database.allOutboxItems()) ?? []
+    }
+
+    /// Queues one issue write and asks for a drain.
+    ///
+    /// Every issue write in the app goes through here, exactly as every pull-request write goes
+    /// through ``PullRequestActions``: ADR 0006's rule is that a mutation is written to SQLite
+    /// first and executed by the sync engine, so a close queued in a tunnel is still closed when
+    /// the train comes out. Nothing in this file calls `GitHubClient`.
+    ///
+    /// The row's three target fields carry the **issue's** node id, repository and number — see
+    /// ``ShepherdCore/OutboxItem``'s own note — and the action carries the row's `updatedAt`, so
+    /// the drain can refuse to send it against an issue that moved.
+    /// - Parameters:
+    ///   - action: What to do.
+    ///   - row: The issue it targets.
+    /// - Returns: `true` when the row reached the outbox.
+    @discardableResult
+    func queue(_ action: OutboxAction, on row: IssueRowSummary) async -> Bool {
+        do {
+            try await database.enqueue(
+                OutboxItem(prID: row.id, repo: row.repo, number: row.number, action: action)
+            )
+        } catch {
+            return false
+        }
+        await refreshPendingWrites()
+        await drain?()
+        await refreshPendingWrites()
+        return true
+    }
+
+    /// Queues a comment on the issue.
+    /// - Parameters:
+    ///   - body: The comment as Markdown source.
+    ///   - row: The issue.
+    /// - Returns: `true` when the row reached the outbox.
+    @discardableResult
+    func comment(_ body: String, on row: IssueRowSummary) async -> Bool {
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        return await queue(
+            .addIssueComment(body: trimmed, basedOnUpdatedAt: row.updatedAt),
+            on: row
+        )
+    }
+
+    /// Queues one label.
+    /// - Parameters:
+    ///   - name: The label name, exactly as GitHub spells it.
+    ///   - row: The issue.
+    /// - Returns: `true` when the row reached the outbox.
+    @discardableResult
+    func addLabel(_ name: String, on row: IssueRowSummary) async -> Bool {
+        await queue(.addIssueLabel(name: name, basedOnUpdatedAt: row.updatedAt), on: row)
+    }
+
+    /// Queues an assignment of the issue to the signed-in user.
+    /// - Parameter row: The issue.
+    /// - Returns: `true` when the row reached the outbox; `false` when nobody is signed in.
+    @discardableResult
+    func assignToMe(_ row: IssueRowSummary) async -> Bool {
+        guard let viewerLogin, !viewerLogin.isEmpty else { return false }
+        return await queue(
+            .addIssueAssignee(login: viewerLogin, basedOnUpdatedAt: row.updatedAt),
+            on: row
+        )
+    }
+
+    /// Queues a close.
+    /// - Parameters:
+    ///   - reason: Completed, or not planned.
+    ///   - row: The issue.
+    /// - Returns: `true` when the row reached the outbox.
+    @discardableResult
+    func close(_ reason: IssueCloseReason, on row: IssueRowSummary) async -> Bool {
+        await queue(.closeIssue(reason: reason, basedOnUpdatedAt: row.updatedAt), on: row)
+    }
+
+    /// Queues a reopen.
+    /// - Parameter row: The issue.
+    /// - Returns: `true` when the row reached the outbox.
+    @discardableResult
+    func reopen(_ row: IssueRowSummary) async -> Bool {
+        await queue(.reopenIssue(basedOnUpdatedAt: row.updatedAt), on: row)
     }
 }
