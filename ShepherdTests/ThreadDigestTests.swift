@@ -291,7 +291,12 @@ final class ThreadDigestTests: XCTestCase {
         guard let state = coordinator.state(for: threadID, comments: thread),
             case .failed(let reason) = state
         else { return XCTFail("the refusal is shown") }
-        XCTAssertTrue(reason.contains("9000") || reason.contains("9,000"))
+        // The number is formatted for the runner's locale, so the sentence is compared whole
+        // rather than searched for one spelling of nine thousand.
+        XCTAssertEqual(
+            reason,
+            IntelligenceError.digestTooLarge(tokens: 9_000, limit: 6_000).errorDescription
+        )
     }
 
     // MARK: - Coverage
