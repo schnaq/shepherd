@@ -165,6 +165,8 @@ public struct EvidenceFact: Sendable, Codable, Hashable, Identifiable {
         case noAcceptanceChecklist
         /// The issue, its state and how many acceptance bullets it lists.
         ///
+        /// "Issue #142 “Retry flaky uploads” is open and lists 3 acceptance bullets."
+        ///
         /// `title` is empty when GitHub sent none, and ``IssueSummary/State/unknown`` is the state
         /// Shepherd does not model — both are rendered as *no state named* rather than as a
         /// sentence about Shepherd.

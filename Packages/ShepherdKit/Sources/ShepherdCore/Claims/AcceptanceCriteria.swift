@@ -376,6 +376,8 @@ public struct AcceptanceMatch: Sendable, Codable, Hashable, Identifiable {
     public enum Reason: Sendable, Codable, Hashable {
         /// Enough of the bullet's distinctive words appear in the pull request.
         ///
+        /// "3 of 4 words in this bullet appear in the pull request: “retry”, “upload”, “timeout”."
+        ///
         /// `present` is every word that appeared, in the bullet's order — the renderers cap how
         /// many they name (``AcceptanceMatcher/namedWordLimit``) rather than the matcher, so the
         /// count in the sentence and the words after it can never disagree.
@@ -385,6 +387,9 @@ public struct AcceptanceMatch: Sendable, Codable, Hashable, Identifiable {
         /// The bullet has no distinctive word to look for at all.
         case noDistinctiveWord
         /// Not enough words appeared, with the cosine when this Mac computed one.
+        ///
+        /// "None of the 4 words in this bullet appear in the pull request." — plus " On-device
+        /// similarity is 0.45." when there is a cosine to name.
         case wordsMissing(present: [String], total: Int, similarity: Double?)
 
         /// The reason as one English sentence. Already ends in a full stop.
