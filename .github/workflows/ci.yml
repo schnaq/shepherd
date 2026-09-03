@@ -55,6 +55,23 @@ jobs:
     runs-on: [self-hosted, macOS]
     steps:
       - uses: actions/checkout@v4
+      # The runner keeps two Xcodes side by side. The newest one whose SDK the app's deployment
+      # target needs is selected per job through DEVELOPER_DIR; nothing on the machine is
+      # switched globally, so the ShepherdKit job above keeps building with the default Xcode.
+      # Until an Xcode 27 exists at one of these paths the step is a no-op and the default is used.
+      - name: Select the newest Xcode on the runner
+        run: |
+          for candidate in /Applications/Xcode-27*.app /Applications/Xcode-beta.app; do
+            if [ -d "$candidate/Contents/Developer" ]; then
+              echo "DEVELOPER_DIR=$candidate/Contents/Developer" >> "$GITHUB_ENV"
+              echo "Using $candidate"
+              break
+            fi
+          done
+      - name: Show the toolchain this build uses
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i macosx || true
       - name: Build diff viewer bundle
         run: npm ci && npm run build
         working-directory: web/diff-viewer
