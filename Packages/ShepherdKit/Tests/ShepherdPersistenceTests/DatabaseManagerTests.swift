@@ -91,7 +91,8 @@ final class MigrationTests: XCTestCase {
         // The sweep prunes the pull request, exactly as it does when a merge lands.
         try await database.savePullRequestSummaries([], pruneMissing: true)
 
-        XCTAssertTrue(try await database.fetchInbox().isEmpty)
+        let awaited1 = try await database.fetchInbox().isEmpty
+        XCTAssertTrue(awaited1)
         let outcomes = try await database.pullRequestOutcomes(
             since: PersistenceFixtures.date(-10_000)
         )

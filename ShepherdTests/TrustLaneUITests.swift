@@ -203,23 +203,17 @@ final class TrustLaneUITests: XCTestCase {
     }
 
     func testTheChipColourIsAmberForARevertGreenOnlyForASettledRecord() {
-        XCTAssertEqual(TrackRecord(merged: 30, reverted: 1).chipColor, Theme.pending)
+        XCTAssertEqual(TrackRecord(merged: 30, reverted: 1).chipTone, .reverted)
+        XCTAssertEqual(TrackRecord(merged: 30, firstPushGreenRate: 0.9).chipTone, .settled)
         XCTAssertEqual(
-            TrackRecord(merged: 30, firstPushGreenRate: 0.9).chipColor,
-            Theme.success
-        )
-        XCTAssertEqual(
-            TrackRecord(merged: 3, firstPushGreenRate: 1).chipColor,
-            Theme.textSecondary,
+            TrackRecord(merged: 3, firstPushGreenRate: 1).chipTone,
+            .muted,
             "three merges are not evidence of anything"
         )
+        XCTAssertEqual(TrackRecord(merged: 30, firstPushGreenRate: 0.2).chipTone, .muted)
         XCTAssertEqual(
-            TrackRecord(merged: 30, firstPushGreenRate: 0.2).chipColor,
-            Theme.textSecondary
-        )
-        XCTAssertEqual(
-            TrackRecord(merged: 30).chipColor,
-            Theme.textSecondary,
+            TrackRecord(merged: 30).chipTone,
+            .muted,
             "no measured first push is not a settled record"
         )
     }

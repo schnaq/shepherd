@@ -203,7 +203,8 @@ final class ClosedPullRequestParsingTests: XCTestCase {
         )
         let client = GitHubClient.makeForTesting(transport: transport)
 
-        XCTAssertNil(try await client.closedPullRequest(repo: repo, number: 9))
+        let awaited1 = try await client.closedPullRequest(repo: repo, number: 9)
+        XCTAssertNil(awaited1)
     }
 
     func testAPullRequestGitHubNoLongerHasIsNotFound() async throws {

@@ -145,13 +145,28 @@ extension TrackRecord {
     ///   merges are not evidence of anything, and a colour that implied they were would be the
     ///   feature quietly becoming a grade.
     var chipColor: Color {
-        if reverted > 0 { return Theme.pending }
+        switch chipTone {
+        case .reverted: return Theme.pending
+        case .settled: return Theme.success
+        case .muted: return Theme.textSecondary
+        }
+    }
+
+    /// The three states behind ``chipColor``, so a test can assert the decision rather than compare
+    /// two dynamic colours that are never the same instance.
+    enum ChipTone: Equatable {
+        case reverted, settled, muted
+    }
+
+    /// Which of the three states this record is in.
+    var chipTone: ChipTone {
+        if reverted > 0 { return .reverted }
         if merged >= TrackRecord.settledMergeCount,
            let rate = firstPushGreenRate,
            rate >= TrackRecord.settledFirstPushRate {
-            return Theme.success
+            return .settled
         }
-        return Theme.textSecondary
+        return .muted
     }
 
     /// How many merged pull requests a record needs before its colour says anything.

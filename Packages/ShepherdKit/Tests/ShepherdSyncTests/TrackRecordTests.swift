@@ -24,7 +24,8 @@ final class OutcomeCaptureTests: XCTestCase {
         try await engine.syncNow()
         try await engine.syncNow()
 
-        XCTAssertEqual(await outcomes.singleReads, ["schnaq/review#1"])
+        let awaited1 = await outcomes.singleReads
+        XCTAssertEqual(awaited1, ["schnaq/review#1"])
         let stored = await outcomes.stored
         XCTAssertEqual(stored["PR_1"]?.outcome.merged, true)
         XCTAssertEqual(stored["PR_1"]?.outcome.repo, SyncFixtures.repo)
@@ -41,7 +42,8 @@ final class OutcomeCaptureTests: XCTestCase {
         try await engine.syncNow()
         try await engine.syncNow()
 
-        XCTAssertTrue(await outcomes.singleReads.isEmpty)
+        let awaited2 = await outcomes.singleReads.isEmpty
+        XCTAssertTrue(awaited2)
     }
 
     func testAPullRequestThatAlreadyHasARowIsNotReadAgain() async throws {
@@ -57,8 +59,9 @@ final class OutcomeCaptureTests: XCTestCase {
         try await engine.syncNow()
         try await engine.syncNow()
 
+        let singleReads = await outcomes.singleReads
         XCTAssertTrue(
-            await outcomes.singleReads.isEmpty,
+            singleReads.isEmpty,
             "the store is asked before GitHub is, so a backfilled pull request costs no request"
         )
     }
@@ -75,8 +78,10 @@ final class OutcomeCaptureTests: XCTestCase {
         try await engine.syncNow()
         try await engine.syncNow()
 
-        XCTAssertEqual(await outcomes.singleReads, ["schnaq/review#1"])
-        XCTAssertTrue(await outcomes.stored.isEmpty)
+        let awaited3 = await outcomes.singleReads
+        XCTAssertEqual(awaited3, ["schnaq/review#1"])
+        let awaited4 = await outcomes.stored.isEmpty
+        XCTAssertTrue(awaited4)
     }
 
     func testAFailedReadNeverFailsTheSweep() async throws {
@@ -100,7 +105,8 @@ final class OutcomeCaptureTests: XCTestCase {
         try await engine.syncNow()
         listener.cancel()
 
-        XCTAssertTrue(await outcomes.stored.isEmpty)
+        let awaited5 = await outcomes.stored.isEmpty
+        XCTAssertTrue(awaited5)
         let collected = await collector.events
         let failures = collected.filter {
             if case .syncFailed = $0 { return true }
@@ -141,7 +147,8 @@ final class OutcomeCaptureTests: XCTestCase {
         try await engine.syncNow()
         try await engine.syncNow()
 
-        XCTAssertEqual(await outcomes.links, ["PR_1": "PR_2"])
+        let awaited6 = await outcomes.links
+        XCTAssertEqual(awaited6, ["PR_1": "PR_2"])
     }
 
     func testAnEngineWithNoPortsDoesNothingAtAll() async throws {
@@ -211,12 +218,14 @@ final class TrackRecordBackfillTests: XCTestCase {
         XCTAssertEqual(result.stored, 3)
         XCTAssertFalse(result.wasCancelled)
         XCTAssertTrue(result.failures.isEmpty)
+        let pageReads = await store.pageReads
         XCTAssertEqual(
-            await store.pageReads,
+            pageReads,
             ["schnaq/review|-", "schnaq/review|cursor-1"],
             "the second page is asked for with the first page's cursor"
         )
-        XCTAssertEqual(await store.stored.count, 3)
+        let awaited7 = await store.stored.count
+        XCTAssertEqual(awaited7, 3)
     }
 
     func testTheProgressLineCountsUpPerPage() async throws {
@@ -276,8 +285,9 @@ final class TrackRecordBackfillTests: XCTestCase {
 
         XCTAssertTrue(result.wasCancelled)
         XCTAssertTrue(result.failures.isEmpty, "a cancellation is not a failure")
+        let storedCount = await store.stored.count
         XCTAssertEqual(
-            await store.stored.count,
+            storedCount,
             1,
             "a cancel keeps everything read so far — the table upserts, so a second run continues"
         )
@@ -299,7 +309,8 @@ final class TrackRecordBackfillTests: XCTestCase {
 
         XCTAssertTrue(result.wasCancelled)
         XCTAssertEqual(result.stored, 0)
-        XCTAssertTrue(await store.pageReads.isEmpty)
+        let awaited8 = await store.pageReads.isEmpty
+        XCTAssertTrue(awaited8)
     }
 
     func testTheCapStopsAtFiveHundredPerRepository() async throws {
@@ -329,7 +340,8 @@ final class TrackRecordBackfillTests: XCTestCase {
 
         XCTAssertEqual(result.stored, TrackRecordBackfill.maximumPullRequestsPerRepository)
         XCTAssertEqual(result.cappedRepositories, [repo])
-        XCTAssertEqual(await store.pageReads.count, 5, "five pages of a hundred, then it stops")
+        let awaited9 = await store.pageReads.count
+        XCTAssertEqual(awaited9, 5, "five pages of a hundred, then it stops")
     }
 
     func testOneRepositorysFailureIsALineAndTheRunContinues() async throws {
@@ -397,7 +409,8 @@ final class TrackRecordBackfillTests: XCTestCase {
         let result = await backfill.run(repos: [repo])
 
         XCTAssertEqual(result.revertsLinked, 1)
-        XCTAssertEqual(await store.links, ["PR_1": "PR_2"])
+        let awaited10 = await store.links
+        XCTAssertEqual(awaited10, ["PR_1": "PR_2"])
     }
 
     func testRunningItTwiceChangesNothing() async throws {
@@ -416,7 +429,8 @@ final class TrackRecordBackfillTests: XCTestCase {
         _ = await backfill.run(repos: [repo])
         _ = await backfill.run(repos: [repo])
 
-        XCTAssertEqual(await store.stored.count, 1)
+        let awaited11 = await store.stored.count
+        XCTAssertEqual(awaited11, 1)
     }
 
     func testNoRepositoriesIsNoWork() async throws {
@@ -428,7 +442,8 @@ final class TrackRecordBackfillTests: XCTestCase {
         )
         let result = await backfill.run(repos: [])
         XCTAssertEqual(result.stored, 0)
-        XCTAssertTrue(await store.pageReads.isEmpty)
+        let awaited12 = await store.pageReads.isEmpty
+        XCTAssertTrue(awaited12)
     }
 }
 

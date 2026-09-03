@@ -58,7 +58,8 @@ final class PullRequestOutcomeStoreTests: XCTestCase {
         try await database.savePullRequestOutcomes([
             OutcomeFixtures.closed(prID: "PR_1", number: 1, merged: true, firstPushGreen: nil)
         ])
-        XCTAssertNil(try await database.pullRequestOutcomes(since: window).first?.firstPushCIGreen)
+        let awaited1 = try await database.pullRequestOutcomes(since: window).first?.firstPushCIGreen
+        XCTAssertNil(awaited1)
     }
 
     // MARK: - Upserting
@@ -120,7 +121,8 @@ final class PullRequestOutcomeStoreTests: XCTestCase {
 
     func testAnEmptyLinkSetIsANoOp() async throws {
         let database = try makeDatabase()
-        XCTAssertEqual(try await database.applyRevertLinks([:]), 0)
+        let awaited2 = try await database.applyRevertLinks([:])
+        XCTAssertEqual(awaited2, 0)
     }
 
     // MARK: - Reading
@@ -215,14 +217,18 @@ final class PullRequestOutcomeStoreTests: XCTestCase {
 
     func testTheCountAndTheExistenceProbe() async throws {
         let database = try makeDatabase()
-        XCTAssertEqual(try await database.pullRequestOutcomeCount(), 0)
-        XCTAssertFalse(try await database.hasPullRequestOutcome(prID: "PR_1"))
+        let awaited3 = try await database.pullRequestOutcomeCount()
+        XCTAssertEqual(awaited3, 0)
+        let awaited4 = try await database.hasPullRequestOutcome(prID: "PR_1")
+        XCTAssertFalse(awaited4)
 
         try await database.savePullRequestOutcomes([
             OutcomeFixtures.closed(prID: "PR_1", number: 1, merged: true)
         ])
-        XCTAssertEqual(try await database.pullRequestOutcomeCount(), 1)
-        XCTAssertTrue(try await database.hasPullRequestOutcome(prID: "PR_1"))
+        let awaited5 = try await database.pullRequestOutcomeCount()
+        XCTAssertEqual(awaited5, 1)
+        let awaited6 = try await database.hasPullRequestOutcome(prID: "PR_1")
+        XCTAssertTrue(awaited6)
     }
 
     // MARK: - Deleting
@@ -239,10 +245,8 @@ final class PullRequestOutcomeStoreTests: XCTestCase {
             ),
         ])
         try await database.deletePullRequestOutcomes(repo: PersistenceFixtures.repo)
-        XCTAssertEqual(
-            try await database.pullRequestOutcomes(since: window).map(\.prID),
-            ["PR_2"]
-        )
+        let remaining = try await database.pullRequestOutcomes(since: window).map(\.prID)
+        XCTAssertEqual(remaining, ["PR_2"])
     }
 
     func testClearHistoryEmptiesTheTable() async throws {
@@ -252,7 +256,8 @@ final class PullRequestOutcomeStoreTests: XCTestCase {
             OutcomeFixtures.closed(prID: "PR_2", number: 2, merged: true),
         ])
         try await database.deleteAllPullRequestOutcomes()
-        XCTAssertEqual(try await database.pullRequestOutcomeCount(), 0)
+        let awaited7 = try await database.pullRequestOutcomeCount()
+        XCTAssertEqual(awaited7, 0)
     }
 
     // MARK: - The lane's diff input
@@ -275,6 +280,7 @@ final class PullRequestOutcomeStoreTests: XCTestCase {
             files[detail.id]?.allSatisfy { !$0.hasPatch } ?? false,
             "the lane reads paths, so the patches stay in SQLite"
         )
-        XCTAssertTrue(try await database.changedFilePaths(prIDs: []).isEmpty)
+        let awaited8 = try await database.changedFilePaths(prIDs: []).isEmpty
+        XCTAssertTrue(awaited8)
     }
 }
