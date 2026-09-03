@@ -57,22 +57,63 @@ public struct Claim: Sendable, Codable, Hashable, Identifiable {
         }
     }
 
+    /// Which pass read the claim out of the description (ADR 0026's tier-2 amendment).
+    ///
+    /// A property of the *claim* rather than of the report, because it is what one line of the
+    /// card says about itself: a claim the patterns found is the card's ordinary content, and a
+    /// claim the optional on-device pass added carries a "read by the model" tag beside its
+    /// quote. Two cases and no third — there is one tier-2 pass, and it is on-device only
+    /// (ADR 0026), so "which model" is not a question this type can be asked.
+    public enum Origin: String, Sendable, Codable, Hashable, CaseIterable {
+        /// ``ClaimExtractor``'s documented patterns: tier 1, deterministic, always run.
+        case pattern
+        /// The optional on-device pass, which only ever *adds* claims (ADR 0026's amendment).
+        case model
+    }
+
     /// Which shape this claim has.
     public var kind: Kind
     /// The sentence the claim was read from, verbatim, Markdown decoration stripped.
     public var quote: String
+    /// Which pass read it.
+    ///
+    /// Defaulted to ``Origin/pattern`` in the initialiser, so the deterministic path — every
+    /// call site in ``ClaimExtractor`` and every test written before tier 2 existed — says
+    /// nothing about origin and means the same thing it always did.
+    public var origin: Origin
 
     /// Creates a claim.
     /// - Parameters:
     ///   - kind: The claim's shape.
     ///   - quote: The sentence it was read from.
-    public init(kind: Kind, quote: String) {
+    ///   - origin: Which pass read it. Defaults to ``Origin/pattern``.
+    public init(kind: Kind, quote: String, origin: Origin = .pattern) {
         self.kind = kind
         self.quote = quote
+        self.origin = origin
     }
 
     /// A claim is identified by its shape, which is unique within one extraction.
     public var id: String { kind.dedupKey }
+
+    /// Stable keys, so the encoded shape is not an accident of the property order.
+    private enum CodingKeys: String, CodingKey {
+        case kind
+        case quote
+        case origin
+    }
+
+    /// Decodes a claim, tolerating an absent ``origin``.
+    ///
+    /// A claim written down before tier 2 existed is a claim the patterns read, which is exactly
+    /// what ``Origin/pattern`` means — so the key is optional on the way in rather than a
+    /// migration. ``kind`` and ``quote`` are required: they *are* the claim.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        kind = try container.decode(Kind.self, forKey: .kind)
+        quote = try container.decode(String.self, forKey: .quote)
+        origin = try container.decodeIfPresent(Origin.self, forKey: .origin) ?? .pattern
+    }
 }
 
 /// Reads the four claim shapes out of a pull-request description with documented patterns
