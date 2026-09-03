@@ -221,14 +221,20 @@ final class AcceptanceCriteriaTests: XCTestCase {
             against: "Adds an upload retry with a fixed delay."
         )
         XCTAssertTrue(mentioned[0].mentioned)
-        XCTAssertTrue(mentioned[0].reason.contains("2 of 5 words"), mentioned[0].reason)
+        XCTAssertTrue(
+            mentioned[0].reason.englishSentence.contains("2 of 5 words"),
+            mentioned[0].reason.englishSentence
+        )
 
         let missed = AcceptanceMatcher.match(
             bullets: [five],
             against: "Adds an upload path and nothing else."
         )
         XCTAssertFalse(missed[0].mentioned)
-        XCTAssertTrue(missed[0].reason.contains("Only 1 of the 5 words"), missed[0].reason)
+        XCTAssertTrue(
+            missed[0].reason.englishSentence.contains("Only 1 of the 5 words"),
+            missed[0].reason.englishSentence
+        )
     }
 
     func testABulletWithNoDistinctiveWordIsNotMentionedAndSaysSo() {
@@ -240,8 +246,9 @@ final class AcceptanceCriteriaTests: XCTestCase {
         // matching on nothing would mark every such bullet as mentioned.
         XCTAssertTrue(AcceptanceMatcher.distinctiveWords(in: "It should always be done").isEmpty)
         XCTAssertFalse(matches[0].mentioned)
+        XCTAssertEqual(matches[0].reason, .noDistinctiveWord)
         XCTAssertEqual(
-            matches[0].reason,
+            matches[0].reason.englishSentence,
             "This bullet has no distinctive word Shepherd could look for."
         )
     }
@@ -267,7 +274,10 @@ final class AcceptanceCriteriaTests: XCTestCase {
             )
         )
         XCTAssertTrue(atFloor[0].mentioned)
-        XCTAssertTrue(atFloor[0].reason.contains("similarity 0.60"), atFloor[0].reason)
+        XCTAssertTrue(
+            atFloor[0].reason.englishSentence.contains("similarity 0.60"),
+            atFloor[0].reason.englishSentence
+        )
 
         // 1 / √5 = 0.447: below the floor, so the bullet stays unmentioned and the number is
         // reported rather than hidden.
@@ -281,8 +291,8 @@ final class AcceptanceCriteriaTests: XCTestCase {
         )
         XCTAssertFalse(missed[0].mentioned)
         XCTAssertTrue(
-            missed[0].reason.contains("On-device similarity is 0.45"),
-            missed[0].reason
+            missed[0].reason.englishSentence.contains("On-device similarity is 0.45"),
+            missed[0].reason.englishSentence
         )
     }
 
@@ -293,7 +303,10 @@ final class AcceptanceCriteriaTests: XCTestCase {
             vectors: nil
         )
         XCTAssertFalse(matches[0].mentioned)
-        XCTAssertFalse(matches[0].reason.contains("similarity"), matches[0].reason)
+        XCTAssertFalse(
+            matches[0].reason.englishSentence.contains("similarity"),
+            matches[0].reason.englishSentence
+        )
     }
 
     func testTheEvidenceTextIsTheProseThePathsAndTheCommitMessages() {
@@ -379,7 +392,7 @@ final class AcceptanceCriteriaTests: XCTestCase {
         XCTAssertEqual(old.status, .unclear)
         XCTAssertEqual(old.facts.count, 2)
         XCTAssertEqual(
-            old.facts.last?.text,
+            old.facts.last?.englishSentence,
             "Acceptance criteria not checked — the issue is not fetched."
         )
         XCTAssertTrue(old.facts.allSatisfy { $0.mark == nil })
@@ -391,10 +404,10 @@ final class AcceptanceCriteriaTests: XCTestCase {
             XCTAssertEqual(result.status, .unclear)
             XCTAssertEqual(result.facts.count, 3, "\(failure)")
             XCTAssertEqual(
-                result.facts[1].text,
+                result.facts[1].englishSentence,
                 "Acceptance criteria not checked — the issue is not fetched."
             )
-            XCTAssertEqual(result.facts[2].text, failure.sentence)
+            XCTAssertEqual(result.facts[2].englishSentence, failure.sentence)
         }
         XCTAssertTrue(
             IssueLookupFailure.notFound.sentence.contains("no issue with that number")
@@ -417,8 +430,8 @@ final class AcceptanceCriteriaTests: XCTestCase {
         XCTAssertEqual(result.status, .ok)
         XCTAssertEqual(result.facts.filter { $0.mark == .mentioned }.count, 2)
         XCTAssertTrue(
-            result.facts.contains { $0.text.contains("Every acceptance bullet is mentioned") },
-            result.facts.map(\.text).joined(separator: " | ")
+            result.facts.contains { $0.englishSentence.contains("Every acceptance bullet is mentioned") },
+            result.facts.map(\.englishSentence).joined(separator: " | ")
         )
     }
 
@@ -439,8 +452,8 @@ final class AcceptanceCriteriaTests: XCTestCase {
         XCTAssertEqual(result.facts.filter { $0.mark == .mentioned }.count, 1)
         XCTAssertEqual(result.facts.filter { $0.mark == .notMentioned }.count, 1)
         XCTAssertTrue(
-            result.facts.contains { $0.text.contains("1 of 2 acceptance bullets are mentioned") },
-            result.facts.map(\.text).joined(separator: " | ")
+            result.facts.contains { $0.englishSentence.contains("1 of 2 acceptance bullets are mentioned") },
+            result.facts.map(\.englishSentence).joined(separator: " | ")
         )
     }
 
@@ -461,8 +474,8 @@ final class AcceptanceCriteriaTests: XCTestCase {
         XCTAssertEqual(result.status, .unclear)
         XCTAssertEqual(result.facts.count, 2)
         XCTAssertTrue(
-            result.facts[1].text.contains("holds no checklist or list"),
-            result.facts[1].text
+            result.facts[1].englishSentence.contains("holds no checklist or list"),
+            result.facts[1].englishSentence
         )
         XCTAssertTrue(result.facts.allSatisfy { $0.mark == nil })
     }
@@ -479,8 +492,8 @@ final class AcceptanceCriteriaTests: XCTestCase {
         XCTAssertEqual(result.status, .unclear)
         XCTAssertEqual(result.facts.count, 2)
         XCTAssertTrue(
-            result.facts[1].text.contains("is a pull request rather than an issue"),
-            result.facts[1].text
+            result.facts[1].englishSentence.contains("is a pull request rather than an issue"),
+            result.facts[1].englishSentence
         )
         XCTAssertTrue(result.facts.allSatisfy { $0.mark == nil })
     }
@@ -505,7 +518,7 @@ final class AcceptanceCriteriaTests: XCTestCase {
             detail: detail(body: "Retries the upload.")
         )
         XCTAssertEqual(
-            openIssue.facts[1].text,
+            openIssue.facts[1].englishSentence,
             "Issue #142 “Uploads fail silently” is open and lists 1 acceptance bullet."
         )
 
@@ -514,8 +527,49 @@ final class AcceptanceCriteriaTests: XCTestCase {
             detail: detail(body: "Retries the upload and records the write.")
         )
         XCTAssertEqual(
-            closedIssue.facts[1].text,
+            closedIssue.facts[1].englishSentence,
             "Issue #142 “Uploads fail silently” is closed and lists 2 acceptance bullets."
+        )
+    }
+
+    // MARK: - The facts as data
+
+    /// The issue line's facts carry *values* — the number, the title, the state, the count, the
+    /// bullet and the matcher's own reason — and render them in English here (ADR 0026's facts,
+    /// ADR 0022's follow-up: the app localises the same cases).
+    func testTheIssueFactsCarryTheirValuesAndNotOnlyTheirProse() throws {
+        let result = verdict(
+            issue: issue(body: "- [ ] retry the flaky upload"),
+            detail: detail(body: "Retries the flaky upload.")
+        )
+        XCTAssertEqual(
+            result.facts[0].kind,
+            .issueReferenced(number: 142, repo: "schnaq/review")
+        )
+        XCTAssertEqual(
+            result.facts[1].kind,
+            .issueWithBullets(
+                number: 142,
+                title: "Uploads fail silently",
+                state: .open,
+                bulletCount: 1
+            )
+        )
+        XCTAssertEqual(result.facts[2].kind, .everyBulletMentioned)
+
+        let bulletFact = try XCTUnwrap(result.facts.last)
+        XCTAssertEqual(bulletFact.mark, .mentioned)
+        XCTAssertEqual(
+            bulletFact.kind,
+            .acceptanceBullet(
+                text: "retry the flaky upload",
+                reason: .wordsAppear(present: ["retry", "flaky", "upload"], total: 3)
+            )
+        )
+        XCTAssertEqual(
+            bulletFact.englishSentence,
+            "“retry the flaky upload” — 3 of 3 words in this bullet appear in the pull request: "
+                + "“retry”, “flaky”, “upload”."
         )
     }
 }

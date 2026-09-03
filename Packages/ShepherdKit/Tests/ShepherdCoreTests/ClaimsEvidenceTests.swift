@@ -55,7 +55,7 @@ final class ClaimsEvidenceTests: XCTestCase {
             )
         )
         XCTAssertEqual(verdict.status, .ok)
-        XCTAssertTrue(verdict.facts.contains { $0.text.contains("CI is green: 2 of 2 checks passed.") })
+        XCTAssertTrue(verdict.facts.contains { $0.englishSentence.contains("CI is green: 2 of 2 checks passed.") })
         XCTAssertTrue(verdict.facts.contains { $0.path == "Tests/ParserTests/LexerTests.swift" })
     }
 
@@ -69,10 +69,10 @@ final class ClaimsEvidenceTests: XCTestCase {
         )
         XCTAssertEqual(verdict.status, .contradicted)
         XCTAssertTrue(
-            verdict.facts.contains { $0.text == "No changed file matches a test naming convention." }
+            verdict.facts.contains { $0.englishSentence == "No changed file matches a test naming convention." }
         )
-        XCTAssertTrue(verdict.facts.contains { $0.text.contains("CI is red: 1 of 2 checks failed.") })
-        XCTAssertTrue(verdict.facts.contains { $0.text == "Check “Linux” failed." })
+        XCTAssertTrue(verdict.facts.contains { $0.englishSentence.contains("CI is red: 1 of 2 checks failed.") })
+        XCTAssertTrue(verdict.facts.contains { $0.englishSentence == "Check “Linux” failed." })
     }
 
     func testATestFileWithCIStillRunningIsUnclear() {
@@ -84,7 +84,7 @@ final class ClaimsEvidenceTests: XCTestCase {
             )
         )
         XCTAssertEqual(verdict.status, .unclear)
-        XCTAssertTrue(verdict.facts.contains { $0.text.contains("CI has not finished") })
+        XCTAssertTrue(verdict.facts.contains { $0.englishSentence.contains("CI has not finished") })
     }
 
     func testNoChecksAtAllIsSaidRatherThanAssumedGreen() {
@@ -94,7 +94,7 @@ final class ClaimsEvidenceTests: XCTestCase {
         )
         XCTAssertEqual(verdict.status, .unclear)
         XCTAssertTrue(
-            verdict.facts.contains { $0.text == "No checks are configured for this commit." }
+            verdict.facts.contains { $0.englishSentence == "No checks are configured for this commit." }
         )
     }
 
@@ -116,12 +116,12 @@ final class ClaimsEvidenceTests: XCTestCase {
             )
         )
         XCTAssertEqual(verdict.status, .contradicted)
-        let drift = verdict.facts.first { $0.text.contains("removes an assertion") }
+        let drift = verdict.facts.first { $0.englishSentence.contains("removes an assertion") }
         XCTAssertEqual(drift?.path, "Tests/UploadTests.swift")
         // Two context rows after `@@ … +10 @@`, so the deletion sits in front of head line 12.
         XCTAssertEqual(drift?.line, 12)
         XCTAssertEqual(
-            drift?.text,
+            drift?.englishSentence,
             "“Tests/UploadTests.swift” removes an assertion at line 12: “XCTAssertEqual(retries, 2)”."
         )
     }
@@ -141,7 +141,7 @@ final class ClaimsEvidenceTests: XCTestCase {
             )
         )
         XCTAssertEqual(verdict.status, .contradicted)
-        let drift = verdict.facts.first { $0.text.contains("adds a skipped test") }
+        let drift = verdict.facts.first { $0.englishSentence.contains("adds a skipped test") }
         XCTAssertEqual(drift?.line, 2)
     }
 
@@ -202,7 +202,7 @@ final class ClaimsEvidenceTests: XCTestCase {
         )
         XCTAssertEqual(verdict.status, .ok)
         XCTAssertTrue(
-            verdict.facts.contains { $0.text == "2 of 2 changed files are under “Sources/Parser”." }
+            verdict.facts.contains { $0.englishSentence == "2 of 2 changed files are under “Sources/Parser”." }
         )
     }
 
@@ -217,11 +217,11 @@ final class ClaimsEvidenceTests: XCTestCase {
             )
         )
         XCTAssertEqual(verdict.status, .contradicted)
-        let outside = verdict.facts.first { $0.text.contains("is outside") }
+        let outside = verdict.facts.first { $0.englishSentence.contains("is outside") }
         XCTAssertEqual(outside?.path, ".github/workflows/ci.yml")
         XCTAssertTrue(
             verdict.facts.contains {
-                $0.text == "“.github/workflows/ci.yml” changes a CI workflow."
+                $0.englishSentence == "“.github/workflows/ci.yml” changes a CI workflow."
             }
         )
     }
@@ -232,7 +232,7 @@ final class ClaimsEvidenceTests: XCTestCase {
             detail(files: [Fixtures.file("Sources/Parser/Lexer.swift")])
         )
         XCTAssertEqual(verdict.status, .unclear)
-        XCTAssertTrue(verdict.facts.contains { $0.text.contains("No changed path contains") })
+        XCTAssertTrue(verdict.facts.contains { $0.englishSentence.contains("No changed path contains") })
     }
 
     func testNoOtherChangesNamesNoModuleAndSaysSo() {
@@ -241,7 +241,7 @@ final class ClaimsEvidenceTests: XCTestCase {
             detail(files: [Fixtures.file("Sources/Parser/Lexer.swift")])
         )
         XCTAssertEqual(verdict.status, .unclear)
-        XCTAssertTrue(verdict.facts.contains { $0.text.contains("names no module") })
+        XCTAssertTrue(verdict.facts.contains { $0.englishSentence.contains("names no module") })
     }
 
     func testARenamedFilesPreviousPathCountsTowardsTheModule() {
@@ -269,7 +269,7 @@ final class ClaimsEvidenceTests: XCTestCase {
                 ]
             )
         )
-        let texts = verdict.facts.map(\.text)
+        let texts = verdict.facts.map(\.englishSentence)
         XCTAssertTrue(texts.contains("“.github/workflows/ci.yml” changes a CI workflow."))
         XCTAssertTrue(texts.contains("“Package.resolved” is a dependency lockfile."))
         XCTAssertTrue(texts.contains("“web/dist/viewer.js” is a generated or vendored file."))
@@ -289,7 +289,7 @@ final class ClaimsEvidenceTests: XCTestCase {
         )
         XCTAssertTrue(
             verdict.facts.contains {
-                $0.text == "The pull request touches 3 top-level paths: “(repository root)”, “Sources”, “Tests”."
+                $0.englishSentence == "The pull request touches 3 top-level paths: “(repository root)”, “Sources”, “Tests”."
             }
         )
     }
@@ -308,7 +308,7 @@ final class ClaimsEvidenceTests: XCTestCase {
             detail(files: [Fixtures.file("Sources/GitHubKit/GitHubClient.swift", patch: patch)])
         )
         XCTAssertEqual(verdict.status, .contradicted)
-        let fact = verdict.facts.first { $0.text.contains("exported declaration") }
+        let fact = verdict.facts.first { $0.englishSentence.contains("exported declaration") }
         XCTAssertEqual(fact?.path, "Sources/GitHubKit/GitHubClient.swift")
         XCTAssertEqual(fact?.line, 21)
     }
@@ -362,7 +362,7 @@ final class ClaimsEvidenceTests: XCTestCase {
             detail(files: [Fixtures.file("Sources/ShepherdPersistence/Migrations/V5.swift", patch: patch)])
         )
         XCTAssertEqual(verdict.status, .unclear)
-        XCTAssertTrue(verdict.facts.contains { $0.text.contains("schema or a migration") })
+        XCTAssertTrue(verdict.facts.contains { $0.englishSentence.contains("schema or a migration") })
     }
 
     func testAManifestDependencyLineIsAQuestion() {
@@ -378,7 +378,7 @@ final class ClaimsEvidenceTests: XCTestCase {
             detail(files: [Fixtures.file("Package.swift", patch: patch)])
         )
         XCTAssertEqual(verdict.status, .unclear)
-        XCTAssertTrue(verdict.facts.contains { $0.text.contains("version or dependency line") })
+        XCTAssertTrue(verdict.facts.contains { $0.englishSentence.contains("version or dependency line") })
     }
 
     func testAnUnreadableDiffIsAQuestion() {
@@ -387,7 +387,7 @@ final class ClaimsEvidenceTests: XCTestCase {
             detail(files: [Fixtures.file("Resources/icon.png", patch: nil)])
         )
         XCTAssertEqual(verdict.status, .unclear)
-        XCTAssertTrue(verdict.facts.contains { $0.text.contains("No diff was readable") })
+        XCTAssertTrue(verdict.facts.contains { $0.englishSentence.contains("No diff was readable") })
     }
 
     func testAWorkflowChangeAloneDoesNotMoveTheBreakingStatus() {
@@ -397,7 +397,7 @@ final class ClaimsEvidenceTests: XCTestCase {
             detail(files: [Fixtures.file(".github/workflows/ci.yml", patch: patch)])
         )
         XCTAssertEqual(verdict.status, .ok)
-        XCTAssertTrue(verdict.facts.contains { $0.text.contains("changes a CI workflow") })
+        XCTAssertTrue(verdict.facts.contains { $0.englishSentence.contains("changes a CI workflow") })
     }
 
     // MARK: - Issue claim
@@ -411,7 +411,7 @@ final class ClaimsEvidenceTests: XCTestCase {
             URL(string: "https://github.com/schnaq/review/issues/142")
         )
         XCTAssertEqual(
-            verdict.facts.last?.text,
+            verdict.facts.last?.englishSentence,
             "Acceptance criteria not checked — the issue is not fetched."
         )
     }
@@ -501,11 +501,104 @@ final class ClaimsEvidenceTests: XCTestCase {
             XCTAssertFalse(line.verdict.facts.isEmpty, "\(line.claim.kind) produced no facts")
             for fact in line.verdict.facts {
                 XCTAssertTrue(
-                    fact.text.hasSuffix("."),
-                    "not a sentence: “\(fact.text)”"
+                    fact.englishSentence.hasSuffix("."),
+                    "not a sentence: “\(fact.englishSentence)”"
                 )
             }
         }
+    }
+
+    // MARK: - The fact as data
+
+    /// A fact is a ``EvidenceFact/Kind`` *plus* a rendering of it, and both halves are asserted.
+    ///
+    /// The kind is what the app localises (ADR 0022's follow-up to ADR 0026) and the English
+    /// sentence is what a log line, a test and a *Turn into a comment* insertion read — so a
+    /// change to either one is a change somebody has to mean.
+    func testAFactCarriesItsValuesAndRendersThemInEnglish() {
+        let verdict = evidence(
+            .testsAdded,
+            detail(
+                files: [
+                    Fixtures.file(
+                        "Tests/ParserTests/LexerTests.swift",
+                        additions: 12,
+                        deletions: 3
+                    )
+                ],
+                checks: [check("Linux", .success)]
+            )
+        )
+        XCTAssertEqual(
+            verdict.facts.map(\.kind),
+            [
+                .testFilesChanged(count: 1),
+                .testFile(
+                    path: "Tests/ParserTests/LexerTests.swift",
+                    additions: 12,
+                    deletions: 3
+                ),
+                .ciGreenCounted(passed: 1, total: 1),
+            ]
+        )
+        XCTAssertEqual(
+            verdict.facts.map(\.englishSentence),
+            [
+                "1 changed file matches a test naming convention.",
+                "“Tests/ParserTests/LexerTests.swift” is a test file (+12 −3).",
+                "CI is green: 1 of 1 check passed.",
+            ]
+        )
+    }
+
+    /// The four sentence shapes a count changes, at both ends of the range.
+    ///
+    /// English needs two forms and German needs two different ones, which is the whole reason the
+    /// count travels as a number rather than as "1 file" (ADR 0022's plural rules).
+    func testTheCountedSentencesAgreeWithTheirCounts() {
+        XCTAssertEqual(
+            EvidenceFact.Kind.testFilesChanged(count: 1).englishSentence,
+            "1 changed file matches a test naming convention."
+        )
+        XCTAssertEqual(
+            EvidenceFact.Kind.testFilesChanged(count: 4).englishSentence,
+            "4 changed files match a test naming convention."
+        )
+        XCTAssertEqual(
+            EvidenceFact.Kind.ciUnfinishedRunning(count: 1).englishSentence,
+            "CI has not finished: 1 check is still running."
+        )
+        XCTAssertEqual(
+            EvidenceFact.Kind.ciUnfinishedRunning(count: 3).englishSentence,
+            "CI has not finished: 3 checks are still running."
+        )
+        XCTAssertEqual(
+            EvidenceFact.Kind.topLevelPaths(count: 1, paths: ["Sources"]).englishSentence,
+            "The pull request touches 1 top-level path: “Sources”."
+        )
+        // More paths than the list names: the ellipsis is the renderer's, from `count` alone.
+        XCTAssertEqual(
+            EvidenceFact.Kind.topLevelPaths(count: 9, paths: ["Sources", "Tests"]).englishSentence,
+            "The pull request touches 9 top-level paths: “Sources”, “Tests”, …."
+        )
+    }
+
+    /// The id is still what it says and where, so a `ForEach` over two facts about one file is
+    /// stable and distinct.
+    func testTwoFactsAboutOneFileHaveDifferentIDs() {
+        let first = EvidenceFact(
+            kind: .assertionRemoved(path: "Tests/A.swift", line: 12, snippet: "XCTAssert(a)"),
+            path: "Tests/A.swift",
+            line: 12
+        )
+        let second = EvidenceFact(
+            kind: .assertionRemoved(path: "Tests/A.swift", line: 20, snippet: "XCTAssert(b)"),
+            path: "Tests/A.swift",
+            line: 20
+        )
+        XCTAssertNotEqual(first.id, second.id)
+        XCTAssertTrue(first.id.hasSuffix("|Tests/A.swift|12"), first.id)
+        XCTAssertTrue(first.id.hasPrefix(first.englishSentence), first.id)
     }
 
     // MARK: - The walker

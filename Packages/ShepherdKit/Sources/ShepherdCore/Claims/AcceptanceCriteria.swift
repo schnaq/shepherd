@@ -355,22 +355,105 @@ public struct AcceptanceVectors: Sendable, Hashable {
 ///
 /// Two states, not three: **mentioned** or **not mentioned**. There is deliberately no
 /// "contradicted" — Shepherd matched words, and the absence of a word is not evidence that the
-/// work was not done (ADR 0026's amendment). The reason is an English sentence, like every other
-/// evidence fact.
+/// work was not done (ADR 0026's amendment).
 public struct AcceptanceMatch: Sendable, Codable, Hashable, Identifiable {
     /// The bullet.
     public var bullet: AcceptanceBullet
     /// Whether the pull request mentions it.
     public var mentioned: Bool
-    /// Why, as one sentence — already ends in a full stop.
-    public var reason: String
+    /// Why — as data, on the same terms as ``EvidenceFact/Kind``.
+    ///
+    /// A ``Reason`` rather than a sentence, because this reason ends up *inside* an evidence fact
+    /// on the card and therefore has to be localisable in the app (ADR 0022) while staying
+    /// renderable here for a log, a test and a GitHub comment.
+    public var reason: Reason
+
+    /// Why one bullet came out mentioned or not, with the values the sentence is made of.
+    ///
+    /// A closed set of four, one per pass of ``AcceptanceMatcher``. The words are the issue
+    /// author's own, quoted verbatim and never translated; the similarity is a number the reader
+    /// compares against ``AcceptanceMatcher/minimumSimilarity``.
+    public enum Reason: Sendable, Codable, Hashable {
+        /// Enough of the bullet's distinctive words appear in the pull request.
+        ///
+        /// `present` is every word that appeared, in the bullet's order — the renderers cap how
+        /// many they name (``AcceptanceMatcher/namedWordLimit``) rather than the matcher, so the
+        /// count in the sentence and the words after it can never disagree.
+        case wordsAppear(present: [String], total: Int)
+        /// The words missed, but the on-device embeddings put the two texts close enough.
+        case readsAsAbout(similarity: Double)
+        /// The bullet has no distinctive word to look for at all.
+        case noDistinctiveWord
+        /// Not enough words appeared, with the cosine when this Mac computed one.
+        case wordsMissing(present: [String], total: Int, similarity: Double?)
+
+        /// The reason as one English sentence. Already ends in a full stop.
+        ///
+        /// The reading a test and a *Turn into a comment* insertion use; the card reads the app's
+        /// localised sentence for the same case.
+        public var englishSentence: String {
+            switch self {
+            case .wordsAppear(let present, let total):
+                let listed = Self.list(present, limit: AcceptanceMatcher.namedWordLimit)
+                return "\(present.count) of \(Self.worded(total)) in this bullet \(Self.appears(present.count)) in the pull request: \(listed)."
+            case .readsAsAbout(let similarity):
+                return "The pull request reads as being about this (similarity \(Self.formatted(similarity)))."
+            case .noDistinctiveWord:
+                return "This bullet has no distinctive word Shepherd could look for."
+            case .wordsMissing(let present, let total, let similarity):
+                let head: String
+                if present.isEmpty, total == 1 {
+                    head = "The one distinctive word in this bullet does not appear in the pull request."
+                } else if present.isEmpty {
+                    head = "None of the \(Self.worded(total)) in this bullet appear in the pull request."
+                } else {
+                    head = "Only \(present.count) of the \(Self.worded(total)) in this bullet \(Self.appears(present.count)) in the pull request."
+                }
+                guard let similarity else { return head }
+                return "\(head) On-device similarity is \(Self.formatted(similarity))."
+            }
+        }
+
+        /// Two decimals, and always with a leading digit, so `0.60` never renders as `.6`.
+        ///
+        /// Public because the app's localised sentence has to name the *same* number: a similarity
+        /// formatted twice in two places is a number that can disagree with itself.
+        /// - Parameter similarity: The cosine.
+        /// - Returns: The number, to two decimals.
+        public static func formatted(_ similarity: Double) -> String {
+            String(format: "%.2f", similarity)
+        }
+
+        /// The named words of a capped list, ending in an ellipsis when there are more.
+        /// - Parameters:
+        ///   - words: Every word that appeared, in order.
+        ///   - limit: How many to name.
+        /// - Returns: The quoted words, comma-separated.
+        static func list(_ words: [String], limit: Int) -> String {
+            let named = words.prefix(limit).map { quoted($0) }.joined(separator: ", ")
+            return words.count > limit ? "\(named), …" : named
+        }
+
+        /// A reason quotes a word the way the rest of the card quotes a path.
+        static func quoted(_ word: String) -> String { "“\(word)”" }
+
+        /// "1 word" / "4 words" — so a reason reads as English at both ends of the range.
+        static func worded(_ count: Int) -> String {
+            count == 1 ? "1 word" : "\(count) words"
+        }
+
+        /// The verb that agrees with a count of words.
+        static func appears(_ count: Int) -> String {
+            count == 1 ? "appears" : "appear"
+        }
+    }
 
     /// Creates a match.
     /// - Parameters:
     ///   - bullet: The bullet.
     ///   - mentioned: Whether the pull request mentions it.
-    ///   - reason: The one-sentence reason.
-    public init(bullet: AcceptanceBullet, mentioned: Bool, reason: String) {
+    ///   - reason: Why it came out that way.
+    public init(bullet: AcceptanceBullet, mentioned: Bool, reason: Reason) {
         self.bullet = bullet
         self.mentioned = mentioned
         self.reason = reason
@@ -428,7 +511,10 @@ public enum AcceptanceMatcher {
     /// pull request must not decide how long a card takes to appear.
     public static let evidenceBudgetBytes = 20_000
     /// How many of a bullet's matched words one reason names.
-    static let namedWordLimit = 4
+    ///
+    /// Public because both renderings of ``AcceptanceMatch/Reason/wordsAppear(present:total:)``
+    /// have to cap the list at the same place, and one of them is in the app target.
+    public static let namedWordLimit = 4
 
     /// The words that are dropped before matching even though they clear ``minimumTokenLength``.
     ///
@@ -520,66 +606,32 @@ public enum AcceptanceMatcher {
                 return AcceptanceMatch(
                     bullet: bullet,
                     mentioned: true,
-                    reason: overlapReason(present: present, total: words.count)
+                    reason: .wordsAppear(present: present, total: words.count)
                 )
             }
             if let similarity, similarity >= minimumSimilarity {
                 return AcceptanceMatch(
                     bullet: bullet,
                     mentioned: true,
-                    reason: "The pull request reads as being about this (similarity \(formatted(similarity)))."
+                    reason: .readsAsAbout(similarity: similarity)
                 )
             }
             if words.isEmpty {
                 return AcceptanceMatch(
                     bullet: bullet,
                     mentioned: false,
-                    reason: "This bullet has no distinctive word Shepherd could look for."
+                    reason: .noDistinctiveWord
                 )
             }
             return AcceptanceMatch(
                 bullet: bullet,
                 mentioned: false,
-                reason: missReason(present: present, total: words.count, similarity: similarity)
+                reason: .wordsMissing(
+                    present: present,
+                    total: words.count,
+                    similarity: similarity
+                )
             )
         }
-    }
-
-    // MARK: - Reasons
-
-    /// "3 of 4 words in this bullet appear in the pull request: “retry”, “upload”, “timeout”."
-    private static func overlapReason(present: [String], total: Int) -> String {
-        let named = present.prefix(namedWordLimit).map { "“\($0)”" }.joined(separator: ", ")
-        let ellipsis = present.count > namedWordLimit ? "\(named), …" : named
-        return "\(present.count) of \(worded(total)) in this bullet \(appears(present.count)) in the pull request: \(ellipsis)."
-    }
-
-    /// "None of the 4 words in this bullet appear in the pull request."
-    private static func missReason(present: [String], total: Int, similarity: Double?) -> String {
-        let head: String
-        if present.isEmpty, total == 1 {
-            head = "The one distinctive word in this bullet does not appear in the pull request."
-        } else if present.isEmpty {
-            head = "None of the \(worded(total)) in this bullet appear in the pull request."
-        } else {
-            head = "Only \(present.count) of the \(worded(total)) in this bullet \(appears(present.count)) in the pull request."
-        }
-        guard let similarity else { return head }
-        return "\(head) On-device similarity is \(formatted(similarity))."
-    }
-
-    /// "1 word" / "4 words" — so a reason reads as English at both ends of the range.
-    private static func worded(_ count: Int) -> String {
-        count == 1 ? "1 word" : "\(count) words"
-    }
-
-    /// The verb that agrees with a count of words.
-    private static func appears(_ count: Int) -> String {
-        count == 1 ? "appears" : "appear"
-    }
-
-    /// Two decimals, and always with a leading digit, so `0.60` never renders as `.6`.
-    private static func formatted(_ similarity: Double) -> String {
-        String(format: "%.2f", similarity)
     }
 }

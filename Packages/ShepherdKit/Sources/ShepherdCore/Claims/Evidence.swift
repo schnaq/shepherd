@@ -1,84 +1,5 @@
 import Foundation
 
-/// One checkable fact about a pull request, written as a sentence.
-///
-/// A fact is never a judgement — "8 of 11 changed files are under “Sources/Parser”" is a fact,
-/// "the scope claim is wrong" is not — because the whole point of the claims card is that the
-/// reviewer draws the conclusion (ADR 0026, ADR 0007's "hints, never verdicts").
-///
-/// ``path`` and ``line`` exist so a fact can be *checked in one click*: they are what the card
-/// turns into a link into the diff viewer. A fact without a path is not a lesser fact; it is one
-/// about the pull request as a whole ("CI is green: 7 of 7 checks passed").
-public struct EvidenceFact: Sendable, Codable, Hashable, Identifiable {
-    /// The fact, as one sentence. Already ends in a full stop.
-    public var text: String
-    /// The changed file the fact is about, when it is about one.
-    public var path: String?
-    /// The head-side line the fact is about, when it names one.
-    ///
-    /// Head-side, because that is the numbering the diff viewer and GitHub's review API speak
-    /// (see ``PatchRow/headLine``). For a deleted line it is the line the deletion sits in front
-    /// of, which is where a reviewer following the link needs to land.
-    public var line: Int?
-    /// A link out of the app, for a fact whose subject is not in the diff at all.
-    ///
-    /// Only the issue reference, which is a GitHub URL rather than a file: `#142`'s own page is
-    /// where a reviewer checks what `#142` asked for, and it is the one place the card sends
-    /// somebody outside the app.
-    public var url: URL?
-    /// Whether this fact is one item of a checklist Shepherd matched, and how it came out.
-    ///
-    /// `nil` for every fact about the diff and CI, and that is the distinction it exists to draw:
-    /// those facts are statements about the pull request, while a marked fact is one *line of the
-    /// referenced issue* with the answer to "is this mentioned" beside it. The card renders the
-    /// mark as a glyph so a list of eight bullets reads as a list rather than as eight sentences
-    /// (ADR 0026's amendment).
-    ///
-    /// There is deliberately no third case. A bullet nobody mentioned is not a contradiction —
-    /// Shepherd matched words, and a missing word is a question, not a finding.
-    public var mark: Mark?
-
-    /// The two answers a matched checklist item can carry.
-    public enum Mark: String, Sendable, Codable, Hashable, CaseIterable {
-        /// The pull request mentions this item. ✓
-        case mentioned
-        /// It does not. ·
-        case notMentioned
-    }
-
-    /// Creates a fact.
-    /// - Parameters:
-    ///   - text: The sentence.
-    ///   - path: The changed file it is about, if any.
-    ///   - line: The head-side line it names, if any.
-    ///   - url: An external link, if any.
-    ///   - mark: The checklist answer, for a fact that is one matched acceptance bullet.
-    public init(
-        text: String,
-        path: String? = nil,
-        line: Int? = nil,
-        url: URL? = nil,
-        mark: Mark? = nil
-    ) {
-        self.text = text
-        self.path = path
-        self.line = line
-        self.url = url
-        self.mark = mark
-    }
-
-    /// A fact is identified by what it says and where.
-    public var id: String {
-        let lineKey: String
-        if let line {
-            lineKey = "\(line)"
-        } else {
-            lineKey = ""
-        }
-        return "\(text)|\(path ?? "")|\(lineKey)"
-    }
-}
-
 /// What the diff and CI say about one claim: a status and the facts it was derived from.
 ///
 /// **The facts come first and the status is a function of them.** That order is the design: the
@@ -114,11 +35,12 @@ public struct EvidenceVerdict: Sendable, Codable, Hashable {
 
 /// Why the referenced issue could not be read.
 ///
-/// A closed set of four, and the sentences live here rather than in the app for the reason
-/// ADR 0026 gives about every other evidence fact: they are prose assembled beside the facts they
-/// sit next to, and a catalog key per shape would be a key per sentence template. The app's job
-/// is to classify its own transport error into one of these — it is the only layer that can, since
-/// `ShepherdCore` cannot see `GitHubKit`'s error type — and the sentence comes back from here.
+/// A closed set of four, and a *case* rather than a message: the app's job is to classify its own
+/// transport error into one of these — it is the only layer that can, since `ShepherdCore` cannot
+/// see `GitHubKit`'s error type — and the case travels as ``EvidenceFact/Kind/issueLookupFailed(_:)``
+/// like every other fact. ``sentence`` is the English rendering, on the same terms as
+/// ``EvidenceFact/englishSentence``: it is what a test and a GitHub comment read, while the card
+/// reads the app's localised sentence for the same case (ADR 0022, ADR 0026).
 public enum IssueLookupFailure: String, Sendable, Codable, Hashable, CaseIterable {
     /// GitHub answered `404`: no issue with that number in this repository.
     case notFound
@@ -129,7 +51,7 @@ public enum IssueLookupFailure: String, Sendable, Codable, Hashable, CaseIterabl
     /// Anything else — a rate limit, a malformed body, a server error.
     case failed
 
-    /// The fact this failure contributes, as one sentence.
+    /// The fact this failure contributes, as one English sentence.
     public var sentence: String {
         switch self {
         case .notFound:
@@ -240,19 +162,17 @@ public enum EvidenceChecker {
 
         let testFiles = detail.files.filter { FilePrioritizer.category(of: $0) == .tests }
         if testFiles.isEmpty {
-            facts.append(EvidenceFact(text: "No changed file matches a test naming convention."))
+            facts.append(EvidenceFact(kind: .noTestFileChanged))
         } else {
-            facts.append(
-                EvidenceFact(
-                    text: testFiles.count == 1
-                        ? "1 changed file matches a test naming convention."
-                        : "\(testFiles.count) changed files match a test naming convention."
-                )
-            )
+            facts.append(EvidenceFact(kind: .testFilesChanged(count: testFiles.count)))
             for file in testFiles.prefix(namedFileLimit) {
                 facts.append(
                     EvidenceFact(
-                        text: "\(quoted(file.path)) is a test file (+\(file.additions) −\(file.deletions)).",
+                        kind: .testFile(
+                            path: file.path,
+                            additions: file.additions,
+                            deletions: file.deletions
+                        ),
                         path: file.path
                     )
                 )
@@ -303,7 +223,11 @@ public enum EvidenceChecker {
                 case .removed where removedAssertion.matches(row.text):
                     facts.append(
                         EvidenceFact(
-                            text: "\(quoted(file.path)) removes an assertion at line \(row.headLine): \(quoted(snippet(row.text))).",
+                            kind: .assertionRemoved(
+                                path: file.path,
+                                line: row.headLine,
+                                snippet: snippet(row.text)
+                            ),
                             path: file.path,
                             line: row.headLine
                         )
@@ -311,7 +235,11 @@ public enum EvidenceChecker {
                 case .added where addedSkip.matches(row.text):
                     facts.append(
                         EvidenceFact(
-                            text: "\(quoted(file.path)) adds a skipped test at line \(row.headLine): \(quoted(snippet(row.text))).",
+                            kind: .skippedTestAdded(
+                                path: file.path,
+                                line: row.headLine,
+                                snippet: snippet(row.text)
+                            ),
                             path: file.path,
                             line: row.headLine
                         )
@@ -355,7 +283,7 @@ public enum EvidenceChecker {
         guard !files.isEmpty else {
             return EvidenceVerdict(
                 status: .unclear,
-                facts: [EvidenceFact(text: "The pull request has no changed files.")]
+                facts: [EvidenceFact(kind: .noChangedFiles)]
             )
         }
 
@@ -364,33 +292,29 @@ public enum EvidenceChecker {
         let token = module.trimmingCharacters(in: .whitespaces)
         let status: EvidenceVerdict.Status
         if token.isEmpty {
-            facts.append(
-                EvidenceFact(
-                    text: "The claim names no module, so there is nothing to match the changed paths against."
-                )
-            )
+            facts.append(EvidenceFact(kind: .claimNamesNoModule))
             status = .unclear
         } else {
             let needle = token.lowercased()
             let inside = files.filter { matches(needle: needle, file: $0) }
             if inside.isEmpty {
-                facts.append(
-                    EvidenceFact(
-                        text: "No changed path contains \(quoted(token)), so the claim could not be matched to the diff."
-                    )
-                )
+                facts.append(EvidenceFact(kind: .noPathContainsToken(token: token)))
                 status = .unclear
             } else {
                 facts.append(
                     EvidenceFact(
-                        text: "\(inside.count) of \(files.count) changed files are under \(quoted(token))."
+                        kind: .filesUnderToken(
+                            inside: inside.count,
+                            total: files.count,
+                            token: token
+                        )
                     )
                 )
                 let outside = files.filter { !matches(needle: needle, file: $0) }
                 for file in outside.prefix(namedFileLimit) {
                     facts.append(
                         EvidenceFact(
-                            text: "\(quoted(file.path)) is outside \(quoted(token)).",
+                            kind: .fileOutsideToken(path: file.path, token: token),
                             path: file.path
                         )
                     )
@@ -449,7 +373,11 @@ public enum EvidenceChecker {
                         guard pattern.matches(row.text) else { continue }
                         declarations.append(
                             EvidenceFact(
-                                text: "\(quoted(file.path)) removes or changes an exported declaration at line \(row.headLine): \(quoted(snippet(row.text))).",
+                                kind: .exportedDeclarationChanged(
+                                    path: file.path,
+                                    line: row.headLine,
+                                    snippet: snippet(row.text)
+                                ),
                                 path: file.path,
                                 line: row.headLine
                             )
@@ -459,7 +387,7 @@ public enum EvidenceChecker {
                 if isManifest(file), manifestLine(in: patch) {
                     dataOrDependency.append(
                         EvidenceFact(
-                            text: "\(quoted(file.path)) changes a version or dependency line.",
+                            kind: .manifestLineChanged(path: file.path),
                             path: file.path
                         )
                     )
@@ -468,7 +396,7 @@ public enum EvidenceChecker {
             if isSchemaChange(file) {
                 dataOrDependency.append(
                     EvidenceFact(
-                        text: "\(quoted(file.path)) changes the database schema or a migration.",
+                        kind: .schemaChanged(path: file.path),
                         path: file.path
                     )
                 )
@@ -483,26 +411,18 @@ public enum EvidenceChecker {
             .prefix(namedFileLimit)
             .map { file in
                 EvidenceFact(
-                    text: isWorkflow(file)
-                        ? "\(quoted(file.path)) changes a CI workflow."
-                        : "\(quoted(file.path)) changes configuration.",
+                    kind: isWorkflow(file)
+                        ? .workflowChanged(path: file.path)
+                        : .configurationChanged(path: file.path),
                     path: file.path
                 )
             }
         facts.append(contentsOf: configuration)
 
         if !readAnyPatch {
-            facts.append(
-                EvidenceFact(
-                    text: "No diff was readable; GitHub sends no patch for binary files and for diffs it truncated."
-                )
-            )
+            facts.append(EvidenceFact(kind: .noReadableDiff))
         } else if declarations.isEmpty {
-            facts.append(
-                EvidenceFact(
-                    text: "No exported declaration is removed or changed in the diff Shepherd read."
-                )
-            )
+            facts.append(EvidenceFact(kind: .noExportedDeclarationChanged))
         }
 
         let status: EvidenceVerdict.Status
@@ -550,52 +470,54 @@ public enum EvidenceChecker {
         let url = issue?.url
             ?? URL(string: "https://github.com/\(repo.owner)/\(repo.name)/issues/\(number)")
         var facts: [EvidenceFact] = [
-            EvidenceFact(text: "Issue #\(number) of \(repo.fullName) is referenced.", url: url)
+            EvidenceFact(
+                kind: .issueReferenced(number: number, repo: repo.fullName),
+                url: url
+            )
         ]
 
         guard let issue else {
-            facts.append(
-                EvidenceFact(text: "Acceptance criteria not checked — the issue is not fetched.")
-            )
+            facts.append(EvidenceFact(kind: .issueNotFetched))
             if let failure {
-                facts.append(EvidenceFact(text: failure.sentence))
+                facts.append(EvidenceFact(kind: .issueLookupFailed(failure)))
             }
             return EvidenceVerdict(status: .unclear, facts: facts)
         }
 
         if issue.isPullRequest {
-            facts.append(
-                EvidenceFact(
-                    text: "#\(number) is a pull request rather than an issue, so it has no acceptance criteria."
-                )
-            )
+            facts.append(EvidenceFact(kind: .referenceIsPullRequest(number: number)))
             return EvidenceVerdict(status: .unclear, facts: facts)
         }
 
         let bullets = matches ?? []
         guard !bullets.isEmpty else {
-            facts.append(
-                EvidenceFact(
-                    text: "Acceptance criteria not checked — the issue body holds no checklist or list Shepherd could read."
-                )
-            )
+            facts.append(EvidenceFact(kind: .noAcceptanceChecklist))
             return EvidenceVerdict(status: .unclear, facts: facts)
         }
 
-        facts.append(EvidenceFact(text: issueFact(for: issue, bulletCount: bullets.count)))
+        facts.append(
+            EvidenceFact(
+                kind: .issueWithBullets(
+                    number: issue.number,
+                    title: issue.title,
+                    state: issue.state,
+                    bulletCount: bullets.count
+                )
+            )
+        )
         let mentioned = bullets.filter(\.mentioned).count
         facts.append(
             EvidenceFact(
-                text: mentioned == bullets.count
-                    ? "Every acceptance bullet is mentioned in the pull request's description, changed paths or commit messages."
-                    : "\(mentioned) of \(bullets.count) acceptance bullets are mentioned in the pull request's description, changed paths or commit messages."
+                kind: mentioned == bullets.count
+                    ? .everyBulletMentioned
+                    : .bulletsMentioned(mentioned: mentioned, total: bullets.count)
             )
         )
         for match in bullets {
             let mark: EvidenceFact.Mark = match.mentioned ? .mentioned : .notMentioned
             facts.append(
                 EvidenceFact(
-                    text: "\(quoted(match.bullet.text)) — \(match.reason)",
+                    kind: .acceptanceBullet(text: match.bullet.text, reason: match.reason),
                     mark: mark
                 )
             )
@@ -604,28 +526,6 @@ public enum EvidenceChecker {
             status: mentioned == bullets.count ? .ok : .unclear,
             facts: facts
         )
-    }
-
-    /// "Issue #142 “Retry flaky uploads” is open and lists 3 acceptance bullets."
-    ///
-    /// The state is named only when GitHub reported one Shepherd models: "was read" would be a
-    /// sentence about Shepherd rather than about the issue.
-    private static func issueFact(for issue: IssueSummary, bulletCount: Int) -> String {
-        let listed = bulletCount == 1
-            ? "lists 1 acceptance bullet"
-            : "lists \(bulletCount) acceptance bullets"
-        let title = issue.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let named = title.isEmpty
-            ? "Issue #\(issue.number)"
-            : "Issue #\(issue.number) \(quoted(title))"
-        switch issue.state {
-        case .open:
-            return "\(named) is open and \(listed)."
-        case .closed:
-            return "\(named) is closed and \(listed)."
-        case .unknown:
-            return "\(named) \(listed)."
-        }
     }
 
     // MARK: - Shared facts
@@ -644,39 +544,35 @@ public enum EvidenceChecker {
 
     private static func checkFacts(rollup: CheckRollup?, checks: [CheckRun]) -> [EvidenceFact] {
         guard let rollup, rollup.state != CheckRollup.State.none else {
-            return [EvidenceFact(text: "No checks are configured for this commit.")]
+            return [EvidenceFact(kind: .noChecksConfigured)]
         }
         var facts: [EvidenceFact] = []
         switch rollup.state {
         case .success:
             facts.append(
                 EvidenceFact(
-                    text: rollup.total > 0
-                        ? "CI is green: \(rollup.successCount) of \(counted(rollup.total)) passed."
-                        : "CI is green."
+                    kind: rollup.total > 0
+                        ? .ciGreenCounted(passed: rollup.successCount, total: rollup.total)
+                        : .ciGreen
                 )
             )
         case .failure:
             facts.append(
                 EvidenceFact(
-                    text: rollup.total > 0
-                        ? "CI is red: \(rollup.failureCount) of \(counted(rollup.total)) failed."
-                        : "CI is red."
+                    kind: rollup.total > 0
+                        ? .ciRedCounted(failed: rollup.failureCount, total: rollup.total)
+                        : .ciRed
                 )
             )
             let failing = checks.filter { $0.rollupContribution == .failure }
             for check in failing.prefix(namedCheckLimit) {
-                facts.append(EvidenceFact(text: "Check \(quoted(check.name)) failed."))
+                facts.append(EvidenceFact(kind: .checkFailed(name: check.name)))
             }
         case .pending:
             let running = rollup.pendingCount
             facts.append(
                 EvidenceFact(
-                    text: running == 0
-                        ? "CI has not finished."
-                        : (running == 1
-                            ? "CI has not finished: 1 check is still running."
-                            : "CI has not finished: \(running) checks are still running.")
+                    kind: running == 0 ? .ciUnfinished : .ciUnfinishedRunning(count: running)
                 )
             )
         case .none:
@@ -695,13 +591,8 @@ public enum EvidenceChecker {
                 : "(repository root)"
             if seen.insert(component).inserted { ordered.append(component) }
         }
-        let named = ordered.sorted().prefix(namedPathLimit).map { quoted($0) }.joined(separator: ", ")
-        let suffix = ordered.count > namedPathLimit ? "\(named), …" : named
-        return EvidenceFact(
-            text: ordered.count == 1
-                ? "The pull request touches 1 top-level path: \(suffix)."
-                : "The pull request touches \(ordered.count) top-level paths: \(suffix)."
-        )
+        let named = Array(ordered.sorted().prefix(namedPathLimit))
+        return EvidenceFact(kind: .topLevelPaths(count: ordered.count, paths: named))
     }
 
     /// The workflow / lockfile / generated / configuration flags, one fact each.
@@ -722,31 +613,25 @@ public enum EvidenceChecker {
                 guard workflows < namedFileLimit else { continue }
                 workflows += 1
                 facts.append(
-                    EvidenceFact(text: "\(quoted(file.path)) changes a CI workflow.", path: file.path)
+                    EvidenceFact(kind: .workflowChanged(path: file.path), path: file.path)
                 )
             } else if FilePrioritizer.isLockfile(file) {
                 guard lockfiles < namedFileLimit else { continue }
                 lockfiles += 1
                 facts.append(
-                    EvidenceFact(
-                        text: "\(quoted(file.path)) is a dependency lockfile.",
-                        path: file.path
-                    )
+                    EvidenceFact(kind: .lockfile(path: file.path), path: file.path)
                 )
             } else if category == .generated {
                 guard generated < namedFileLimit else { continue }
                 generated += 1
                 facts.append(
-                    EvidenceFact(
-                        text: "\(quoted(file.path)) is a generated or vendored file.",
-                        path: file.path
-                    )
+                    EvidenceFact(kind: .generatedFile(path: file.path), path: file.path)
                 )
             } else if category == .config {
                 guard configs < namedFileLimit else { continue }
                 configs += 1
                 facts.append(
-                    EvidenceFact(text: "\(quoted(file.path)) is configuration.", path: file.path)
+                    EvidenceFact(kind: .configurationFile(path: file.path), path: file.path)
                 )
             }
         }
@@ -853,17 +738,6 @@ public enum EvidenceChecker {
     private static let declarationLimit = 6
     /// How much of a diff line a fact quotes.
     private static let snippetLimit = 80
-
-    /// A fact quotes a path, a token or a line of code in typographic quotes.
-    ///
-    /// The same shape ``FilePrioritizer``'s reasons use, and not backticks: the card renders these
-    /// as text, so a backtick would be a backtick on screen.
-    private static func quoted(_ text: String) -> String { "“\(text)”" }
-
-    /// "1 check" / "7 checks" — so a fact reads as English at both ends of the range.
-    private static func counted(_ checks: Int) -> String {
-        checks == 1 ? "1 check" : "\(checks) checks"
-    }
 
     private static func snippet(_ line: String) -> String {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
