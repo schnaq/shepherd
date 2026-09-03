@@ -701,7 +701,8 @@ final class AIDraftingTests: XCTestCase {
         )
         let stream = try XCTUnwrap(outcome.stream)
         XCTAssertEqual(stream.kind, .onDevice)
-        XCTAssertEqual(try await collect(stream.text), ["On-device draft."])
+        let awaited = try await collect(stream.text)
+        XCTAssertEqual(awaited, ["On-device draft."])
     }
 
     func testATierThatStreamsNothingCountsAsAFailureAndTheLadderMovesOn() async throws {
@@ -718,11 +719,10 @@ final class AIDraftingTests: XCTestCase {
                 }
             )
         )
-        let stream = try XCTUnwrap(
-            await router.streamReviewSummaryDraft(
+        let streamOutcome = await router.streamReviewSummaryDraft(
                 for: detail(patch: longPatch(lines: 10))
-            ).stream
-        )
+            )
+        let stream = try XCTUnwrap(streamOutcome.stream)
         XCTAssertEqual(stream.kind, .onDevice, "an empty answer is not an answer")
     }
 
@@ -738,11 +738,10 @@ final class AIDraftingTests: XCTestCase {
                 }
             )
         )
-        let stream = try XCTUnwrap(
-            await router.streamReviewSummaryDraft(
+        let streamOutcome = await router.streamReviewSummaryDraft(
                 for: detail(patch: longPatch(lines: 10))
-            ).stream
-        )
+            )
+        let stream = try XCTUnwrap(streamOutcome.stream)
         // Committed: once the reviewer is watching text arrive, another tier's attempt at the
         // same draft may not replace it.
         XCTAssertEqual(stream.kind, .anthropic)
@@ -830,13 +829,13 @@ final class AIDraftingTests: XCTestCase {
                 onDeviceUnavailabilityReason: { nil }
             )
         )
-        let stream = try XCTUnwrap(
-            await router.streamInlineCommentDraft(
+        let streamOutcome = await router.streamInlineCommentDraft(
                 for: detail(patch: longPatch(lines: 10)),
                 anchor: InlineCommentAnchor(path: "Sources/Upload.swift", line: 5, side: .right)
-            ).stream
-        )
-        XCTAssertEqual(try await collect(stream.text), ["one-shot draft"])
+            )
+        let stream = try XCTUnwrap(streamOutcome.stream)
+        let awaited = try await collect(stream.text)
+        XCTAssertEqual(awaited, ["one-shot draft"])
     }
 
     // MARK: - The field's own rules, streamed
