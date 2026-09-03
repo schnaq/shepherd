@@ -32,6 +32,8 @@ enum InboxFilterOption: String, AppEnum, CaseIterable {
     case humans
     /// Pull requests from bot accounts.
     case bots
+    /// The issues section rather than a pull-request smart view (ADR 0032's Sprint 2 amendment).
+    case issues
 
     static var typeDisplayRepresentation: TypeDisplayRepresentation {
         TypeDisplayRepresentation(name: "Inbox Filter")
@@ -45,6 +47,7 @@ enum InboxFilterOption: String, AppEnum, CaseIterable {
             .approvedByMe: DisplayRepresentation(title: "Approved by me"),
             .humans: DisplayRepresentation(title: "People"),
             .bots: DisplayRepresentation(title: "Bots"),
+            .issues: DisplayRepresentation(title: "Issues"),
         ]
     }
 

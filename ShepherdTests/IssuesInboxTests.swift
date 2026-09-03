@@ -205,7 +205,8 @@ final class IssuesInboxTests: XCTestCase {
 
         // A `shepherd://` link carries whatever casing was typed; the cache holds GitHub's.
         model.repoFilter = RepoRef(owner: "SCHNAQ", name: "Review")
-        XCTAssertEqual(model.filteredRows.map(\.number), [1, 2])
+        // The store orders by freshness; this test is about membership, not order.
+        XCTAssertEqual(model.filteredRows.map(\.number).sorted(), [1, 2])
     }
 
     // MARK: - Selection
