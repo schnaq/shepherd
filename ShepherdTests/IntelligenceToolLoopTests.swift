@@ -859,6 +859,14 @@ final class IntelligenceToolLoopTests: XCTestCase {
         )
     }
 
+    /// An unavailable on-device model does not put a *silent* rung under this call.
+    ///
+    /// The assertion is the same one this test always made — nothing is asked, so nothing leaves
+    /// the Mac — with `preferCloud: true` taken out of it, because that argument now means
+    /// something on this path: it is the reviewer having pressed the card's question, and the
+    /// three tests below are what it may then do. Before the click the answer is still the tier's
+    /// own sentence; what is new is the *fact* returned beside it, which is what the card needs
+    /// to ask instead of drawing a button that could only fail.
     func testAnUnavailableOnDeviceModelIsNotAReasonToUseTheCloudOne() async throws {
         let log = DiagnoseLog()
         var stubTiers = tiers(log: log, cloud: StubDiagnosisProvider(kind: .anthropic))
@@ -868,15 +876,62 @@ final class IntelligenceToolLoopTests: XCTestCase {
             tiers: stubTiers
         )
 
-        let outcome = await router.diagnoseFailingChecks(
+        let attempt = await router.attemptDiagnosis(for: detail(), summary: summary())
+
+        let asked = await log.kinds
+        XCTAssertEqual(attempt.outcome.message, "Apple Intelligence is turned off.")
+        XCTAssertTrue(asked.isEmpty, "no tier was asked, so nothing left this Mac")
+        XCTAssertFalse(attempt.didExceedBudget, "an unavailable model is not a budget failure")
+        XCTAssertTrue(
+            attempt.isOnDeviceUnavailableWithCloudTier,
+            "but there is a rung the card may ask about"
+        )
+    }
+
+    func testAnUnavailableOnDeviceModelReachesTheCloudTierOnlyWithTheClick() async throws {
+        let log = DiagnoseLog()
+        var stubTiers = tiers(log: log, cloud: StubDiagnosisProvider(kind: .anthropic))
+        stubTiers.onDeviceUnavailabilityReason = { "Apple Intelligence is turned off." }
+        let router = IntelligenceRouter(
+            configuration: .init(mode: .onDeviceAndCloud),
+            tiers: stubTiers
+        )
+
+        let attempt = await router.attemptDiagnosis(
             for: detail(),
             summary: summary(),
             preferCloud: true
         )
 
         let asked = await log.kinds
-        XCTAssertEqual(outcome.message, "Apple Intelligence is turned off.")
+        XCTAssertEqual(attempt.outcome.output?.kind, .anthropic)
+        XCTAssertEqual(asked, [.anthropic], "the tier that cannot answer is not asked to")
+        XCTAssertFalse(
+            attempt.isOnDeviceUnavailableWithCloudTier,
+            "the one offer is spent by pressing it"
+        )
+        XCTAssertTrue(router.canDiagnose, "and the button was drawn on this Mac")
+    }
+
+    func testWithoutAKeyAnUnavailableOnDeviceModelHasNothingToOfferAndNoButton() async throws {
+        let log = DiagnoseLog()
+        var stubTiers = tiers(log: log, cloud: nil)
+        stubTiers.onDeviceUnavailabilityReason = { "Apple Intelligence is turned off." }
+        let router = IntelligenceRouter(configuration: .init(mode: .onDevice), tiers: stubTiers)
+
+        // Even with the argument set — no caller in the app can do this, and it still asks
+        // nothing, because there is nothing configured to ask.
+        let attempt = await router.attemptDiagnosis(
+            for: detail(),
+            summary: summary(),
+            preferCloud: true
+        )
+
+        let asked = await log.kinds
+        XCTAssertEqual(attempt.outcome.message, "Apple Intelligence is turned off.")
+        XCTAssertFalse(attempt.isOnDeviceUnavailableWithCloudTier)
         XCTAssertTrue(asked.isEmpty)
+        XCTAssertFalse(router.canDiagnose, "so the Why? button is not drawn at all")
     }
 
     func testAPullRequestWithNothingRedIsAnsweredWithoutAskingAnyTier() async throws {

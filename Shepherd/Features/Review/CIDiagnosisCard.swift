@@ -21,10 +21,11 @@ import SwiftUI
 /// - **The trace is not decoration.** ``CIDiagnosisTraceView`` is what turns a hypothesis into a
 ///   claim a reviewer can check; it is part of the card rather than a detail sheet somewhere else.
 /// - **There is exactly one way to the cloud, and it is a question.** *Ask <provider> with the
-///   full log?* appears only after the on-device tier said the content did not fit **and** only
-///   when a key is configured; otherwise the card says the log did not fit on-device and offers
-///   nothing. Pressing it is the only thing in Shepherd that lets a CI log reach a configured
-///   endpoint (ADR 0024, `CONTRIBUTING.md`'s host list).
+///   full log?* appears only after the on-device tier said the content did not fit — or said it
+///   is not available on this Mac at all, which asks the same question with the other sentence
+///   in front of it — **and** only when a key is configured; otherwise the card says what
+///   happened and offers nothing. Pressing it is the only thing in Shepherd that lets a CI log
+///   reach a configured endpoint (ADR 0024, `CONTRIBUTING.md`'s host list).
 /// - **Nothing in it acts.** *Draft an agent brief* opens the delegation sheet with the finding
 ///   filled in — and Run is still the reviewer's click (ADR 0011's amendment). There is no
 ///   *comment this*, no *re-run CI*, and no path from this card to the outbox.
@@ -57,8 +58,8 @@ struct CIDiagnosisCard: View {
                     asking
                 case .diagnosed(let kind, let run):
                     diagnosed(kind: kind, run: run)
-                case .tooLargeForDevice(let message, let canAskCloud):
-                    tooLarge(message: message, canAskCloud: canAskCloud)
+                case .cloudRung(let reason, let message, let canAskCloud):
+                    cloudRung(reason: reason, message: message, canAskCloud: canAskCloud)
                 case .failed(let message):
                     Text(message)
                         .font(.system(size: 11))
@@ -196,23 +197,37 @@ struct CIDiagnosisCard: View {
         }
     }
 
-    /// The one failure with a way out of it — and the honest sentence when there is none.
+    /// The two refusals with a way out of them — and the honest sentence when there is none.
+    ///
+    /// `message` is always the tier's *own* words: the log that did not fit, or the reason macOS
+    /// gives for the on-device model being unavailable (*"…is turned off in System Settings"* is
+    /// a different thing to do about it than *"this Mac does not support…"*). The question under
+    /// it is Shepherd's, and pressing it is the only thing in the app that can send a CI log to a
+    /// configured endpoint.
     @ViewBuilder
-    private func tooLarge(message: String, canAskCloud: Bool) -> some View {
+    private func cloudRung(
+        reason: CIDiagnosisState.CloudRungReason,
+        message: String,
+        canAskCloud: Bool
+    ) -> some View {
         Text(message)
             .font(.system(size: 11))
             .foregroundStyle(Theme.textMuted)
             .fixedSize(horizontal: false, vertical: true)
         if canAskCloud, let cloudBadge {
             Button(
-                String(localized: "Ask \(cloudBadge) with the full log?"),
+                CIDiagnosisCard.cloudRungQuestion(reason, provider: cloudBadge),
                 action: onAskCloud
             )
             .buttonStyle(SecondaryButtonStyle(height: 26, tint: Theme.accentText))
             .help(String(
                 localized: "Sends the reduced log, the failing checks and the diff Shepherd reads to the endpoint you configured"
             ))
-        } else {
+        } else if reason == .tooLargeForDevice {
+            // Only reachable for this reason: with no on-device model *and* no key the **Why?**
+            // button is never drawn (``IntelligenceRouter/canDiagnose``), so the other reason
+            // only ever arrives here with a tier to offer — and its sentence above is the whole
+            // answer on its own anyway.
             Text(String(
                 localized: "The log did not fit the on-device model, and no cloud provider is configured."
             ))
@@ -223,6 +238,31 @@ struct CIDiagnosisCard: View {
     }
 
     // MARK: - Copy
+
+    /// The question on the card's one button, for the refusal it is an answer to.
+    ///
+    /// Both halves are load-bearing. The *provider* is named rather than "the cloud", because
+    /// what a reviewer agrees to is one endpoint they configured themselves. The *reason* picks
+    /// the sentence: "with the full log?" answers a log that did not fit, and it would be a
+    /// strange thing to read on a Mac whose on-device model was never asked at all — there the
+    /// question a reviewer has is why the button is there, so the button says.
+    /// - Parameters:
+    ///   - reason: Why the on-device tier could not answer.
+    ///   - provider: The configured tier's badge — "Anthropic", "custom endpoint".
+    /// - Returns: The label for the button that spends the one click.
+    static func cloudRungQuestion(
+        _ reason: CIDiagnosisState.CloudRungReason,
+        provider: String
+    ) -> String {
+        switch reason {
+        case .tooLargeForDevice:
+            return String(localized: "Ask \(provider) with the full log?")
+        case .onDeviceUnavailable:
+            return String(
+                localized: "Apple Intelligence is not available on this Mac. Ask \(provider) instead?"
+            )
+        }
+    }
 
     /// `path:line`, or just the path when the log named no line.
     /// - Parameters:

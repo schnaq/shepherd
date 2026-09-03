@@ -171,12 +171,12 @@ enum IntelligenceStreamOutcome: Sendable {
     }
 }
 
-/// A diagnosis attempt: what came back, and whether tier 2 refused it for being too large.
+/// A diagnosis attempt: what came back, and whether the cloud rung is an answer to it.
 ///
 /// A separate value rather than a fourth case on ``IntelligenceOutcome`` because the question it
 /// answers is local to one feature: every surface in the app knows how to show "no answer, and
-/// here is the sentence", and only the CI card has a *second* thing to do with one particular
-/// failure — offer the cloud rung. Widening the generic outcome for that would make every other
+/// here is the sentence", and only the CI card has a *second* thing to do with two particular
+/// refusals — offer the cloud rung. Widening the generic outcome for that would make every other
 /// caller carry a case it can never see.
 struct CIDiagnosisAttempt: Sendable {
     /// What the ladder produced.
@@ -188,6 +188,16 @@ struct CIDiagnosisAttempt: Sendable {
     /// window is an answer to (``IntelligenceRouter/isBudgetFailure(_:)``) — and `false` once the
     /// cloud rung has itself been asked and failed, so a card cannot offer the same rung twice.
     var didExceedBudget: Bool = false
+    /// Whether the only thing in the way was that the on-device tier is **unavailable**, with a
+    /// cloud tier configured that has not been asked yet.
+    ///
+    /// The second failure with a way out of it, and it is a different sentence rather than a
+    /// second meaning for ``didExceedBudget``: a log that did not fit and a Mac with Apple
+    /// Intelligence switched off are the same *offer* ("ask the endpoint you configured?") and
+    /// two different explanations, and a card that told a cloud-only reviewer their log was too
+    /// large would be explaining the wrong thing. `false` once the cloud rung has itself been
+    /// asked, so the offer cannot be made twice.
+    var isOnDeviceUnavailableWithCloudTier: Bool = false
 }
 
 /// What a tier's stream did first — the ladder's whole decision.
@@ -444,6 +454,21 @@ struct IntelligenceRouter: Sendable {
     /// button that would fail. Same reasoning as ``canDraft``, one rung further up.
     var hasCloudTier: Bool { isEnabled && cloudProvider != nil }
 
+    /// Whether the **Why?** button may be drawn at all, on a red check.
+    ///
+    /// Deliberately *not* ``canDraft``: drafting is cloud-first, so a configured key alone is
+    /// enough for it, while a diagnosis is on-device-first
+    /// (``attemptDiagnosis(for:summary:preferCloud:jobLog:)``) and a cloud-only Mac reaches its
+    /// cloud tier only through the card's own question. Both of those Macs can be *asked* — the
+    /// one with Apple Intelligence, and the one with a key — and a Mac with neither cannot, which
+    /// is the case that must not draw a button that can only fail (ADR 0007: no feature
+    /// hard-depends on a tier).
+    var canDiagnose: Bool {
+        guard isEnabled else { return false }
+        if tiers.onDeviceUnavailabilityReason() == nil { return true }
+        return hasCloudTier
+    }
+
     /// What to call the configured cloud tier on that button, or `nil` when there is none.
     ///
     /// The tier's own badge — "Anthropic", "custom endpoint" — so the question the reviewer is
@@ -461,15 +486,18 @@ struct IntelligenceRouter: Sendable {
     /// the user says so for this click, so:
     ///
     /// - tier 2 answers, and normally that is the whole story;
-    /// - tier 3 is tried **only** when tier 2 failed *because the content did not fit*
-    ///   (``IntelligenceError/contextExceeded`` or
-    ///   ``IntelligenceError/digestTooLarge(tokens:limit:)``) **and** `preferCloud` is `true`.
-    ///   Any other tier-2 failure — a guardrail refusal, an unreadable answer, the model being
-    ///   switched off — is reported as it happened. A cloud provider is not a retry.
+    /// - tier 3 is tried **only** with `preferCloud` — the reviewer's click — and then only for
+    ///   the two things a different tier is an answer to: tier 2 failed *because the content did
+    ///   not fit* (``IntelligenceError/contextExceeded`` or
+    ///   ``IntelligenceError/digestTooLarge(tokens:limit:)``), or tier 2 is **not available on
+    ///   this Mac at all** and tier 3 is the only tier there is. Any other tier-2 failure — a
+    ///   guardrail refusal, an unreadable answer — is reported as it happened. A cloud provider
+    ///   is not a retry.
     ///
     /// `preferCloud` is the reviewer's answer to one button: ``CIDiagnosisCard`` asks *"ask
     /// <provider> with the full log?"* when — and only when — the on-device tier reported the
-    /// budget exceeded and a cloud tier is configured. It defaults to `false` so that no caller
+    /// budget exceeded or reported itself unavailable, and a cloud tier is configured. It
+    /// defaults to `false` so that no caller
     /// can send a pull request's contents, log included, to a configured endpoint by leaving an
     /// argument out.
     /// - Parameters:
@@ -493,21 +521,25 @@ struct IntelligenceRouter: Sendable {
         ).outcome
     }
 
-    /// The same diagnosis, plus the one thing about a failure the card has to know.
+    /// The same diagnosis, plus the two things about a failure the card has to know.
     ///
     /// ``IntelligenceOutcome`` carries a failure as a *sentence*, which is right for every other
     /// surface: a missing summary card shows the tier's own words and there is nothing to decide.
     /// Here there is one decision — whether to offer the cloud rung — and it may only be offered
-    /// for the two failures a larger context window is a fix for. Recovering that from the
-    /// sentence would mean string-matching an error message, so the fact is returned beside the
-    /// outcome instead, and ``diagnoseFailingChecks(for:summary:preferCloud:jobLog:)`` stays the
-    /// call for everything that does not care.
+    /// for the failures another tier is a fix for: the content not fitting
+    /// (``CIDiagnosisAttempt/didExceedBudget``), and the on-device tier not being available on
+    /// this Mac while a cloud tier is (``CIDiagnosisAttempt/isOnDeviceUnavailableWithCloudTier``).
+    /// Recovering either from the sentence would mean string-matching an error message, so both
+    /// facts are returned beside the outcome instead, and
+    /// ``diagnoseFailingChecks(for:summary:preferCloud:jobLog:)`` stays the call for everything
+    /// that does not care.
     /// - Parameters:
     ///   - detail: The fetched pull request. The tools answer from this snapshot.
     ///   - summary: The inbox row the reviewer opened.
     ///   - preferCloud: Whether the reviewer has agreed to the cloud rung for *this* diagnosis.
     ///   - jobLog: How the `jobLogTail` tool downloads a log.
-    /// - Returns: The outcome, and whether tier 2 refused because the content did not fit.
+    /// - Returns: The outcome, and which of the two answerable refusals — if either — tier 2
+    ///   came back with.
     func attemptDiagnosis(
         for detail: PullRequestDetail,
         summary: PullRequestSummary,
@@ -526,11 +558,26 @@ struct IntelligenceRouter: Sendable {
                 )
             )
         }
-        // An unavailable on-device model is *not* a reason to use the cloud one here: the second
-        // rung answers a budget failure, and a machine with Apple Intelligence switched off never
-        // produced one. Saying why is the honest answer.
+        // An unavailable on-device model is still not a reason to *silently* use the cloud one —
+        // this rung is not a retry, and on this path nothing has been read or sent yet. What it
+        // is, on a Mac with a key configured, is a *question*: the same question a log that did
+        // not fit asks, with a different explanation in front of it. So the reason travels back
+        // with `isOnDeviceUnavailableWithCloudTier` set, the card turns that into its one button,
+        // and only that button arrives here with `preferCloud` — which is ADR 0024's rule
+        // unchanged (the cloud rung after an explicit click, never before one). With no cloud
+        // tier there is nothing to offer and the reason is the whole answer; on such a Mac
+        // ``canDiagnose`` drew no button in the first place.
         if let reason = tiers.onDeviceUnavailabilityReason() {
-            return CIDiagnosisAttempt(outcome: .unavailable(reason))
+            guard let cloud = cloudProvider else {
+                return CIDiagnosisAttempt(outcome: .unavailable(reason))
+            }
+            guard preferCloud else {
+                return CIDiagnosisAttempt(
+                    outcome: .unavailable(reason),
+                    isOnDeviceUnavailableWithCloudTier: true
+                )
+            }
+            return await askCloud(cloud, detail: detail, summary: summary, jobLog: jobLog)
         }
 
         let onDevice = tiers.onDevice()
@@ -557,26 +604,46 @@ struct IntelligenceRouter: Sendable {
                     didExceedBudget: didExceedBudget
                 )
             }
-            do {
-                return CIDiagnosisAttempt(
-                    outcome: .value(
-                        IntelligenceOutput(
-                            kind: cloud.kind,
-                            value: try await ask(
-                                cloud,
-                                detail: detail,
-                                summary: summary,
-                                budget: AnthropicProvider.budget,
-                                jobLog: jobLog
-                            )
+            return await askCloud(cloud, detail: detail, summary: summary, jobLog: jobLog)
+        }
+    }
+
+    /// Asks the cloud rung, and turns what it answers into an attempt with no offer left in it.
+    ///
+    /// Two paths reach tier 3 and both of them are one click old: a log that did not fit, and an
+    /// on-device tier that is not available on this Mac at all. Neither may offer the rung a
+    /// second time, so both `didExceedBudget` and `isOnDeviceUnavailableWithCloudTier` stay
+    /// `false` on the way back out — otherwise an endpoint with a wrong key would answer every
+    /// click with the same button (ADR 0024: the offer is spent by pressing it).
+    /// - Parameters:
+    ///   - cloud: The configured cloud tier.
+    ///   - detail: The pull request snapshot.
+    ///   - summary: The inbox row.
+    ///   - jobLog: How the `jobLogTail` tool downloads a log.
+    /// - Returns: The diagnosis and its trace, or the endpoint's own failure.
+    private func askCloud(
+        _ cloud: any IntelligenceProvider,
+        detail: PullRequestDetail,
+        summary: PullRequestSummary,
+        jobLog: (any JobLogFetching)?
+    ) async -> CIDiagnosisAttempt {
+        do {
+            return CIDiagnosisAttempt(
+                outcome: .value(
+                    IntelligenceOutput(
+                        kind: cloud.kind,
+                        value: try await ask(
+                            cloud,
+                            detail: detail,
+                            summary: summary,
+                            budget: AnthropicProvider.budget,
+                            jobLog: jobLog
                         )
                     )
                 )
-            } catch {
-                // The cloud rung's own failure, and `didExceedBudget` stays `false`: the card has
-                // already spent the one offer it had, and offering it again would be a loop.
-                return CIDiagnosisAttempt(outcome: .failed(IntelligenceRouter.describe(error)))
-            }
+            )
+        } catch {
+            return CIDiagnosisAttempt(outcome: .failed(IntelligenceRouter.describe(error)))
         }
     }
 

@@ -1671,6 +1671,16 @@
         }
       }
     },
+    "Apple Intelligence is not available on this Mac. Ask %@ instead?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence ist auf diesem Mac nicht verfügbar. Stattdessen %@ fragen?"
+          }
+        }
+      }
+    },
     "Apple Intelligence is turned off in System Settings.": {
       "localizations": {
         "de": {
@@ -9857,6 +9867,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "mit %@ gelabelt"
+          }
+        }
+      }
+    },
+    "last %lld of %lld lines of %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "letzte %lld von %lld Zeilen von %@"
           }
         }
       }

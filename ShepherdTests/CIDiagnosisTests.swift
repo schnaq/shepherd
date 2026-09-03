@@ -14,9 +14,10 @@ import XCTest
 ///
 /// - **The log reaches the model as a digest, or the tool says why it did not.** Four ways to
 ///   have no log, each with its own sentence, and none of them an error that could end a turn.
-/// - **The card's state machine.** The cloud rung is offered for exactly one failure, only when a
-///   key is configured, exactly once — and `preferCloud` is only ever `true` because somebody
-///   pressed that button.
+/// - **The card's state machine.** The cloud rung is offered for exactly two refusals — the log
+///   did not fit, and there is no on-device model on this Mac — only when a key is configured,
+///   exactly once, and `preferCloud` is only ever `true` because somebody pressed that button.
+///   With no key *and* no on-device model there is no button at all.
 /// - **What the brief is handed.** One finding comment, the origin the log named, and no author,
 ///   because the sentence is Shepherd's own rather than a colleague's (ADR 0011's amendment).
 @MainActor
@@ -236,11 +237,12 @@ final class CIDiagnosisTests: XCTestCase {
             jobLog: nil
         )
         guard let offeredState = withKey.state,
-              case .tooLargeForDevice(let message, let canAskCloud) = offeredState
+              case .cloudRung(let reason, let message, let canAskCloud) = offeredState
         else {
             XCTFail("expected the budget state, got \(String(describing: withKey.state))")
             return
         }
+        XCTAssertEqual(reason, .tooLargeForDevice)
         XCTAssertTrue(canAskCloud)
         XCTAssertEqual(message, IntelligenceError.contextExceeded.errorDescription)
 
@@ -257,7 +259,7 @@ final class CIDiagnosisTests: XCTestCase {
             jobLog: nil
         )
         guard let silentState = withoutKey.state,
-              case .tooLargeForDevice(_, let offered) = silentState
+              case .cloudRung(.tooLargeForDevice, _, let offered) = silentState
         else {
             XCTFail("expected the budget state, got \(String(describing: withoutKey.state))")
             return
@@ -377,6 +379,94 @@ final class CIDiagnosisTests: XCTestCase {
         XCTAssertNil(model.diagnosis)
     }
 
+    func testAnUnavailableOnDeviceModelWithAKeyAsksInsteadOfFailing() async {
+        let log = DiagnoseLog()
+        let reason = "Apple Intelligence is turned off in System Settings."
+        let ladder = router(log: log, onDeviceUnavailable: reason)
+        let model = CIDiagnosisModel()
+
+        XCTAssertTrue(
+            ladder.canDiagnose,
+            "a cloud-only Mac can be asked, so the button is drawn"
+        )
+
+        await model.diagnose(
+            check: actionsCheck(),
+            detail: detail(),
+            summary: summary(),
+            router: ladder,
+            jobLog: nil
+        )
+
+        guard let state = model.state,
+              case .cloudRung(let cloudReason, let message, let canAskCloud) = state
+        else {
+            XCTFail("expected the cloud question, got \(String(describing: model.state))")
+            return
+        }
+        XCTAssertEqual(cloudReason, .onDeviceUnavailable, "not \"the log did not fit\"")
+        XCTAssertEqual(message, reason, "the tier's own sentence, so it can be acted on")
+        XCTAssertTrue(canAskCloud)
+        var asked = await log.kinds
+        XCTAssertTrue(asked.isEmpty, "no tier was asked, so nothing was sent, before the click")
+
+        // The click, and only now: the same question with consent for this one run.
+        await model.diagnose(
+            check: actionsCheck(),
+            detail: detail(),
+            summary: summary(),
+            router: ladder,
+            jobLog: nil,
+            preferCloud: true
+        )
+
+        asked = await log.kinds
+        XCTAssertEqual(
+            asked,
+            [.anthropic],
+            "the cloud rung runs, and the tier that cannot answer is not asked to"
+        )
+        guard let answered = model.state, case .diagnosed(let kind, _) = answered else {
+            XCTFail("expected the cloud rung to answer, got \(String(describing: model.state))")
+            return
+        }
+        XCTAssertEqual(kind, .anthropic)
+    }
+
+    func testWithNeitherAnOnDeviceModelNorAKeyThereIsNoButtonAtAll() async {
+        let log = DiagnoseLog()
+        let nothing = router(
+            log: log,
+            hasCloud: false,
+            onDeviceUnavailable: "This Mac does not support Apple Intelligence."
+        )
+
+        XCTAssertFalse(nothing.canDiagnose, "the one Mac that cannot be asked at all")
+        XCTAssertTrue(
+            router(log: log, hasCloud: false).canDiagnose,
+            "an available on-device model needs no key"
+        )
+        XCTAssertTrue(
+            router(log: log, onDeviceUnavailable: "off").canDiagnose,
+            "and a key is enough on its own, because the card asks first"
+        )
+
+        // And if Apple Intelligence is switched off between the draw and the click, the card says
+        // so and offers nothing: there is no rung to offer.
+        let model = CIDiagnosisModel()
+        await model.diagnose(
+            check: actionsCheck(),
+            detail: detail(),
+            summary: summary(),
+            router: nothing,
+            jobLog: nil
+        )
+
+        XCTAssertEqual(model.state, .failed("This Mac does not support Apple Intelligence."))
+        let asked = await log.kinds
+        XCTAssertTrue(asked.isEmpty)
+    }
+
     // MARK: - The hand-off to a brief (plan §3.E)
 
     func testTheBriefIsHandedTheFindingTheLogNamedAndNothingElse() async throws {
@@ -440,6 +530,24 @@ final class CIDiagnosisTests: XCTestCase {
             "the tier a reviewer configured is named, never \"the cloud\""
         )
 
+        for provider in ["Anthropic", "custom endpoint"] {
+            let reasons: [CIDiagnosisState.CloudRungReason] = [
+                .tooLargeForDevice, .onDeviceUnavailable,
+            ]
+            for reason in reasons {
+                XCTAssertTrue(
+                    CIDiagnosisCard.cloudRungQuestion(reason, provider: provider)
+                        .contains(provider),
+                    "the endpoint the reviewer configured is named, never \"the cloud\""
+                )
+            }
+        }
+        XCTAssertNotEqual(
+            CIDiagnosisCard.cloudRungQuestion(.tooLargeForDevice, provider: "Anthropic"),
+            CIDiagnosisCard.cloudRungQuestion(.onDeviceUnavailable, provider: "Anthropic"),
+            "a log that did not fit and a Mac without the model are different sentences"
+        )
+
         XCTAssertNotEqual(
             CIDiagnosisCard.confidenceLabel(.high),
             CIDiagnosisCard.confidenceLabel(.low)
@@ -469,10 +577,14 @@ final class CIDiagnosisTests: XCTestCase {
     /// - Parameters:
     ///   - log: Records the tiers, in order.
     ///   - hasCloud: Whether a cloud tier is configured. `false` for a Mac with no key.
+    ///   - onDeviceUnavailable: Why the on-device model cannot answer, or `nil` when it can.
+    ///     Non-`nil` is a Mac with Apple Intelligence off — the case that used to draw a button
+    ///     that could only fail.
     ///   - failures: What a tier throws instead of answering.
     private func router(
         log: DiagnoseLog,
         hasCloud: Bool = true,
+        onDeviceUnavailable: String? = nil,
         failures: [IntelligenceKind: IntelligenceError] = [:]
     ) -> IntelligenceRouter {
         // Copied into locals first: the closure below is `@Sendable` and runs off the main actor,
@@ -484,7 +596,7 @@ final class CIDiagnosisTests: XCTestCase {
             tiers: IntelligenceTiers(
                 cloud: { _ in hasCloud ? StubDiagnosisTier(kind: .anthropic) : nil },
                 onDevice: { StubDiagnosisTier(kind: .onDevice) },
-                onDeviceUnavailabilityReason: { nil },
+                onDeviceUnavailabilityReason: { onDeviceUnavailable },
                 diagnose: { provider, _, _ in
                     await log.record(provider.kind)
                     if let failure = failures[provider.kind] { throw failure }

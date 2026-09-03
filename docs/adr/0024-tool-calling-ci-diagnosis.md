@@ -71,12 +71,22 @@ fetched or came back empty. That is permanent behaviour for part of the input, n
 ### 3. Log content travels to a cloud tier only after an explicit click
 
 The ladder for this call runs the *opposite way* to every other call in `IntelligenceRouter`: tier
-2 first, and tier 3 only when tier 2 failed **because the content did not fit**
-(`IntelligenceError.contextExceeded` / `digestTooLarge`) **and** the reviewer pressed the card's
-one button, *"Ask <provider> with the full log?"*, which is only drawn when a key is
-configured. Any other tier-2 failure is reported as it happened — a cloud provider is not a retry —
-and an unavailable on-device model is not a budget failure. `preferCloud` defaults to `false`, so
-no caller can send a log to a configured endpoint by leaving an argument out.
+2 first, and tier 3 only when tier 2 could not answer for one of exactly two reasons — the content
+**did not fit** (`IntelligenceError.contextExceeded` / `digestTooLarge`), or the on-device model is
+**not available on this Mac at all** — **and** the reviewer pressed the card's one button, which is
+only drawn when a key is configured. Any other tier-2 failure is reported as it happened: a cloud
+provider is not a retry.
+
+The second reason is not a budget failure and does not pretend to be one; it is the same *offer*
+with the other sentence in front of it. A Mac with Apple Intelligence switched off and a key
+configured gets the *Why?* button, and the card says the on-device model is unavailable and asks
+*"…Ask <provider> instead?"* — the log reaches the endpoint on that click and not before, which is
+this section's rule unchanged. A Mac with **neither** tier gets no button: `canDiagnose`
+(on-device available *or* a cloud tier), not `canDraft`, is what the checks list asks, because
+`canDraft` is satisfied by a key alone and this ladder starts on-device — a *Why?* button that was
+drawn from a key and then refused by the tier below it was a promise the feature could not keep.
+`preferCloud` defaults to `false`, so no caller can send a log to a configured endpoint by leaving
+an argument out.
 
 CI log output is a **new kind of content for the cloud path**, so it is stated where the privacy
 contract lives: `CONTRIBUTING.md`'s host list now says that the reduced log tail reaches the

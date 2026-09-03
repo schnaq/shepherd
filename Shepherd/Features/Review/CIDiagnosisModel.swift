@@ -19,15 +19,30 @@ enum CIDiagnosisState: Sendable, Equatable {
     case asking(checkName: String)
     /// A tier answered: the diagnosis, its hops, and which tier it was.
     case diagnosed(kind: IntelligenceKind, run: IntelligenceToolRun<CIDiagnosis>)
-    /// The on-device tier refused because the content did not fit.
+    /// The on-device tier could not answer, and the cloud rung is the way out of it.
     ///
-    /// The one failure with a way out, and ``canAskCloud`` is whether that way exists on this Mac:
-    /// with a key configured the card offers *"ask <provider> with the full log?"*, and without
-    /// one it says the log did not fit and stops there. A button that could only fail would be
-    /// worse than a sentence.
-    case tooLargeForDevice(message: String, canAskCloud: Bool)
+    /// The one state with a button in it. `reason` is *which* refusal it was — the log did not
+    /// fit, or Apple Intelligence is not available on this Mac at all — because the two need
+    /// different sentences and the same offer: a cloud-only reviewer told their log was too
+    /// large would be reading an explanation of something that never happened. `canAskCloud` is
+    /// whether that way out exists here: with a key configured the card asks the question, and
+    /// without one it says so and stops, because a button that could only fail would be worse
+    /// than a sentence.
+    case cloudRung(reason: CloudRungReason, message: String, canAskCloud: Bool)
     /// Nothing answered, in the tier's own words.
     case failed(String)
+
+    /// Why the on-device tier could not answer, when a cloud tier could be asked instead.
+    ///
+    /// Two cases and no `other`: every remaining tier-2 failure is a
+    /// ``CIDiagnosisState/failed(_:)`` with the tier's own sentence in it, because a cloud
+    /// provider is not a retry (ADR 0024 §3).
+    enum CloudRungReason: Sendable, Equatable {
+        /// The reduced log still did not fit the on-device model's window.
+        case tooLargeForDevice
+        /// The on-device model is switched off, or this Mac does not have it.
+        case onDeviceUnavailable
+    }
 }
 
 /// Spends the tool-calling run behind the **Why?** button on a red check (plan §3.F).
@@ -43,10 +58,11 @@ enum CIDiagnosisState: Sendable, Equatable {
 /// - **One run at a time, and asking again replaces it.** A second click, or the cloud rung, cancels
 ///   the run in flight: two model sessions for one question would spend a reviewer's battery (or
 ///   their money) on an answer only one of which is going to be shown.
-/// - **The cloud rung is a separate click, and it is offered once.** ``CIDiagnosisState/tooLargeForDevice(message:canAskCloud:)``
+/// - **The cloud rung is a separate click, and it is offered once.** ``CIDiagnosisState/cloudRung(reason:message:canAskCloud:)``
 ///   is the only state with a button in it, `preferCloud` is only ever `true` because the reviewer
 ///   pressed that button, and a cloud attempt that fails reports its failure rather than offering
-///   itself again (``CIDiagnosisAttempt/didExceedBudget``).
+///   itself again (``CIDiagnosisAttempt/didExceedBudget``,
+///   ``CIDiagnosisAttempt/isOnDeviceUnavailableWithCloudTier``).
 /// - **Nothing is persisted.** No `UserDefaults`, no GRDB table, no field in the synced settings
 ///   document: a diagnosis is a reading aid that holds a log tail, and it lives exactly as long
 ///   as the reviewer is looking at it (ADR 0024, and ADR 0020's reasoning about held prose).
@@ -152,10 +168,27 @@ final class CIDiagnosisModel {
             // card saying nothing would be the wrong way to find that out, so the card closes.
             state = nil
         case .unavailable(let reason):
-            state = .failed(reason)
+            // The one unavailability with somewhere to go: no on-device model, but an endpoint
+            // the reviewer configured. The `canAskCloud` re-check is belt-and-braces — the router
+            // only sets the flag with a cloud tier and without `preferCloud` — and it keeps a
+            // settings change made while the run was in flight from producing a button whose tier
+            // no longer exists.
+            if attempt.isOnDeviceUnavailableWithCloudTier, canAskCloud {
+                state = .cloudRung(
+                    reason: .onDeviceUnavailable,
+                    message: reason,
+                    canAskCloud: true
+                )
+            } else {
+                state = .failed(reason)
+            }
         case .failed(let reason):
             state = attempt.didExceedBudget
-                ? .tooLargeForDevice(message: reason, canAskCloud: canAskCloud)
+                ? .cloudRung(
+                    reason: .tooLargeForDevice,
+                    message: reason,
+                    canAskCloud: canAskCloud
+                )
                 : .failed(reason)
         }
     }

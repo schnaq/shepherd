@@ -145,6 +145,12 @@ bumping a dependency that ships inside the app also means a line in
     to the `*.githubusercontent.com` blob host GitHub stores job logs on. One plain `GET` of a
     signed URL, no request body, and the redirect hop carries no `Authorization` header — the
     transport drops it whenever a redirect leaves the host the request was made to;
+    reported the content too large — or reported that it is not available on this Mac at all —
+    **and** you pressed the card's own button for that one click; with no key configured the card
+    says what happened and offers nothing, and with neither a key nor an on-device model the
+    *Why?* button is not drawn. Downloading the log itself adds no host: `GET /repos/…/actions/jobs/{id}/logs`
+    redirects to GitHub's own storage host for the blob, which is part of the api.github.com read
+    above and receives no credentials from Shepherd;
   - only when the user enables webhooks and types a URL: **that URL** (ADR 0012). Outbound only,
     one destination, off by default, and the payload never carries review text, comment bodies,
     diffs or agent output;

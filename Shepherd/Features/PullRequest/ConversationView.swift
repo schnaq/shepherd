@@ -176,12 +176,17 @@ struct ConversationView: View {
     /// Whether the **Why?** button is drawn on one check.
     ///
     /// Only on a red one, and only when a tier could take the question at all
-    /// (``IntelligenceRouter/canDraft``) — a button that is always there and always fails would be
-    /// worse than no button (ADR 0007: no feature hard-depends on a tier). A cancelled or
+    /// (``IntelligenceRouter/canDiagnose``) — a button that is always there and always fails would
+    /// be worse than no button (ADR 0007: no feature hard-depends on a tier). A cancelled or
     /// timed-out check counts as red, because that is what a reviewer is looking at when they ask.
+    ///
+    /// Not ``IntelligenceRouter/canDraft``, which is the *drafting* buttons' question: that one is
+    /// satisfied by a configured key alone, and a diagnosis starts on-device. On a Mac with
+    /// Apple Intelligence off and a key configured this button is still drawn — the card asks
+    /// before anything is sent — and on a Mac with neither it is not drawn at all.
     /// - Parameter check: The check the row is drawing.
     private func canDiagnose(_ check: CheckRun) -> Bool {
-        check.rollupContribution == .failure && model.intelligence.canDraft
+        check.rollupContribution == .failure && model.intelligence.canDiagnose
     }
 
     /// Asks a tier why one check is red.
