@@ -731,7 +731,7 @@ UI can say *why* a card is missing instead of silently hiding it. `IntelligenceT
 the ladder is tested through — a stub cloud tier that fails, a stub on-device tier that answers, an
 on-device tier that reports itself unavailable — so the degradation is verified without a key, a
 network or Apple Intelligence. All FoundationModels usage is
-confined to `Intelligence/OnDeviceProvider.swift`, guarded by
+confined to the `OnDevice*.swift` files in `Intelligence/`, guarded by
 `SystemLanguageModel.default.availability`, and file paths a model invents are dropped before
 they reach the UI.
 

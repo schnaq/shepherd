@@ -116,7 +116,7 @@ struct OnDeviceTriageClassifier: TriageClassifying {
 
     func classify(_ input: TriageInput) async throws -> TriageVerdict {
         let prompt = input.promptText
-        let session = try OnDeviceTriageClassifier.preflight(
+        let session = try await OnDeviceTriageClassifier.preflight(
             prompt: prompt,
             estimate: input.approximateTokenCount
         )
@@ -184,9 +184,14 @@ struct OnDeviceTriageClassifier: TriageClassifying {
     /// - Returns: The measurement closure and the model's context window in tokens.
     @available(macOS 26.4, *)
     private static func measuredContext(
-        of model: SystemLanguageModel
-    ) -> (measure: (String) -> Int?, contextSize: Int) {
-        ({ text in try? model.tokenCount(for: text) }, model.contextSize)
+        of model: SystemLanguageModel,
+        measuring text: String
+    ) async -> (measure: (String) -> Int?, contextSize: Int) {
+        // Taken once, here, because the framework tokenises asynchronously and the budget's
+        // `measured(_:using:)` wants a synchronous closure; the closure answers for this one
+        // string and declines for any other.
+        let count = try? await model.tokenCount(for: text)
+        return ({ candidate in candidate == text ? count : nil }, model.contextSize)
     }
 
     /// Turns the framework's generation failures into ``IntelligenceError`` where Shepherd has
@@ -223,7 +228,7 @@ struct OnDeviceTriageClassifier: TriageClassifying {
     private static func preflight(
         prompt: String,
         estimate: Int
-    ) throws -> LanguageModelSession {
+    ) async throws -> LanguageModelSession {
         let useCase = OnDeviceUseCase.tagging
         if let reason = OnDeviceProvider.unavailabilityReason(for: useCase) {
             throw IntelligenceError.unavailable(reason)
@@ -237,7 +242,7 @@ struct OnDeviceTriageClassifier: TriageClassifying {
         if #available(macOS 26.4, *) {
             // Both halves of the comparison come from the same measurement, or this would be a
             // real token count against a limit that was only ever a guess about the window.
-            let context = measuredContext(of: model)
+            let context = await measuredContext(of: model, measuring: text)
             budget = budget.limited(
                 toContextSize: context.contextSize,
                 reservedForResponse: OnDeviceGeneration.reservedResponseTokens
