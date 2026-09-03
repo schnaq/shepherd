@@ -75,6 +75,18 @@ extension DatabaseManager {
         )
     }
 
+    /// Streams the number of mutations the drain gave up on.
+    ///
+    /// The third of the three standing counts, and like the conflicted one it never falls by
+    /// itself: a failed row waits for the user to retry it or throw it away (Settings → Sync).
+    /// - Returns: A stream of failed counts.
+    public func observeFailedOutboxCount() -> AsyncStream<Int> {
+        observeOutboxCount(
+            matching: "state = 'failed'",
+            label: "com.schnaq.shepherd.observation.outbox.failed"
+        )
+    }
+
     private func observeOutboxCount(matching predicate: String, label: String) -> AsyncStream<Int> {
         let writer = self.writer
         let observation = ValueObservation.tracking { db -> Int in

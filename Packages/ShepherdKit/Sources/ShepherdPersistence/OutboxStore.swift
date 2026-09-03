@@ -239,7 +239,59 @@ extension DatabaseManager {
         }
     }
 
-    /// Deletes a row outright — the user discarding a conflicted mutation.
+    /// The rows the drain gave up on, oldest first.
+    ///
+    /// The list behind ``failedOutboxCount()``: Settings → Sync needs to *name* each one — what it
+    /// would have done, and why it was refused — because "1 failed" is not something a user can act
+    /// on, and a row that is never retried automatically is one only they can decide about.
+    /// A row whose payload no longer decodes is skipped, exactly as
+    /// ``claimReadyOutboxItems(now:limit:)`` skips it.
+    public func failedOutboxItems() async throws -> [OutboxItem] {
+        let records = try await writer.read { db in
+            try OutboxRecord.fetchAll(
+                db,
+                sql: "SELECT * FROM outbox WHERE state = ? ORDER BY createdAt ASC",
+                arguments: [OutboxState.failed.rawValue]
+            )
+        }
+        return records.compactMap { try? $0.outboxItem() }
+    }
+
+    /// Puts a row the drain gave up on back into the queue, with its backoff reset.
+    ///
+    /// The counterpart of ``deleteOutboxItem(id:)`` for a failed row: retry or discard, and
+    /// nothing in between. ``ShepherdCore/OutboxState/failed`` means "retrying cannot fix this",
+    /// so the next attempt only makes sense once a *person* has changed something the queue cannot
+    /// see — a token that was missing, a permission that was denied, a branch that was protected.
+    /// That is why this is an explicit user action rather than another rung of
+    /// ``ShepherdCore/OutboxBackoff``, and why the attempt count goes back to zero: the row starts
+    /// its life again rather than resuming a schedule that had already run out.
+    ///
+    /// The `state = 'failed'` guard is what makes it safe to call from a screen: a row a drain is
+    /// currently sending cannot be yanked back into ``ShepherdCore/OutboxState/pending`` underneath
+    /// it and sent twice.
+    /// - Parameter id: The row's identity.
+    public func retryOutboxItem(id: UUID) async throws {
+        try await writer.write { db in
+            try db.execute(
+                sql: """
+                    UPDATE outbox
+                    SET state = ?, attemptCount = 0, nextAttemptAt = 0, lastError = NULL
+                    WHERE id = ? AND state = ?
+                    """,
+                arguments: [
+                    OutboxState.pending.rawValue,
+                    id.uuidString,
+                    OutboxState.failed.rawValue,
+                ]
+            )
+        }
+    }
+
+    /// Deletes a row outright — the user discarding a mutation that is never going to be sent.
+    ///
+    /// Both parked states end here when the user says so: a conflicted row from the draft-conflict
+    /// alert, and a failed one from Settings → Sync's Discard.
     /// - Parameter id: The row's identity.
     public func deleteOutboxItem(id: UUID) async throws {
         try await writer.write { db in

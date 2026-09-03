@@ -297,6 +297,110 @@ final class OutboxStoreTests: XCTestCase {
         XCTAssertEqual(afterRetriable, 1)
     }
 
+    func testRetryingARowTheDrainGaveUpOnPutsItBackInTheQueueWithItsBackoffReset() async throws {
+        // Retry is the *user* saying "the thing that made this impossible is fixed now" — a token
+        // that was missing, a permission that was denied. So the row starts again from zero rather
+        // than resuming the schedule it had already run out of.
+        let database = try DatabaseManager.inMemory()
+        let doomed = item(action: .addIssueComment(body: "on it", basedOnUpdatedAt: now))
+        try await database.enqueue(doomed)
+        _ = try await database.claimReadyOutboxItems(now: now, limit: 10)
+        try await database.markOutboxItemFailed(
+            id: doomed.id,
+            error: "422 Unprocessable Entity",
+            now: now,
+            retriable: false
+        )
+        let failedBefore = try await database.failedOutboxCount()
+        XCTAssertEqual(failedBefore, 1)
+
+        try await database.retryOutboxItem(id: doomed.id)
+
+        let stored = try await database.allOutboxItems()
+        let restored = try XCTUnwrap(stored.first { $0.id == doomed.id })
+        XCTAssertEqual(restored.state, .pending)
+        XCTAssertEqual(restored.attemptCount, 0, "the backoff starts again rather than resuming")
+        XCTAssertNil(restored.lastError, "the row is no longer describing a failure")
+        let failedAfter = try await database.failedOutboxCount()
+        let pendingAfter = try await database.pendingOutboxCount()
+        XCTAssertEqual(failedAfter, 0)
+        XCTAssertEqual(pendingAfter, 1)
+
+        // And it is due *now*, not after the delay the failed attempt had scheduled.
+        let ready = try await database.claimReadyOutboxItems(now: now, limit: 10)
+        XCTAssertEqual(ready.map(\.id), [doomed.id])
+    }
+
+    func testDiscardingARowTheDrainGaveUpOnDeletesIt() async throws {
+        let database = try DatabaseManager.inMemory()
+        let doomed = item()
+        try await database.enqueue(doomed)
+        try await database.markOutboxItemFailed(
+            id: doomed.id,
+            error: "no writer is wired up",
+            now: now,
+            retriable: false
+        )
+
+        try await database.deleteOutboxItem(id: doomed.id)
+
+        let stored = try await database.allOutboxItems()
+        let failed = try await database.failedOutboxCount()
+        XCTAssertTrue(stored.isEmpty)
+        XCTAssertEqual(failed, 0)
+    }
+
+    func testFailedOutboxItemsListsOnlyTheRowsTheDrainGaveUpOnAndCarriesTheReason() async throws {
+        // Settings → Sync names each row, so the list has to be the failed ones and nothing else:
+        // a parked row is dealt with somewhere else entirely, and a waiting one needs no user.
+        let database = try DatabaseManager.inMemory()
+        let doomed = item(action: .closeIssue(reason: .completed, basedOnUpdatedAt: now))
+        var parked = item()
+        parked.createdAt = now.addingTimeInterval(1)
+        var waiting = item()
+        waiting.createdAt = now.addingTimeInterval(2)
+        try await database.enqueue(doomed)
+        try await database.enqueue(parked)
+        try await database.enqueue(waiting)
+        try await database.markOutboxItemFailed(
+            id: doomed.id,
+            error: "403 Forbidden",
+            now: now,
+            retriable: false
+        )
+        try await database.markOutboxItemConflicted(id: parked.id, reason: "head moved")
+
+        let failed = try await database.failedOutboxItems()
+        XCTAssertEqual(failed.map(\.id), [doomed.id])
+        XCTAssertEqual(failed.first?.lastError, "403 Forbidden")
+        XCTAssertEqual(failed.first?.action.kind, "closeIssue")
+    }
+
+    func testRetryLeavesARowThatIsNotFailedWhereItIs() async throws {
+        // The guard that makes Retry safe to press from a screen: a row a drain is currently
+        // sending must not be pulled back into the queue underneath it and sent twice. A parked
+        // row is left alone too — the conflicted path is unchanged by this button.
+        let database = try DatabaseManager.inMemory()
+        let parked = item()
+        var inFlight = item()
+        inFlight.createdAt = now.addingTimeInterval(1)
+        try await database.enqueue(parked)
+        try await database.enqueue(inFlight)
+        try await database.markOutboxItemConflicted(id: parked.id, reason: "head moved")
+        _ = try await database.claimReadyOutboxItems(now: now, limit: 10)
+
+        try await database.retryOutboxItem(id: parked.id)
+        try await database.retryOutboxItem(id: inFlight.id)
+
+        let stored = try await database.allOutboxItems()
+        let stillParked = try XCTUnwrap(stored.first { $0.id == parked.id })
+        let stillSending = try XCTUnwrap(stored.first { $0.id == inFlight.id })
+        XCTAssertEqual(stillParked.state, .conflicted)
+        XCTAssertEqual(stillParked.lastError, "head moved")
+        XCTAssertEqual(stillSending.state, .sending)
+        XCTAssertEqual(stillSending.attemptCount, 1, "the claim's attempt is not thrown away")
+    }
+
     func testDiscardingAConflictDeletesIt() async throws {
         let database = try DatabaseManager.inMemory()
         let queued = item()
@@ -571,6 +675,34 @@ final class ObservationTests: XCTestCase {
         var iterator = database.observePendingOutboxCount().makeAsyncIterator()
         let first = await iterator.next()
         XCTAssertEqual(first, 1)
+    }
+
+    func testObserveFailedOutboxCount() async throws {
+        let database = try DatabaseManager.inMemory()
+        let doomed = OutboxItem(
+            prID: "PR_1",
+            repo: PersistenceFixtures.repo,
+            number: 128,
+            action: .resolveThread(threadID: "PRRT_1")
+        )
+        try await database.enqueue(doomed)
+        try await database.markOutboxItemFailed(
+            id: doomed.id,
+            error: "422 Unprocessable Entity",
+            now: Date(timeIntervalSince1970: 1_788_162_000),
+            retriable: false
+        )
+
+        var iterator = database.observeFailedOutboxCount().makeAsyncIterator()
+        let first = await iterator.next()
+        XCTAssertEqual(first, 1)
+        // The three counts are disjoint: a row given up on is neither waiting nor parked.
+        var pending = database.observePendingOutboxCount().makeAsyncIterator()
+        let stillPending = await pending.next()
+        var conflicted = database.observeConflictedOutboxCount().makeAsyncIterator()
+        let stillConflicted = await conflicted.next()
+        XCTAssertEqual(stillPending, 0)
+        XCTAssertEqual(stillConflicted, 0)
     }
 
     func testObserveConflictedOutboxCount() async throws {
