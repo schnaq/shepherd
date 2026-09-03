@@ -71,6 +71,16 @@
         }
       }
     },
+    "%@ is not one of this pull request's changed files": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ist keine der von diesem Pull Request geänderten Dateien"
+          }
+        }
+      }
+    },
     "%@ · %@ · %@": {
       "localizations": {
         "de": {
@@ -317,6 +327,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld d"
+          }
+        }
+      }
+    },
+    "%lld diff lines": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Diff-Zeile"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Diff-Zeilen"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld diff line"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld diff lines"
+                }
+              }
+            }
           }
         }
       }
@@ -3507,6 +3557,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "GitHub verlangt für diese Bewertung eine Zusammenfassung — nur ein Approval darf ohne abgeschickt werden."
+          }
+        }
+      }
+    },
+    "GitHub sent no diff for this file": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub hat für diese Datei keinen Diff geschickt"
           }
         }
       }
@@ -7541,6 +7601,16 @@
         }
       }
     },
+    "The model asked to read more than Shepherd allows for one diagnosis.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Modell wollte mehr lesen, als Shepherd für eine Diagnose erlaubt."
+          }
+        }
+      }
+    },
     "The model endpoint returned %lld: %@": {
       "localizations": {
         "de": {
@@ -7917,6 +7987,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dieser Inhalt ist größer als das Kontextfenster des On-Device-Modells. Ein Cloud-Provider hat dafür Platz."
+          }
+        }
+      }
+    },
+    "This endpoint cannot call tools, so it cannot look up why CI is red.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Endpunkt kann keine Tools aufrufen und daher nicht nachsehen, warum die CI rot ist."
           }
         }
       }
@@ -8971,6 +9051,16 @@
         }
       }
     },
+    "no check called %@ on this pull request": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kein Check namens %@ in diesem Pull Request"
+          }
+        }
+      }
+    },
     "no checks": {
       "localizations": {
         "de": {
@@ -8987,6 +9077,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "keine Details"
+          }
+        }
+      }
+    },
+    "no log available for this check yet": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "für diesen Check ist noch kein Log verfügbar"
           }
         }
       }
@@ -9307,6 +9407,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "den Pull Request"
+          }
+        }
+      }
+    },
+    "the tool call was refused": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "der Tool-Aufruf wurde abgelehnt"
           }
         }
       }

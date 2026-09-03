@@ -105,6 +105,38 @@ protocol IntelligenceProvider: Sendable {
     func streamInlineCommentDraft(
         _ request: InlineCommentDraftRequest
     ) -> AsyncThrowingStream<String, Error>
+    /// Diagnoses a red pull request by **reading** it, one tool call at a time (plan §3.F).
+    ///
+    /// The first method on this protocol where the model does not simply answer a prompt: it is
+    /// handed three read-only tools and decides which of them to call, and the provider's job is
+    /// the loop around that — offer the tools in the tier's own wire shape, run each call the
+    /// model asks for through `tools`, hand back the result, repeat until the model answers or
+    /// until ``IntelligenceToolLoop/maximumHops`` reads have happened.
+    ///
+    /// Three rules the implementations share, and none of them is negotiable per tier:
+    ///
+    /// - **Every call is validated before it runs.** The executor does it, so a tool cannot be
+    ///   reached with a path this pull request does not contain.
+    /// - **The hop cap is a hard stop**, not a hint in the prompt: a model that keeps asking gets
+    ///   ``IntelligenceError/toolLoopExceeded``, because a loop that does not converge spends a
+    ///   reviewer's battery or their money and produces nothing either way.
+    /// - **The trace is part of the answer.** A diagnosis nobody can check is a guess with a
+    ///   confidence label on it, so the hops come back with the value.
+    ///
+    /// It stays a **hint**: the answer is a card, and handing it on to a coding agent is a
+    /// separate click by the person reading it (ADR 0007).
+    /// - Parameters:
+    ///   - request: Which pull request, which checks are red, which files exist, and the tier's
+    ///     budget.
+    ///   - tools: The reads the model may perform.
+    /// - Returns: The diagnosis and every hop it took.
+    /// - Throws: ``IntelligenceError/toolsUnsupported`` when the tier cannot call tools at all,
+    ///   ``IntelligenceError/toolLoopExceeded`` when the model exceeded the hop cap, and the
+    ///   tier's own failures otherwise.
+    func diagnoseFailingChecks(
+        _ request: CIDiagnosisRequest,
+        tools: any IntelligenceToolExecuting
+    ) async throws -> IntelligenceToolRun<CIDiagnosis>
 }
 
 /// Streaming, for tiers that do not stream.
@@ -124,6 +156,21 @@ extension IntelligenceProvider {
         _ request: InlineCommentDraftRequest
     ) -> AsyncThrowingStream<String, Error> {
         IntelligenceStreaming.singleValue { try await self.draftInlineComment(request) }
+    }
+
+    /// Tool calling, for tiers that cannot call tools.
+    ///
+    /// Refusing in the default implementation rather than requiring every conformance to write
+    /// the same `throw` is what keeps a tier added later — a stub in a test, a local model with no
+    /// tool head — from silently answering a diagnosis *without having read anything*, which is
+    /// the one failure mode this feature must not have: an unread guess reads exactly like a read
+    /// one on the card. A tier that means to support tools implements the method; a tier that
+    /// does not says so, and the router shows the reason.
+    func diagnoseFailingChecks(
+        _ request: CIDiagnosisRequest,
+        tools: any IntelligenceToolExecuting
+    ) async throws -> IntelligenceToolRun<CIDiagnosis> {
+        throw IntelligenceError.toolsUnsupported
     }
 }
 
@@ -229,6 +276,22 @@ enum IntelligenceError: Error, LocalizedError, Equatable {
     /// arithmetic refusing to start: this one is the model saying the real tokenizer disagreed
     /// with the estimate, which can only be found out from inside a session.
     case contextExceeded
+    /// The tier cannot call tools, so it cannot answer a request that is built out of reads.
+    ///
+    /// Its own case because it is a property of the *endpoint*, not of this request: tier 3b is
+    /// "whatever speaks the chat-completions shape", and a good part of that population — Ollama
+    /// with a model that has no tool head, a small self-hosted gateway — rejects a request
+    /// carrying `tools` outright. Told apart from a generic ``http(status:message:)`` so the UI
+    /// can say "this endpoint cannot do this" instead of showing the user a 400 they cannot act
+    /// on, and never retried: the answer will not change.
+    case toolsUnsupported
+    /// The model asked for more reads than one diagnosis is allowed.
+    ///
+    /// The hop cap firing (``IntelligenceToolLoop/maximumHops``). It is a failure rather than
+    /// "answer with what you have", because a model still asking for its seventh read has not
+    /// converged, and a diagnosis assembled from a turn that was cut off mid-thought would carry
+    /// a confidence the reviewer has no way to discount.
+    case toolLoopExceeded
 
     var errorDescription: String? {
         switch self {
@@ -248,6 +311,10 @@ enum IntelligenceError: Error, LocalizedError, Equatable {
             return String(localized: "Apple Intelligence declined this content.")
         case .contextExceeded:
             return String(localized: "This content is larger than the on-device model's context window. A cloud provider has room for it.")
+        case .toolsUnsupported:
+            return String(localized: "This endpoint cannot call tools, so it cannot look up why CI is red.")
+        case .toolLoopExceeded:
+            return String(localized: "The model asked to read more than Shepherd allows for one diagnosis.")
         }
     }
 }
@@ -296,6 +363,35 @@ enum IntelligencePrompt {
         sign-off, no praise, no restating of the code. Use only what the excerpt shows; if it is \
         not enough to judge, say which context you would need instead of guessing. This is a \
         suggestion for a human reviewer, not a verdict.
+        """
+
+    /// The system/instructions text for "why is CI red?" (plan §3.F).
+    ///
+    /// Short on purpose. This is the one request where the *tools* carry the instructions — each
+    /// descriptor says what it reads and what it takes — so a long prompt here would only repeat
+    /// them in worse words and spend the on-device tier's shared window doing it. What is left is
+    /// the four things the descriptors cannot say: that everything available is a read, what the
+    /// answer's five fields are, that a field the tools did not show is left unknown rather than
+    /// filled, and that the answer is a hint for a person rather than a verdict.
+    static let ciDiagnosisInstructions = """
+        You work out why a pull request's CI is failing, for a senior engineer looking at the \
+        pull request. You can only read: the failing checks, one job log, the diff of one \
+        changed file. Read what you need, then answer with the failing test, the file, the line, \
+        a one-sentence hypothesis and how sure you are. Name only tests, files and lines the \
+        tools showed you; leave a field empty rather than guessing at it, and say plainly when \
+        the evidence is thin. This is a hint for a human, not a verdict: you never fix, comment, \
+        approve, merge or re-run anything.
+        """
+
+    /// The JSON shape the cloud providers are asked for (a CI diagnosis).
+    ///
+    /// `null` is spelled out for the three locating fields because that is the answer a thin log
+    /// deserves, and a model told only that the field is a string will invent a plausible file
+    /// rather than leave it out.
+    static let ciDiagnosisJSONContract = """
+        When you have read enough, answer with JSON only, no prose and no code fence: \
+        {"failingTest": string or null, "file": string or null, "line": integer or null, \
+        "hypothesis": string, "confidence": "low" or "medium" or "high"}
         """
 
     /// The JSON shape the cloud providers are asked for (summaries).
@@ -413,6 +509,45 @@ enum IntelligencePrompt {
         }
         return text
     }
+
+    /// Renders a CI-diagnosis request: which pull request, what is red, what may be read.
+    ///
+    /// The file list is the reason this prompt exists at all: `fileDiff` only accepts a path from
+    /// it, so a model that has not seen the list can only guess and be refused. It is capped — a
+    /// pull request with four hundred files would otherwise spend the whole window on a file tree
+    /// — and says how many it left out, because a truncated list a model believes is complete is
+    /// a list that makes it stop looking.
+    /// - Parameter request: The request.
+    static func body(for request: CIDiagnosisRequest) -> String {
+        var text = """
+            Repository: \(request.repoFullName)
+            Pull request: #\(request.number) — \(request.pullRequestTitle)
+            """
+        if request.failingChecks.isEmpty {
+            text += "\n\nNo check is reported as failing."
+        } else {
+            text += "\n\nFailing checks:"
+            for check in request.failingChecks {
+                text += "\n- \(check.name) [\(check.conclusion)]"
+                if let summary = check.summary {
+                    text += " — \(summary)"
+                }
+            }
+        }
+        if request.changedFilePaths.isEmpty {
+            text += "\n\nThis pull request's changed files are not available, so no file can be read."
+            return text
+        }
+        text += "\n\nChanged files. Only these paths can be read:"
+        for path in request.changedFilePaths.prefix(CIDiagnosisRequest.maximumListedPaths) {
+            text += "\n- \(path)"
+        }
+        let overflow = request.changedFilePaths.count - CIDiagnosisRequest.maximumListedPaths
+        if overflow > 0 {
+            text += "\n- (and \(overflow) more files, not listed here)"
+        }
+        return text
+    }
 }
 
 // MARK: - Lenient JSON parsing
@@ -484,6 +619,27 @@ enum IntelligenceJSON {
         let fallback = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !fallback.isEmpty else { throw IntelligenceError.malformedResponse }
         return fallback
+    }
+
+    /// Parses a CI diagnosis out of a cloud tier's final answer.
+    ///
+    /// The tolerances live in ``ShepherdCore/CIDiagnosis``'s own decoder — an empty `file` is
+    /// `nil`, a quoted line number is still a line number, an absent confidence reads as `low` —
+    /// so all this adds is the two things that are about the *answer* rather than the value: the
+    /// JSON has to be found inside whatever prose the model wrapped it in, and a diagnosis with
+    /// no hypothesis is not a diagnosis. There is deliberately no fallback to "treat the whole
+    /// answer as the hypothesis" the way ``draft(from:)`` has one: a drafted comment is text a
+    /// reviewer edits, while this fills five fields on a card, and a card whose hypothesis is a
+    /// paragraph of the model thinking out loud is worse than a stated failure.
+    /// - Parameter text: The raw answer.
+    /// - Returns: The diagnosis.
+    /// - Throws: ``IntelligenceError/malformedResponse`` when nothing usable came back.
+    static func diagnosis(from text: String) throws -> CIDiagnosis {
+        guard let object = extractObject(from: text),
+              let value = try? JSONDecoder().decode(CIDiagnosis.self, from: Data(object.utf8)),
+              !value.hypothesis.isEmpty
+        else { throw IntelligenceError.malformedResponse }
+        return value
     }
 
     /// Parses a focus-hint answer.
