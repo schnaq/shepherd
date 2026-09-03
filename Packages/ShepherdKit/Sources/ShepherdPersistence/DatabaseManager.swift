@@ -61,6 +61,7 @@ public final class DatabaseManager: Sendable {
         migrator.registerMigration("v4", migrate: DatabaseSchema.addV4)
         migrator.registerMigration("v5", migrate: DatabaseSchema.addV5)
         migrator.registerMigration("v6", migrate: DatabaseSchema.addV6)
+        migrator.registerMigration("v7", migrate: DatabaseSchema.addV7)
         return migrator
     }
 
@@ -153,6 +154,10 @@ enum DatabaseSchema {
         "triage_verdicts",
         "review_snapshots",
         "pull_request_outcomes",
+        "issues",
+        "issue_search_index",
+        "issue_linked_pull_requests",
+        "pull_request_closing_issues",
     ]
 
     static func createV1(_ db: Database) throws {
@@ -537,6 +542,110 @@ enum DatabaseSchema {
         try db.execute(sql: """
             CREATE INDEX idx_pull_request_outcomes_repo_agent_closedAt
             ON pull_request_outcomes(repoFullName, agentName, closedAt)
+            """)
+    }
+
+    /// The v7 addition: issues as a first-class inbox citizen, and the two tables that link them
+    /// to pull requests (ADR 0032).
+    ///
+    /// Append-only once more — `createV1` through `addV6` are never edited. Four tables in one
+    /// migration, deliberately: `createV1` already establishes that one migration may create
+    /// several related tables, and landing the two linking tables now — even though only a later
+    /// sprint populates and shows them — means the linking work needs no migration of its own and
+    /// cannot end up ordered after a migration that depends on it.
+    ///
+    /// Five decisions live in this DDL, each mirroring a precedent already in the schema:
+    ///
+    /// - **`issues` follows `pull_requests`' exact column shape** for the author, the agent, the
+    ///   relations and the labels (`authorKind` plus the three `agent…` columns, `relations` as a
+    ///   sorted joined string, `labels` as JSON), so ``IssueRecord`` and ``PullRequestRecord``
+    ///   share ``ColumnCoding``'s helpers instead of inventing a second encoding for the same
+    ///   values.
+    /// - **`linkedPullRequestCount` and `hasAgentLinkedPullRequest` are denormalised onto the
+    ///   row**, the same choice the check rollup makes: the "has an agent pull request" facet
+    ///   filters the whole inbox on every click, and a scan across `issue_linked_pull_requests`
+    ///   for something the sweep already knows is the wrong shape. The full list stays in the
+    ///   side table for the detail panel; the two summary columns live on the row for the facet.
+    /// - **`issue_linked_pull_requests` has no foreign key onto `pull_requests`.** The linked
+    ///   pull request may not be in the local inbox at all — somebody else's, or never
+    ///   detail-fetched — so the row is about what the sweep saw rather than about a join that
+    ///   might not resolve. The repository travels by value for the reason
+    ///   `pull_request_outcomes` gives.
+    /// - **`pull_request_closing_issues` *is* keyed by `prID` and cascades with it**, because
+    ///   unlike the outcome table this one is about a pull request that is in the inbox and
+    ///   disappears with it, exactly as `changed_files` does.
+    /// - **`issue_search_index` copies `search_index` (v3)**, including the nullable `vector` and
+    ///   the document-hash staleness gate, for the reason ADR 0019 gives: two documents built by
+    ///   two schema versions must never be compared, and a gate this shape is already tested.
+    static func addV7(_ db: Database) throws {
+        try db.execute(sql: """
+            CREATE TABLE issues (
+                id TEXT PRIMARY KEY NOT NULL,
+                repoFullName TEXT NOT NULL REFERENCES repos(fullName) ON DELETE CASCADE,
+                number INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                authorLogin TEXT NOT NULL,
+                authorDisplayName TEXT,
+                authorAvatarURL TEXT,
+                authorKind TEXT NOT NULL,
+                agentID TEXT,
+                agentDisplayName TEXT,
+                agentMatchedBy TEXT,
+                createdAt REAL NOT NULL,
+                updatedAt REAL NOT NULL,
+                closedAt REAL,
+                state TEXT NOT NULL DEFAULT 'open',
+                stateReason TEXT,
+                relations TEXT NOT NULL DEFAULT '',
+                labels TEXT NOT NULL DEFAULT '[]',
+                commentCount INTEGER NOT NULL DEFAULT 0,
+                linkedPullRequestCount INTEGER NOT NULL DEFAULT 0,
+                hasAgentLinkedPullRequest INTEGER NOT NULL DEFAULT 0,
+                bodyMarkdown TEXT,
+                detailFetchedAt REAL
+            )
+            """)
+        try db.execute(sql: """
+            CREATE UNIQUE INDEX idx_issues_repo_number ON issues(repoFullName, number)
+            """)
+        try db.execute(sql: "CREATE INDEX idx_issues_updatedAt ON issues(updatedAt)")
+
+        try db.execute(sql: """
+            CREATE TABLE issue_search_index (
+                issueID TEXT PRIMARY KEY NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+                documentHash TEXT NOT NULL,
+                modelIdentifier TEXT,
+                dimensions INTEGER NOT NULL DEFAULT 0,
+                vector BLOB,
+                indexedAt REAL NOT NULL
+            )
+            """)
+
+        try db.execute(sql: """
+            CREATE TABLE issue_linked_pull_requests (
+                issueID TEXT NOT NULL REFERENCES issues(id) ON DELETE CASCADE,
+                prRepoFullName TEXT NOT NULL,
+                prNumber INTEGER NOT NULL,
+                prTitle TEXT NOT NULL,
+                prState TEXT NOT NULL,
+                authorLogin TEXT NOT NULL,
+                authorKind TEXT NOT NULL,
+                agentDisplayName TEXT,
+                sortIndex INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (issueID, prRepoFullName, prNumber)
+            )
+            """)
+
+        try db.execute(sql: """
+            CREATE TABLE pull_request_closing_issues (
+                prID TEXT NOT NULL REFERENCES pull_requests(id) ON DELETE CASCADE,
+                issueRepoFullName TEXT NOT NULL,
+                issueNumber INTEGER NOT NULL,
+                issueTitle TEXT NOT NULL,
+                issueState TEXT NOT NULL,
+                sortIndex INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (prID, issueRepoFullName, issueNumber)
+            )
             """)
     }
 }

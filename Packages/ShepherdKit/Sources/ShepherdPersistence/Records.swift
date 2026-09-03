@@ -60,6 +60,20 @@ enum ColumnCoding {
         Set(raw.split(separator: ",").compactMap { Relation(rawValue: String($0)) })
     }
 
+    /// Encodes an issue-relation set as a stable, comma-separated list.
+    ///
+    /// A second function rather than a generic over `RawRepresentable`: the two relation sets are
+    /// different vocabularies stored in two different tables, and one shared helper would make a
+    /// pull-request relation decodable out of an issue's column.
+    static func encodeIssueRelations(_ relations: Set<IssueRelation>) -> String {
+        relations.map(\.rawValue).sorted().joined(separator: ",")
+    }
+
+    /// Decodes a comma-separated issue-relation list, skipping values this version does not know.
+    static func decodeIssueRelations(_ raw: String) -> Set<IssueRelation> {
+        Set(raw.split(separator: ",").compactMap { IssueRelation(rawValue: String($0)) })
+    }
+
     /// Encodes a value as a JSON string column.
     static func encodeJSON<T: Encodable>(_ value: T) -> String {
         guard let data = try? JSONEncoder().encode(value) else { return "null" }
@@ -817,6 +831,250 @@ struct PullRequestOutcomeRecord: Codable, FetchableRecord, PersistableRecord {
             // which the *reverting* pull request carries and which is therefore always in hand.
             bodyMarkdown: "",
             mergeCommitOid: mergeCommitOid
+        )
+    }
+}
+
+/// A row of `issues` (ADR 0032).
+///
+/// ``PullRequestRecord``'s twin, column for column where the two rows hold the same thing: the
+/// author and the detected agent flattened by ``ColumnCoding/encodeActorKind(_:)``, the relations
+/// as a sorted joined string, the labels as JSON, and the body beside a `detailFetchedAt` stamp
+/// so a sweep can upsert the row without discarding a detail fetch.
+///
+/// Two columns are not on the model and are computed on save:
+/// `linkedPullRequestCount`/`hasAgentLinkedPullRequest` denormalise
+/// ``ShepherdCore/IssueRowSummary/linkedPullRequests`` so the "has an agent pull request" facet is
+/// a column comparison rather than a scan of the side table. They are derived from the list every
+/// time it is written, so they cannot drift from it.
+struct IssueRecord: Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = "issues"
+
+    var id: String
+    var repoFullName: String
+    var number: Int
+    var title: String
+    var authorLogin: String
+    var authorDisplayName: String?
+    var authorAvatarURL: String?
+    var authorKind: String
+    var agentID: String?
+    var agentDisplayName: String?
+    var agentMatchedBy: String?
+    var createdAt: Double
+    var updatedAt: Double
+    var closedAt: Double?
+    var state: String
+    var stateReason: String?
+    var relations: String
+    var labels: String
+    var commentCount: Int
+    var linkedPullRequestCount: Int
+    var hasAgentLinkedPullRequest: Bool
+    var bodyMarkdown: String?
+    var detailFetchedAt: Double?
+
+    /// Builds a row from an inbox summary, preserving any detail columns already stored.
+    init(summary: IssueRowSummary, existing: IssueRecord? = nil) {
+        let kind = ColumnCoding.encodeActorKind(summary.author.kind)
+        self.id = summary.id
+        self.repoFullName = summary.repo.fullName
+        self.number = summary.number
+        self.title = summary.title
+        self.authorLogin = summary.author.login
+        self.authorDisplayName = summary.author.displayName
+        self.authorAvatarURL = summary.author.avatarURL?.absoluteString
+        self.authorKind = kind.kind
+        self.agentID = kind.agentID
+        self.agentDisplayName = kind.agentDisplayName
+        self.agentMatchedBy = kind.agentMatchedBy
+        self.createdAt = summary.createdAt.timeIntervalSince1970
+        self.updatedAt = summary.updatedAt.timeIntervalSince1970
+        self.closedAt = summary.closedAt?.timeIntervalSince1970
+        self.state = summary.state.rawValue
+        self.stateReason = summary.stateReason
+        self.relations = ColumnCoding.encodeIssueRelations(summary.myRelation)
+        self.labels = ColumnCoding.encodeJSON(summary.labels)
+        self.commentCount = summary.commentCount
+        self.linkedPullRequestCount = summary.linkedPullRequests.count
+        self.hasAgentLinkedPullRequest = summary.hasAgentPullRequest
+        self.bodyMarkdown = existing?.bodyMarkdown
+        self.detailFetchedAt = existing?.detailFetchedAt
+    }
+
+    /// Rebuilds the inbox row with the links the caller fetched from the side table.
+    ///
+    /// The links are a parameter rather than a stored blob for the reason the denormalised
+    /// columns exist: the row answers the facet on its own, and the list is read only when
+    /// somebody is looking at it.
+    /// - Parameter linkedPullRequests: The rows of `issue_linked_pull_requests`, in sort order.
+    func summary(
+        linkedPullRequests: [LinkedPullRequestReference] = []
+    ) -> IssueRowSummary {
+        let author = ShepherdCore.Actor(
+            login: authorLogin,
+            displayName: authorDisplayName,
+            avatarURL: authorAvatarURL.flatMap { URL(string: $0) },
+            kind: ColumnCoding.decodeActorKind(
+                kind: authorKind,
+                agentID: agentID,
+                agentDisplayName: agentDisplayName,
+                agentMatchedBy: agentMatchedBy
+            )
+        )
+        return IssueRowSummary(
+            id: id,
+            // The same tolerant parse ``PullRequestRecord/summary`` uses: a stored `repoFullName`
+            // without a slash degrades to a readable reference instead of dropping the row.
+            repo: RepoRef.parse(fullName: repoFullName)
+                ?? RepoRef(owner: repoFullName, name: repoFullName),
+            number: number,
+            title: title,
+            author: author,
+            createdAt: Date(timeIntervalSince1970: createdAt),
+            updatedAt: Date(timeIntervalSince1970: updatedAt),
+            closedAt: closedAt.map { Date(timeIntervalSince1970: $0) },
+            // A `state` this build does not know reads as `unknown` rather than failing the
+            // fetch — ADR 0026's amendment's own vocabulary, and the same tolerance every other
+            // raw string column in this file gets.
+            state: IssueSummary.State(rawValue: state) ?? .unknown,
+            stateReason: stateReason,
+            labels: ColumnCoding.decodeJSON([String].self, from: labels) ?? [],
+            myRelation: ColumnCoding.decodeIssueRelations(relations),
+            commentCount: commentCount,
+            linkedPullRequests: linkedPullRequests
+        )
+    }
+}
+
+/// A row of `issue_linked_pull_requests` (ADR 0032).
+///
+/// The pull request is stored by value — repository included — because it may not be in the local
+/// inbox at all: the row records what the sweep saw, not a join. Only the author's login, kind and
+/// agent display name are kept, which is exactly what the provenance chip beside a link needs;
+/// the avatar and the match signal are not, because a link is a line of text and not a row.
+struct IssueLinkedPullRequestRecord: Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = "issue_linked_pull_requests"
+
+    var issueID: String
+    var prRepoFullName: String
+    var prNumber: Int
+    var prTitle: String
+    var prState: String
+    var authorLogin: String
+    var authorKind: String
+    var agentDisplayName: String?
+    var sortIndex: Int
+
+    init(issueID: String, reference: LinkedPullRequestReference, sortIndex: Int) {
+        let kind = ColumnCoding.encodeActorKind(reference.author.kind)
+        self.issueID = issueID
+        self.prRepoFullName = reference.repo.fullName
+        self.prNumber = reference.number
+        self.prTitle = reference.title
+        self.prState = reference.state
+        self.authorLogin = reference.author.login
+        self.authorKind = kind.kind
+        self.agentDisplayName = kind.agentDisplayName
+        self.sortIndex = sortIndex
+    }
+
+    /// Rebuilds the reference.
+    ///
+    /// The agent's own id and match signal are not stored, so an `"agent"` row is rebuilt with
+    /// the display name as its id. That is enough for the chip and for
+    /// ``ShepherdCore/ActorKind/isMachine`` — which is what the facet reads — and it is why
+    /// ``ColumnCoding/decodeActorKind(kind:agentID:agentDisplayName:agentMatchedBy:)`` is given
+    /// the display name for both: a row with a name but no id would otherwise degrade to a plain
+    /// bot and lose the agent's name from the link.
+    var reference: LinkedPullRequestReference {
+        LinkedPullRequestReference(
+            repo: RepoRef.parse(fullName: prRepoFullName)
+                ?? RepoRef(owner: prRepoFullName, name: prRepoFullName),
+            number: prNumber,
+            title: prTitle,
+            state: prState,
+            author: ShepherdCore.Actor(
+                login: authorLogin,
+                displayName: nil,
+                avatarURL: nil,
+                kind: ColumnCoding.decodeActorKind(
+                    kind: authorKind,
+                    agentID: agentDisplayName,
+                    agentDisplayName: agentDisplayName,
+                    agentMatchedBy: nil
+                )
+            )
+        )
+    }
+}
+
+/// A row of `pull_request_closing_issues` (ADR 0032).
+///
+/// The other direction of the link — the issues one pull request says it closes — and the one of
+/// the two that *does* cascade with `pull_requests`, because it is about a pull request in the
+/// inbox and disappears with it, exactly as `changed_files` does.
+///
+/// The table and this record land with migration v7 so that the sprint which reads
+/// `closingIssuesReferences` needs no migration of its own; nothing writes it yet, which is why
+/// there is no initialiser taking a model — the value it will carry is a decision for the code
+/// that fetches it.
+struct PullRequestClosingIssueRecord: Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = "pull_request_closing_issues"
+
+    var prID: String
+    var issueRepoFullName: String
+    var issueNumber: Int
+    var issueTitle: String
+    var issueState: String
+    var sortIndex: Int
+}
+
+/// A row of `issue_search_index` (ADR 0032).
+///
+/// ``SearchIndexRecord``'s twin: the same two-hash staleness gate, the same nullable vector, the
+/// same `dimensions` column stored beside the blob so a truncated one is detectable rather than
+/// silently decoding as a shorter vector that would still produce a plausible cosine.
+///
+/// `modelIdentifier` is nullable here where `search_index`'s is `NOT NULL DEFAULT ''`, so it is
+/// read as an optional and an absent value becomes the empty string — which is what "no model
+/// produced this row" already means on the pull-request side.
+struct IssueSearchIndexRecord: Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = "issue_search_index"
+
+    var issueID: String
+    var documentHash: String
+    var modelIdentifier: String?
+    var dimensions: Int
+    var vector: Data?
+    var indexedAt: Double
+
+    init(entry: IssueSearchIndexEntry) {
+        self.issueID = entry.issueID
+        self.documentHash = entry.documentHash
+        self.modelIdentifier = entry.modelIdentifier
+        self.dimensions = entry.vector?.dimensions ?? 0
+        self.vector = entry.vector?.data
+        self.indexedAt = entry.indexedAt.timeIntervalSince1970
+    }
+
+    /// Rebuilds the entry.
+    ///
+    /// A blob that does not decode, or decodes to a different number of dimensions than the row
+    /// claims, yields an entry with **no** vector rather than a failed fetch: the index is a
+    /// cache, so the honest response is to rank that issue lexically and re-embed it on the next
+    /// pass.
+    var entry: IssueSearchIndexEntry {
+        var decoded: SearchVector?
+        if let vector, let candidate = SearchVector(data: vector), candidate.dimensions == dimensions {
+            decoded = candidate
+        }
+        return IssueSearchIndexEntry(
+            issueID: issueID,
+            documentHash: documentHash,
+            modelIdentifier: modelIdentifier ?? "",
+            vector: decoded,
+            indexedAt: Date(timeIntervalSince1970: indexedAt)
         )
     }
 }

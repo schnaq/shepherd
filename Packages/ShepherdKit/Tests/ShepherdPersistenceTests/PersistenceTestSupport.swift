@@ -276,3 +276,85 @@ enum OutcomeFixtures {
         )
     }
 }
+
+/// Fixtures for the issues inbox (ADR 0032).
+///
+/// Its own namespace rather than more functions on ``PersistenceFixtures``: an issue row shares
+/// none of that type's pull-request-shaped defaults — no head commit, no check rollup, no draft
+/// state — and would only be confusing beside them.
+enum IssueFixtures {
+    /// A machine that opens pull requests, for the "has an agent pull request" facet.
+    static func machineActor() -> ShepherdCore.Actor {
+        ShepherdCore.Actor(
+            login: "dependabot[bot]",
+            displayName: nil,
+            avatarURL: URL(string: "https://avatars.example/2"),
+            kind: .agent(
+                AgentIdentity(id: "dependabot", displayName: "Dependabot", matchedBy: .login)
+            )
+        )
+    }
+
+    /// One linked pull request.
+    /// - Parameters:
+    ///   - number: The pull request number.
+    ///   - repo: The repository it lives in — deliberately allowed to differ from the issue's.
+    ///   - title: The title.
+    ///   - state: GitHub's raw state string.
+    ///   - author: The author, with detected provenance.
+    static func link(
+        number: Int,
+        repo: RepoRef = PersistenceFixtures.repo,
+        title: String = "fix: the timeout",
+        state: String = "OPEN",
+        author: ShepherdCore.Actor = PersistenceFixtures.humanActor()
+    ) -> LinkedPullRequestReference {
+        LinkedPullRequestReference(
+            repo: repo,
+            number: number,
+            title: title,
+            state: state,
+            author: author
+        )
+    }
+
+    /// One issue row.
+    /// - Parameters:
+    ///   - id: The node id.
+    ///   - number: The issue number.
+    ///   - repo: The repository.
+    ///   - author: The author.
+    ///   - createdAt: When it was opened, as an offset from the fixture epoch.
+    ///   - updatedAt: When it was last updated, as an offset from the fixture epoch.
+    ///   - state: Whether it is open or closed.
+    ///   - relations: How the user relates to it.
+    ///   - links: The pull requests that will close it.
+    static func summary(
+        id: String = "I_1",
+        number: Int = 42,
+        repo: RepoRef = PersistenceFixtures.repo,
+        author: ShepherdCore.Actor = PersistenceFixtures.humanActor(),
+        createdAt: TimeInterval = -3_600,
+        updatedAt: TimeInterval = 0,
+        state: IssueSummary.State = .open,
+        relations: Set<IssueRelation> = [.assigned],
+        links: [LinkedPullRequestReference] = []
+    ) -> IssueRowSummary {
+        IssueRowSummary(
+            id: id,
+            repo: repo,
+            number: number,
+            title: "Login times out after the token refresh",
+            author: author,
+            createdAt: PersistenceFixtures.date(createdAt),
+            updatedAt: PersistenceFixtures.date(updatedAt),
+            closedAt: state == .closed ? PersistenceFixtures.date(updatedAt) : nil,
+            state: state,
+            stateReason: state == .closed ? "COMPLETED" : nil,
+            labels: ["bug", "auth"],
+            myRelation: relations,
+            commentCount: 4,
+            linkedPullRequests: links
+        )
+    }
+}

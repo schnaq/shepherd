@@ -117,10 +117,11 @@ extension DatabaseManager {
                     arguments: StatementArguments(keep)
                 )
             }
-            try db.execute(sql: """
-                DELETE FROM repos
-                WHERE fullName NOT IN (SELECT DISTINCT repoFullName FROM pull_requests)
-                """)
+            // Shared with the issues sweep, and it has to be: `repos` is the parent of both
+            // tables with `ON DELETE CASCADE`, so a prune that only looked at `pull_requests`
+            // would delete a repository the user has issues but no open pull requests in — and
+            // take every one of those issues with it (ADR 0032).
+            try DatabaseManager.pruneOrphanedRepos(db)
         }
     }
 
