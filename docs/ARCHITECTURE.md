@@ -379,6 +379,7 @@ frameworks are.
   runner and is **skipped unless `SHEPHERD_EVAL=1`** — it measures a model, not the code, so a
   new OS model must not be able to turn a build red. `Scripts/eval-intelligence/README.md` is
   the harness contract: fixture shapes, how to run it, and why it is not in CI.
+
 Both drafting surfaces prefer the **streamed** path. `IntelligenceRouter.streamReviewSummaryDraft`
 / `streamInlineCommentDraft` return an `IntelligenceStream` — the tier plus the stream — inside an
 `IntelligenceStreamOutcome` whose three failure shapes convert back into the ordinary
@@ -395,6 +396,47 @@ replace/append question is asked **once, before the request is made**, the growi
 cumulatively, the caption is up before the first token and stays until the reviewer's first
 keystroke, a keystroke during a stream takes the field away from it, and a cancelled stream keeps
 what arrived (still labelled).
+
+### The tool loop (app target)
+
+`IntelligenceProvider.diagnoseFailingChecks(_:tools:)` is the first method where the model decides
+what to read. `CIDiagnosisRequest` orients it — slug, title, the red checks with their
+conclusions, the changed-file paths, the tier's budget — and `IntelligenceToolExecuting` is the
+seam behind which the reads happen; `LocalToolExecutor` is the one implementation, an `actor` over
+a `PullRequestDetail` **snapshot** so a turn cannot see the pull request change underneath it. It
+validates every call through the registry first, cuts every answer to the tier's budget
+(`checksShare`/`diffShare`, per-check summary caps, `IntelligenceDiffWindow` for a diff window
+around the line the model named — pure and Linux-tested in `ShepherdCore`), and turns a call the
+model got wrong into a **refusal result** rather than an error: the model reads why and corrects
+itself, and the reviewer sees the hop. `jobLogTail` answers "no log available for this check yet"
+until the GitHubKit job-log read exists, which is the same answer it will always give a
+non-Actions check. Model-facing tool content is English like every prompt here; the one-line
+summaries beside it are the reviewer's and are localised.
+
+Each tier drives the loop in its own shape and they agree on everything that matters:
+`OnDeviceToolBridge` (the second and last file importing `FoundationModels`) wraps the three tools
+in `FoundationModels.Tool` conformances with `@Generable` argument structs, and the framework
+drives the calls — so the hop cap lives in the wrappers and the trace is collected by a shared
+`ToolTraceRecorder` actor; `AnthropicProvider` keeps a `tool_use`/`tool_result` transcript, echoing
+the assistant's content verbatim; `OpenAICompatibleProvider` keeps `tool_calls` plus one
+`role: "tool"` message per call, non-streaming, and parses the `arguments` JSON *string*. All three
+stop at `IntelligenceToolLoop.maximumHops` (6) with `IntelligenceError.toolLoopExceeded` rather
+than answering from a turn that was cut off, and both cloud tiers map a `400` mentioning
+tools/functions to `IntelligenceError.toolsUnsupported` — an Ollama-class endpoint with no tool
+head. A tier that does not implement the method inherits a default that throws the same thing, so
+a new tier can never answer a diagnosis *without having read anything*. The answer comes back as
+`IntelligenceToolRun<CIDiagnosis>` — value plus `IntelligenceTrace` — because a diagnosis nobody
+can check is a guess with a confidence label on it. `IntelligenceTransport` is the POST seam the
+loops are tested through (`ShepherdTests/IntelligenceToolLoopTests.swift` scripts recorded
+answers); the streamed drafting paths keep going straight to `URLSession`, since they need bytes.
+
+`IntelligenceRouter.diagnoseFailingChecks(for:summary:preferCloud:)` runs the ladder **the other
+way round**: tier 2 first, and tier 3 only when tier 2 failed with `contextExceeded` /
+`digestTooLarge` *and* `preferCloud` is `true`. Any other tier-2 failure is reported as it
+happened — a cloud provider is not a retry — and an unavailable on-device model is not a budget
+failure either. `preferCloud` defaults to `false`: the card asks the reviewer before passing
+`true`, so no caller can send a pull request's contents to a configured endpoint by leaving an
+argument out. The executor is rebuilt per tier, because the budget is what the tools cut to.
 
 ## UI conventions
 

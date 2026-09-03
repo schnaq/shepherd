@@ -126,7 +126,11 @@ bumping a dependency that ships inside the app also means a line in
     the inline comments already in your pending review. So: yes, pull-request *code* reaches that
     endpoint, only that endpoint, only for the pull request you are looking at, and only after you
     configured it and clicked. Everything is capped against an explicit token budget before it is
-    sent;
+    sent. When a cloud provider answers *"why is CI red?"*, what travels is the failing checks'
+    names, conclusions and own summary text plus a budgeted diff window around the line the model
+    asks about — CI **log** output does not travel there yet, because nothing reads a job log yet;
+    and that tier is only asked at all after the on-device model reported the content too large
+    and you agreed to it for that click;
   - only when the user enables webhooks and types a URL: **that URL** (ADR 0012). Outbound only,
     one destination, off by default, and the payload never carries review text, comment bodies,
     diffs or agent output;

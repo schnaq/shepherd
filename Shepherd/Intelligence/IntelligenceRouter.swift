@@ -158,6 +158,19 @@ struct IntelligenceTiers: Sendable {
     var inlineStream: @Sendable (
         any IntelligenceProvider, InlineCommentDraftRequest
     ) -> AsyncThrowingStream<String, Error> = { $0.streamInlineCommentDraft($1) }
+    /// How a CI diagnosis is asked of a tier.
+    ///
+    /// The same kind of seam as the two streams above, and needed for the same reason: the part
+    /// of ``IntelligenceRouter/diagnoseFailingChecks(for:summary:preferCloud:)`` worth testing is
+    /// the *ladder* — on-device first, the cloud rung only after a budget failure and only with
+    /// consent — and driving that through a real provider would need Apple Intelligence, a key
+    /// and a network. A test scripts this closure with the failure it wants; every test that does
+    /// not care never mentions it.
+    var diagnose: @Sendable (
+        any IntelligenceProvider, CIDiagnosisRequest, any IntelligenceToolExecuting
+    ) async throws -> IntelligenceToolRun<CIDiagnosis> = {
+        try await $0.diagnoseFailingChecks($1, tools: $2)
+    }
 
     /// The real tiers.
     static let live = IntelligenceTiers(
@@ -301,6 +314,138 @@ struct IntelligenceRouter: Sendable {
             try await provider.draftInlineComment(
                 InlineCommentDraftBuilder.build(detail: detail, anchor: anchor, budget: budget)
             )
+        }
+    }
+
+    // MARK: - Tool calling (plan §3.F)
+
+    /// Works out why CI is red, by letting a tier read the pull request (plan §3.F).
+    ///
+    /// **The ladder runs the other way round here, and that is the point.** Every other call in
+    /// this router tries the cloud tier first, because it sees a larger digest and answers
+    /// better. This one is tier 2 first and tier 3 only as an *explicit* second rung, because the
+    /// content is different in kind: a diagnosis reads check summaries and diff windows chosen by
+    /// a model rather than a digest a human can see the shape of, and — once the job-log read
+    /// exists — CI log output as well. ADR 0007 lets that travel only when the user says so for
+    /// this click, so:
+    ///
+    /// - tier 2 answers, and normally that is the whole story;
+    /// - tier 3 is tried **only** when tier 2 failed *because the content did not fit*
+    ///   (``IntelligenceError/contextExceeded`` or
+    ///   ``IntelligenceError/digestTooLarge(tokens:limit:)``) **and** `preferCloud` is `true`.
+    ///   Any other tier-2 failure — a guardrail refusal, an unreadable answer, the model being
+    ///   switched off — is reported as it happened. A cloud provider is not a retry.
+    ///
+    /// `preferCloud` exists because there is no card yet: the plan's UI asks the reviewer *"ask
+    /// <provider> with the full log?"* when the on-device tier reports the budget exceeded, and
+    /// the answer to that question is this parameter. It defaults to `false` so that no caller
+    /// can send a pull request's contents to a configured endpoint by leaving an argument out.
+    /// - Parameters:
+    ///   - detail: The fetched pull request. The tools answer from this snapshot.
+    ///   - summary: The inbox row the reviewer opened — where the title and number come from.
+    ///   - preferCloud: Whether the reviewer has agreed to the cloud rung for *this* diagnosis.
+    /// - Returns: The diagnosis and its trace, or why there is none.
+    func diagnoseFailingChecks(
+        for detail: PullRequestDetail,
+        summary: PullRequestSummary,
+        preferCloud: Bool = false
+    ) async -> IntelligenceOutcome<IntelligenceToolRun<CIDiagnosis>> {
+        guard isEnabled else { return .disabled }
+        // Settled before a tier is picked, because the answer is the same for all of them and
+        // costs nothing to find out: a pull request with nothing red has nothing to diagnose.
+        guard !LocalToolExecutor.failingChecks(in: detail).isEmpty else {
+            return .unavailable(
+                String(
+                    localized: "No check on this pull request is failing, so there is nothing to diagnose."
+                )
+            )
+        }
+        // An unavailable on-device model is *not* a reason to use the cloud one here: the second
+        // rung answers a budget failure, and a machine with Apple Intelligence switched off never
+        // produced one. Saying why is the honest answer.
+        if let reason = tiers.onDeviceUnavailabilityReason() {
+            return .unavailable(reason)
+        }
+
+        let onDevice = tiers.onDevice()
+        do {
+            return .value(
+                IntelligenceOutput(
+                    kind: onDevice.kind,
+                    value: try await ask(
+                        onDevice,
+                        detail: detail,
+                        summary: summary,
+                        budget: OnDeviceProvider.budget
+                    )
+                )
+            )
+        } catch {
+            guard preferCloud,
+                  IntelligenceRouter.isBudgetFailure(error),
+                  let cloud = cloudProvider
+            else {
+                return .failed(IntelligenceRouter.describe(error))
+            }
+            do {
+                return .value(
+                    IntelligenceOutput(
+                        kind: cloud.kind,
+                        value: try await ask(
+                            cloud,
+                            detail: detail,
+                            summary: summary,
+                            budget: AnthropicProvider.budget
+                        )
+                    )
+                )
+            } catch {
+                return .failed(IntelligenceRouter.describe(error))
+            }
+        }
+    }
+
+    /// Asks one tier for a diagnosis, with an executor budgeted for that tier.
+    ///
+    /// The executor is built per tier rather than once, because the budget is what the tools cut
+    /// their answers to: the same `fileDiff` call returns a window a cloud model can afford and a
+    /// window an on-device model can, from the same snapshot. Building it once would mean the
+    /// second rung inheriting the first rung's budget, which is precisely the budget that just
+    /// failed.
+    /// - Parameters:
+    ///   - provider: The tier to ask.
+    ///   - detail: The pull request snapshot.
+    ///   - summary: The inbox row.
+    ///   - budget: The tier's token budget.
+    /// - Returns: The diagnosis and its trace.
+    private func ask(
+        _ provider: any IntelligenceProvider,
+        detail: PullRequestDetail,
+        summary: PullRequestSummary,
+        budget: TokenBudget
+    ) async throws -> IntelligenceToolRun<CIDiagnosis> {
+        try await tiers.diagnose(
+            provider,
+            CIDiagnosisRequest.build(detail: detail, summary: summary, budget: budget),
+            LocalToolExecutor(detail: detail, budget: budget)
+        )
+    }
+
+    /// Whether a failure was the content not fitting — the one failure the cloud rung answers.
+    ///
+    /// Two cases, and they are the two ends of the same problem: `digestTooLarge` is Shepherd's
+    /// own pre-flight refusing to start, `contextExceeded` is the model's real tokenizer
+    /// disagreeing with that estimate from inside a session. Both mean "this does not fit in
+    /// 8,192 tokens", which is the only thing a 100,000-token window is a fix for.
+    /// - Parameter error: What the tier threw.
+    /// - Returns: `true` when a larger context window would be a different answer.
+    static func isBudgetFailure(_ error: any Error) -> Bool {
+        guard let intelligence = error as? IntelligenceError else { return false }
+        switch intelligence {
+        case .contextExceeded, .digestTooLarge:
+            return true
+        default:
+            return false
         }
     }
 

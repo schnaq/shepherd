@@ -4511,6 +4511,16 @@
         }
       }
     },
+    "No check on this pull request is failing, so there is nothing to diagnose.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kein Check dieses Pull Requests ist rot, es gibt also nichts zu diagnostizieren."
+          }
+        }
+      }
+    },
     "No checks": {
       "localizations": {
         "de": {
