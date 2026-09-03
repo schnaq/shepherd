@@ -88,7 +88,11 @@ public enum UnifiedPatch {
         var result: [Hunk] = []
         var current: Hunk?
         let normalised = patch.replacingOccurrences(of: "\r\n", with: "\n")
-        for rawLine in normalised.components(separatedBy: "\n") {
+        var rawLines = normalised.components(separatedBy: "\n")
+        // A unified diff ends with a newline; the empty component after it is not a line, and
+        // keeping it would pad every reconstructed file with one phantom line at the end.
+        if rawLines.last == "" { rawLines.removeLast() }
+        for rawLine in rawLines {
             if rawLine.hasPrefix("@@") {
                 if let current { result.append(current) }
                 current = header(rawLine).map {

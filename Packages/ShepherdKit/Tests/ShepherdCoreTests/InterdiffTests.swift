@@ -119,6 +119,13 @@ final class InterdiffTests: XCTestCase {
         XCTAssertEqual(changed.removedLineCount, 1)
     }
 
+    func testATrailingNewlineDoesNotBecomeAPhantomLastLine() {
+        // Every unified diff ends with a newline; the empty component after it is not a line.
+        let patch = "@@ -1,2 +1,2 @@\n first\n-second\n+zweite\n"
+        XCTAssertEqual(UnifiedPatch.reconstruct(after: patch), ["first", "zweite"])
+        XCTAssertEqual(UnifiedPatch.hunks(in: patch).first?.lines.count, 3)
+    }
+
     func testTheSynthesizedPatchRoundTripsThroughTheReconstructor() {
         let interdiff = Interdiff.compute(
             before: [file("a.swift", patch: reviewedPatch)],

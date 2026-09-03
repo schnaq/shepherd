@@ -441,6 +441,46 @@
         }
       }
     },
+    "%lld findings unchanged": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Finding unverändert"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Findings unverändert"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld finding unchanged"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld findings unchanged"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld gone": {
       "localizations": {
         "de": {
@@ -934,19 +974,39 @@
     "%lld rounds": {
       "localizations": {
         "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld Runden"
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Runde"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Runden"
+                }
+              }
+            }
           }
-        }
-      }
-    },
-    "%lld rounds · %lld findings unchanged": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld Runden · %lld Anmerkungen unverändert"
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld round"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld rounds"
+                }
+              }
+            }
           }
         }
       }

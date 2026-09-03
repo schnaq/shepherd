@@ -61,18 +61,21 @@ struct SinceReviewRound: Sendable, Equatable {
 struct ReviewRoundsSummary: Sendable, Equatable {
     /// How many heads have been reviewed.
     var roundCount: Int
-    /// How many of the reviewer's findings the newest round left unchanged.
-    var unchangedFindingCount: Int
+    /// How many of the reviewer's findings the newest round left unchanged, or `nil` when the
+    /// interdiff was not computed for this row — a row past the inbox cap, or one whose head has
+    /// not moved since the reviewed one. `nil` is not `0`: the chip must never claim a count
+    /// Shepherd did not work out.
+    var unchangedFindingCount: Int?
 
     /// The row's chip text, or `nil` when there is nothing worth a chip.
+    ///
+    /// Two counters, each pluralised on its own through the catalog's plural variations and
+    /// joined with a middle dot, because one key with two numbers cannot be pluralised for both.
     var chipText: String? {
         guard roundCount > 0 else { return nil }
-        guard unchangedFindingCount > 0 else {
-            return String(localized: "\(roundCount) rounds")
-        }
-        return String(
-            localized: "\(roundCount) rounds · \(unchangedFindingCount) findings unchanged"
-        )
+        let rounds = String(localized: "\(roundCount) rounds")
+        guard let unchangedFindingCount, unchangedFindingCount > 0 else { return rounds }
+        return rounds + " · " + String(localized: "\(unchangedFindingCount) findings unchanged")
     }
 }
 
@@ -86,7 +89,8 @@ enum SinceReviewLoader {
     /// How many inbox rows one refresh is willing to compute an interdiff for.
     ///
     /// The chip is a nicety on a list that must stay instant, and the plan's volume is ten to
-    /// forty pull requests a week; rows past the cap simply show no chip until they are opened.
+    /// forty pull requests a week; rows past the cap show their round count and no finding
+    /// count until they are opened.
     static let inboxRowLimit = 20
 
     /// Computes the round from a snapshot and the current detail. Pure.
@@ -165,7 +169,7 @@ enum SinceReviewLoader {
         var computed = 0
         for row in rows {
             guard let count = counts[row.id], count > 0 else { continue }
-            result[row.id] = ReviewRoundsSummary(roundCount: count, unchangedFindingCount: 0)
+            result[row.id] = ReviewRoundsSummary(roundCount: count, unchangedFindingCount: nil)
             guard computed < inboxRowLimit else { continue }
             guard let snapshot = try? await database.latestReviewSnapshot(prID: row.id),
                   snapshot.isBehind(row.headRefOid),
