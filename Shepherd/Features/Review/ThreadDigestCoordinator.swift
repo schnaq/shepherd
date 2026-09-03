@@ -178,7 +178,13 @@ final class ThreadDigestCoordinator {
         guard isAvailable else { return }
 
         let key = Self.cacheKey(threadID: threadID, comments: comments)
-        if states[key] != nil { return }
+        // A finished digest is final for this content; a failed one is not — the reviewer may
+        // press the button again, and a guardrail decline or a transient error deserves a
+        // second run.
+        switch states[key] {
+        case nil, .failed: break
+        default: return
+        }
         if let running = inFlight[threadID] {
             guard running.key != key else {
                 // The same click twice: wait for the run that is already paying for it.

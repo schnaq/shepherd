@@ -1002,11 +1002,15 @@ struct ThreadPopover: View {
     /// does not need a summary — the reviewer reads six comments faster than a summary of them
     /// plus the six. A Mac without the on-device model cannot produce one, and tier 2 is the only
     /// tier allowed to see somebody else's comments (ADR 0007's amendment). And once the card is
-    /// on screen the button has nothing left to ask for.
+    /// on screen the button has nothing left to ask for — unless the attempt failed, in which
+    /// case it stays, like every other drafting button, so the reviewer can try again.
     private var canSummarise: Bool {
-        thread.comments.count >= ThreadDigestCoordinator.minimumCommentCount
-            && environment.threadDigests.isAvailable
-            && digestState == nil
+        guard thread.comments.count >= ThreadDigestCoordinator.minimumCommentCount,
+              environment.threadDigests.isAvailable else { return false }
+        switch digestState {
+        case nil, .failed: return true
+        default: return false
+        }
     }
 
     /// Spends the one on-device run behind the button.

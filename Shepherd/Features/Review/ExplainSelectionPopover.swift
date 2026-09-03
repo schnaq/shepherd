@@ -210,9 +210,9 @@ struct ExplainSelectionButton: View {
         .accessibilityLabel(isExplaining
             ? String(localized: "Stop explaining")
             : String(localized: "Explain these lines"))
-        .accessibilityHint(isExplaining
+        .accessibilityHint(Text(isExplaining
             ? String(localized: "Keeps the sentences that have already arrived.")
-            : String(localized: "Explains what the selected lines change. Nothing is sent and nothing is saved."))
+            : String(localized: "Explains what the selected lines change. Nothing is sent and nothing is saved.")))
     }
 }
 

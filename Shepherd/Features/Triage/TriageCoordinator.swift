@@ -406,9 +406,10 @@ final class TriageCoordinator {
     /// - Returns: The row to persist, or `nil` when nothing new was computed.
     private func classify(_ row: TriagePreparedRow, canClassify: Bool) async -> TriageVerdictEntry? {
         let prID = row.input.prID
-        // Recorded before the model is asked, so a pass that cannot classify still stops
-        // re-reading this pull request's diff on every sweep. It is taken back below when a
-        // classification *failed*, which is the one case worth retrying.
+        // Recorded before the model is asked, so a pass stops re-reading this pull request's
+        // diff on every sweep. It is taken back in two places: when a classification *failed*,
+        // and when the model could not be asked at all — a row seen while the tier was off must
+        // be looked at again on the first sweep after the tier comes back.
         fingerprints[prID] = row.fingerprint
         var summary = rows[prID] ?? TriageRowSummary()
         summary.heuristicRisk = row.heuristicRisk
@@ -424,7 +425,10 @@ final class TriageCoordinator {
         // one is asked for: a chip that keeps describing the previous commit is worse than none.
         summary.verdict = nil
         rows[prID] = summary
-        guard canClassify else { return nil }
+        guard canClassify else {
+            fingerprints[prID] = nil
+            return nil
+        }
 
         do {
             let verdict = try await classifier.classify(row.input)

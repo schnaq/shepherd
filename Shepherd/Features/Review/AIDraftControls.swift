@@ -53,9 +53,9 @@ struct AIDraftButton: View {
         .accessibilityLabel(isDrafting
             ? String(localized: "Stop drafting")
             : String(localized: "Draft with AI"))
-        .accessibilityHint(isDrafting
+        .accessibilityHint(Text(isDrafting
             ? String(localized: "Keeps the text that has already arrived, still labelled as a draft.")
-            : String(localized: "Drafts a suggestion into the field beside this button. Nothing is sent."))
+            : String(localized: "Drafts a suggestion into the field beside this button. Nothing is sent.")))
     }
 }
 
