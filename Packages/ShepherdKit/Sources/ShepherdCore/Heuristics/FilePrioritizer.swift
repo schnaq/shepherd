@@ -197,6 +197,19 @@ public enum FilePrioritizer {
             }
     }
 
+    /// Whether a file is a dependency lockfile.
+    ///
+    /// Public because "a lockfile changed" is a fact in its own right on the claims card
+    /// (ADR 0026), which needs to name it separately from the generated-and-vendored bucket
+    /// ``category(of:)`` folds it into. The set of names is the prioritiser's own, so the two
+    /// surfaces cannot come to different conclusions about `Package.resolved`.
+    /// - Parameter file: The changed file.
+    /// - Returns: `true` for a known lockfile name or any `*.lock` file.
+    public static func isLockfile(_ file: ChangedFile) -> Bool {
+        let name = file.fileName.lowercased()
+        return lockfileNames.contains(name) || name.hasSuffix(".lock")
+    }
+
     /// Classifies a path into a broad category.
     /// - Parameter file: The changed file.
     /// - Returns: The detected category.
