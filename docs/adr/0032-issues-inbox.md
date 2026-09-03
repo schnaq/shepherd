@@ -205,8 +205,9 @@ in answer would be an opinion nobody asked for.
   keyboard does not notice" rule requires. That is the price of not widening a type ADR 0019 pins,
   and it is one loop with two bodies rather than one body with three optional fields.
 - **The linking tables exist before anything writes them.** `pull_request_closing_issues` is an
-  empty table with a record type and no writer until the linking sprint lands. An empty table is
-  cheap; a migration ordered after the feature that needs it is not.
+  empty table with a record type and no writer until the linking sprint lands — which is the
+  *Sprint 3 — linking* amendment below. An empty table is cheap; a migration ordered after the
+  feature that needs it is not.
 
 ### Sprint 3 — linking
 
