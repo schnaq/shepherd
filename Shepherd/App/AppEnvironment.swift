@@ -817,7 +817,8 @@ final class AppEnvironment {
                 // The wide observation, closed rows included: the digest's second issue line is
                 // about an issue an agent's pull request just closed (ADR 0032).
                 issues: session.issueRows,
-                parkedReviewCount: session.conflictedOutboxCount
+                parkedReviewCount: session.conflictedOutboxCount,
+                failedWriteCount: session.failedOutboxCount
             )
         }
     }

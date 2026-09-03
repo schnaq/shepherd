@@ -5,8 +5,9 @@ import Foundation
 /// The declaration order *is* the reading order of the digest, and it is a priority order rather
 /// than a chronological one: what somebody else is waiting for comes first — a review request,
 /// then an issue somebody put your name on — then the work that is one click from done and the
-/// work an agent finished, then the user's own blocked pull requests, and last the one section
-/// that is about Shepherd itself: reviews it could not send.
+/// work an agent finished, then the user's own blocked pull requests, and last the two sections
+/// that are about Shepherd itself: writes it could not send — parked first, because those still
+/// have a draft to re-apply, then the ones it gave up on entirely.
 ///
 /// A closed vocabulary on purpose. The digest is assembled by walking ``allCases``, so a new kind
 /// is one case plus one branch of an exhaustive switch, and it cannot be silently forgotten.
@@ -23,18 +24,25 @@ public enum DigestSectionKind: String, Sendable, Codable, Hashable, CaseIterable
     case ownPullRequestsNeedingAttention
     /// Queued reviews the outbox parked because the pull request moved on (ADR 0006).
     case parkedReviews
+    /// Queued writes the outbox gave up on, because retrying them cannot help (ADR 0006).
+    ///
+    /// The section that exists because nothing else reported it: a row in
+    /// ``OutboxState/failed`` is neither waiting nor parked, it never leaves that state on its
+    /// own, and a digest that is meant to say what happened overnight would otherwise stay silent
+    /// about the one thing that is certainly not going to fix itself.
+    case failedWrites
 
     /// Whether the section is about a *change* inside the digest's window rather than about
     /// standing state.
     ///
-    /// Two of the six are windowed, and the asymmetry is deliberate — see
-    /// ``DigestReport/make(pullRequests:issues:parkedReviewCount:windowStart:now:maxItemsPerSection:)``.
+    /// Two of the seven are windowed, and the asymmetry is deliberate — see
+    /// ``DigestReport/make(pullRequests:issues:parkedReviewCount:failedWriteCount:windowStart:now:maxItemsPerSection:)``.
     public var isWindowed: Bool {
         switch self {
         case .newReviewRequests, .issuesAssignedToYou:
             return true
         case .greenAgentPullRequests, .agentPullRequestsThatClosedAnIssue,
-             .ownPullRequestsNeedingAttention, .parkedReviews:
+             .ownPullRequestsNeedingAttention, .parkedReviews, .failedWrites:
             return false
         }
     }
@@ -49,7 +57,7 @@ public enum DigestSectionKind: String, Sendable, Codable, Hashable, CaseIterable
         case .issuesAssignedToYou, .agentPullRequestsThatClosedAnIssue:
             return true
         case .newReviewRequests, .greenAgentPullRequests, .ownPullRequestsNeedingAttention,
-             .parkedReviews:
+             .parkedReviews, .failedWrites:
             return false
         }
     }
@@ -126,10 +134,11 @@ public struct DigestReport: Sendable, Equatable {
     public struct Section: Sendable, Equatable, Identifiable {
         /// Which kind of line this is.
         public let kind: DigestSectionKind
-        /// How many pull requests, issues or parked reviews the line counts.
+        /// How many pull requests, issues or outbox rows the line counts.
         public let count: Int
-        /// The first few, in the digest's order. Empty for ``DigestSectionKind/parkedReviews``,
-        /// which counts outbox rows rather than pull requests.
+        /// The first few, in the digest's order. Empty for the two outbox lines
+        /// (``DigestSectionKind/parkedReviews``, ``DigestSectionKind/failedWrites``), which count
+        /// outbox rows rather than pull requests.
         public let items: [Item]
 
         /// Creates a section.
@@ -148,8 +157,8 @@ public struct DigestReport: Sendable, Equatable {
 
         /// How many the section counts beyond the ones it names.
         ///
-        /// Zero for a section that names nothing at all — ``DigestSectionKind/parkedReviews`` is a
-        /// bare count, and "3 parked reviews, and 3 more" would count the same rows twice.
+        /// Zero for a section that names nothing at all — the two outbox lines are bare counts,
+        /// and "3 parked reviews, and 3 more" would count the same rows twice.
         public var overflow: Int {
             guard !items.isEmpty else { return 0 }
             return max(0, count - items.count)
@@ -226,6 +235,8 @@ public struct DigestReport: Sendable, Equatable {
     ///     Defaults to none, which is how a caller that predates the issues inbox builds a
     ///     report — and what it gets is the report it always got.
     ///   - parkedReviewCount: How many outbox rows are parked as conflicted (ADR 0006).
+    ///   - failedWriteCount: How many outbox rows the drain gave up on (ADR 0006). Defaults to
+    ///     none, which is how a caller that predates the line builds the report it always built.
     ///   - windowStart: The start of the span, from ``DigestSchedule/window(now:lastDeliveredAt:calendar:)``.
     ///   - now: The clock.
     ///   - maxItemsPerSection: How many rows a section names.
@@ -234,6 +245,7 @@ public struct DigestReport: Sendable, Equatable {
         pullRequests: [PullRequestSummary],
         issues: [IssueRowSummary] = [],
         parkedReviewCount: Int,
+        failedWriteCount: Int = 0,
         windowStart: Date,
         now: Date = Date(),
         maxItemsPerSection: Int = DigestReport.maxItemsPerSection
@@ -286,6 +298,12 @@ public struct DigestReport: Sendable, Equatable {
                 // Settings → Sync is where they are dealt with.
                 guard parkedReviewCount > 0 else { continue }
                 sections.append(Section(kind: kind, count: parkedReviewCount, items: []))
+            case .failedWrites:
+                // Also a bare count, and for the same reason — but a stronger one: a failed row
+                // may be an *issue* write, so naming it would mean reaching into the outbox for a
+                // kind of target this report does not otherwise carry. Settings → Sync names them.
+                guard failedWriteCount > 0 else { continue }
+                sections.append(Section(kind: kind, count: failedWriteCount, items: []))
             }
         }
         return DigestReport(windowStart: windowStart, generatedAt: now, sections: sections)

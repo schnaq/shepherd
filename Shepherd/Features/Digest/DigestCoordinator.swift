@@ -5,7 +5,7 @@ import ShepherdCore
 /// Everything one due check needs from the signed-in session.
 ///
 /// A value rather than the session itself, so the coordinator can be exercised — and reasoned
-/// about — without a database: the digest reads two numbers off the session and nothing else.
+/// about — without a database: the digest reads a few numbers off the session and nothing else.
 struct DigestInputs: Sendable, Equatable {
     /// Every row the local inbox holds (``SignedInSession/inboxRows``).
     var pullRequests: [PullRequestSummary]
@@ -14,6 +14,12 @@ struct DigestInputs: Sendable, Equatable {
     var issues: [IssueRowSummary]
     /// How many outbox rows are parked as conflicted (``SignedInSession/conflictedOutboxCount``).
     var parkedReviewCount: Int
+    /// How many outbox rows the drain gave up on (``SignedInSession/failedOutboxCount``).
+    ///
+    /// The digest's other standing outbox number, and the one that most deserves an unattended
+    /// report: a parked write still has a draft and an alert behind it, while a failed one was
+    /// refused in a way retrying cannot fix and nothing ever raised it a second time.
+    var failedWriteCount: Int
 
     /// Creates the inputs.
     /// - Parameters:
@@ -21,14 +27,18 @@ struct DigestInputs: Sendable, Equatable {
     ///   - issues: Every cached issue row. Defaults to none, so a caller that predates the issues
     ///     inbox builds the inputs it always built.
     ///   - parkedReviewCount: How many mutations are parked as conflicted.
+    ///   - failedWriteCount: How many mutations the drain gave up on. Defaults to none, so a
+    ///     caller that predates the line builds the inputs it always built.
     init(
         pullRequests: [PullRequestSummary],
         issues: [IssueRowSummary] = [],
-        parkedReviewCount: Int
+        parkedReviewCount: Int,
+        failedWriteCount: Int = 0
     ) {
         self.pullRequests = pullRequests
         self.issues = issues
         self.parkedReviewCount = parkedReviewCount
+        self.failedWriteCount = failedWriteCount
     }
 }
 
@@ -37,7 +47,7 @@ struct DigestInputs: Sendable, Equatable {
 ///
 /// The division of labour is ``AutoDelegationCoordinator``'s: the *decisions* are pure functions in
 /// `ShepherdCore` — ``ShepherdCore/DigestSchedule/window(now:lastDeliveredAt:calendar:)`` for "is it
-/// due" and ``ShepherdCore/DigestReport/make(pullRequests:issues:parkedReviewCount:windowStart:now:maxItemsPerSection:)``
+/// due" and ``ShepherdCore/DigestReport/make(pullRequests:issues:parkedReviewCount:failedWriteCount:windowStart:now:maxItemsPerSection:)``
 /// for "what does it say" — and this type only supplies the inputs, records the delivery, and tells
 /// the user.
 ///
@@ -201,6 +211,7 @@ final class DigestCoordinator {
             pullRequests: inputs.pullRequests,
             issues: inputs.issues,
             parkedReviewCount: inputs.parkedReviewCount,
+            failedWriteCount: inputs.failedWriteCount,
             windowStart: window.start,
             now: moment
         )

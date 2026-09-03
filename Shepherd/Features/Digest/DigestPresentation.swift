@@ -51,6 +51,10 @@ enum DigestPresentation {
             return count == 1
                 ? String(localized: "1 queued review was not sent")
                 : String(localized: "\(count) queued reviews were not sent")
+        case .failedWrites:
+            return count == 1
+                ? String(localized: "1 queued write was given up on")
+                : String(localized: "\(count) queued writes were given up on")
         }
     }
 
@@ -70,6 +74,8 @@ enum DigestPresentation {
             return String(localized: "Show your own pull requests")
         case .parkedReviews:
             return String(localized: "Open Settings → Sync, where the parked reviews are listed")
+        case .failedWrites:
+            return String(localized: "Open Settings → Sync, where each one can be retried or discarded")
         }
     }
 
@@ -83,6 +89,7 @@ enum DigestPresentation {
         case .agentPullRequestsThatClosedAnIssue: return "checkmark.circle.badge.checkmark"
         case .ownPullRequestsNeedingAttention: return "exclamationmark.triangle"
         case .parkedReviews: return "tray.full"
+        case .failedWrites: return "xmark.octagon"
         }
     }
 
@@ -96,6 +103,7 @@ enum DigestPresentation {
         case .agentPullRequestsThatClosedAnIssue: return Theme.success
         case .ownPullRequestsNeedingAttention: return Theme.failure
         case .parkedReviews: return Theme.pending
+        case .failedWrites: return Theme.failure
         }
     }
 

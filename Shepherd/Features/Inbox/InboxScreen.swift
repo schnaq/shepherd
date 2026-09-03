@@ -250,9 +250,9 @@ struct InboxScreen: View {
             markGreenAgentRows()
         case .ownPullRequestsNeedingAttention:
             model.apply(.myPullRequests)
-        case .parkedReviews:
-            // Not an inbox filter at all: a parked mutation is an outbox row, and Settings → Sync
-            // is where it is counted and explained.
+        case .parkedReviews, .failedWrites:
+            // Not an inbox filter at all: both are outbox rows, and Settings → Sync is where they
+            // are counted and explained — and, for the failed ones, retried or discarded.
             openSettings(.sync)
         }
     }
@@ -468,6 +468,19 @@ struct SyncStatusView: View {
                     .foregroundStyle(Theme.pending)
                     .help(String(
                         localized: "Queued reviews that were parked because the pull request moved on. Settings → Sync has the count; open the pull request to check your draft."
+                    ))
+            }
+            // And the third state, the one this side of the app could not say until now: a write
+            // the drain **gave up on**. It is not coming back by itself either, and unlike a
+            // parked one there is no draft to re-apply and no alert that ever raised it — a 4xx
+            // from GitHub simply ends the row. The issue panel says exactly this about one issue
+            // (ADR 0032); this is the same sentence about the account.
+            if session.failedOutboxCount > 0 {
+                Text(verbatim: "·")
+                Text(String(localized: "\(session.failedOutboxCount) failed — see Settings → Sync"))
+                    .foregroundStyle(Theme.failure)
+                    .help(String(
+                        localized: "Queued writes Shepherd gave up on: GitHub refused them, or they could not be made at all. They are never retried by themselves — Settings → Sync lists each one and offers Retry or Discard."
                     ))
             }
         }

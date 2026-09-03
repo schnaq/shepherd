@@ -35,13 +35,21 @@ final class SignedInSession {
     /// Kept beside the pending count because it behaves in the opposite way: pending drains by
     /// itself, conflicted does not, so it stays visible until someone acts on it.
     var conflictedOutboxCount = 0
+    /// How many mutations the drain gave up on (ADR 0006).
+    ///
+    /// The third of the three, and it behaves like the conflicted one rather than the pending one:
+    /// ``ShepherdCore/OutboxState/failed`` means retrying cannot help, so the number never falls
+    /// by itself — only a Retry or a Discard in Settings → Sync moves it. It is published here for
+    /// the same reason the other two are: a write that is never going to arrive has to be sayable
+    /// from a surface the user is already looking at, not only from the panel it was queued in.
+    var failedOutboxCount = 0
     /// Every inbox row the local database holds, for the surfaces that outlive a screen.
     ///
     /// This is the menu-bar quick inbox's source (`Features/MenuBar/`), and it is here rather
     /// than in the inbox for one reason: `InboxModel` is owned by `InboxScreen` and stops
     /// observing when that screen goes away — the review screen replaces it — while the menu-bar
     /// item has to keep its badge current whether or not the inbox, or any window, is on screen.
-    /// So the observation belongs to the session, exactly like the two outbox counts above.
+    /// So the observation belongs to the session, exactly like the three outbox counts above.
     ///
     /// It is the *same* source, not a second one: `observeInbox()` re-reads what the sync engine
     /// wrote, the menu bar has no fetch of its own and no sync of its own, and the counting and
@@ -71,6 +79,7 @@ final class SignedInSession {
     private var eventTask: Task<Void, Never>?
     private var outboxTask: Task<Void, Never>?
     private var conflictTask: Task<Void, Never>?
+    private var failedTask: Task<Void, Never>?
     private var inboxTask: Task<Void, Never>?
     private var issuesTask: Task<Void, Never>?
 
@@ -207,6 +216,13 @@ final class SignedInSession {
             }
         }
 
+        let failures = database.observeFailedOutboxCount()
+        failedTask = Task { [weak self] in
+            for await count in failures {
+                self?.failedOutboxCount = count
+            }
+        }
+
         let inbox = database.observeInbox()
         inboxTask = Task { [weak self] in
             for await rows in inbox {
@@ -272,6 +288,8 @@ final class SignedInSession {
         outboxTask = nil
         conflictTask?.cancel()
         conflictTask = nil
+        failedTask?.cancel()
+        failedTask = nil
         inboxTask?.cancel()
         inboxTask = nil
         issuesTask?.cancel()

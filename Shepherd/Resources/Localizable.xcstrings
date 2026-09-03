@@ -751,6 +751,46 @@
         }
       }
     },
+    "%lld given up on — they will not be retried.": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld aufgegeben – sie wird nicht erneut versucht."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld aufgegeben – sie werden nicht erneut versucht."
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld given up on — it will not be retried."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld given up on — they will not be retried."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld gone": {
       "localizations": {
         "de": {
@@ -1391,6 +1431,46 @@
         }
       }
     },
+    "%lld queued writes were given up on": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld eingereihte Änderung wurde aufgegeben"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld eingereihte Änderungen wurden aufgegeben"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld queued write was given up on"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld queued writes were given up on"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld reports stored; the %lld newest are kept.": {
       "localizations": {
         "de": {
@@ -1831,6 +1911,16 @@
         }
       }
     },
+    "1 queued write was given up on": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 eingereihte Änderung wurde aufgegeben"
+          }
+        }
+      }
+    },
     "1 report stored.": {
       "localizations": {
         "de": {
@@ -2211,6 +2301,16 @@
         }
       }
     },
+    "Add a label": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Label hinzufügen"
+          }
+        }
+      }
+    },
     "Add a rule to the repository's agent instructions (CLAUDE.md or AGENTS.md, whichever this repository has; if it has neither, say so in your final message instead of creating one) that prevents this recurring review finding:\n\n%@\n\nKeep it to one paragraph, in the file's existing voice. Change nothing else in this pull request.": {
       "localizations": {
         "de": {
@@ -2237,6 +2337,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vorlage hinzufügen"
+          }
+        }
+      }
+    },
+    "Add an assignee": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zuständige:n hinzufügen"
           }
         }
       }
@@ -3731,6 +3841,16 @@
         }
       }
     },
+    "Close an issue": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issue schließen"
+          }
+        }
+      }
+    },
     "Close as completed": {
       "localizations": {
         "de": {
@@ -3877,6 +3997,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Kommentar zu %@"
+          }
+        }
+      }
+    },
+    "Comment on an issue": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issue kommentieren"
           }
         }
       }
@@ -5181,6 +5311,16 @@
         }
       }
     },
+    "GitHub refused these writes, or Shepherd could not make them at all. Nothing about them changes by itself: retry one once you have fixed what stopped it, or discard it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub hat diese Änderungen abgelehnt, oder Shepherd konnte sie gar nicht erst senden. Von allein ändert sich daran nichts: Sende eine erneut, sobald du behoben hast, was sie verhindert hat, oder verwirf sie."
+          }
+        }
+      }
+    },
     "GitHub refuses an approval on a pull request you opened yourself.": {
       "localizations": {
         "de": {
@@ -6171,6 +6311,16 @@
         }
       }
     },
+    "Mark ready for review": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Als bereit für Review markieren"
+          }
+        }
+      }
+    },
     "Mark viewed": {
       "localizations": {
         "de": {
@@ -6851,6 +7001,16 @@
         }
       }
     },
+    "No reason was recorded.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kein Grund wurde festgehalten."
+          }
+        }
+      }
+    },
     "No reports stored yet.": {
       "localizations": {
         "de": {
@@ -7467,6 +7627,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Einstellungen → Delegation öffnen"
+          }
+        }
+      }
+    },
+    "Open Settings → Sync, where each one can be retried or discarded": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einstellungen → Sync öffnen, wo sich jede erneut senden oder verwerfen lässt"
           }
         }
       }
@@ -8131,6 +8301,16 @@
         }
       }
     },
+    "Queued writes Shepherd gave up on: GitHub refused them, or they could not be made at all. They are never retried by themselves — Settings → Sync lists each one and offers Retry or Discard.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eingereihte Änderungen, die Shepherd aufgegeben hat: GitHub hat sie abgelehnt, oder sie ließen sich gar nicht erst senden. Von allein werden sie nie erneut versucht — Einstellungen → Sync listet jede auf und bietet „Erneut senden“ und „Verwerfen“ an."
+          }
+        }
+      }
+    },
     "Queues a merge for each pull request that already carries an approval.": {
       "localizations": {
         "de": {
@@ -8461,6 +8641,16 @@
         }
       }
     },
+    "Reopen an issue": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issue wiedereröffnen"
+          }
+        }
+      }
+    },
     "Reopen queued.": {
       "localizations": {
         "de": {
@@ -8657,6 +8847,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Auflösen"
+          }
+        }
+      }
+    },
+    "Retry": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erneut senden"
           }
         }
       }

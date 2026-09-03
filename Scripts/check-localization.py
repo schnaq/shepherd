@@ -191,6 +191,7 @@ INTEGER_EXPRESSIONS = frozenset(
         "running.total",
         "section.count",
         "session.conflictedOutboxCount",
+        "session.failedOutboxCount",
         "session.pendingOutboxCount",
         "session.position",
         "session.remaining",

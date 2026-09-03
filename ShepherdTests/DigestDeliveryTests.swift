@@ -287,13 +287,40 @@ final class DigestDeliveryTests: XCTestCase {
                     items: []
                 ),
                 DigestReport.Section(kind: .parkedReviews, count: 1, items: []),
+                DigestReport.Section(kind: .failedWrites, count: 2, items: []),
             ]
         )
         XCTAssertEqual(
             DigestPresentation.summary(for: report),
             "4 new review requests · 2 green agent pull requests ready · "
-                + "1 of your pull requests needs attention · 1 queued review was not sent"
+                + "1 of your pull requests needs attention · 1 queued review was not sent · "
+                + "2 queued writes were given up on"
         )
+    }
+
+    func testAWriteTheOutboxGaveUpOnIsItsOwnDigestLine() throws {
+        // The digest runs while nobody is watching, and a failed write is the one outbox state
+        // that is certainly not going to fix itself — so it gets a line of its own rather than
+        // being summed into the parked one, which needs a different thing done about it.
+        let settings = armedSettings()
+        let harness = Harness()
+        harness.clock = moment(1, 9)
+        let coordinator = makeCoordinator(settings: settings, harness: harness)
+
+        let delivered = try XCTUnwrap(
+            coordinator.check(
+                source: {
+                    DigestInputs(
+                        pullRequests: [],
+                        parkedReviewCount: 1,
+                        failedWriteCount: 1
+                    )
+                }
+            )
+        )
+        XCTAssertEqual(delivered.sections.map(\.kind), [.parkedReviews, .failedWrites])
+        let payload = try XCTUnwrap(harness.posted.first)
+        XCTAssertTrue(payload.body.contains("1 queued write was given up on"))
     }
 
     func testAnEmptyReportProducesNoNotificationPayloadAtAll() {

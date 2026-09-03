@@ -1,4 +1,5 @@
 import ShepherdCore
+import ShepherdPersistence
 import SwiftUI
 
 /// The Settings window: Account, Sync, Replies, Agents, Intelligence, Delegation, Automation,
@@ -367,6 +368,14 @@ struct SyncSettingsTab: View {
     @Environment(AppEnvironment.self) private var environment
     /// The encrypted settings-sync model, owned by ``SettingsView``.
     let syncModel: SettingsSyncModel
+    /// The outbox rows the drain gave up on, listed one by one in the OUTBOX card.
+    ///
+    /// Fetched rather than observed, and keyed on ``SignedInSession/failedOutboxCount``, which is
+    /// observed: the count is the thing that changes, and re-reading a table of tens of rows when
+    /// it does is cheaper than a second `ValueObservation` on the same table. Retry and Discard
+    /// re-read it themselves as well, so the list is right immediately rather than one
+    /// observation hop later.
+    @State private var failedRows: [OutboxItem] = []
 
     var body: some View {
         SettingsPage {
@@ -430,15 +439,130 @@ struct SyncSettingsTab: View {
                                 localized: "These pull requests got new commits after the review was queued, so nothing was sent. Open each one and check your draft against the new commit."
                             ))
                         }
+                        failedOutboxGroup(session)
                         Button(String(localized: "Sync now")) {
                             Task { await environment.syncNow() }
                         }
                         .buttonStyle(SecondaryButtonStyle(height: 28))
                     }
                 }
+                .task(id: session.failedOutboxCount) { await reloadFailedRows(session) }
             }
 
             SettingsSyncSection(model: syncModel)
+        }
+    }
+
+    // MARK: - Rows the outbox gave up on
+
+    /// The failed rows, named one by one, each with Retry and Discard.
+    ///
+    /// The third outbox state and the only one this card can *do* anything about. A pending row
+    /// needs nothing but time and a parked one needs the pull request it was queued against — but
+    /// a failed row was refused in a way retrying cannot fix (a 4xx from GitHub, a port the app
+    /// never wired up), so it sits in the queue for ever and the click that produced it looked as
+    /// though it had worked. Retry is the user saying the obstacle is gone; Discard is them saying
+    /// it never mattered.
+    ///
+    /// It is a group of its own rather than another line beside the conflicted count for the same
+    /// reason: a count nobody can act on is a nag, and these rows are the only ones in the outbox
+    /// with an action attached. The conflicted line above is deliberately untouched — a parked
+    /// review is re-applied against the new commit from the pull request itself, not thrown back
+    /// at GitHub from a settings window.
+    @ViewBuilder
+    private func failedOutboxGroup(_ session: SignedInSession) -> some View {
+        if session.failedOutboxCount > 0 {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "xmark.octagon.fill")
+                    Text(String(
+                        localized: "\(session.failedOutboxCount) given up on — they will not be retried."
+                    ))
+                }
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Theme.failure)
+                .help(String(
+                    localized: "GitHub refused these writes, or Shepherd could not make them at all. Nothing about them changes by itself: retry one once you have fixed what stopped it, or discard it."
+                ))
+                ForEach(failedRows) { item in
+                    failedOutboxRow(item, session: session)
+                }
+            }
+        }
+    }
+
+    private func failedOutboxRow(_ item: OutboxItem, session: SignedInSession) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: "\(item.repo.fullName)#\(item.number) · \(Self.actionName(item.action))")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Theme.textSecondary)
+                Text(item.lastError ?? String(localized: "No reason was recorded."))
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textMuted)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Button(String(localized: "Retry")) {
+                Task {
+                    try? await session.database.retryOutboxItem(id: item.id)
+                    await reloadFailedRows(session)
+                    await session.drainOutbox()
+                    await reloadFailedRows(session)
+                }
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 11))
+            .foregroundStyle(Theme.accentText)
+            Button(String(localized: "Discard")) {
+                Task {
+                    try? await session.database.deleteOutboxItem(id: item.id)
+                    await reloadFailedRows(session)
+                }
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 11))
+            .foregroundStyle(Theme.accentText)
+        }
+    }
+
+    /// Re-reads the failed rows.
+    ///
+    /// `@MainActor` for the reason ``ClosingIssuesCard/openOnGitHub(_:)`` is: every caller is a
+    /// view body or a button's action, which is main-actor isolated already, and the session it
+    /// reads the database off is a main-actor type.
+    @MainActor
+    private func reloadFailedRows(_ session: SignedInSession) async {
+        // A read failure answers "nothing to list", which is the same answer an empty outbox
+        // gives; the standing count above is the record.
+        failedRows = (try? await session.database.failedOutboxItems()) ?? []
+    }
+
+    /// What one queued write would have done, in the user's words.
+    ///
+    /// An exhaustive switch over ``ShepherdCore/OutboxAction`` rather than its `kind`
+    /// discriminator: that string is a database column and a log token ("markReadyForReview"), and
+    /// a settings window is not the place to read one. A case added to the action is a compile
+    /// error here, which is the point.
+    ///
+    /// Not `private` so `OutboxSurfacesTests` can hold it to that: every case named, no case
+    /// falling back to the discriminator.
+    /// - Parameter action: The queued write.
+    /// - Returns: What it would have done, as a short phrase.
+    static func actionName(_ action: OutboxAction) -> String {
+        switch action {
+        case .submitReview: return String(localized: "Submit review")
+        case .replyToComment: return String(localized: "Reply")
+        case .resolveThread: return String(localized: "Resolve")
+        case .unresolveThread: return String(localized: "Unresolve")
+        case .merge: return String(localized: "Merge")
+        case .markReadyForReview: return String(localized: "Mark ready for review")
+        case .addIssueComment: return String(localized: "Comment on an issue")
+        case .addIssueLabel: return String(localized: "Add a label")
+        case .addIssueAssignee: return String(localized: "Add an assignee")
+        case .closeIssue: return String(localized: "Close an issue")
+        case .reopenIssue: return String(localized: "Reopen an issue")
         }
     }
 

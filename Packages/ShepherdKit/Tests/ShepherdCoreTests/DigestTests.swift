@@ -70,6 +70,7 @@ final class DigestTests: XCTestCase {
         _ rows: [PullRequestSummary],
         issues: [IssueRowSummary] = [],
         parked: Int = 0,
+        failed: Int = 0,
         windowStart: TimeInterval = -3_600,
         now: TimeInterval = 0
     ) -> DigestReport {
@@ -77,6 +78,7 @@ final class DigestTests: XCTestCase {
             pullRequests: rows,
             issues: issues,
             parkedReviewCount: parked,
+            failedWriteCount: failed,
             windowStart: Fixtures.date(windowStart),
             now: Fixtures.date(now)
         )
@@ -256,6 +258,31 @@ final class DigestTests: XCTestCase {
         XCTAssertNil(report([], parked: 0).section(.parkedReviews))
     }
 
+    // MARK: - Writes the outbox gave up on
+
+    func testWritesGivenUpOnAreCountedWithoutNamingAnything() throws {
+        let section = try XCTUnwrap(report([], failed: 2).section(.failedWrites))
+        XCTAssertEqual(section.count, 2)
+        XCTAssertTrue(section.items.isEmpty)
+        XCTAssertEqual(section.overflow, 0)
+    }
+
+    func testNoFailedWritesMeansNoLineAboutThem() {
+        XCTAssertNil(report([], failed: 0).section(.failedWrites))
+    }
+
+    func testParkedAndGivenUpOnAreTwoLinesRatherThanOne() throws {
+        // They are different answers to "what happened to my write": a parked one still has a
+        // draft to re-apply against the new commit, a failed one was refused outright. Summing
+        // them into "3 not sent" would tell the user to do the wrong thing about two of them.
+        let built = report([], parked: 1, failed: 2)
+        let parked = try XCTUnwrap(built.section(.parkedReviews))
+        let failed = try XCTUnwrap(built.section(.failedWrites))
+        XCTAssertEqual(parked.count, 1)
+        XCTAssertEqual(failed.count, 2)
+        XCTAssertEqual(built.totalCount, 3)
+    }
+
     // MARK: - Order
 
     func testTheSectionsAreAlwaysInTheSameOrder() {
@@ -277,7 +304,7 @@ final class DigestTests: XCTestCase {
             ),
         ]
         XCTAssertEqual(
-            report(rows, issues: issues, parked: 1).sections.map(\.kind),
+            report(rows, issues: issues, parked: 1, failed: 1).sections.map(\.kind),
             [
                 .newReviewRequests,
                 .issuesAssignedToYou,
@@ -285,6 +312,7 @@ final class DigestTests: XCTestCase {
                 .agentPullRequestsThatClosedAnIssue,
                 .ownPullRequestsNeedingAttention,
                 .parkedReviews,
+                .failedWrites,
             ]
         )
     }
