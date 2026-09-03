@@ -303,6 +303,10 @@ protocol IntelligenceProvider: Sendable {
   // cannot stream inherits a default implementation that yields the finished answer once.
   func streamReviewSummaryDraft(_: ReviewSummaryDraftRequest) -> AsyncThrowingStream<String, Error>
   func streamInlineCommentDraft(_: InlineCommentDraftRequest) -> AsyncThrowingStream<String, Error>
+  // The third drafting surface (plan §3.D): the same windowed excerpt as an inline draft, a
+  // different instruction, and an answer in `Locale.current`'s language. Streamed only — there is
+  // no awaited twin — so the protocol's default implementation *refuses* rather than wrapping one.
+  func streamExplanation(_: ExplainSelectionRequest) -> AsyncThrowingStream<String, Error>
 }
 ```
 
@@ -385,7 +389,8 @@ frameworks are.
   the harness contract: fixture shapes, how to run it, and why it is not in CI.
 
 Both drafting surfaces prefer the **streamed** path. `IntelligenceRouter.streamReviewSummaryDraft`
-/ `streamInlineCommentDraft` return an `IntelligenceStream` — the tier plus the stream — inside an
+/ `streamInlineCommentDraft` — and `streamExplanation`, which runs the same ladder because it sends
+the same excerpt — return an `IntelligenceStream` — the tier plus the stream — inside an
 `IntelligenceStreamOutcome` whose three failure shapes convert back into the ordinary
 `IntelligenceOutcome`, so the field has one way of saying "no draft, and here is why". The router
 awaits the tier's *first* element before answering: that is what keeps the cloud → on-device
@@ -400,6 +405,15 @@ replace/append question is asked **once, before the request is made**, the growi
 cumulatively, the caption is up before the first token and stays until the reviewer's first
 keystroke, a keystroke during a stream takes the field away from it, and a cancelled stream keeps
 what arrived (still labelled).
+
+`ExplainSelectionState` (`Features/Review/ExplainSelectionPopover.swift`) is the same idea for the
+explain-a-selection popover and deliberately *not* a mode of `AIDraftFieldState`: an explanation is
+prose in a read-only popover, so it can keep a partial answer **and** the reason a stream failed
+side by side, where a field holding editable text can only sensibly show one of them. Its stop keeps
+what arrived, its Escape does not (a dismissed popover is a withdrawn question), and the one thing
+it produces is a string — `InlineCommentComposer` hands that to `AIDraftFieldState.finish(_:existingText:)`
+as the outcome a draft would have produced, which is what makes "Turn into a comment" obey the
+replace/append rule and the caption without a second copy of either.
 
 ### The tool loop (app target)
 

@@ -135,6 +135,36 @@ Additive again, and again inside the decision above: the three tiers, the provid
 Consequence: a new drafting surface now has a streamed twin to implement as well — or it can
 inherit the single-element default and be indistinguishable from today's behaviour.
 
+## Amendment (2026-09-03): explaining a selection
+
+Additive, and the smallest of these amendments: the tiers, the provider protocol's place in the
+design, the host list and the privacy line are all unchanged. A **third drafting surface** joins the
+two above (`docs/plans/apple-intelligence-v2.md` §3.D) — *explain the lines I selected* — and it is
+inside this decision rather than beside it because it carries **exactly the context an inline
+comment draft carries**: the same `InlineCommentDraftBuilder` window, cut against the same tier
+budget, with the anchored lines still the last thing surrendered. Nothing new travels, so nothing
+new has to be stated: the sentence in `CONTRIBUTING.md`'s host list about a diff excerpt reaching
+the endpoint the user configured covers explanations with one added clause. Tier 2 first and tier 3
+allowed, for that reason and no other.
+
+Two things are new, and both are about the reviewer rather than about the data. The instruction asks
+for three to six sentences of plain language **in `Locale.current`'s language**, named in the prompt
+as a word ("German") rather than as a tag, so a German reviewer reads German whichever tier
+answered. And the answer is not a draft: it is prose in a popover, with the tier named on it
+(*Explained on-device*), and the single way out of that popover into anything editable is a
+**Turn into a comment** button that hands the text to `AIDraftFieldState` — so the replace-or-append
+question, the caption and the "it stops being a draft on your first keystroke" rule apply to an
+explanation exactly as they do to a draft, without a second implementation of any of them.
+
+**The non-goal is unchanged and, here, has one fewer path to guard:** the popover has no route to
+`submitReview`, to the outbox or to a saved draft comment, and the explanation does not become a
+comment at all until the reviewer presses the button and then presses *Add comment*.
+
+Consequence: the protocol gained one requirement (`streamExplanation(_:)`) whose default
+implementation **refuses**, unlike the two drafting streams' defaults, because an explanation has no
+awaited twin to wrap — and a tier answering without one would be indistinguishable from a tier that
+had.
+
 ## Consequences
 
 - No feature may hard-depend on an LLM; every AI surface needs a heuristic-only fallback state.

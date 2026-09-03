@@ -335,6 +335,26 @@ story with one line of the provider's own words under the field.
 Nothing is ever submitted for you — Shepherd has no path from generated text to GitHub that does
 not go through your click.
 
+### Explain these lines
+
+Select lines in the diff and the comment composer that opens carries an **Explain** action (⌥E)
+beside the ✨ button. A popover answers what the change does and what it touches, in three to six
+sentences of plain language, **in your own language** — a German reviewer reads German, because the
+instruction names the language rather than hoping the model guesses. The sentences arrive as they
+are written, under the tier that is writing them, and the finished answer keeps that line
+(*Explained on-device*), so "did these lines leave my Mac?" has an answer you can read rather than
+one you have to infer.
+
+It sends exactly what an inline draft sends: the same windowed diff excerpt around the lines you
+picked, capped against the same token budget, so tier 2 answers it on your Mac and tier 3 only
+where you configured a key yourself.
+
+It explains, it does not review. There is one button — **Turn into a comment** — and it writes the
+explanation into the inline-comment field through the same rules as any draft: labelled until your
+first keystroke, and never over text you had already typed without asking whether to replace or
+append. Stop keeps the sentences that arrived; Escape closes the popover and throws them away.
+Nothing is saved and nothing is sent until you add the comment yourself.
+
 ---
 
 ## Sync & privacy

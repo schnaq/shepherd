@@ -123,7 +123,10 @@ bumping a dependency that ships inside the app also means a line in
     they chose themselves (a preset's base URL is still their choice). What travels there is the
     tier-1 digest — title, description excerpt, file list, top hunks — and, when you use AI
     drafting (ADR 0007 amendment), the diff excerpt around the line you are commenting on plus
-    the inline comments already in your pending review. So: yes, pull-request *code* reaches that
+    the inline comments already in your pending review — and, when you ask that endpoint to
+    **explain** a selection, that same diff excerpt and nothing else, cut by the same builder
+    against the same budget (ADR 0007's 2026-09-03 amendment), so an explanation sends no kind of
+    content a drafted comment does not. So: yes, pull-request *code* reaches that
     endpoint, only that endpoint, only for the pull request you are looking at, and only after you
     configured it and clicked. Everything is capped against an explicit token budget before it is
     sent. When a cloud provider answers *"why is CI red?"*, what travels is the failing checks'
