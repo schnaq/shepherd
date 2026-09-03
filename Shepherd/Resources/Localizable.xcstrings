@@ -1661,6 +1661,16 @@
         }
       }
     },
+    "Apple Intelligence is not available on this Mac.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apple Intelligence ist auf diesem Mac nicht verfügbar."
+          }
+        }
+      }
+    },
     "Apple Intelligence is turned off in System Settings.": {
       "localizations": {
         "de": {
@@ -4137,6 +4147,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Intelligenz"
+          }
+        }
+      }
+    },
+    "Intelligence is switched off in Shepherd's settings.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Intelligenz ist in Shepherds Einstellungen ausgeschaltet."
           }
         }
       }
@@ -7171,6 +7191,16 @@
         }
       }
     },
+    "Shepherd has not fetched this pull request yet — open it once in the app.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd hat diesen Pull Request noch nicht geladen — öffne ihn einmal in der App."
+          }
+        }
+      }
+    },
     "Shepherd has not fetched this pull request yet, so there is nothing to draft a brief from.": {
       "localizations": {
         "de": {
@@ -7761,6 +7791,26 @@
         }
       }
     },
+    "Summarise Pull Request": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pull Request zusammenfassen"
+          }
+        }
+      }
+    },
+    "Summarise a review": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review zusammenfassen"
+          }
+        }
+      }
+    },
     "Summarise this thread on this Mac": {
       "localizations": {
         "de": {
@@ -8307,6 +8357,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Das Objekt im Bucket ist kein Shepherd-Einstellungs-Envelope."
+          }
+        }
+      }
+    },
+    "The on-device model had nothing to say about this one.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das On-Device-Modell hatte dazu nichts zu sagen."
           }
         }
       }

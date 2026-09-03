@@ -293,9 +293,22 @@ struct IntelligenceRouter: Sendable {
     }
 
     /// Summarises a pull request.
-    /// - Parameter detail: The fetched pull request.
-    func summary(for detail: PullRequestDetail) async -> IntelligenceOutcome<PRSummary> {
-        await run(detail: detail) { provider, digest in
+    ///
+    /// - Parameters:
+    ///   - detail: The fetched pull request.
+    ///   - onDeviceOnly: Whether the cloud rung may see this request at all. The default keeps
+    ///     the review screen's own call on the full ladder; `true` is the same *rule* — not a
+    ///     preference — that ``streamAgentBrief(for:digest:viewerLogin:)`` applies for a
+    ///     colleague's comment, and the App Intents surface passes it (plan §3.H): an intent
+    ///     runs with no review screen and no human to fall back to, so tier 2 is the ceiling
+    ///     there (ADR 0007's "unattended means on-device only"). Expressing it as a ladder that
+    ///     skips the rung is a stronger guarantee than a caller remembering to check the mode.
+    /// - Returns: The summary, or why there is none.
+    func summary(
+        for detail: PullRequestDetail,
+        onDeviceOnly: Bool = false
+    ) async -> IntelligenceOutcome<PRSummary> {
+        await run(detail: detail, allowsCloud: !onDeviceOnly) { provider, digest in
             try await provider.summarizePullRequest(digest)
         }
     }
@@ -830,11 +843,17 @@ struct IntelligenceRouter: Sendable {
     }
 
     /// Runs an operation that needs a digest, building one per tier's budget.
+    /// - Parameters:
+    ///   - detail: The fetched pull request the digest is built from.
+    ///   - allowsCloud: Whether the cloud rung may see this request at all — passed straight
+    ///     through to ``run(allowsCloud:operation:)``.
+    ///   - operation: How one tier is asked, given the digest built for its budget.
     private func run<Value: Sendable & Hashable>(
         detail: PullRequestDetail,
+        allowsCloud: Bool = true,
         operation: @Sendable (any IntelligenceProvider, PullRequestDigest) async throws -> Value
     ) async -> IntelligenceOutcome<Value> {
-        await run { provider, budget in
+        await run(allowsCloud: allowsCloud) { provider, budget in
             try await operation(provider, PullRequestDigestBuilder.build(from: detail, budget: budget))
         }
     }
@@ -845,14 +864,22 @@ struct IntelligenceRouter: Sendable {
     /// is the one thing that genuinely differs between the tiers — the cloud tier sees a large
     /// context, the on-device tier a small one, and every request type caps itself against the
     /// budget it is given.
+    /// - Parameters:
+    ///   - allowsCloud: Whether the cloud rung may see this request at all. The mirror of
+    ///     ``runStream(allowsCloud:operation:)``'s parameter and there for the same reason: `false`
+    ///     is a rule rather than a preference, so a request that may not travel is never *offered*
+    ///     to a provider instead of being asked nicely not to look. Defaulted, so every existing
+    ///     call site keeps the full ladder unchanged.
+    ///   - operation: How one tier is asked, given its token budget.
     private func run<Value: Sendable & Hashable>(
+        allowsCloud: Bool = true,
         operation: @Sendable (any IntelligenceProvider, TokenBudget) async throws -> Value
     ) async -> IntelligenceOutcome<Value> {
         guard isEnabled else { return .disabled }
 
         var lastFailure: String?
 
-        if let cloud = cloudProvider {
+        if allowsCloud, let cloud = cloudProvider {
             do {
                 return .value(
                     IntelligenceOutput(

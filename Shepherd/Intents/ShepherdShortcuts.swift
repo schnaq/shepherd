@@ -8,13 +8,21 @@ import Foundation
 /// installed. Every phrase must contain `\(.applicationName)`; that is a system requirement and
 /// also the right thing, because "sync" on its own belongs to no app.
 ///
-/// Four, deliberately. The list is what a user would want *without being asked to configure
+/// Five, deliberately. The list is what a user would want *without being asked to configure
 /// anything*, and every entry on it is navigation or a read:
 ///
 /// - the review queue, which is the app's whole reason for existing;
 /// - the count, the one thing worth having as a spoken answer rather than a window;
 /// - a sweep, the equivalent of ⌘R;
-/// - the focus session, the one command that does something a click cannot do faster.
+/// - the focus session, the one command that does something a click cannot do faster;
+/// - the summary of the next review (plan §3.H), the second thing worth *hearing* rather than
+///   reading — and the only phrase here that runs a model, on-device only.
+///
+/// The phrases are English, including both spellings of *summarise*, because Siri matches a phrase
+/// literally and a user who says "summarize" is asking for the same thing. German phrases are the
+/// `AppShortcuts.xcstrings` follow-up ADR 0022 lists in the roadmap, not a row in
+/// `Localizable.xcstrings`; until then the English phrases work on a German Mac, because Siri
+/// matches them by the app's name.
 ///
 /// Nothing that writes to GitHub is here, and nothing that writes to GitHub exists as an intent at
 /// all — see the note in `ShepherdIntents.swift` and ADR 0021. A Siri phrase that could approve a
@@ -54,6 +62,19 @@ struct ShepherdShortcuts: AppShortcutsProvider {
             ],
             shortTitle: "Review session",
             systemImageName: "play.circle"
+        )
+        AppShortcut(
+            // No pull request pre-filled: the phrase says "my next review", and the intent's
+            // optional parameter is what turns that into the top of the review queue while the
+            // same action still takes an entity a shortcut hands it (plan §3.H).
+            intent: SummarizePullRequestIntent(pullRequest: nil),
+            phrases: [
+                "Summarise my next review in \(.applicationName)",
+                "Summarize my next review in \(.applicationName)",
+                "What's my next review about in \(.applicationName)",
+            ],
+            shortTitle: "Summarise a review",
+            systemImageName: "sparkles"
         )
     }
 }

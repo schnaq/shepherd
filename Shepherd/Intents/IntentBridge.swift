@@ -45,6 +45,39 @@ enum IntentBridge {
         guard let session = environment.session else { throw IntentFailure.notSignedIn }
         return (environment, session)
     }
+
+    /// The seam ``SummarizePullRequestIntent`` summarises through (plan §3.H).
+    ///
+    /// Built here, on the main actor, out of the three pieces the intent needs and *as values*:
+    /// the router is a `Sendable` snapshot of today's settings and the database is a `Sendable`
+    /// class, so the closure the summarizer holds never reaches back into ``AppEnvironment`` from
+    /// whatever task the system runs the intent on. The same shape, and the same reason, as
+    /// ``AppEnvironment/agentBriefDrafter()``.
+    ///
+    /// The router is handed over already pinned to tier 2 by
+    /// ``PullRequestSummarizer/live(router:detail:)`` — there is no argument an intent could pass
+    /// to widen that.
+    /// - Returns: The summarizer.
+    static func requireSummarizer() throws -> PullRequestSummarizer {
+        let (environment, session) = try requireSession()
+        let database = session.database
+        return PullRequestSummarizer.live(
+            router: environment.intelligence,
+            detail: { prID in
+                // `detailFetchedAt` is the one column a detail fetch sets and a sweep does not,
+                // so it is the honest answer to "has this pull request been opened once". Without
+                // it the row is still *there* — a sweep writes an inbox row with no body, no diff
+                // and no checks — and a digest built from a title alone would produce two
+                // confident sentences about nothing. The intent says what is missing instead, and
+                // it does not fetch: rate limit is not something a voice request may spend.
+                guard let stamps = try? await database.detailFetchTimestamps(),
+                      stamps[prID] != nil,
+                      let detail = try? await database.fetchPullRequestDetail(id: prID)
+                else { return nil }
+                return detail
+            }
+        )
+    }
 }
 
 extension AppEnvironment {
