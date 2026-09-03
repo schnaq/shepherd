@@ -220,10 +220,14 @@ Pure logic in `ShepherdCore` (all unit-tested):
 
 Tables mirror core models (`repos`, `pull_requests`, `changed_files`, `review_threads`,
 `review_comments`, `review_drafts`, `draft_comments`, `check_runs`, `sync_state`, `outbox`,
-`etags`, `viewed_files`, `agent_registry_overrides`, `search_index`). Append-only migrator —
-currently `v1`, `v2` and `v3` (the search index, ADR 0019: one row per pull request holding the
-document hash, the model identifier and a `Float32` vector, pruned by an `ON DELETE CASCADE` onto
-`pull_requests` rather than by a sweep of its own). `ValueObservation`
+`etags`, `viewed_files`, `agent_registry_overrides`, `search_index`, `triage_verdicts`).
+Append-only migrator — currently `v1`, `v2`, `v3` and `v4`. `v3` is the search index (ADR 0019: one
+row per pull request holding the document hash, the model identifier and a `Float32` vector, pruned
+by an `ON DELETE CASCADE` onto `pull_requests` rather than by a sweep of its own); `v4` is
+`triage_verdicts` (ADR 0023: one row per pull request holding `kind`, `risk`, the one-sentence
+`reason`, the same `documentHash` gate, the model identifier and `classifiedAt`, pruned by the same
+cascade — deliberately the search index's shape, because the two rows answer the same two questions
+about the same pull request). `ValueObservation`
 publishers feed the UI. The **outbox** stores every outbound mutation (submit review, reply,
 resolve, merge) as a row with retry/backoff state so writes survive crash/offline.
 
@@ -974,6 +978,43 @@ key — and everything it decides is the pure `ShepherdCore/Search/` trio above.
 - Device state versus setting, once more: the switch travels in the encrypted settings document
   (`search` group, both applier directions), the index does not — it is rebuildable from local
   rows, and it is dropped with the rest of the local data on sign-out.
+
+### Structured triage (on-device, ADR 0023)
+
+Every pull request in the inbox gets one generated verdict — `kind`, `risk`, one sentence — and
+three surfaces may read it: the chip on the inbox row, the RISK facet in the rail, and ⌘K's
+`risk:`/`kind:` tokens. All three sort or filter a list a human then looks at, which is the whole of
+what a verdict is allowed to do.
+
+- **`TriageClassifying`** is the seam and `OnDeviceTriageClassifier` is its one implementation: the
+  `.contentTagging` system model, `@Generable` enums so the vocabulary is enforced by guided
+  decoding, low temperature, a measured pre-flight, and the two `IntelligenceError` cases for a
+  guardrail refusal and a context overflow. **There is deliberately no cloud implementation and
+  there may not be one** — the pass is unattended, and ADR 0007's tier-3 argument (a human clicked,
+  on one pull request, and can see the answer) covers none of it. The `Codable` twin
+  (`ShepherdCore/Intelligence/IntelligenceOutputs.swift`) is what the UI and the database see.
+- **`TriageCoordinator`** (`@MainActor`, `Features/Triage/`) runs the passes on the same
+  `onInboxRows` callback automatic merging, the Spotlight export and the search index use. It is a
+  *peer* of `SearchIndexCoordinator`, not a step inside it: chaining it to the end of an indexing
+  pass would have been cheaper, but with semantic search switched off that pass composes documents
+  from inbox rows alone, so triage would quietly start classifying titles because a different
+  feature's toggle moved. Both staleness gates are ADR 0019's — the in-memory `sourceFingerprint`
+  decides whether a diff is read out of SQLite at all, the persisted `documentHash` decides whether
+  a *generation* is spent — and the pass is batched at twenty for the read, sequential for the
+  generations, `.utility` priority, cancellable, with mid-pass rows merged per pull request.
+- **The tier-1 half needs no model and is what the feature degrades to.**
+  `ShepherdCore/Triage/TriageInput.swift` turns `FilePrioritizer`'s reasons into the hint sentences
+  that go *into* the prompt and into a heuristic risk level read straight off its buckets. A pull
+  request with no stored diff has no risk at all rather than a default one. So the rail keeps a RISK
+  section with Apple Intelligence off, and its tooltip says how much of a count is the model's.
+- **Nothing else may read a verdict**, and that is a test rather than a comment:
+  `StructuredTriageTests.testNoAutomationInputCanSeeAVerdict` walks the inputs of `BulkTriagePlan`,
+  `AutoMergePolicy` and `AutoDelegationPolicy` reflectively and fails when any value reachable from
+  them is a triage type.
+- Device state versus setting, once more: the switch travels in the encrypted settings document
+  (`intelligence.structuredTriageEnabled`, both applier directions), the verdicts do not — they are
+  rebuildable from local rows, they are emptied when the switch goes off, and they go with the rest
+  of the local data on sign-out.
 
 ### In-app updates (ADR 0010)
 

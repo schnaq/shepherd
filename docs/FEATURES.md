@@ -68,6 +68,31 @@ The index is on by default — it is built from data you already have and costs 
 CPU — and Settings → Intelligence shows what it holds, with a *Rebuild index* button and a switch.
 Switching it off empties it.
 
+### What kind of change is this, and how much can it hurt
+
+Every pull request in the inbox carries a chip: `fix · risk high`. Click it and a popover gives you
+the one sentence behind it — "touches the auth middleware and deletes two tests" — plus the line
+that matters most about it: *classified on this Mac, nothing was sent anywhere.* The rail gains a
+RISK section that filters the list to what is high, medium or low, and ⌘K understands `risk:high`
+and `kind:dependency` as filters beside everything it already searches.
+
+The verdict is Apple's on-device model reading the same local search document ⌘K uses, plus the risk
+hints Shepherd works out from the diff by itself. It runs in the background while the inbox syncs,
+one pull request at a time, and only for a pull request whose text actually changed since the last
+time — so a sweep that changed nothing costs nothing.
+
+**It sorts, it never approves.** No rule engine can read a verdict: bulk triage, automatic merging
+and automatic delegation take pull-request rows and your own rules, and there is no path from a
+generated classification to a button, a merge or an agent. That is a rule with a test behind it —
+adding a verdict to any of those inputs fails CI ([ADR 0023](adr/0023-structured-triage.md)).
+
+Because it runs unattended there is deliberately **no cloud option**, not even with a key
+configured: a background pass over every pull request in your inbox is not something to send to a
+third party. With Apple Intelligence off — or on a Mac whose tagging model is not there — the chip
+and the facet fall back to the risk hints Shepherd computes without any model at all ("touches
+auth", "deletes tests", "only a lockfile"), and Settings → Intelligence says so in one line. The
+switch is under Semantic Search, on by default, and switching it off deletes every stored verdict.
+
 ### A morning digest, built on your Mac
 
 Switch it on and once a day — nine o'clock by default, weekdays only if you like — Shepherd tells

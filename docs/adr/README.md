@@ -28,6 +28,7 @@ founder interview (2026-08-31) combined with three research reports (see
 | 0020 | [Apple-native text intelligence: Writing Tools + on-device translation](0020-apple-native-text-intelligence.md) | Accepted (v1.x) |
 | 0021 | [App Intents for Shortcuts and Siri, pull requests in Spotlight](0021-app-intents-and-spotlight.md) | Accepted (v1.x) |
 | 0022 | [German localisation through one String Catalog, with a Python gate in CI](0022-german-localisation.md) | Accepted (v1.x) |
+| 0023 | [Structured triage: one on-device verdict per pull request](0023-structured-triage.md) | Accepted (v1.x) |
 
 Format: lightweight [MADR](https://adr.github.io/madr/)-style — Context, Decision, Consequences.
 New decisions get the next number; superseded ADRs are marked, never deleted.

@@ -250,12 +250,14 @@ short form.
       hop shown as a step the reviewer can expand. Read-only by construction: the tools are
       `GitHubKit` reads, there is no tool that writes, and the answer is text in a card, not an
       action. Fits ADR 0011 too — the same summary makes a good delegation task
-- [ ] Structured triage classification — a `@Generable` verdict per pull request (kind:
+- [x] Structured triage classification (ADR 0023) — a `@Generable` verdict per pull request (kind:
       feature / fix / chore / dependency bump; risk: low / medium / high, with the one-sentence
       reason) computed on-device from the ADR 0019 search document, stored beside the vector, and
-      exposed as an inbox facet and a ⌘K filter. Never sent anywhere, never decides anything:
-      it sorts, it does not approve (non-goal). The on-device model is the ceiling here — when it
-      is unavailable the facet is simply absent, there is no cloud fallback for a bulk pass
+      exposed as an inbox chip, a rail facet and the ⌘K `risk:`/`kind:` filters. Never sent
+      anywhere, never decides anything: it sorts, it does not approve (non-goal), and a test over
+      the rules engines' inputs enforces it. The on-device model is the ceiling here — there is no
+      cloud fallback for a bulk pass, and without a model the facet falls back to the tier-1 risk
+      hints
 - [ ] Streaming drafts — the ✨ draft (ADR 0007 amendment) arrives token by token in the composer
       instead of after a spinner, through `LanguageModelSession.streamResponse` for tier 2 and the
       SSE variants of the tier-3 providers; still labelled until edited, still asks before
