@@ -373,6 +373,31 @@ story with one line of the provider's own words under the field.
 Nothing is ever submitted for you — Shepherd has no path from generated text to GitHub that does
 not go through your click.
 
+### Why is CI red?
+
+A red check gets a **Why?** button, and the card under the checks list answers it: the failing
+test, the `file:line` it points at — a link, when that file is in the diff — a one-line hypothesis
+and how sure the model says it is, under the caption naming the tier that answered
+(*Diagnosed on-device*).
+
+The card shows its work. Every step the model took expands to **exactly what it was given**:
+*read the failing checks · read the last lines of a job log · read the diff of one file*, with the
+log tail and the diff window verbatim underneath. So the answer is a claim you can check in five
+seconds rather than a guess with a confidence label on it.
+
+It only reads. The model gets three tools and there is no fourth: the failing check runs, the tail
+of one job log, the diff of one changed file — and it can only ask for a file this pull request
+actually changed. Shepherd reduces the log on your Mac first (the error and failure lines with
+their context, repeats dropped, capped against the tier's budget), so what a model sees is never a
+raw megabyte of `xcodebuild` output. A check that is not a GitHub Actions job — Buildkite,
+CircleCI — has no log to read, and the card says so instead of guessing.
+
+The on-device model answers it. When the log does not fit, the card offers **one** button —
+*Ask <provider> with the full log?* — and only if you configured a key; that click is the
+only way a CI log reaches your endpoint, and without a key the card simply says the log did not fit.
+One more button, **Draft an agent brief**, opens the delegation sheet with the finding filled in —
+and Run is still your click ([ADR 0024](adr/0024-tool-calling-ci-diagnosis.md)).
+
 ### Explain these lines
 
 Select lines in the diff and the comment composer that opens carries an **Explain** action (⌥E)

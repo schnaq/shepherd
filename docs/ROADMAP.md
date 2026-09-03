@@ -244,12 +244,15 @@ groundwork, delivery order, APIs, budgets, guardrails and the ADRs each item nee
 [`docs/plans/apple-intelligence-v2.md`](plans/apple-intelligence-v2.md); the list below stays the
 short form.
 
-- [ ] "Why is CI red?" — Foundation Models **tool calling** on the review screen: the model gets
-      three read-only tools (the failing check runs, the tail of a job log, the diff of one file)
-      and answers with the failing test, the line it points at, and a one-line hypothesis, each
-      hop shown as a step the reviewer can expand. Read-only by construction: the tools are
-      `GitHubKit` reads, there is no tool that writes, and the answer is text in a card, not an
-      action. Fits ADR 0011 too — the same summary makes a good delegation task
+- [x] "Why is CI red?" (ADR 0024) — Foundation Models **tool calling** on the review screen: the
+      model gets three read-only tools (the failing check runs, the tail of a job log reduced by
+      the pure `LogDigest`, the diff of one file) and answers with the failing test, the line it
+      points at, and a one-line hypothesis, each hop shown as a step the reviewer can expand to
+      exactly what the model was given. Read-only by construction: the tools are `GitHubKit` and
+      GRDB reads, there is no tool that writes, a `fileDiff` path must be one the pull request
+      changed, and the answer is a card, not an action. The on-device tier answers it; the log
+      reaches a configured endpoint only through the card's own explicit button. Fits ADR 0011 too
+      — one click hands the finding to the delegation brief, and Run stays the reviewer's
 - [x] Structured triage classification (ADR 0023) — a `@Generable` verdict per pull request (kind:
       feature / fix / chore / dependency bump; risk: low / medium / high, with the one-sentence
       reason) computed on-device from the ADR 0019 search document, stored beside the vector, and

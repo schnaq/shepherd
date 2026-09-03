@@ -207,6 +207,14 @@ Pure logic in `ShepherdCore` (all unit-tested):
     `POST /pulls/{n}/reviews` with full `comments` array; maps verdict to `event`
   - `replyToComment/resolveThread/unresolveThread/mergePullRequest/markReadyForReview…`
   - `notifications(since:) async throws -> (items, pollInterval)` — honors `X-Poll-Interval`
+  - `jobLog(repo:jobID:) async throws -> String` — `GET /actions/jobs/{id}/logs` for "why is CI
+    red?" (ADR 0024). GitHub answers `302` to a short-lived, self-signed blob URL on its own
+    storage host: the redirect is followed **once**, the bearer token is *not* sent to the blob
+    host (a transport that follows redirects itself is answered from the body it already has), the
+    body is capped at `maximumJobLogBytes` (2 MB) with `GitHubError.responseTooLarge` beyond it,
+    and it is decoded UTF-8 lossily. Deliberately **not** ETag-cached — the URL is keyed by an
+    immutable job id, so every entry would be an unreachable row holding a megabyte, which is why
+    `cacheKey(for:)` refuses `/check-runs` too.
 - `DeviceFlowAuthenticator` — device-code request, user-code presentation callback, poll loop
   with `interval`/`slow_down` handling, returns `TokenSet`; `TokenRefresher` for GitHub App
   refresh tokens.
@@ -371,8 +379,11 @@ frameworks are.
   fixture tests, because a schema an endpoint dislikes fails on the user's Mac otherwise.
 - **`IntelligenceTrace`/`IntelligenceTraceStep`** are what the review screen renders as
   expandable steps: tool, arguments rendered for display (sorted by name, so a row reads the same
-  every time), the tool's summary line, duration and ordering. Appending assigns the order.
-  Stored nowhere, and deliberately holds the *summary* rather than the content.
+  every time), the tool's summary line, duration, ordering — and `resultContent`, the **budgeted**
+  text the model was handed, which is what makes an expanded step show what the model saw rather
+  than a re-description of it (ADR 0024). Appending assigns the order, and the
+  `append(tool:call:result:duration:)` overload every tier's loop uses is the one place the content
+  enters. Stored nowhere: the trace lives with the card and is thrown away with it.
 - **The twins** are the `Codable` values the UI and the database see: `TriageVerdict`
   (`Kind`/`Risk` + one-sentence reason), `CIDiagnosis` (`failingTest?`, `file?`, `line?`,
   hypothesis, `Confidence`) and `ThreadDigest` (`State`, summary, open questions). Their coding
@@ -381,6 +392,21 @@ frameworks are.
   is matched ignoring case, spaces, hyphens and underscores, a quoted line number is still a line
   number, an absent confidence reads as `low` — but a kind nobody declared is a decoding error
   rather than a default presented as the model's verdict.
+- **`LogDigest`** (`ShepherdCore/Heuristics/`) is the tier-1 reduction the `jobLogTail` tool
+  answers with (ADR 0024): it cleans each line (ANSI escapes, GitHub Actions' per-line `2026-…Z `
+  timestamps, trailing whitespace), keeps the lines that name a failure — `error:`/`Error:`,
+  `FAILED`, `FAIL `, `Test Case … failed`, `npm ERR!`, `AssertionError`, `Traceback`, `panic:`,
+  `✘`/`✗` — with `contextLines` (3) lines *that carry something* on either side, drops repeats and
+  blank lines, and cuts to `characterLimit(for:)` — a fifth of the tier's characters, ≈1,200 tokens
+  on-device — by giving up the **front**, because a build that failed twice usually failed last for
+  the reason worth reading. With nothing matching at all it answers the last 40 lines and reports
+  `matchedLines == 0`. `Result` carries `text`, `lineCount`, `matchedLines`, `totalLines` and
+  `wasTruncated`, so the tool's summary line ("last 42 of 1,320 lines of App build (macOS)") is
+  built from counts rather than guessed. Linux-tested against the four real log tails in
+  `Tests/Fixtures/eval/ci-*.json`.
+- **`CheckRun.actionsJobID`** parses the job id out of a check's `detailsURL`
+  (`/actions/runs/{run}/job/{job}`) and is `nil` for everything else — a Buildkite or CircleCI
+  check, or a check run an app created — which is how the log tool knows there is no log to read.
 - **The evaluation corpus** lives in `Tests/Fixtures/eval/` (twelve anonymised pull requests with
   an expected kind and risk, four CI log tails with an expected diagnosis: `xcodebuild`,
   `swift test`, npm and pytest shapes). `ShepherdTests/IntelligenceEvalTests.swift` is the
@@ -426,10 +452,13 @@ validates every call through the registry first, cuts every answer to the tier's
 (`checksShare`/`diffShare`, per-check summary caps, `IntelligenceDiffWindow` for a diff window
 around the line the model named — pure and Linux-tested in `ShepherdCore`), and turns a call the
 model got wrong into a **refusal result** rather than an error: the model reads why and corrects
-itself, and the reviewer sees the hop. `jobLogTail` answers "no log available for this check yet"
-until the GitHubKit job-log read exists, which is the same answer it will always give a
-non-Actions check. Model-facing tool content is English like every prompt here; the one-line
-summaries beside it are the reviewer's and are localised.
+itself, and the reviewer sees the hop. `jobLogTail` resolves the check by name, takes its
+`CheckRun.actionsJobID`, fetches the log through the injected `JobLogFetching` seam
+(`GitHubClient` in production, a fake in tests) and reduces it with `LogDigest` — and answers
+*there is no log, work from the summary and the diff* in four cases, each naming which one it was:
+no reader, not an Actions job, the fetch failed, the log was empty. Model-facing tool content is
+English like every prompt here; the one-line summaries beside it are the reviewer's and are
+localised.
 
 Each tier drives the loop in its own shape and they agree on everything that matters:
 `OnDeviceToolBridge` (`FoundationModels` is imported only by the `OnDevice*.swift` files in
@@ -449,13 +478,32 @@ can check is a guess with a confidence label on it. `IntelligenceTransport` is t
 loops are tested through (`ShepherdTests/IntelligenceToolLoopTests.swift` scripts recorded
 answers); the streamed drafting paths keep going straight to `URLSession`, since they need bytes.
 
-`IntelligenceRouter.diagnoseFailingChecks(for:summary:preferCloud:)` runs the ladder **the other
-way round**: tier 2 first, and tier 3 only when tier 2 failed with `contextExceeded` /
+`IntelligenceRouter.diagnoseFailingChecks(for:summary:preferCloud:jobLog:)` runs the ladder **the
+other way round**: tier 2 first, and tier 3 only when tier 2 failed with `contextExceeded` /
 `digestTooLarge` *and* `preferCloud` is `true`. Any other tier-2 failure is reported as it
 happened — a cloud provider is not a retry — and an unavailable on-device model is not a budget
 failure either. `preferCloud` defaults to `false`: the card asks the reviewer before passing
-`true`, so no caller can send a pull request's contents to a configured endpoint by leaving an
-argument out. The executor is rebuilt per tier, because the budget is what the tools cut to.
+`true`, so no caller can send a pull request's contents — log included — to a configured endpoint by
+leaving an argument out. The executor is rebuilt per tier, because the budget is what the tools cut
+to, which is also what lets the rung a reviewer explicitly asked for see more of the log than the
+on-device tier did. `attemptDiagnosis(…)` is the same call returning `CIDiagnosisAttempt` — the
+outcome plus `didExceedBudget` — because the card has one decision to make about a failure (offer
+the cloud rung) and recovering that from a failure *sentence* would mean string-matching an error
+message.
+
+**The card** (`Features/Review/CIDiagnosisCard.swift`, `CIDiagnosisTraceView.swift`,
+`CIDiagnosisModel.swift`; the **Why?** button and the card itself hang off the checks list in
+`Features/PullRequest/ConversationView.swift`). `CIDiagnosisModel` is a `@MainActor @Observable`
+per review screen holding one `CIDiagnosisState` — `asking` / `diagnosed` / `tooLargeForDevice` /
+`failed` — created inert, taking the router and the log reader *per call* so a settings change
+cannot leave it asking a tier the user switched off. It renders the twin's fields, omitting the
+ones the log did not name; the `file:line` links into the diff viewer (`ReviewModel.reveal(path:line:)`
+→ the viewer's existing `revealLine`) only when the file is in the diff; each trace step expands to
+the tool's own `resultContent`; the cloud question appears only for a budget failure and only when
+`hasCloudTier`; and *Draft an agent brief* builds a `DelegationContext` (origin
+`.reviewFinding(path:line:)` when the log named a file, one finding comment *"CI: test —
+hypothesis"*, no author because the sentence is Shepherd's) and opens the delegation sheet, where
+Run stays the reviewer's click. Nothing is persisted.
 
 ## UI conventions
 
@@ -1194,6 +1242,14 @@ exact-slug shortcut, an embedding finding a pull request the words do not, the t
 no model, and the toggle off — both still answering, and the chunker's boundaries; the document
 composition and the ranker are tested in `ShepherdCoreTests`, the table in
 `ShepherdPersistenceTests`, so both run on the Linux runner);
+"why is CI red?" (ADR 0024: the log tool with a fake `JobLogFetching` — the digest reaching the
+model, the read going to the right job once, and the four ways to have no log; the card's state
+machine through scripted tiers — the trace and the tier kept, the cloud rung offered for a budget
+failure *and only when a key is configured*, `preferCloud` reaching the cloud tier only from the
+button, a cloud failure not offering itself again, every other failure as one line, nothing red
+asking no tier at all; what the brief is handed; and the card's copy. `LogDigest`, the job-id
+parser and the read itself are tested in `ShepherdCoreTests`/`GitHubKitTests`, so they run on the
+Linux runner);
 the translation offer rules and cache (ADR 0020: the pure decide-to-offer function including
 `en-GB` → `en-US`, the prose strip and both detection floors, and the cache's keying, collapse and
 eviction — `TranslationSession` itself is not mocked);
