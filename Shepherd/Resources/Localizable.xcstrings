@@ -10441,6 +10441,16 @@
         }
       }
     },
+    "zero retention": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "keine Speicherung"
+          }
+        }
+      }
+    },
     "· %@": {
       "localizations": {
         "de": {

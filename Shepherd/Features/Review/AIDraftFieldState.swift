@@ -33,12 +33,17 @@ struct AIDraftFieldState: Equatable, Sendable {
         var text: String
         /// Which tier produced it, for the badge on the confirmation.
         var kind: IntelligenceKind
+        /// Who actually ran the model, when the endpoint volunteered it (plan §3.K). `nil` for
+        /// every tier that says nothing about it, which leaves the caption as it was.
+        var servedBy: String? = nil
     }
 
     /// A stream in flight, and everything needed to render the field while it runs.
     struct StreamingDraft: Equatable, Sendable {
         /// Which tier is producing the text, known before the first token arrived.
         var kind: IntelligenceKind
+        /// Who actually ran the model, settled with ``kind`` from the response headers.
+        var servedBy: String? = nil
         /// What the reviewer had written before the stream started, plus the blank line that
         /// separates it. Empty when the draft replaces the field's contents.
         var base: String
@@ -105,6 +110,13 @@ struct AIDraftFieldState: Equatable, Sendable {
     /// and the caption would never appear.
     private var writtenText: String?
 
+    /// Who ran the model for the finished draft now in the field, when the endpoint said.
+    ///
+    /// Stored rather than carried on ``Phase/drafted(_:)`` so that the phase enum — which four
+    /// files switch over exhaustively — keeps its shape, and cleared wherever the caption goes:
+    /// on a new request, and on the reviewer's first keystroke.
+    private var draftedServedBy: String?
+
     /// Creates an idle state.
     init() {}
 
@@ -156,6 +168,19 @@ struct AIDraftFieldState: Equatable, Sendable {
         }
     }
 
+    /// Who actually ran the model for the text the caption is about, when the endpoint said so.
+    ///
+    /// The generic served-by hook's last hop (plan §3.K): present only for a tier whose endpoint
+    /// volunteered it, and read alongside ``labelledKind`` so the caption is one line either way
+    /// — "AI draft (custom endpoint)" or "AI draft (custom endpoint · scaleway)".
+    var labelledServedBy: String? {
+        switch phase {
+        case .drafted: return draftedServedBy
+        case .streaming(let streaming): return streaming.servedBy
+        default: return nil
+        }
+    }
+
     /// The failure to show, if the last attempt failed.
     var failureMessage: String? {
         if case .failed(let message) = phase { return message }
@@ -165,6 +190,7 @@ struct AIDraftFieldState: Equatable, Sendable {
     /// Marks a request as started.
     mutating func begin() {
         phase = .drafting
+        draftedServedBy = nil
     }
 
     /// Applies the outcome of a request.
@@ -194,10 +220,12 @@ struct AIDraftFieldState: Equatable, Sendable {
                 return nil
             }
             guard existingText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                phase = .confirming(PendingDraft(text: draft, kind: output.kind))
+                phase = .confirming(
+                    PendingDraft(text: draft, kind: output.kind, servedBy: output.servedBy)
+                )
                 return nil
             }
-            return write(draft, kind: output.kind)
+            return write(draft, kind: output.kind, servedBy: output.servedBy)
         }
     }
 
@@ -205,7 +233,7 @@ struct AIDraftFieldState: Equatable, Sendable {
     /// - Returns: The text to write, or `nil` when nothing is waiting.
     mutating func replaceWithPendingDraft() -> String? {
         guard let pending = pendingDraft else { return nil }
-        return write(pending.text, kind: pending.kind)
+        return write(pending.text, kind: pending.kind, servedBy: pending.servedBy)
     }
 
     /// Appends the waiting draft after what the reviewer already wrote.
@@ -217,8 +245,14 @@ struct AIDraftFieldState: Equatable, Sendable {
     mutating func appendPendingDraft(to existingText: String) -> String? {
         guard let pending = pendingDraft else { return nil }
         let trimmed = existingText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return write(pending.text, kind: pending.kind) }
-        return write(trimmed + "\n\n" + pending.text, kind: pending.kind)
+        guard !trimmed.isEmpty else {
+            return write(pending.text, kind: pending.kind, servedBy: pending.servedBy)
+        }
+        return write(
+            trimmed + "\n\n" + pending.text,
+            kind: pending.kind,
+            servedBy: pending.servedBy
+        )
     }
 
     /// Throws the waiting draft away. The field is untouched, because it never was touched.
@@ -287,10 +321,18 @@ struct AIDraftFieldState: Equatable, Sendable {
     /// which is why the router hands out the tier with the stream rather than after it.
     /// - Parameters:
     ///   - kind: The tier that answered.
+    ///   - servedBy: Who actually ran the model, when the endpoint's response headers said
+    ///     (``IntelligenceStream/servedBy``). Defaulted, because almost every tier says nothing.
     ///   - base: What the draft grows after, from ``prepareStream(existingText:)`` or
     ///     ``resolve(_:existingText:)``.
-    mutating func streamStarted(kind: IntelligenceKind, base: String) {
-        phase = .streaming(StreamingDraft(kind: kind, base: base, partial: ""))
+    mutating func streamStarted(
+        kind: IntelligenceKind,
+        servedBy: String? = nil,
+        base: String
+    ) {
+        phase = .streaming(
+            StreamingDraft(kind: kind, servedBy: servedBy, base: base, partial: "")
+        )
     }
 
     /// Takes one cumulative snapshot of the draft.
@@ -321,7 +363,11 @@ struct AIDraftFieldState: Equatable, Sendable {
             phase = .failed(String(localized: "The model returned an empty draft."))
             return nil
         }
-        return write(streaming.base + trimmed, kind: streaming.kind)
+        return write(
+            streaming.base + trimmed,
+            kind: streaming.kind,
+            servedBy: streaming.servedBy
+        )
     }
 
     /// Stops a request that has not produced a single character yet.
@@ -351,7 +397,11 @@ struct AIDraftFieldState: Equatable, Sendable {
             phase = .idle
             return nil
         }
-        return write(streaming.base + trimmed, kind: streaming.kind)
+        return write(
+            streaming.base + trimmed,
+            kind: streaming.kind,
+            servedBy: streaming.servedBy
+        )
     }
 
     /// Ends a stream that failed part-way.
@@ -371,7 +421,11 @@ struct AIDraftFieldState: Equatable, Sendable {
             phase = .failed(message)
             return nil
         }
-        return write(streaming.base + trimmed, kind: streaming.kind)
+        return write(
+            streaming.base + trimmed,
+            kind: streaming.kind,
+            servedBy: streaming.servedBy
+        )
     }
 
     /// Called with the field's new text on every change.
@@ -388,13 +442,23 @@ struct AIDraftFieldState: Equatable, Sendable {
         if let writtenText, writtenText == text { return }
         writtenText = nil
         switch phase {
-        case .drafted, .streaming: phase = .idle
+        case .drafted, .streaming:
+            phase = .idle
+            // The served-by phrase is part of the caption, so it goes with it: after the first
+            // keystroke the text is the reviewer's, and who ran the model that suggested it is no
+            // longer a statement about what is in the field.
+            draftedServedBy = nil
         default: break
         }
     }
 
-    private mutating func write(_ text: String, kind: IntelligenceKind) -> String {
+    private mutating func write(
+        _ text: String,
+        kind: IntelligenceKind,
+        servedBy: String? = nil
+    ) -> String {
         writtenText = text
+        draftedServedBy = servedBy
         phase = .drafted(kind)
         return text
     }

@@ -11,6 +11,24 @@ protocol ModelListing: Sendable {
     /// - Returns: The offered model ids, never empty.
     /// - Throws: ``IntelligenceError`` when the list cannot be obtained.
     func availableModels() async throws -> [String]
+
+    /// The same list, with whatever else the endpoint published about each entry (plan §3.K).
+    ///
+    /// A second requirement with a **default implementation** rather than a widened return type
+    /// on the first, because the extra material is optional by construction: the documented
+    /// OpenAI shape carries an id and nothing else, and every conformance that has only ids —
+    /// a stub in a test, a local server — should not have to say so. The default therefore maps
+    /// ``availableModels()`` into id-only entries, which is exactly what the picker showed
+    /// before this existed.
+    /// - Returns: The offered entries, never empty, in the endpoint's own order.
+    /// - Throws: ``IntelligenceError`` when the list cannot be obtained.
+    func availableModelEntries() async throws -> [OpenAIModelsResponse.Model]
+}
+
+extension ModelListing {
+    func availableModelEntries() async throws -> [OpenAIModelsResponse.Model] {
+        try await availableModels().map { OpenAIModelsResponse.Model(id: $0) }
+    }
 }
 
 /// Tier 3b: any endpoint that speaks the OpenAI chat-completions shape (ADR 0007).
@@ -30,8 +48,25 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
     let apiKey: String
     /// How many tokens the answer may use.
     var maxTokens: Int = 1_024
+    /// ISO 3166-1 alpha-2 countries the request may be served from, or empty for no constraint.
+    ///
+    /// The user's optional sovereignty policy (plan §3.K). It is **request-body content**, not a
+    /// per-endpoint feature flag: it reaches the wire as `provider.countries` and only when it is
+    /// non-empty, because a gateway that understands the field refuses an empty object and a
+    /// gateway that does not understand it refuses the field at all. Nothing here branches on a
+    /// base URL, so no preset gains a code path (ADR 0007's 2026-09-03 amendment).
+    var sovereigntyCountries: [String] = []
+    /// Whether only an operator that stores neither prompt nor completion may serve the request.
+    ///
+    /// Sent as `provider.zero_retention` and only when `true`: `false` and absent mean the same
+    /// thing to the field's own definition, so sending `false` would be a constraint that is not
+    /// one, on an endpoint that may reject the key it arrived under.
+    var requiresZeroRetention: Bool = false
     /// Where a non-streaming request goes. `URLSession` outside tests.
     let transport: any IntelligenceTransport
+    /// Where this request's response headers and usage counts are recorded, when somebody is
+    /// listening. `nil` for a call nobody asked about — a connection test, a settings probe.
+    var report: IntelligenceEndpointReport?
 
     var kind: IntelligenceKind { .openAICompatible }
 
@@ -44,17 +79,42 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
     ///   - baseURL: The endpoint's base URL.
     ///   - model: The model name.
     ///   - apiKey: The bearer token.
+    ///   - sovereigntyCountries: The optional country allow-list. Empty sends no policy.
+    ///   - requiresZeroRetention: Whether to require a zero-retention operator. `false` sends
+    ///     no policy.
     ///   - transport: Where requests go. Defaults to `URLSession`; a test substitutes a script.
+    ///   - report: Where to record who served the request and what it cost. `nil` records
+    ///     nothing.
     init(
         baseURL: String,
         model: String,
         apiKey: String,
-        transport: any IntelligenceTransport = IntelligenceURLSessionTransport()
+        sovereigntyCountries: [String] = [],
+        requiresZeroRetention: Bool = false,
+        transport: any IntelligenceTransport = IntelligenceURLSessionTransport(),
+        report: IntelligenceEndpointReport? = nil
     ) {
         self.baseURL = baseURL
         self.model = model
         self.apiKey = apiKey
+        self.sovereigntyCountries = sovereigntyCountries
+        self.requiresZeroRetention = requiresZeroRetention
         self.transport = transport
+        self.report = report
+    }
+
+    /// A copy of this provider that records who served its requests into `report`.
+    ///
+    /// The generic hook's provider half (plan §3.K). It is a *copy* rather than a mutation
+    /// because the provider is a `Sendable` value the router rebuilds per request; handing the
+    /// report in through the initialiser would mean every caller that does not care about it
+    /// naming it anyway.
+    /// - Parameter report: Where to record the response headers and the usage chunk.
+    /// - Returns: The same configuration, reporting into `report`.
+    func reporting(to report: IntelligenceEndpointReport) -> any IntelligenceProvider {
+        var copy = self
+        copy.report = report
+        return copy
     }
 
     func summarizePullRequest(_ digest: PullRequestDigest) async throws -> PRSummary {
@@ -189,6 +249,20 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
     /// - Throws: ``IntelligenceError`` when the endpoint is unreachable, refuses the key, or
     ///   answers with something other than the documented list shape.
     func availableModels() async throws -> [String] {
+        try await availableModelEntries().compactMap(\.id)
+    }
+
+    /// Asks the endpoint which models it offers, keeping what it published about each.
+    ///
+    /// The same one request ``availableModels()`` makes — that method is written in terms of this
+    /// one, so there is no way for the picker's ids and the picker's badges to come from two
+    /// different fetches. What a plain OpenAI endpoint publishes is an id and nothing else, which
+    /// decodes to an entry whose optional blocks are `nil`; a gateway that publishes sovereignty
+    /// and pricing beside it has both kept (plan §3.K).
+    /// - Returns: The offered entries, in the endpoint's own order.
+    /// - Throws: ``IntelligenceError`` when the endpoint is unreachable, refuses the key, or
+    ///   answers with something other than the documented list shape.
+    func availableModelEntries() async throws -> [OpenAIModelsResponse.Model] {
         guard let url = OpenAICompatibleProvider.modelsURL(base: baseURL) else {
             throw IntelligenceError.notConfigured("base URL")
         }
@@ -208,7 +282,7 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
                 message: OpenAICompatibleProvider.errorMessage(in: data)
             )
         }
-        return try OpenAIModelsResponse.modelIDs(in: data)
+        return try OpenAIModelsResponse.models(in: data)
     }
 
     /// The JSON body one chat-completions request sends.
@@ -217,6 +291,13 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
     /// the `max_tokens` key, the system message first and the user message second — is then
     /// unit-testable without a network, and the drafting prompts (ADR 0007 amendment) can be
     /// asserted on the wire rather than only in the string constants.
+    /// Two further keys are conditional, and both are absent by default (plan §3.K):
+    /// `stream_options: {"include_usage": true}` on a streamed request, so the endpoint's own
+    /// token count arrives in a final chunk; and `provider: {…}` when — and only when — the user
+    /// set a sovereignty policy. The second one is why "only when" matters: a gateway that
+    /// understands the field rejects an unrecognised key inside it and rejects an empty object,
+    /// and a gateway that does not understand it rejects the key outright, so an always-sent
+    /// `provider: {}` would break every endpoint that is not the one it was written for.
     /// - Parameters:
     ///   - system: The system message.
     ///   - user: The user message.
@@ -238,8 +319,28 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
                 ],
                 // Absent rather than `false` when not streaming: a local server that has never
                 // heard of the key is likelier to accept a body without it than to ignore it.
-                stream: streaming ? true : nil
+                stream: streaming ? true : nil,
+                streamOptions: streaming
+                    ? RequestBody.StreamOptions(includeUsage: true)
+                    : nil,
+                provider: sovereigntyPolicy
             )
+        )
+    }
+
+    /// The `provider` object to send, or `nil` when the user set no policy.
+    ///
+    /// Blank country codes are dropped and the rest are uppercased, because the field is defined
+    /// as ISO 3166-1 alpha-2 and a gateway matching `de` against `DE` is not something to rely
+    /// on. Everything empty means `nil`, which means the key is not in the body at all.
+    private var sovereigntyPolicy: RequestBody.ProviderPolicy? {
+        let countries = sovereigntyCountries
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() }
+            .filter { !$0.isEmpty }
+        guard !countries.isEmpty || requiresZeroRetention else { return nil }
+        return RequestBody.ProviderPolicy(
+            countries: countries.isEmpty ? nil : countries,
+            zeroRetention: requiresZeroRetention ? true : nil
         )
     }
 
@@ -250,6 +351,18 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
     /// which is deliberately tolerant: the servers behind this tier disagree about the role-only
     /// first frame, about `null` contents and about whether the sentinel is sent at all, and none
     /// of those disagreements may reach the reviewer's field as an error.
+    ///
+    /// Three things happen around the frames rather than in them (plan §3.K), and all three are
+    /// optional extensions any endpoint may fill:
+    ///
+    /// - the **served-by headers** are read from the initial response, *before* the first
+    ///   `data:` line, which is what lets the router settle the caption before the reviewer sees
+    ///   a character;
+    /// - a **`429` with a usable `Retry-After`** is waited out once and the request made once
+    ///   more — never twice, and a cancellation during the wait aborts rather than resuming;
+    /// - the **final usage chunk** (asked for by `stream_options`) is recorded. It carries an
+    ///   empty `choices` array, which the delta decoder already reads as "no text in this frame",
+    ///   so it cannot truncate a draft and the `[DONE]` sentinel still ends the stream.
     /// - Parameters:
     ///   - system: The system message.
     ///   - user: The user message.
@@ -282,8 +395,24 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
                 streaming: true
             )
 
-            let (bytes, response) = try await URLSession.shared.bytes(for: request)
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            var (bytes, response) = try await URLSession.shared.bytes(for: request)
+            var http = response as? HTTPURLResponse
+            if http?.statusCode == 429,
+               let delay = IntelligenceRetryAfter.delay(
+                   headers: IntelligenceURLSessionTransport.fields(of: http)
+               ) {
+                // The refused body is drained first: leaving it unread would keep the connection
+                // alive with nobody on this end, and the second request is a new one anyway.
+                _ = await IntelligenceStreaming.failureBody(bytes)
+                try await Task.sleep(for: .seconds(delay))
+                (bytes, response) = try await URLSession.shared.bytes(for: request)
+                http = response as? HTTPURLResponse
+            }
+            let status = http?.statusCode ?? 0
+            let headers = IntelligenceURLSessionTransport.fields(of: http)
+            if let report = provider.report {
+                await report.record(servedBy: ServedBy.parse(headers: headers))
+            }
             guard (200..<300).contains(status) else {
                 throw IntelligenceError.http(
                     status: status,
@@ -295,11 +424,15 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
 
             var parser = ServerSentEventParser()
             var answer = ""
+            var usage: StreamUsage?
             for try await line in bytes.lines {
                 guard let event = parser.consume(line) else { continue }
                 if OpenAICompatibleStreamDecoder.isDone(event) { break }
                 if let message = OpenAICompatibleStreamDecoder.errorMessage(in: event) {
                     throw IntelligenceError.http(status: status, message: message)
+                }
+                if let reported = OpenAICompatibleStreamDecoder.usage(in: event) {
+                    usage = reported
                 }
                 guard let delta = OpenAICompatibleStreamDecoder.textDelta(in: event) else {
                     continue
@@ -308,6 +441,9 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
                 continuation.yield(answer)
             }
             _ = parser.finish()
+            if let report = provider.report {
+                await report.record(usage: usage)
+            }
             guard !answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 throw IntelligenceError.malformedResponse
             }
@@ -315,6 +451,12 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
     }
 
     /// Sends one non-streaming chat-completions request.
+    ///
+    /// It goes through ``IntelligenceTransport`` rather than straight to `URLSession` — which is
+    /// what it used to do — for two reasons that arrived together (plan §3.K): the response
+    /// **headers** have to be readable (who served the answer), and the one piece of control flow
+    /// this call now has, the single `Retry-After` wait, is a decision that must be assertable in
+    /// a test rather than only on a user's Mac with a rate-limited key.
     /// - Parameters:
     ///   - system: The system message.
     ///   - user: The user message.
@@ -325,23 +467,29 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
         }
         guard !model.isEmpty else { throw IntelligenceError.notConfigured("model name") }
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "content-type")
-        if !apiKey.isEmpty {
-            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "authorization")
-        }
-        request.httpBody = try completionRequestBody(system: system, user: user)
+        var headers = ["content-type": "application/json"]
+        if !apiKey.isEmpty { headers["authorization"] = "Bearer \(apiKey)" }
+        let body = try completionRequestBody(system: system, user: user)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard (200..<300).contains(status) else {
+        var response = try await transport.send(url: url, headers: headers, body: body)
+        // Once, and only when the endpoint named a delay a person will sit through. The retry is
+        // this one expression rather than a loop, so there is no counter to get wrong and no way
+        // for a gateway to keep Shepherd talking to it (``IntelligenceRetryAfter``).
+        if response.status == 429,
+           let delay = IntelligenceRetryAfter.delay(headers: response.headers) {
+            try await Task.sleep(for: .seconds(delay))
+            response = try await transport.send(url: url, headers: headers, body: body)
+        }
+        if let report {
+            await report.record(servedBy: ServedBy.parse(headers: response.headers))
+        }
+        guard (200..<300).contains(response.status) else {
             throw IntelligenceError.http(
-                status: status,
-                message: OpenAICompatibleProvider.errorMessage(in: data)
+                status: response.status,
+                message: OpenAICompatibleProvider.errorMessage(in: response.data)
             )
         }
-        guard let decoded = try? JSONDecoder().decode(ResponseBody.self, from: data),
+        guard let decoded = try? JSONDecoder().decode(ResponseBody.self, from: response.data),
               let text = decoded.choices.first?.message?.content?
                   .trimmingCharacters(in: .whitespacesAndNewlines),
               !text.isEmpty
@@ -540,16 +688,49 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
             var role: String
             var content: String
         }
+
+        /// `stream_options`, sent only on a streamed request.
+        struct StreamOptions: Encodable {
+            /// Whether the endpoint should send the final usage chunk.
+            var includeUsage: Bool
+
+            enum CodingKeys: String, CodingKey {
+                case includeUsage = "include_usage"
+            }
+        }
+
+        /// The user's sovereignty policy, sent only when they set one.
+        ///
+        /// Both fields are optional and both are omitted when they carry no constraint, because
+        /// the object is validated as a whole by the endpoints that understand it: an
+        /// unrecognised key inside it is refused rather than ignored, and `zero_retention: false`
+        /// means "no constraint" — which is what leaving the key out already means.
+        struct ProviderPolicy: Encodable {
+            /// ISO 3166-1 alpha-2 hosting countries a deployment may run in — any of them.
+            var countries: [String]?
+            /// Whether the operator must store neither prompt nor completion.
+            var zeroRetention: Bool?
+
+            enum CodingKeys: String, CodingKey {
+                case countries
+                case zeroRetention = "zero_retention"
+            }
+        }
+
         var model: String
         var maxTokens: Int
         var messages: [Message]
         var stream: Bool?
+        var streamOptions: StreamOptions?
+        var provider: ProviderPolicy?
 
         enum CodingKeys: String, CodingKey {
             case model
             case maxTokens = "max_tokens"
             case messages
             case stream
+            case streamOptions = "stream_options"
+            case provider
         }
     }
 

@@ -90,9 +90,9 @@ struct AIDraftStatusView: View {
             // to preview and no tier to name yet — and a discarded question sends nothing at all.
             question(badge: nil, preview: nil)
         case .streaming(let streaming):
-            streamingCaption(streaming.kind)
+            streamingCaption(streaming.kind, servedBy: streaming.servedBy)
         case .drafted(let kind):
-            caption(kind)
+            caption(kind, servedBy: state.labelledServedBy)
         case .failed(let message):
             HStack(alignment: .top, spacing: 5) {
                 Image(systemName: "exclamationmark.triangle")
@@ -114,12 +114,14 @@ struct AIDraftStatusView: View {
     /// ``IntelligenceStream`` settles it before the first character: "Drafting on-device…" is
     /// also the honest answer to "did this just leave my Mac?", which is worth reading while the
     /// text arrives rather than after.
-    /// - Parameter kind: The tier that is answering.
-    private func streamingCaption(_ kind: IntelligenceKind) -> some View {
+    /// - Parameters:
+    ///   - kind: The tier that is answering.
+    ///   - servedBy: Who actually ran the model, when the endpoint said so.
+    private func streamingCaption(_ kind: IntelligenceKind, servedBy: String?) -> some View {
         HStack(spacing: 5) {
             Image(systemName: "sparkles")
                 .font(.system(size: 10))
-            Text(AIDraftStatusView.draftingLine(kind))
+            Text(AIDraftStatusView.draftingLine(kind, servedBy: servedBy))
         }
         .font(.system(size: 11))
         .foregroundStyle(Theme.accentText)
@@ -130,26 +132,52 @@ struct AIDraftStatusView: View {
     /// Two sentences rather than one interpolation of ``IntelligenceKind/badge``, because the
     /// badges are not all nouns you can put after "with": "Drafting with on-device…" is not a
     /// sentence, and a translator handed one key here could not fix that either.
-    /// - Parameter kind: The tier that is answering.
+    /// - Parameters:
+    ///   - kind: The tier that is answering.
+    ///   - servedBy: Who actually ran the model, when the endpoint's response headers said so
+    ///     (plan §3.K). It is appended to the tier's badge rather than replacing it, because the
+    ///     two answer different questions — the badge says *which configuration of mine is this*
+    ///     and the suffix says *and who ran it*. `nil` for every tier that volunteers nothing,
+    ///     which is the line exactly as it was.
     /// - Returns: The already-localized line.
-    static func draftingLine(_ kind: IntelligenceKind) -> String {
+    static func draftingLine(_ kind: IntelligenceKind, servedBy: String? = nil) -> String {
+        let badge = AIDraftStatusView.badge(kind, servedBy: servedBy)
         switch kind {
         case .onDevice:
             return String(localized: "Drafting on-device…")
         case .anthropic, .openAICompatible:
-            return String(localized: "Drafting with \(kind.badge)…")
+            return String(localized: "Drafting with \(badge)…")
         }
+    }
+
+    /// The tier's badge with the served-by suffix on it, when there is one.
+    ///
+    /// One place, so the streaming line and the finished caption cannot disagree about the
+    /// spelling — and one interpolation, so a translator sees "Drafting with %@…" either way
+    /// rather than two keys that differ only in a middle dot.
+    /// - Parameters:
+    ///   - kind: The tier.
+    ///   - servedBy: Who actually ran the model, when the endpoint said so.
+    /// - Returns: The badge, e.g. `custom endpoint` or `custom endpoint · scaleway`.
+    static func badge(_ kind: IntelligenceKind, servedBy: String?) -> String {
+        guard let servedBy, !servedBy.isEmpty else { return kind.badge }
+        return "\(kind.badge) · \(servedBy)"
     }
 
     /// The line that marks the field's current contents as generated.
     ///
     /// Shown until the reviewer's first keystroke: after that it is their text, and the label
     /// would be untrue.
-    private func caption(_ kind: IntelligenceKind) -> some View {
+    /// - Parameters:
+    ///   - kind: The tier that wrote it.
+    ///   - servedBy: Who actually ran the model, when the endpoint said so.
+    private func caption(_ kind: IntelligenceKind, servedBy: String?) -> some View {
         HStack(spacing: 5) {
             Image(systemName: "sparkles")
                 .font(.system(size: 10))
-            Text(String(localized: "AI draft (\(kind.badge)) — review before submitting."))
+            Text(String(
+                localized: "AI draft (\(AIDraftStatusView.badge(kind, servedBy: servedBy))) — review before submitting."
+            ))
         }
         .font(.system(size: 11))
         .foregroundStyle(Theme.accentText)

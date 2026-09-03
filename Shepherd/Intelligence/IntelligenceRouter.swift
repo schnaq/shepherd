@@ -16,6 +16,15 @@ struct IntelligenceConfiguration: Sendable, Hashable {
     var openAIBaseURL: String = ""
     /// The OpenAI-compatible model name.
     var openAIModel: String = ""
+    /// ISO 3166-1 alpha-2 countries the OpenAI-compatible endpoint may serve a request from.
+    ///
+    /// The user's optional sovereignty policy (plan §3.K), empty by default and empty for every
+    /// endpoint that does not understand it. It is part of the *request body* rather than a
+    /// per-endpoint setting with behaviour behind it, and it is only sent when set — see
+    /// ``OpenAICompatibleProvider/sovereigntyCountries``.
+    var openAISovereigntyCountries: [String] = []
+    /// Whether the OpenAI-compatible endpoint must pick a zero-retention operator.
+    var openAIZeroRetention: Bool = false
     /// The API key for whichever cloud provider is selected.
     var cloudAPIKey: String = ""
 
@@ -29,6 +38,12 @@ struct IntelligenceOutput<Value: Sendable & Hashable>: Sendable, Hashable {
     var kind: IntelligenceKind
     /// The answer.
     var value: Value
+    /// Who actually ran the model, when the endpoint volunteered it (plan §3.K).
+    ///
+    /// Almost always `nil`: the on-device tier has no operator to name and a single-company API
+    /// has already been named by ``IntelligenceKind/badge``. A gateway in front of several
+    /// operators can fill it, and a caption that has one appends it — see ``ServedBy``.
+    var servedBy: String? = nil
 }
 
 /// What asking a tier produced.
@@ -71,13 +86,55 @@ enum IntelligenceOutcome<Value: Sendable & Hashable>: Sendable, Hashable {
 struct IntelligenceStream: Sendable {
     /// Which tier is producing the text.
     var kind: IntelligenceKind
+    /// Who actually ran the model, when the endpoint volunteered it (plan §3.K).
+    ///
+    /// Settled at the same moment ``kind`` is, and for the same reason: the served-by headers
+    /// arrive with the response's status line, which is *before* the first server-sent event, so
+    /// a caption that names the operator is correct before the reviewer sees a character rather
+    /// than growing a second clause half-way through their draft. `nil` for every endpoint that
+    /// does not send the headers, which leaves the caption exactly as it was.
+    var servedBy: String?
+    /// What the endpoint said about this request, when anyone is recording it.
+    ///
+    /// The one thing on this value that is only readable **after** the stream finished: the usage
+    /// chunk is the last frame before the sentinel. Nothing in the UI reads it — it is the cloud
+    /// twin of the measured on-device budget, kept so that a later comparison has the number
+    /// instead of having to add the wire field first.
+    var report: IntelligenceEndpointReport?
     /// The draft so far, growing. Never deltas.
     var text: AsyncThrowingStream<String, Error>
 
     /// Creates a labelled stream.
-    init(kind: IntelligenceKind, text: AsyncThrowingStream<String, Error>) {
+    /// - Parameters:
+    ///   - kind: The tier producing the text.
+    ///   - servedBy: Who ran the model, when the endpoint said.
+    ///   - report: Where the endpoint's own facts about this request are recorded.
+    ///   - text: The cumulative drafts.
+    init(
+        kind: IntelligenceKind,
+        servedBy: String? = nil,
+        report: IntelligenceEndpointReport? = nil,
+        text: AsyncThrowingStream<String, Error>
+    ) {
         self.kind = kind
+        self.servedBy = servedBy
+        self.report = report
         self.text = text
+    }
+
+    /// What the endpoint said this answer cost, once the stream has finished.
+    ///
+    /// **Read it after `text` is exhausted, or it is `nil` for the boring reason**: the usage
+    /// chunk is the last frame before the sentinel, so it does not exist while the draft is still
+    /// growing. `nil` also for every tier that reports none — the on-device model, an endpoint
+    /// that ignored `stream_options`.
+    ///
+    /// Nothing in the UI reads this yet, on purpose: it is the cloud twin of the measured
+    /// on-device budget (ADR 0007's 2026-09-02 amendment), and a token count under a reviewer's
+    /// draft would be noise. It is decoded and carried so that whatever compares the estimate
+    /// against the real cost later has the number rather than having to add the wire field first.
+    var usage: StreamUsage? {
+        get async { await report?.usage }
     }
 }
 
@@ -287,7 +344,12 @@ struct IntelligenceRouter: Sendable {
             return OpenAICompatibleProvider(
                 baseURL: configuration.openAIBaseURL,
                 model: configuration.openAIModel,
-                apiKey: configuration.cloudAPIKey
+                apiKey: configuration.cloudAPIKey,
+                // Carried through as configuration, not as behaviour: the provider sends the
+                // policy only when it holds one, and an endpoint that has never heard of the
+                // field sees a body identical to the one it saw before (plan §3.K).
+                sovereigntyCountries: configuration.openAISovereigntyCountries,
+                requiresZeroRetention: configuration.openAIZeroRetention
             )
         }
     }
@@ -718,9 +780,14 @@ struct IntelligenceRouter: Sendable {
         var lastFailure: String?
 
         if allowsCloud, let cloud = cloudProvider {
+            // One report per request, handed to the tier before it is asked and read back once it
+            // has committed to answering. A tier whose endpoint volunteers nothing keeps the
+            // default no-op and leaves it empty (plan §3.K).
+            let report = IntelligenceEndpointReport()
             switch await IntelligenceRouter.start(
-                operation(cloud, AnthropicProvider.budget),
-                kind: cloud.kind
+                operation(cloud.reporting(to: report), AnthropicProvider.budget),
+                kind: cloud.kind,
+                report: report
             ) {
             case .started(let stream): return .stream(stream)
             // A cancellation ends the request instead of moving down a rung: the reviewer who
@@ -777,11 +844,16 @@ struct IntelligenceRouter: Sendable {
     /// - Parameters:
     ///   - source: The provider's stream, not yet iterated.
     ///   - kind: The tier it came from.
+    ///   - report: The box the tier records what its endpoint said into, when there is one. It is
+    ///     read exactly here, after the first element: the served-by headers arrive with the
+    ///     response's status line, so by the time a tier has produced text they are already in —
+    ///     and this is the last moment before the caption is handed out (plan §3.K).
     /// - Returns: The labelled stream, the fact that the request was cancelled, or the reason this
     ///   tier did not answer.
     private static func start(
         _ source: AsyncThrowingStream<String, Error>,
-        kind: IntelligenceKind
+        kind: IntelligenceKind,
+        report: IntelligenceEndpointReport? = nil
     ) async -> StartedStream {
         let relay = AsyncThrowingStream<String, Error>.makeStream()
         // One value, from the driving task to the ladder: which of the four things happened first.
@@ -832,7 +904,14 @@ struct IntelligenceRouter: Sendable {
 
         switch signal {
         case .arrived:
-            return .started(IntelligenceStream(kind: kind, text: relay.stream))
+            return .started(
+                IntelligenceStream(
+                    kind: kind,
+                    servedBy: await IntelligenceRouter.servedByCaption(report),
+                    report: report,
+                    text: relay.stream
+                )
+            )
         case .empty:
             return .failed(describe(IntelligenceError.malformedResponse))
         case .cancelled:
@@ -880,11 +959,20 @@ struct IntelligenceRouter: Sendable {
         var lastFailure: String?
 
         if allowsCloud, let cloud = cloudProvider {
+        if let cloud = cloudProvider {
+            // The non-streaming twin of the same hook: one report per request, read after the
+            // answer rather than after the first element, because here there is only an answer.
+            let report = IntelligenceEndpointReport()
             do {
+                let value = try await operation(
+                    cloud.reporting(to: report),
+                    AnthropicProvider.budget
+                )
                 return .value(
                     IntelligenceOutput(
                         kind: cloud.kind,
-                        value: try await operation(cloud, AnthropicProvider.budget)
+                        value: value,
+                        servedBy: await IntelligenceRouter.servedByCaption(report)
                     )
                 )
             } catch {
@@ -925,6 +1013,21 @@ struct IntelligenceRouter: Sendable {
 
     private static func describe(_ error: any Error) -> String {
         (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+    }
+
+    /// The one phrase a caption appends when the endpoint named who served the request.
+    ///
+    /// Written out rather than inlined as an optional chain across an actor boundary, so the
+    /// hop is one statement and the `nil` cases — no report, nothing recorded — read as the
+    /// same "nothing to say" they are (plan §3.K).
+    /// - Parameter report: The request's report, when there was one.
+    /// - Returns: The caption suffix, or `nil` when the endpoint volunteered nothing.
+    private static func servedByCaption(
+        _ report: IntelligenceEndpointReport?
+    ) async -> String? {
+        guard let report else { return nil }
+        let servedBy = await report.servedBy
+        return servedBy?.caption
     }
 
     // MARK: - Delegation brief (plan §3.E)

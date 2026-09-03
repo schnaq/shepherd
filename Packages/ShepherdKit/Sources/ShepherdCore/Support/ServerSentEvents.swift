@@ -207,6 +207,35 @@ public enum AnthropicStreamDecoder {
     }
 }
 
+/// The token counts an endpoint reports for one streamed answer.
+///
+/// The cloud twin of the measured on-device budget (ADR 0007's 2026-09-02 amendment): the
+/// estimate Shepherd cuts a prompt against is arithmetic, and this is what the endpoint actually
+/// billed. It is decoded and carried, not shown — a number that appeared under a reviewer's
+/// draft would be noise — so that a later feature comparing the two has the measurement rather
+/// than having to add the wire field first.
+///
+/// Both fields are optional because the shape is: a gateway may relay a usage object with only
+/// `total_tokens` in it, and a chunk that carries usage beside content may carry `usage: null`.
+public struct StreamUsage: Sendable, Hashable, Codable {
+    /// Tokens the answer itself cost, when the endpoint said.
+    public var completionTokens: Int?
+    /// Prompt plus answer, when the endpoint said.
+    public var totalTokens: Int?
+
+    /// Creates a usage report.
+    /// - Parameters:
+    ///   - completionTokens: Tokens the answer cost.
+    ///   - totalTokens: Prompt plus answer.
+    public init(completionTokens: Int? = nil, totalTokens: Int? = nil) {
+        self.completionTokens = completionTokens
+        self.totalTokens = totalTokens
+    }
+
+    /// Whether the endpoint reported any number at all.
+    public var isEmpty: Bool { completionTokens == nil && totalTokens == nil }
+}
+
 /// Reads the text out of the OpenAI-compatible streaming shape.
 ///
 /// The tolerance here is not politeness, it is the tier's premise: tier 3b is "whatever speaks
@@ -266,6 +295,59 @@ public enum OpenAICompatibleStreamDecoder {
         let message = error.message?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let message, !message.isEmpty { return message }
         return error.type
+    }
+
+    /// The token counts a final usage chunk carries, when this frame is one.
+    ///
+    /// A request that asked for `stream_options: {"include_usage": true}` gets one extra frame
+    /// before the sentinel whose `choices` array is **empty** and whose `usage` object holds the
+    /// counts. Two properties of that frame decide how this is written:
+    ///
+    /// - it must not look like the end of the answer, which it does not: ``textDelta(in:)`` reads
+    ///   `choices.first` and an empty array has none, so a usage chunk already contributes no text
+    ///   and cannot truncate a draft;
+    /// - `usage` may be explicitly `null` on a chunk that also carries content (a gateway that
+    ///   cannot withhold the field relays it nulled), and a usage report with no number in it is
+    ///   not a report — hence the ``StreamUsage/isEmpty`` guard rather than a non-nil check.
+    /// - Parameter event: A dispatched frame.
+    /// - Returns: The counts, or `nil` when this frame carries none.
+    public static func usage(in event: ServerSentEvent) -> StreamUsage? {
+        guard !isDone(event) else { return nil }
+        struct Frame: Decodable {
+            struct Usage: Decodable {
+                var completionTokens: Int?
+                var totalTokens: Int?
+
+                enum CodingKeys: String, CodingKey {
+                    case completionTokens = "completion_tokens"
+                    case totalTokens = "total_tokens"
+                }
+            }
+            var usage: Usage?
+        }
+        guard let frame = try? JSONDecoder().decode(Frame.self, from: Data(event.data.utf8)),
+              let reported = frame.usage
+        else { return nil }
+        let value = StreamUsage(
+            completionTokens: reported.completionTokens,
+            totalTokens: reported.totalTokens
+        )
+        return value.isEmpty ? nil : value
+    }
+
+    /// The counts a whole recorded body ends with, when it carries a usage chunk.
+    ///
+    /// The last one wins: a stream is allowed to report cumulative usage more than once, and the
+    /// answer to "what did this cost" is the final statement, not the first.
+    /// - Parameter body: The complete `text/event-stream` body.
+    /// - Returns: The counts, or `nil` when the stream reported none.
+    public static func usage(in body: String) -> StreamUsage? {
+        var latest: StreamUsage?
+        for event in ServerSentEventParser.events(in: body) {
+            if isDone(event) { break }
+            if let reported = usage(in: event) { latest = reported }
+        }
+        return latest
     }
 
     /// Accumulates a whole recorded body into the answer it represents.

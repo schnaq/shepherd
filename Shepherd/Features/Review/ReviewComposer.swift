@@ -313,7 +313,7 @@ struct SubmitReviewSheet: View {
             apply(aiDraft.finish(outcome.failure ?? .disabled, existingText: model.summaryText))
             return
         }
-        aiDraft.streamStarted(kind: stream.kind, base: base)
+        aiDraft.streamStarted(kind: stream.kind, servedBy: stream.servedBy, base: base)
         do {
             for try await partial in stream.text {
                 apply(aiDraft.streamed(partial))
@@ -635,7 +635,7 @@ struct InlineCommentComposer: View {
             apply(aiDraft.finish(outcome.failure ?? .disabled, existingText: commentText))
             return
         }
-        aiDraft.streamStarted(kind: stream.kind, base: base)
+        aiDraft.streamStarted(kind: stream.kind, servedBy: stream.servedBy, base: base)
         do {
             for try await partial in stream.text {
                 apply(aiDraft.streamed(partial))

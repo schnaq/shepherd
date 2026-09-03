@@ -603,7 +603,7 @@ struct DelegationSheet: View {
             )
             return
         }
-        briefDraft.streamStarted(kind: stream.kind, base: base)
+        briefDraft.streamStarted(kind: stream.kind, servedBy: stream.servedBy, base: base)
         do {
             for try await partial in stream.text {
                 applyBriefDraft(briefDraft.streamed(partial))

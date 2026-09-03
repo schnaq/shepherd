@@ -172,6 +172,24 @@ protocol IntelligenceProvider: Sendable {
     /// - Returns: A stream of ever-longer briefs. It throws the tier's own error when the tier
     ///   cannot answer, and cancelling the consuming task ends the request.
     func streamAgentBrief(_ request: AgentBriefRequest) -> AsyncThrowingStream<String, Error>
+
+    // MARK: - What the endpoint said about the request (plan §3.K)
+
+    /// A copy of this tier that records what its endpoint volunteered about a request.
+    ///
+    /// The generic "served-by" hook (ADR 0007's 2026-09-03 amendment). Some endpoints answer with
+    /// facts that are *about the answer* rather than in it — which operator actually ran the
+    /// weights, what the endpoint says the answer cost — and a reviewer is entitled to read the
+    /// first of those in the caption over their draft. Rather than a field on every request type
+    /// or a second element type on the streams, the router hands the tier one `Sendable` box and
+    /// reads it back once the tier has committed to answering.
+    ///
+    /// It is a *request* to report, not a requirement to have anything to report: the default
+    /// implementation returns `self`, so a tier whose endpoint says none of this — the on-device
+    /// model, the Anthropic API — is unchanged and the caption is exactly what it was.
+    /// - Parameter report: Where to record what the endpoint said.
+    /// - Returns: The same tier, reporting into `report`.
+    func reporting(to report: IntelligenceEndpointReport) -> any IntelligenceProvider
 }
 
 /// Streaming, for tiers that do not stream.
@@ -248,6 +266,16 @@ extension IntelligenceProvider {
             )
         }
     }
+
+    // MARK: - What the endpoint said about the request (plan §3.K)
+
+    /// Reporting, for a tier whose endpoint volunteers nothing.
+    ///
+    /// The honest default, and the reason the hook is cheap: on-device there is no endpoint and no
+    /// operator to name, and an API served by exactly one company has already been named by the
+    /// tier's own badge. Both keep this implementation, both leave the report empty, and both
+    /// captions stay the single line they were.
+    func reporting(to report: IntelligenceEndpointReport) -> any IntelligenceProvider { self }
 }
 
 /// The plumbing shared by every provider's streaming methods.

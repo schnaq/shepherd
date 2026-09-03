@@ -335,6 +335,24 @@ failure, an unknown shape or an empty list falls back to the free-text model fie
 the endpoint did not list stays selectable. `ModelListing` is the seam the settings tests drive
 instead of a network.
 
+Four further things about that tier are **optional on both sides** and add no endpoint-specific
+code path (ADR 0007's 2026-09-03 amendment, plan §3.K). Reads: two response headers become a
+`ServedBy` value (operator plus deployment id) through one pure parse, recorded into a per-request
+`IntelligenceEndpointReport` the router hands the tier and reads back once the tier has committed —
+which puts the operator in the draft caption as a suffix before the first character arrives;
+`OpenAIModelsResponse` keeps the `sovereignty` and `pricing` blocks a gateway may publish per model,
+so the picker can show a badge; and a streamed request sends
+`stream_options: {"include_usage": true}` and keeps the final usage chunk's counts through
+`OpenAICompatibleStreamDecoder.usage(in:)` (pure, Linux-tested, and harmless to the delta decoder
+because that chunk's `choices` array is empty). Write: `provider: {countries, zero_retention}` goes
+into the request body when — and only when — the user set the two synced
+`openAICompatibleSovereigntyCountries` / `openAICompatibleZeroRetention` settings, because the
+gateways that read the field reject an empty object and the ones that do not reject the field.
+`IntelligenceTransport` gained a headers-bearing `send(url:headers:body:)` (default implementation
+forwards to `post`) so the served-by parse and the single `Retry-After` retry — one wait, one
+resend, `IntelligenceRetryAfter`'s pure clamp deciding whether there is one at all — are driven by
+a scripted transport in tests rather than by a live key.
+
 `PullRequestDigest` is built by tier-1 heuristics in `ShepherdCore` (per-file stats, top
 hunks, title/body) with an explicit token budget parameter — the on-device provider requests
 a small digest (≤ ~6K tokens), the Anthropic provider a large one. Providers are selected in

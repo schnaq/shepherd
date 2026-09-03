@@ -218,6 +218,82 @@ final class ServerSentEventTests: XCTestCase {
         XCTAssertEqual(OpenAICompatibleStreamDecoder.text(in: body), "ab")
     }
 
+    // MARK: - The final usage chunk (plan §3.K)
+
+    /// The same recorded response as ``openAIBody``, with the extra frame a request that sent
+    /// `stream_options: {"include_usage": true}` gets: empty `choices`, and the counts.
+    private let openAIBodyWithUsage = """
+        data: {"id":"chatcmpl-1","object":"chat.completion.chunk",\
+        "choices":[{"index":0,"delta":{"role":"assistant","content":""}}]}
+
+        data: {"id":"chatcmpl-1","object":"chat.completion.chunk",\
+        "choices":[{"index":0,"delta":{"content":"Confirm the timeout."}}]}
+
+        data: {"id":"chatcmpl-1","object":"chat.completion.chunk","choices":[],\
+        "usage":{"prompt_tokens":1200,"completion_tokens":48,"total_tokens":1248}}
+
+        data: [DONE]
+
+        """
+
+    func testAUsageChunkCarriesNoTextAndDoesNotEndTheAnswer() {
+        XCTAssertEqual(
+            OpenAICompatibleStreamDecoder.text(in: openAIBodyWithUsage),
+            "Confirm the timeout.",
+            "an empty choices array contributes nothing and truncates nothing"
+        )
+        let events = ServerSentEventParser.events(in: openAIBodyWithUsage)
+        XCTAssertEqual(events.count, 4)
+        XCTAssertNil(OpenAICompatibleStreamDecoder.textDelta(in: events[2]))
+        XCTAssertFalse(OpenAICompatibleStreamDecoder.isDone(events[2]))
+        XCTAssertNil(OpenAICompatibleStreamDecoder.errorMessage(in: events[2]))
+        // The sentinel still ends the stream, and it is not a usage chunk.
+        XCTAssertTrue(OpenAICompatibleStreamDecoder.isDone(events[3]))
+        XCTAssertNil(OpenAICompatibleStreamDecoder.usage(in: events[3]))
+    }
+
+    func testTheFinalUsageChunkIsReadWhenItIsThere() {
+        let usage = OpenAICompatibleStreamDecoder.usage(in: openAIBodyWithUsage)
+        XCTAssertEqual(usage, StreamUsage(completionTokens: 48, totalTokens: 1248))
+        // A stream nobody asked for usage on reports none, and that is not a failure.
+        XCTAssertNil(OpenAICompatibleStreamDecoder.usage(in: openAIBody))
+    }
+
+    func testAPartialOrNulledUsageObjectIsToleratedRatherThanBelieved() {
+        let onlyTotal = ServerSentEvent(data: "{\"choices\":[],\"usage\":{\"total_tokens\":9}}")
+        XCTAssertEqual(
+            OpenAICompatibleStreamDecoder.usage(in: onlyTotal),
+            StreamUsage(totalTokens: 9)
+        )
+        // A gateway that cannot withhold the field nulls it on a content chunk; a report with no
+        // number in it is not a report.
+        let nulled = ServerSentEvent(
+            data: "{\"choices\":[{\"delta\":{\"content\":\"a\"}}],\"usage\":null}"
+        )
+        XCTAssertNil(OpenAICompatibleStreamDecoder.usage(in: nulled))
+        XCTAssertEqual(OpenAICompatibleStreamDecoder.textDelta(in: nulled), "a")
+        let empty = ServerSentEvent(data: "{\"choices\":[],\"usage\":{}}")
+        XCTAssertNil(OpenAICompatibleStreamDecoder.usage(in: empty))
+    }
+
+    func testTheLastUsageStatementWins() {
+        let body = """
+            data: {"choices":[],"usage":{"total_tokens":1}}
+
+            data: {"choices":[],"usage":{"total_tokens":2}}
+
+            data: [DONE]
+
+            data: {"choices":[],"usage":{"total_tokens":99}}
+
+            """
+        XCTAssertEqual(
+            OpenAICompatibleStreamDecoder.usage(in: body),
+            StreamUsage(totalTokens: 2),
+            "and nothing after the sentinel counts"
+        )
+    }
+
     func testGarbageFramesAreIgnoredRatherThanThrown() {
         let event = ServerSentEvent(data: "not json at all")
         XCTAssertNil(OpenAICompatibleStreamDecoder.textDelta(in: event))

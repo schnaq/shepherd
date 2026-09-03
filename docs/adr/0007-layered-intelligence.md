@@ -221,6 +221,79 @@ Consequence: a further on-device-only content class is a new seam plus its own f
 `IntelligenceProvider`. Anything that would send third-party prose to a configured endpoint has to
 overturn the paragraph above rather than quietly widen it.
 
+## Amendment (2026-09-03): served-by headers, sovereignty metadata and an optional policy
+
+Additive, and inside both the original decision and the preset amendment above: the three tiers,
+the provider protocol, the host list and the privacy line are unchanged, and **no preset gains a
+code path** (`docs/plans/apple-intelligence-v2.md` §3.K). What changes is that tier 3b now *reads*
+three optional things an endpoint may volunteer, and *sends* one optional thing the user may set.
+
+The preset amendment's rule was "a preset only fills in the base URL". That rule stands, with one
+sentence added to it: **a preset may also describe an optional extension, in copy.** The extension
+itself is generic — every OpenAI-compatible endpoint is offered it, reads of it are `nil`-tolerant,
+and writes of it happen only when the user asked for them — so the difference between the
+`Konduit (EU)` preset and a hand-typed URL remains a base URL, a note and a key link.
+
+**Read: who actually ran the model.** A gateway in front of several operators can answer two
+questions a single-operator API cannot — which operator ran the weights, and which exact
+deployment. Two optional response headers carry that, parsed by one pure function into a
+`ServedBy` value (operator, plus a deployment id kept for the code that may later pin it). It
+reaches the caption over a reviewer's draft as a suffix and nothing more: *AI draft (custom
+endpoint · scaleway)*. An endpoint that sends neither header produces `nil`, and the caption is
+byte-for-byte the line it was — which is what makes this a hook rather than a branch. It is read
+from the initial response, before the first server-sent event, so the caption is correct **before
+the reviewer sees a character**, the same ordering the streaming amendment established for the
+tier's own name. On-device and Anthropic keep a no-op default: there is no operator to name where
+there is no gateway.
+
+**Read: sovereignty and pricing per model.** `GET {base}/models` may carry, after OpenAI's four
+fields, a `sovereignty` block (hosting country, ownership, zero retention, tier, certifications,
+note) and a `pricing` block. `OpenAIModelsResponse` keeps both — every field optional, a malformed
+extra costing only that extra rather than the list — and the model picker shows one short badge per
+row (*DE · zero retention · eu-owned*). The reason it is in the picker and not in a details pane is
+that this is the tier people are on *for* data residency: "where does this model run" is the
+question they are choosing by. A plain OpenAI endpoint publishes none of it and the picker is
+exactly what it was.
+
+**Read: the endpoint's own token count.** Streamed requests now send
+`stream_options: {"include_usage": true}` and keep the final usage chunk's counts. It is the cloud
+twin of the measured on-device budget: the estimate Shepherd cuts a prompt against is arithmetic,
+and this is what the endpoint actually billed. Nothing renders it — a number under a reviewer's
+draft would be noise — and the chunk cannot disturb a draft, because it carries an empty `choices`
+array, which the delta decoder already reads as "no text in this frame", and `[DONE]` still ends
+the stream.
+
+**Write: one optional sovereignty policy, and only when set.** Two new synced settings on the
+OpenAI-compatible endpoint — a list of ISO 3166-1 alpha-2 countries, and a zero-retention flag —
+travel in the **request body** as `provider: {countries, zero_retention}`. They are generic
+request-body content, not a per-endpoint feature: an endpoint that understands the fields honours
+them, and one that does not refuses the request in its own words, which is the honest outcome for
+a constraint the user asked for and the endpoint cannot meet. Both ship empty/off, and in that
+state the object is **not sent at all** — an empty `provider: {}` would break every endpoint that
+has never heard of the field, so "only when set" is a correctness rule and not a nicety. They are
+`SyncedSettingsDocument` fields with both `SettingsSyncApplier` directions and a fixture value
+(ADR 0014), because they are part of *what the request is*: two Macs that disagreed about them
+would send a prompt to a country their owner asked it to stay out of.
+
+**One retry, on one status, from the endpoint's own instruction.** A `429` carrying a
+`Retry-After` a person will sit through — integer seconds up to 30, or an HTTP-date inside the
+same ceiling — is waited out **once** and the request made once more. Never a loop: there is one
+call site rather than a counter, anything else surfaces as today's `IntelligenceError.http`, and a
+cancellation during the wait aborts instead of resuming. The `IntelligenceTransport` seam grew a
+headers-bearing round trip for this and for the served-by parse, with a default implementation that
+forwards to the old one, so the retry decision is asserted against a scripted transport rather than
+against a rate-limited key on a user's Mac.
+
+**Nothing new travels.** Every read above is the endpoint talking about its own answer; the one
+write is two values the user typed into Settings. The content Shepherd sends is unchanged, so
+`CONTRIBUTING.md`'s host list gains one clause about the policy fields being part of the request
+when set, and nothing else.
+
+Consequence: a further optional extension of this kind is a `nil`-tolerant read plus, at most, a
+sentence of preset copy. Anything that needs the *provider* to behave differently per endpoint —
+a second request shape, a capability probe, a branch on a base URL — still needs its own provider
+and its own ADR, exactly as the preset amendment says.
+
 ## Consequences
 
 - No feature may hard-depend on an LLM; every AI surface needs a heuristic-only fallback state.

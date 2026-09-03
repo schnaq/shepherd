@@ -682,6 +682,69 @@ final class AIDraftingTests: XCTestCase {
         XCTAssertEqual(received.last, "Check the retry bound.", "the last element is the draft")
     }
 
+    func testAStreamCarriesWhoServedItWhenTheTiersEndpointSaidSo() async throws {
+        // The generic served-by hook end to end (plan §3.K): the router hands the tier a report,
+        // the tier fills it from the response headers *before* its first frame, and the labelled
+        // stream carries the phrase — so the caption is right before the reviewer sees a
+        // character rather than growing a clause half-way through.
+        let router = IntelligenceRouter(
+            configuration: enabledConfiguration,
+            tiers: IntelligenceTiers(
+                cloud: { _ in StubProvider(kind: .openAICompatible) },
+                onDevice: { StubProvider(kind: .onDevice) },
+                onDeviceUnavailabilityReason: { nil },
+                summaryStream: { provider, _ in
+                    IntelligenceStreaming.stream { continuation in
+                        let report = (provider as? StubProvider)?.report
+                        // The headers arrive with the status line, before any frame.
+                        await report?.record(
+                            servedBy: ServedBy(
+                                operatorName: "scaleway",
+                                deployment: "scaleway/mistral-small-3.2@fp8"
+                            )
+                        )
+                        continuation.yield("Confirm the timeout.")
+                        // The usage chunk is the *last* frame, so this is the honest order too.
+                        await report?.record(
+                            usage: StreamUsage(completionTokens: 48, totalTokens: 1_248)
+                        )
+                    }
+                }
+            )
+        )
+        let outcome = await router.streamReviewSummaryDraft(
+            for: detail(patch: longPatch(lines: 10))
+        )
+        let stream = try XCTUnwrap(outcome.stream)
+        XCTAssertEqual(stream.kind, .openAICompatible)
+        XCTAssertEqual(stream.servedBy, "scaleway", "the operator, not the deployment id")
+        let received = try await collect(stream.text)
+        XCTAssertEqual(received, ["Confirm the timeout."])
+        // The other half of what an endpoint volunteers is only readable once the stream is done,
+        // because the usage chunk is the last frame. Nothing renders it: it is carried as the
+        // cloud twin of the measured on-device budget.
+        let usage = await stream.usage
+        XCTAssertEqual(usage, StreamUsage(completionTokens: 48, totalTokens: 1_248))
+    }
+
+    func testATierThatReportsNothingLeavesTheStreamsCaptionAsItWas() async throws {
+        let router = IntelligenceRouter(
+            configuration: enabledConfiguration,
+            tiers: IntelligenceTiers(
+                cloud: { _ in StubProvider(kind: .anthropic) },
+                onDevice: { StubProvider(kind: .onDevice) },
+                onDeviceUnavailabilityReason: { nil },
+                summaryStream: { _, _ in streamScript(["Check the retry bound."]) }
+            )
+        )
+        let outcome = await router.streamReviewSummaryDraft(
+            for: detail(patch: longPatch(lines: 10))
+        )
+        let stream = try XCTUnwrap(outcome.stream)
+        XCTAssertNil(stream.servedBy, "no headers, no suffix — every tier Shepherd ships today")
+        _ = try await collect(stream.text)
+    }
+
     func testACloudStreamThatFailsBeforeItsFirstTokenDegradesToTheOnDeviceTier() async throws {
         let router = IntelligenceRouter(
             configuration: enabledConfiguration,
@@ -891,6 +954,48 @@ final class AIDraftingTests: XCTestCase {
         state.fieldChanged(to: "Check the retry bound. Also the timeout.")
         XCTAssertNil(state.draftedKind, "their keystroke makes it their text")
         XCTAssertNil(state.labelledKind)
+    }
+
+    func testTheCaptionNamesWhoRanTheModelOnlyWhenTheEndpointSaidSo() {
+        // The served-by hook's last hop (plan §3.K): a gateway that names the operator gets one
+        // extra clause in the caption, and every tier that names nobody gets the line it always
+        // had. The suffix survives the stream finishing, because the text is still generated.
+        var served = AIDraftFieldState()
+        _ = served.prepareStream(existingText: "")
+        served.streamStarted(kind: .openAICompatible, servedBy: "scaleway", base: "")
+        XCTAssertEqual(served.labelledServedBy, "scaleway")
+        _ = served.streamed("Confirm the timeout.")
+        XCTAssertEqual(served.finishStream(), "Confirm the timeout.")
+        XCTAssertEqual(served.labelledServedBy, "scaleway", "still generated, still labelled")
+
+        let plain = AIDraftStatusView.draftingLine(.openAICompatible)
+        let named = AIDraftStatusView.draftingLine(.openAICompatible, servedBy: "scaleway")
+        XCTAssertNotEqual(plain, named)
+        XCTAssertTrue(named.contains("scaleway"))
+        XCTAssertEqual(
+            AIDraftStatusView.badge(.openAICompatible, servedBy: nil),
+            IntelligenceKind.openAICompatible.badge,
+            "no header, no suffix"
+        )
+        XCTAssertEqual(
+            AIDraftStatusView.badge(.openAICompatible, servedBy: ""),
+            IntelligenceKind.openAICompatible.badge,
+            "and a blank one is no header"
+        )
+
+        // The suffix goes with the caption on the reviewer's first keystroke.
+        served.fieldChanged(to: "Confirm the timeout, and the retry bound.")
+        XCTAssertNil(served.labelledKind)
+        XCTAssertNil(served.labelledServedBy)
+
+        // A tier that says nothing is unchanged, streaming and finished.
+        var quiet = AIDraftFieldState()
+        _ = quiet.prepareStream(existingText: "")
+        quiet.streamStarted(kind: .onDevice, base: "")
+        XCTAssertNil(quiet.labelledServedBy)
+        _ = quiet.streamed("On-device draft.")
+        _ = quiet.finishStream()
+        XCTAssertNil(quiet.labelledServedBy)
     }
 
     func testAnAppendedStreamGrowsUnderTheReviewersOwnParagraph() {
@@ -1114,8 +1219,19 @@ final class AIDraftingTests: XCTestCase {
         var cancels: Bool = false
         /// Records that this tier was asked at all, for the tests that assert it was not.
         var asked: AskedTiers?
+        /// Where this tier pretends its endpoint's headers went (plan §3.K). `nil` until the
+        /// router hands one over, exactly as in production.
+        var report: IntelligenceEndpointReport? = nil
 
         var isAvailable: Bool { get async { failure == nil } }
+
+        /// The one thing a stub has to implement for the served-by hook: keep the report the
+        /// router handed it, so a scripted stream can fill it the way a real response would.
+        func reporting(to report: IntelligenceEndpointReport) -> any IntelligenceProvider {
+            var copy = self
+            copy.report = report
+            return copy
+        }
 
         /// What every method below does before it answers: log the call, then obey the flags.
         private func begin() async throws {

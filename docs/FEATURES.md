@@ -364,6 +364,17 @@ Three tiers ([ADR 0007](adr/0007-layered-intelligence.md)):
 The app is fully functional with AI switched off, and what reaches a configured endpoint is capped
 against an explicit token budget before it is sent.
 
+An OpenAI-compatible endpoint may volunteer more than an answer, and where it does, Shepherd shows
+it — as an addition, never as a requirement. If the endpoint names the operator that actually ran
+the weights, the caption over your draft says so (*AI draft (custom endpoint · scaleway)*); if its
+model list publishes where each model runs, the picker carries a small badge per model
+(*DE · zero retention · eu-owned*). You can also pin requests to a **country set** and to an
+operator that **retains nothing**: two optional fields under the endpoint, sent as part of the
+request, honoured by the endpoints that understand them and refused — openly — by the ones that
+cannot meet them. Left empty, nothing extra is sent and the request is exactly the request
+Shepherd has always made. And a rate-limited endpoint that says *come back in five seconds* is
+waited out once and asked once more, never in a loop.
+
 ### AI-drafted review text — a suggestion, never a submission
 
 A ✨ button (⇧⌘D) next to the review summary and next to any inline comment drafts the text for
