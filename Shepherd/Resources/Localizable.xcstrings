@@ -381,6 +381,16 @@
         }
       }
     },
+    "%lld facts": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Fakten"
+          }
+        }
+      }
+    },
     "%lld files are uncommitted in the worktree.": {
       "localizations": {
         "de": {
@@ -1031,6 +1041,16 @@
         }
       }
     },
+    "1 fact": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 Fakt"
+          }
+        }
+      }
+    },
     "1 green agent pull request ready": {
       "localizations": {
         "de": {
@@ -1441,12 +1461,32 @@
         }
       }
     },
+    "Add the finding after what you already wrote": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den Befund hinter das anfügen, was du schon geschrieben hast"
+          }
+        }
+      }
+    },
     "Add to the selection (x)": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Zur Auswahl hinzufügen (x)"
+          }
+        }
+      }
+    },
+    "Added to your review summary — open Submit review to edit it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zu deiner Review-Zusammenfassung hinzugefügt – öffne „Review abschicken“, um sie zu bearbeiten."
           }
         }
       }
@@ -2467,6 +2507,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Den lokalen Clone von %@ auswählen"
+          }
+        }
+      }
+    },
+    "Claims come from the description; evidence comes from the diff and CI. There is no score.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aussagen stammen aus der Beschreibung, Belege aus dem Diff und der CI. Es gibt keine Bewertung."
           }
         }
       }
@@ -3731,6 +3781,16 @@
         }
       }
     },
+    "Fixes issue #%lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Behebt Issue #%lld"
+          }
+        }
+      }
+    },
     "Focus hint: ": {
       "localizations": {
         "de": {
@@ -4911,6 +4971,16 @@
         }
       }
     },
+    "No breaking changes": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Breaking Changes"
+          }
+        }
+      }
+    },
     "No check on this pull request is failing, so there is nothing to diagnose.": {
       "localizations": {
         "de": {
@@ -5217,6 +5287,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Noch nichts eingeordnet."
+          }
+        }
+      }
+    },
+    "Nothing else changed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sonst hat sich nichts geändert"
           }
         }
       }
@@ -5531,6 +5611,16 @@
         }
       }
     },
+    "Only %@ changed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur %@ geändert"
+          }
+        }
+      }
+    },
     "Only local heuristics: file priority, agent detection, risk hints.": {
       "localizations": {
         "de": {
@@ -5661,6 +5751,16 @@
         }
       }
     },
+    "Open the issue on GitHub": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Issue auf GitHub öffnen"
+          }
+        }
+      }
+    },
     "Open this line in the diff": {
       "localizations": {
         "de": {
@@ -5747,6 +5847,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Das Feld mit dem Draft überschreiben"
+          }
+        }
+      }
+    },
+    "Overwrite the review summary with the finding": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Review-Zusammenfassung mit dem Befund überschreiben"
           }
         }
       }
@@ -6091,6 +6201,16 @@
         }
       }
     },
+    "Puts this claim and the facts under it into your review summary. Nothing is sent.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schreibt diese Aussage und die Fakten darunter in deine Review-Zusammenfassung. Es wird nichts gesendet."
+          }
+        }
+      }
+    },
     "Queue a reply": {
       "localizations": {
         "de": {
@@ -6427,6 +6547,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Die aktuelle Zusammenfassung ersetzen?"
+          }
+        }
+      }
+    },
+    "Replace the review summary you already wrote?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Review-Zusammenfassung ersetzen, die du schon geschrieben hast?"
           }
         }
       }
@@ -8071,6 +8201,16 @@
         }
       }
     },
+    "Tests added or run": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tests hinzugefügt oder ausgeführt"
+          }
+        }
+      }
+    },
     "That is not a valid URL.": {
       "localizations": {
         "de": {
@@ -9231,6 +9371,16 @@
         }
       }
     },
+    "WHAT IT SAYS · WHAT SHEPHERD FOUND": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WAS ER SAGT · WAS SHEPHERD GEFUNDEN HAT"
+          }
+        }
+      }
+    },
     "WHAT SHEPHERD MERGED": {
       "localizations": {
         "de": {
@@ -9307,6 +9457,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nur an Wochentagen"
+          }
+        }
+      }
+    },
+    "What the description claims, beside what the diff and CI show. It never says whether to trust this pull request.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was die Beschreibung behauptet, neben dem, was Diff und CI zeigen. Nie eine Aussage darüber, ob du diesem Pull Request trauen kannst."
           }
         }
       }
@@ -9637,6 +9797,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Befehle"
+          }
+        }
+      }
+    },
+    "contradicted by the evidence": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "von den Belegen widerlegt"
           }
         }
       }
@@ -10091,6 +10261,16 @@
         }
       }
     },
+    "not enough evidence": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nicht genug Belege"
+          }
+        }
+      }
+    },
     "not required": {
       "localizations": {
         "de": {
@@ -10427,6 +10607,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Squash-and-Merge"
+          }
+        }
+      }
+    },
+    "supported by the evidence": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "von den Belegen gestützt"
           }
         }
       }

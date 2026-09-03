@@ -21,9 +21,16 @@ struct ConversationView: View {
     /// the screen — nothing about a diagnosis is persisted (ADR 0024).
     @State private var diagnosis = CIDiagnosisModel()
 
+    /// The claims-vs-evidence card above the description (ADR 0026).
+    ///
+    /// One per review screen, holding the report so that walking every hunk of every file does not
+    /// happen on every redraw; it draws nothing at all when the description claims nothing.
+    @State private var claims = ClaimsEvidenceModel()
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                claimsCard
                 description
                 timeline
                 commits
@@ -35,6 +42,30 @@ struct ConversationView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(Theme.background)
+        .onChange(of: model.detail, initial: true) { _, detail in
+            claims.refresh(detail: detail)
+        }
+    }
+
+    /// What the pull request says beside what Shepherd found (ADR 0026).
+    ///
+    /// The summary field is read and written straight through the model: this is a plain
+    /// insertion into the composer the submit sheet shows, not generated text, so it carries no
+    /// tier and does not go through ``AIDraftFieldState`` — what it does borrow is that type's
+    /// rule, asked inside the card, that a non-empty field is never overwritten silently. It is
+    /// read through a closure so that typing in that field does not re-render this tab.
+    @ViewBuilder
+    private var claimsCard: some View {
+        ClaimsEvidenceCard(
+            model: claims,
+            onOpenFile: { path, line in
+                model.reveal(path: path, line: line)
+            },
+            currentSummary: { model.summaryText },
+            onWriteSummary: { text in
+                model.summaryText = text
+            }
+        )
     }
 
     @ViewBuilder
