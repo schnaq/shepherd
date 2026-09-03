@@ -69,9 +69,9 @@ public struct HTTPResponse: Sendable, Hashable {
 
 /// The seam between `GitHubKit` and the network.
 ///
-/// Exactly one implementation talks to the network (``URLSessionTransport``, which wraps the
-/// single injected `URLSession`); tests substitute a scripted transport so that every parsing
-/// and error-mapping path is exercised without a socket.
+/// Exactly one implementation talks to the network (``URLSessionTransport``, which owns one
+/// `URLSession`); tests substitute a scripted transport so that every parsing and error-mapping
+/// path is exercised without a socket.
 public protocol HTTPTransport: Sendable {
     /// Performs a request.
     /// - Parameter request: The request to perform.
@@ -87,17 +87,56 @@ public protocol HTTPTransport: Sendable {
 /// multiple threads, but is not universally annotated `Sendable` across the platforms this
 /// package builds on (notably swift-corelibs-foundation). The stored session is immutable and
 /// never mutated after `init`.
+///
+/// The session it builds for itself has a delegate, and that is a privacy decision rather than a
+/// detail: `URLSession` follows redirects on its own, and on a cross-host hop it copies the
+/// original request's headers — the bearer token included — onto the new one. The job-log read
+/// redirects to `*.githubusercontent.com` by design (ADR 0024), so
+/// ``RedirectStrippingDelegate`` drops `Authorization` on any hop that leaves the host it was
+/// sent to. `URLSession.shared` cannot carry a delegate, which is why it is no longer the
+/// default.
 public final class URLSessionTransport: @unchecked Sendable {
     private let session: URLSession
     private let timeout: TimeInterval
+    /// Whether this transport built its own session and therefore has to let it go again.
+    private let ownsSession: Bool
 
     /// Creates a transport.
     /// - Parameters:
-    ///   - session: The session to use. Defaults to `URLSession.shared`.
+    ///   - session: The session to use, for a caller that has one to inject. `nil` — the
+    ///     default, and what the app uses — builds a session whose redirects are policed by
+    ///     ``RedirectStrippingDelegate``. A session passed in here brings its own delegate, or
+    ///     no protection: ``GitHubClient/jobLog(repo:jobID:)``'s own unauthenticated second
+    ///     request is what still holds in that case.
     ///   - timeout: Per-request timeout in seconds. Defaults to 30.
-    public init(session: URLSession = .shared, timeout: TimeInterval = 30) {
-        self.session = session
+    public init(session: URLSession? = nil, timeout: TimeInterval = 30) {
+        self.session = session ?? URLSessionTransport.makeSession()
+        self.ownsSession = session == nil
         self.timeout = timeout
+    }
+
+    deinit {
+        // A `URLSession` holds its delegate — and an operation queue — until it is invalidated,
+        // so a transport that built one has to release it: the sign-in screen makes a transport
+        // per model, and every one of those would otherwise outlive the screen. Tasks in flight
+        // are allowed to finish, because their continuations are waiting on them. An injected
+        // session belongs to whoever injected it and is left alone.
+        if ownsSession { session.finishTasksAndInvalidate() }
+    }
+
+    /// A session that will not carry credentials off the host they were sent to.
+    ///
+    /// Not `URLSession.shared`: that session's delegate cannot be set, and a delegate is the only
+    /// place `URLSession` lets anybody see the redirect it is about to follow. The configuration
+    /// is otherwise the default one — conditional requests and cache policy are decided per
+    /// request in ``data(for:)``, as they were.
+    /// - Returns: The session the transport owns.
+    private static func makeSession() -> URLSession {
+        URLSession(
+            configuration: .default,
+            delegate: RedirectStrippingDelegate(),
+            delegateQueue: nil
+        )
     }
 }
 

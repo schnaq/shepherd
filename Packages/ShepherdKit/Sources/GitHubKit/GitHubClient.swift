@@ -333,11 +333,14 @@ public actor GitHubClient {
     /// - **The token does not follow the redirect.** The blob URL carries its own signed
     ///   credentials in its query string, so the `Authorization` header is not needed there — and
     ///   a bearer token sent to a host that does not need it is a token in one more place than
-    ///   it has to be. A transport that follows redirects itself (``URLSessionTransport`` does,
-    ///   because `URLSession` does) answers here with the blob already fetched and nothing is
-    ///   re-sent; a transport that does not answers with the `302`, and the second request this
-    ///   method makes carries no credentials at all. Either way the redirect is followed exactly
-    ///   once: a `Location` that points at another redirect is refused rather than chased.
+    ///   it has to be. The rule is therefore enforced twice, on the two paths a `302` can take.
+    ///   A transport that follows redirects itself (``URLSessionTransport`` does, because
+    ///   `URLSession` does) answers here with the blob already fetched — and stripped the header
+    ///   on that hop, because ``RedirectPolicy`` decided it before `URLSession` sent it. A
+    ///   transport that does not follow redirects answers with the `302`, and the second request
+    ///   this method makes carries no credentials at all. Either way the redirect is followed
+    ///   exactly once: a `Location` that points at another redirect is refused rather than
+    ///   chased.
     /// - **It is not ETag-cached.** The URL is keyed by an immutable job id, so every cached
     ///   entry is one more row that can never be replayed — the reason
     ///   ``cacheKey(for:)`` already refuses to cache `/check-runs` — and here each row would hold

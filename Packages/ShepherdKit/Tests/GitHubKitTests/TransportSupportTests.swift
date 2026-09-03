@@ -3,6 +3,12 @@ import ShepherdCore
 import XCTest
 @testable import GitHubKit
 
+// `URLRequest` lives in a separate module on Linux, and `RedirectPolicyTests` below asserts on
+// the two of them the redirect delegate is handed.
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
+
 final class GitHubTimestampTests: XCTestCase {
     func testParsesTheShapeGitHubActuallySends() {
         XCTAssertEqual(
@@ -214,5 +220,124 @@ final class InboxQueryTests: XCTestCase {
         let scoped = InboxQuery.reviewRequested.scoped(toOrganization: "schnaq")
         XCTAssertTrue(scoped.rawQuery.hasSuffix("org:schnaq"))
         XCTAssertEqual(scoped.impliedRelations, [.reviewRequested])
+    }
+}
+
+/// The one rule about where a credential may travel (ADR 0024).
+///
+/// `URLSession` follows redirects itself and copies the original request's headers onto the hop,
+/// so on the job-log read — a `302` from `api.github.com` to a signed blob on
+/// `*.githubusercontent.com` — it would hand a bearer token to a host that never needed one. The
+/// decision is a pure function precisely so that it can be asserted here, on the Linux runner,
+/// with no session and no socket; ``RedirectStrippingDelegate/followedRequest(original:proposed:)``
+/// is the same decision applied to the two `URLRequest`s the delegate is handed.
+final class RedirectPolicyTests: XCTestCase {
+    private let api = URL(string: "https://api.github.com/repos/schnaq/review/actions/jobs/9/logs")!
+    private let blob = URL(
+        string: "https://objects.githubusercontent.com/github-production-actions-log/1?sig=abc"
+    )!
+
+    private func request(_ url: URL, headers: [String: String]? = nil) -> HTTPRequest {
+        HTTPRequest(
+            method: "GET",
+            url: url,
+            headers: headers ?? [
+                "Authorization": "Bearer ghu_test-token",
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "Shepherd/1.0",
+                "X-GitHub-Api-Version": "2022-11-28",
+            ]
+        )
+    }
+
+    func testADifferentHostDoesNotGetTheToken() {
+        let followed = RedirectPolicy.request(for: request(api), redirectingTo: blob)
+
+        XCTAssertNil(followed.headers["Authorization"], "the whole point")
+        XCTAssertEqual(followed.url, blob)
+        // The headers that say *what* is wanted rather than *who* is asking still travel: the
+        // blob ignores them, and dropping them would make a followed redirect a different
+        // request from the one that was sent.
+        XCTAssertEqual(followed.headers["Accept"], "application/vnd.github+json")
+        XCTAssertEqual(followed.headers["User-Agent"], "Shepherd/1.0")
+        XCTAssertEqual(followed.headers["X-GitHub-Api-Version"], "2022-11-28")
+        XCTAssertEqual(followed.method, "GET")
+    }
+
+    func testTheSameHostKeepsIt() {
+        let elsewhere = URL(string: "https://api.github.com/repositories/1/pulls/42")!
+
+        let followed = RedirectPolicy.request(for: request(api), redirectingTo: elsewhere)
+
+        XCTAssertEqual(followed.headers["Authorization"], "Bearer ghu_test-token")
+        XCTAssertEqual(followed.url, elsewhere)
+    }
+
+    func testTheHostComparisonIgnoresCaseAndTheHeaderNameDoesToo() {
+        let sameHostShouting = URL(string: "https://API.GitHub.COM/rate_limit")!
+        XCTAssertEqual(
+            RedirectPolicy.request(for: request(api), redirectingTo: sameHostShouting)
+                .headers["Authorization"],
+            "Bearer ghu_test-token",
+            "DNS does not care about case, so neither may this"
+        )
+
+        // HTTP header names are case-insensitive and `HTTPRequest` keeps whatever the caller
+        // wrote, so a lowercased one must be dropped just the same.
+        let lowercased = request(api, headers: ["authorization": "Bearer ghu_test-token"])
+        XCTAssertTrue(
+            RedirectPolicy.request(for: lowercased, redirectingTo: blob).headers.isEmpty
+        )
+    }
+
+    func testAHostThatCannotBeEstablishedIsTreatedAsADifferentOne() {
+        let hostless = URL(string: "file:///tmp/log.txt")!
+
+        let followed = RedirectPolicy.request(for: request(api), redirectingTo: hostless)
+
+        XCTAssertNil(followed.headers["Authorization"], "\"we could not tell\" is not a yes")
+        XCTAssertFalse(RedirectPolicy.isSameHost(api, hostless))
+        XCTAssertFalse(RedirectPolicy.isSameHost(hostless, hostless), "not even to itself")
+    }
+
+    func testTheDelegateStripsTheHeaderOffTheRequestURLSessionProposed() {
+        var original = URLRequest(url: api)
+        original.setValue("Bearer ghu_test-token", forHTTPHeaderField: "Authorization")
+        original.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        // What `URLSession` builds for the hop: the original's headers, plus its own.
+        var proposed = URLRequest(url: blob)
+        proposed.setValue("Bearer ghu_test-token", forHTTPHeaderField: "Authorization")
+        proposed.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        proposed.setValue("gzip", forHTTPHeaderField: "Accept-Encoding")
+
+        let followed = RedirectStrippingDelegate.followedRequest(
+            original: original,
+            proposed: proposed
+        )
+
+        XCTAssertNil(followed.value(forHTTPHeaderField: "Authorization"))
+        XCTAssertEqual(followed.value(forHTTPHeaderField: "Accept"), "application/vnd.github+json")
+        XCTAssertEqual(
+            followed.value(forHTTPHeaderField: "Accept-Encoding"),
+            "gzip",
+            "what the session added for itself is not ours to drop"
+        )
+        XCTAssertEqual(followed.url, blob)
+    }
+
+    func testTheDelegateLeavesASameHostRedirectAlone() {
+        var original = URLRequest(url: api)
+        original.setValue("Bearer ghu_test-token", forHTTPHeaderField: "Authorization")
+        let elsewhere = URL(string: "https://api.github.com/rate_limit")!
+        var proposed = URLRequest(url: elsewhere)
+        proposed.setValue("Bearer ghu_test-token", forHTTPHeaderField: "Authorization")
+
+        let followed = RedirectStrippingDelegate.followedRequest(
+            original: original,
+            proposed: proposed
+        )
+
+        XCTAssertEqual(followed.value(forHTTPHeaderField: "Authorization"), "Bearer ghu_test-token")
+        XCTAssertEqual(followed.url, elsewhere)
     }
 }

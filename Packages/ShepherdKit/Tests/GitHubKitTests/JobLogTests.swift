@@ -11,7 +11,8 @@ import XCTest
 ///
 /// - the redirect to the short-lived blob is followed, and the **bearer token is not sent to the
 ///   blob host** (a transport that does not follow redirects itself is the only way to observe
-///   that, which is exactly what the mock is);
+///   that, which is exactly what the mock is) — and the rule holds for the transport that *does*
+///   follow it, where `RedirectPolicy` is what drops the header on the hop;
 /// - a transport that *did* follow the redirect on its own — `URLSessionTransport`, because
 ///   `URLSession` does — is answered from the body it already has, with no second request;
 /// - a log larger than ``GitHubClient/maximumJobLogBytes`` is refused with a typed error rather
@@ -51,6 +52,34 @@ final class JobLogTests: XCTestCase {
         XCTAssertEqual(requests[1].url.absoluteString, blob)
         // The whole point: the blob URL carries its own signature, so the token stays behind.
         XCTAssertNil(requests[1].headers["Authorization"])
+    }
+
+    func testTheTransportsOwnRedirectWouldStripTheSameHeader() throws {
+        // The other half of the same rule, asserted where it can be: `MockTransport` answers with
+        // the `302` and lets the method above make the second request, but the production
+        // transport never gets that far — `URLSession` follows the hop inside itself and copies
+        // the request's headers onto it. So the header the blob host must never see is decided by
+        // `RedirectPolicy`, and this is the API request as `GitHubClient` actually sends it.
+        let sent = HTTPRequest(
+            method: "GET",
+            url: try XCTUnwrap(
+                URL(string: "https://api.github.com/repos/schnaq/review/actions/jobs/98765/logs")
+            ),
+            headers: [
+                "Accept": "application/vnd.github+json",
+                "Authorization": "Bearer ghu_test-token",
+                "User-Agent": "Shepherd-Test",
+            ]
+        )
+
+        let followed = RedirectPolicy.request(
+            for: sent,
+            redirectingTo: try XCTUnwrap(URL(string: blob))
+        )
+
+        XCTAssertNil(followed.headers["Authorization"], "the token stays behind on both paths")
+        XCTAssertEqual(followed.headers["Accept"], "application/vnd.github+json")
+        XCTAssertEqual(followed.url.absoluteString, blob)
     }
 
     func testATransportThatFollowedTheRedirectItselfCostsOneRequest() async throws {

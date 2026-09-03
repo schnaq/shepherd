@@ -90,8 +90,18 @@ an argument out.
 
 CI log output is a **new kind of content for the cloud path**, so it is stated where the privacy
 contract lives: `CONTRIBUTING.md`'s host list now says that the reduced log tail reaches the
-configured provider, and only after that click. No new host: the blob the redirect points at is
-GitHub's own storage, part of the same `api.github.com` read.
+configured provider, and only after that click.
+
+No new host, and one rule about the one hop. The `Location` the log read answers with points at
+GitHub's own storage — a signed URL on `objects.githubusercontent.com` (`*.githubusercontent.com`,
+already on the host list for release downloads), whose signature is in its query string and which
+therefore needs no bearer token. So it is not sent one: **`Authorization` is dropped on any
+redirect that leaves the host it was sent to.** That is not a property of the endpoint but of the
+transport, because `URLSession` follows a `302` itself and copies the request's headers onto the
+hop — so the decision is `RedirectPolicy.request(for:redirectingTo:)`, a pure function asserted on
+the Linux runner, applied by `URLSessionTransport`'s task delegate; and `jobLog`'s own second
+request, for a transport that does not follow redirects, sends no credentials either. Two paths, one
+rule, stated in both.
 
 ### 4. The answer is a card, and the card shows what the model saw
 
