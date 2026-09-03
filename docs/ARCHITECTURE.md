@@ -245,12 +245,12 @@ Pure logic in `ShepherdCore` (all unit-tested):
   and a matching template with a body — so a template can only ever fill a new review and can
   never overwrite review work (ADR 0006).
 - `DigestReport` / `DigestSchedule` (`Digest/`) — the morning digest, as two pure values.
-  `DigestReport.make(pullRequests:issues:parkedReviewCount:windowStart:now:)` turns cached inbox
-  rows, cached issue rows and the parked-outbox count into ordered sections with a count and up to
+  `DigestReport.make(pullRequests:issues:parkedReviewCount:failedWriteCount:windowStart:now:)` turns
+  cached inbox rows, cached issue rows and the two standing outbox counts into ordered sections with a count and up to
   three named rows each; an empty report is the signal for "say nothing at all". The predicates are
   *borrowed*, not restated: `PullRequestSummary.needsMyReview`,
   `BulkTriagePlan.greenAgentPullRequests(in:)` (ADR 0015), `AutoDelegationPolicy.isOwn(_:)`
-  (ADR 0016) and `IssueRowSummary.hasAgentPullRequest` (ADR 0032). Two of the six sections are
+  (ADR 0016) and `IssueRowSummary.hasAgentPullRequest` (ADR 0032). Two of the seven sections are
   windowed (`DigestSectionKind.isWindowed`) — the review requests and the issues assigned to you,
   both on `updatedAt`, because that is the field GitHub moves when somebody hands you something.
   The other four are standing state, because a green agent PR nobody merged is exactly what a
@@ -482,8 +482,12 @@ schema change for the issue actions: `outbox.payload` is an opaque blob of the w
 repository and number — which is the question `issuePruneGuardSQL` was already asking. Three
 standing counts read it: `pendingOutboxCount()` (waiting or in flight), `conflictedOutboxCount()`
 (parked for the user to decide) and `failedOutboxCount()` (given up on, and therefore in neither of
-the other two) — the last one added with the issue panel's failed-write line, because a
-non-retriable failure was until then counted by nothing at all.
+the other two). All three are observed by `SignedInSession` and shown wherever the outbox is
+described — Settings → Sync, the title bar, the morning digest. The failed one is the only one with
+rows the user can *act* on, which is why the store also carries `failedOutboxItems()` (the list
+Settings → Sync names) and `retryOutboxItem(id:)` (back to `pending`, `attemptCount` and
+`nextAttemptAt` reset, guarded on `state = 'failed'` so a row a drain is currently sending cannot be
+pulled out from under it); `deleteOutboxItem(id:)` is the discard on the other button.
 
 One read crosses tables rather than serving a screen: `viewerReviewComments(login:since:)` joins
 `review_comments → review_threads → pull_requests` and returns the signed-in user's own posted
@@ -1073,19 +1077,20 @@ duplicate the toolbar, the digest card, the Settings sheet and the palette overl
   a mutation, which is the same rule `PullRequestActions` states below. The label picker is fed by
   the labels the section has already seen in that repository (a `GET /repos/…/labels` would be a
   new request on every panel for a list the sweep already wrote), and the panel shows the two
-  outbox states the pull-request side shows — waiting to be sent, and parked — **plus the one it
-  does not**: a write the drain gave up on, counted by `failedWriteCount(for:)` and drawn in the
-  failure colour. An issue row fails non-retriably whenever the engine was built without an
+  outbox states the pull-request side shows — waiting to be sent, parked, and given up on —
+  about this one issue, the third counted by `failedWriteCount(for:)` and drawn in the failure
+  colour. An issue row fails non-retriably whenever the engine was built without an
   `IssueWriting` port, and a 4xx from GitHub ends the same way; such a row is neither pending nor
-  conflicted, so without that line the click looked as though it had worked. No new global
-  shortcuts: the issues section already refuses `r a`, `m` and `x`.
+  conflicted, so without that line the click looked as though it had worked. This panel had the
+  line first; the account-wide surfaces (Settings → Sync, the title bar, the digest) caught up
+  afterwards. No new global shortcuts: the issues section already refuses `r a`, `m` and `x`.
 
 ### Morning digest (opt-in, local, no scheduler)
 
 Once a day, at a time the user picks, Shepherd says what came in: new review requests, issues
 assigned to you, green agent pull requests that only need an approval or a merge, issues an agent's
-pull request closed as completed, the user's own pull requests with red CI or a change request, and
-reviews the outbox could not send. It arrives as a macOS notification and as a
+pull request closed as completed, the user's own pull requests with red CI or a change request,
+reviews the outbox parked, and writes it gave up on entirely. It arrives as a macOS notification and as a
 dismissible card above the inbox list. **Off by default** (Settings → Sync).
 
 `Features/Digest/` is three files and holds no judgement: `DigestCoordinator` (the loop and the
@@ -1221,6 +1226,9 @@ deliberately is not. `SyncEvent.draftConflict` surfaces as an
 alert offering to re-open the review rather than submitting against the wrong commit — one alert
 per parked review, queued in `DraftConflictQueue` so a drain that parks several shows all of them,
 with `conflictedOutboxCount()` behind the standing count in Settings → Sync and the title bar.
+A row the drain **gave up on** raises no alert at all — there is no draft to re-apply and retrying
+cannot help — so the standing `failedOutboxCount()` beside it is the whole surface, and Settings →
+Sync's OUTBOX card is where those rows are named and either retried or discarded.
 
 Bulk triage (ADR 0015) is the same surface used *n* times, on purpose. `PullRequestActions.queue(_:method:)`
 takes a confirmed `BulkTriagePlan`, persists each draft and enqueues each row exactly as the
