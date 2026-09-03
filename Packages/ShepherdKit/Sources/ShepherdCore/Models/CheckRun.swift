@@ -126,3 +126,36 @@ public struct CheckRun: Sendable, Codable, Hashable, Identifiable {
         }
     }
 }
+
+extension CheckRun {
+    /// The id of the GitHub Actions job behind this check, when there is one (plan §3.F).
+    ///
+    /// A check run does not carry its job id: the only place it appears is inside
+    /// ``detailsURL``, which for an Actions job is
+    /// `https://github.com/{owner}/{repo}/actions/runs/{run}/job/{job}`. That is the id
+    /// `GET /repos/{owner}/{repo}/actions/jobs/{id}/logs` needs, so parsing it here is what makes
+    /// the job-log read reachable at all.
+    ///
+    /// It is a pure property in `ShepherdCore` rather than a helper next to the network call for
+    /// the reason the rest of this layer's arithmetic is: this is a *parser of somebody else's
+    /// URL shape*, it is wrong in a way nobody notices (an off-by-one in the path components
+    /// yields a plausible number that reads the wrong job's log), and it has to be testable
+    /// without a Mac.
+    ///
+    /// **A check that is not an Actions job answers `nil`, and that is a supported answer rather
+    /// than a failure.** Buildkite, CircleCI and every other integration point their
+    /// `detailsURL` somewhere else entirely, and the tool that asks for a log says "there is no
+    /// readable log for this check" and works from the check's own summary instead. The path is
+    /// matched from `actions/runs/…/job/…` rather than from the front, so a GitHub Enterprise
+    /// Server host with a path prefix still parses.
+    public var actionsJobID: Int? {
+        guard let detailsURL else { return nil }
+        let parts = detailsURL.pathComponents.filter { $0 != "/" }
+        guard let actions = parts.firstIndex(of: "actions"), parts.count > actions + 4 else {
+            return nil
+        }
+        guard parts[actions + 1] == "runs", parts[actions + 3] == "job" else { return nil }
+        guard let id = Int(parts[actions + 4]), id > 0 else { return nil }
+        return id
+    }
+}
