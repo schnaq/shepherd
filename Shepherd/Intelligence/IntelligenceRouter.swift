@@ -959,7 +959,6 @@ struct IntelligenceRouter: Sendable {
         var lastFailure: String?
 
         if allowsCloud, let cloud = cloudProvider {
-        if let cloud = cloudProvider {
             // The non-streaming twin of the same hook: one report per request, read after the
             // answer rather than after the first element, because here there is only an answer.
             let report = IntelligenceEndpointReport()
