@@ -178,6 +178,39 @@ public protocol IssueFetching: Sendable {
 /// `GitHubClient` already has exactly this shape; the conformance is the contract check.
 extension GitHubClient: IssueFetching {}
 
+/// The slice of ``GitHubKit/GitHubClient`` the outbox drain executes issue writes through
+/// (ADR 0032's Sprint 4a amendment).
+///
+/// A third port rather than more requirements on ``IssueFetching``, and the split is the one
+/// ``ClosedPullRequestReading`` makes: ``IssueFetching`` is what the *sweep* needs, and every
+/// double in every sweep test implements all of it. The drain is a different moment with a
+/// different failure mode, and a test that queues an issue write needs no sweep at all — so the
+/// writes and the precondition they are gated on live behind a protocol only those tests have to
+/// satisfy.
+///
+/// ``issueState(repo:number:)`` is first in the list because it is first in the drain: no method
+/// below it is called until it has answered.
+public protocol IssueWriting: Sendable {
+    /// Reads the issue's current `updatedAt` — the precondition every write below is gated on.
+    func issueState(repo: RepoRef, number: Int) async throws -> IssueState
+    /// Posts a comment on the issue.
+    func addIssueComment(repo: RepoRef, number: Int, body: String) async throws
+    /// Adds labels without touching the ones already there.
+    func addIssueLabels(repo: RepoRef, number: Int, labels: [String]) async throws
+    /// Adds assignees without removing the ones already there.
+    func addIssueAssignees(repo: RepoRef, number: Int, logins: [String]) async throws
+    /// Opens or closes the issue, sending `state` and `state_reason` and nothing else.
+    func setIssueState(
+        repo: RepoRef,
+        number: Int,
+        state: String,
+        stateReason: String?
+    ) async throws
+}
+
+/// `GitHubClient` already has exactly this shape; the conformance is the contract check.
+extension GitHubClient: IssueWriting {}
+
 /// The slice of ``ShepherdPersistence/DatabaseManager`` the issues sweep writes through
 /// (ADR 0032).
 public protocol IssueSyncStoring: Sendable {

@@ -9,10 +9,15 @@ final class OutboxDrainTests: XCTestCase {
     private let repo = SyncFixtures.repo
     private let now = Date(timeIntervalSince1970: 1_788_162_000)
 
-    private func makeEngine(github: MockGitHub, store: DatabaseManager) -> SyncEngine {
+    private func makeEngine(
+        github: MockGitHub,
+        store: DatabaseManager,
+        issueWrites: (any IssueWriting)? = nil
+    ) -> SyncEngine {
         SyncEngine(
             github: github,
             store: store,
+            issueWrites: issueWrites,
             configuration: SyncConfiguration(),
             sleeper: RecordingSleeper(),
             now: { Date(timeIntervalSince1970: 1_788_162_000) }
@@ -461,5 +466,204 @@ final class OutboxDrainTests: XCTestCase {
         XCTAssertTrue(headChecks.isEmpty)
         let submitted = await github.submittedDrafts
         XCTAssertEqual(submitted.count, 1)
+    }
+
+    // MARK: - Issue writes and their staleness precondition (ADR 0032's Sprint 4a amendment)
+
+    /// Queues one issue action against an issue last updated at ``now``.
+    ///
+    /// The row's `prID`, `repo` and `number` are the *issue's*: `OutboxItem` reuses its three
+    /// target fields for whichever kind of node the action names.
+    private func enqueueIssue(
+        _ action: OutboxAction,
+        in store: DatabaseManager,
+        queuedAfter offset: TimeInterval = 0
+    ) async throws {
+        try await store.enqueue(
+            OutboxItem(
+                prID: "I_1",
+                repo: repo,
+                number: 128,
+                action: action,
+                // Distinct, because the drain claims in `createdAt` order and a test that
+                // asserts on the order of two state changes must not depend on a tie-break.
+                createdAt: now.addingTimeInterval(offset),
+                nextAttemptAt: Date(timeIntervalSince1970: 0)
+            )
+        )
+    }
+
+    func testAMatchingTimestampLetsEveryIssueWriteThrough() async throws {
+        let github = MockGitHub()
+        let writer = MockIssueWriter()
+        await writer.setState(updatedAt: now)
+        let store = try DatabaseManager.inMemory()
+        try await enqueueIssue(
+            .addIssueComment(body: "Picking this up.", basedOnUpdatedAt: now),
+            in: store,
+            queuedAfter: 1
+        )
+        try await enqueueIssue(
+            .addIssueLabel(name: "needs-triage", basedOnUpdatedAt: now),
+            in: store,
+            queuedAfter: 2
+        )
+        try await enqueueIssue(
+            .addIssueAssignee(login: "octocat", basedOnUpdatedAt: now),
+            in: store,
+            queuedAfter: 3
+        )
+        try await enqueueIssue(
+            .closeIssue(reason: .notPlanned, basedOnUpdatedAt: now),
+            in: store,
+            queuedAfter: 4
+        )
+        try await enqueueIssue(.reopenIssue(basedOnUpdatedAt: now), in: store, queuedAfter: 5)
+        let engine = makeEngine(github: github, store: store, issueWrites: writer)
+
+        await engine.drainOutbox()
+
+        let comments = await writer.comments
+        XCTAssertEqual(
+            comments,
+            [MockIssueWriter.Comment(repo: repo, number: 128, body: "Picking this up.")]
+        )
+        let labels = await writer.labels
+        XCTAssertEqual(labels, [["needs-triage"]])
+        let assignees = await writer.assignees
+        XCTAssertEqual(assignees, [["octocat"]])
+        let changes = await writer.stateChanges
+        XCTAssertEqual(
+            changes,
+            [
+                MockIssueWriter.StateChange(
+                    repo: repo,
+                    number: 128,
+                    state: "closed",
+                    stateReason: "not_planned"
+                ),
+                MockIssueWriter.StateChange(
+                    repo: repo,
+                    number: 128,
+                    state: "open",
+                    stateReason: nil
+                ),
+            ]
+        )
+        // Every one of the five was probed first, and the row is gone once it landed.
+        let probes = await writer.probes
+        XCTAssertEqual(probes, Array(repeating: "schnaq/review#128", count: 5))
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testAChangedUpdatedAtParksTheRowAndSendsNothing() async throws {
+        let github = MockGitHub()
+        let writer = MockIssueWriter()
+        // Somebody relabelled the issue between the click and the drain.
+        await writer.setState(updatedAt: now.addingTimeInterval(90))
+        let store = try DatabaseManager.inMemory()
+        try await enqueueIssue(.closeIssue(reason: .completed, basedOnUpdatedAt: now), in: store)
+        let engine = makeEngine(github: github, store: store, issueWrites: writer)
+
+        let emitted = await drainCollectingEvents(engine)
+
+        let sent = await writer.sentAnything
+        XCTAssertFalse(sent, "nothing may be sent against an issue that moved on")
+        let stored = try await store.allOutboxItems()
+        XCTAssertEqual(stored.count, 1)
+        XCTAssertEqual(stored.first?.state, .conflicted, "the row is parked, not retried")
+        XCTAssertEqual(
+            stored.first?.lastError?.contains("moved on before the write could run"),
+            true
+        )
+        // No `draftConflict`: there is no review draft to re-apply, so the alert that offers one
+        // would be a promise this row cannot keep. The standing conflicted count is the surface.
+        XCTAssertFalse(
+            emitted.contains { event in
+                if case .draftConflict = event { return true }
+                return false
+            }
+        )
+        XCTAssertTrue(sentMutations(in: emitted).isEmpty)
+    }
+
+    func testAProbeThatCouldNotBeMadeIsABackoffAndNotAConflict() async throws {
+        let github = MockGitHub()
+        let writer = MockIssueWriter()
+        await writer.setState(updatedAt: now)
+        await writer.setProbeError(.transport(message: "offline"))
+        let store = try DatabaseManager.inMemory()
+        try await enqueueIssue(
+            .addIssueComment(body: "On it.", basedOnUpdatedAt: now),
+            in: store
+        )
+        let engine = makeEngine(github: github, store: store, issueWrites: writer)
+
+        await engine.drainOutbox()
+
+        let sent = await writer.sentAnything
+        XCTAssertFalse(sent)
+        let stored = try await store.allOutboxItems()
+        // Still queued and backed off — a tunnel says nothing about the issue, so parking on it
+        // would leave the user a pile of rows to clear by hand.
+        XCTAssertEqual(stored.first?.state, .pending)
+        XCTAssertEqual(stored.first?.attemptCount, 1)
+        XCTAssertEqual(
+            stored.first?.nextAttemptAt.timeIntervalSince1970 ?? 0,
+            now.addingTimeInterval(5).timeIntervalSince1970,
+            accuracy: 0.001
+        )
+    }
+
+    func testAnEngineWithNoIssueWriterRefusesTheRowRatherThanSendingItBlind() async throws {
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        try await enqueueIssue(.reopenIssue(basedOnUpdatedAt: now), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        await engine.drainOutbox()
+
+        let stored = try await store.allOutboxItems()
+        XCTAssertEqual(stored.first?.state, .failed, "not retryable: the port cannot appear later")
+    }
+
+    func testAClosedIssueIsAnnouncedWithGitHubsOwnReasonWord() async throws {
+        let github = MockGitHub()
+        let writer = MockIssueWriter()
+        await writer.setState(updatedAt: now)
+        let store = try DatabaseManager.inMemory()
+        try await enqueueIssue(.closeIssue(reason: .notPlanned, basedOnUpdatedAt: now), in: store)
+        let engine = makeEngine(github: github, store: store, issueWrites: writer)
+
+        let sent = sentMutations(in: await drainCollectingEvents(engine))
+
+        XCTAssertEqual(sent.map(\.kind), [.issueClosed(reason: "not_planned")])
+        XCTAssertEqual(sent.first?.prID, "I_1")
+        XCTAssertEqual(sent.first?.number, 128)
+    }
+
+    func testEveryIssueActionMapsToASentKind() {
+        let queuedAt = Date(timeIntervalSince1970: 1_788_162_000)
+        XCTAssertEqual(
+            SyncEngine.sentKind(for: .addIssueComment(body: "x", basedOnUpdatedAt: queuedAt)),
+            .issueCommentAdded
+        )
+        XCTAssertEqual(
+            SyncEngine.sentKind(for: .addIssueLabel(name: "bug", basedOnUpdatedAt: queuedAt)),
+            .issueLabelAdded(name: "bug")
+        )
+        XCTAssertEqual(
+            SyncEngine.sentKind(for: .addIssueAssignee(login: "octocat", basedOnUpdatedAt: queuedAt)),
+            .issueAssigneeAdded(login: "octocat")
+        )
+        XCTAssertEqual(
+            SyncEngine.sentKind(for: .closeIssue(reason: .completed, basedOnUpdatedAt: queuedAt)),
+            .issueClosed(reason: "completed")
+        )
+        XCTAssertEqual(
+            SyncEngine.sentKind(for: .reopenIssue(basedOnUpdatedAt: queuedAt)),
+            .issueReopened
+        )
     }
 }

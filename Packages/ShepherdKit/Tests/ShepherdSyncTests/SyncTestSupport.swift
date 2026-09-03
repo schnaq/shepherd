@@ -503,6 +503,89 @@ actor MockIssueGitHub: IssueFetching {
     }
 }
 
+/// A scripted stand-in for the issue-write half of ``GitHubKit/GitHubClient`` (ADR 0032's
+/// Sprint 4a amendment).
+///
+/// Its own double rather than more scripting on ``MockGitHub`` or on ``MockIssueGitHub``,
+/// mirroring the port split a third time: only a test that queues an issue write has to satisfy
+/// ``IssueWriting``. It records the probe separately from the writes, because "nothing was sent"
+/// and "nothing was even asked" are the two different failures the precondition can have.
+actor MockIssueWriter: IssueWriting {
+    /// One comment the drain posted.
+    struct Comment: Equatable {
+        var repo: RepoRef
+        var number: Int
+        var body: String
+    }
+
+    /// One state change the drain sent.
+    struct StateChange: Equatable {
+        var repo: RepoRef
+        var number: Int
+        var state: String
+        var stateReason: String?
+    }
+
+    private var state: IssueState?
+    private var probeError: GitHubError?
+
+    /// `owner/name#number` for every probe, in order.
+    private(set) var probes: [String] = []
+    private(set) var comments: [Comment] = []
+    private(set) var labels: [[String]] = []
+    private(set) var assignees: [[String]] = []
+    private(set) var stateChanges: [StateChange] = []
+
+    init() {}
+
+    /// Scripts what the probe answers with.
+    func setState(updatedAt: Date, isClosed: Bool = false) {
+        state = IssueState(id: "I_1", updatedAt: updatedAt, isClosed: isClosed)
+    }
+
+    /// Scripts a probe that cannot be made at all — the offline case.
+    func setProbeError(_ error: GitHubError?) {
+        probeError = error
+    }
+
+    func issueState(repo: RepoRef, number: Int) async throws -> IssueState {
+        probes.append("\(repo.fullName)#\(number)")
+        if let probeError { throw probeError }
+        guard let state else {
+            throw GitHubError.notFound(resource: "\(repo.fullName)#\(number)")
+        }
+        return state
+    }
+
+    func addIssueComment(repo: RepoRef, number: Int, body: String) async throws {
+        comments.append(Comment(repo: repo, number: number, body: body))
+    }
+
+    func addIssueLabels(repo: RepoRef, number: Int, labels newLabels: [String]) async throws {
+        labels.append(newLabels)
+    }
+
+    func addIssueAssignees(repo: RepoRef, number: Int, logins: [String]) async throws {
+        assignees.append(logins)
+    }
+
+    func setIssueState(
+        repo: RepoRef,
+        number: Int,
+        state newState: String,
+        stateReason: String?
+    ) async throws {
+        stateChanges.append(
+            StateChange(repo: repo, number: number, state: newState, stateReason: stateReason)
+        )
+    }
+
+    /// Whether the drain sent anything at all.
+    var sentAnything: Bool {
+        !comments.isEmpty || !labels.isEmpty || !assignees.isEmpty || !stateChanges.isEmpty
+    }
+}
+
 extension SyncFixtures {
     /// A machine that opens pull requests, for the "has an agent pull request" facet.
     static func machine() -> ShepherdCore.Actor {

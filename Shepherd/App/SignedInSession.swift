@@ -137,6 +137,12 @@ final class SignedInSession {
             // (`runIssueSweep()` does not throw), which is what makes turning it on safe for the
             // review inbox Shepherd is actually for.
             issues: IssueCapture(fetcher: github, store: database),
+            // And the port the drain executes a queued issue triage write through (ADR 0032's
+            // Sprint 4a amendment). Separate from the pair above because the drain is a
+            // different moment: it probes the issue's `updatedAt` before every write and parks
+            // the row when it has moved, which is `ReviewDraft.basedOnHeadOid`'s rule on the
+            // other kind of node.
+            issueWrites: github,
             configuration: SyncConfiguration(
                 sweepInterval: sweepInterval,
                 viewerLogin: account.login
@@ -211,7 +217,12 @@ final class SignedInSession {
             }
         }
 
-        let issues = database.observeIssues()
+        // `includeClosed: true`, which the issues *section* does not want and the digest does:
+        // "an agent pull request closed one of your issues" is a statement about a closed row,
+        // and the sweep searches `is:open`, so such a row lives here only until the next sweep
+        // prunes it. The section keeps its own observation on the open rows (`IssueInboxModel`),
+        // so nothing on screen changes — this is the wider source ⌘K and the digest read.
+        let issues = database.observeIssues(filter: IssueFilter(includeClosed: true))
         issuesTask = Task { [weak self] in
             for await rows in issues {
                 guard let self else { return }

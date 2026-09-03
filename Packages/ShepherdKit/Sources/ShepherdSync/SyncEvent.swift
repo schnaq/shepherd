@@ -35,11 +35,13 @@ public struct SyncFailure: Sendable, Hashable, Codable {
 /// ADR 0006 is explicit that this must be surfaced rather than silently submitted against the
 /// wrong commit: the user's inline comments would land on the wrong lines.
 public struct DraftConflict: Sendable, Hashable, Codable {
-    /// The pull request's node id.
+    /// The target's node id — the pull request's, or the issue's for an issue action
+    /// (ADR 0032). Named for the pull request it usually is, exactly as
+    /// ``ShepherdCore/OutboxItem/prID`` is and for the same reason.
     public var prID: String
     /// The repository.
     public var repo: RepoRef
-    /// The pull request number.
+    /// The target's number within its repository.
     public var number: Int
     /// The head commit the draft was written against.
     public var expectedHeadOid: String
@@ -89,6 +91,16 @@ public struct SentMutation: Sendable, Hashable, Codable {
         case merged(method: String)
         /// The pull request was taken out of draft state.
         case markedReadyForReview
+        /// A comment was posted on an issue (ADR 0032's Sprint 4a amendment).
+        case issueCommentAdded
+        /// A label was added to an issue.
+        case issueLabelAdded(name: String)
+        /// An assignee was added to an issue.
+        case issueAssigneeAdded(login: String)
+        /// An issue was closed, with GitHub's own `state_reason` word.
+        case issueClosed(reason: String)
+        /// A closed issue was reopened.
+        case issueReopened
     }
 
     /// The pull request's node id.

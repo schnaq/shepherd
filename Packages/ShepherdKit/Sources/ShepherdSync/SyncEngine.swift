@@ -87,6 +87,14 @@ public actor SyncEngine {
     private let outcomes: OutcomeCapture?
     /// Where the issues sweep reads and writes, when the app wired it up (ADR 0032).
     private let issues: IssueCapture?
+    /// Where the drain executes an issue triage write, when the app wired one up (ADR 0032's
+    /// Sprint 4a amendment).
+    ///
+    /// Separate from ``issues`` rather than a third field on ``IssueCapture``, because that
+    /// value's own argument — "neither half is any use without the other" — is not true here: a
+    /// drain that sends a queued comment needs no sweep, and a sweep needs no writer. `nil` means
+    /// an issue row in the outbox is parked as failed with one sentence rather than sent blind.
+    private let issueWrites: (any IssueWriting)?
     private let configuration: SyncConfiguration
     private let sleeper: any Sleeping
     private let now: @Sendable () -> Date
@@ -126,6 +134,10 @@ public actor SyncEngine {
     ///   - issues: Where the issues sweep reads and writes (ADR 0032). `nil` — the default —
     ///     means the cycle runs the pull-request sweep alone, which is how every caller that
     ///     predates the issues inbox builds an engine.
+    ///   - issueWrites: Where a queued issue triage write is probed and executed (ADR 0032's
+    ///     Sprint 4a amendment). `nil` — the default — means the drain refuses an issue row
+    ///     instead of sending it, which is how every caller that predates the issue writes
+    ///     builds an engine.
     ///   - configuration: Tunables.
     ///   - sleeper: The delay abstraction; tests inject one that does not wait.
     ///   - now: Clock injection point for tests.
@@ -135,6 +147,7 @@ public actor SyncEngine {
         snapshots: (any ReviewSnapshotWriting)? = nil,
         outcomes: OutcomeCapture? = nil,
         issues: IssueCapture? = nil,
+        issueWrites: (any IssueWriting)? = nil,
         configuration: SyncConfiguration = SyncConfiguration(),
         sleeper: any Sleeping = SystemSleeper(),
         now: @escaping @Sendable () -> Date = { Date() }
@@ -144,6 +157,7 @@ public actor SyncEngine {
         self.snapshots = snapshots
         self.outcomes = outcomes
         self.issues = issues
+        self.issueWrites = issueWrites
         self.configuration = configuration
         self.sleeper = sleeper
         self.now = now
@@ -636,6 +650,16 @@ public actor SyncEngine {
         case sent
         /// The mutation was not sent because the pull request moved on.
         case conflict(DraftConflict)
+        /// The mutation was not sent because the **issue** moved on (ADR 0032's Sprint 4a
+        /// amendment).
+        ///
+        /// Its own case rather than a ``DraftConflict`` with timestamps in the two SHA fields,
+        /// because ``SyncEvent/draftConflict(_:)`` promises something an issue write cannot
+        /// offer: a review draft that is still on disk and can be re-applied against the new
+        /// head. A parked issue row is parked, counted by
+        /// ``ShepherdPersistence/DatabaseManager/conflictedOutboxCount()`` beside every other
+        /// parked row, and left for the user — which is the whole of what ADR 0006 asks for.
+        case staleIssue(reason: String)
     }
 
     /// Sends everything in the outbox that is due.
@@ -700,6 +724,10 @@ public actor SyncEngine {
                         reason: "Head moved from \(conflict.expectedHeadOid) to \(conflict.actualHeadOid)"
                     )
                     emit(.draftConflict(conflict))
+                case .staleIssue(let reason):
+                    // Parked, and nothing is emitted: there is no draft to re-apply and no
+                    // alert that could offer one. The standing conflicted count is the surface.
+                    try await store.markOutboxItemConflicted(id: item.id, reason: reason)
                 }
             } catch let error as GitHubError {
                 await handleOutboxFailure(item, error: error)
@@ -800,7 +828,131 @@ public actor SyncEngine {
         case .markReadyForReview:
             try await github.markReadyForReview(pullRequestID: item.prID)
             return .sent
+
+        // The five issue actions (ADR 0032's Sprint 4a amendment). Every one of them goes
+        // through `issueTarget(for:)` first, so the precondition cannot be forgotten for one of
+        // them, and `item.prID`/`repo`/`number` are read here as *the issue's* node id,
+        // repository and number — see ``ShepherdCore/OutboxItem``'s own note.
+        case .addIssueComment(let body, let basedOnUpdatedAt):
+            let target = try await issueTarget(for: item, basedOnUpdatedAt: basedOnUpdatedAt)
+            switch target {
+            case .stale(let outcome):
+                return outcome
+            case .fresh(let writes):
+                try await writes.addIssueComment(repo: item.repo, number: item.number, body: body)
+                return .sent
+            }
+
+        case .addIssueLabel(let name, let basedOnUpdatedAt):
+            let target = try await issueTarget(for: item, basedOnUpdatedAt: basedOnUpdatedAt)
+            switch target {
+            case .stale(let outcome):
+                return outcome
+            case .fresh(let writes):
+                try await writes.addIssueLabels(
+                    repo: item.repo,
+                    number: item.number,
+                    labels: [name]
+                )
+                return .sent
+            }
+
+        case .addIssueAssignee(let login, let basedOnUpdatedAt):
+            let target = try await issueTarget(for: item, basedOnUpdatedAt: basedOnUpdatedAt)
+            switch target {
+            case .stale(let outcome):
+                return outcome
+            case .fresh(let writes):
+                try await writes.addIssueAssignees(
+                    repo: item.repo,
+                    number: item.number,
+                    logins: [login]
+                )
+                return .sent
+            }
+
+        case .closeIssue(let reason, let basedOnUpdatedAt):
+            let target = try await issueTarget(for: item, basedOnUpdatedAt: basedOnUpdatedAt)
+            switch target {
+            case .stale(let outcome):
+                return outcome
+            case .fresh(let writes):
+                try await writes.setIssueState(
+                    repo: item.repo,
+                    number: item.number,
+                    state: reason.apiState,
+                    stateReason: reason.rawValue
+                )
+                return .sent
+            }
+
+        case .reopenIssue(let basedOnUpdatedAt):
+            let target = try await issueTarget(for: item, basedOnUpdatedAt: basedOnUpdatedAt)
+            switch target {
+            case .stale(let outcome):
+                return outcome
+            case .fresh(let writes):
+                // No `state_reason`: "reopened" is what GitHub records by itself, and sending a
+                // reason Shepherd invented would be a second opinion about why.
+                try await writes.setIssueState(
+                    repo: item.repo,
+                    number: item.number,
+                    state: "open",
+                    stateReason: nil
+                )
+                return .sent
+            }
         }
+    }
+
+    /// What the staleness probe found: either a writer to go ahead with, or the outcome to park
+    /// the row with.
+    private enum IssueTarget {
+        /// The issue is where it was when the row was queued.
+        case fresh(any IssueWriting)
+        /// The issue moved on; nothing may be sent.
+        case stale(OutboxOutcome)
+    }
+
+    /// Probes the issue and decides whether the queued write may go out (ADR 0006, ADR 0032).
+    ///
+    /// This is `ReviewDraft.basedOnHeadOid`'s rule on the other kind of node: the field a review
+    /// is pinned to is the head commit, and the field an issue write is pinned to is `updatedAt`,
+    /// because that is what GitHub moves for every edit, label, assignment, comment and state
+    /// change. A mismatch parks the row; it does **not** send and then apologise.
+    ///
+    /// A probe that *fails* is a plain failure and therefore a backoff — the row stays queued and
+    /// is tried again — rather than a conflict. The two are genuinely different: a conflict is a
+    /// fact about the issue that will not change by waiting, while a probe that could not be made
+    /// says nothing about the issue at all, and parking on it would turn every tunnel into a pile
+    /// of rows the user has to clear by hand.
+    /// - Parameters:
+    ///   - item: The outbox row, whose target fields name the issue.
+    ///   - basedOnUpdatedAt: The `updatedAt` the action was composed against.
+    /// - Returns: The writer to proceed with, or the outcome to park with.
+    /// - Throws: Whatever the probe or the missing port failed with.
+    private func issueTarget(
+        for item: OutboxItem,
+        basedOnUpdatedAt: Date
+    ) async throws -> IssueTarget {
+        guard let issueWrites else {
+            // Not retryable: an engine built without the port will never grow one at runtime, so
+            // a backoff would only mean the same sentence every fifteen minutes.
+            throw GitHubError.validationFailed(
+                message: "This build of the sync engine cannot send issue writes."
+            )
+        }
+        let state = try await issueWrites.issueState(repo: item.repo, number: item.number)
+        guard state.isStale(against: basedOnUpdatedAt) else { return .fresh(issueWrites) }
+        return .stale(
+            .staleIssue(
+                reason: "The issue moved on before the write could run: it was last updated "
+                    + GitHubTimestamp.string(from: basedOnUpdatedAt)
+                    + " when this was queued, and GitHub now says "
+                    + GitHubTimestamp.string(from: state.updatedAt)
+                    + "."
+            )
+        )
     }
 
     // MARK: - Helpers
@@ -883,6 +1035,11 @@ public actor SyncEngine {
         case .unresolveThread: return .threadUnresolved
         case .merge(let method, _): return .merged(method: method)
         case .markReadyForReview: return .markedReadyForReview
+        case .addIssueComment: return .issueCommentAdded
+        case .addIssueLabel(let name, _): return .issueLabelAdded(name: name)
+        case .addIssueAssignee(let login, _): return .issueAssigneeAdded(login: login)
+        case .closeIssue(let reason, _): return .issueClosed(reason: reason.rawValue)
+        case .reopenIssue: return .issueReopened
         }
     }
 
