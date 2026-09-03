@@ -180,7 +180,11 @@ struct ClosingIssuesCard: View {
     /// build — the `shepherd://issue/…` grammar lands with the issues inbox itself — and an issue
     /// Shepherd has no screen for is best opened where a reviewer can act on it. This is also the
     /// single call site that changes when `AppEnvironment.openIssue` exists.
+    ///
+    /// `@MainActor` because opening a URL is AppKit work, and the one caller is a button's action
+    /// inside a view body — which is main-actor isolated already.
     /// - Parameter issue: The issue to open.
+    @MainActor
     static func openOnGitHub(_ issue: LinkedIssueReference) {
         NSWorkspace.shared.open(githubURL(for: issue))
     }
