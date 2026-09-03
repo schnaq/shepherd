@@ -223,6 +223,34 @@ review you submitted on github.com is picked up too, as long as the pull request
 commit you reviewed; after that there is nothing honest to compare, and the control stays away
 rather than guessing ([ADR 0028](adr/0028-since-my-review-interdiff.md)).
 
+### You have said this three times
+
+The third time you write essentially the same review comment on one repository's pull requests, a
+card appears on the review screen: **"You have said this three times."** — with the three comments
+quoted and the pull requests you wrote them on. The problem, at that point, is not the pull request
+in front of you. It is that the repository's agent instructions do not say it.
+
+So the card offers **Draft a rule**. It opens the delegation sheet with a task already written: add
+one rule to `CLAUDE.md` or `AGENTS.md`, whichever the repository has, that prevents this — with your
+three comments quoted underneath and a note to keep it to one paragraph in the file's existing
+voice. With a model configured, the ✨ button drafts the wording for you instead, streamed into the
+field like every other draft. Then it is an ordinary delegation: your local agent works in a
+detached worktree, **Run** is your click, and the instruction-file change comes back as a pull
+request you review in Shepherd like any other. Shepherd never commits to a repository.
+
+The counting happens on your Mac, from **your own comments only** — nobody else's review text is
+read, and there is no cloud option here even when you have configured a key
+([ADR 0020](adr/0020-apple-native-text-intelligence.md)'s line). A finding needs three comments
+within thirty days on at least two different pull requests of the same repository before it counts,
+because three comments on one pull request are one argument, not a pattern. Nothing is fetched from
+GitHub for it and nothing is stored.
+
+An **automatic** delegation never gets this: a recurring finding is a suggestion to you, not an
+event, and there is no rule you could arm with it
+([ADR 0029](adr/0029-feedback-loop-agent-rules.md)). *Dismiss for this repository* makes the card go
+away for good on that Mac; every finding stays listed under **Settings → Replies → Recurring
+findings** with a *Show again* beside it.
+
 ### Where does this long thread stand?
 
 A review thread with six comments or more gets a **Summarise** button. Press it and three lines

@@ -31,6 +31,7 @@ struct ConversationView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 claimsCard
+                recurringFinding
                 description
                 timeline
                 commits
@@ -66,6 +67,32 @@ struct ConversationView: View {
                 model.summaryText = text
             }
         )
+    }
+
+    /// "You have said this three times." — the feedback loop's card (ADR 0029).
+    ///
+    /// Under the claims card and above the description, which is where the reviewer is already
+    /// reading before they look at the diff. It draws nothing at all when this repository has no
+    /// undismissed recurring finding, which is the ordinary case; the coordinator that decides
+    /// that is owned by ``AppEnvironment`` and shared by every window, because the pass is per
+    /// account rather than per screen.
+    ///
+    /// Both buttons hand the *finding* back to the app layer. The card knows nothing about the
+    /// delegation engine, and there is no path from it to a started run: ``AppEnvironment/startRuleDelegation(finding:pullRequest:)``
+    /// opens a sheet with text in a field, and Run stays the reviewer's click (ADR 0011).
+    @ViewBuilder
+    private var recurringFinding: some View {
+        if let summary = model.summary {
+            RecurringFindingCard(
+                finding: environment.recurringFindings.topFinding(for: summary.repo),
+                onDraftRule: { finding in
+                    environment.startRuleDelegation(finding: finding, pullRequest: summary)
+                },
+                onDismiss: { finding in
+                    environment.recurringFindings.dismiss(finding)
+                }
+            )
+        }
     }
 
     @ViewBuilder

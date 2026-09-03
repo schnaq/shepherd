@@ -837,6 +837,35 @@ enum IntelligencePrompt {
         text += "\n\n" + body(for: request.digest)
         return text
     }
+
+    /// The one sentence that turns a drafted agent brief into a drafted **rule** (ADR 0029).
+    ///
+    /// The feedback loop reuses the brief drafting above wholesale — the same request, the same
+    /// budget arithmetic, the same ladder, the same "Run is the reviewer's click" — and changes
+    /// only what the brief is *for*: not "fix this pull request" but "write one rule for the
+    /// repository's agent instructions file that would have prevented these three review
+    /// comments".
+    ///
+    /// It lives here, beside ``agentBriefInstructions``, because this is where the model-facing
+    /// English of a brief is written and two spellings of the same steering in two files is how
+    /// prompts rot. It is *used* by `Features/Delegation/RuleBriefDrafter.swift`, which puts it at
+    /// the head of the request's quoted comments — an agent-brief request has no instruction field
+    /// to carry it, and that drafter's note explains the trade in full. Its first clause names
+    /// itself for exactly that reason: it appears among review comments and must not read as one.
+    ///
+    /// Unlocalised, like every other string in this layer: it is a word the model reads, not a
+    /// word the reviewer does.
+    ///
+    /// Kept under ``AgentBriefRequest/maximumFindingCharacters`` on purpose — it travels as a
+    /// quoted comment and would otherwise be the one thing the per-comment cap truncated, which
+    /// would drop its closing clauses without a trace.
+    static let agentRuleBriefInstruction = """
+        Shepherd's instruction, not a review comment. Do not change this pull request's code. \
+        Write ONE rule for the repository's agent instructions file — CLAUDE.md or AGENTS.md, \
+        whichever it has — that would have prevented the review comments below. One paragraph, \
+        in the file's existing voice, general enough for the next pull request. The engineer \
+        edits it and starts the agent themselves.
+        """
 }
 
 // MARK: - Lenient JSON parsing

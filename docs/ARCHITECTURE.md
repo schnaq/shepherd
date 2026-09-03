@@ -47,7 +47,9 @@ Packages/ShepherdKit/          # SPM package, NO AppKit/SwiftUI imports
                                #     finding becomes (ADR 0030)
       Claims/                  #     claims read from the description + evidence over the diff
                                #     and CI, one line per claim, no score (ADR 0026)
-      Review/                  #     saved replies, per-repo review templates + matching rule
+      Review/                  #     saved replies, per-repo review templates + matching rule,
+                               #     recurring-finding clustering over the reviewer's own
+                               #     comments (ADR 0029)
       Routing/                 #     shepherd:// grammar + CLI argument grammar (ADR 0013)
       Triage/                  #     bulk-triage partition + intended writes (ADR 0015)
       Automation/              #     auto-delegation rules, ledger and policy (ADR 0016);
@@ -225,6 +227,17 @@ Pure logic in `ShepherdCore` (all unit-tested):
   current side, `originalLine` on the reviewed side for an outdated thread, never backfilled from
   one another — onto those hunks and answers `addressed` / `moved` / `replied` / `unchanged` in
   that fixed precedence. Every state is a claim about lines and comments, never about correctness.
+- `RecurringFinding` / `RecurringFindingDetector` / `ViewerReviewComment` (`Review/`) — the whole
+  judgement of the feedback loop (ADR 0029). `detect(repo:comments:now:window:…)` takes one
+  embedding per comment of the reviewer's own and clusters greedily by cosine — seeded by the
+  oldest comment in a fixed order, so the answer never depends on the order SQLite returned the
+  rows in. Five documented constants carry the rule: `minimumCount` 3, `minimumDistinctPullRequests`
+  2, `defaultWindow` 30 days, `minimumSimilarity` **0.6** (above ADR 0019's 0.35 and the saved
+  reply's 0.45, because a corpus of one person's short review prose scores high against itself),
+  `maximumQuotes` 3. A cluster's `exemplar` is its *shortest* comment — the phrasing closest to a
+  rule — and `dismissalKey` hashes the repository plus that exemplar, so a fourth comment joining
+  the cluster cannot resurrect a card the reviewer dismissed. Both orders are total: clusters by
+  size then newest then exemplar, comments by date then id.
 - `ReviewSnapshot` (`Review/`) — the diff a review was written against: `prID`,
   `reviewedHeadOid`, `reviewedAt`, `files: [ChangedFile]` (patches included). The interdiff's
   baseline, kept locally because GitHub cannot be asked for a force-pushed head's patches.
@@ -282,6 +295,13 @@ one `filesJSON` blob, pruned by the same cascade. Written by the outbox drain wh
 at once, and keeping the patches is the point, because a force-push makes them unfetchable).
 `ValueObservation` publishers feed the UI. The **outbox** stores every outbound mutation (submit review, reply,
 resolve, merge) as a row with retry/backoff state so writes survive crash/offline.
+
+One read crosses tables rather than serving a screen: `viewerReviewComments(login:since:)` joins
+`review_comments → review_threads → pull_requests` and returns the signed-in user's own posted
+comments since a date, with the repository and pull request number each belongs to (ADR 0029). It
+is the *only* input the feedback loop has, which is why the login match and the "posted, not
+pending" condition live in the SQL rather than in a caller: nobody else's comment can be read at
+all, let alone clustered.
 
 ## ShepherdSync
 
@@ -1095,6 +1115,60 @@ access to the user's CLI configuration, every path needing a bookmark. ADR 0010 
 the Mac App Store out for v1, so this costs nothing that was on the table; hardened runtime
 stays on.
 
+### The feedback loop: a recurring finding to an agent rule (ADR 0029)
+
+Three files in the app, one in the package, one additive database read, and nothing else.
+
+**Detection** is `Features/Review/RecurringFindingCoordinator.swift`, an `@MainActor @Observable`
+built to `SavedReplySuggestionCoordinator`'s shape: every decision is
+`ShepherdCore/RecurringFindingDetector`, and the coordinator supplies inputs, spends embeddings and
+holds the caches. It hangs off `SignedInSession`'s `onInboxRows` as a *peer* of the search index and
+the triage pass — same rows, same moment — but reads none of them: it takes the sweep as a clock and
+reads `DatabaseManager.viewerReviewComments(login:since:)` instead. That query is the privacy
+guarantee, not a filter: it matches the signed-in login (`COLLATE NOCASE`), skips comments still
+pending in an unsent review, takes the thirty-day floor as SQL, and returns nobody else's rows at
+all. The embedder is `EmbeddingProviding` — the on-device actor of ADR 0019 — and there is no
+`IntelligenceRouter`, base URL or key anywhere in this path, which is what makes an *unattended*
+pass over review prose acceptable (ADR 0007's rule; ADR 0020's line).
+
+Two caches and one ceiling bound the cost. One vector per comment **body**, keyed by the body itself
+(four identical sentences on four pull requests cost one embedding, and the bodies are already in
+memory so a hash key would only add a collision to reason about); a `count|first-id|last-id`
+fingerprint so an unchanged sweep costs one string comparison; and `maximumComments` = 200 newest
+comments per repository, which bounds both the embeddings and the *n*² cosines. Nothing is
+persisted — no table, no vector on disk.
+
+**The card** is `Features/Review/RecurringFindingCard.swift`, drawn under the claims card in
+`Features/PullRequest/ConversationView.swift`. It quotes the reviewer, names the *other* pull
+requests the comments were written on, and has two buttons. Neither writes anything: *Dismiss for
+this repository* flips a `Bool`, and *Draft a rule* hands the finding back to
+`AppEnvironment.startRuleDelegation(finding:pullRequest:)`.
+
+**The rule** is `Features/Delegation/RuleBriefDrafter.swift`, and it is text only.
+`RecurringFindingRule.context(…)` builds an ordinary `DelegationContext` with origin
+`.pullRequest` (a rule is not anchored to a file or a line) whose `findingComments` are the three
+quotes and whose `findingCommentAuthors` are the reviewer's own login — stated, so
+`AgentBriefRequest.requiresOnDevice` decides the cloud rung from matching data rather than from an
+omitted author. `RecurringFindingRule.template(for:)` is the tier-1 task the sheet opens with: both
+candidate filenames, the three quotes, one sentence about length and voice. `RuleBriefDrafter.live`
+is the ✨ button — the same `AgentBriefDrafter` value, the same digest at the same on-device budget,
+the same ladder — steered by `IntelligencePrompt.agentRuleBriefInstruction` prepended to the quoted
+comments, because an agent-brief request has no instruction field. That is the one compromise, it is
+argued at the call site, the sentence names itself so it cannot be read as a review comment, and it
+is kept under the per-comment character cap so nothing of it is truncated.
+
+**Dismissals** are a `Set<String>` of `RecurringFinding.dismissalKey` in `UserDefaults`, beside the
+auto-delegation ledger and for the same three reasons: it must survive a relaunch, it carries no
+content, and it is *not* a setting — it does not travel in `SyncedSettingsDocument` (ADR 0014),
+because a second Mac that has never shown the card has nothing to suppress. Cleared explicitly in
+`signOutAndErase`. The list under Settings → Replies is the only way back: `Hide` / `Show again`.
+
+`AutoDelegationTrigger` gained **no case**, and the test that says so
+(`RecurringFindingTests.testTheAutoDelegationRulesCarryNoRecurringFindingTrigger`) asserts the
+whole enum rather than one absence, mirroring `AgentBriefTests`' rules-carry-no-drafted-text test.
+A recurring finding is a state, not an edge — which is failure mode 1 of ADR 0016 — and nothing in
+the detection path emits a `SyncEvent` for one to be built from.
+
 ### Automatic merging (opt-in, ADR 0018)
 
 Auto-delegation's sibling, and the only automation that *writes to GitHub*: when a pull request an
@@ -1385,6 +1459,15 @@ recognised agent and collapsed for a person *and* for an unrecognised bot, the r
 surviving a background refresh, the comment text's assembly, and the replace/append/discard
 question over a summary that already has text in it — the extractor, the evidence rules and the
 report are tested in `ShepherdCoreTests`, so they run on the Linux runner);
+the feedback loop's app half (ADR 0029: the third comment producing a card, a colleague's comment
+never being *read* even though its vector would have joined the cluster, a comment outside the
+window costing not one embedding, a repeated body costing none, an unchanged sweep costing none, no
+embedder meaning no card and no complaint, a dismissal surviving a relaunch while staying listed in
+Settings, sign-out forgetting both, what the delegation context and the template carry, that the
+steering sentence leads the quoted comments and survives into the request uncut, and that
+`AutoDelegationTrigger` has no case a recurring finding could be armed with — the clustering,
+the thresholds and both total orders are tested in `ShepherdCoreTests`, so they run on the Linux
+runner);
 the translation offer rules and cache (ADR 0020: the pure decide-to-offer function including
 `en-GB` → `en-US`, the prose strip and both detection floors, and the cache's keying, collapse and
 eviction — `TranslationSession` itself is not mocked);

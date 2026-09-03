@@ -1211,6 +1211,16 @@
         }
       }
     },
+    "A RECURRING FINDING": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EIN WIEDERKEHRENDER BEFUND"
+          }
+        }
+      }
+    },
     "A delegation finished": {
       "localizations": {
         "de": {
@@ -1517,6 +1527,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mit --output-format stream-json --verbose erscheint der Lauf Zeile für Zeile im Delegationsfenster; mit --max-turns und --max-budget-usd wird er begrenzt wie ein Aufgabenlauf."
+          }
+        }
+      }
+    },
+    "Add a rule to the repository's agent instructions (CLAUDE.md or AGENTS.md, whichever this repository has; if it has neither, say so in your final message instead of creating one) that prevents this recurring review finding:\n\n%@\n\nKeep it to one paragraph, in the file's existing voice. Change nothing else in this pull request.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Füge den Agent-Anweisungen des Repositories (CLAUDE.md oder AGENTS.md, je nachdem, was dieses Repository hat; wenn es keine davon gibt, sage das in deiner Abschlussnachricht, statt eine anzulegen) eine Regel hinzu, die diesen wiederkehrenden Review-Befund verhindert:\n\n%@\n\nHalte es bei einem Absatz, im bestehenden Ton der Datei. Ändere nichts anderes in diesem Pull Request."
           }
         }
       }
@@ -3411,6 +3431,16 @@
         }
       }
     },
+    "Dismiss for this repository": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für dieses Repository ausblenden"
+          }
+        }
+      }
+    },
     "Dismiss the digest": {
       "localizations": {
         "de": {
@@ -3467,6 +3497,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Draft"
+          }
+        }
+      }
+    },
+    "Draft a rule": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Regel entwerfen"
           }
         }
       }
@@ -7701,6 +7741,16 @@
         }
       }
     },
+    "Shepherd can draft a rule for this repository's agent instructions — CLAUDE.md or AGENTS.md — and open it as a pull request through your local agent. You review that pull request like any other.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd kann eine Regel für die Agent-Anweisungen dieses Repositories entwerfen — CLAUDE.md oder AGENTS.md — und sie über deinen lokalen Agenten als Pull Request eröffnen. Diesen Pull Request prüfst du wie jeden anderen."
+          }
+        }
+      }
+    },
     "Shepherd did not understand the link “%@”.": {
       "localizations": {
         "de": {
@@ -7727,6 +7777,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Shepherd hat diesen Pull Request noch nicht geladen – es gibt also keine Grundlage für einen Entwurf."
+          }
+        }
+      }
+    },
+    "Shepherd has not fetched this pull request yet, so there is nothing to draft a rule from.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd hat diesen Pull Request noch nicht geladen, also gibt es nichts, woraus sich eine Regel entwerfen ließe."
           }
         }
       }
@@ -10117,6 +10177,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "Du hast keine offenen Pull Requests."
+          }
+        }
+      }
+    },
+    "You have said this %lld times on this repository.": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Das hast du in diesem Repository %lld Mal gesagt."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Das hast du in diesem Repository %lld Mal gesagt."
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "You have said this %lld time on this repository."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "You have said this %lld times on this repository."
+                }
+              }
+            }
           }
         }
       }

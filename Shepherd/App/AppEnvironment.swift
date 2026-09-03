@@ -538,6 +538,30 @@ final class AppEnvironment {
     ///   pull request and was revealed instead.
     @discardableResult
     func sendToSession(_ context: DelegationContext, message: String) -> DelegationModel? {
+    /// Opens the delegation sheet with a **rule** for the repository's agent instructions
+    /// (ADR 0029).
+    ///
+    /// Everything ADR 0011 guarantees is the code above, reused: the same centre, the same
+    /// worktree isolation and caps, the same "Shepherd never pushes", the same one-run-per-pull-request
+    /// rule. Two things differ, and both are about the *text*:
+    ///
+    /// - the task is prefilled with ``RecurringFindingRule/template(for:)`` — the three quotes and
+    ///   a sentence, which is the whole feature with no model configured at all;
+    /// - the ✨ button is wired to ``RuleBriefDrafter`` rather than ``AgentBriefDrafter/live(router:viewerLogin:detail:)``,
+    ///   so the drafted text asks for a rule instead of a fix.
+    ///
+    /// There is no `automatic` parameter, and that omission is the ADR 0016 rule expressed as
+    /// missing code: a recurring finding is a suggestion to a person, so nothing can turn it into
+    /// an unattended run.
+    /// - Parameters:
+    ///   - finding: The recurring finding the rule is drafted from.
+    ///   - pullRequest: The pull request the reviewer is on — the worktree the agent gets.
+    func startRuleDelegation(finding: RecurringFinding, pullRequest: PullRequestSummary) {
+        let context = RecurringFindingRule.context(
+            finding: finding,
+            pullRequest: pullRequest,
+            viewerLogin: session?.account.login
+        )
         let onDidPush: @MainActor () async -> Void = { [weak self] in
             await self?.syncNow()
         }
@@ -560,6 +584,35 @@ final class AppEnvironment {
         model.task = message
         model.start()
         return model
+            brief: ruleBriefDrafter()
+        )
+        // Never over a run in flight: that sheet's task belongs to the prompt the agent is
+        // already working from (``DelegationCenter/open(context:settings:toasts:onDidPush:onDidFinish:brief:)``
+        // reveals the running model unchanged).
+        if !model.isBusy {
+            model.task = RecurringFindingRule.template(for: finding)
+        }
+    }
+
+    /// Builds the rule drafter for the ✨ button of a rule delegation (ADR 0029).
+    ///
+    /// The same three pieces ``agentBriefDrafter()`` reads, read the same way and for the same
+    /// reason: on the main actor, captured as values, so the drafter's closure never reaches back
+    /// into this class from a background task.
+    /// - Returns: The drafter, or `nil` when no account is signed in.
+    private func ruleBriefDrafter() -> AgentBriefDrafter? {
+        guard let session else { return nil }
+        let database = session.database
+        return RuleBriefDrafter.live(
+            router: intelligence,
+            viewerLogin: session.account.login,
+            detail: { prID in
+                guard let detail = try? await database.fetchPullRequestDetail(id: prID) else {
+                    return nil
+                }
+                return detail
+            }
+        )
     }
 
     /// Builds the delegation sheet's brief drafter from the current tiers and session (plan §3.E).

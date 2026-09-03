@@ -33,6 +33,7 @@ founder interview (2026-08-31) combined with three research reports (see
 | 0026 | [Claims vs. Evidence: the description beside the diff, no score](0026-claims-vs-evidence.md) | Accepted (v1.2) |
 | 0028 | [Since my review: a local snapshot at submit time, the interdiff computed on the Mac](0028-since-my-review-interdiff.md) | Accepted (v1.2) |
 | 0030 | [The session back-channel: a finding addressed to the session that wrote the code, through the user's own CLI](0030-session-back-channel.md) | Accepted (v1.2) |
+| 0029 | [The feedback loop: a recurring finding becomes a drafted agent rule](0029-feedback-loop-agent-rules.md) | Accepted (v1.2) |
 
 Format: lightweight [MADR](https://adr.github.io/madr/)-style — Context, Decision, Consequences.
 New decisions get the next number; superseded ADRs are marked, never deleted.

@@ -305,6 +305,11 @@ order. Everything here is tier 1 first (deterministic, local); a model only ever
       `claude.ai/code` session at all is written up with the three commands that settle it in
       `docs/plans/session-back-channel-spike.md`, and until it is answered the remote button
       links to the session instead of running anything
+- [x] Feedback loop — a finding the reviewer has written three times becomes a drafted `CLAUDE.md`
+      rule in the delegation sheet; the local agent opens the pull request (ADR 0029). Detection is
+      on-device over the reviewer's own comments only; the rules engine never gets the trigger
+- [ ] Session back-channel — a finding goes to the Claude Code session named in the head commits'
+      `Claude-Session:` trailer, through the user's own CLI (ADR 0011: no Shepherd-held credentials)
 
 ## v1.x
 

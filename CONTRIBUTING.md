@@ -200,6 +200,17 @@ bumping a dependency that ships inside the app also means a line in
   structural; keep it that way. The lexical ranker in `ShepherdCore` is the fallback and is always
   on, which is why no search surface may hard-depend on a model being present (ADR 0007's rule,
   unchanged).
+- **The recurring-finding pass reads your own comments, on this Mac.** The feedback loop (ADR 0029)
+  is the second thing Shepherd does while nobody is watching, and it reads *review prose*, so its
+  licence is narrower than the digest's: `DatabaseManager.viewerReviewComments(login:since:)` matches
+  the signed-in login in SQL and returns nobody else's rows at all, and the embeddings come from the
+  same on-device `EmbeddingProviding` ⌘K search uses. Nothing in the detection path — `ShepherdCore/Review/RecurringFindings.swift`,
+  `Features/Review/RecurringFindingCoordinator.swift` — takes an `IntelligenceRouter`, a base URL or
+  a key, so the impossibility is structural, exactly as it is for search; keep it that way. The
+  *attended* half may use the tiers, because the reviewer pressed a button and reads the result in a
+  field before running it — and it goes through feature E's existing brief request, which already
+  refuses the cloud rung for a comment somebody else wrote. No new host, no GitHub read, nothing
+  stored.
 - **Spotlight gets metadata, never content.** The Spotlight export (ADR 0021) is the only thing
   Shepherd writes *outside* its own database that nobody asked for click by click, and the system
   index is not the app's to govern: it is machine-wide, it is backed up, and other processes can
