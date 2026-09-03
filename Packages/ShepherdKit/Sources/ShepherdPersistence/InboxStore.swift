@@ -145,6 +145,31 @@ extension DatabaseManager {
         }
     }
 
+    /// Reads one inbox row by repository and number.
+    ///
+    /// The node id is the primary key everywhere in Shepherd, so this is the *only* lookup that
+    /// does not have one — and it exists because a link is written the way GitHub writes it:
+    /// `owner/name#number`, never a node id (ADR 0032). It is what resolves the issue side's
+    /// links against the local inbox, and `idx_pull_requests_repo_number` is exactly this query's
+    /// unique index, so it is a lookup rather than a scan.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - number: The pull request number within it.
+    /// - Returns: The row, or `nil` when this pull request is not cached — which is an ordinary
+    ///   answer and not a failure: the linked pull request may be somebody else's.
+    public func fetchPullRequestSummary(
+        repo: RepoRef,
+        number: Int
+    ) async throws -> PullRequestSummary? {
+        try await writer.read { db in
+            try PullRequestRecord.fetchOne(
+                db,
+                sql: "SELECT * FROM pull_requests WHERE repoFullName = ? AND number = ?",
+                arguments: [repo.fullName, number]
+            )?.summary
+        }
+    }
+
     /// The inbox query, shared by ``fetchInbox(filter:)`` and ``observeInbox(filter:)``.
     static func loadInbox(_ db: Database, filter: InboxFilter) throws -> [PullRequestSummary] {
         let records = try PullRequestRecord.fetchAll(
@@ -160,7 +185,8 @@ extension DatabaseManager {
 
     // MARK: - Detail
 
-    /// Stores a full detail fetch, replacing the pull request's files, threads and checks.
+    /// Stores a full detail fetch, replacing the pull request's files, threads, checks and the
+    /// issues it closes.
     /// - Parameter detail: The detail record to store.
     public func savePullRequestDetail(_ detail: PullRequestDetail) async throws {
         let fetchedAt = Date().timeIntervalSince1970
@@ -200,6 +226,23 @@ extension DatabaseManager {
             )
             for (index, file) in detail.files.enumerated() {
                 try ChangedFileRecord(prID: detail.id, file: file, sortIndex: index).save(db)
+            }
+
+            // Replaced on every detail write, exactly as `changed_files` is, and for the same
+            // reason: this fetch selects `closingIssuesReferences` unconditionally, so it is the
+            // authority on the list and an empty answer means "this pull request closes nothing"
+            // (ADR 0032). It sits here, above the checks' early return, so a repository with no
+            // check runs still gets its links replaced.
+            try db.execute(
+                sql: "DELETE FROM pull_request_closing_issues WHERE prID = ?",
+                arguments: [detail.id]
+            )
+            for (index, issue) in detail.closingIssues.enumerated() {
+                try PullRequestClosingIssueRecord(
+                    prID: detail.id,
+                    reference: issue,
+                    sortIndex: index
+                ).save(db)
             }
 
             // Comments cascade with their thread.
@@ -289,6 +332,15 @@ extension DatabaseManager {
                 arguments: [id]
             )
 
+            let closingIssueRecords = try PullRequestClosingIssueRecord.fetchAll(
+                db,
+                sql: """
+                    SELECT * FROM pull_request_closing_issues
+                    WHERE prID = ? ORDER BY sortIndex ASC
+                    """,
+                arguments: [id]
+            )
+
             return PullRequestDetail(
                 summary: record.summary,
                 bodyMarkdown: record.bodyMarkdown ?? "",
@@ -296,7 +348,8 @@ extension DatabaseManager {
                 files: files,
                 threads: threads,
                 timeline: record.timeline,
-                checks: checkRecords.map(\.checkRun)
+                checks: checkRecords.map(\.checkRun),
+                closingIssues: closingIssueRecords.map(\.reference)
             )
         }
     }

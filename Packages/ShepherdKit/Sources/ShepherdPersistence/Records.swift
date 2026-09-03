@@ -1015,10 +1015,14 @@ struct IssueLinkedPullRequestRecord: Codable, FetchableRecord, PersistableRecord
 /// the two that *does* cascade with `pull_requests`, because it is about a pull request in the
 /// inbox and disappears with it, exactly as `changed_files` does.
 ///
-/// The table and this record land with migration v7 so that the sprint which reads
-/// `closingIssuesReferences` needs no migration of its own; nothing writes it yet, which is why
-/// there is no initialiser taking a model — the value it will carry is a decision for the code
-/// that fetches it.
+/// The table and this record landed with migration v7 so that the sprint which reads
+/// `closingIssuesReferences` needed no migration of its own; that sprint is what filled in the
+/// initialiser and the round trip below.
+///
+/// The issue is stored by value — repository included — for the reason the other direction gives:
+/// `closingIssuesReferences` may name an issue in another repository, and one the issues sweep
+/// never returned, so the row is about what the detail fetch saw and not about a join. Unlike its
+/// twin it carries no author: a provenance chip is a question about a pull request.
 struct PullRequestClosingIssueRecord: Codable, FetchableRecord, PersistableRecord {
     static let databaseTableName = "pull_request_closing_issues"
 
@@ -1028,6 +1032,31 @@ struct PullRequestClosingIssueRecord: Codable, FetchableRecord, PersistableRecor
     var issueTitle: String
     var issueState: String
     var sortIndex: Int
+
+    init(prID: String, reference: LinkedIssueReference, sortIndex: Int) {
+        self.prID = prID
+        self.issueRepoFullName = reference.repo.fullName
+        self.issueNumber = reference.number
+        self.issueTitle = reference.title
+        self.issueState = reference.state.rawValue
+        self.sortIndex = sortIndex
+    }
+
+    /// Rebuilds the reference.
+    ///
+    /// Both tolerances are the ones every other raw column in this file gets: a stored
+    /// `issueRepoFullName` without a slash degrades to a readable reference rather than dropping
+    /// the row, and a `issueState` this build does not know reads as `unknown` rather than
+    /// failing the fetch.
+    var reference: LinkedIssueReference {
+        LinkedIssueReference(
+            repo: RepoRef.parse(fullName: issueRepoFullName)
+                ?? RepoRef(owner: issueRepoFullName, name: issueRepoFullName),
+            number: issueNumber,
+            title: issueTitle,
+            state: IssueSummary.State(rawValue: issueState) ?? .unknown
+        )
+    }
 }
 
 /// A row of `issue_search_index` (ADR 0032).

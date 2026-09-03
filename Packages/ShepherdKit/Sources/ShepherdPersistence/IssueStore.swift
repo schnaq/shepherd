@@ -192,6 +192,27 @@ extension DatabaseManager {
         }
     }
 
+    /// Reads one issue's linked pull requests, in the order the sweep stored them.
+    ///
+    /// ``fetchIssueSummary(id:)`` and ``fetchIssueDetail(id:)`` already carry the same list on
+    /// the row they return, so this is not the only way to it — it is the *narrow* way, for the
+    /// detail panel's linked-pull-request section (ADR 0032, Sprint 3). Two things make it worth
+    /// its own entry point: the section is drawn from the links alone, so a view that re-reads
+    /// them after a sweep does not have to re-read a body it already has; and it is the honest
+    /// read after a **detail-shaped** write, where ``saveIssueDetail(_:)`` deliberately leaves
+    /// the stored links alone because an empty list there means "this fetch learned nothing about
+    /// them" rather than "there are none".
+    /// - Parameter issueID: The issue's GraphQL node id.
+    /// - Returns: The references. Empty for an issue with no links *and* for an issue nothing was
+    ///   ever stored about — the same answer, because the panel draws nothing either way.
+    public func fetchLinkedPullRequests(
+        issueID: String
+    ) async throws -> [LinkedPullRequestReference] {
+        try await writer.read { db in
+            try DatabaseManager.linkedPullRequests(db, issueID: issueID)
+        }
+    }
+
     /// The issues query, shared by ``fetchIssues(filter:)`` and ``observeIssues(filter:)``.
     ///
     /// Two queries rather than a join, for ``searchIndexSources(prIDs:)``'s reason: a join would
