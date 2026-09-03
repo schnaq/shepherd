@@ -59,6 +59,13 @@ final class AppEnvironment {
     var pendingInboxFilter: Pending<InboxDeepLinkFilter>?
     /// A Settings tab a deep link asked for, waiting for the inbox to present it.
     var pendingSettingsTab: Pending<SettingsDeepLinkTab>?
+    /// An issue a link or a ⌘K row asked for, waiting for the inbox to reveal it (ADR 0032).
+    ///
+    /// The same mechanism as ``pendingInboxFilter`` above, and it is a *pending request* rather
+    /// than a call into a model for that field's reason: which section is showing and which row
+    /// is selected are state ``InboxScreen`` owns, and this container reaches into no model a
+    /// screen owns.
+    var pendingIssueSelection: Pending<String>?
 
     /// User preferences.
     let settings: AppSettings
@@ -425,6 +432,14 @@ final class AppEnvironment {
                         viewerLogin: login
                     )
                 }
+            },
+            onIssueRows: { [weak self] rows in
+                // The issues sweep's only announcement (ADR 0032): it emits no `SyncEvent`, and
+                // the rows it wrote are what the second ⌘K pass is about. One consumer, because
+                // one feature indexes issues — the digest, the webhooks and automatic merging are
+                // all about pull requests and none of them may grow an issue input here.
+                guard let self, let database = self.session?.database else { return }
+                self.search.considerIndexingIssues(rows: rows, database: database)
             }
         )
         // A `shepherd://` link may have arrived while the app was still launching or signed
@@ -711,6 +726,8 @@ final class AppEnvironment {
         }
         if settings.semanticSearchEnabled {
             search.considerIndexing(rows: session.inboxRows, database: session.database)
+            // Both corpora, because it is one switch (ADR 0032).
+            search.considerIndexingIssues(rows: session.issueRows, database: session.database)
             return
         }
         // The clear is a write, so it is awaited in a task of its own; only the database — which
@@ -931,6 +948,28 @@ final class AppEnvironment {
     func consumePendingReviewVerdict() -> ReviewVerdict? {
         defer { pendingReviewVerdict = nil }
         return pendingReviewVerdict
+    }
+
+    /// Opens one issue in the inbox's issues section (ADR 0032).
+    ///
+    /// ``openReview(prID:composing:)``'s sibling, and the one entry point every surface that
+    /// names an issue goes through — a `shepherd://issue/…` link, a ⌘K result, a linked-issue row
+    /// a later sprint adds — so "reveal this issue" has one implementation for the same reason
+    /// opening a review does.
+    ///
+    /// A running focus session ends first, exactly as it does when a pull request that is not
+    /// under its cursor is opened: the user has left the queue, and a session bar naming a pull
+    /// request while the screen below it shows an issue would be worse than no bar.
+    /// - Parameter issueID: The issue's GraphQL node id.
+    func openIssue(issueID: String) {
+        if reviewSession != nil { endReviewSession() }
+        route = .inbox
+        pendingIssueSelection = Pending(issueID)
+    }
+
+    /// Clears the issue request after the inbox has revealed it.
+    func clearPendingIssueSelection() {
+        pendingIssueSelection = nil
     }
 
     /// Returns to the inbox.

@@ -19,6 +19,71 @@ struct PullRequestSearchResult: Identifiable, Equatable, Sendable {
     var id: String { summary.id }
 }
 
+/// One ranked issue, ready for a palette row (ADR 0032).
+///
+/// ``PullRequestSearchResult``'s twin, carrying its own summary for that type's reason: the
+/// palette is an overlay with no database, and a row that fetched its own title would flicker as
+/// the user types.
+///
+/// It is called *Match* rather than *Result* only because `ShepherdCore` already has an
+/// `IssueSearchResult` — the ranker's output, which has no title on it. Two types with one name
+/// for one feature would be worse than one name that differs.
+struct IssueSearchMatch: Identifiable, Equatable, Sendable {
+    /// The issue, as the local issues inbox knows it.
+    var summary: IssueRowSummary
+    /// The blended score, kept so the merge order is explainable in a test.
+    var score: Double
+    /// Why it matched, when there is something worth saying.
+    var reason: IssueSearchMatchReason?
+
+    /// `IssueSearchMatch` shares the issue's identity.
+    var id: String { summary.id }
+}
+
+/// One row of the merge that produces ``PaletteSearchResults`` (ADR 0032).
+///
+/// A private sum type rather than two sorted lists interleaved by hand: the merge has to be a
+/// *total* order over rows of two different types, and a comparison written twice is a comparison
+/// that can disagree with itself.
+private enum MergedSearchRow {
+    case pullRequest(PullRequestSearchResult)
+    case issue(IssueSearchMatch)
+
+    /// The blended score the merge orders by.
+    var score: Double {
+        switch self {
+        case .pullRequest(let value): return value.score
+        case .issue(let value): return value.score
+        }
+    }
+
+    /// The tie-break: pull requests first, then node id. Prefixed so the two id spaces cannot
+    /// collide, and stable so two sweeps of the same data produce the same palette.
+    var sortKey: String {
+        switch self {
+        case .pullRequest(let value): return "0-\(value.id)"
+        case .issue(let value): return "1-\(value.id)"
+        }
+    }
+}
+
+/// The palette's whole answer to one query: the best rows of both kinds (ADR 0032).
+///
+/// The two corpora are ranked separately — they have different documents, different weights and
+/// different reasons — and then **merged by score and sliced once**, which is the property ADR
+/// 0019's "the keyboard does not notice" rule needs: the palette has room for a fixed number of
+/// rows, and giving each kind its own quota would let a weak issue push out a strong pull request.
+/// The caller groups them under two headers afterwards; the cursor walks one flat list either way.
+struct PaletteSearchResults: Equatable, Sendable {
+    /// The pull requests that survived the merge, best first.
+    var pullRequests: [PullRequestSearchResult] = []
+    /// The issues that survived the merge, best first.
+    var issues: [IssueSearchMatch] = []
+
+    /// Whether the query matched nothing at all.
+    var isEmpty: Bool { pullRequests.isEmpty && issues.isEmpty }
+}
+
 /// What the Intelligence settings card says about the index.
 struct SearchIndexStatus: Equatable, Sendable {
     /// Whether the user has the index switched on.
@@ -29,6 +94,14 @@ struct SearchIndexStatus: Equatable, Sendable {
     var documentCount = 0
     /// How many of those have an embedding.
     var embeddedCount = 0
+    /// How many issues are in the second searchable corpus (ADR 0032).
+    ///
+    /// Counted apart from ``documentCount`` rather than added to it, because the card's sentence
+    /// names the two kinds: "412 of 412 pull requests and 96 of 96 issues indexed" is a claim a
+    /// reader can check, while one merged number would hide a corpus that never got built.
+    var issueDocumentCount = 0
+    /// How many issues have an embedding.
+    var issueEmbeddedCount = 0
     /// How many bytes of vector are on disk.
     var vectorByteCount = 0
     /// When the newest index row was written.
@@ -94,6 +167,18 @@ final class SearchIndexCoordinator {
     private var hasReadStoredEntries = false
     private var hasCheckedAvailability = false
 
+    /// The second corpus: one document per issue in the local issues inbox (ADR 0032).
+    ///
+    /// Four parallel dictionaries rather than one keyed by a sum type, because the documents,
+    /// the vectors and the summaries are all *different types* — an issue document has four
+    /// fields where a pull request's has eight (ADR 0032 argues why it is a sibling and not a
+    /// widening), and a shared container would mean unwrapping at every use.
+    private var issueDocuments: [String: IssueSearchDocument] = [:]
+    private var issueVectors: [String: SearchVector] = [:]
+    private var issueSummaries: [String: IssueRowSummary] = [:]
+    private var storedIssueEntries: [String: IssueSearchIndexEntry] = [:]
+    private var hasReadStoredIssueEntries = false
+
     /// The pass that is running, if one is.
     ///
     /// `private(set)` rather than private so `ShepherdTests` can *await* a pass instead of polling
@@ -107,6 +192,16 @@ final class SearchIndexCoordinator {
     /// no interest once a newer one is known — but a one-row announcement can no longer discard a
     /// whole snapshot that was waiting alongside it.
     private var pendingRows: [String: PullRequestSummary] = [:]
+    /// The issues pass that is running, if one is.
+    ///
+    /// A task of its own rather than one pass over both corpora, and the reason is the trigger:
+    /// the two observations speak independently — a sweep writes pull requests and issues in the
+    /// same cycle but in two transactions — so a single task would make an issue write wait for
+    /// a pull-request pass that is embedding a three-hundred-kilobyte diff. `private(set)` for
+    /// ``passTask``'s reason: `ShepherdTests` awaits a pass instead of polling for its effects.
+    private(set) var issuePassTask: Task<Void, Never>?
+    /// Issue rows that arrived while a pass was running, keyed by issue.
+    private var pendingIssueRows: [String: IssueRowSummary] = [:]
 
     /// Creates a coordinator.
     /// - Parameters:
@@ -185,6 +280,101 @@ final class SearchIndexCoordinator {
         }
     }
 
+    /// Ranks both corpora against what the user typed and merges them into one ordered answer.
+    ///
+    /// The palette's one call (ADR 0032). Both sets are ranked to the *same* limit and then
+    /// merged by score and sliced once, so the rows the palette has room for are the best of
+    /// both kinds rather than a fixed quota each — and the caller still gets them grouped, which
+    /// is what a reader scans.
+    ///
+    /// Ties break pull requests first and then on node id, so the order is total: two sweeps of
+    /// the same data can never reshuffle the palette (the property ``ShepherdCore/SearchRanker``
+    /// pins for one corpus, extended to the merge of two).
+    /// - Parameters:
+    ///   - query: What the user typed.
+    ///   - limit: How many rows the palette has room for, across both kinds.
+    ///   - verdicts: The structured-triage verdicts the `risk:`/`kind:` tokens filter pull
+    ///     requests against (ADR 0023). They do not reach the issue ranking, and cannot: a
+    ///     verdict is a statement about a pull request, so `IssueSearchRanker` answers a
+    ///     triage-only query with nothing rather than with a listing (ADR 0032).
+    /// - Returns: The best matches of both kinds, best first within each.
+    func paletteResults(
+        for query: String,
+        limit: Int = 6,
+        verdicts: [String: TriageVerdict] = [:]
+    ) async -> PaletteSearchResults {
+        let pullRequests = await results(for: query, limit: limit, verdicts: verdicts)
+        let issues = await issueResults(for: query, limit: limit)
+        guard !Task.isCancelled else { return PaletteSearchResults() }
+        guard !issues.isEmpty else {
+            return PaletteSearchResults(pullRequests: pullRequests, issues: [])
+        }
+        guard !pullRequests.isEmpty else {
+            return PaletteSearchResults(
+                pullRequests: [],
+                issues: Array(issues.prefix(max(0, limit)))
+            )
+        }
+        // One ordered list, sliced once, then partitioned back — which is the whole point: the
+        // slice is what a quota per kind would get wrong.
+        let merged = (pullRequests.map(MergedSearchRow.pullRequest)
+            + issues.map(MergedSearchRow.issue))
+            .sorted { left, right in
+                if left.score != right.score { return left.score > right.score }
+                return left.sortKey < right.sortKey
+            }
+            .prefix(max(0, limit))
+        var result = PaletteSearchResults()
+        for entry in merged {
+            switch entry {
+            case .pullRequest(let value): result.pullRequests.append(value)
+            case .issue(let value): result.issues.append(value)
+            }
+        }
+        return result
+    }
+
+    /// Ranks the local issues inbox against what the user typed (ADR 0032).
+    ///
+    /// ``results(for:limit:verdicts:)``'s twin with one difference, and it is a decision rather
+    /// than an omission: a query that is nothing but a `risk:`/`kind:` token is answered with
+    /// **nothing**. `IssueSearchRanker.rank` returns `[]` for it — there is no issue the filter
+    /// could have narrowed, and listing every issue in the inbox in answer would be an opinion
+    /// nobody asked for — and the guard below spares the embedding as well.
+    /// - Parameters:
+    ///   - query: What the user typed.
+    ///   - limit: How many rows to rank.
+    /// - Returns: The best matches, best first.
+    func issueResults(for query: String, limit: Int = 6) async -> [IssueSearchMatch] {
+        let parsed = SearchQuery(text: query)
+        guard !parsed.isEmpty, !issueDocuments.isEmpty, parsed.hasSearchTerms else { return [] }
+
+        var searchVectors: IssueSearchVectors?
+        // An exact `owner/repo#n` is not a ranking question, so it does not spend an embedding —
+        // the same rule the pull-request half follows, and the same query text, so the two
+        // rankings cannot be scored on two different curves.
+        if !issueVectors.isEmpty, parsed.reference == nil,
+           let queryVector = await embedder.vector(for: parsed.normalizedText) {
+            searchVectors = IssueSearchVectors(query: queryVector, documents: issueVectors)
+        }
+        guard !Task.isCancelled else { return [] }
+
+        let ranked = IssueSearchRanker.rank(
+            query: parsed,
+            documents: Array(issueDocuments.values),
+            vectors: searchVectors,
+            options: SearchRankingOptions(limit: limit)
+        )
+        return ranked.compactMap { result in
+            guard let summary = issueSummaries[result.issueID] else { return nil }
+            return IssueSearchMatch(
+                summary: summary,
+                score: result.score,
+                reason: result.reason
+            )
+        }
+    }
+
     // MARK: - Indexing
 
     /// Considers the rows a sweep just wrote.
@@ -214,6 +404,37 @@ final class SearchIndexCoordinator {
             return
         }
         schedulePass(rows: rows, database: database)
+    }
+
+    /// Considers the issue rows the second sweep just wrote (ADR 0032).
+    ///
+    /// ``considerIndexing(rows:database:)``'s twin, wired to
+    /// ``SignedInSession/start(settings:notifications:onEvent:onInboxRows:onIssueRows:)``'s issue
+    /// callback — the only announcement the issues sweep makes, deliberately, since it emits no
+    /// `SyncEvent` of its own. Everything the pull-request pass promises holds here too: no
+    /// client in this folder, so typing in the palette cannot produce a request; two hashes, so
+    /// an unchanged sweep reads one small column and stops; and with the toggle off the corpus is
+    /// still built from the rows alone, so ⌘K keeps finding issues by title and label.
+    /// - Parameters:
+    ///   - rows: Every issue row the local database now holds.
+    ///   - database: Where the sources and the index live.
+    func considerIndexingIssues(rows: [IssueRowSummary], database: DatabaseManager) {
+        issueSummaries = Dictionary(rows.map { ($0.id, $0) }, uniquingKeysWith: { _, last in last })
+        // An issue the sweep pruned leaves the corpus in the same breath. Its index row is
+        // already gone — the v7 migration's `ON DELETE CASCADE` took it with the issue.
+        let present = Set(rows.map(\.id))
+        issueDocuments = issueDocuments.filter { present.contains($0.key) }
+        issueVectors = issueVectors.filter { present.contains($0.key) }
+        storedIssueEntries = storedIssueEntries.filter { present.contains($0.key) }
+
+        guard settings.semanticSearchEnabled else {
+            issuePassTask?.cancel()
+            issuePassTask = nil
+            pendingIssueRows = [:]
+            indexIssuesFromRowsOnly(rows)
+            return
+        }
+        scheduleIssuePass(rows: rows, database: database)
     }
 
     /// Re-indexes one pull request now, because its diff has just been stored.
@@ -247,15 +468,28 @@ final class SearchIndexCoordinator {
         // Nothing is stored after the clear below, so there is nothing to read back.
         hasReadStoredEntries = true
         hasCheckedAvailability = false
+        issuePassTask?.cancel()
+        issuePassTask = nil
+        pendingIssueRows = [:]
+        issueDocuments = [:]
+        issueVectors = [:]
+        storedIssueEntries = [:]
+        hasReadStoredIssueEntries = true
         try? await database.clearSearchIndex()
+        // Both tables, because *Rebuild index* is one button and one promise: an index the user
+        // does not believe any more is both corpora (ADR 0032).
+        try? await database.clearIssueSearchIndex()
         // `async` rather than fire-and-forget so the caller — and a test — can tell when the
         // table is actually empty; the *pass* it hands over to stays asynchronous.
         let rows = Array(summaries.values)
+        let issueRows = Array(issueSummaries.values)
         guard settings.semanticSearchEnabled else {
             indexFromRowsOnly(rows)
+            indexIssuesFromRowsOnly(issueRows)
             return
         }
         schedulePass(rows: rows, database: database)
+        scheduleIssuePass(rows: issueRows, database: database)
     }
 
     /// Switches the index off: cancels the pass, drops the vectors and empties the table.
@@ -278,10 +512,18 @@ final class SearchIndexCoordinator {
         hasReadStoredEntries = false
         hasCheckedAvailability = false
         indexFromRowsOnly(Array(summaries.values))
+        issuePassTask?.cancel()
+        issuePassTask = nil
+        pendingIssueRows = [:]
+        issueVectors = [:]
+        storedIssueEntries = [:]
+        hasReadStoredIssueEntries = false
+        indexIssuesFromRowsOnly(Array(issueSummaries.values))
         status.isEnabled = false
         status.embeddingUnavailabilityReason = nil
         guard let database else { return }
         try? await database.clearSearchIndex()
+        try? await database.clearIssueSearchIndex()
     }
 
     /// Drops everything. Called from "Sign out & erase local data".
@@ -299,6 +541,14 @@ final class SearchIndexCoordinator {
         storedEntries = [:]
         hasReadStoredEntries = false
         hasCheckedAvailability = false
+        issuePassTask?.cancel()
+        issuePassTask = nil
+        pendingIssueRows = [:]
+        issueDocuments = [:]
+        issueVectors = [:]
+        issueSummaries = [:]
+        storedIssueEntries = [:]
+        hasReadStoredIssueEntries = false
         status = SearchIndexStatus(isEnabled: settings.semanticSearchEnabled)
     }
 
@@ -407,6 +657,131 @@ final class SearchIndexCoordinator {
         await refreshCounts(database: database)
     }
 
+    private func scheduleIssuePass(rows: [IssueRowSummary], database: DatabaseManager) {
+        guard issuePassTask == nil else {
+            for row in rows { pendingIssueRows[row.id] = row }
+            return
+        }
+        issuePassTask = Task(priority: .low) { [weak self] in
+            guard let self else { return }
+            var next: [IssueRowSummary]? = rows
+            while let current = next {
+                await self.runIssuePass(rows: current, database: database)
+                if Task.isCancelled { break }
+                next = self.takePendingIssueRows()
+            }
+            self.issuePassTask = nil
+        }
+    }
+
+    private func takePendingIssueRows() -> [IssueRowSummary]? {
+        defer { pendingIssueRows = [:] }
+        return pendingIssueRows.isEmpty ? nil : Array(pendingIssueRows.values)
+    }
+
+    /// One pass over the issues corpus (ADR 0032).
+    ///
+    /// ``runPass(rows:database:)`` with the issue types substituted and the two staleness gates
+    /// unchanged: the `sourceFingerprint` decides whether a row's body is read back out of
+    /// SQLite at all, and only then does the `documentHash` decide whether an embedding is spent.
+    /// The `detailFetchedAt` column is what makes the first gate correct rather than merely
+    /// cheap — opening an issue stores its body and moves that timestamp, so the very next pass
+    /// grows the document from "title and labels" to the whole report.
+    ///
+    /// It does **not** ask ``EmbeddingProviding/availability()``: the pull-request pass asks once
+    /// per session and the answer is a property of the Mac, so asking again here would load the
+    /// model a second time to learn the same thing.
+    private func runIssuePass(rows: [IssueRowSummary], database: DatabaseManager) async {
+        let model = embedder.modelIdentifier
+        if !hasReadStoredIssueEntries {
+            let entries = (try? await database.issueSearchIndexEntries()) ?? []
+            storedIssueEntries = Dictionary(
+                entries.map { ($0.issueID, $0) },
+                uniquingKeysWith: { first, _ in first }
+            )
+            hasReadStoredIssueEntries = true
+        }
+
+        let timestamps = (try? await database.issueDetailFetchTimestamps()) ?? [:]
+        let stale = rows
+            .filter { row in
+                let fingerprint = IssueSearchDocument.fingerprint(
+                    for: IssueSearchIndexSource(
+                        summary: row,
+                        detailFetchedAt: timestamps[row.id]
+                    )
+                )
+                return issueDocuments[row.id]?.sourceFingerprint != fingerprint
+            }
+            .map(\.id)
+        guard !stale.isEmpty else {
+            await refreshCounts(database: database)
+            return
+        }
+        status.isIndexing = true
+
+        var index = 0
+        while index < stale.count {
+            guard !Task.isCancelled else { return }
+            let batch = Array(stale[index..<min(index + Self.batchSize, stale.count)])
+            index += Self.batchSize
+            guard let sources = try? await database.issueSearchIndexSources(issueIDs: batch) else {
+                continue
+            }
+            // Off the main actor for ``runPass(rows:database:)``'s reason, even though an issue
+            // body is capped by what a human typed rather than by a generated diff: composing
+            // tokenises and hashes, and the shape is kept identical so the two passes cannot
+            // drift apart.
+            let composed = await Task.detached(priority: .low) {
+                sources.map { IssueSearchDocument.make(source: $0) }
+            }.value
+            guard !Task.isCancelled else { return }
+
+            var writes: [IssueSearchIndexEntry] = []
+            for document in composed {
+                issueDocuments[document.issueID] = document
+                if let stored = storedIssueEntries[document.issueID],
+                   stored.isUsable(for: document, modelIdentifier: model) {
+                    issueVectors[document.issueID] = stored.vector
+                    continue
+                }
+                let vector = await embedder.vector(for: document.embeddingText)
+                guard !Task.isCancelled else { return }
+                issueVectors[document.issueID] = vector
+                let entry = IssueSearchIndexEntry(
+                    issueID: document.issueID,
+                    documentHash: document.documentHash,
+                    modelIdentifier: model,
+                    vector: vector,
+                    indexedAt: now()
+                )
+                storedIssueEntries[document.issueID] = entry
+                writes.append(entry)
+            }
+            try? await database.saveIssueSearchIndexEntries(writes)
+            await Task.yield()
+        }
+        status.isIndexing = false
+        await refreshCounts(database: database)
+    }
+
+    /// Builds the issues corpus from the rows alone: no source read, no embedding, no write.
+    ///
+    /// The switched-off state, and the honest state between the first sweep and the first pass.
+    /// The same ``ShepherdCore/IssueSearchDocument`` with the body left out, so the ranker, the
+    /// palette and the reasons need no second code path.
+    private func indexIssuesFromRowsOnly(_ rows: [IssueRowSummary]) {
+        issueDocuments = [:]
+        for row in rows {
+            issueDocuments[row.id] = IssueSearchDocument.make(
+                source: IssueSearchIndexSource(summary: row)
+            )
+        }
+        issueVectors = [:]
+        status.issueDocumentCount = issueDocuments.count
+        status.issueEmbeddedCount = 0
+    }
+
     /// Builds the corpus from the inbox rows alone: no source read, no embedding, no write.
     ///
     /// The switched-off state, and also the honest state for a fresh install between the first
@@ -437,8 +812,17 @@ final class SearchIndexCoordinator {
     private func refreshCounts(database: DatabaseManager) async {
         status.documentCount = documents.count
         status.embeddedCount = vectors.count
+        status.issueDocumentCount = issueDocuments.count
+        status.issueEmbeddedCount = issueVectors.count
         guard let statistics = try? await database.searchIndexStatistics() else { return }
-        status.vectorByteCount = statistics.vectorByteCount
-        status.lastIndexedAt = statistics.lastIndexedAt
+        // The two indexes are added up, because the question Settings asks is "how much of my
+        // disk is this" and the answer is one number (ADR 0032: the statistics *type* is shared
+        // for exactly this reason). The newest write of either is the newest write.
+        let issueStatistics =
+            (try? await database.issueSearchIndexStatistics()) ?? SearchIndexStatistics()
+        status.vectorByteCount = statistics.vectorByteCount + issueStatistics.vectorByteCount
+        status.lastIndexedAt = [statistics.lastIndexedAt, issueStatistics.lastIndexedAt]
+            .compactMap { $0 }
+            .max()
     }
 }

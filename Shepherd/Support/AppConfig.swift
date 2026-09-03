@@ -71,4 +71,21 @@ enum AppConfig {
             .appendingPathComponent("pull")
             .appendingPathComponent(String(number))
     }
+
+    /// The URL an issue lives at on github.com (ADR 0032).
+    ///
+    /// Beside ``pullRequestURL(owner:name:number:)`` and built the same way, on the host that is
+    /// already the only one "open on GitHub" ever reaches: `github.com`, no new entry on
+    /// `CONTRIBUTING.md`'s list, and nothing is requested — the URL is handed to the browser.
+    /// - Parameters:
+    ///   - owner: Repository owner.
+    ///   - name: Repository name.
+    ///   - number: Issue number.
+    static func issueURL(owner: String, name: String, number: Int) -> URL {
+        webBaseURL
+            .appendingPathComponent(owner)
+            .appendingPathComponent(name)
+            .appendingPathComponent("issues")
+            .appendingPathComponent(String(number))
+    }
 }

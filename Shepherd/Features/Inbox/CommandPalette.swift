@@ -78,6 +78,13 @@ struct CommandPaletteView: View {
     /// coordinator owns the corpus and answers questions, and a second palette (or the same one
     /// reopened) starts from an empty query with nothing to show.
     @State private var pullRequestResults: [PullRequestSearchResult] = []
+    /// The best-matching issues for the current query (ADR 0032).
+    ///
+    /// Held beside the pull requests rather than merged into one array, because the two are
+    /// rendered by two row views and grouped under two headers — the *ordering* decision is the
+    /// coordinator's (``SearchIndexCoordinator/paletteResults(for:limit:verdicts:)`` merges by
+    /// score and slices once), and by the time they arrive here the slice has happened.
+    @State private var issueResults: [IssueSearchMatch] = []
     @FocusState private var isFieldFocused: Bool
 
     var body: some View {
@@ -146,14 +153,16 @@ struct CommandPaletteView: View {
         // and the query's own embedding is an on-device call — so there is nothing to throttle
         // and nothing that could reach the network (ADR 0019).
         .task(id: query) {
-            pullRequestResults = await environment.search.results(
+            let answer = await environment.search.paletteResults(
                 for: query,
-                limit: CommandPaletteView.pullRequestResultLimit,
+                limit: CommandPaletteView.searchResultLimit,
                 // Read here, at the one call site, rather than held by the search coordinator:
                 // `risk:high kind:dependency` is a *filter over* the ranking, and the two
                 // coordinators stay unaware of each other (ADR 0023).
                 verdicts: environment.triage.verdicts
             )
+            pullRequestResults = answer.pullRequests
+            issueResults = answer.issues
         }
     }
 
@@ -207,6 +216,13 @@ struct CommandPaletteView: View {
                 open(result)
             } label: {
                 SearchResultRowView(result: result, isSelected: isSelected(row))
+            }
+            .buttonStyle(.plain)
+        case .issue(let result):
+            Button {
+                open(result)
+            } label: {
+                IssueSearchResultRowView(result: result, isSelected: isSelected(row))
             }
             .buttonStyle(.plain)
         }
@@ -296,12 +312,20 @@ struct CommandPaletteView: View {
         case command(MatchedCommand)
         /// A pull request, ranked by ``ShepherdCore/SearchRanker``.
         case pullRequest(PullRequestSearchResult)
+        /// An issue, ranked by ``ShepherdCore/IssueSearchRanker`` (ADR 0032).
+        ///
+        /// A third case rather than a second list, for the reason the second one is a case: the
+        /// arrows, ⏎ and the scroll-to-selection all work on one ordered list, and a third list
+        /// would mean a third cursor and two rules for moving between them.
+        case issue(IssueSearchMatch)
 
-        /// A stable identifier, namespaced so a command and a pull request cannot collide.
+        /// A stable identifier, namespaced so a command, a pull request and an issue cannot
+        /// collide.
         var id: String {
             switch self {
             case .command(let matched): return "command:\(matched.command.id)"
             case .pullRequest(let result): return "pr:\(result.id)"
+            case .issue(let result): return "issue:\(result.id)"
             }
         }
     }
@@ -316,8 +340,12 @@ struct CommandPaletteView: View {
         var id: String { title }
     }
 
-    /// How many pull requests the palette has room for beside the commands.
-    static let pullRequestResultLimit = 6
+    /// How many search rows the palette has room for beside the commands.
+    ///
+    /// A budget across *both* kinds rather than one each (ADR 0032): the coordinator ranks both
+    /// corpora to this limit, merges them by score and slices once, so six strong pull requests
+    /// are six rows and a quota cannot push one of them out for a weak issue.
+    static let searchResultLimit = 6
 
     private var commands: [PaletteCommand] {
         var result: [PaletteCommand] = []
@@ -568,14 +596,30 @@ struct CommandPaletteView: View {
     /// those cases the commands underneath are only ever the dimmed non-matches.
     private var sections: [PaletteSection] {
         let commandGroups = commandSections
-        guard !pullRequestResults.isEmpty else { return commandGroups }
-        let group = PaletteSection(
-            title: String(localized: "Pull requests"),
-            rows: pullRequestResults.map { PaletteRow.pullRequest($0) }
-        )
+        var searchGroups: [PaletteSection] = []
+        if !pullRequestResults.isEmpty {
+            searchGroups.append(
+                PaletteSection(
+                    title: String(localized: "Pull requests"),
+                    rows: pullRequestResults.map { PaletteRow.pullRequest($0) }
+                )
+            )
+        }
+        // Issues come second when both kinds answered, which is the one place this feature makes
+        // a layout decision: the pull-request inbox is what Shepherd is for, and the merge above
+        // has already decided *how many* of each there are.
+        if !issueResults.isEmpty {
+            searchGroups.append(
+                PaletteSection(
+                    title: String(localized: "Issues"),
+                    rows: issueResults.map { PaletteRow.issue($0) }
+                )
+            )
+        }
+        guard !searchGroups.isEmpty else { return commandGroups }
         let hasCommandMatch = matchedCommands.contains(where: \.isMatch)
         let leadsWithSearch = SearchQuery(text: query).looksLikeProse || !hasCommandMatch
-        return leadsWithSearch ? [group] + commandGroups : commandGroups + [group]
+        return leadsWithSearch ? searchGroups + commandGroups : commandGroups + searchGroups
     }
 
     private var flatRows: [PaletteRow] {
@@ -593,6 +637,8 @@ struct CommandPaletteView: View {
             close()
         case .pullRequest(let result):
             open(result)
+        case .issue(let result):
+            open(result)
         }
     }
 
@@ -603,6 +649,17 @@ struct CommandPaletteView: View {
     /// focus session's "did the user leave the queue" rule to be forgotten.
     private func open(_ result: PullRequestSearchResult) {
         environment.openReview(prID: result.summary.id)
+        close()
+    }
+
+    /// Opens an issue the same way every other surface does (ADR 0032).
+    ///
+    /// ``AppEnvironment/openIssue(issueID:)`` and nothing else — the argument above, once more:
+    /// selecting an issue here has to switch the content kind *and* reveal the row even when the
+    /// rail's facets are hiding it, and a second implementation of that would be a second place
+    /// for one of the two halves to be forgotten.
+    private func open(_ result: IssueSearchMatch) {
+        environment.openIssue(issueID: result.summary.id)
         close()
     }
 

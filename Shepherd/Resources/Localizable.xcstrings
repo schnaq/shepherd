@@ -171,6 +171,16 @@
         }
       }
     },
+    "%@#%lld is not an issue Shepherd can open.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@#%lld ist kein Issue, das Shepherd öffnen kann."
+          }
+        }
+      }
+    },
     "%@, was line %lld": {
       "localizations": {
         "de": {
@@ -511,6 +521,46 @@
         }
       }
     },
+    "%lld comments": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Kommentar"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Kommentare"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld comment"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld comments"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld conflicted — needs your attention.": {
       "localizations": {
         "de": {
@@ -734,6 +784,46 @@
                 "stringUnit": {
                   "state": "translated",
                   "value": "%lld inline comments will be sent with this review."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld issues": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Issue"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Issues"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld issue"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld issues"
                 }
               }
             }
@@ -977,6 +1067,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld von %lld Zeilen von %@"
+          }
+        }
+      }
+    },
+    "%lld of %lld pull requests and %lld of %lld issues indexed · %@ · last updated %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %lld Pull Requests und %lld von %lld Issues indexiert · %@ · zuletzt aktualisiert %@."
           }
         }
       }
@@ -1791,12 +1891,32 @@
         }
       }
     },
+    "AGE": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ALTER"
+          }
+        }
+      }
+    },
     "AGENT CLI": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "AGENT-CLI"
+          }
+        }
+      }
+    },
+    "AGENT PULL REQUESTS": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AGENT-PULL-REQUESTS"
           }
         }
       }
@@ -2187,6 +2307,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Schon approved — ein zweites zustimmendes Review würde nichts ändern."
+          }
+        }
+      }
+    },
+    "An agent has a pull request for this issue": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Agent hat einen Pull Request für dieses Issue"
           }
         }
       }
@@ -2727,6 +2857,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bucket"
+          }
+        }
+      }
+    },
+    "Bucketed by when the issue was opened, not when it was last touched.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gruppiert danach, wann das Issue geöffnet wurde – nicht danach, wann es zuletzt bearbeitet wurde."
           }
         }
       }
@@ -3381,6 +3521,16 @@
         }
       }
     },
+    "Clear them to see every issue again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setze sie zurück, um wieder alle Issues zu sehen."
+          }
+        }
+      }
+    },
     "Close": {
       "localizations": {
         "de": {
@@ -3587,6 +3737,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Branch-Namen kopieren"
+          }
+        }
+      }
+    },
+    "Copy reference": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Referenz kopieren"
           }
         }
       }
@@ -4501,6 +4661,16 @@
         }
       }
     },
+    "Fetching the body…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beschreibung wird geladen…"
+          }
+        }
+      }
+    },
     "Fetching the diff…": {
       "localizations": {
         "de": {
@@ -4941,6 +5111,16 @@
         }
       }
     },
+    "Has an agent pull request": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hat einen Agent-Pull-Request"
+          }
+        }
+      }
+    },
     "Hide": {
       "localizations": {
         "de": {
@@ -5281,6 +5461,26 @@
         }
       }
     },
+    "Issues": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issues"
+          }
+        }
+      }
+    },
+    "Issues assigned to you, opened by you or mentioning you land here on the next sweep. Press ⌘R to run one now.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issues, die dir zugewiesen sind, die du geöffnet hast oder in denen du erwähnt wirst, landen beim nächsten Sweep hier. Drücke ⌘R, um jetzt einen laufen zu lassen."
+          }
+        }
+      }
+    },
     "It is built from the local database only — no GitHub call, no AI, nothing sent anywhere — because it runs while you are not watching. If your Mac was asleep at that time, the digest arrives when it wakes up, and only if that is still the same day. A quiet night produces nothing at all.": {
       "localizations": {
         "de": {
@@ -5421,12 +5621,32 @@
         }
       }
     },
+    "LABELS": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "LABELS"
+          }
+        }
+      }
+    },
     "LANES": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "SPUREN"
+          }
+        }
+      }
+    },
+    "LINKED PULL REQUESTS": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VERKNÜPFTE PULL REQUESTS"
           }
         }
       }
@@ -6261,6 +6481,26 @@
         }
       }
     },
+    "No issue selected": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kein Issue ausgewählt"
+          }
+        }
+      }
+    },
+    "No issues yet": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch keine Issues"
+          }
+        }
+      }
+    },
     "No local checkout for %@": {
       "localizations": {
         "de": {
@@ -6317,6 +6557,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Kein Pull Request passt zu diesem Filter. Setze ihn zurück, um wieder alles zu sehen."
+          }
+        }
+      }
+    },
+    "No pull request references this issue yet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch kein Pull Request verweist auf dieses Issue."
           }
         }
       }
@@ -6431,6 +6681,16 @@
         }
       }
     },
+    "Not in your inbox — opens %@ on GitHub.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht in deiner Inbox – öffnet %@ auf GitHub."
+          }
+        }
+      }
+    },
     "Not selected": {
       "localizations": {
         "de": {
@@ -6521,6 +6781,16 @@
         }
       }
     },
+    "Nothing matches these facets": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nichts passt zu diesen Facetten"
+          }
+        }
+      }
+    },
     "Nothing matches “%@”.": {
       "localizations": {
         "de": {
@@ -6557,6 +6827,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nichts Neues"
+          }
+        }
+      }
+    },
+    "Nothing started yet": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch nichts begonnen"
           }
         }
       }
@@ -6747,6 +7027,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Aus — ⌘K trifft nur Wörter, und nichts wird gespeichert."
+          }
+        }
+      }
+    },
+    "Older": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Älter"
           }
         }
       }
@@ -7007,6 +7297,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Das Issue auf GitHub öffnen"
+          }
+        }
+      }
+    },
+    "Open the review for %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Review für %@ öffnen."
           }
         }
       }
@@ -8491,6 +8791,16 @@
         }
       }
     },
+    "Section": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bereich"
+          }
+        }
+      }
+    },
     "Select": {
       "localizations": {
         "de": {
@@ -9751,6 +10061,16 @@
         }
       }
     },
+    "That command works on pull requests. Switch the section with the picker.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Befehl gilt für Pull Requests. Wechsle den Bereich mit der Auswahl oben."
+          }
+        }
+      }
+    },
     "That is not a valid URL.": {
       "localizations": {
         "de": {
@@ -10621,6 +10941,16 @@
         }
       }
     },
+    "This month": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diesen Monat"
+          }
+        }
+      }
+    },
     "This provider cannot explain a selection.": {
       "localizations": {
         "de": {
@@ -10701,6 +11031,16 @@
         }
       }
     },
+    "This week": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Woche"
+          }
+        }
+      }
+    },
     "Thread reopened.": {
       "localizations": {
         "de": {
@@ -10727,6 +11067,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Titel"
+          }
+        }
+      }
+    },
+    "Today": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heute"
           }
         }
       }
@@ -10927,6 +11277,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Unverändert"
+          }
+        }
+      }
+    },
+    "Unknown state": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unbekannter Status"
           }
         }
       }
@@ -11221,6 +11581,16 @@
         }
       }
     },
+    "Whether a machine wrote any of the pull requests GitHub says would close the issue. Only the ones the sweep saw count, so this can understate and never overstate.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ob eine Maschine einen der Pull Requests geschrieben hat, die das Issue laut GitHub schließen würden. Es zählen nur die, die der Sweep gesehen hat – die Zahl kann also zu niedrig sein, nie zu hoch."
+          }
+        }
+      }
+    },
     "Why Shepherd flagged this risk": {
       "localizations": {
         "de": {
@@ -11431,6 +11801,16 @@
         }
       }
     },
+    "Your issues are indexed the same way and answer the same ⌘K: the same on-device embeddings, over the title, the labels and the body of what Shepherd already downloaded.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Issues werden genauso indexiert und antworten im selben ⌘K: dieselben Embeddings auf dem Gerät, über Titel, Labels und Beschreibung von allem, was Shepherd schon heruntergeladen hat."
+          }
+        }
+      }
+    },
     "Your settings and your secrets are encrypted on this Mac with a passphrase you choose, then stored as one object in a bucket you own. The bucket operator — and anyone who can read the bucket — sees ciphertext only.": {
       "localizations": {
         "de": {
@@ -11577,6 +11957,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "chore"
+          }
+        }
+      }
+    },
+    "clear facets": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Facetten zurücksetzen"
           }
         }
       }
@@ -11887,6 +12277,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zeile %lld"
+          }
+        }
+      }
+    },
+    "linked pull request": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verknüpfter Pull Request"
           }
         }
       }

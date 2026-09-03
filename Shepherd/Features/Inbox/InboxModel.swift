@@ -84,12 +84,19 @@ enum ProvenanceFilter: Hashable, Sendable {
 ///
 /// A pure value so the mapping is testable without a session: the model only assigns it.
 struct InboxRailSelection: Equatable {
-    /// The smart view to select.
-    var smartView: SmartView
+    /// The smart view to select, or `nil` when the token names no pull-request rail state at all.
+    ///
+    /// Exactly one token answers `nil`: `filter=issues` names the inbox *section* rather than a
+    /// rail state (ADR 0032). Making it widen the pull-request rail — the way a facet token
+    /// does — would silently change what the user comes back to when they move the picker back,
+    /// and a link that asked for the issues section has said nothing about pull requests.
+    var smartView: SmartView?
     /// The provenance facet, if the token names one.
     var provenanceFilter: ProvenanceFilter?
     /// The repository facet, if the token names one.
     var repoFilter: RepoRef?
+    /// Which section the token asks the screen to show (ADR 0032).
+    var contentKind: ContentKind
 
     /// Maps a deep-link filter onto rail state.
     ///
@@ -97,6 +104,7 @@ struct InboxRailSelection: Equatable {
     /// additionally widens the smart view to "Involved", because `filter=agent:claude-code`
     /// means "everything that agent sent me" — keeping whichever smart view happened to be
     /// selected would answer a different question, and an empty list looks like a broken link.
+    /// The *section* token moves the picker and touches nothing else.
     /// - Parameter filter: The filter from the link.
     init(_ filter: InboxDeepLinkFilter) {
         switch filter {
@@ -116,22 +124,27 @@ struct InboxRailSelection: Equatable {
             self.init(smartView: .involved, provenanceFilter: .agent(id: id))
         case .repository(let repo):
             self.init(smartView: .involved, repoFilter: repo)
+        case .issues:
+            self.init(smartView: nil, contentKind: .issues)
         }
     }
 
     /// Creates a selection.
     /// - Parameters:
-    ///   - smartView: The smart view.
+    ///   - smartView: The smart view, or `nil` to leave the pull-request rail alone.
     ///   - provenanceFilter: The provenance facet, if any.
     ///   - repoFilter: The repository facet, if any.
+    ///   - contentKind: Which section to show.
     init(
-        smartView: SmartView,
+        smartView: SmartView?,
         provenanceFilter: ProvenanceFilter? = nil,
-        repoFilter: RepoRef? = nil
+        repoFilter: RepoRef? = nil,
+        contentKind: ContentKind = .pullRequests
     ) {
         self.smartView = smartView
         self.provenanceFilter = provenanceFilter
         self.repoFilter = repoFilter
+        self.contentKind = contentKind
     }
 }
 
@@ -737,7 +750,11 @@ final class InboxModel {
     /// - Parameter filter: The filter from the link.
     func apply(_ filter: InboxDeepLinkFilter) {
         let selection = InboxRailSelection(filter)
-        smartView = selection.smartView
+        // A token that names the *section* rather than a rail state leaves this rail exactly as
+        // it was; the screen moves the picker (ADR 0032). Clearing the facets here would mean a
+        // `filter=issues` link quietly discarded the pull-request rail the user set up.
+        guard let view = selection.smartView else { return }
+        smartView = view
         provenanceFilter = selection.provenanceFilter
         repoFilter = selection.repoFilter
         // The link's grammar has no risk token (ADR 0013 is unchanged by ADR 0023), so a risk

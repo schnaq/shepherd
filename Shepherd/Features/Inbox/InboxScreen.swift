@@ -2,12 +2,34 @@ import ShepherdCore
 import SwiftUI
 
 /// The three-pane inbox: rail, grouped list, detail preview.
+///
+/// One screen, two sections. The rail's content-kind picker (ADR 0032) decides which of the two
+/// models drives all three panes; both are held here for the screen's lifetime, so switching the
+/// picker changes what is drawn and nothing else — the pull-request model keeps its smart view,
+/// its facets, its cursor, its ticks and its half-typed key sequence, because it is never told
+/// anything happened.
 struct InboxScreen: View {
     @Environment(AppEnvironment.self) private var environment
     /// The active session.
     let session: SignedInSession
 
     @State private var model: InboxModel
+    /// The issues section's model (ADR 0032).
+    @State private var issueModel: IssueInboxModel
+    /// Which section is showing, remembered per window.
+    ///
+    /// `@SceneStorage` rather than `@State`, and that is the whole of what "remembered" means
+    /// here: this screen is rebuilt whenever ``AppEnvironment/route`` changes, so a `@State`
+    /// property would put the picker back on *Pull requests* after every trip to the review
+    /// screen — including the trip a linked pull request in the issue panel just made. Scene
+    /// storage is per window and per session of the window, which is exactly the scope a picker
+    /// like this has.
+    ///
+    /// It is deliberately **not** in ``AppSettings`` and therefore not in
+    /// ``SyncedSettingsDocument``: which section a window happens to be showing is not a
+    /// preference, and travelling between a user's Macs it would only ever arrive wrong
+    /// (ADR 0014's obligation applies to settings, and this is UI state).
+    @SceneStorage("inbox.contentKind") private var contentKind: ContentKind = .pullRequests
     @State private var isMergeSheetPresented = false
     @State private var isSettingsPresented = false
     /// Whether the bulk-triage confirmation is up, and what it is confirming (ADR 0015).
@@ -24,14 +46,19 @@ struct InboxScreen: View {
     init(session: SignedInSession, settings: AppSettings) {
         self.session = session
         _model = State(initialValue: InboxModel(session: session, settings: settings))
+        // The database and the issue read, rather than the whole session: the narrower
+        // dependency is what makes `IssueInboxModel` testable without a Keychain (ADR 0032).
+        _issueModel = State(
+            initialValue: IssueInboxModel(database: session.database, issues: session.github)
+        )
     }
 
     var body: some View {
         NavigationSplitView {
-            InboxSidebar(model: model, onOpenSettings: { openSettings(.account) })
+            sidebar
                 .navigationSplitViewColumnWidth(min: 200, ideal: 232, max: 300)
         } content: {
-            InboxListView(model: model, onOpen: open)
+            centre
                 // Above the list header, as a top safe-area inset — the same mechanism the shortcut
                 // bar and the review session bar use, so the card is chrome around the list rather
                 // than a row inside it, and the list keeps its own focus and key handling.
@@ -46,13 +73,8 @@ struct InboxScreen: View {
                 }
                 .navigationSplitViewColumnWidth(min: 380, ideal: 640)
         } detail: {
-            InboxDetailPanel(
-                model: model,
-                actions: actions,
-                onOpenReview: open,
-                onMerge: { isMergeSheetPresented = true }
-            )
-            .navigationSplitViewColumnWidth(min: 320, ideal: 380, max: 480)
+            panel
+                .navigationSplitViewColumnWidth(min: 320, ideal: 380, max: 480)
         }
         .navigationSplitViewStyle(.balanced)
         .toolbar { toolbarContent }
@@ -63,6 +85,7 @@ struct InboxScreen: View {
             // app's lifetime, the screen is rebuilt whenever the route changes.
             model.triage = environment.triage
             model.startObserving()
+            issueModel.startObserving()
             // A deep link raised while the review screen was showing routes here first; the
             // request is waiting in the container by the time this screen appears.
             consumeDeepLinkRequests()
@@ -84,6 +107,7 @@ struct InboxScreen: View {
         }
         .onDisappear {
             model.stopObserving()
+            issueModel.stopObserving()
         }
         .onChange(of: environment.pendingAction) { _, pending in
             guard let pending else { return }
@@ -94,6 +118,9 @@ struct InboxScreen: View {
             consumeDeepLinkRequests()
         }
         .onChange(of: environment.pendingSettingsTab) { _, _ in
+            consumeDeepLinkRequests()
+        }
+        .onChange(of: environment.pendingIssueSelection) { _, _ in
             consumeDeepLinkRequests()
         }
         .sheet(isPresented: $isMergeSheetPresented) {
@@ -119,11 +146,62 @@ struct InboxScreen: View {
         }
     }
 
+    // MARK: - The three panes
+
+    /// The rail: the content-kind picker, then whichever section's facets (ADR 0032).
+    private var sidebar: some View {
+        VStack(spacing: 0) {
+            ContentKindPicker(selection: $contentKind)
+            switch contentKind {
+            case .pullRequests:
+                InboxSidebar(model: model, onOpenSettings: { openSettings(.account) })
+            case .issues:
+                IssueSidebar(model: issueModel, onOpenSettings: { openSettings(.account) })
+            }
+        }
+        .background(Theme.panel)
+    }
+
+    @ViewBuilder
+    private var centre: some View {
+        switch contentKind {
+        case .pullRequests:
+            InboxListView(model: model, onOpen: open)
+        case .issues:
+            IssueListView(model: issueModel)
+        }
+    }
+
+    @ViewBuilder
+    private var panel: some View {
+        switch contentKind {
+        case .pullRequests:
+            InboxDetailPanel(
+                model: model,
+                actions: actions,
+                onOpenReview: open,
+                onMerge: { isMergeSheetPresented = true }
+            )
+        case .issues:
+            IssueDetailPanel(model: issueModel)
+        }
+    }
+
     /// Applies whatever a `shepherd://` link asked the inbox for (ADR 0013).
     private func consumeDeepLinkRequests() {
         if let pending = environment.pendingInboxFilter {
             environment.clearPendingInboxFilter()
+            // The section first, then the rail: `filter=issues` names the section and narrows
+            // nothing, so `InboxRailSelection` answers `nil` for the smart view and
+            // `InboxModel.apply` leaves the pull-request rail exactly as the user left it
+            // (ADR 0032).
+            contentKind = InboxRailSelection(pending.value).contentKind
             model.apply(pending.value)
+        }
+        if let pending = environment.pendingIssueSelection {
+            environment.clearPendingIssueSelection()
+            contentKind = .issues
+            issueModel.reveal(issueID: pending.value)
         }
         if let pending = environment.pendingSettingsTab {
             environment.clearPendingSettingsTab()
@@ -229,7 +307,35 @@ struct InboxScreen: View {
         environment.openReview(prID: prID)
     }
 
+    /// Runs one raised command against the model that owns the current selection (ADR 0032).
+    ///
+    /// The navigation pair goes to whichever section is showing — which is the plan's own
+    /// wording, and is why `j`/`k` needed no new mechanism: both lists raise the same action and
+    /// the container decides. Everything else is a pull-request verb. Rather than let `r a` from
+    /// the menu bar or the palette approve a pull request the user cannot see, those are refused
+    /// with one line while the issues section is up; the two exceptions are the focus session,
+    /// which builds its queue from the session's own observation and not from a screen's list,
+    /// and the grouping commands, which change a preference.
     private func perform(_ action: ShortcutAction) {
+        if contentKind == .issues {
+            switch action {
+            case .selectNext:
+                issueModel.moveSelection(by: 1)
+                return
+            case .selectPrevious:
+                issueModel.moveSelection(by: -1)
+                return
+            case .startReviewSession, .groupBy:
+                break
+            default:
+                environment.toasts.info(
+                    String(
+                        localized: "That command works on pull requests. Switch the section with the picker."
+                    )
+                )
+                return
+            }
+        }
         switch action {
         case .selectNext:
             model.moveSelection(by: 1)

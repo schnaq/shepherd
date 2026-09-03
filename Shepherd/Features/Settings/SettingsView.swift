@@ -917,6 +917,12 @@ struct IntelligenceSettingsTab: View {
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
                 Text(String(
+                    localized: "Your issues are indexed the same way and answer the same ⌘K: the same on-device embeddings, over the title, the labels and the body of what Shepherd already downloaded."
+                ))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                Text(String(
                     localized: "It never uses an AI endpoint, even when you have configured one: search runs on every keystroke and over every pull request, so it stays on this Mac. Switching it off leaves ⌘K searching titles, labels, repositories, branches and authors, and empties the index."
                 ))
                 .font(.system(size: 11))
@@ -966,7 +972,7 @@ struct IntelligenceSettingsTab: View {
             return String(localized: "Indexing \(status.documentCount) pull requests…")
         }
         return String(
-            localized: "\(status.embeddedCount) of \(status.documentCount) pull requests indexed · \(sizeText) · last updated \(RelativeDate.long(last))."
+            localized: "\(status.embeddedCount) of \(status.documentCount) pull requests and \(status.issueEmbeddedCount) of \(status.issueDocumentCount) issues indexed · \(sizeText) · last updated \(RelativeDate.long(last))."
         )
     }
 

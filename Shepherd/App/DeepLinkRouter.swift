@@ -107,6 +107,8 @@ extension AppEnvironment {
         switch link {
         case .pullRequest(let repo, let number):
             openPullRequest(repo: repo, number: number, in: session)
+        case .issue(let repo, let number):
+            openIssue(repo: repo, number: number, in: session)
         case .inbox(let filter):
             route = .inbox
             pendingInboxFilter = filter.map { Pending($0) }
@@ -148,6 +150,68 @@ extension AppEnvironment {
                 )
             }
         }
+    }
+
+    /// Opens the issues section on the issue named by `owner/repo/number` (ADR 0032).
+    ///
+    /// ``openPullRequest(repo:number:in:)``'s rule, unchanged and for its reason. The cache is
+    /// asked first, because that is free and covers every issue in the inbox. When the issue is
+    /// *not* cached the app fetches that one issue and stores it, so the section renders from
+    /// SQLite like every other screen (ADR 0006) — a sweep searches
+    /// `assignee:`/`author:`/`mentions:@me`, so it would not find an issue somebody sent the user
+    /// in chat, and it would cost several API calls to fail.
+    ///
+    /// `pruneMissing: false` on the write is the one difference worth naming: this is a row the
+    /// *link* asked for, not the result of a sweep, so it must not be treated as the new complete
+    /// set and take the whole issues inbox with it.
+    private func openIssue(repo: RepoRef, number: Int, in session: SignedInSession) {
+        Task {
+            let cached = (try? await session.database.fetchIssues()) ?? []
+            if let issueID = AppEnvironment.issueID(repo: repo, number: number, in: cached) {
+                openIssue(issueID: issueID)
+                return
+            }
+            // The fetch can take a second or two and there is no row to select yet.
+            toasts.info(String(localized: "Fetching \(repo.fullName)#\(number) from GitHub…"))
+            do {
+                guard let row = try await session.github.issueRow(repo: repo, number: number)
+                else {
+                    toasts.show(
+                        Toast(
+                            message: String(
+                                localized: "\(repo.fullName)#\(number) is not an issue Shepherd can open."
+                            ),
+                            kind: .warning
+                        )
+                    )
+                    return
+                }
+                try? await session.database.saveIssueSummaries([row], pruneMissing: false)
+                openIssue(issueID: row.id)
+            } catch {
+                toasts.failure(
+                    error,
+                    context: String(localized: "Could not open \(repo.fullName)#\(number)")
+                )
+            }
+        }
+    }
+
+    /// Finds a cached issue by repository and number.
+    ///
+    /// ``pullRequestID(repo:number:in:)``'s twin, case-insensitive for its reason: a link carries
+    /// whatever casing was typed while the cache holds the casing GitHub returned.
+    /// - Parameters:
+    ///   - repo: The repository from the link.
+    ///   - number: The issue number from the link.
+    ///   - rows: The cached issue rows.
+    /// - Returns: The issue's node id, or `nil` when it is not cached.
+    nonisolated static func issueID(
+        repo: RepoRef,
+        number: Int,
+        in rows: [IssueRowSummary]
+    ) -> String? {
+        rows.first { $0.number == number && $0.repo.isSameRepository(as: repo) }?.id
     }
 
     /// Finds a cached pull request by repository and number.

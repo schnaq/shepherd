@@ -25,7 +25,7 @@ struct InboxSidebar: View {
         .scrollContentBackground(.hidden)
         .background(Theme.panel)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            settingsRow
+            RailSettingsRow(action: onOpenSettings)
         }
     }
 
@@ -157,27 +157,6 @@ struct InboxSidebar: View {
         }
     }
 
-    private var settingsRow: some View {
-        VStack(spacing: 0) {
-            Divider().overlay(Theme.border)
-            Button(action: onOpenSettings) {
-                HStack(spacing: 8) {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 12))
-                    Text(String(localized: "Settings"))
-                        .font(.system(size: 13))
-                    Spacer(minLength: 0)
-                }
-                .foregroundStyle(Theme.textSecondary)
-                .padding(.horizontal, 10)
-                .frame(height: 34)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-        }
-        .background(Theme.panel)
-    }
-
     /// Says where a risk row's number came from, because the two sources are different claims.
     private func helpText(for facet: TriageRiskFacet) -> String {
         guard facet.classifiedCount > 0 else {
@@ -204,6 +183,37 @@ struct InboxSidebar: View {
         case .approvedByMe:
             return String(localized: "Approximation: pull requests you were asked to review that now carry an approval.")
         }
+    }
+}
+
+/// The Settings row pinned to the bottom of the left rail.
+///
+/// Extracted rather than duplicated when the issues rail arrived (ADR 0032): it is the same
+/// control in the same place doing the same thing, and two copies would be two places for the
+/// row height and the label to drift apart.
+struct RailSettingsRow: View {
+    /// Opens the Settings window.
+    var action: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Divider().overlay(Theme.border)
+            Button(action: action) {
+                HStack(spacing: 8) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 12))
+                    Text(String(localized: "Settings"))
+                        .font(.system(size: 13))
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(Theme.textSecondary)
+                .padding(.horizontal, 10)
+                .frame(height: 34)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .background(Theme.panel)
     }
 }
 
