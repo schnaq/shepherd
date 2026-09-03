@@ -113,14 +113,20 @@ struct ClaimsEvidenceCardState: Equatable, Sendable {
     /// The text one contradicted line becomes in the review summary: the claim, then the facts.
     ///
     /// The claim's own sentence comes first because that is what the author will recognise, and
-    /// the facts follow as the reason. Every fact is already a sentence
-    /// (``ShepherdCore/EvidenceFact``), so joining them with a space produces prose rather than a
-    /// list — the reviewer edits it in the composer anyway, and a bullet list would be a shape
-    /// they have to undo before writing their own sentence.
+    /// the facts follow as the reason. Every fact renders to a sentence
+    /// (``ShepherdCore/EvidenceFact/englishSentence``), so joining them with a space produces
+    /// prose rather than a list — the reviewer edits it in the composer anyway, and a bullet list
+    /// would be a shape they have to undo before writing their own sentence.
+    ///
+    /// **The English sentence, deliberately, on a German Mac too.** This text goes into a review
+    /// comment, and a review comment is written to GitHub, where the author — and every later
+    /// reader of the thread — reads English (ADR 0022's rule about the review vocabulary, taken
+    /// to its end). The card above it shows the same facts in the reviewer's own language through
+    /// `EvidenceFact.localizedSentence(bundle:)`.
     /// - Parameter line: The line the button was pressed on.
     /// - Returns: The text to insert.
     static func commentText(for line: ClaimsEvidenceReport.Line) -> String {
-        let facts = line.verdict.facts.map(\.text).joined(separator: " ")
+        let facts = line.verdict.facts.map(\.englishSentence).joined(separator: " ")
         let quote = line.claim.quote.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !facts.isEmpty else { return quote }
         guard !quote.isEmpty else { return facts }
@@ -538,10 +544,10 @@ final class ClaimsEvidenceModel {
         }
     }
 
-    /// Which of ``ShepherdCore/IssueLookupFailure``'s four sentences a failed read gets.
+    /// Which of ``ShepherdCore/IssueLookupFailure``'s four answers a failed read gets.
     ///
-    /// The mapping lives here because this is the only layer that can see both types: the
-    /// sentences are `ShepherdCore` prose (ADR 0026's rule about evidence facts) and the error is
+    /// The mapping lives here because this is the only layer that can see both types: the failure
+    /// is a `ShepherdCore` case that travels inside an evidence fact and the error is
     /// `GitHubKit`'s. A rate limit is `failed` rather than `offline` — GitHub was reached and
     /// answered, and "could not be reached" would be the wrong sentence to put on the card.
     /// - Parameter error: Whatever the read threw.

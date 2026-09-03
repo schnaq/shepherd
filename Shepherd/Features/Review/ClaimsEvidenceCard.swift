@@ -206,6 +206,10 @@ struct ClaimsEvidenceCard: View {
 
     /// One fact: the sentence, then whatever there is to open.
     ///
+    /// The sentence comes from ``ShepherdCore/EvidenceFact/localizedSentence(bundle:)`` — the
+    /// app-side rendering of the structured fact, with a German row per shape (ADR 0022) — and
+    /// **not** from `englishSentence`, which is what a GitHub comment gets.
+    ///
     /// A fact carrying a ``ShepherdCore/EvidenceFact/mark`` is one acceptance bullet of the
     /// referenced issue, and it gets the glyph in front of it so eight of them read as a checklist
     /// rather than as eight sentences (ADR 0026's amendment). The glyph is ✓ or a dot — never ✗,
@@ -222,7 +226,7 @@ struct ClaimsEvidenceCard: View {
                         .padding(.top, 2)
                         .accessibilityLabel(ClaimsEvidenceCard.markLabel(mark))
                 }
-                Text(fact.text)
+                Text(fact.localizedSentence())
                     .font(.system(size: 11.5))
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)

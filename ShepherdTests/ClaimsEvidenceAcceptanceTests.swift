@@ -192,7 +192,7 @@ final class ClaimsEvidenceAcceptanceTests: XCTestCase {
         let line = issueLine(model)
         XCTAssertEqual(line?.verdict.status, .unclear)
         XCTAssertEqual(
-            line?.verdict.facts.last?.text,
+            line?.verdict.facts.last?.englishSentence,
             "Acceptance criteria not checked — the issue is not fetched."
         )
     }
@@ -266,10 +266,10 @@ final class ClaimsEvidenceAcceptanceTests: XCTestCase {
         XCTAssertEqual(issueLine(model)?.verdict.status, .unclear)
         XCTAssertEqual(facts.count, 3)
         XCTAssertEqual(
-            facts[1].text,
+            facts[1].englishSentence,
             "Acceptance criteria not checked — the issue is not fetched."
         )
-        XCTAssertEqual(facts[2].text, IssueLookupFailure.notFound.sentence)
+        XCTAssertEqual(facts[2].englishSentence, IssueLookupFailure.notFound.sentence)
 
         // A failure is remembered, so the card does not re-ask on every redraw.
         await model.loadAcceptanceCriteria()
@@ -313,8 +313,8 @@ final class ClaimsEvidenceAcceptanceTests: XCTestCase {
         XCTAssertEqual(issueLine(model)?.verdict.status, .unclear)
         XCTAssertTrue(facts.allSatisfy { $0.mark == nil })
         XCTAssertTrue(
-            facts.contains { $0.text.contains("is a pull request rather than an issue") },
-            facts.map(\.text).joined(separator: " | ")
+            facts.contains { $0.englishSentence.contains("is a pull request rather than an issue") },
+            facts.map(\.englishSentence).joined(separator: " | ")
         )
     }
 
@@ -326,8 +326,8 @@ final class ClaimsEvidenceAcceptanceTests: XCTestCase {
 
         let facts = issueLine(model)?.verdict.facts ?? []
         XCTAssertTrue(
-            facts.contains { $0.text.contains("holds no checklist or list") },
-            facts.map(\.text).joined(separator: " | ")
+            facts.contains { $0.englishSentence.contains("holds no checklist or list") },
+            facts.map(\.englishSentence).joined(separator: " | ")
         )
     }
 

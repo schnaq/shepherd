@@ -21,6 +21,16 @@
         }
       }
     },
+    "#%lld is a pull request rather than an issue, so it has no acceptance criteria.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%lld ist ein Pull Request und kein Issue, hat also keine Akzeptanzkriterien."
+          }
+        }
+      }
+    },
     "$%@ max": {
       "localizations": {
         "de": {
@@ -254,6 +264,46 @@
                 "stringUnit": {
                   "state": "translated",
                   "value": "%lld automatic delegations are already running. Start it by hand from the pull request."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld changed files match a test naming convention.": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld geänderte Datei entspricht einer Namenskonvention für Tests."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld geänderte Dateien entsprechen einer Namenskonvention für Tests."
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld changed file matches a test naming convention."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld changed files match a test naming convention."
                 }
               }
             }
@@ -891,6 +941,26 @@
         }
       }
     },
+    "%lld of %lld acceptance bullets are mentioned in the pull request's description, changed paths or commit messages.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %lld Akzeptanzpunkten sind in der Beschreibung, den geänderten Pfaden oder den Commit-Messages des Pull Requests erwähnt."
+          }
+        }
+      }
+    },
+    "%lld of %lld changed files are under “%@”.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %lld geänderten Dateien liegen unter „%@“."
+          }
+        }
+      }
+    },
     "%lld of %lld classified on this Mac; the rest are risk hints from the changed files.": {
       "localizations": {
         "de": {
@@ -947,6 +1017,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld von %lld heute genutzt · %lld laufen gerade. Ist ein Limit erreicht, benachrichtigt Shepherd dich, statt etwas zu starten."
+          }
+        }
+      }
+    },
+    "%lld of %lld words in this bullet appear in the pull request: %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %lld Wörtern aus diesem Punkt kommen im Pull Request vor: %@."
           }
         }
       }
@@ -1451,6 +1531,26 @@
         }
       }
     },
+    "1 of %lld words in this bullet appears in the pull request: %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 von %lld Wörtern aus diesem Punkt kommt im Pull Request vor: %@."
+          }
+        }
+      }
+    },
+    "1 of 1 word in this bullet appears in the pull request: %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 von 1 Wort aus diesem Punkt kommt im Pull Request vor: %@."
+          }
+        }
+      }
+    },
     "1 of your pull requests needs attention": {
       "localizations": {
         "de": {
@@ -1787,6 +1887,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Änderungen zulassen"
+          }
+        }
+      }
+    },
+    "Acceptance criteria not checked — the issue body holds no checklist or list Shepherd could read.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Akzeptanzkriterien nicht geprüft — der Issue-Text enthält keine Checkliste und keine Liste, die Shepherd lesen konnte."
+          }
+        }
+      }
+    },
+    "Acceptance criteria not checked — the issue is not fetched.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Akzeptanzkriterien nicht geprüft — das Issue ist nicht geladen."
           }
         }
       }
@@ -2711,6 +2831,116 @@
         }
       }
     },
+    "CI has not finished.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CI ist noch nicht fertig."
+          }
+        }
+      }
+    },
+    "CI has not finished: %lld checks are still running.": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "CI ist noch nicht fertig: %lld Check läuft noch."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "CI ist noch nicht fertig: %lld Checks laufen noch."
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "CI has not finished: %lld check is still running."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "CI has not finished: %lld checks are still running."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "CI is green.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CI ist grün."
+          }
+        }
+      }
+    },
+    "CI is green: %lld of %lld checks passed.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CI ist grün: %lld von %lld Checks bestanden."
+          }
+        }
+      }
+    },
+    "CI is green: %lld of 1 check passed.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CI ist grün: %lld von 1 Check bestanden."
+          }
+        }
+      }
+    },
+    "CI is red.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CI ist rot."
+          }
+        }
+      }
+    },
+    "CI is red: %lld of %lld checks failed.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CI ist rot: %lld von %lld Checks fehlgeschlagen."
+          }
+        }
+      }
+    },
+    "CI is red: %lld of 1 check failed.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CI ist rot: %lld von 1 Check fehlgeschlagen."
+          }
+        }
+      }
+    },
     "CI running": {
       "localizations": {
         "de": {
@@ -2877,6 +3107,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Remote prüfen"
+          }
+        }
+      }
+    },
+    "Check “%@” failed.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check „%@“ ist fehlgeschlagen."
           }
         }
       }
@@ -4061,6 +4301,16 @@
         }
       }
     },
+    "Every acceptance bullet is mentioned in the pull request's description, changed paths or commit messages.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Akzeptanzpunkt ist in der Beschreibung, den geänderten Pfaden oder den Commit-Messages des Pull Requests erwähnt."
+          }
+        }
+      }
+    },
     "Every allowed tool runs unattended, including shell commands.": {
       "localizations": {
         "de": {
@@ -4837,6 +5087,136 @@
           "stringUnit": {
             "state": "translated",
             "value": "Beteiligt"
+          }
+        }
+      }
+    },
+    "Issue #%lld is closed and lists %lld acceptance bullets.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issue #%lld ist geschlossen und nennt %lld Akzeptanzpunkte."
+          }
+        }
+      }
+    },
+    "Issue #%lld is closed and lists 1 acceptance bullet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issue #%lld ist geschlossen und nennt 1 Akzeptanzpunkt."
+          }
+        }
+      }
+    },
+    "Issue #%lld is open and lists %lld acceptance bullets.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issue #%lld ist offen und nennt %lld Akzeptanzpunkte."
+          }
+        }
+      }
+    },
+    "Issue #%lld is open and lists 1 acceptance bullet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issue #%lld ist offen und nennt 1 Akzeptanzpunkt."
+          }
+        }
+      }
+    },
+    "Issue #%lld lists %lld acceptance bullets.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issue #%lld nennt %lld Akzeptanzpunkte."
+          }
+        }
+      }
+    },
+    "Issue #%lld lists 1 acceptance bullet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issue #%lld nennt 1 Akzeptanzpunkt."
+          }
+        }
+      }
+    },
+    "Issue #%lld of %@ is referenced.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issue #%lld von %@ ist referenziert."
+          }
+        }
+      }
+    },
+    "Issue #%lld “%@” is closed and lists %lld acceptance bullets.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issue #%lld „%@“ ist geschlossen und nennt %lld Akzeptanzpunkte."
+          }
+        }
+      }
+    },
+    "Issue #%lld “%@” is closed and lists 1 acceptance bullet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issue #%lld „%@“ ist geschlossen und nennt 1 Akzeptanzpunkt."
+          }
+        }
+      }
+    },
+    "Issue #%lld “%@” is open and lists %lld acceptance bullets.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issue #%lld „%@“ ist offen und nennt %lld Akzeptanzpunkte."
+          }
+        }
+      }
+    },
+    "Issue #%lld “%@” is open and lists 1 acceptance bullet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issue #%lld „%@“ ist offen und nennt 1 Akzeptanzpunkt."
+          }
+        }
+      }
+    },
+    "Issue #%lld “%@” lists %lld acceptance bullets.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issue #%lld „%@“ nennt %lld Akzeptanzpunkte."
+          }
+        }
+      }
+    },
+    "Issue #%lld “%@” lists 1 acceptance bullet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issue #%lld „%@“ nennt 1 Akzeptanzpunkt."
           }
         }
       }
@@ -5641,6 +6021,26 @@
         }
       }
     },
+    "No changed file matches a test naming convention.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine geänderte Datei entspricht einer Namenskonvention für Tests."
+          }
+        }
+      }
+    },
+    "No changed path contains “%@”, so the claim could not be matched to the diff.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kein geänderter Pfad enthält „%@“, also ließ sich die Aussage nicht dem Diff zuordnen."
+          }
+        }
+      }
+    },
     "No check on this pull request is failing, so there is nothing to diagnose.": {
       "localizations": {
         "de": {
@@ -5657,6 +6057,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Keine Checks"
+          }
+        }
+      }
+    },
+    "No checks are configured for this commit.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für diesen Commit sind keine Checks konfiguriert."
           }
         }
       }
@@ -5711,12 +6121,32 @@
         }
       }
     },
+    "No diff was readable; GitHub sends no patch for binary files and for diffs it truncated.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kein Diff war lesbar; GitHub liefert für Binärdateien und für gekürzte Diffs keinen Patch."
+          }
+        }
+      }
+    },
     "No digest delivered on this Mac yet.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Auf diesem Mac wurde noch kein Digest ausgeliefert."
+          }
+        }
+      }
+    },
+    "No exported declaration is removed or changed in the diff Shepherd read.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Im Diff, das Shepherd gelesen hat, wird keine exportierte Deklaration entfernt oder geändert."
           }
         }
       }
@@ -5887,6 +6317,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Noch keine konfiguriert."
+          }
+        }
+      }
+    },
+    "None of the %lld words in this bullet appear in the pull request.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keines der %lld Wörter aus diesem Punkt kommt im Pull Request vor."
           }
         }
       }
@@ -6311,6 +6751,16 @@
         }
       }
     },
+    "On-device similarity is %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die On-Device-Ähnlichkeit ist %@."
+          }
+        }
+      }
+    },
     "One more review was parked in the same run; it comes up next.": {
       "localizations": {
         "de": {
@@ -6337,6 +6787,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nur %@ geändert"
+          }
+        }
+      }
+    },
+    "Only %lld of the %lld words in this bullet appear in the pull request.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur %lld von %lld Wörtern aus diesem Punkt kommen im Pull Request vor."
+          }
+        }
+      }
+    },
+    "Only 1 of the %lld words in this bullet appears in the pull request.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur 1 von %lld Wörtern aus diesem Punkt kommt im Pull Request vor."
           }
         }
       }
@@ -9371,6 +9841,16 @@
         }
       }
     },
+    "The claim names no module, so there is nothing to match the changed paths against.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Aussage nennt kein Modul, also gibt es nichts, womit die geänderten Pfade verglichen werden könnten."
+          }
+        }
+      }
+    },
     "The command template ends with a stray backslash.": {
       "localizations": {
         "de": {
@@ -9477,6 +9957,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "Der Eingang teilt sich in Kurzer Blick und Vollständige Review. Ein Pull Request ist nur dann ein kurzer Blick, wenn die CI grün ist, das Diff innerhalb der beiden Zahlen unten liegt und er keine Workflow-, Auth-, Secret-, Migrations- oder gelöschte Testdatei berührt."
+          }
+        }
+      }
+    },
+    "The issue could not be read.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Issue konnte nicht gelesen werden."
+          }
+        }
+      }
+    },
+    "The issue could not be read: GitHub could not be reached.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Issue konnte nicht gelesen werden: GitHub war nicht erreichbar."
+          }
+        }
+      }
+    },
+    "The issue could not be read: GitHub has no issue with that number in this repository.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Issue konnte nicht gelesen werden: GitHub hat in diesem Repository kein Issue mit dieser Nummer."
+          }
+        }
+      }
+    },
+    "The issue could not be read: this account cannot see it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Issue konnte nicht gelesen werden: Dieser Account kann es nicht sehen."
           }
         }
       }
@@ -9611,6 +10131,16 @@
         }
       }
     },
+    "The one distinctive word in this bullet does not appear in the pull request.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das einzige markante Wort aus diesem Punkt kommt im Pull Request nicht vor."
+          }
+        }
+      }
+    },
     "The original above is always shown, translated or not.": {
       "localizations": {
         "de": {
@@ -9661,12 +10191,52 @@
         }
       }
     },
+    "The pull request has no changed files.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Pull Request hat keine geänderten Dateien."
+          }
+        }
+      }
+    },
     "The pull request is still loading.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Der Pull Request wird noch geladen."
+          }
+        }
+      }
+    },
+    "The pull request reads as being about this (similarity %@).": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Pull Request liest sich, als ginge es darum (Ähnlichkeit %@)."
+          }
+        }
+      }
+    },
+    "The pull request touches %lld top-level paths: %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Pull Request berührt %lld Pfade der obersten Ebene: %@."
+          }
+        }
+      }
+    },
+    "The pull request touches 1 top-level path: %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Pull Request berührt 1 Pfad der obersten Ebene: %@."
           }
         }
       }
@@ -9927,6 +10497,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dieser Build hat noch keinen Update-Signierschlüssel, deshalb sind Updates aus statt unverifiziert. Releases von github.com/schnaq/review sind signiert."
+          }
+        }
+      }
+    },
+    "This bullet has no distinctive word Shepherd could look for.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Punkt hat kein markantes Wort, nach dem Shepherd suchen könnte."
           }
         }
       }
@@ -12017,6 +12597,146 @@
           "stringUnit": {
             "state": "translated",
             "value": "· war Zeile %lld"
+          }
+        }
+      }
+    },
+    "“%@”": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“"
+          }
+        }
+      }
+    },
+    "“%@” adds a skipped test at line %lld: “%@”.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ fügt in Zeile %lld einen übersprungenen Test hinzu: „%@“."
+          }
+        }
+      }
+    },
+    "“%@” changes a CI workflow.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ ändert einen CI-Workflow."
+          }
+        }
+      }
+    },
+    "“%@” changes a version or dependency line.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ ändert eine Versions- oder Abhängigkeitszeile."
+          }
+        }
+      }
+    },
+    "“%@” changes configuration.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ ändert Konfiguration."
+          }
+        }
+      }
+    },
+    "“%@” changes the database schema or a migration.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ ändert das Datenbankschema oder eine Migration."
+          }
+        }
+      }
+    },
+    "“%@” is a dependency lockfile.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ ist ein Lockfile für Abhängigkeiten."
+          }
+        }
+      }
+    },
+    "“%@” is a generated or vendored file.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ ist eine generierte oder mitgelieferte Datei."
+          }
+        }
+      }
+    },
+    "“%@” is a test file (+%lld −%lld).": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ ist eine Testdatei (+%lld −%lld)."
+          }
+        }
+      }
+    },
+    "“%@” is configuration.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ ist Konfiguration."
+          }
+        }
+      }
+    },
+    "“%@” is outside “%@”.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ liegt außerhalb von „%@“."
+          }
+        }
+      }
+    },
+    "“%@” removes an assertion at line %lld: “%@”.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ entfernt eine Assertion in Zeile %lld: „%@“."
+          }
+        }
+      }
+    },
+    "“%@” removes or changes an exported declaration at line %lld: “%@”.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ entfernt oder ändert in Zeile %lld eine exportierte Deklaration: „%@“."
+          }
+        }
+      }
+    },
+    "“%@” — %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„%@“ — %@"
           }
         }
       }
