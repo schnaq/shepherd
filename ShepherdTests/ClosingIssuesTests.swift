@@ -83,18 +83,23 @@ final class ClosingIssuesTests: XCTestCase {
 
     // MARK: - Opening the right issue
 
+    /// Collects what the section asked to open, so the click can be asserted without a window.
+    private final class OpenCollector {
+        var issues: [LinkedIssueReference] = []
+    }
+
     func testTheRowOpensTheIssueItNames() {
         // The click hands back the whole reference, which is what makes
         // `AppEnvironment.openIssue` a one-line change later. Here it is asserted the way the
         // requirement is worded: the *right* issue.
-        var opened: [LinkedIssueReference] = []
+        let collector = OpenCollector()
         let card = ClosingIssuesCard(
             issues: [issue(number: 142), issue(number: 7, state: .closed)],
             repo: repo,
-            onOpen: { opened.append($0) }
+            onOpen: { collector.issues.append($0) }
         )
         card.onOpen(card.issues[1])
-        XCTAssertEqual(opened.map(\.number), [7])
+        XCTAssertEqual(collector.issues.map(\.number), [7])
     }
 
     func testTheGitHubURLPointsAtTheIssueInItsOwnRepository() {
