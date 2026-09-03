@@ -274,6 +274,52 @@ public enum GraphQLDocuments {
     }
     """
 
+    /// One issue by repository and number — what a `shepherd://issue/…` link needs when the row
+    /// is not in the local cache (ADR 0032, ADR 0013).
+    ///
+    /// The same `... on Issue` field set ``searchIssues`` selects, under
+    /// `repository { issue(number:) }` instead of under the search connection, which is exactly
+    /// how ``closedPullRequest`` relates to ``searchPullRequests``. It therefore decodes into the
+    /// same DTO and goes through the same ``ResponseMapping/issueRowSummary(from:relations:detector:)``
+    /// — a link cannot produce a row shaped differently from a swept one.
+    ///
+    /// It exists for the reason `openPullRequest`'s single fetch does: the sweep searches
+    /// `assignee:`/`author:`/`mentions:@me`, so an issue somebody sends you in chat is routinely
+    /// *not* in the inbox, and a sweep would be slow and still miss it. One GraphQL query on the
+    /// host that is already on `CONTRIBUTING.md`'s list, made only when a link names an issue the
+    /// cache does not have.
+    public static let issueByNumber = """
+    query ShepherdIssue($owner: String!, $name: String!, $number: Int!) {
+      repository(owner: $owner, name: $name) {
+        issue(number: $number) {
+          __typename
+          id
+          number
+          title
+          createdAt
+          updatedAt
+          closedAt
+          closed
+          stateReason
+          repository { name owner { login } }
+          author { __typename login avatarUrl }
+          labels(first: 20) { nodes { name } }
+          comments { totalCount }
+          closedByPullRequestsReferences(first: 5, includeClosedPrs: true) {
+            totalCount
+            nodes {
+              number
+              title
+              state
+              repository { name owner { login } }
+              author { __typename login avatarUrl }
+            }
+          }
+        }
+      }
+    }
+    """
+
     /// The same sweep, reading the links out of the issue's timeline instead — the documented
     /// fallback, and **not** what the client sends (ADR 0032).
     ///

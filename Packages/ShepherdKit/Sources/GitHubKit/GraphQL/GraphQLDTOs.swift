@@ -309,6 +309,17 @@ struct SearchIssuesData: Decodable {
     var search: Search?
 }
 
+/// The payload of ``GraphQLDocuments/issueByNumber``.
+///
+/// The search connection's node type, reused: the document selects the same fields, so a row a
+/// deep link fetched cannot be shaped differently from one the sweep returned.
+struct IssueByNumberData: Decodable {
+    struct Repository: Decodable {
+        var issue: IssueSearchNodeDTO?
+    }
+    var repository: Repository?
+}
+
 /// One pull request as an issue's links carry it.
 ///
 /// The three shapes that can produce it — `closedByPullRequestsReferences.nodes`,

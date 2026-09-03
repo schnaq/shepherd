@@ -183,6 +183,41 @@ public actor GitHubClient {
         return results
     }
 
+    /// Fetches one issue as an inbox row, by repository and number (ADR 0032).
+    ///
+    /// What a `shepherd://issue/<owner>/<repo>/<number>` link falls back to when the row is not
+    /// in the local cache, and it is `openPullRequest`'s argument applied to issues: the sweep
+    /// searches `assignee:`/`author:`/`mentions:@me`, so an issue a colleague sends you is
+    /// routinely not in the inbox, and running a sweep would be slow *and* still miss it.
+    ///
+    /// GraphQL rather than the REST read beside it (``issue(repo:number:)``), because the two
+    /// answer different questions: that one is the claims card's body read and has no node id,
+    /// no author and no timestamps, while this has to produce a row the `issues` table can hold.
+    /// One query, the same document shape the sweep pages, the same mapper — and **no relation**,
+    /// deliberately: a link says nothing about how the user relates to the issue, and
+    /// `saveIssueSummaries`' "an empty relation keeps what the sweep saw" rule means storing this
+    /// row cannot erase the facets a swept copy already has.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - number: The issue number.
+    /// - Returns: The row, or `nil` when the repository has no issue with that number — which is
+    ///   an ordinary answer for a number somebody typed, not a failure.
+    /// - Throws: Any ``GitHubError`` the request maps to.
+    public func issueRow(repo: RepoRef, number: Int) async throws -> IssueRowSummary? {
+        let data: IssueByNumberData = try await graphQL(
+            document: GraphQLDocuments.issueByNumber,
+            variables: [
+                "owner": .string(repo.owner),
+                "name": .string(repo.name),
+                "number": .int(number),
+            ],
+            resource: "\(repo.fullName)#\(number) issue",
+            isIdempotent: true
+        )
+        guard let node = data.repository?.issue else { return nil }
+        return ResponseMapping.issueRowSummary(from: node, relations: [], detector: detector)
+    }
+
     // MARK: - Detail
 
     /// Fetches everything Shepherd shows on a pull request page.
