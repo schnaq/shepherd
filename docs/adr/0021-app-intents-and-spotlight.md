@@ -252,3 +252,62 @@ rebuilds its own from local rows.
   request the user made. It is metadata only, it is deletable in one call, and the toggle deletes
   it — but it does mean `CONTRIBUTING.md`'s privacy rules gained a line, because "the code stays
   local" now has a neighbour: "and the titles stay local unless this switch is on".
+
+## Amendment (2026-09-03): a read intent that runs the on-device model
+
+Additive, and nothing above it changes: still six navigation-and-read intents plus this seventh,
+still no write intent, still `PullRequestEntity` as a metadata-only handle, still one Spotlight
+export driven by `onInboxRows`, still one toggle. What is new is that an intent may now run a
+*model* (`docs/plans/apple-intelligence-v2.md` §3.H): `SummarizePullRequestIntent` takes a
+`PullRequestEntity` — or nothing, in which case it resolves to the first row of the review queue —
+and answers with `ProvidesDialog` for Siri to speak and `ShowsSnippetView` for the card, plus three
+English phrases in `ShepherdShortcuts` (both spellings of *summarise*, because Siri matches a
+phrase literally).
+
+**Tier 2 is the ceiling, and it is the ladder that says so.** The failure mode this addition has to
+be designed against is not a verdict — it summarises, and a summary approves nothing — it is
+*where the pull request goes*. An intent runs with no review screen in front of anybody and, from
+Siri, no screen at all, which is exactly the situation ADR 0007 answers with "unattended means
+on-device only". So `IntelligenceRouter.summary(for:onDeviceOnly:)` gained a parameter whose `true`
+makes the ladder **skip the cloud rung entirely**, the same mechanism and the same reasoning as the
+delegation brief's rule about a colleague's comment: a request that may not travel is never
+*offered* to a provider, rather than being asked nicely not to look. A user with an API key
+configured — the one configuration where this could go wrong quietly — gets the on-device answer or
+one sentence, *"Apple Intelligence is not available on this Mac."*, and a test asserts the cloud
+tier was not called at all rather than merely that its answer was not used.
+
+**The summary is a result, not a property.** It is spoken once and drawn once. It is not stored on
+the entity, which keeps exactly the five exposed properties this ADR gave it; it is not exported to
+Spotlight, whose `SpotlightItemFields` still has nowhere to put it; and it is not written to the
+database. So the guarantee this ADR made about the entity — that "a shortcut that mails my
+pull-request diffs somewhere" is not assemblable out of Shepherd's own actions — is unaffected,
+because the thing a shortcut can pass on is still the handle and not the prose.
+
+**It reads, and it never fetches.** Two consequences follow from that being a rule rather than a
+preference. The digest is built from the cached pull request, so the intent is as safe on a
+five-minute automation as `GetReviewQueueIntent` is. And a row whose *detail* has never been
+fetched — a sweep writes an inbox row with no body, no diff and no checks — is not summarised at
+all: `detailFetchedAt` is the one column a detail fetch sets and a sweep does not, so it is the
+honest answer to "has this been opened once", and the intent says *"Shepherd has not fetched this
+pull request yet — open it once in the app."* rather than producing two confident sentences about a
+title. A digest built from nothing would be the worst kind of answer here: it would sound exactly
+like a real one.
+
+Consequences, beyond the ones already stated:
+
+- **The intent identifier is a public interface**, as every identifier here is:
+  `SummarizePullRequestIntent` and its `pullRequest` parameter are what a user's shortcut stores.
+- `IntentBridge` gained one accessor (`requireSummarizer()`) beside `requireEnvironment()` and
+  `requireSession()`, and it hands over a `Sendable` seam — the router snapshot plus a read closure
+  over the database — rather than the container, so nothing the system runs the intent on reaches
+  back into `AppEnvironment`. The seam is also what makes the whole answer testable without Siri,
+  a window or a Mac with Apple Intelligence switched on.
+- The German phrases are still the `AppShortcuts.xcstrings` follow-up ADR 0022 lists in the
+  roadmap. Until then the English phrases work on a German Mac, because Siri matches them by the
+  app's name; the intent's *title*, its short title and its four new spoken sentences are ordinary
+  catalog rows and are translated in this commit (its parameter title and its fifth sentence,
+  *"Nothing needs your review."*, are rows the existing intents already produced).
+- Five of the six spoken sentences a run can produce are fixed copy and one is the router's own
+  formatted failure. There is deliberately no "and here is why" path to Settings: a voice answer
+  has no screen to link to, and the card beside the toggle already carries the three-way
+  Apple Intelligence reason for the reader who is looking at it.

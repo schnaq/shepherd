@@ -317,10 +317,21 @@ you are signed out is remembered and opens right after sign-in.
 
 Shepherd's commands are **App Intents**, so they show up in the Shortcuts app with typed
 parameters, in Spotlight's actions, and in Siri: *"Open my review queue in Shepherd"*, *"What needs
-my review in Shepherd"*, *"Sync Shepherd"*, *"Start a review session in Shepherd"*. An
-*Open Pull Request* action takes a pull request you pick — or search for, using the same on-device
-⌘K ranker — and a *Get Pull Requests Needing Review* action answers with the count and the list
-from the local database, with no GitHub call, so it is safe on a five-minute automation.
+my review in Shepherd"*, *"Sync Shepherd"*, *"Start a review session in Shepherd"*, *"Summarise my
+next review in Shepherd"*. An *Open Pull Request* action takes a pull request you pick — or search
+for, using the same on-device ⌘K ranker — and a *Get Pull Requests Needing Review* action answers
+with the count and the list from the local database, with no GitHub call, so it is safe on a
+five-minute automation.
+
+Ask *"summarise my next review"* and Siri reads out the on-device summary of the pull request at
+the top of your queue and shows a card with the title, the slug, the overview and up to three risk
+notes. The matching *Summarise Pull Request* action takes a pull request, so *Get Pull Requests
+Needing Review → Summarise Pull Request → Show Result* composes into your own morning routine.
+It is **on-device only**: an intent runs with no review screen in front of you and Siri has no
+screen at all, so a configured API key is deliberately never used here — a Mac without Apple
+Intelligence hears "Apple Intelligence is not available on this Mac" rather than having the pull
+request sent somewhere. It reads what is already cached, never fetches, and the summary is spoken
+and drawn once: nothing is stored on the pull request, put in Spotlight or written to the database.
 
 Every pull request in your inbox is also in **⌘Space**: title, `owner/repo#123 · author · CI
 state`, and its labels, repository and agent as keywords. Opening a result opens the review screen
