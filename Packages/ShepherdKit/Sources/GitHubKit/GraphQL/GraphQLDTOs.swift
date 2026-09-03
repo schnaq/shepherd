@@ -263,3 +263,104 @@ struct ClosedPullRequestNodeDTO: Decodable {
         case repository, author, reviews, commits
     }
 }
+
+// MARK: - Issues sweep (ADR 0032)
+
+/// The `search` connection returned by ``GraphQLDocuments/searchIssues`` and by its
+/// timeline-shaped fallback.
+struct SearchIssuesData: Decodable {
+    struct Search: Decodable {
+        var issueCount: Int?
+        var pageInfo: PageInfoDTO?
+        var nodes: [IssueSearchNodeDTO?]?
+    }
+    var search: Search?
+}
+
+/// One pull request as an issue's links carry it.
+///
+/// The three shapes that can produce it — `closedByPullRequestsReferences.nodes`,
+/// `CrossReferencedEvent.source` and `ConnectedEvent.subject` — select the same five fields, so
+/// they decode into the same DTO and there is one mapping rather than three.
+struct LinkedPullRequestNodeDTO: Decodable {
+    var typename: String?
+    var number: Int?
+    var title: String?
+    var state: String?
+    var repository: GraphQLRepositoryDTO?
+    var author: GraphQLActorDTO?
+
+    private enum CodingKeys: String, CodingKey {
+        case typename = "__typename"
+        case number, title, state, repository, author
+    }
+}
+
+/// One node of the issues search connection.
+///
+/// Every field is optional for ``SearchNodeDTO``'s reason: a `search(type: ISSUE)` connection may
+/// legitimately contain pull requests, which carry only `__typename` here — the mirror image of
+/// the pull-request sweep, which sees plain issues.
+///
+/// Both link shapes are decoded on the same type. Only one of them is ever populated, because
+/// only one of the two documents is ever sent; carrying both is what lets the primary mapper and
+/// the fallback mapper share every other field instead of duplicating fourteen of them.
+struct IssueSearchNodeDTO: Decodable {
+    struct LabelConnection: Decodable {
+        struct Label: Decodable { var name: String? }
+        var nodes: [Label?]?
+    }
+
+    struct CommentConnection: Decodable {
+        var totalCount: Int?
+    }
+
+    /// `closedByPullRequestsReferences` — the primary shape.
+    struct LinkedPullRequestConnection: Decodable {
+        var totalCount: Int?
+        var nodes: [LinkedPullRequestNodeDTO?]?
+    }
+
+    /// `timelineItems(itemTypes: [CROSS_REFERENCED_EVENT, CONNECTED_EVENT])` — the fallback shape.
+    struct TimelineItemConnection: Decodable {
+        struct Node: Decodable {
+            var typename: String?
+            /// `CrossReferencedEvent.willCloseTarget`: whether the reference actually closes this
+            /// issue rather than merely mentioning it.
+            var willCloseTarget: Bool?
+            /// `CrossReferencedEvent.source`.
+            var source: LinkedPullRequestNodeDTO?
+            /// `ConnectedEvent.subject`.
+            var subject: LinkedPullRequestNodeDTO?
+
+            private enum CodingKeys: String, CodingKey {
+                case typename = "__typename"
+                case willCloseTarget, source, subject
+            }
+        }
+        var nodes: [Node?]?
+    }
+
+    var typename: String?
+    var id: String?
+    var number: Int?
+    var title: String?
+    var createdAt: String?
+    var updatedAt: String?
+    var closedAt: String?
+    var closed: Bool?
+    var stateReason: String?
+    var repository: GraphQLRepositoryDTO?
+    var author: GraphQLActorDTO?
+    var labels: LabelConnection?
+    var comments: CommentConnection?
+    var closedByPullRequestsReferences: LinkedPullRequestConnection?
+    var timelineItems: TimelineItemConnection?
+
+    private enum CodingKeys: String, CodingKey {
+        case typename = "__typename"
+        case id, number, title, createdAt, updatedAt, closedAt, closed, stateReason
+        case repository, author, labels, comments
+        case closedByPullRequestsReferences, timelineItems
+    }
+}

@@ -1,0 +1,30 @@
+{
+  "data": {
+    "search": {
+      "issueCount": 1,
+      "pageInfo": { "hasNextPage": false, "endCursor": "Y3Vyc29yOjE=" },
+      "nodes": [
+        {
+          "__typename": "Issue",
+          "id": "I_kwDOIssueThree",
+          "number": 51,
+          "title": "Add a keyboard shortcut for the focus session",
+          "createdAt": "2026-08-31T06:00:00Z",
+          "updatedAt": "2026-08-31T06:30:00Z",
+          "closedAt": null,
+          "closed": false,
+          "stateReason": null,
+          "repository": { "name": "review", "owner": { "login": "schnaq" } },
+          "author": {
+            "__typename": "User",
+            "login": "octocat",
+            "avatarUrl": null
+          },
+          "labels": { "nodes": [{ "name": "enhancement" }] },
+          "comments": { "totalCount": 1 },
+          "closedByPullRequestsReferences": { "totalCount": 0, "nodes": [] }
+        }
+      ]
+    }
+  }
+}

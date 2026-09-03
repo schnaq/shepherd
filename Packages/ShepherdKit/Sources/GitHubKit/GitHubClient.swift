@@ -120,6 +120,67 @@ public actor GitHubClient {
         return results
     }
 
+    // MARK: - Issues sweep (ADR 0032)
+
+    /// Runs the issues sweep: one GraphQL `search` per facet, merged into one list.
+    ///
+    /// The pull-request sweep's twin in every respect that matters — the same connection, the
+    /// same five-page cap, the same merge-by-id — so it inherits the retry, the `Retry-After`
+    /// backoff, the rate-limit snapshot and the request log rather than growing a second read
+    /// path. It adds no host: this is `api.github.com`, the host Shepherd already talks to.
+    ///
+    /// Rows returned by several facets are merged and their ``IssueRelation``s unioned, so an
+    /// issue the user opened *and* was assigned carries both.
+    /// - Parameter queries: The facet queries. Defaults to ``IssueQuery/defaultSweep``.
+    /// - Returns: The issue rows, most-recently-updated first.
+    /// - Throws: Any ``GitHubError`` the request maps to.
+    public func searchOpenIssues(
+        queries: [IssueQuery] = IssueQuery.defaultSweep
+    ) async throws -> [IssueRowSummary] {
+        var collected: [IssueRowSummary] = []
+        for query in queries {
+            let page = try await searchIssues(query)
+            collected.append(contentsOf: page)
+        }
+        return ResponseMapping.mergeIssueFacetResults(collected)
+    }
+
+    private func searchIssues(_ query: IssueQuery) async throws -> [IssueRowSummary] {
+        var results: [IssueRowSummary] = []
+        var cursor: String? = nil
+        // Five pages of 100, the sweep's own cap: 500 open issues per facet is far beyond any
+        // inbox a human can triage, and a hard stop against a pathological account.
+        for _ in 0..<5 {
+            var variables: [String: GraphQLValue] = [
+                "q": .string(query.rawQuery),
+                "first": .int(100),
+            ]
+            variables["after"] = cursor.map { GraphQLValue.string($0) } ?? .null
+
+            let data: SearchIssuesData = try await graphQL(
+                document: GraphQLDocuments.searchIssues,
+                variables: variables,
+                resource: "search",
+                isIdempotent: true
+            )
+            let nodes = (data.search?.nodes ?? []).compactMap { $0 }
+            for node in nodes {
+                if let summary = ResponseMapping.issueRowSummary(
+                    from: node,
+                    relations: query.impliedRelations,
+                    detector: detector
+                ) {
+                    results.append(summary)
+                }
+            }
+            guard data.search?.pageInfo?.hasNextPage == true,
+                  let next = data.search?.pageInfo?.endCursor
+            else { break }
+            cursor = next
+        }
+        return results
+    }
+
     // MARK: - Detail
 
     /// Fetches everything Shepherd shows on a pull request page.

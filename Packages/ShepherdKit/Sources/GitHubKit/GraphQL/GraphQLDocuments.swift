@@ -114,6 +114,67 @@ public struct InboxQuery: Sendable, Hashable {
     }
 }
 
+/// One facet query of the issues sweep (ADR 0032).
+///
+/// ``InboxQuery``'s twin, one word changed — `is:issue` in place of `is:pr` — for the reason
+/// ADR 0027 gives for the closed-pull-request search: `search(query:, type: ISSUE)` already
+/// returns both kinds of node, so a second facet type on the same connection inherits the
+/// paging, the retry, the `Retry-After` backoff, the rate-limit snapshot and the request log
+/// rather than growing a second read path. Like ``InboxQuery`` it also *tells us why* an issue is
+/// in the inbox, which is where ``IssueRelation`` comes from.
+public struct IssueQuery: Sendable, Hashable {
+    /// The GitHub search expression, e.g. `"is:issue is:open assignee:@me"`.
+    public var rawQuery: String
+    /// What a hit on this query says about the user's relation to the issue.
+    public var impliedRelations: Set<IssueRelation>
+
+    /// Creates a facet query.
+    /// - Parameters:
+    ///   - rawQuery: The GitHub search expression.
+    ///   - impliedRelations: Relations every hit of this query has.
+    public init(rawQuery: String, impliedRelations: Set<IssueRelation> = []) {
+        self.rawQuery = rawQuery
+        self.impliedRelations = impliedRelations
+    }
+
+    /// The common prefix every issue facet shares.
+    public static let openIssuePrefix = "is:issue is:open archived:false"
+
+    /// Issues assigned to the user.
+    public static let assigned = IssueQuery(
+        rawQuery: "\(openIssuePrefix) assignee:@me",
+        impliedRelations: [.assigned]
+    )
+    /// Issues the user opened.
+    public static let authored = IssueQuery(
+        rawQuery: "\(openIssuePrefix) author:@me",
+        impliedRelations: [.authored]
+    )
+    /// Issues that mention the user.
+    public static let mentioned = IssueQuery(
+        rawQuery: "\(openIssuePrefix) mentions:@me",
+        impliedRelations: [.mentioned]
+    )
+
+    /// The default sweep: exactly the three relation-bearing facets, in rail order.
+    ///
+    /// No `involves:@me` catch-all, unlike ``InboxQuery/defaultSweep``. The pull-request inbox
+    /// has one because a review request can reach a user through a team without any of the four
+    /// narrow facets matching; an issue reaches somebody by being assigned to them, opened by
+    /// them or mentioning them, and a fourth search that returns the union of the three would
+    /// cost a search call per cycle for rows the sweep already has.
+    public static let defaultSweep: [IssueQuery] = [.assigned, .authored, .mentioned]
+
+    /// Returns the query narrowed to a single organisation, for very large accounts.
+    /// - Parameter organization: The organisation login.
+    public func scoped(toOrganization organization: String) -> IssueQuery {
+        IssueQuery(
+            rawQuery: "\(rawQuery) org:\(organization)",
+            impliedRelations: impliedRelations
+        )
+    }
+}
+
 /// The GraphQL documents Shepherd sends.
 ///
 /// They are plain strings on purpose: no code generation, no schema download, nothing that
@@ -154,6 +215,129 @@ public enum GraphQLDocuments {
                   statusCheckRollup {
                     state
                     contexts(first: 100) { totalCount }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    """
+
+    /// The issues sweep (ADR 0032): the same `search(type: ISSUE)` connection the inbox sweep
+    /// pages, with `... on Issue` in place of `... on PullRequest`.
+    ///
+    /// `closedByPullRequestsReferences` is the "Development panel" equivalent on `Issue` — the
+    /// field that answers *which pull requests will close this* — and it is selected **inside the
+    /// sweep** rather than fetched per issue, for the reason `statusCheckRollup` sits inside the
+    /// pull-request sweep's `commits` selection: it is one more nested selection on a connection
+    /// that is being paged anyway. `includeClosedPrs: true` is deliberate: an issue whose fix was
+    /// merged last week is exactly the row a reader wants to see the link on, and leaving it out
+    /// would make the "has an agent pull request" facet forget every finished piece of work.
+    ///
+    /// Five is the cap because the row shows a count and the detail panel a short list; an issue
+    /// with a sixth linked pull request is a conversation, not an inbox row.
+    public static let searchIssues = """
+    query ShepherdIssueSweep($q: String!, $first: Int!, $after: String) {
+      search(query: $q, type: ISSUE, first: $first, after: $after) {
+        issueCount
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          __typename
+          ... on Issue {
+            id
+            number
+            title
+            createdAt
+            updatedAt
+            closedAt
+            closed
+            stateReason
+            repository { name owner { login } }
+            author { __typename login avatarUrl }
+            labels(first: 20) { nodes { name } }
+            comments { totalCount }
+            closedByPullRequestsReferences(first: 5, includeClosedPrs: true) {
+              totalCount
+              nodes {
+                number
+                title
+                state
+                repository { name owner { login } }
+                author { __typename login avatarUrl }
+              }
+            }
+          }
+        }
+      }
+    }
+    """
+
+    /// The same sweep, reading the links out of the issue's timeline instead — the documented
+    /// fallback, and **not** what the client sends (ADR 0032).
+    ///
+    /// `Issue.closedByPullRequestsReferences` is part of GitHub's public schema and needs no
+    /// preview header, so ``searchIssues`` is the primary read. This document and
+    /// ``ResponseMapping/issueRowSummary(fromTimelineOf:relations:detector:)`` exist so that a
+    /// schema regression is a one-line switch rather than a rewrite: `CROSS_REFERENCED_EVENT` and
+    /// `CONNECTED_EVENT` have been on `IssueTimelineItems` for years, and between them they carry
+    /// the same two facts the panel needs — a pull request that references the issue, and one
+    /// that was linked to it by hand.
+    ///
+    /// It is more verbose and slightly less precise (a cross-reference is *any* mention, so
+    /// `willCloseTarget` is what separates "will fix this" from "mentioned this"), which is why
+    /// it is the fallback and not the default. Both shapes are fixture-tested, so whichever way
+    /// the live schema goes there is already a regression test for it.
+    public static let searchIssuesWithTimelineLinks = """
+    query ShepherdIssueSweepTimeline($q: String!, $first: Int!, $after: String) {
+      search(query: $q, type: ISSUE, first: $first, after: $after) {
+        issueCount
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          __typename
+          ... on Issue {
+            id
+            number
+            title
+            createdAt
+            updatedAt
+            closedAt
+            closed
+            stateReason
+            repository { name owner { login } }
+            author { __typename login avatarUrl }
+            labels(first: 20) { nodes { name } }
+            comments { totalCount }
+            timelineItems(
+              itemTypes: [CROSS_REFERENCED_EVENT, CONNECTED_EVENT]
+              first: 20
+            ) {
+              nodes {
+                __typename
+                ... on CrossReferencedEvent {
+                  willCloseTarget
+                  source {
+                    __typename
+                    ... on PullRequest {
+                      number
+                      title
+                      state
+                      repository { name owner { login } }
+                      author { __typename login avatarUrl }
+                    }
+                  }
+                }
+                ... on ConnectedEvent {
+                  subject {
+                    __typename
+                    ... on PullRequest {
+                      number
+                      title
+                      state
+                      repository { name owner { login } }
+                      author { __typename login avatarUrl }
+                    }
                   }
                 }
               }

@@ -194,6 +194,183 @@ public enum ResponseMapping {
         return InboxGrouper.sorted(Array(merged.values))
     }
 
+    // MARK: - Issues sweep (ADR 0032)
+
+    /// Maps one linked pull request, whichever of the three link shapes carried it.
+    ///
+    /// Returns `nil` for a node that is not a pull request — a cross-reference's `source` can
+    /// perfectly well be another *issue* — and for one missing the repository or number the row
+    /// is identified by. `state` is kept as GitHub sent it: nothing branches on it, so an
+    /// unfamiliar word is displayed rather than dropped.
+    /// - Parameters:
+    ///   - dto: The pull-request node.
+    ///   - detector: The agent detector to classify the author with.
+    /// - Returns: The reference, or `nil`.
+    static func linkedPullRequest(
+        from dto: LinkedPullRequestNodeDTO,
+        detector: AgentDetector
+    ) -> LinkedPullRequestReference? {
+        guard dto.typename == nil || dto.typename == "PullRequest" else { return nil }
+        guard let number = dto.number,
+              let repoName = dto.repository?.name,
+              let repoOwner = dto.repository?.owner?.login
+        else { return nil }
+        return LinkedPullRequestReference(
+            repo: RepoRef(owner: repoOwner, name: repoName),
+            number: number,
+            title: dto.title ?? "",
+            state: dto.state ?? "",
+            // No branch name is selected here, so branch-prefix detection cannot fire for a
+            // linked pull request — the login and the bot flag are what the chip has, which is
+            // the same information GitHub shows beside the link itself.
+            author: makeActor(from: dto.author, detector: detector)
+        )
+    }
+
+    /// Maps one issues-search node onto an inbox row.
+    ///
+    /// Returns `nil` for nodes that are not issues — the connection serves both kinds — and for
+    /// one missing a field the inbox cannot do without. A malformed row is dropped, never faked,
+    /// exactly as in ``pullRequestSummary(from:relations:detector:)``.
+    /// - Parameters:
+    ///   - node: The search node.
+    ///   - relations: The relations implied by the facet query that returned the node.
+    ///   - detector: The agent detector to classify the authors with.
+    static func issueRowSummary(
+        from node: IssueSearchNodeDTO,
+        relations: Set<IssueRelation>,
+        detector: AgentDetector
+    ) -> IssueRowSummary? {
+        let links = (node.closedByPullRequestsReferences?.nodes ?? [])
+            .compactMap { $0 }
+            .compactMap { linkedPullRequest(from: $0, detector: detector) }
+        return issueRowSummary(from: node, relations: relations, detector: detector, links: links)
+    }
+
+    /// The same mapping, reading the links out of the issue's timeline — the fallback (ADR 0032).
+    ///
+    /// Kept beside the primary mapper and fixture-tested, not wired: `searchIssues` is what the
+    /// client sends. Two item types are read, and they are read differently on purpose. A
+    /// `ConnectedEvent` is somebody linking a pull request to the issue by hand, which is always
+    /// a link; a `CrossReferencedEvent` is *any* mention, so only one whose `willCloseTarget` is
+    /// `true` is a link — without that condition an issue somebody quoted in a review would
+    /// collect a "will close this" row and the agent facet would count it.
+    /// - Parameters:
+    ///   - node: The search node, as the timeline-shaped document selects it.
+    ///   - relations: The relations implied by the facet query that returned the node.
+    ///   - detector: The agent detector to classify the authors with.
+    static func issueRowSummary(
+        fromTimelineOf node: IssueSearchNodeDTO,
+        relations: Set<IssueRelation>,
+        detector: AgentDetector
+    ) -> IssueRowSummary? {
+        var links: [LinkedPullRequestReference] = []
+        var seen = Set<String>()
+        for item in (node.timelineItems?.nodes ?? []).compactMap({ $0 }) {
+            let candidate: LinkedPullRequestNodeDTO?
+            switch item.typename {
+            case "ConnectedEvent":
+                candidate = item.subject
+            case "CrossReferencedEvent":
+                candidate = item.willCloseTarget == true ? item.source : nil
+            default:
+                // An item type this build did not ask for is ignored rather than guessed at:
+                // `subject` and `source` mean different things on different events.
+                candidate = nil
+            }
+            guard let candidate,
+                  let link = linkedPullRequest(from: candidate, detector: detector),
+                  seen.insert(link.id).inserted
+            else { continue }
+            links.append(link)
+        }
+        return issueRowSummary(from: node, relations: relations, detector: detector, links: links)
+    }
+
+    /// Everything the two issue mappers share: the row itself, with its links handed in.
+    private static func issueRowSummary(
+        from node: IssueSearchNodeDTO,
+        relations: Set<IssueRelation>,
+        detector: AgentDetector,
+        links: [LinkedPullRequestReference]
+    ) -> IssueRowSummary? {
+        guard node.typename == nil || node.typename == "Issue" else { return nil }
+        guard let id = node.id,
+              let number = node.number,
+              let repoName = node.repository?.name,
+              let repoOwner = node.repository?.owner?.login,
+              let createdAt = node.createdAt.flatMap(GitHubTimestamp.parse),
+              let updatedAt = node.updatedAt.flatMap(GitHubTimestamp.parse)
+        else { return nil }
+
+        // `closed` is the boolean GitHub's `Issue` carries; `IssueSummary.State` is the
+        // vocabulary ADR 0026's amendment already established, and `unknown` is reachable only
+        // through *that* type's REST mapping — here GitHub answered one of two things.
+        let state: IssueSummary.State = (node.closed ?? false) ? .closed : .open
+        return IssueRowSummary(
+            id: id,
+            repo: RepoRef(owner: repoOwner, name: repoName),
+            number: number,
+            title: node.title ?? "",
+            author: makeActor(from: node.author, detector: detector),
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+            closedAt: node.closedAt.flatMap(GitHubTimestamp.parse),
+            state: state,
+            stateReason: node.stateReason,
+            labels: (node.labels?.nodes ?? []).compactMap { $0?.name },
+            myRelation: relations,
+            commentCount: max(0, node.comments?.totalCount ?? 0),
+            linkedPullRequests: links
+        )
+    }
+
+    /// Merges the same issue seen through several facet queries, unioning relations.
+    ///
+    /// ``mergeFacetResults(_:)``'s twin, with one addition the pull-request sweep does not need:
+    /// the **links are unioned too**, keyed by `owner/name#number`. The three facets ask the same
+    /// question of the same connection, so they normally agree — but `first: 5` is a cap per
+    /// answer, and taking only the freshest copy's list would quietly drop a link the other two
+    /// facets could see.
+    /// - Parameter summaries: All rows returned by all facet queries.
+    /// - Returns: The rows, most-recently-updated first, in a total order.
+    static func mergeIssueFacetResults(_ summaries: [IssueRowSummary]) -> [IssueRowSummary] {
+        var merged: [String: IssueRowSummary] = [:]
+        for summary in summaries {
+            guard let existing = merged[summary.id] else {
+                merged[summary.id] = summary
+                continue
+            }
+            // Prefer the freshest copy of the mutable fields, then put the unions back on it.
+            var newest = summary.updatedAt > existing.updatedAt ? summary : existing
+            let older = summary.updatedAt > existing.updatedAt ? existing : summary
+            newest.myRelation.formUnion(older.myRelation)
+            var links = newest.linkedPullRequests
+            var seen = Set(links.map(\.id))
+            for link in older.linkedPullRequests where seen.insert(link.id).inserted {
+                links.append(link)
+            }
+            newest.linkedPullRequests = links
+            merged[summary.id] = newest
+        }
+        return sortedIssues(Array(merged.values))
+    }
+
+    /// The issues sweep's stable order: most recently updated first, then repository, then the
+    /// higher number, then the node id.
+    ///
+    /// ``ShepherdCore/InboxGrouper/sorted(_:)``'s rule, spelled out here rather than generalised:
+    /// that function is typed to the pull-request row, and one comparator over two unrelated
+    /// value types would need a protocol for the four fields it reads.
+    static func sortedIssues(_ summaries: [IssueRowSummary]) -> [IssueRowSummary] {
+        summaries.sorted { lhs, rhs in
+            if lhs.updatedAt != rhs.updatedAt { return lhs.updatedAt > rhs.updatedAt }
+            if lhs.repo != rhs.repo { return lhs.repo < rhs.repo }
+            if lhs.number != rhs.number { return lhs.number > rhs.number }
+            return lhs.id < rhs.id
+        }
+    }
+
     // MARK: - Detail
 
     /// Maps `GET /pulls/{number}` onto an inbox row.

@@ -1,0 +1,103 @@
+{
+  "data": {
+    "search": {
+      "issueCount": 1,
+      "pageInfo": { "hasNextPage": false, "endCursor": "Y3Vyc29yOjE=" },
+      "nodes": [
+        {
+          "__typename": "Issue",
+          "id": "I_kwDOIssueOne",
+          "number": 42,
+          "title": "Login times out after the token refresh",
+          "createdAt": "2026-08-20T10:00:00Z",
+          "updatedAt": "2026-08-31T08:00:00Z",
+          "closedAt": null,
+          "closed": false,
+          "stateReason": null,
+          "repository": { "name": "review", "owner": { "login": "schnaq" } },
+          "author": {
+            "__typename": "User",
+            "login": "octocat",
+            "avatarUrl": null
+          },
+          "labels": { "nodes": [{ "name": "bug" }, { "name": "auth" }] },
+          "comments": { "totalCount": 4 },
+          "timelineItems": {
+            "nodes": [
+              {
+                "__typename": "CrossReferencedEvent",
+                "willCloseTarget": true,
+                "source": {
+                  "__typename": "PullRequest",
+                  "number": 128,
+                  "title": "Refactor the token store",
+                  "state": "OPEN",
+                  "repository": { "name": "review", "owner": { "login": "schnaq" } },
+                  "author": {
+                    "__typename": "Bot",
+                    "login": "dependabot[bot]",
+                    "avatarUrl": null
+                  }
+                }
+              },
+              {
+                "__typename": "CrossReferencedEvent",
+                "willCloseTarget": false,
+                "source": {
+                  "__typename": "PullRequest",
+                  "number": 999,
+                  "title": "Mentions this issue in a review comment",
+                  "state": "OPEN",
+                  "repository": { "name": "review", "owner": { "login": "schnaq" } },
+                  "author": {
+                    "__typename": "User",
+                    "login": "octocat",
+                    "avatarUrl": null
+                  }
+                }
+              },
+              {
+                "__typename": "CrossReferencedEvent",
+                "willCloseTarget": true,
+                "source": {
+                  "__typename": "Issue",
+                  "number": 77
+                }
+              },
+              {
+                "__typename": "ConnectedEvent",
+                "subject": {
+                  "__typename": "PullRequest",
+                  "number": 131,
+                  "title": "Add a regression test for the timeout",
+                  "state": "MERGED",
+                  "repository": { "name": "review", "owner": { "login": "schnaq" } },
+                  "author": {
+                    "__typename": "User",
+                    "login": "octocat",
+                    "avatarUrl": null
+                  }
+                }
+              },
+              {
+                "__typename": "ConnectedEvent",
+                "subject": {
+                  "__typename": "PullRequest",
+                  "number": 128,
+                  "title": "Refactor the token store",
+                  "state": "OPEN",
+                  "repository": { "name": "review", "owner": { "login": "schnaq" } },
+                  "author": {
+                    "__typename": "Bot",
+                    "login": "dependabot[bot]",
+                    "avatarUrl": null
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

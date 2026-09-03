@@ -1,0 +1,80 @@
+{
+  "data": {
+    "search": {
+      "issueCount": 3,
+      "pageInfo": { "hasNextPage": false, "endCursor": "Y3Vyc29yOjI=" },
+      "nodes": [
+        {
+          "__typename": "Issue",
+          "id": "I_kwDOIssueOne",
+          "number": 42,
+          "title": "Login times out after the token refresh",
+          "createdAt": "2026-08-20T10:00:00Z",
+          "updatedAt": "2026-08-31T08:00:00Z",
+          "closedAt": null,
+          "closed": false,
+          "stateReason": null,
+          "repository": { "name": "review", "owner": { "login": "schnaq" } },
+          "author": {
+            "__typename": "User",
+            "login": "octocat",
+            "avatarUrl": "https://avatars.githubusercontent.com/u/583231?v=4"
+          },
+          "labels": { "nodes": [{ "name": "bug" }, { "name": "auth" }] },
+          "comments": { "totalCount": 4 },
+          "closedByPullRequestsReferences": {
+            "totalCount": 2,
+            "nodes": [
+              {
+                "number": 128,
+                "title": "Refactor the token store",
+                "state": "OPEN",
+                "repository": { "name": "review", "owner": { "login": "schnaq" } },
+                "author": {
+                  "__typename": "Bot",
+                  "login": "dependabot[bot]",
+                  "avatarUrl": "https://avatars.githubusercontent.com/in/1?v=4"
+                }
+              },
+              {
+                "number": 131,
+                "title": "Add a regression test for the timeout",
+                "state": "MERGED",
+                "repository": { "name": "review", "owner": { "login": "schnaq" } },
+                "author": {
+                  "__typename": "User",
+                  "login": "octocat",
+                  "avatarUrl": "https://avatars.githubusercontent.com/u/583231?v=4"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "__typename": "Issue",
+          "id": "I_kwDOIssueTwo",
+          "number": 43,
+          "title": "Sidebar loses its selection on relaunch",
+          "createdAt": "2026-07-01T09:00:00Z",
+          "updatedAt": "2026-08-29T12:00:00Z",
+          "closedAt": "2026-08-29T12:00:00Z",
+          "closed": true,
+          "stateReason": "COMPLETED",
+          "repository": { "name": "shepherd-web", "owner": { "login": "schnaq" } },
+          "author": {
+            "__typename": "User",
+            "login": "hubot",
+            "avatarUrl": null
+          },
+          "labels": { "nodes": [] },
+          "comments": { "totalCount": 0 },
+          "closedByPullRequestsReferences": { "totalCount": 0, "nodes": [] }
+        },
+        {
+          "__typename": "PullRequest",
+          "id": "PR_kwDOSomePullRequest"
+        }
+      ]
+    }
+  }
+}
