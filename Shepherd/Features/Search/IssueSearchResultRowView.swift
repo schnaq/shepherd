@@ -97,11 +97,19 @@ struct IssueSearchResultRowView: View {
         .accessibilityLabel(Text(accessibilityText))
     }
 
+    /// The row's spoken label: the issue, why it matched, and the two chips beside it.
+    ///
+    /// The state chip and the provenance chip are drawn and were not spoken, because the
+    /// `.accessibilityLabel` replaces the combined children's own labels rather than adding to
+    /// them. Whether the issue is already closed is the first thing a reader wants off a search
+    /// result, so it goes first.
     private var accessibilityText: String {
-        let base = "\(result.summary.slug): \(result.summary.title)"
-        guard let reason = IssueSearchResultPresentation.reasonLine(for: result.reason) else {
-            return base
-        }
-        return String(localized: "\(base). Matched: \(reason)")
+        SpokenRow.sentence([
+            result.summary.state == .closed ? String(localized: "Closed") : nil,
+            "\(result.summary.slug): \(result.summary.title)",
+            IssueSearchResultPresentation.reasonLine(for: result.reason)
+                .map { String(localized: "Matched: \($0)") },
+            ProvenanceChip.spokenProvenance(of: result.summary.author),
+        ])
     }
 }

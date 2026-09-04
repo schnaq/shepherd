@@ -392,6 +392,7 @@ struct ReviewHeaderView: View {
             }
             .buttonStyle(.plain)
             .help(String(localized: "Back to the inbox (esc)"))
+            .accessibilityLabel(Text(String(localized: "Back to the inbox")))
 
             if let summary = model.summary {
                 VStack(alignment: .leading, spacing: 2) {

@@ -243,6 +243,14 @@ struct MenuBarInboxRow: View {
         .buttonStyle(.plain)
         .padding(.horizontal, 4)
         .onHover { isHovering = $0 }
-        .accessibilityLabel(Text("\(row.slug): \(row.title)"))
+        .accessibilityLabel(
+            Text(
+                SpokenRow.sentence([
+                    CheckDotView.spokenState(row.checkRollup?.state),
+                    "\(row.slug): \(row.title)",
+                    ProvenanceChip.spokenProvenance(of: row.author),
+                ])
+            )
+        )
     }
 }

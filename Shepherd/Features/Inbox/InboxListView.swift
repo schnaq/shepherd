@@ -55,6 +55,7 @@ struct InboxListView: View {
                 }
                 .buttonStyle(.plain)
                 .help(String(localized: "Clear filter"))
+                .accessibilityLabel(Text(String(localized: "Clear filter")))
             }
 
             if model.hasMarks {
@@ -71,6 +72,7 @@ struct InboxListView: View {
                 }
                 .buttonStyle(.plain)
                 .help(String(localized: "Clear the selection (esc)"))
+                .accessibilityLabel(Text(String(localized: "Clear the selection")))
             }
 
             Spacer(minLength: 8)
@@ -516,13 +518,35 @@ struct InboxRowView: View {
         row.author.kind.agentIdentity?.displayName ?? row.author.login
     }
 
-    /// The row's spoken label, with the tick state in front when the column is showing.
+    /// The row's spoken label: everything the row shows, in the order it shows it.
+    ///
+    /// `.accessibilityElement(children: .combine)` would concatenate the siblings' own labels,
+    /// and the `.accessibilityLabel` beside it *replaces* that — so this has to say the whole
+    /// row or the row says only its number and title. Six facts are drawn here and six are
+    /// spoken: the tick, the checks, which pull request, its title, who opened it, whether it
+    /// answers a session, how that author has done before, what triage made of it, whether it
+    /// is a draft, how many rounds it has been reviewed in, its status chip, its size and its
+    /// age. Each part comes from the same value the view draws, through the components' own
+    /// spoken forms, so the row cannot describe itself differently from its own chips.
     private var accessibilityText: String {
-        let base = "\(row.slug): \(row.title)"
-        guard showsMarkColumn else { return base }
-        return isMarked
-            ? String(localized: "Selected. \(base)")
-            : String(localized: "Not selected. \(base)")
+        SpokenRow.sentence([
+            showsMarkColumn
+                ? (isMarked
+                    ? String(localized: "Selected")
+                    : String(localized: "Not selected"))
+                : nil,
+            CheckDotView.spokenState(row.checkRollup?.state),
+            "\(row.slug): \(row.title)",
+            ProvenanceChip.spokenProvenance(of: row.author),
+            hasSession ? String(localized: "Has a session to answer to") : nil,
+            trackRecord.map { TrackRecordBadge.sentence(authorName: badgeAuthorName, record: $0) },
+            triage.flatMap { TriageChip.spokenTitle(for: $0) },
+            row.isDraft ? String(localized: "Draft") : nil,
+            rounds?.chipText,
+            statusChip?.text,
+            DiffCountsView.spokenCounts(additions: row.additions, deletions: row.deletions),
+            RelativeDate.long(row.updatedAt),
+        ])
     }
 
     private var statusChip: (text: String, color: Color)? {

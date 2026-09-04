@@ -106,11 +106,17 @@ struct SearchResultRowView: View {
         .accessibilityLabel(Text(accessibilityText))
     }
 
+    /// The row's spoken label: the pull request, why it matched, and the chips beside it.
+    ///
+    /// ``IssueSearchResultRowView``'s reasoning: an `.accessibilityLabel` replaces the combined
+    /// children's labels, so the CI dot and the provenance chip were drawn and never spoken.
     private var accessibilityText: String {
-        let base = "\(result.summary.slug): \(result.summary.title)"
-        guard let reason = SearchResultPresentation.reasonLine(for: result.reason) else {
-            return base
-        }
-        return String(localized: "\(base). Matched: \(reason)")
+        SpokenRow.sentence([
+            CheckDotView.spokenState(result.summary.checkRollup?.state),
+            "\(result.summary.slug): \(result.summary.title)",
+            SearchResultPresentation.reasonLine(for: result.reason)
+                .map { String(localized: "Matched: \($0)") },
+            ProvenanceChip.spokenProvenance(of: result.summary.author),
+        ])
     }
 }

@@ -65,6 +65,7 @@ struct IssueListView: View {
                 }
                 .buttonStyle(.plain)
                 .help(String(localized: "Clear filter"))
+                .accessibilityLabel(Text(String(localized: "Clear filter")))
             }
 
             Spacer(minLength: 8)
@@ -205,6 +206,28 @@ struct IssueRowView: View {
     /// How many labels are drawn before the rest become a `+n` chip.
     private static let visibleLabelCount = 2
 
+    /// The row's spoken label: everything the row shows, in the order it shows it.
+    ///
+    /// ``InboxRowView/accessibilityText``'s reasoning, for the issues side: the combined label
+    /// this replaces would have carried the state chip, the provenance, the agent glyph, the
+    /// labels, the comment count and the age, and a label that says only the number and the
+    /// title throws all six away. Every part is the value the row draws.
+    private var accessibilityText: String {
+        SpokenRow.sentence([
+            row.state == .closed ? String(localized: "Closed") : nil,
+            "\(row.slug): \(row.title)",
+            ProvenanceChip.spokenProvenance(of: row.author),
+            row.hasAgentPullRequest
+                ? String(localized: "An agent has a pull request for this issue")
+                : nil,
+            // All of them, not the two the row has room for: the `+n` chip's tooltip says the
+            // same thing, and a reader who cannot see the chip has no other way to the rest.
+            row.labels.isEmpty ? nil : row.labels.joined(separator: ", "),
+            row.commentCount > 0 ? String(localized: "\(row.commentCount) comments") : nil,
+            String(localized: "opened \(RelativeDate.long(row.createdAt))"),
+        ])
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             Text("\(row.repo.name) #\(row.number)")
@@ -297,7 +320,7 @@ struct IssueRowView: View {
             Rectangle().fill(Theme.hairline).frame(height: 1)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(Text("\(row.slug): \(row.title)"))
+        .accessibilityLabel(Text(accessibilityText))
     }
 }
 

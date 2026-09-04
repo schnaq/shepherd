@@ -341,6 +341,28 @@ order. Everything here is tier 1 first (deterministic, local); a model only ever
       rule in the delegation sheet; the local agent opens the pull request (ADR 0029). Detection is
       on-device over the reviewer's own comments only; the rules engine never gets the trigger
 
+## Accessibility (audited 2026-09-04, [ADR 0033](adr/0033-accessibility.md))
+
+The lists now say what they show, and colour is no longer the only carrier anywhere. Three gaps
+remain and each is a project rather than a label; what they would take is in
+[`docs/plans/accessibility.md`](plans/accessibility.md).
+
+- [ ] **The diff is silent with VoiceOver.** Monaco's screen-reader support is left at `auto` in a
+      `WKWebView` and there is no native path to the same content. Try `accessibilitySupport: 'on'`
+      plus ARIA in the bundle first; the real answer is a native, keyboard-walkable rendering of
+      the patch, which `PatchReconstructor` already has the pieces for and which is a better diff
+      for everybody
+- [ ] **An inline comment needs a mouse.** The gutter's "+" is wired to mouse events only, in an
+      app whose keyboard vocabulary is otherwise thorough. A Monaco action with a keybinding
+      emitting the same bridge event the mouse emits, plus one key in the review screen — `c`, as
+      GitHub uses
+- [ ] **macOS's Larger Text does nothing.** 419 `Font.system(size:)` call sites against two
+      semantic styles, so the OS setting has no effect anywhere. Needs a type scale in `Theme` and
+      a decision about the dense fixed-height rows, not a find-and-replace
+- [ ] Colour contrast against WCAG ratios, deliberately not audited from the repository: two
+      themes resolved per appearance means measuring rendered pairs on a real display. Same
+      session as the VoiceOver verification above
+
 ## v1.x
 
 - Authorization Code + PKCE loopback sign-in (nicer than device flow)

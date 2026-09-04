@@ -75,6 +75,14 @@ bumping a dependency that ships inside the app also means a line in
 
 - Decisions live in [docs/adr](docs/adr). Changing a decision = new ADR, not a silent edit.
 - UI strings: English source, `String(localized:)`. Colors: semantic tokens only (dark/light!).
+- **A list row's spoken label says what the row shows** (ADR 0033). After
+  `.accessibilityElement(children: .combine)`, an `.accessibilityLabel` *replaces* the children's
+  own labels rather than adding to them — so either leave the automatic label alone or build the
+  replacement out of every fact the row draws, through `SpokenRow.sentence(_:)` and the
+  components' own spoken forms (`CheckDotView.spokenState(_:)` and friends). This has the shape of
+  the German-row obligation below and the same reason: a row that announces one of its nine facts
+  does not warn, it just quietly says less than it shows. A coloured dot or chip needs a word
+  beside it, in the row or in its label; colour is never the only carrier.
 - **Every new `String(localized:)` gets a German row in
   `Shepherd/Resources/Localizable.xcstrings`, in the same commit** (ADR 0022). This has the shape
   of the settings obligation below and the same reason: a key with no German value does not warn,

@@ -162,6 +162,10 @@ struct DelegationSheet: View {
                     )
                     .disabled(model.isBusy)
                     .opacity(model.isBusy ? 0.6 : 1)
+                    // A `TextEditor` has no title to borrow a name from, unlike a `TextField`
+                    // with a label, so without this a screen reader announces "text view" and
+                    // the reviewer has to infer what they are typing into.
+                    .accessibilityLabel(Text(String(localized: "Task for the agent")))
                 AIDraftStatusView(
                     state: briefDraft,
                     confirmationTitle: String(localized: "Replace the task for the agent?"),
@@ -522,6 +526,11 @@ struct DelegationSheet: View {
             Button(String(localized: "Start")) { model.start() }
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(!model.canStart)
+                // The primary action of every other sheet in the app is the default one, and
+                // this one was the exception: Return did nothing here and a keyboard-only
+                // reviewer had to find the button by tabbing. Return inside the task editor
+                // still inserts a line, because a `TextEditor` consumes it first.
+                .keyboardShortcut(.defaultAction)
         }
     }
 

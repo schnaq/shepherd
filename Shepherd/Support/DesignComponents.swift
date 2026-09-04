@@ -234,7 +234,15 @@ struct CheckDotView: View {
         }
     }
 
-    private var helpText: String {
+    private var helpText: String { CheckDotView.spokenState(state) }
+
+    /// What the dot's colour means, in words.
+    ///
+    /// `internal` and `static` because a coloured dot inside a list row is announced by the row
+    /// rather than on its own: the row's spoken label has to be able to say the same sentence
+    /// this view says in its tooltip, and one definition is the only way the two cannot drift.
+    /// - Parameter state: The rollup state, or `nil` when there is none.
+    static func spokenState(_ state: CheckRollup.State?) -> String {
         switch state {
         case .some(.success): return String(localized: "All checks passed")
         case .some(.failure): return String(localized: "Checks failing")
@@ -262,7 +270,15 @@ struct DiffCountsView: View {
         }
         .font(Theme.mono(size))
         .monospacedDigit()
-        .accessibilityLabel(Text(String(localized: "\(additions) added, \(deletions) deleted")))
+        .accessibilityLabel(Text(DiffCountsView.spokenCounts(additions: additions, deletions: deletions)))
+    }
+
+    /// The pair in words, for a row that announces itself as one element.
+    /// - Parameters:
+    ///   - additions: Added lines.
+    ///   - deletions: Deleted lines.
+    static func spokenCounts(additions: Int, deletions: Int) -> String {
+        String(localized: "\(additions) added, \(deletions) deleted")
     }
 }
 
@@ -288,7 +304,12 @@ struct ProvenanceChip: View {
         actor.login
     }
 
-    private var helpText: String {
+    private var helpText: String { ProvenanceChip.spokenProvenance(of: actor) }
+
+    /// Who opened it and how Shepherd knows, in words — see ``CheckDotView/spokenState(_:)``
+    /// for why a row needs this as a function rather than as a tooltip.
+    /// - Parameter actor: The author.
+    static func spokenProvenance(of actor: ShepherdCore.Actor) -> String {
         switch actor.kind {
         case .human:
             return String(localized: "Opened by a person")

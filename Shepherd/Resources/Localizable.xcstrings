@@ -201,16 +201,6 @@
         }
       }
     },
-    "%@. Matched: %@": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@. Treffer: %@"
-          }
-        }
-      }
-    },
     "%@: %@": {
       "localizations": {
         "de": {
@@ -6451,6 +6441,16 @@
         }
       }
     },
+    "Matched: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Treffer: %@"
+          }
+        }
+      }
+    },
     "Max turns": {
       "localizations": {
         "de": {
@@ -7227,16 +7227,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nicht ausgewählt"
-          }
-        }
-      }
-    },
-    "Not selected. %@": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nicht ausgewählt. %@"
           }
         }
       }
@@ -9507,16 +9497,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ausgewählt"
-          }
-        }
-      }
-    },
-    "Selected. %@": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ausgewählt. %@"
           }
         }
       }

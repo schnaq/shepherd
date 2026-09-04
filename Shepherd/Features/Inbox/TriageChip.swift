@@ -92,6 +92,16 @@ struct TriageChip: View {
     }
 
     private func title(for risk: TriageVerdict.Risk) -> String {
+        TriageChip.spokenTitle(for: summary) ?? risk.chipTitle
+    }
+
+    /// The chip's two words, for a row that announces itself as one element.
+    ///
+    /// `nil` when there is nothing to say — no verdict and no risk — so a row can leave the part
+    /// out rather than announce an absence, which is what the chip does on screen too.
+    /// - Parameter summary: What the coordinator knows about the row.
+    static func spokenTitle(for summary: TriageRowSummary) -> String? {
+        guard let risk = summary.risk else { return nil }
         guard let verdict = summary.verdict else { return risk.chipTitle }
         return "\(verdict.kind.chipTitle) · \(risk.chipTitle)"
     }

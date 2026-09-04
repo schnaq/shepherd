@@ -325,6 +325,26 @@ struct PriorityRowView: View {
                 .foregroundStyle(Theme.textMuted)
                 .lineLimit(1)
         }
-        .help(priority.file.path + "\n" + priority.reasons.joined(separator: "\n"))
+        .help(
+            SpokenRow.sentence([
+                priority.bucket.localizedTitle,
+                priority.file.path,
+            ]) + "\n" + priority.reasons.joined(separator: "\n")
+        )
+        // The dot's colour is the *only* thing on this row that says which bucket the file is
+        // in — the card has no section headers, unlike the review screen's file list, where the
+        // same buckets are printed as "REVIEW FIRST · 3". So the bucket is named here, where a
+        // reader who cannot tell the colours apart, or who hears the row read out, can still
+        // get at it.
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            Text(
+                SpokenRow.sentence([
+                    priority.bucket.localizedTitle,
+                    priority.file.fileName,
+                    priority.reasons.first ?? priority.category.reasonLabel,
+                ])
+            )
+        )
     }
 }
