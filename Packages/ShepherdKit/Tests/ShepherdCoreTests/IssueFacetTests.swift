@@ -2,8 +2,8 @@ import Foundation
 import XCTest
 @testable import ShepherdCore
 
-/// The issues rail's three new facets (ADR 0032): pure counting, so the numbers the sidebar
-/// prints are pinned on the Linux runner rather than discovered in a window.
+/// The issues rail's own facets (ADR 0032): pure counting, so the numbers the sidebar prints are
+/// pinned on the Linux runner rather than discovered in a window.
 final class IssueFacetTests: XCTestCase {
     private let repo = RepoRef(owner: "schnaq", name: "review")
     private let now = Date(timeIntervalSince1970: 1_788_162_000)
@@ -13,6 +13,7 @@ final class IssueFacetTests: XCTestCase {
         repo: RepoRef? = nil,
         labels: [String] = [],
         daysAgo: Double = 0,
+        state: IssueSummary.State = .open,
         linkedPullRequests: [LinkedPullRequestReference] = []
     ) -> IssueRowSummary {
         IssueRowSummary(
@@ -23,6 +24,7 @@ final class IssueFacetTests: XCTestCase {
             author: ShepherdCore.Actor(login: "octocat", kind: .human),
             createdAt: now.addingTimeInterval(-daysAgo * 24 * 3_600),
             updatedAt: now,
+            state: state,
             labels: labels,
             linkedPullRequests: linkedPullRequests
         )
@@ -156,5 +158,56 @@ final class IssueFacetTests: XCTestCase {
         XCTAssertFalse(IssueAgentPullRequestFilter.hasNone.matches(withAgent))
         XCTAssertTrue(IssueAgentPullRequestFilter.hasAgentPullRequest.storeValue)
         XCTAssertFalse(IssueAgentPullRequestFilter.hasNone.storeValue)
+    }
+
+    // MARK: - State
+
+    func testStateFacetCountsBothHalvesWithOpenFirst() {
+        let rows = [
+            issue(1),
+            issue(2, state: .closed),
+            issue(3),
+        ]
+        let facets = IssueFacets.stateFacets(rows)
+        XCTAssertEqual(facets.map(\.filter), [.open, .closed])
+        XCTAssertEqual(facets.map(\.count), [2, 1])
+    }
+
+    func testAStateNobodyIsInIsAbsentRatherThanZero() {
+        XCTAssertEqual(
+            IssueFacets.stateFacets([issue(1)]),
+            [IssueStateFacet(filter: .open, count: 1)]
+        )
+        XCTAssertEqual(
+            IssueFacets.stateFacets([issue(1, state: .closed)]),
+            [IssueStateFacet(filter: .closed, count: 1)]
+        )
+        XCTAssertTrue(IssueFacets.stateFacets([]).isEmpty)
+    }
+
+    func testAStateShepherdDoesNotModelCountsAsOpen() {
+        // The half is "not closed" rather than "open", which is exactly where the store's
+        // `includeClosed` has always drawn the line — so a word this build does not know keeps
+        // the row on screen instead of hiding it from both halves.
+        let unknown = issue(1, state: .unknown)
+        XCTAssertTrue(IssueStateFilter.open.matches(unknown))
+        XCTAssertFalse(IssueStateFilter.closed.matches(unknown))
+        XCTAssertEqual(
+            IssueFacets.stateFacets([unknown]),
+            [IssueStateFacet(filter: .open, count: 1)]
+        )
+    }
+
+    func testTheStateHalvesAgreeWithTheRowsTheyCount() {
+        let openRow = issue(1)
+        let closedRow = issue(2, state: .closed)
+        XCTAssertTrue(IssueStateFilter.open.matches(openRow))
+        XCTAssertFalse(IssueStateFilter.open.matches(closedRow))
+        XCTAssertTrue(IssueStateFilter.closed.matches(closedRow))
+        XCTAssertFalse(IssueStateFilter.closed.matches(openRow))
+        XCTAssertLessThan(
+            IssueStateFilter.open.facetSortIndex,
+            IssueStateFilter.closed.facetSortIndex
+        )
     }
 }

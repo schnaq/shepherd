@@ -7691,6 +7691,16 @@
         }
       }
     },
+    "Open is what this section shows unless you ask otherwise. Closed reaches back fourteen days: Shepherd keeps an issue that long after it closes and then prunes it, so anything closed before that is no longer on this Mac and github.com is where to look for it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offen ist, was dieser Bereich zeigt, solange du nichts anderes wählst. Geschlossen reicht vierzehn Tage zurück: Shepherd behält ein Issue so lange, nachdem es geschlossen wurde, und entfernt es dann – alles, was davor geschlossen wurde, ist nicht mehr auf diesem Mac, und github.com ist die Stelle, an der du danach suchst."
+          }
+        }
+      }
+    },
     "Open on GitHub": {
       "localizations": {
         "de": {
@@ -9167,6 +9177,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "SPOTLIGHT"
+          }
+        }
+      }
+    },
+    "STATE": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "STATUS"
           }
         }
       }

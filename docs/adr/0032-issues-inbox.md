@@ -677,3 +677,106 @@ colour beside the other two, and `DatabaseManager.failedOutboxCount()` is the st
 `pendingOutboxCount()` and `conflictedOutboxCount()`. It stays scoped to the issue panel: the
 pull-request side has the same gap, and closing it there is a change to a surface this ADR does not
 own.
+
+## Amendment, 2026-09-04 — the section shows the rows it kept
+
+The amendment above closes with a section called *"Nothing on screen changes"*, and it was true in
+a way nobody wanted. Closed issues now survive on disk for fourteen days, ⌘K indexes them and the
+palette draws them with a *Closed* chip — and clicking one switched to the issues section and then
+showed **nothing at all**. `IssueInboxModel.startObserving()` observed `IssueFilter()`, whose
+`includeClosed` is `false`, so `allRows` could not contain a closed issue in the first place;
+`reveal(issueID:)` therefore took its "not cached yet" branch, parked the ask in `pendingReveal`
+and waited for an observation value that could never arrive. The chip's own comment named the
+reason and called it a feature — the row is "not in the open-only section" — which is a label
+pasted on a dead click. The same click from `shepherd://issue/…` and from `shepherd issue
+owner/repo#128` failed identically.
+
+The fix is not "show closed issues": a triage section is a list of work still to be done, and a
+backlog that mixed in everything closed in the last fortnight would be a worse list for the reader
+who never asked. So the widening happens in the query and the narrowing happens in a facet, and
+that split is this amendment's decision.
+
+### The observation is the wide one; a facet keeps today's list
+
+`IssueInboxModel` observes `IssueFilter(now:includeClosed:)` with `includeClosed: true` — the
+filter `SignedInSession` has been using for the digest and ⌘K since Sprint 4a, now the section's
+too, so there is one answer to "which issue rows does this Mac hold" rather than two. A fifth rail
+facet, `stateFilter: IssueStateFilter?`, decides what reaches the screen and **defaults to
+`.open`**.
+
+That default is the whole of "nothing changes for a user who does not ask". `IssueStateFilter` has
+two cases where `IssueSummary.State` has three, and `.open` means *not closed* rather than
+*equal to open*, because that is exactly where the store's `includeClosed` has always drawn the
+line: an issue whose state GitHub reported in a word this build does not model stayed on screen
+before this facet existed and stays on screen now. `nil` means "open and closed", precisely as
+`nil` means "all" for the four facets beside it.
+
+The rail row is drawn as soon as **either** half is populated, which is deliberately not the
+agent-pull-request facet's "both halves or nothing" rule. That rule exists because a one-sided
+two-valued facet can only filter to everything or to nothing; this facet starts *selected*, so its
+row is the thing on screen that says what the list is currently leaving out — and the reader whose
+open list has finally emptied is exactly the reader who wants to see *Closed 3*. Its tooltip says
+the part that is not guessable: the window reaches back fourteen days and an issue closed before
+that is gone from this Mac, github.com being the place to look. The number is prose there rather
+than interpolated, because `SyncEngine.closedIssueRetention` is internal to `ShepherdSync` and a
+second hard-coded fourteen would be a worse honesty than a sentence.
+
+### The other four facets are counted over the state facet's half
+
+The four counts were read off `allRows`, and leaving them there would have changed every number in
+the rail the moment the observation widened — a closed issue would have added itself to LABELS, to
+AGE and to REPOSITORIES while the list it belongs to was not on screen, which is a rail whose
+numbers nothing visible adds up to. They are now counted over `stateScopedRows`: the rows the
+*state* facet has chosen. With the default that reproduces every count the rail printed before
+closed rows were observed at all, and with *Closed* selected the labels, ages and repositories
+describe the closed rows, which is what a reader who has just asked for them wants to read.
+
+`stateFacets` is the one facet still counted over everything, for the reason the others are not
+counted over the filtered list: a *Closed* row that vanished the moment *Open* was selected would
+put the retained issues back out of reach.
+
+One visible consequence is worth writing down, because it is a change and not a bug. The list's two
+empty states are told apart by `allRows` against `visibleRows`, and `allRows` is now the wider set —
+so a user whose only remaining issues are closed ones reads *"Nothing matches these facets"* where
+they used to read *"No issues yet"*. That is the more accurate of the two sentences: clearing the
+facets does show them, the STATE row says how many there are, and *"land here on the next sweep"*
+would have been advice about rows that are already here.
+
+### Clearing the facets clears the state, and the reveal insists
+
+`clearFacets()` — the header's ✕ and Escape — sets the state facet to `nil` along with the other
+four, which is what lets `reveal(issueID:)` keep its existing shape: select the row, then widen if
+the rail is hiding it. Two details fell out of doing that honestly. The state facet is cleared
+**first**, because each of the five assignments clamps the selection and clearing the widest axis
+last would run four clamps against a list that still hides the row — and a clamp that lands on the
+first row of the section fetches that row's body for nobody. And `reveal` asks for its row once
+more after the widening, because those clamps happen one per assignment: a row that two facets
+were hiding is still hidden while the first of them is being cleared, so the cursor could be moved
+off it on the way through. A cursor that survived makes the second ask a no-op. `pendingReveal` is
+untouched and still means what it meant: the issue is not in the local cache at all, and the next
+observation value will honour the ask.
+
+`hasActiveFacet` counts the state facet only when it is narrower than the section's default.
+`.open` *is* that default and `nil` widens rather than narrows, so neither is something to tell a
+user to clear.
+
+### A closed row says it is closed
+
+The list row draws a *Closed* chip beside the provenance chip, in the panel's and the ⌘K row's word
+for it rather than a third one, and the header's facet chip says *Closed* when that half is
+selected — it leads the other four there, because a list of triage work showing closed issues is
+the most surprising thing that list can be doing. The detail panel needed nothing: its state chip
+has said *Closed*, with GitHub's own reason beside it, since Sprint 2, and a second statement of
+one fact in one panel is how two of them come to disagree.
+
+The ⌘K row keeps its chip and loses its comment's claim. Whether an issue is already dealt with is
+the first thing a reader wants off a search result, so the chip is worth its width; it is simply no
+longer a warning that the click goes nowhere.
+
+### What this does not change
+
+No new host, no new request, no new table, no migration and no setting. The section's observation
+is a wider read of a table this Mac already holds, and the rows it now carries are the ones the
+sweep was already keeping. The sweep, the retention window, the digest lines and the ⌘K index are
+untouched: this amendment is about which of the rows already on disk the section is willing to
+draw.

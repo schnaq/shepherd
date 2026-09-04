@@ -145,7 +145,13 @@ struct IssueListView: View {
     /// The narrowest claim wins, exactly as ``InboxListView``'s does: a rail with a label *and* a
     /// repository selected is showing "this label, in this repository", and the surprising half
     /// of that sentence is the label.
+    ///
+    /// The state facet leads all four of them when it is showing closed issues, because that is
+    /// the most surprising thing a list of triage work can be doing — and it is silent on the
+    /// section's own default, and silent again when it has been widened to open *and* closed,
+    /// since the rows in the list say which they are themselves.
     private var activeFacetLabel: String? {
+        if let state = model.stateFilter, state == .closed { return state.facetTitle }
         if let label = model.labelFilter { return label }
         if let filter = model.agentPullRequestFilter { return filter.facetTitle }
         if let bucket = model.ageFilter { return bucket.facetTitle }
@@ -211,6 +217,14 @@ struct IssueRowView: View {
                 .foregroundStyle(isSelected ? Theme.textStrong : Theme.text)
                 .lineLimit(1)
                 .truncationMode(.tail)
+
+            // The section can show closed rows since the state facet arrived (ADR 0032's
+            // 2026-09-04 amendment), so a row that is one says so where the eye already is,
+            // in the panel's and the ⌘K row's word for it rather than a third one.
+            if row.state == .closed {
+                ChipView(text: String(localized: "Closed"), color: Theme.textMuted, size: 10)
+                    .layoutPriority(1)
+            }
 
             // The unchanged chip, from the unchanged detector: an issue's author is produced by
             // the same `AgentDetector` the pull-request sweep uses (ADR 0008, ADR 0032).

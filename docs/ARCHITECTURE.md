@@ -1055,15 +1055,24 @@ duplicate the toolbar, the digest card, the Settings sheet and the palette overl
   rebuilt on a route change; `AppSettings` would put it in the synced document, and which section
   a window shows is not a preference (ADR 0014).
 - **`IssueInboxModel`** is `InboxModel`'s twin — `observeIssues(filter:)`, selection with pruning,
-  four facets — built from a `DatabaseManager` and the existing `IssueFetching` seam rather than
+  five facets — built from a `DatabaseManager` and the existing `IssueFetching` seam rather than
   from a `SignedInSession`, which is what makes it testable without a Keychain. The observation is
   as wide as the section and the facets narrow it in Swift, which is also how `IssueFilter.now` is
   settled: the filter is the observation's key, so the model states one moment and no predicate
-  reads the clock.
+  reads the clock. Since ADR 0032's 2026-09-04 amendment the observation is `includeClosed: true`
+  — the same wide read `SignedInSession` makes for the digest and ⌘K — and the STATE facet, which
+  defaults to open, is what keeps the list the list it was. That is what makes a ⌘K hit or a
+  `shepherd://issue/…` link land on a closed issue instead of parking the ask forever:
+  `reveal(issueID:)` selects the row and `clearFacets()` widens the state facet along with the
+  other four.
 - **The facets are pure** (`ShepherdCore/Triage/IssueFacet.swift`): labels sorted by count then
   name and capped with the overflow counted beside the rows, age over `IssueAgeBucket`, the two
-  agent-pull-request halves drawn only when both are populated. Counted over the whole section, so
-  clicking one does not change the numbers.
+  agent-pull-request halves drawn only when both are populated, and the two `IssueStateFilter`
+  halves drawn as soon as either is — that one starts selected, so its row is what says what the
+  list is leaving out. Clicking a facet does not change the numbers: the first four are counted
+  over `stateScopedRows`, so the default selection reproduces every count the rail printed before
+  closed rows were observed and *Closed* describes the closed ones, while `stateFacets` is counted
+  over the whole section, being its own axis.
 - **`IssueDetailPanel`** shows provenance, state with GitHub's raw reason, age, labels and the
   body through the same `AttributedString` renderer the pull-request description uses, plus
   "Linked pull requests" from `IssueRowSummary.linkedPullRequests` at zero extra GitHub calls. A

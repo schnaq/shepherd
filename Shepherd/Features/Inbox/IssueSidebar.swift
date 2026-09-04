@@ -31,6 +31,31 @@ extension IssueAgeBucket {
     }
 }
 
+extension IssueStateFilter {
+    /// The rail's label for this half.
+    ///
+    /// The panel's own two words for an issue's state, reused rather than reinvented: a row the
+    /// rail calls *Closed* is the row whose detail chip says *Closed*.
+    var facetTitle: String {
+        switch self {
+        case .open: return String(localized: "Open")
+        case .closed: return String(localized: "Closed")
+        }
+    }
+
+    /// The tooltip both halves share, and it says the part a reader would otherwise get wrong.
+    ///
+    /// The retention window is stated in prose rather than interpolated from
+    /// `SyncEngine.closedIssueRetention`: that constant lives in `ShepherdSync` and is internal
+    /// to it, so the honest choice between a sentence and a second hard-coded number is a
+    /// sentence. If the window ever moves, this is the one place that says how long it is.
+    static var railHelp: String {
+        String(
+            localized: "Open is what this section shows unless you ask otherwise. Closed reaches back fourteen days: Shepherd keeps an issue that long after it closes and then prunes it, so anything closed before that is no longer on this Mac and github.com is where to look for it."
+        )
+    }
+}
+
 extension IssueAgentPullRequestFilter {
     /// The rail's label for this half.
     var facetTitle: String {
@@ -80,8 +105,8 @@ struct ContentKindPicker: View {
 
 // MARK: - The issues rail
 
-/// The left rail while the issues section is showing: the agent-pull-request facet, LABELS, AGE,
-/// REPOSITORIES, Settings (ADR 0032).
+/// The left rail while the issues section is showing: STATE, the agent-pull-request facet,
+/// LABELS, AGE, REPOSITORIES, Settings (ADR 0032).
 ///
 /// A view of its own rather than a `ContentKind` branch inside ``InboxSidebar``, because the two
 /// rails share no section: there is no smart view, no lane, no risk and no agent facet here, and
@@ -90,8 +115,9 @@ struct ContentKindPicker: View {
 /// (``RailSectionHeader``) and the Settings row (``RailSettingsRow``), which is where the
 /// consistency actually has to live.
 ///
-/// The section order is the order a triage pass reads them in: what nobody has started on first,
-/// then what it is about, then how long it has been sitting there, then where it lives.
+/// The section order is the order a triage pass reads them in: whether the issue is still open at
+/// all, then what nobody has started on, then what it is about, then how long it has been sitting
+/// there, then where it lives.
 struct IssueSidebar: View {
     /// The issues model.
     let model: IssueInboxModel
@@ -101,6 +127,7 @@ struct IssueSidebar: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
+                stateFacet
                 agentPullRequestFacet
                 labelFacet
                 ageFacet
@@ -118,6 +145,37 @@ struct IssueSidebar: View {
     }
 
     // MARK: - Sections
+
+    /// The open/closed facet (ADR 0032's 2026-09-04 amendment).
+    ///
+    /// Drawn as soon as either half is populated, which is deliberately *not* the
+    /// agent-pull-request facet's "both or nothing" rule: *Open* is the selection the section
+    /// starts on, so this is the row that says what the list is currently leaving out, and a rail
+    /// that waited for a closed issue to exist would hide it exactly when there is nothing else on
+    /// screen to explain the empty list.
+    @ViewBuilder
+    private var stateFacet: some View {
+        let facets = model.stateFacets
+        if !facets.isEmpty {
+            VStack(alignment: .leading, spacing: 2) {
+                RailSectionHeader(title: String(localized: "STATE"))
+                ForEach(facets) { facet in
+                    RailRow(
+                        title: facet.filter.facetTitle,
+                        dotColor: facet.filter == .closed ? Theme.priority : Theme.success,
+                        count: facet.count,
+                        isSelected: model.stateFilter == facet.filter
+                    ) {
+                        // Clicking the selected half deselects it, exactly as every other facet
+                        // row does — and here that means "open and closed together" rather than
+                        // "no restriction", which is the same sentence with the same shape.
+                        model.stateFilter = model.stateFilter == facet.filter ? nil : facet.filter
+                    }
+                    .help(IssueStateFilter.railHelp)
+                }
+            }
+        }
+    }
 
     /// The "nothing started yet / has an agent pull request" facet.
     ///

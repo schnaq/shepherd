@@ -50,7 +50,9 @@ enum ContentKind: String, CaseIterable, Identifiable, Sendable {
 ///   token or a network — the argument ``ClaimsEvidenceModel`` already makes for the same
 ///   `IssueFetching` seam. The seam's one production conformance is `GitHubClient`, whose
 ///   `issue(repo:number:)` carries the ETag cache and the error mapping.
-/// - **The observation is as wide as the section, and the facets narrow it in Swift.** That is
+/// - **The observation is as wide as the section, and the facets narrow it in Swift.** Wide
+///   enough since ADR 0032's 2026-09-04 amendment to carry the closed rows the sweep retained,
+///   with ``stateFilter`` — defaulting to open — deciding what is on screen. That is
 ///   ``InboxModel/filteredRows``' arrangement, and here it also settles ``IssueFilter/now``:
 ///   the filter *is* the observation's key (Sprint 1's own doc comment), so a predicate that read
 ///   the clock inside itself would make two otherwise identical observations unequal and would
@@ -107,6 +109,17 @@ final class IssueInboxModel {
     var agentPullRequestFilter: IssueAgentPullRequestFilter? {
         didSet { clampSelection() }
     }
+    /// The selected half of the state facet — open, closed, or `nil` for both.
+    ///
+    /// The only facet with a default, and that is the decision it records (ADR 0032's 2026-09-04
+    /// amendment). The observation carries every retained closed row so that a ⌘K hit on one can
+    /// land somewhere, but a triage section is a list of work still to do: a user who never asks
+    /// for closed issues must see the list, the counts and the empty states exactly as they were.
+    /// So the widening happens in the query and the narrowing happens here, and `nil` means
+    /// "open and closed" precisely as it means "all" for the four facets above.
+    var stateFilter: IssueStateFilter? = .open {
+        didSet { clampSelection() }
+    }
     /// The selected row's issue id — the keyboard cursor, always at most one row.
     private(set) var selectedID: String?
 
@@ -151,8 +164,13 @@ final class IssueInboxModel {
     /// Starts observing the `issues` table. Safe to call more than once.
     func startObserving() {
         guard observationTask == nil else { return }
-        // Stated here, once, rather than defaulted inside the filter: see the type's own note.
-        let stream = database.observeIssues(filter: IssueFilter(now: now()))
+        // Two things are stated here rather than left to the filter's defaults. `now` is stated
+        // once, because the filter is the observation's key and a predicate that read the clock
+        // would re-bucket rows underneath the view; `includeClosed` is stated because the section
+        // is the place a ⌘K hit on a closed issue lands (ADR 0032's 2026-09-04 amendment), and a
+        // row the observation never carries is a row ``reveal(issueID:)`` can only wait for. What
+        // reaches the screen is ``stateFilter``'s business, and it starts at open.
+        let stream = database.observeIssues(filter: IssueFilter(now: now(), includeClosed: true))
         observationTask = Task { [weak self] in
             for await rows in stream {
                 guard let self else { return }
@@ -180,7 +198,7 @@ final class IssueInboxModel {
     /// grouping or sort picker on this side: nothing in the brief asks for one, and a second sort
     /// vocabulary beside ``InboxSortOrder`` would be a decision nobody has made.
     var filteredRows: [IssueRowSummary] {
-        allRows.filter { row in
+        stateScopedRows.filter { row in
             // Case-insensitive, exactly as the pull-request rail's repository facet is: the rail
             // always sets this from a row it is showing, but a link may carry any casing.
             if let repoFilter, !row.repo.isSameRepository(as: repoFilter) { return false }
@@ -194,6 +212,17 @@ final class IssueInboxModel {
         }
     }
 
+    /// The rows the state facet has left, and the set the other four facets are counted over.
+    ///
+    /// A step of its own rather than one more line inside ``filteredRows``, because the counts
+    /// read it too: with the default selection every number in the rail is the number it was
+    /// before closed rows were observed at all, and with *Closed* selected the labels, ages and
+    /// repositories describe the closed rows rather than a total nothing on screen adds up to.
+    var stateScopedRows: [IssueRowSummary] {
+        guard let stateFilter else { return allRows }
+        return allRows.filter { stateFilter.matches($0) }
+    }
+
     /// Every visible row in display order — the order `j`/`k` walks.
     var visibleRows: [IssueRowSummary] { filteredRows }
 
@@ -204,13 +233,28 @@ final class IssueInboxModel {
     }
 
     /// Whether any facet is narrowing the list, which is what tells the two empty states apart.
+    ///
+    /// The state facet counts only when it is narrower than the section's own default: `.open`
+    /// *is* that default, and `nil` widens the list rather than narrowing it, so neither is
+    /// something a user has to be told to clear.
     var hasActiveFacet: Bool {
-        repoFilter != nil || labelFilter != nil || ageFilter != nil
+        if let stateFilter, stateFilter != .open { return true }
+        return repoFilter != nil || labelFilter != nil || ageFilter != nil
             || agentPullRequestFilter != nil
     }
 
     /// Clears every facet — the header's ✕ and Escape.
+    ///
+    /// The state facet goes to `nil` rather than back to `.open`, which is what makes "clear the
+    /// facets" mean *show me everything* on this side too: it is the widening step
+    /// ``reveal(issueID:)`` relies on, and a ⌘K hit on a closed issue would otherwise clear four
+    /// facets and still land on a row the fifth is hiding.
     func clearFacets() {
+        // The state facet goes first, and the order is not cosmetic: each of these five
+        // assignments clamps the selection, so clearing the widest axis last would run four
+        // clamps against a list that still hides a closed row — and a clamp that lands on the
+        // first row of the section loads that row's body for nobody.
+        stateFilter = nil
         repoFilter = nil
         labelFilter = nil
         ageFilter = nil
@@ -221,12 +265,17 @@ final class IssueInboxModel {
 
     /// The repositories present in the section, with counts.
     ///
-    /// Counted over every row rather than over the filtered list, exactly as the pull-request
-    /// rail's facets are: a facet whose counts changed when you selected one of its own rows
-    /// could not be used to compare them. The same goes for the three below.
+    /// Counted over ``stateScopedRows`` rather than over the list the rail has finished
+    /// narrowing, which is the pull-request rail's arrangement for its own reason: a facet whose
+    /// counts changed when you selected one of its own rows could not be used to compare them.
+    /// The state facet is the single exception to "the whole section", and it is why this is not
+    /// simply ``allRows`` — these four describe whichever half of the section the state facet has
+    /// chosen, so the default selection reproduces every count the rail showed before closed rows
+    /// were observed and *Closed* describes the closed ones. The same goes for the three below;
+    /// ``stateFacets`` is counted over everything, being its own axis.
     var repositoryFacets: [(repo: RepoRef, count: Int)] {
         var counts: [RepoRef: Int] = [:]
-        for row in allRows {
+        for row in stateScopedRows {
             counts[row.repo, default: 0] += 1
         }
         return counts
@@ -239,17 +288,26 @@ final class IssueInboxModel {
 
     /// The labels present in the section, with counts and the cap's overflow (ADR 0032).
     var labelFacets: IssueLabelFacets {
-        IssueFacets.labelFacets(allRows)
+        IssueFacets.labelFacets(stateScopedRows)
     }
 
     /// The age buckets present in the section, with counts.
     var ageFacets: [IssueAgeFacet] {
-        IssueFacets.ageFacets(allRows, now: referenceDate)
+        IssueFacets.ageFacets(stateScopedRows, now: referenceDate)
     }
 
     /// The two halves of the agent-pull-request facet, when both are populated.
     var agentPullRequestFacets: [IssueAgentPullRequestFacet] {
-        IssueFacets.agentPullRequestFacets(allRows)
+        IssueFacets.agentPullRequestFacets(stateScopedRows)
+    }
+
+    /// The two halves of the state facet, with counts (ADR 0032's 2026-09-04 amendment).
+    ///
+    /// The one facet counted over ``allRows``, because it is its own axis: a *Closed* row that
+    /// vanished the moment *Open* was selected would leave the retained issues reachable only
+    /// through ⌘K, which is the dead end this amendment exists to close.
+    var stateFacets: [IssueStateFacet] {
+        IssueFacets.stateFacets(allRows)
     }
 
     // MARK: - Selection
@@ -291,11 +349,19 @@ final class IssueInboxModel {
             pendingReveal = id
             return
         }
-        // Selected first, then widened: `clearFacets()` sets four properties whose `didSet`
+        // Selected first, then widened: `clearFacets()` sets five properties whose `didSet`
         // clamps the selection, and clamping before the cursor has moved would pick the first row
-        // of the widened list and load its body for nothing.
+        // of the widened list and load its body for nothing. The fifth property is the state
+        // facet, which is what lets a *closed* issue be revealed rather than waited for.
         select(id)
-        if !visibleRows.contains(where: { $0.id == id }) { clearFacets() }
+        guard !visibleRows.contains(where: { $0.id == id }) else { return }
+        clearFacets()
+        // And asked for once more, now that the rail is empty. Those five clamps happen one per
+        // assignment, so a row two facets were hiding is still hidden while the first of them is
+        // being cleared and the cursor can be moved off it on the way through. A cursor that
+        // did survive makes this a no-op — ``select(_:)`` returns early when nothing changed —
+        // so the body is never loaded twice.
+        select(id)
     }
 
     /// An issue a link asked for before the observation had it.

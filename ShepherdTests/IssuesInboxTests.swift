@@ -80,6 +80,7 @@ final class IssuesInboxTests: XCTestCase {
         labels: [String] = [],
         daysAgo: Double = 0,
         updatedOffset: TimeInterval = 0,
+        state: IssueSummary.State = .open,
         agentLink: Bool = false
     ) -> IssueRowSummary {
         let repository = repo ?? self.repo
@@ -102,6 +103,10 @@ final class IssuesInboxTests: XCTestCase {
             author: ShepherdCore.Actor(login: "octocat", kind: .human),
             createdAt: clock.addingTimeInterval(-daysAgo * 24 * 3_600),
             updatedAt: clock.addingTimeInterval(updatedOffset),
+            // A closed row the sweep captured always carries the moment: the retention window is
+            // measured from it, and a row without one would be kept on `updatedAt` instead.
+            closedAt: state == .closed ? clock.addingTimeInterval(updatedOffset) : nil,
+            state: state,
             labels: labels,
             myRelation: [.assigned],
             commentCount: number,
@@ -115,6 +120,24 @@ final class IssuesInboxTests: XCTestCase {
             issue(2, title: "Bump GRDB", labels: ["bug"], daysAgo: 3, agentLink: true),
             issue(3, repo: webRepo, title: "A dark theme", labels: ["ui"], daysAgo: 40),
         ]
+    }
+
+    /// A closed issue the sweep captured and is holding for its retention window (ADR 0032).
+    ///
+    /// A fourth row rather than a state on one of the three, so every assertion about the three
+    /// open ones keeps saying what it said before this facet existed.
+    private func closedIssue(
+        repo: RepoRef? = nil,
+        labels: [String] = ["bug"]
+    ) -> IssueRowSummary {
+        issue(
+            4,
+            repo: repo,
+            title: "Long since fixed",
+            labels: labels,
+            daysAgo: 9,
+            state: .closed
+        )
     }
 
     private func makeModel(
@@ -288,6 +311,99 @@ final class IssuesInboxTests: XCTestCase {
         model.reveal(issueID: "I_3")
         XCTAssertEqual(model.selectedID, "I_3")
         XCTAssertNil(model.repoFilter, "a hidden row is shown, not silently not selected")
+    }
+
+    func testRevealingAClosedIssueWidensTheStateFacetAndShowsTheRow() async throws {
+        // The bug this closes: a ⌘K hit on a closed issue used to switch to the section and show
+        // nothing at all, because the section's observation left closed rows out and the ask was
+        // parked forever waiting for a value that could not arrive.
+        let database = try DatabaseManager.inMemory()
+        try await database.saveIssueSummaries(rows + [closedIssue()])
+        let model = makeModel(database: database, issues: nil)
+        await started(model)
+
+        XCTAssertEqual(model.allRows.count, 4, "the section observes the retained closed rows")
+        XCTAssertEqual(model.stateFilter, IssueStateFilter.open)
+        XCTAssertFalse(
+            model.visibleRows.contains(where: { $0.id == "I_4" }),
+            "and keeps them off screen"
+        )
+
+        model.reveal(issueID: "I_4")
+        XCTAssertEqual(model.selectedID, "I_4")
+        XCTAssertNil(model.stateFilter, "the reveal widens the facet rather than parking the ask")
+        XCTAssertTrue(model.visibleRows.contains(where: { $0.id == "I_4" }))
+        XCTAssertNotNil(model.selectedRow, "the panel has a row to draw, which is the whole point")
+    }
+
+    func testRevealingAClosedIssueTheRailIsAlsoFilteringSurvivesEveryClamp() async throws {
+        // Two facets hiding one row: `clearFacets()` clamps once per assignment, so the cursor
+        // has to be put back on the row that was asked for rather than trusted to survive.
+        let database = try DatabaseManager.inMemory()
+        try await database.saveIssueSummaries(rows + [closedIssue(repo: webRepo)])
+        let model = makeModel(database: database, issues: nil)
+        await started(model)
+
+        model.repoFilter = repo
+        model.labelFilter = "bug"
+        model.reveal(issueID: "I_4")
+        XCTAssertEqual(model.selectedID, "I_4")
+        XCTAssertFalse(model.hasActiveFacet)
+        XCTAssertTrue(model.visibleRows.contains(where: { $0.id == "I_4" }))
+    }
+
+    func testTheDefaultStateFacetHidesAClosedRowAndLeavesEveryOtherCountAlone() async throws {
+        let database = try DatabaseManager.inMemory()
+        let openOnly = try DatabaseManager.inMemory()
+        try await database.saveIssueSummaries(rows + [closedIssue(labels: ["bug", "ui"])])
+        try await openOnly.saveIssueSummaries(rows)
+        let model = makeModel(database: database, issues: nil)
+        let reference = makeModel(database: openOnly, issues: nil)
+        await started(model)
+        await started(reference)
+
+        // What the list shows is what it showed before closed rows were observed at all. As
+        // sorted sets, because what is under test here is which rows survive the state facet;
+        // the store's own order is pinned by the selection test above.
+        XCTAssertEqual(model.allRows.count, 4)
+        XCTAssertEqual(
+            model.filteredRows.map(\.number).sorted(),
+            reference.filteredRows.map(\.number).sorted()
+        )
+
+        // And so is every number in the rail: the four facets are counted over the rows the state
+        // facet has already chosen, so a closed row cannot inflate one of them.
+        XCTAssertEqual(model.labelFacets, reference.labelFacets)
+        XCTAssertEqual(model.ageFacets, reference.ageFacets)
+        XCTAssertEqual(model.agentPullRequestFacets, reference.agentPullRequestFacets)
+        XCTAssertEqual(model.repositoryFacets.map(\.repo), reference.repositoryFacets.map(\.repo))
+        XCTAssertEqual(
+            model.repositoryFacets.map(\.count),
+            reference.repositoryFacets.map(\.count)
+        )
+    }
+
+    func testTheStateFacetCountsBothHalvesAndSelectingClosedDescribesTheClosedRows() async throws {
+        let database = try DatabaseManager.inMemory()
+        try await database.saveIssueSummaries(rows + [closedIssue(labels: ["stale"])])
+        let model = makeModel(database: database, issues: nil)
+        await started(model)
+
+        // Counted over the whole section, both halves: its own axis, so selecting one half must
+        // not make the other disappear from the rail.
+        XCTAssertEqual(model.stateFacets.map(\.filter), [.open, .closed])
+        XCTAssertEqual(model.stateFacets.map(\.count), [3, 1])
+
+        model.stateFilter = .closed
+        XCTAssertEqual(model.filteredRows.map(\.number), [4])
+        XCTAssertEqual(model.stateFacets.map(\.count), [3, 1], "the facet still counts both")
+        XCTAssertTrue(model.hasActiveFacet, "closed is narrower than the section's default")
+        // The other four now describe the closed rows rather than a mixed total.
+        XCTAssertEqual(model.labelFacets.facets, [IssueLabelFacet(name: "stale", count: 1)])
+        XCTAssertEqual(model.repositoryFacets.map(\.count), [1])
+
+        model.stateFilter = nil
+        XCTAssertEqual(model.filteredRows.count, 4, "nil is open and closed, as it is for the rest")
     }
 
     func testRevealOfAnIssueTheObservationDoesNotHaveYetIsHonouredWhenItArrives() async throws {

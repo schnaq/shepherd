@@ -75,8 +75,11 @@ struct IssueSearchResultRowView: View {
             }
             Spacer(minLength: 8)
             if result.summary.state == .closed {
-                // A closed issue stays in the index for the retention window (ADR 0032) but is
-                // not in the open-only section, so the row says so before the click.
+                // A closed issue stays in the index for the retention window (ADR 0032), and the
+                // click lands: the section observes the retained rows and the reveal widens its
+                // state facet to show this one (that ADR's 2026-09-04 amendment). The chip is
+                // still worth its width — whether an issue is already dealt with is the first
+                // thing a reader wants off a search result — it is simply no longer a warning.
                 ChipView(text: String(localized: "Closed"), color: Theme.textMuted)
                     .layoutPriority(1)
             }

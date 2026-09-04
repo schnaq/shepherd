@@ -54,12 +54,15 @@ mentioning you. Three searches beside the five the review inbox already runs, in
 the same host, at the same cadence — and if they fail, the review inbox does not
 ([ADR 0032](adr/0032-issues-inbox.md)).
 
-The rail asks the four questions a triage pass asks. **Has anything been started on this?** — the
-facet reads whether a machine already has a pull request open that would close the issue, so
-*Nothing started yet* is the pile you are actually looking for. Then **labels**, **age** — bucketed
-by when the issue was *opened*, because an issue somebody commented on this morning has not become
-a new issue — and **repository**. Each row carries the provenance chip you already know from the
-review inbox, a small glyph when an agent is on it, its labels and its comment count.
+The rail asks the five questions a triage pass asks. **Is this still open?** — it is, unless you
+say otherwise: *Closed* is there for the fortnight Shepherd holds on to an issue after it closes,
+so the one you finished on Tuesday is still somewhere, and the rail says how many rather than
+leaving you to wonder. **Has anything been started on this?** — the facet reads whether a machine already has a
+pull request open that would close the issue, so *Nothing started yet* is the pile you are actually
+looking for. Then **labels**, **age** — bucketed by when the issue was *opened*, because an issue
+somebody commented on this morning has not become a new issue — and **repository**. Each row
+carries the provenance chip you already know from the review inbox, a small glyph when an agent is
+on it, its labels, its comment count, and a *Closed* chip when that is what it is.
 
 Open one and the panel shows the body rendered the way a pull-request description is, the labels,
 the state with GitHub's own reason for it, and *Linked pull requests*: the pull requests GitHub says

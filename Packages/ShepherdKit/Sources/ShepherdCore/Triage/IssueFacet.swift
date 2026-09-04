@@ -137,10 +137,67 @@ public struct IssueAgentPullRequestFacet: Sendable, Hashable, Identifiable {
     }
 }
 
+/// Which half of the issues rail's STATE facet a row belongs to (ADR 0032's 2026-09-04
+/// amendment).
+///
+/// Two cases where ``IssueSummary/State`` has three, and that is the one thing worth saying about
+/// it: this is not the server's vocabulary narrowed into a filter, it is the section's own
+/// question, and the section has always drawn its line in exactly one place — the store's
+/// `IssueFilter.includeClosed` leaves out a row whose state is `closed` and keeps every other
+/// one. So ``open`` here means *not closed*, an issue whose state GitHub reported in a word this
+/// build does not model included, and the rail's default selection therefore shows precisely the
+/// rows the section showed before this facet existed.
+public enum IssueStateFilter: String, Sendable, Codable, Hashable, CaseIterable {
+    /// Issues still to be dealt with — anything the section is not calling closed.
+    case open
+    /// Issues that have been closed and are still inside the retention window.
+    case closed
+
+    /// Whether one row belongs to this half.
+    /// - Parameter summary: The issue row.
+    public func matches(_ summary: IssueRowSummary) -> Bool {
+        switch self {
+        case .open: return summary.state != .closed
+        case .closed: return summary.state == .closed
+        }
+    }
+
+    /// A stable display order: the half the section starts on leads.
+    ///
+    /// Not derived from `allCases`, for ``IssueAgentPullRequestFilter/facetSortIndex``'s reason:
+    /// the case order spells the vocabulary, the facet order spells the question.
+    public var facetSortIndex: Int {
+        switch self {
+        case .open: return 0
+        case .closed: return 1
+        }
+    }
+}
+
+/// One row of the issues rail's STATE facet (ADR 0032's 2026-09-04 amendment).
+public struct IssueStateFacet: Sendable, Hashable, Identifiable {
+    /// The half this row filters by.
+    public var filter: IssueStateFilter
+    /// How many issues are in it.
+    public var count: Int
+
+    /// `IssueStateFacet` is identified by its half.
+    public var id: String { filter.rawValue }
+
+    /// Creates a facet row.
+    /// - Parameters:
+    ///   - filter: The half.
+    ///   - count: How many issues.
+    public init(filter: IssueStateFilter, count: Int) {
+        self.filter = filter
+        self.count = count
+    }
+}
+
 /// Counting the issues rail's facets — pure, so the numbers in the sidebar are unit-tested on
 /// Linux (ADR 0032).
 ///
-/// ``TriageFacets``' twin, and the same rule runs through all three functions: **a level nobody
+/// ``TriageFacets``' twin, and the same rule runs through every function here: **a level nobody
 /// is at is omitted rather than shown as zero**. A rail row that filters to an empty list is a
 /// dead end the user has to discover by clicking it, which is what the AGENTS and REPOSITORIES
 /// facets already avoid by only listing what is in the current data.
@@ -244,6 +301,40 @@ public enum IssueFacets {
             result.append(
                 IssueAgentPullRequestFacet(filter: .hasAgentPullRequest, count: withAgent)
             )
+        }
+        return result
+    }
+
+    /// Counts the two halves of the STATE facet, open first.
+    ///
+    /// The "both halves or nothing" rule ``agentPullRequestFacets(_:)`` follows is deliberately
+    /// *not* followed here: either half is drawn as soon as it is populated, because one of the
+    /// two is the selection the section starts on. A rail that waited for a closed issue to exist
+    /// would hide the control that says what the list is currently leaving out, and a reader whose
+    /// open list is finally empty is exactly the reader who wants to see "Closed 3". The empty
+    /// half is still omitted, which is the rule the other three functions share.
+    /// - Parameter rows: The issues to count over. The **whole** section, closed rows included:
+    ///   this is the one facet whose own axis must not be narrowed before it is counted, or
+    ///   selecting a half would make the other one disappear.
+    /// - Returns: The populated halves, in rail order.
+    public static func stateFacets(_ rows: [IssueRowSummary]) -> [IssueStateFacet] {
+        var openCount = 0
+        var closedCount = 0
+        for row in rows {
+            // Through ``IssueStateFilter/matches(_:)`` rather than beside it, so the count and
+            // the filter cannot come to different conclusions about a state neither models.
+            if IssueStateFilter.closed.matches(row) {
+                closedCount += 1
+            } else {
+                openCount += 1
+            }
+        }
+        var result: [IssueStateFacet] = []
+        if openCount > 0 {
+            result.append(IssueStateFacet(filter: .open, count: openCount))
+        }
+        if closedCount > 0 {
+            result.append(IssueStateFacet(filter: .closed, count: closedCount))
         }
         return result
     }
