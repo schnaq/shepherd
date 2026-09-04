@@ -22,12 +22,18 @@ import FoundationNetworking
 public enum RedirectPolicy {
     /// The headers that are credentials for *one* host, and therefore never leave it.
     ///
-    /// One name, deliberately. `Accept`, `User-Agent` and `X-GitHub-Api-Version` say what is
+    /// Two names, deliberately. `Accept`, `User-Agent` and `X-GitHub-Api-Version` say what is
     /// wanted and by which client rather than who is asking, so they may travel: the blob host
     /// ignores them, and dropping them would make a redirect answer differently from a request.
     /// Anything added here has to be a *credential* — something that would let its holder act as
-    /// the signed-in user.
-    public static let credentialHeaders = ["Authorization"]
+    /// the person who sent it.
+    ///
+    /// `x-api-key` is Anthropic's spelling of the same thing and is here for the same reason: the
+    /// app sends the user's own key straight to the endpoint they configured (ADR 0007), and an
+    /// endpoint that answers with a redirect must not be able to forward that key to a host the
+    /// user never named. A webhook signature is deliberately *not* here: it authenticates one
+    /// message rather than its sender, so it is not something a holder can act with.
+    public static let credentialHeaders = ["Authorization", "x-api-key"]
 
     /// The request a redirect may be followed with.
     ///
@@ -150,6 +156,28 @@ public final class RedirectStrippingDelegate: NSObject, URLSessionTaskDelegate {
         }
         completionHandler(
             RedirectStrippingDelegate.followedRequest(original: original, proposed: request)
+        )
+    }
+}
+
+extension RedirectStrippingDelegate {
+    /// A session that will not carry a credential off the host it was sent to.
+    ///
+    /// The one place that knows how to build such a session, because there is one reason to want
+    /// one and every client that sends a credential wants it: `URLSession.shared` cannot be given
+    /// a delegate, and a delegate is the only place `URLSession` lets anybody see the redirect it
+    /// is about to follow. Whoever calls this owns the session and should hold it rather than
+    /// build one per request.
+    /// - Parameter configuration: The configuration to use; the default one unless a caller has
+    ///   a reason of its own.
+    /// - Returns: A session whose redirects go through ``RedirectPolicy``.
+    public static func makeSession(
+        configuration: URLSessionConfiguration = .default
+    ) -> URLSession {
+        URLSession(
+            configuration: configuration,
+            delegate: RedirectStrippingDelegate(),
+            delegateQueue: nil
         )
     }
 }

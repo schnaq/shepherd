@@ -187,7 +187,7 @@ struct URLSessionWebhookPoster: WebhookPosting {
         urlRequest.httpBody = request.body
 
         do {
-            let (_, response) = try await URLSession.shared.data(for: urlRequest)
+            let (_, response) = try await CredentialSafeSession.shared.data(for: urlRequest)
             return WebhookResponse(status: (response as? HTTPURLResponse)?.statusCode ?? 0)
         } catch {
             throw WebhookError.transport(error.localizedDescription)

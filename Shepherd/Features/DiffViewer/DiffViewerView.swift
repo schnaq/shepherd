@@ -61,6 +61,11 @@ struct DiffViewerView: NSViewRepresentable {
 
         context.coordinator.attach(webView)
         if let dist = DiffViewerView.distributionURL() {
+            // The one directory this web view is ever allowed to be in. Handed to the
+            // coordinator before the load, so the first navigation is already checked against
+            // it (ADR 0003's "no remote loads" is enforced here rather than assumed).
+            context.coordinator.bundleRoot = dist
+            webView.navigationDelegate = context.coordinator
             webView.loadFileURL(
                 dist.appendingPathComponent("index.html"),
                 allowingReadAccessTo: dist
@@ -87,6 +92,7 @@ struct DiffViewerView: NSViewRepresentable {
         nsView.configuration.userContentController.removeScriptMessageHandler(
             forName: DiffViewerView.handlerName
         )
+        nsView.navigationDelegate = nil
         coordinator.detach()
     }
 
@@ -122,9 +128,15 @@ struct DiffViewerView: NSViewRepresentable {
 
     /// Bridges `WKScriptMessage`s into typed events and holds the outbound queue.
     @MainActor
-    final class Coordinator: NSObject, WKScriptMessageHandler {
+    final class Coordinator: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         /// Called for every decoded event.
         var onEvent: (DiffViewerEvent) -> Void
+
+        /// The bundle directory this web view may load from, and nothing else.
+        ///
+        /// Set before the first load. `nil` would mean "no navigation is allowed at all", which
+        /// is the safe answer for a view that could not find its own bundle.
+        var bundleRoot: URL?
 
         private weak var webView: WKWebView?
         private var isReady = false
@@ -231,6 +243,65 @@ struct DiffViewerView: NSViewRepresentable {
             for command in pending {
                 deliver(command)
             }
+        }
+
+        // MARK: - WKNavigationDelegate
+
+        /// Allows the bundle to load and nothing else.
+        ///
+        /// The viewer renders somebody else's text: a pull-request description or a review
+        /// comment may contain a link, `MarkdownHTML` deliberately lets `https://` links
+        /// through, and the bundle draws them as ordinary anchors. Without this method
+        /// `WKWebView`'s default answer to a click is *allow*, which would navigate this view —
+        /// the one holding the `shepherd` message handler — to a stranger's page, and that page
+        /// could then post forged bridge events from the same `WKWebViewConfiguration`.
+        ///
+        /// So the rule is the one ADR 0003 always assumed: the only navigation this view
+        /// performs is inside its own bundle directory. A link goes to the user's browser,
+        /// where a URL bar and a real security model exist, and everything else is refused
+        /// without comment.
+        /// - Parameters:
+        ///   - webView: The view.
+        ///   - navigationAction: What it is about to do.
+        ///   - decisionHandler: Where the answer goes.
+        nonisolated func webView(
+            _ webView: WKWebView,
+            decidePolicyFor navigationAction: WKNavigationAction,
+            decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void
+        ) {
+            MainActor.assumeIsolated {
+                guard let url = navigationAction.request.url else {
+                    decisionHandler(.cancel)
+                    return
+                }
+                if DiffViewerView.Coordinator.isInsideBundle(url, root: bundleRoot) {
+                    decisionHandler(.allow)
+                    return
+                }
+                decisionHandler(.cancel)
+                // A link the reviewer clicked is still worth following — just not here. Only the
+                // two web schemes are handed on: `file:`, `javascript:` and anything a comment
+                // author invented are refused outright.
+                if url.scheme == "https" || url.scheme == "http" {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+        }
+
+        /// Whether a URL is a file inside the bundle directory.
+        ///
+        /// Symlinks are resolved on both sides before the prefix is compared, which is
+        /// ``GitWorktree/ensureManaged()``'s reasoning: a path that spells its way out with
+        /// `..` or through a link must not pass a string comparison.
+        /// - Parameters:
+        ///   - url: The URL to check.
+        ///   - root: The bundle directory, or `nil` when there is none.
+        static func isInsideBundle(_ url: URL, root: URL?) -> Bool {
+            guard let root, url.isFileURL else { return false }
+            let base = root.standardizedFileURL.resolvingSymlinksInPath().path
+            let target = url.standardizedFileURL.resolvingSymlinksInPath().path
+            let boundary = base.hasSuffix("/") ? base : base + "/"
+            return target == base || target.hasPrefix(boundary)
         }
 
         // MARK: - WKScriptMessageHandler

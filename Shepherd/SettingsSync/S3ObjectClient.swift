@@ -231,7 +231,7 @@ struct URLSessionS3Transport: S3Transporting {
         urlRequest.httpBody = request.body
 
         do {
-            let (data, response) = try await URLSession.shared.data(for: urlRequest)
+            let (data, response) = try await CredentialSafeSession.shared.data(for: urlRequest)
             var headers: [String: String] = [:]
             if let http = response as? HTTPURLResponse {
                 for (key, value) in http.allHeaderFields {

@@ -132,11 +132,7 @@ public final class URLSessionTransport: @unchecked Sendable {
     /// request in ``data(for:)``, as they were.
     /// - Returns: The session the transport owns.
     private static func makeSession() -> URLSession {
-        URLSession(
-            configuration: .default,
-            delegate: RedirectStrippingDelegate(),
-            delegateQueue: nil
-        )
+        RedirectStrippingDelegate.makeSession()
     }
 }
 

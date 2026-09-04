@@ -29,3 +29,27 @@ network access, no remote content, `file`/`about:` origin only.
   protocol is a public contract with schema tests on both sides.
 - Native rewrite of the diff view remains possible later behind the same view-model
   boundary — the bridge isolates Monaco from the rest of the app.
+
+## Amendment (2026-09-04): the boundary is enforced, not assumed
+
+This ADR says the web view has no network access of its own — a `file://` origin, no remote
+loads — and the bundle was written against that sentence. It was not true. A `WKWebView` with no
+navigation delegate answers *allow* to every navigation, and the viewer renders somebody else's
+text: `MarkdownHTML` deliberately lets `https://` links through and the bundle draws them as
+ordinary anchors, so anyone who can write a pull-request description or a review comment could put
+a link in front of the reviewer that navigated **this** view — the one holding the `shepherd`
+message handler — to a page of their choosing. That page would then have been able to post forged
+bridge messages from the same `WKWebViewConfiguration`, and it would have done so inside the app's
+own chrome, where there is no address bar to give it away.
+
+So the sentence is now a `WKNavigationDelegate`. The only navigation allowed is a file inside the
+bundle directory, compared after both paths are standardised and their symlinks resolved, which is
+`GitWorktree.ensureManaged()`'s reasoning. A view that could not find its own bundle allows
+nothing at all. A clicked `http`/`https` link is cancelled here and opened in the user's browser
+instead, where a URL bar and a real security model exist; every other scheme is refused without
+comment.
+
+The decision this records is small and worth stating anyway: a trust boundary a document only
+*describes* is not a boundary. The check is a static function so it can be asserted without
+fabricating a `WKNavigationAction`, and the tests spell out the cases — the bundle's own files, a
+web page, a traversal out, a sibling directory whose name starts the same way, and no bundle.

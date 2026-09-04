@@ -149,3 +149,28 @@ a re-run of CI, to a merge or to a started agent. It reads, and it says what it 
   from a turn where it read nothing, and a provider that does not implement the method inherits a
   default that refuses. An unread guess looks exactly like a read one on a card, which is the one
   failure mode this feature could not tolerate.
+
+## Amendment (2026-09-04): every credentialed request gets the redirect policy
+
+`RedirectPolicy` was written for one request — the job-log read that redirects off
+`api.github.com` — and it was wired into `GitHubClient`'s session only. CONTRIBUTING.md then
+stated the rule in general terms ("the transport drops it whenever a redirect leaves the host"),
+which read as a property of the app and was a property of one client.
+
+Four other places send a credential in a header, and all four were on `URLSession.shared`, whose
+delegate cannot be set and which therefore copies the original headers onto a cross-host redirect:
+the S3-compatible bucket the encrypted settings document lives in (ADR 0014), the webhook receiver
+(ADR 0012), and both AI providers (ADR 0007). The last two are the ones that matter. The header
+there is the user's **own API key**, and the endpoint is a host Shepherd does not control — a
+gateway URL the user typed. An endpoint that answers `302` could have had the key forwarded to a
+host the user never named.
+
+All four now go through `CredentialSafeSession`, one session for the app built by
+`RedirectStrippingDelegate.makeSession()`, so there is one definition of "a session that will not
+carry a credential off the host it was sent to". `RedirectPolicy.credentialHeaders` gained
+`x-api-key`, which is Anthropic's spelling of `Authorization`. A webhook signature is deliberately
+*not* on that list: it authenticates one message rather than its sender, so it is not something a
+holder can act with, and the list is a rule rather than a habit.
+
+No behaviour changes for a request that is not redirected, which is every request the app makes on
+a good day.

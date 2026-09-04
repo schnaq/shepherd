@@ -200,7 +200,7 @@ struct AnthropicProvider: IntelligenceProvider {
                 streaming: true
             )
 
-            let (bytes, response) = try await URLSession.shared.bytes(for: request)
+            let (bytes, response) = try await CredentialSafeSession.shared.bytes(for: request)
             let status = (response as? HTTPURLResponse)?.statusCode ?? 0
             guard (200..<300).contains(status) else {
                 throw IntelligenceError.http(
@@ -249,7 +249,7 @@ struct AnthropicProvider: IntelligenceProvider {
         request.setValue("application/json", forHTTPHeaderField: "content-type")
         request.httpBody = try completionRequestBody(system: system, user: user)
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await CredentialSafeSession.shared.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             throw IntelligenceError.http(

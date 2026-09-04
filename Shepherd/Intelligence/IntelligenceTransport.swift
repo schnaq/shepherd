@@ -93,7 +93,9 @@ extension IntelligenceTransport {
     }
 }
 
-/// The real transport: `URLSession.shared`, which is what every other call in this layer uses.
+/// The real transport: ``CredentialSafeSession``, which is what every call in this layer that
+/// carries the user's own key uses — a session whose redirects cannot take that key to a host the
+/// user never named (ADR 0024's `RedirectPolicy`).
 struct IntelligenceURLSessionTransport: IntelligenceTransport {
     /// Creates the transport.
     init() {}
@@ -118,7 +120,7 @@ struct IntelligenceURLSessionTransport: IntelligenceTransport {
             request.setValue(value, forHTTPHeaderField: field)
         }
         request.httpBody = body
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await CredentialSafeSession.shared.data(for: request)
         let http = response as? HTTPURLResponse
         // Zero rather than a throw for a response that is not HTTP, matching what the
         // non-streaming calls in both cloud providers already do with the same expression: the

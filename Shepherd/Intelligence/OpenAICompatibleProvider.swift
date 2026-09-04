@@ -274,7 +274,7 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "authorization")
         }
 
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await CredentialSafeSession.shared.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             throw IntelligenceError.http(
@@ -395,7 +395,7 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
                 streaming: true
             )
 
-            var (bytes, response) = try await URLSession.shared.bytes(for: request)
+            var (bytes, response) = try await CredentialSafeSession.shared.bytes(for: request)
             var http = response as? HTTPURLResponse
             if http?.statusCode == 429,
                let delay = IntelligenceRetryAfter.delay(
@@ -405,7 +405,7 @@ struct OpenAICompatibleProvider: IntelligenceProvider, ModelListing {
                 // alive with nobody on this end, and the second request is a new one anyway.
                 _ = await IntelligenceStreaming.failureBody(bytes)
                 try await Task.sleep(for: .seconds(delay))
-                (bytes, response) = try await URLSession.shared.bytes(for: request)
+                (bytes, response) = try await CredentialSafeSession.shared.bytes(for: request)
                 http = response as? HTTPURLResponse
             }
             let status = http?.statusCode ?? 0

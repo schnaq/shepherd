@@ -264,6 +264,41 @@ final class RedirectPolicyTests: XCTestCase {
         XCTAssertEqual(followed.method, "GET")
     }
 
+    func testAnApiKeyIsACredentialToo() {
+        // Anthropic's spelling, and the app sends the user's own key straight to the endpoint
+        // they configured. An endpoint that answers with a redirect must not be able to forward
+        // that key to a host the user never named.
+        let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!
+        let elsewhere = URL(string: "https://gateway.example.test/v1/messages")!
+        let sent = request(
+            endpoint,
+            headers: [
+                "x-api-key": "sk-ant-test",
+                "anthropic-version": "2023-06-01",
+                "content-type": "application/json",
+            ]
+        )
+
+        let followed = RedirectPolicy.request(for: sent, redirectingTo: elsewhere)
+
+        XCTAssertNil(followed.headers["x-api-key"], "the key stays on the host it was sent to")
+        // What the request *is* still travels, exactly as it does for a GitHub hop.
+        XCTAssertEqual(followed.headers["anthropic-version"], "2023-06-01")
+        XCTAssertEqual(followed.headers["content-type"], "application/json")
+
+        let sameHost = URL(string: "https://api.anthropic.com/v1/messages?beta=1")!
+        XCTAssertEqual(
+            RedirectPolicy.request(for: sent, redirectingTo: sameHost).headers["x-api-key"],
+            "sk-ant-test"
+        )
+    }
+
+    func testACredentialIsSomethingItsHolderCanActWith() {
+        // The list is a rule, not a habit: a webhook signature authenticates one message rather
+        // than its sender, so it is deliberately not on it.
+        XCTAssertEqual(RedirectPolicy.credentialHeaders, ["Authorization", "x-api-key"])
+    }
+
     func testTheSameHostKeepsIt() {
         let elsewhere = URL(string: "https://api.github.com/repositories/1/pulls/42")!
 

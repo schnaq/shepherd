@@ -181,7 +181,10 @@ bumping a dependency that ships inside the app also means a line in
     the way the update download's is: `GET /repos/…/actions/jobs/{id}/logs` on api.github.com
     redirects to the `*.githubusercontent.com` blob host GitHub stores job logs on. One plain `GET`
     of a signed URL, no request body, and the redirect hop carries no `Authorization` header — the
-    transport drops it whenever a redirect leaves the host the request was made to;
+    transport drops it whenever a redirect leaves the host the request was made to, and **every**
+    request in the app that carries a credential goes through such a session (`CredentialSafeSession`),
+    not only this one: the bucket, the webhook receiver and the AI endpoints are hosts Shepherd does
+    not control, and a `302` from one of them must not be able to forward the credential onwards;
   - only when the user enables webhooks and types a URL: **that URL** (ADR 0012). Outbound only,
     one destination, off by default, and the payload never carries review text, comment bodies,
     diffs or agent output;

@@ -246,3 +246,57 @@ final class BridgeProtocolTests: XCTestCase {
         XCTAssertEqual(event, .viewportChanged(firstVisibleLine: 128))
     }
 }
+
+/// The one navigation the diff viewer is allowed to perform (ADR 0003).
+///
+/// The viewer renders somebody else's text, and `MarkdownHTML` deliberately lets `https://` links
+/// through, so a review comment can put a clickable link inside the web view that holds the
+/// `shepherd` message handler. `WKWebView`'s default answer to a click is *allow*, so the boundary
+/// the ADR always assumed is asserted here: file URLs inside the bundle directory, and nothing
+/// else. The delegate method itself needs a real `WKNavigationAction`, which cannot be
+/// constructed; what it decides with is this function.
+final class DiffViewerNavigationBoundaryTests: XCTestCase {
+    private let root = URL(fileURLWithPath: "/Applications/Shepherd.app/Contents/Resources/DiffViewer/dist", isDirectory: true)
+
+    private func isInside(_ url: URL, root: URL? = nil) -> Bool {
+        DiffViewerView.Coordinator.isInsideBundle(url, root: root ?? self.root)
+    }
+
+    func testTheBundlesOwnFilesLoad() {
+        XCTAssertTrue(isInside(root.appendingPathComponent("index.html")))
+        XCTAssertTrue(isInside(root.appendingPathComponent("assets/monaco.js")))
+        XCTAssertTrue(isInside(root), "the directory itself is inside itself")
+    }
+
+    func testAWebPageIsRefusedHoweverItArrives() {
+        // The attack this closes: a link in a pull-request description or a review comment,
+        // clicked inside the viewer, navigating the view that owns the bridge to a stranger's
+        // page — which could then post forged bridge messages from the same configuration.
+        XCTAssertFalse(isInside(URL(string: "https://attacker.example/page")!))
+        XCTAssertFalse(isInside(URL(string: "http://attacker.example/page")!))
+        XCTAssertFalse(isInside(URL(string: "about:blank")!))
+        XCTAssertFalse(isInside(URL(string: "data:text/html,<script>alert(1)</script>")!))
+    }
+
+    func testAFileOutsideTheBundleIsRefusedIncludingBySpellingItsWayOut() {
+        XCTAssertFalse(isInside(URL(fileURLWithPath: "/etc/passwd")))
+        XCTAssertFalse(
+            isInside(root.appendingPathComponent("../../../../../../etc/passwd")),
+            "a traversal is resolved before the comparison, not compared as a string"
+        )
+        XCTAssertFalse(
+            isInside(URL(fileURLWithPath: "/Applications/Shepherd.app/Contents/Resources/DiffViewer/dist-elsewhere/index.html")),
+            "a sibling whose name starts the same way is not inside"
+        )
+    }
+
+    func testAViewWithNoBundleNavigatesNowhere() {
+        XCTAssertFalse(
+            DiffViewerView.Coordinator.isInsideBundle(
+                URL(fileURLWithPath: "/tmp/index.html"),
+                root: nil
+            ),
+            "a view that could not find its own bundle allows nothing at all"
+        )
+    }
+}
