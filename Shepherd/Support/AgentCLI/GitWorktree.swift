@@ -35,6 +35,8 @@ struct GitWorktree: Sendable {
         case pathOutsideManagedDirectory(String)
         /// git could not say which branch `origin`'s HEAD points at.
         case noDefaultBranch
+        /// A previous run left uncommitted work in the worktree this one wants.
+        case worktreeHasUncommittedWork(String)
 
         var errorDescription: String? {
             switch self {
@@ -51,6 +53,10 @@ struct GitWorktree: Sendable {
             case .noDefaultBranch:
                 return String(
                     localized: "git could not tell which branch this repository's `origin` points at. Run `git remote set-head origin --auto` in your clone and try again."
+                )
+            case .worktreeHasUncommittedWork(let path):
+                return String(
+                    localized: "A previous run left changes in \(path) that were never committed. Commit or discard them from that delegation's sheet, then assign the issue again."
                 )
             }
         }
@@ -215,8 +221,16 @@ struct GitWorktree: Sendable {
         )
         let base = try await defaultBranchRef()
         if FileManager.default.fileExists(atPath: directory.path) {
-            // A worktree left behind by a previous run or a crash, cleaned up rather than
-            // failing the whole delegation — ``prepare(branch:headOid:)``'s reasoning exactly.
+            // A worktree is already there: a previous run's, or a crash's. Committed work is
+            // safe either way — it is on the branch, and the branch is what this worktree is
+            // re-checked-out from below. **Uncommitted** work is not, and removing a worktree
+            // is `--force`, so the one case that must not be silently swallowed is a dirty
+            // one: it is refused with a message naming the directory instead. A clean leftover
+            // is cleared out, exactly as ``prepare(branch:headOid:)`` clears one.
+            let leftover = try? await status()
+            if leftover?.isDirty == true {
+                throw Failure.worktreeHasUncommittedWork(directory.path)
+            }
             try? await remove()
         }
         try FileManager.default.createDirectory(

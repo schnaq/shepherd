@@ -2071,6 +2071,16 @@
         }
       }
     },
+    "A previous run left changes in %@ that were never committed. Commit or discard them from that delegation's sheet, then assign the issue again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein früherer Lauf hat in %@ Änderungen hinterlassen, die nie committet wurden. Committe oder verwirf sie im Fenster dieser Delegation und übergib das Issue dann erneut."
+          }
+        }
+      }
+    },
     "A pull request was merged": {
       "localizations": {
         "de": {
@@ -12377,6 +12387,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ohne Modell aus den geänderten Dateien ermittelt — daher gibt es keine Art und keinen Satz, nur das, was Pfade und Diff sagen."
+          }
+        }
+      }
+    },
+    "Working on %@, started from %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arbeitet auf %@, gestartet von %@."
           }
         }
       }

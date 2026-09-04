@@ -124,3 +124,12 @@ runs must not delete each other's.
 Handing the same issue over twice **resumes** its branch rather than resetting it. The first run's
 commits are the user's work; a second worktree that quietly threw them away would be the worst
 available reading of "assign this again".
+
+That covers committed work, because a commit is on the branch and the branch is what the second
+worktree is checked out from. Work the first run left **uncommitted** is not on the branch, and
+`git worktree remove --force` would take it away without asking — so a leftover worktree that is
+*dirty* is refused rather than cleared, with a message naming the directory and pointing at the
+sheet where the changes can be committed or discarded. A clean leftover is cleared out as before.
+The asymmetry with `prepare(branch:headOid:)`, which does clear a dirty worktree, is deliberate:
+there the reviewer pressed Run again in the sheet that shows the diff, and here they pressed a
+button on an issue that says nothing about a previous run.

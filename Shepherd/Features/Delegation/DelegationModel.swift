@@ -322,12 +322,13 @@ final class DelegationModel: Identifiable {
         let prompt = DelegationPrompt.full(for: context, task: task)
         runTask = Task { [weak self] in
             guard let self else { return }
+            var startedFrom: String?
             do {
                 if self.context.isIssue {
                     // New work, so there is no commit to stand on: the worktree is created on
                     // Shepherd's branch at the default branch's tip (ADR 0032's 2026-09-04
                     // amendment). The two pull-request origins keep the detached checkout.
-                    try await worktree.addForNewWork(branch: self.context.headRefName)
+                    startedFrom = try await worktree.addForNewWork(branch: self.context.headRefName)
                 } else {
                     try await worktree.prepare(
                         branch: self.context.headRefName,
@@ -339,6 +340,18 @@ final class DelegationModel: Identifiable {
                 return
             }
             guard !Task.isCancelled else { return }
+            if let startedFrom {
+                // Which branch the work is on, and what it was started from. A pull-request run
+                // needs no such line — its branch and commit are the pull request's, and both
+                // are in the header — but for an issue both are Shepherd's own choice, so the
+                // transcript is where they are recorded.
+                self.append(
+                    .note,
+                    String(
+                        localized: "Working on \(self.context.headRefName), started from \(startedFrom)."
+                    )
+                )
+            }
 
             let session: AgentSession
             do {

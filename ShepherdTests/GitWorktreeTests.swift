@@ -383,4 +383,53 @@ final class GitWorktreeTests: XCTestCase {
         XCTAssertEqual(runner.arguments.count, 1, "nothing runs after a failed fetch")
     }
 
+    func testAddingForNewWorkRefusesToDiscardAPreviousRunsUncommittedWork() async throws {
+        // The branch survives a second handover because it is a ref; work that was never
+        // committed is not on it, and `worktree remove --force` would take it away without
+        // asking. So a dirty leftover is refused instead.
+        let tree = issueWorktree(runner: RecordingProcessRunner())
+        try FileManager.default.createDirectory(at: tree.directory, withIntermediateDirectories: true)
+        let runner = RecordingProcessRunner { invocation in
+            switch invocation.arguments.first {
+            case "symbolic-ref":
+                return ProcessResult(status: 0, standardOutput: "origin/main\n", standardError: "")
+            case "status":
+                return ProcessResult(
+                    status: 0,
+                    standardOutput: " M Sources/App.swift\n",
+                    standardError: ""
+                )
+            default:
+                return ProcessResult(status: 0, standardOutput: "", standardError: "")
+            }
+        }
+        do {
+            try await issueWorktree(runner: runner).addForNewWork(branch: "agent/issue-128")
+            XCTFail("expected the uncommitted work to be reported rather than deleted")
+        } catch {
+            XCTAssertEqual(
+                error as? GitWorktree.Failure,
+                .worktreeHasUncommittedWork(tree.directory.path)
+            )
+        }
+        XCTAssertFalse(
+            runner.arguments.contains { $0.first == "worktree" },
+            "neither removed nor re-added: the work is still where the reviewer left it"
+        )
+    }
+
+    func testAddingForNewWorkClearsACleanLeftoverAndCarriesOn() async throws {
+        let tree = issueWorktree(runner: RecordingProcessRunner())
+        try FileManager.default.createDirectory(at: tree.directory, withIntermediateDirectories: true)
+        let runner = newWorkRunner()
+        try await issueWorktree(runner: runner).addForNewWork(branch: "agent/issue-128")
+
+        let worktreeCalls = runner.arguments.filter { $0.first == "worktree" }
+        XCTAssertEqual(worktreeCalls.first?.dropFirst().first, "remove")
+        XCTAssertEqual(
+            worktreeCalls.last,
+            ["worktree", "add", "-b", "agent/issue-128", tree.directory.path, "origin/main"]
+        )
+    }
+
 }
