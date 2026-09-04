@@ -89,18 +89,7 @@ struct DiffViewerView: NSViewRepresentable {
 
     func updateNSView(_ nsView: WKWebView, context: Context) {
         context.coordinator.onEvent = onEvent
-        context.coordinator.apply(
-            content: content,
-            mode: mode,
-            wrap: wrap,
-            theme: theme,
-            fontSize: fontSize,
-            threads: threads,
-            draftComments: draftComments,
-            revealLine: revealLine,
-            focusRequest: focusRequest,
-            screenReader: screenReader
-        )
+        context.coordinator.apply(self)
     }
 
     static func dismantleNSView(_ nsView: WKWebView, coordinator: Coordinator) {
@@ -205,66 +194,60 @@ struct DiffViewerView: NSViewRepresentable {
         }
 
         /// Sends whatever changed since the last update.
-        func apply(
-            content: DiffViewerContent,
-            mode: BridgeDiffMode,
-            wrap: Bool,
-            theme: BridgeThemeName,
-            fontSize: Double,
-            threads: [BridgeThread],
-            draftComments: [BridgeDraftComment],
-            revealLine: Int?,
-            focusRequest: Int,
-            screenReader: Bool
-        ) {
-            if sentTheme != theme || sentFontSize != fontSize {
-                sentTheme = theme
-                sentFontSize = fontSize
-                send(.setTheme(theme: theme, fontSize: fontSize))
+        ///
+        /// Takes the view rather than its ten properties one by one: every one of them is
+        /// already stored on the view, so a parameter list is a second copy of the same
+        /// declaration that has to be extended twice for every field the bridge grows.
+        /// - Parameter view: The representable being updated.
+        func apply(_ view: DiffViewerView) {
+            if sentTheme != view.theme || sentFontSize != view.fontSize {
+                sentTheme = view.theme
+                sentFontSize = view.fontSize
+                send(.setTheme(theme: view.theme, fontSize: view.fontSize))
             }
             // Before `loadFile`, so a file that arrives while a screen reader is running is
             // rendered in the mode that reader needs rather than switched into it afterwards.
-            if sentScreenReader != screenReader {
-                sentScreenReader = screenReader
-                send(.setAccessibility(screenReader: screenReader))
+            if sentScreenReader != view.screenReader {
+                sentScreenReader = view.screenReader
+                send(.setAccessibility(screenReader: view.screenReader))
             }
-            if sentContent != content || sentMode != mode || sentWrap != wrap {
-                sentContent = content
-                sentMode = mode
-                sentWrap = wrap
+            if sentContent != view.content || sentMode != view.mode || sentWrap != view.wrap {
+                sentContent = view.content
+                sentMode = view.mode
+                sentWrap = view.wrap
                 // A newly loaded file starts with no zones, so the snapshots must be re-sent.
                 sentThreads = nil
                 sentDrafts = nil
                 sentRevealLine = nil
                 send(.loadFile(
                     DiffViewerCommand.LoadFile(
-                        path: content.path,
-                        language: content.language,
-                        original: content.original,
-                        modified: content.modified,
-                        mode: mode,
-                        wrap: wrap,
-                        commentableLines: content.commentableLines,
-                        paneLabels: DiffViewerView.paneLabels(for: content.path)
+                        path: view.content.path,
+                        language: view.content.language,
+                        original: view.content.original,
+                        modified: view.content.modified,
+                        mode: view.mode,
+                        wrap: view.wrap,
+                        commentableLines: view.content.commentableLines,
+                        paneLabels: DiffViewerView.paneLabels(for: view.content.path)
                     )
                 ))
             }
-            if sentThreads != threads {
-                sentThreads = threads
-                send(.setThreads(threads))
+            if sentThreads != view.threads {
+                sentThreads = view.threads
+                send(.setThreads(view.threads))
             }
-            if sentDrafts != draftComments {
-                sentDrafts = draftComments
-                send(.setDraftComments(draftComments))
+            if sentDrafts != view.draftComments {
+                sentDrafts = view.draftComments
+                send(.setDraftComments(view.draftComments))
             }
-            if let revealLine, sentRevealLine != revealLine, revealLine >= 1 {
+            if let revealLine = view.revealLine, sentRevealLine != revealLine, revealLine >= 1 {
                 sentRevealLine = revealLine
                 send(.revealLine(line: revealLine, side: .right))
             }
             // Last, and after `loadFile`: focus follows the content it is being handed to, and a
             // command queued before the bundle is ready is flushed in this order too.
-            if focusRequest > sentFocusRequest {
-                sentFocusRequest = focusRequest
+            if view.focusRequest > sentFocusRequest {
+                sentFocusRequest = view.focusRequest
                 send(.focusEditor)
             }
         }
