@@ -219,12 +219,14 @@ multi-comment pending reviews, approve / request changes / comment, reply to and
 threads, CI check status, and merge (merge / squash / rebase) — complete GitHub review parity,
 natively wrapped. Drafts survive restart and offline; a staleness check runs before a submit.
 
-And a comment on a line does not need the mouse. Press `c` and the keyboard moves into the diff;
-press it again and the composer opens on the line the cursor is on. Inside the diff the arrow keys
-walk the file, so the whole review — pick a file, read it, comment on a line, submit — is keys the
-whole way through ([ADR 0033](adr/0033-accessibility.md)). A line the diff does not actually
+And a comment on an added or changed line does not need the mouse. Press `c` and the keyboard
+moves into the diff; press it again and the composer opens on the line the cursor is on. Inside
+the diff the arrow keys walk the file, so picking a file, reading it, commenting on a line and
+submitting are all keys ([ADR 0033](adr/0033-accessibility.md)). A line the diff does not actually
 contain, one of the blank ones that pad the gaps between hunks, is refused exactly as it is for a
-click, because GitHub refuses a comment on it and the review with it.
+click, because GitHub refuses a comment on it and the review with it. Commenting on a *deleted*
+line still needs the mouse: the keyboard lands in the pane you are reading, and there is no key
+yet that crosses to the original one.
 
 ### Review-priority file ordering
 

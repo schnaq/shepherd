@@ -356,8 +356,10 @@ remain and each is a project rather than a label; what they would take is in
       everybody
 - [x] **An inline comment needs a mouse.** Fixed 2026-09-04: `c` inside the diff comments on the
       cursor's line through the same line rules the pointer's path uses, and `c` outside it hands
-      the keyboard over through a new payload-less `focusEditor` bridge command. So the whole
-      review — pick a file, read it, comment on a line, submit — is keys the whole way through
+      the keyboard over through a new payload-less `focusEditor` bridge command. Picking a file,
+      reading it, commenting on an added or changed line and submitting are all keys now; a
+      comment on a *deleted* line still needs the mouse, because nothing crosses to the original
+      pane without a pointer (the plan says what that would take)
 - [ ] **macOS's Larger Text does nothing.** 419 `Font.system(size:)` call sites against two
       semantic styles, so the OS setting has no effect anywhere. Needs a type scale in `Theme` and
       a decision about the dense fixed-height rows, not a find-and-replace

@@ -91,6 +91,23 @@ struct KeySequenceState: Sendable {
     /// The prefix currently armed, for the UI hint.
     var armedPrefix: Character? { pendingPrefix }
 
+    /// Whether the *next* keystroke belongs to a sequence rather than meaning what it usually
+    /// means.
+    ///
+    /// Which matters because two commands can want the same letter: `r c` submits the review as
+    /// a comment, and a bare `c` hands the keyboard to the diff (ADR 0033's amendment). A screen
+    /// that acts on a bare key before consulting this would eat the second half of every
+    /// sequence that ends in the same letter — and, worse, leave the prefix armed, so the
+    /// keystroke *after* it would be read as a second key too.
+    ///
+    /// Time-aware for the same reason ``consume(_:at:)`` is: a prefix nobody completed within
+    /// ``timeout`` is forgotten, so a stale `r` from a minute ago must not block anything.
+    /// - Parameter date: When the next keystroke would arrive.
+    func isAwaitingSecondKey(at date: Date = Date()) -> Bool {
+        guard pendingPrefix != nil, let since = pendingSince else { return false }
+        return date.timeIntervalSince(since) <= timeout
+    }
+
     /// Feeds one character in.
     /// - Parameters:
     ///   - character: The typed character (already lowercased by the caller if needed).

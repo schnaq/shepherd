@@ -146,6 +146,12 @@ final class ReviewModel {
         keySequence.consume(character)
     }
 
+    /// Whether the next keystroke completes a two-key sequence.
+    ///
+    /// Asked before any bare-key handling, because `c` is claimed twice over: `r c` submits the
+    /// review as a comment, and `c` alone hands the keyboard to the diff.
+    var isAwaitingSecondKey: Bool { keySequence.isAwaitingSecondKey() }
+
     /// Whether the draft observation has delivered at least one value.
     ///
     /// The template must not be applied before this: the observation is what tells the model

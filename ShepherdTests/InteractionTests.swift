@@ -82,6 +82,41 @@ final class InteractionTests: XCTestCase {
         }
     }
 
+    /// The guard the review screen's bare-`c` handler needs.
+    ///
+    /// The regression this exists to stop coming back: `c` is claimed twice over — `r c` submits
+    /// the review as a comment, and a bare `c` hands the keyboard to the diff (ADR 0033). A
+    /// screen that acts on the bare key without asking whether a prefix is armed kills `r c`
+    /// *and* leaves the prefix armed, so the keystroke after it is swallowed as a second key.
+    func testAnArmedPrefixIsVisibleBeforeTheSecondKeyArrives() {
+        var state = KeySequenceState()
+        XCTAssertFalse(state.isAwaitingSecondKey(), "nothing typed yet")
+
+        XCTAssertEqual(state.consume("r"), .awaitingSecondKey("r"))
+        XCTAssertTrue(state.isAwaitingSecondKey(), "`c` now belongs to `r c`, not to the diff")
+
+        XCTAssertEqual(state.consume("c"), .action(.comment))
+        XCTAssertFalse(state.isAwaitingSecondKey(), "the sequence consumed the prefix")
+    }
+
+    func testABareKeyLeavesNothingArmed() {
+        var state = KeySequenceState()
+        for key: Character in ["j", "k", "m", "x", "q", "c", "v"] {
+            _ = state.consume(key)
+            XCTAssertFalse(state.isAwaitingSecondKey(), "bare \(key) armed something")
+        }
+    }
+
+    func testAPrefixNobodyCompletedStopsBlockingTheBareKey() {
+        // Same clock rule as `consume`: an `r` from a minute ago is forgotten, so `c` means the
+        // diff again rather than being held for a sequence that will never finish.
+        var state = KeySequenceState(timeout: 1.5)
+        let armed = Date()
+        XCTAssertEqual(state.consume("r", at: armed), .awaitingSecondKey("r"))
+        XCTAssertTrue(state.isAwaitingSecondKey(at: armed.addingTimeInterval(1.0)))
+        XCTAssertFalse(state.isAwaitingSecondKey(at: armed.addingTimeInterval(60)))
+    }
+
     func testEveryKeyHintIsEitherAKeyOrDeliberatelyEmpty() {
         let actions: [ShortcutAction] = [
             .selectNext, .selectPrevious, .openSelection, .approve, .requestChanges, .comment,

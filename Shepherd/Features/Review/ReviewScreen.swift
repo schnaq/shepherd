@@ -356,7 +356,12 @@ struct ReviewScreen: View {
         // do here is hand the keyboard over, which is the step that was missing: every review
         // action had a key except the one that needed a cursor, because there was no way to get
         // a cursor without a mouse (ADR 0033's amendment).
-        if character == "c" {
+        //
+        // Unless a prefix is armed, and this is the reason that guard is here: `r c` submits the
+        // review as a comment. Acting on the bare key first would eat the second half of that
+        // sequence *and* leave the prefix armed, so the keystroke after it would be read as a
+        // second key as well.
+        if character == "c", !model.isAwaitingSecondKey {
             model.requestEditorFocus()
             return .handled
         }

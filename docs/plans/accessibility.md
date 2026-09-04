@@ -92,6 +92,14 @@ message has). So: `c` to get a cursor, `c` to comment on it, arrows to move betw
 down, since the obvious API is the one that does not exist here. The key is only swallowed once a
 commentable line has been found, so an unhandled `c` still reaches the native screen.
 
+**What it left open: a deleted line.** `c` works in *either* pane — the original pane's handler
+posts `side: "left"`, and there is a test for it — but `focusEditor` always lands in the modified
+pane, which is the one a reviewer is reading. So a comment on a deletion is still mouse-only,
+because nothing crosses from one pane to the other without a pointer. Fixing it is one key inside
+the editor, and the reason it is not just picked here is that the review screen's keyboard
+vocabulary is normative in `docs/ARCHITECTURE.md`: which letter means "the other side" is a
+decision about the app's language, not an implementation detail. `[`/`]` and `s` are all free.
+
 ## 3. Larger Text does nothing
 
 **What is true today.** 419 call sites use `Font.system(size:)` — a fixed point size — against two

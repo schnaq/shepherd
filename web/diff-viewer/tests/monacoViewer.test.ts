@@ -12,7 +12,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { LoadFileMessage, Thread } from '../src/bridge/protocol.js';
+import type { LoadFileMessage, OutboundMessage, Thread } from '../src/bridge/protocol.js';
 
 // -- the stand-in ------------------------------------------------------------------------------
 
@@ -39,8 +39,14 @@ interface FakeCodeEditor {
   onMouseMove(handler: (event: unknown) => void): void;
   onMouseLeave(handler: () => void): void;
   onMouseDown(handler: (event: unknown) => void): void;
+  /** The handler the viewer registered, so a test can press the key itself. */
+  keyHandler: ((event: unknown) => void) | null;
   onKeyDown(handler: (event: unknown) => void): void;
+  focused: boolean;
   focus(): void;
+  /** Where the cursor is, which is what the keyboard comment path reads. */
+  position: { lineNumber: number } | null;
+  getPosition(): { lineNumber: number } | null;
   createDecorationsCollection(): { set(): void };
   getModel(): FakeModel | null;
   getVisibleRanges(): { startLineNumber: number }[];
@@ -69,8 +75,16 @@ function makeCodeEditor(): FakeCodeEditor {
     onMouseMove: () => undefined,
     onMouseLeave: () => undefined,
     onMouseDown: () => undefined,
-    onKeyDown: () => undefined,
-    focus: () => undefined,
+    keyHandler: null,
+    onKeyDown: (handler) => {
+      editor.keyHandler = handler;
+    },
+    focused: false,
+    focus: () => {
+      editor.focused = true;
+    },
+    position: null,
+    getPosition: () => editor.position,
     createDecorationsCollection: () => ({ set: () => undefined }),
     getModel: () => editor.model,
     getVisibleRanges: () => [{ startLineNumber: 1 }],
@@ -137,6 +151,7 @@ vi.mock('monaco-editor/editor/editor.api', () => {
   };
   return {
     editor,
+    KeyCode: { KeyC: 41 },
     Uri: {
       from: (parts: { scheme: string; authority: string; path: string }) => ({
         toString: () => `${parts.scheme}://${parts.authority}${parts.path}`,
@@ -185,6 +200,34 @@ function makeViewer(): InstanceType<typeof MonacoDiffViewer> {
   document.body.append(container);
   return new MonacoDiffViewer({ container, post: () => undefined });
 }
+
+/** A viewer whose outbound messages a test can read. */
+function makeListeningViewer(): {
+  viewer: InstanceType<typeof MonacoDiffViewer>;
+  posted: OutboundMessage[];
+} {
+  const container = document.createElement('div');
+  document.body.append(container);
+  const posted: OutboundMessage[] = [];
+  const viewer = new MonacoDiffViewer({
+    container,
+    post: (message: OutboundMessage) => {
+      posted.push(message);
+    },
+  });
+  return { viewer, posted };
+}
+
+/** One `c` keypress with no modifiers, as Monaco would report it. */
+const pressC = {
+  keyCode: 41,
+  ctrlKey: false,
+  shiftKey: false,
+  altKey: false,
+  metaKey: false,
+  preventDefault: () => undefined,
+  stopPropagation: () => undefined,
+};
 
 describe('MonacoDiffViewer.loadFile', () => {
   beforeEach(() => {
@@ -309,5 +352,110 @@ describe('MonacoDiffViewer.setAccessibility', () => {
       accessibilitySupport: 'auto',
       accessibilityPageSize: 10,
     });
+  });
+});
+
+describe('the keyboard path to an inline comment', () => {
+  beforeEach(() => {
+    liveURIs.clear();
+    for (const editor of [originalEditor, modifiedEditor]) {
+      editor.position = null;
+      editor.focused = false;
+    }
+  });
+
+  it('comments on the line the cursor is on', () => {
+    const { viewer, posted } = makeListeningViewer();
+    viewer.loadFile(message());
+    modifiedEditor.position = { lineNumber: 2 };
+
+    modifiedEditor.keyHandler?.(pressC);
+
+    expect(posted).toEqual([{ v: 1, type: 'addComment', line: 2, side: 'right' }]);
+  });
+
+  it('comments on a deletion when the cursor is in the original pane', () => {
+    const { viewer, posted } = makeListeningViewer();
+    viewer.loadFile(message());
+    originalEditor.position = { lineNumber: 3 };
+
+    originalEditor.keyHandler?.(pressC);
+
+    expect(posted).toEqual([{ v: 1, type: 'addComment', line: 3, side: 'left' }]);
+  });
+
+  it('refuses a line that is not part of the diff, exactly as the pointer does', () => {
+    // The blank lines the reconstruction pads the gaps between hunks with. GitHub rejects a
+    // comment on one of those and rejects the whole review with it, so the keyboard must not
+    // become the way around a guard the mouse respects.
+    const { viewer, posted } = makeListeningViewer();
+    viewer.loadFile(message({ commentableLines: { left: [1], right: [1] } }));
+    modifiedEditor.position = { lineNumber: 3 };
+
+    modifiedEditor.keyHandler?.(pressC);
+
+    expect(posted).toEqual([]);
+  });
+
+  it('refuses a cursor past the end of the model', () => {
+    const { viewer, posted } = makeListeningViewer();
+    viewer.loadFile(message());
+    modifiedEditor.position = { lineNumber: 99 };
+
+    modifiedEditor.keyHandler?.(pressC);
+
+    expect(posted).toEqual([]);
+  });
+
+  it('ignores the key when it carries a modifier, and every other key', () => {
+    const { viewer, posted } = makeListeningViewer();
+    viewer.loadFile(message());
+    modifiedEditor.position = { lineNumber: 2 };
+
+    // ⌘C is copy and must stay copy; a different letter is not ours at all.
+    modifiedEditor.keyHandler?.({ ...pressC, metaKey: true });
+    modifiedEditor.keyHandler?.({ ...pressC, shiftKey: true });
+    modifiedEditor.keyHandler?.({ ...pressC, keyCode: 42 });
+
+    expect(posted).toEqual([]);
+  });
+
+  it('swallows the key only once a line has been found', () => {
+    const { viewer } = makeListeningViewer();
+    viewer.loadFile(message({ commentableLines: { left: [1], right: [1] } }));
+
+    const onACommentableLine = { ...pressC, prevented: false, stopped: false };
+    const handled = {
+      ...pressC,
+      preventDefault: () => {
+        onACommentableLine.prevented = true;
+      },
+      stopPropagation: () => {
+        onACommentableLine.stopped = true;
+      },
+    };
+
+    // A line no comment can go on: the key must keep travelling, so that a key the native
+    // screen owns still reaches it.
+    modifiedEditor.position = { lineNumber: 3 };
+    modifiedEditor.keyHandler?.(handled);
+    expect(onACommentableLine.prevented).toBe(false);
+    expect(onACommentableLine.stopped).toBe(false);
+
+    modifiedEditor.position = { lineNumber: 1 };
+    modifiedEditor.keyHandler?.(handled);
+    expect(onACommentableLine.prevented).toBe(true);
+    expect(onACommentableLine.stopped).toBe(true);
+  });
+});
+
+describe('MonacoDiffViewer.focusEditor', () => {
+  it('focuses the pane the reviewer is reading', () => {
+    const viewer = makeViewer();
+    modifiedEditor.focused = false;
+
+    viewer.focusEditor();
+
+    expect(modifiedEditor.focused).toBe(true);
   });
 });
