@@ -206,6 +206,38 @@ struct BridgeDraftComment: Codable, Hashable, Sendable, Identifiable {
 ///
 /// Omitting the field means "no restriction", which is what a viewer built against an older
 /// payload sees — the field is additive, so the protocol version stays 1.
+/// What a screen reader should call each pane of the diff.
+///
+/// Monaco's own default is the same sentence on both panes, so it cannot say which one the
+/// cursor is in — the single most useful fact at the moment somebody has just handed the
+/// keyboard over with `c`. The wording is sent from here rather than written in the bundle
+/// because the app is localised and the bundle is not (ADR 0033's second amendment).
+struct BridgePaneLabels: Codable, Hashable, Sendable {
+    /// What to call the original (left) pane.
+    var left: String
+    /// What to call the modified (right) pane.
+    var right: String
+
+    /// Creates a payload.
+    init(left: String, right: String) {
+        self.left = left
+        self.right = right
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case left, right
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let left = try container.decode(String.self, forKey: .left)
+        let right = try container.decode(String.self, forKey: .right)
+        guard !left.isEmpty else { throw BridgeProtocolError.emptyField("paneLabels.left") }
+        guard !right.isEmpty else { throw BridgeProtocolError.emptyField("paneLabels.right") }
+        self.init(left: left, right: right)
+    }
+}
+
 struct BridgeCommentableLines: Codable, Hashable, Sendable {
     /// Commentable 1-based lines of the original (left) document.
     var left: [Int]
@@ -251,6 +283,8 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
         var wrap: Bool
         /// Which lines may carry a comment, or `nil` for "every line".
         var commentableLines: BridgeCommentableLines?
+        /// What a screen reader calls each pane, or `nil` to leave Monaco's own default.
+        var paneLabels: BridgePaneLabels?
 
         /// Creates a payload.
         init(
@@ -260,7 +294,8 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
             modified: String,
             mode: BridgeDiffMode,
             wrap: Bool,
-            commentableLines: BridgeCommentableLines? = nil
+            commentableLines: BridgeCommentableLines? = nil,
+            paneLabels: BridgePaneLabels? = nil
         ) {
             self.path = path
             self.language = language
@@ -269,6 +304,7 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
             self.mode = mode
             self.wrap = wrap
             self.commentableLines = commentableLines
+            self.paneLabels = paneLabels
         }
     }
 
@@ -282,6 +318,13 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
     case setDraftComments([BridgeDraftComment])
     /// Scroll a line into view.
     case revealLine(line: Int, side: BridgeSide)
+    /// Tell the viewer whether a screen reader is running.
+    ///
+    /// Monaco decides this for itself when `accessibilitySupport` is `'auto'`, and in a
+    /// `WKWebView` it decides wrong: its detection is a browser's, and nothing inside the web
+    /// view can see that VoiceOver is reading the window around it. macOS tells the app, so the
+    /// app is the honest source (ADR 0033's second amendment).
+    case setAccessibility(screenReader: Bool)
     /// Put the keyboard focus in the editor.
     ///
     /// The one command with no payload. It exists because the keyboard has a boundary the mouse
@@ -300,15 +343,17 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
         case .setDraftComments: return "setDraftComments"
         case .revealLine: return "revealLine"
         case .focusEditor: return "focusEditor"
+        case .setAccessibility: return "setAccessibility"
         }
     }
 
     private enum CodingKeys: String, CodingKey {
         case v, type
-        case path, language, original, modified, mode, wrap, commentableLines
+        case path, language, original, modified, mode, wrap, commentableLines, paneLabels
         case theme, fontSize
         case threads, comments
         case line, side
+        case screenReader
     }
 
     init(from decoder: any Decoder) throws {
@@ -331,6 +376,10 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
                     commentableLines: try container.decodeIfPresent(
                         BridgeCommentableLines.self,
                         forKey: .commentableLines
+                    ),
+                    paneLabels: try container.decodeIfPresent(
+                        BridgePaneLabels.self,
+                        forKey: .paneLabels
                     )
                 )
             )
@@ -359,6 +408,10 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
         case "focusEditor":
             // Nothing to decode: the type is the whole message.
             self = .focusEditor
+        case "setAccessibility":
+            self = .setAccessibility(
+                screenReader: try container.decode(Bool.self, forKey: .screenReader)
+            )
         default:
             throw BridgeProtocolError.unknownMessageType(type)
         }
@@ -377,6 +430,7 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
             try container.encode(payload.mode, forKey: .mode)
             try container.encode(payload.wrap, forKey: .wrap)
             try container.encodeIfPresent(payload.commentableLines, forKey: .commentableLines)
+            try container.encodeIfPresent(payload.paneLabels, forKey: .paneLabels)
         case .setTheme(let theme, let fontSize):
             try container.encode(theme, forKey: .theme)
             try container.encode(fontSize, forKey: .fontSize)
@@ -390,6 +444,8 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
         case .focusEditor:
             // The envelope above is the whole message.
             break
+        case .setAccessibility(let screenReader):
+            try container.encode(screenReader, forKey: .screenReader)
         }
     }
 }

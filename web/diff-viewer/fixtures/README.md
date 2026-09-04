@@ -32,11 +32,13 @@ Swift → web:
 
 | message | valid | invalid — why it must be rejected |
 | --- | --- | --- |
-| `loadFile` | `loadFile.valid.json`, `loadFile.valid-inline.json`, `loadFile.valid-commentable.json` | `mode: "unified"` is not `sideBySide`/`inline` |
+| `loadFile` | `loadFile.valid.json`, `loadFile.valid-inline.json`, `loadFile.valid-commentable.json`, `loadFile.valid-labels.json` | `mode: "unified"` is not `sideBySide`/`inline` |
 | `setTheme` | `setTheme.valid.json` | `theme: "solarized"` is not `light`/`dark` |
 | `setThreads` | `setThreads.valid.json` | `comments[0].isAgent` is the string `"false"` |
 | `setDraftComments` | `setDraftComments.valid.json` | `line: 0` — line numbers are 1-based |
 | `revealLine` | `revealLine.valid.json` | `side: "modified"` is not `left`/`right` |
+| `focusEditor` | `focusEditor.valid.json` | `v: 2` — a message with no payload can only be wrong in its envelope |
+| `setAccessibility` | `setAccessibility.valid.json` | `screenReader: "yes"` is a string, not a boolean |
 
 Web → Swift:
 
@@ -49,10 +51,14 @@ Web → Swift:
 
 ## Optional fields
 
-`loadFile.commentableLines` is optional and additive: `loadFile.valid.json` and
-`loadFile.valid-inline.json` omit it (which means "every line is commentable"), and
-`loadFile.valid-commentable.json` carries it. Both shapes must decode on both sides — that is
-the whole point of an additive field, and it is why the protocol version stays 1.
+`loadFile` has two, both additive, which is why the protocol version stays 1 for either.
+
+`commentableLines`: `loadFile.valid.json` and `loadFile.valid-inline.json` omit it (which means
+"every line is commentable"), and `loadFile.valid-commentable.json` carries it.
+
+`paneLabels`: only `loadFile.valid-labels.json` carries it; omitting it leaves Monaco's own
+default aria label in place. Both shapes must decode on both sides — that is the whole point of
+an additive field.
 
 ## Rules
 

@@ -1,0 +1,14 @@
+{
+  "v": 1,
+  "type": "loadFile",
+  "path": "Shepherd/Features/Review/ReviewModel.swift",
+  "language": "swift",
+  "original": "func submit() {\n}\n",
+  "modified": "func submit() async {\n}\n",
+  "mode": "sideBySide",
+  "wrap": false,
+  "paneLabels": {
+    "left": "Original, ReviewModel.swift",
+    "right": "Changed, ReviewModel.swift"
+  }
+}

@@ -44,6 +44,13 @@ struct DiffViewerView: NSViewRepresentable {
     /// raises it, the view sends the command once, and raising it again sends it again. Zero is
     /// "nobody has asked", which is what a screen that never hands focus over stays at.
     var focusRequest: Int = 0
+    /// Whether a screen reader is running, as macOS sees it.
+    ///
+    /// Monaco's `accessibilitySupport: 'auto'` cannot work this out from inside a `WKWebView`:
+    /// its detection is a browser's, and nothing in the web view knows that VoiceOver is reading
+    /// the window around it. The app does know — SwiftUI publishes it — so it says
+    /// (ADR 0033's second amendment).
+    var screenReader: Bool = false
     /// Called on the main actor for every message the viewer sends back.
     var onEvent: (DiffViewerEvent) -> Void
 
@@ -91,7 +98,8 @@ struct DiffViewerView: NSViewRepresentable {
             threads: threads,
             draftComments: draftComments,
             revealLine: revealLine,
-            focusRequest: focusRequest
+            focusRequest: focusRequest,
+            screenReader: screenReader
         )
     }
 
@@ -105,6 +113,24 @@ struct DiffViewerView: NSViewRepresentable {
 
     /// The message-handler name the web bundle looks up. It must be exactly `"shepherd"`.
     static let handlerName = "shepherd"
+
+    /// What a screen reader calls each pane of the diff.
+    ///
+    /// The file's *name*, not its path: VoiceOver reads this whole label every time the cursor
+    /// enters a pane, and the path is already on screen in the review header. What the label has
+    /// to carry is which of the two panes this is — the one thing Monaco's own default, the same
+    /// sentence on both, cannot say (ADR 0033's second amendment).
+    ///
+    /// `nonisolated` because it is a pure function over a string, and a test asserting one
+    /// should not have to be on the main actor; nesting it in a `View` would otherwise make it.
+    /// - Parameter path: The repository-relative path of the file being shown.
+    nonisolated static func paneLabels(for path: String) -> BridgePaneLabels {
+        let name = path.split(separator: "/").last.map(String.init) ?? path
+        return BridgePaneLabels(
+            left: String(localized: "Original, \(name)"),
+            right: String(localized: "Changed, \(name)")
+        )
+    }
 
     /// Locates the built web bundle inside the app bundle.
     ///
@@ -158,6 +184,7 @@ struct DiffViewerView: NSViewRepresentable {
         private var sentDrafts: [BridgeDraftComment]?
         private var sentRevealLine: Int?
         private var sentFocusRequest = 0
+        private var sentScreenReader: Bool?
 
         /// Creates a coordinator.
         /// - Parameter onEvent: The event sink.
@@ -187,12 +214,19 @@ struct DiffViewerView: NSViewRepresentable {
             threads: [BridgeThread],
             draftComments: [BridgeDraftComment],
             revealLine: Int?,
-            focusRequest: Int
+            focusRequest: Int,
+            screenReader: Bool
         ) {
             if sentTheme != theme || sentFontSize != fontSize {
                 sentTheme = theme
                 sentFontSize = fontSize
                 send(.setTheme(theme: theme, fontSize: fontSize))
+            }
+            // Before `loadFile`, so a file that arrives while a screen reader is running is
+            // rendered in the mode that reader needs rather than switched into it afterwards.
+            if sentScreenReader != screenReader {
+                sentScreenReader = screenReader
+                send(.setAccessibility(screenReader: screenReader))
             }
             if sentContent != content || sentMode != mode || sentWrap != wrap {
                 sentContent = content
@@ -210,7 +244,8 @@ struct DiffViewerView: NSViewRepresentable {
                         modified: content.modified,
                         mode: mode,
                         wrap: wrap,
-                        commentableLines: content.commentableLines
+                        commentableLines: content.commentableLines,
+                        paneLabels: DiffViewerView.paneLabels(for: content.path)
                     )
                 ))
             }

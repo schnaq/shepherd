@@ -12,6 +12,7 @@ export interface ViewerPort {
   setDraftComments(comments: readonly DraftComment[]): void;
   revealLine(line: number, side: Side): void;
   focusEditor(): void;
+  setAccessibility(screenReader: boolean): void;
 }
 
 /** Dispatches one validated inbound message. Exhaustive over `InboundMessage`. */
@@ -34,6 +35,9 @@ export function routeInbound(message: InboundMessage, port: ViewerPort): void {
       return;
     case 'focusEditor':
       port.focusEditor();
+      return;
+    case 'setAccessibility':
+      port.setAccessibility(message.screenReader);
       return;
     default: {
       const exhaustive: never = message;

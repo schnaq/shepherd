@@ -5,6 +5,9 @@ import SwiftUI
 struct ReviewScreen: View {
     @Environment(AppEnvironment.self) private var environment
     @Environment(\.colorScheme) private var colorScheme
+    /// Whether VoiceOver is running. The diff viewer needs telling, because Monaco cannot work
+    /// it out from inside a `WKWebView` (ADR 0033's second amendment).
+    @Environment(\.accessibilityVoiceOverEnabled) private var isVoiceOverEnabled
 
     /// The active session.
     let session: SignedInSession
@@ -198,6 +201,7 @@ struct ReviewScreen: View {
                 // screen owns the keys that act on a *file*, the editor owns the keys that act
                 // on a *line*, and this is the one command that carries the keyboard across.
                 focusRequest: model.focusEditorRequest,
+                screenReader: isVoiceOverEnabled,
                 onEvent: { event in model.handle(event) }
             )
         } else if let path = model.selectedPath {

@@ -98,3 +98,39 @@ token* rather than a value the view compares, because handing over focus is an e
 has to send twice. Its invalid fixture is a version mismatch, which is the only way a message with
 no payload can be wrong — the same shape `ready.invalid.json` has on the way out, and the fixture
 test now names both rather than one.
+
+## Amendment (2026-09-04): the app tells the diff a screen reader is listening
+
+The second gap the plan named — that the diff is silent — has a cheap half and an expensive one,
+and this is the cheap half in full. It is not the whole answer and is deliberately not claimed as
+one.
+
+Monaco does have screen-reader support, gated behind `accessibilitySupport`, whose default is
+`'auto'`: **detect a screen reader and turn on if there is one.** In a browser that is reasonable.
+In a `WKWebView` it is a guess made with the wrong information — the detection is a browser's, and
+nothing inside the web view can see that VoiceOver is reading the window around it. So the option
+that exists to make the diff readable was, in this app, almost certainly never turning on.
+
+macOS knows. SwiftUI publishes it as `accessibilityVoiceOverEnabled`, and the review screen now
+passes it across the bridge as `setAccessibility {screenReader}`, which sets
+`accessibilitySupport` to `'on'` or back to `'auto'` and raises `accessibilityPageSize` from
+Monaco's default of 10 lines to 100. The page size is the reason this is a flag rather than a
+constant: a hundred lines held in the DOM costs something, and only the reviewer who needs them
+should pay it. Turning it off restates both options rather than leaving them raised, because an
+option that is only ever raised stays raised for the rest of the session.
+
+The panes also say which pane they are. Monaco's default aria label is one sentence about editor
+content, identical on both sides of a side-by-side diff, which is precisely the fact a person
+needs at the moment `c` has just handed them a cursor. `loadFile` gained an optional additive
+`paneLabels {left, right}`, filled in natively — the app is localised and this bundle is not, so a
+German build must not announce its diff in English. The label carries the file's *name*, not its
+path: VoiceOver reads the whole thing every time the cursor enters a pane, and the path is already
+on screen in the header.
+
+**What this does not settle.** Whether WebKit's accessibility tree actually carries what Monaco
+puts into it is not knowable from this repository — it needs a Mac, VoiceOver, and somebody
+listening. Both changes are the kind that can be verified only that way, which is why the plan
+keeps recommending the native, keyboard-walkable rendering of the patch as the real answer rather
+than the fallback: a diff a person can walk with the arrow keys is a better product for everybody.
+This amendment buys the possibility that the cheap half is most of the answer, at the price of two
+messages on a bridge that already had five.

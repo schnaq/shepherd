@@ -32,6 +32,9 @@ const createdURIs: string[] = [];
 interface FakeCodeEditor {
   zones: Set<string>;
   model: FakeModel | null;
+  /** Everything `updateOptions` has been handed, merged — the pane's aria label lands here. */
+  options: Record<string, unknown>;
+  updateOptions(options: Record<string, unknown>): void;
   onDidScrollChange(handler: () => void): void;
   onMouseMove(handler: (event: unknown) => void): void;
   onMouseLeave(handler: () => void): void;
@@ -58,6 +61,10 @@ function makeCodeEditor(): FakeCodeEditor {
   const editor: FakeCodeEditor = {
     zones,
     model: null,
+    options: {},
+    updateOptions: (options) => {
+      Object.assign(editor.options, options);
+    },
     onDidScrollChange: () => undefined,
     onMouseMove: () => undefined,
     onMouseLeave: () => undefined,
@@ -190,6 +197,8 @@ describe('MonacoDiffViewer.loadFile', () => {
     modifiedEditor.zones.clear();
     originalEditor.model = null;
     modifiedEditor.model = null;
+    originalEditor.options = {};
+    modifiedEditor.options = {};
   });
 
   it('re-loads the same path without throwing (the wrap / inline toggle)', () => {
@@ -216,6 +225,28 @@ describe('MonacoDiffViewer.loadFile', () => {
       wordWrap: 'on',
       diffWordWrap: 'on',
     });
+  });
+
+  it('labels each pane for a screen reader when the payload says what to call them', () => {
+    const viewer = makeViewer();
+
+    viewer.loadFile(
+      message({ paneLabels: { left: 'Original, a.swift', right: 'Changed, a.swift' } }),
+    );
+
+    // Per pane, not on the diff editor: one label for both panes would be the same sentence
+    // twice, which is the Monaco default this replaces.
+    expect(originalEditor.options['ariaLabel']).toBe('Original, a.swift');
+    expect(modifiedEditor.options['ariaLabel']).toBe('Changed, a.swift');
+  });
+
+  it('leaves the default labels alone when the payload names none', () => {
+    const viewer = makeViewer();
+
+    viewer.loadFile(message());
+
+    expect('ariaLabel' in originalEditor.options).toBe(false);
+    expect('ariaLabel' in modifiedEditor.options).toBe(false);
   });
 
   it('remounts zones after a same-path reload', () => {
@@ -245,5 +276,38 @@ describe('MonacoDiffViewer.loadFile', () => {
 
     expect(modifiedEditor.zones.size).toBe(1);
     expect(originalEditor.zones.size).toBe(0);
+  });
+});
+
+describe('MonacoDiffViewer.setAccessibility', () => {
+  beforeEach(() => {
+    liveURIs.clear();
+    updateOptions.mockClear();
+  });
+
+  it('turns Monaco screen-reader mode on, and gives it a page worth reading', () => {
+    const viewer = makeViewer();
+
+    viewer.setAccessibility(true);
+
+    expect(updateOptions).toHaveBeenCalledWith({
+      accessibilitySupport: 'on',
+      accessibilityPageSize: 100,
+    });
+  });
+
+  it('puts Monaco back where it was when the screen reader stops', () => {
+    const viewer = makeViewer();
+    viewer.setAccessibility(true);
+    updateOptions.mockClear();
+
+    viewer.setAccessibility(false);
+
+    // Restated rather than left as it was: an option that is only ever raised would keep the
+    // 100-line page for the rest of the session, which is a cost nobody asked for.
+    expect(updateOptions).toHaveBeenCalledWith({
+      accessibilitySupport: 'auto',
+      accessibilityPageSize: 10,
+    });
   });
 });

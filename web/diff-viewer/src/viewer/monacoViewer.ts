@@ -28,6 +28,14 @@ import { installMonacoEnvironment } from './workerEnvironment.js';
 import { hostSide, toDraftZones, toThreadZones, ZoneStore, type Zone } from './zoneState.js';
 
 const VIEWPORT_THROTTLE_MS = 120;
+
+/**
+ * How many lines Monaco keeps readable in the DOM while a screen reader is running, and what
+ * it keeps otherwise (10 is Monaco's own default, restated so switching the flag off puts the
+ * editor back rather than leaving it wherever it happened to be).
+ */
+const SCREEN_READER_PAGE_SIZE = 100;
+const MONACO_PAGE_SIZE = 10;
 const ESTIMATED_ZONE_HEIGHT_PX = 72;
 
 const FONT_FAMILY = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace';
@@ -76,6 +84,7 @@ export class MonacoDiffViewer implements ViewerPort {
    * payload did not say, so every line stays armable.
    */
   private commentable: Record<Side, ReadonlySet<number> | null> = { left: null, right: null };
+
 
   constructor(options: ViewerOptions) {
     this.container = options.container;
@@ -180,6 +189,15 @@ export class MonacoDiffViewer implements ViewerPort {
     this.originalModel = monaco.editor.createModel(message.original, language, this.modelURI('original', message.path));
     this.modifiedModel = monaco.editor.createModel(message.modified, language, this.modelURI('modified', message.path));
     this.diffEditor.setModel({ original: this.originalModel, modified: this.modifiedModel });
+
+    // After the models, because a pane's aria label names the file the pane is showing and the
+    // model is what makes that true. Absent, Monaco keeps its own default, which is the same
+    // sentence on both panes and therefore cannot say which one you are in.
+    const labels = message.paneLabels;
+    if (labels !== undefined) {
+      this.editorFor('left').updateOptions({ ariaLabel: labels.left });
+      this.editorFor('right').updateOptions({ ariaLabel: labels.right });
+    }
   }
 
   setTheme(message: SetThemeMessage): void {
@@ -218,6 +236,25 @@ export class MonacoDiffViewer implements ViewerPort {
    */
   focusEditor(): void {
     this.editorFor('right').focus();
+  }
+
+  /**
+   * Turns Monaco's screen-reader mode on or off, because the app knows and Monaco does not.
+   *
+   * `accessibilitySupport: 'auto'` asks Monaco to detect a screen reader, and its detection is
+   * a browser's: it cannot see that VoiceOver is reading the window this web view is embedded
+   * in. macOS tells the app, the app tells us, and the option stops being a guess.
+   *
+   * `accessibilityPageSize` is how many lines Monaco keeps in the DOM for the screen reader to
+   * read; the default of 10 is a page too small to walk a hunk through, and the cost of raising
+   * it is paid only by the reviewer who needs it — which is the whole reason this is a flag and
+   * not a constant.
+   */
+  setAccessibility(screenReader: boolean): void {
+    this.diffEditor.updateOptions({
+      accessibilitySupport: screenReader ? 'on' : 'auto',
+      accessibilityPageSize: screenReader ? SCREEN_READER_PAGE_SIZE : MONACO_PAGE_SIZE,
+    });
   }
 
   // -- lifecycle -----------------------------------------------------------------------------

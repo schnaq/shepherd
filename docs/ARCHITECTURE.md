@@ -598,7 +598,7 @@ versioned with `"v": 1`, defined in `web/diff-viewer/src/bridge/protocol.ts` (Ty
 both sides have decode tests over shared fixture JSON in `web/diff-viewer/fixtures/`.
 
 Swift → web (`postMessage` via `evaluateJavaScript("shepherd.receive(…)")`):
-- `loadFile` `{path, language, original, modified, mode: "sideBySide"|"inline", wrap, commentableLines?}`
+- `loadFile` `{path, language, original, modified, mode: "sideBySide"|"inline", wrap, commentableLines?, paneLabels?}`
   - `commentableLines` is `{left: [Int], right: [Int]}` — the 1-based lines of each document
     that came from the patch. Swift reconstructs both sides from GitHub's unified diff and
     pads the gaps between hunks with blank lines so absolute line numbers still match
@@ -606,10 +606,22 @@ Swift → web (`postMessage` via `evaluateJavaScript("shepherd.receive(…)")`):
     rejects an *entire* review when one `comments[].line` is not part of the diff. The viewer
     therefore arms the gutter “+” only on the listed lines of the hovered side.
   - The field is **optional and additive** — omitting it means "every line" — so `v` stays 1.
+  - `paneLabels` is `{left: String, right: String}` — what a screen reader calls each pane,
+    which Monaco's default (the same sentence on both) cannot say. Sent from Swift because the
+    app is localised and this bundle is not. Also optional and additive.
 - `setTheme` `{theme: "light"|"dark", fontSize}`
 - `setThreads` `{threads: [{id, line, side, resolved, outdated, comments:[{author, bodyHTML, createdAt, isAgent}]}]}`
 - `setDraftComments` `{comments: [{localID, line, side, body}]}`
 - `revealLine` `{line, side}`
+- `focusEditor` `{}` — hands the keyboard to the modified pane. The one command with no payload:
+  everything a reviewer does to a *file* is a key in the native screen, everything they do to a
+  *line* is Monaco's, and `c` pressed outside the diff sends this so the next `c` can comment on
+  the cursor's line (ADR 0033). Swift sends it off a *request token* rather than a value it
+  compares, because focus is an event: asking twice must send twice.
+- `setAccessibility` `{screenReader}` — turns Monaco's `accessibilitySupport` on and raises its
+  `accessibilityPageSize`. Monaco's own `'auto'` detection is a browser's and cannot see that
+  VoiceOver is reading the window this web view is embedded in; macOS can, so the app is the
+  source of the flag (SwiftUI's `accessibilityVoiceOverEnabled`, straight through).
 
 Web → Swift (`window.webkit.messageHandlers.shepherd.postMessage`):
 - `ready` `{}` — bundle booted, safe to send
@@ -619,8 +631,9 @@ Web → Swift (`window.webkit.messageHandlers.shepherd.postMessage`):
 - `viewportChanged` `{firstVisibleLine}` (scroll-state restore)
 
 Rules: no remote loads, no eval of dynamic strings, webview has no access beyond its bundle
-directory; comment *text entry* is always native SwiftUI so the webview never handles user
-keystrokes beyond scrolling/selection.
+directory; comment *text entry* is always native SwiftUI, so the only keystrokes the webview
+acts on are navigation, selection, and the single `c` that asks for a composer on the cursor's
+line — which it answers with an `addComment` message, exactly as a click on the gutter does.
 
 ## Intelligence layer (app target, ADR 0007)
 

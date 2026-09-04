@@ -3601,6 +3601,16 @@
         }
       }
     },
+    "Changed, %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geändert, %@"
+          }
+        }
+      }
+    },
     "Changes requested": {
       "localizations": {
         "de": {
@@ -7937,6 +7947,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Optional. Zweibuchstabige Ländercodes, durch Kommas getrennt. Beide Felder werden als Teil der Anfrage mitgesendet — nur Endpunkte, die sie kennen, können sie umsetzen, und ein Endpunkt, der sie nicht erfüllen kann, lehnt die Anfrage ab, statt sie von anderswo zu beantworten. Leer und ausgeschaltet wird nichts zusätzlich gesendet."
+          }
+        }
+      }
+    },
+    "Original, %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Original, %@"
           }
         }
       }

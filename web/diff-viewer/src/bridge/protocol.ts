@@ -46,6 +46,22 @@ export interface CommentableLines {
   readonly right: readonly number[];
 }
 
+/**
+ * What a screen reader should call each pane of the diff.
+ *
+ * Monaco's own default is “Editor content;press Alt+F1 for Accessibility Options”, which is
+ * true of both panes and therefore says nothing about which one the cursor is in — the single
+ * most useful fact at the moment somebody has just handed the keyboard over with `c`. The
+ * native side sends the wording because the app is localised and this bundle is not: a German
+ * build must not announce its diff in English (ADR 0033's second amendment).
+ *
+ * Optional and additive, like ``commentableLines``: without it Monaco keeps its own default.
+ */
+export interface PaneLabels {
+  readonly left: string;
+  readonly right: string;
+}
+
 export interface LoadFileMessage {
   readonly v: ProtocolVersion;
   readonly type: 'loadFile';
@@ -61,6 +77,8 @@ export interface LoadFileMessage {
    * what this viewer did before the field existed. That is why `v` stays 1.
    */
   readonly commentableLines?: CommentableLines;
+  /** What a screen reader calls each pane; see ``PaneLabels``. Optional and additive. */
+  readonly paneLabels?: PaneLabels;
 }
 
 export interface SetThemeMessage {
@@ -137,13 +155,29 @@ export interface FocusEditorMessage {
   readonly type: 'focusEditor';
 }
 
+/**
+ * Whether a screen reader is running, as the *app* sees it.
+ *
+ * Monaco decides for itself when `accessibilitySupport` is `'auto'`, and in a `WKWebView` it
+ * decides wrong: the heuristics it uses are browser ones, and nothing in the web view knows
+ * that VoiceOver is reading the window it lives in. macOS does know, so the native side is the
+ * honest source — SwiftUI's `accessibilityVoiceOverEnabled` straight through to the option
+ * (ADR 0033's second amendment).
+ */
+export interface SetAccessibilityMessage {
+  readonly v: ProtocolVersion;
+  readonly type: 'setAccessibility';
+  readonly screenReader: boolean;
+}
+
 export type InboundMessage =
   | LoadFileMessage
   | SetThemeMessage
   | SetThreadsMessage
   | SetDraftCommentsMessage
   | RevealLineMessage
-  | FocusEditorMessage;
+  | FocusEditorMessage
+  | SetAccessibilityMessage;
 
 export type InboundMessageType = InboundMessage['type'];
 
@@ -154,6 +188,7 @@ export const INBOUND_MESSAGE_TYPES: readonly InboundMessageType[] = [
   'setDraftComments',
   'revealLine',
   'focusEditor',
+  'setAccessibility',
 ];
 
 // ---------------------------------------------------------------------------------------------
@@ -321,6 +356,17 @@ function parseCommentableLines(value: unknown, path: string): ParseResult<Commen
   return ok({ left: left.value, right: right.value });
 }
 
+function parsePaneLabels(value: unknown, path: string): ParseResult<PaneLabels> {
+  if (!isRecord(value)) return fail(`${path}: expected an object`);
+  if (!isString(value['left']) || value['left'].length === 0) {
+    return fail(`${path}.left: expected non-empty string`);
+  }
+  if (!isString(value['right']) || value['right'].length === 0) {
+    return fail(`${path}.right: expected non-empty string`);
+  }
+  return ok({ left: value['left'], right: value['right'] });
+}
+
 function parseThreadComment(value: unknown, path: string): ParseResult<ThreadComment> {
   if (!isRecord(value)) return fail(`${path}: expected an object`);
   if (!isString(value['author'])) return fail(`${path}.author: expected string`);
@@ -401,11 +447,22 @@ export function parseInbound(value: unknown): ParseResult<InboundMessage> {
         mode: msg['mode'],
         wrap: msg['wrap'],
       } as const;
+      // Two optional fields, so the message is built up rather than returned early: both are
+      // additive, and a payload carrying neither is still the valid v1 message it always was.
+      let message: LoadFileMessage = base;
       const rawCommentable = msg['commentableLines'];
-      if (rawCommentable === undefined || rawCommentable === null) return ok(base);
-      const commentableLines = parseCommentableLines(rawCommentable, 'loadFile.commentableLines');
-      if (!commentableLines.ok) return fail(commentableLines.error);
-      return ok({ ...base, commentableLines: commentableLines.value });
+      if (rawCommentable !== undefined && rawCommentable !== null) {
+        const commentableLines = parseCommentableLines(rawCommentable, 'loadFile.commentableLines');
+        if (!commentableLines.ok) return fail(commentableLines.error);
+        message = { ...message, commentableLines: commentableLines.value };
+      }
+      const rawLabels = msg['paneLabels'];
+      if (rawLabels !== undefined && rawLabels !== null) {
+        const paneLabels = parsePaneLabels(rawLabels, 'loadFile.paneLabels');
+        if (!paneLabels.ok) return fail(paneLabels.error);
+        message = { ...message, paneLabels: paneLabels.value };
+      }
+      return ok(message);
     }
     case 'setTheme': {
       if (!isThemeName(msg['theme'])) return fail('setTheme.theme: expected "light" | "dark"');
@@ -440,6 +497,13 @@ export function parseInbound(value: unknown): ParseResult<InboundMessage> {
       if (!isLineNumber(msg['line'])) return fail('revealLine.line: expected a 1-based line number');
       if (!isSide(msg['side'])) return fail('revealLine.side: expected "left" | "right"');
       return ok({ v: PROTOCOL_VERSION, type: 'revealLine', line: msg['line'], side: msg['side'] });
+    }
+    case 'setAccessibility': {
+      const screenReader = msg['screenReader'];
+      if (typeof screenReader !== 'boolean') {
+        return fail('setAccessibility.screenReader: expected boolean');
+      }
+      return ok({ v: PROTOCOL_VERSION, type: 'setAccessibility', screenReader });
     }
     case 'focusEditor':
       // Nothing to validate: the command is the whole message. An unknown extra key is ignored

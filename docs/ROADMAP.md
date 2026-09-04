@@ -347,11 +347,13 @@ The lists now say what they show, and colour is no longer the only carrier anywh
 remain and each is a project rather than a label; what they would take is in
 [`docs/plans/accessibility.md`](plans/accessibility.md).
 
-- [ ] **The diff is silent with VoiceOver.** Monaco's screen-reader support is left at `auto` in a
-      `WKWebView` and there is no native path to the same content. Try `accessibilitySupport: 'on'`
-      plus ARIA in the bundle first; the real answer is a native, keyboard-walkable rendering of
-      the patch, which `PatchReconstructor` already has the pieces for and which is a better diff
-      for everybody
+- [ ] **The diff is silent with VoiceOver.** Half done, 2026-09-04: the app now tells the bundle
+      when VoiceOver is running (`setAccessibility`), because Monaco's own `auto` detection is a
+      browser's and cannot see it from inside a `WKWebView`, and each pane says which pane it is.
+      Whether WebKit carries what Monaco puts in its accessibility tree needs a Mac and somebody
+      listening; the real answer is still a native, keyboard-walkable rendering of the patch,
+      which `PatchReconstructor` already has the pieces for and which is a better diff for
+      everybody
 - [x] **An inline comment needs a mouse.** Fixed 2026-09-04: `c` inside the diff comments on the
       cursor's line through the same line rules the pointer's path uses, and `c` outside it hands
       the keyboard over through a new payload-less `focusEditor` bridge command. So the whole

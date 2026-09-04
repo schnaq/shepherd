@@ -7,7 +7,7 @@ not fit in a label, and this is what each of the three would actually take.
 
 Ordered by what a person hits first, which is not the order of effort.
 
-## 1. The diff is silent (the big one)
+## 1. The diff is silent (the big one) — **cheap half done, 2026-09-04**
 
 **What is true today.** The diff pane is `monaco.editor.createDiffEditor` in a `WKWebView`
 (ADR 0003), `readOnly: true`, with Monaco's `accessibilitySupport` left at `'auto'`. Monaco's
@@ -37,6 +37,27 @@ to avoid.
 **Recommendation:** try the first, plan for the second, and treat the native list as the real
 answer rather than the fallback — a diff a person can walk with the arrow keys is a better product
 for everybody, not an accommodation.
+
+**What was built** (the first, in full). The paragraph above was wrong about one thing worth
+correcting: `accessibilitySupport: 'auto'` is not a setting somebody forgot to change, it is a
+*detection* — and one that cannot work here, because it is a browser's detection and nothing
+inside a `WKWebView` can see VoiceOver reading the window around it. So the option was almost
+certainly never turning on, which makes "cheap to try" cheaper than it looked: the app already
+knows the answer.
+
+It now says so. SwiftUI's `accessibilityVoiceOverEnabled` goes across the bridge as
+`setAccessibility {screenReader}`, which turns `accessibilitySupport` on and raises
+`accessibilityPageSize` from 10 lines to 100 while a screen reader is listening — and restates
+both when it stops, so the cost is paid only by the person who needs it. And each pane now says
+*which* pane it is, through an optional additive `paneLabels` on `loadFile`, filled in natively
+because the app is localised and the bundle is not. Monaco's own label is the same sentence on
+both sides, which is the one fact a person needs the moment `c` hands them a cursor.
+
+**What is still open, and it is the important half.** None of this can be verified from a Linux
+container: whether WebKit's accessibility tree carries what Monaco puts in it needs a Mac,
+VoiceOver, and somebody listening. Until somebody has listened, the honest description of the diff
+is "possibly readable" rather than "readable". The native rendering below is still the real answer
+and is still worth building for its own sake.
 
 ## 2. An inline comment needs a mouse — **done, 2026-09-04**
 

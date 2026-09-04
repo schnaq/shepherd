@@ -45,7 +45,15 @@ describe('envelope', () => {
 
   it('enumerates every message type in both directions', () => {
     expect([...INBOUND_MESSAGE_TYPES].sort()).toEqual(
-      ['focusEditor', 'loadFile', 'revealLine', 'setDraftComments', 'setTheme', 'setThreads'].sort(),
+      [
+        'focusEditor',
+        'loadFile',
+        'revealLine',
+        'setAccessibility',
+        'setDraftComments',
+        'setTheme',
+        'setThreads',
+      ].sort(),
     );
     expect([...OUTBOUND_MESSAGE_TYPES].sort()).toEqual(
       ['addComment', 'commentClicked', 'ready', 'viewportChanged'].sort(),
@@ -120,6 +128,45 @@ describe('parseInbound: loadFile', () => {
     ['a fractional line', { left: [1], right: [2.5] }],
   ])('rejects commentableLines with %s', (_why, commentableLines) => {
     expectFail(parseInbound({ ...valid, commentableLines }), 'loadFile.commentableLines');
+  });
+
+  it('omits paneLabels when the payload has none, and keeps both when it has them', () => {
+    const bare = parseInbound(valid);
+    expect(bare.ok && 'paneLabels' in bare.value).toBe(false);
+    const paneLabels = { left: 'Original, a/b.swift', right: 'Changed, a/b.swift' };
+    const result = parseInbound({ ...valid, paneLabels });
+    expect(result.ok && result.value).toEqual({ ...valid, paneLabels });
+  });
+
+  it('keeps both additive fields at once, which is what the app actually sends', () => {
+    const commentableLines = { left: [1], right: [1, 2] };
+    const paneLabels = { left: 'Original', right: 'Changed' };
+    const result = parseInbound({ ...valid, commentableLines, paneLabels });
+    expect(result.ok && result.value).toEqual({ ...valid, commentableLines, paneLabels });
+  });
+
+  it.each([
+    ['not an object', 'Original'],
+    ['a missing side', { left: 'Original' }],
+    ['a non-string side', { left: 'Original', right: 3 }],
+    ['an empty side', { left: '', right: 'Changed' }],
+  ])('rejects paneLabels that are %s', (_why, paneLabels) => {
+    expectFail(parseInbound({ ...valid, paneLabels }), 'loadFile.paneLabels');
+  });
+});
+
+describe('parseInbound: setAccessibility', () => {
+  it('accepts both states', () => {
+    expect(parseInbound({ v: 1, type: 'setAccessibility', screenReader: true }).ok).toBe(true);
+    expect(parseInbound({ v: 1, type: 'setAccessibility', screenReader: false }).ok).toBe(true);
+  });
+
+  it('rejects a missing or non-boolean flag', () => {
+    expectFail(parseInbound({ v: 1, type: 'setAccessibility' }), 'setAccessibility.screenReader');
+    expectFail(
+      parseInbound({ v: 1, type: 'setAccessibility', screenReader: 'yes' }),
+      'setAccessibility.screenReader',
+    );
   });
 });
 

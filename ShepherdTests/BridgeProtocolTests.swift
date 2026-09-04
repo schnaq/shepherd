@@ -12,6 +12,7 @@ final class BridgeProtocolTests: XCTestCase {
     /// Message types that travel Swift → web.
     private static let commandTypes: Set<String> = [
         "loadFile", "setTheme", "setThreads", "setDraftComments", "revealLine", "focusEditor",
+        "setAccessibility",
     ]
 
     /// Message types that travel web → Swift.
@@ -118,6 +119,58 @@ final class BridgeProtocolTests: XCTestCase {
         XCTAssertEqual(payload.modified, "two\n")
         XCTAssertEqual(payload.mode, .sideBySide)
         XCTAssertTrue(payload.wrap)
+    }
+
+    func testPaneLabelsAreOptionalAndAdditive() throws {
+        let without = """
+            {"v":1,"type":"loadFile","path":"a.swift","language":"swift",
+             "original":"x","modified":"y","mode":"inline","wrap":false}
+            """
+        let bare = try JSONDecoder().decode(DiffViewerCommand.self, from: Data(without.utf8))
+        guard case .loadFile(let payload) = bare else {
+            return XCTFail("Expected a loadFile message")
+        }
+        XCTAssertNil(payload.paneLabels)
+        let reencoded = String(decoding: try JSONEncoder().encode(bare), as: UTF8.self)
+        XCTAssertFalse(reencoded.contains("paneLabels"), "nil is omitted, not sent as null")
+
+        let with = """
+            {"v":1,"type":"loadFile","path":"a.swift","language":"swift",
+             "original":"x","modified":"y","mode":"inline","wrap":false,
+             "paneLabels":{"left":"Original, a.swift","right":"Changed, a.swift"}}
+            """
+        let message = try JSONDecoder().decode(DiffViewerCommand.self, from: Data(with.utf8))
+        guard case .loadFile(let labelled) = message else {
+            return XCTFail("Expected a loadFile message")
+        }
+        XCTAssertEqual(labelled.paneLabels?.left, "Original, a.swift")
+        XCTAssertEqual(labelled.paneLabels?.right, "Changed, a.swift")
+    }
+
+    func testAnEmptyPaneLabelIsRejected() {
+        // An empty label is worse than none: Monaco would announce nothing at all where it
+        // would otherwise at least announce its own default.
+        let json = """
+            {"v":1,"type":"loadFile","path":"a.swift","language":"swift",
+             "original":"x","modified":"y","mode":"inline","wrap":false,
+             "paneLabels":{"left":"","right":"Changed, a.swift"}}
+            """
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(DiffViewerCommand.self, from: Data(json.utf8))
+        )
+    }
+
+    func testSetAccessibilityCarriesTheFlagBothWays() throws {
+        for flag in [true, false] {
+            let command = DiffViewerCommand.setAccessibility(screenReader: flag)
+            let data = try JSONEncoder().encode(command)
+            let decoded = try JSONDecoder().decode(DiffViewerCommand.self, from: data)
+            XCTAssertEqual(decoded, command)
+            guard case .setAccessibility(let screenReader) = decoded else {
+                return XCTFail("Expected a setAccessibility message")
+            }
+            XCTAssertEqual(screenReader, flag)
+        }
     }
 
     func testLoadFileCommentableLinesAreOptionalAndAdditive() throws {
@@ -298,5 +351,35 @@ final class DiffViewerNavigationBoundaryTests: XCTestCase {
             ),
             "a view that could not find its own bundle allows nothing at all"
         )
+    }
+}
+
+/// What the diff's two panes are called for a screen reader.
+///
+/// `nonisolated`, like the function it tests: a pure function over a path should not need the
+/// main actor to be asserted (ADR 0033's second amendment).
+final class DiffViewerPaneLabelTests: XCTestCase {
+    func testEachPaneIsNamedAndTheyDifferFromEachOther() {
+        let labels = DiffViewerView.paneLabels(for: "Shepherd/Features/Review/ReviewModel.swift")
+        XCTAssertTrue(labels.left.contains("ReviewModel.swift"))
+        XCTAssertTrue(labels.right.contains("ReviewModel.swift"))
+        XCTAssertNotEqual(
+            labels.left,
+            labels.right,
+            "which pane you are in is the one thing Monaco's own default cannot say"
+        )
+    }
+
+    func testTheLabelCarriesTheFileNameRatherThanThePath() {
+        // VoiceOver reads the whole label every time the cursor enters a pane, and the path is
+        // already on screen in the review header.
+        let labels = DiffViewerView.paneLabels(for: "a/very/deep/directory/tree/File.swift")
+        XCTAssertFalse(labels.left.contains("directory"))
+        XCTAssertFalse(labels.right.contains("directory"))
+    }
+
+    func testAPathWithNoDirectoryIsItsOwnName() {
+        let labels = DiffViewerView.paneLabels(for: "README.md")
+        XCTAssertTrue(labels.left.contains("README.md"))
     }
 }
