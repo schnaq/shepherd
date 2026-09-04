@@ -253,7 +253,7 @@ Pure logic in `ShepherdCore` (all unit-tested):
   (ADR 0016) and `IssueRowSummary.hasAgentPullRequest` (ADR 0032). Two of the seven sections are
   windowed (`DigestSectionKind.isWindowed`) — the review requests and the issues assigned to you,
   both on `updatedAt`, because that is the field GitHub moves when somebody hands you something.
-  The other four are standing state, because a green agent PR nobody merged is exactly what a
+  The other five are standing state, because a green agent PR nobody merged is exactly what a
   morning brief is for and a windowed version would go quiet on the second morning; the same
   argument makes `agentPullRequestsThatClosedAnIssue` a state, and it stops repeating by itself
   because a closed row is kept only for the sweep's retention window (14 days) and pruned after it.
