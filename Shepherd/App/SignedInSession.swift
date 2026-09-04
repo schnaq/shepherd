@@ -233,13 +233,15 @@ final class SignedInSession {
             }
         }
 
-        // `includeClosed: true`, which the issues *section* does not want and the digest does:
-        // "an agent pull request closed one of your issues" is a statement about a closed row.
-        // The sweep searches `is:open`, so such a row exists here only because the sweep captured
-        // the close onto it and kept it for its retention window (ADR 0032's 2026-09-03
-        // amendment) — before that it vanished two minutes after closing and this line could
-        // never fire. The section keeps its own observation on the open rows (`IssueInboxModel`),
-        // so nothing on screen changes — this is the wider source ⌘K and the digest read.
+        // `includeClosed: true`, because "an agent pull request closed one of your issues" is a
+        // statement about a closed row. The sweep searches `is:open`, so such a row exists here
+        // only because the sweep captured the close onto it and kept it for its retention window
+        // (ADR 0032's 2026-09-03 amendment) — before that it vanished two minutes after closing
+        // and this line could never fire. The issues section reads just as widely since that
+        // ADR's 2026-09-04 amendment and narrows it in Swift with its STATE facet, so the two
+        // observations no longer disagree about which rows this Mac holds; this one stays because
+        // it is a different question — everything on disk, for the digest and for ⌘K, with no
+        // facet in front of it.
         let issues = database.observeIssues(filter: IssueFilter(includeClosed: true))
         issuesTask = Task { [weak self] in
             for await rows in issues {
