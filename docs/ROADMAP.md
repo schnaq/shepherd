@@ -352,8 +352,12 @@ remain and each is a project rather than a label; what they would take is in
       browser's and cannot see it from inside a `WKWebView`, and each pane says which pane it is.
       Whether WebKit carries what Monaco puts in its accessibility tree needs a Mac and somebody
       listening; the real answer is still a native, keyboard-walkable rendering of the patch,
-      which `PatchReconstructor` already has the pieces for and which is a better diff for
-      everybody
+      which is a better diff for everybody and now has a plan of its own
+      (`docs/plans/accessible-diff.md`): what two renderers must agree on is three things — which
+      lines may carry a comment, what a comment means, and which round is showing — and everything
+      else, syntax highlighting included, is deliberately free to differ. `PatchReconstructor` has
+      fewer of the pieces than that bullet assumed: it keeps two padded documents and two line
+      sets, and throws away per line whether it was added, deleted or context
 - [x] **An inline comment needs a mouse.** Fixed 2026-09-04: `c` inside the diff comments on the
       cursor's line through the same line rules the pointer's path uses, `c` outside it hands the
       keyboard over through a new `focusEditor` bridge command, and `[` / `]` move between the

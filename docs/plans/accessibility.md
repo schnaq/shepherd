@@ -56,8 +56,12 @@ both sides, which is the one fact a person needs the moment `c` hands them a cur
 **What is still open, and it is the important half.** None of this can be verified from a Linux
 container: whether WebKit's accessibility tree carries what Monaco puts in it needs a Mac,
 VoiceOver, and somebody listening. Until somebody has listened, the honest description of the diff
-is "possibly readable" rather than "readable". The native rendering below is still the real answer
-and is still worth building for its own sake.
+is "possibly readable" rather than "readable". The native rendering above is still the real answer
+and is still worth building for its own sake — it now has a plan of its own,
+[accessible-diff.md](accessible-diff.md), which works out what has to stay in step between two
+renderers and what is free to differ, because that boundary is the whole cost. One thing it turned
+up that belongs here: `PatchReconstructor`, the app's fiddliest piece of pure logic, sits in the app
+target and so is not exercised on the Linux CI leg at all.
 
 ## 2. An inline comment needs a mouse — **done, 2026-09-04**
 
