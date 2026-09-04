@@ -47,6 +47,7 @@ final class DelegationCenter {
     ///   - toasts: Where failures are surfaced.
     ///   - onDidPush: Called after a successful push so the caller can re-sync.
     ///   - onDidFinish: Called once when the run reaches a terminal state (ADR 0012).
+    ///   - onDidStart: Called once when an issue handover is actually running (ADR 0032).
     ///   - brief: How the sheet's ✨ button drafts the task text (plan §3.E), when a tier could
     ///     take it. Only the *attended* entry point takes one — see
     ///     ``startAutomatically(context:task:settings:toasts:onDidPush:onDidFinish:)``.
@@ -58,6 +59,7 @@ final class DelegationCenter {
         toasts: ToastCenter,
         onDidPush: (@MainActor () async -> Void)? = nil,
         onDidFinish: (@MainActor (DelegationOutcome) -> Void)? = nil,
+        onDidStart: (@MainActor (DelegationStart) -> Void)? = nil,
         brief: AgentBriefDrafter? = nil
     ) -> DelegationModel {
         if let existing = models[context.prID], existing.isBusy {
@@ -72,6 +74,7 @@ final class DelegationCenter {
             isAutomatic: false,
             onDidPush: onDidPush,
             onDidFinish: onDidFinish,
+            onDidStart: onDidStart,
             brief: brief
         )
         models[context.prID] = model
@@ -117,6 +120,9 @@ final class DelegationCenter {
             isAutomatic: true,
             onDidPush: onDidPush,
             onDidFinish: onDidFinish,
+            // No handover event either: a rule only ever starts from a pull request (ADR 0016),
+            // and ``DelegationStart`` is an issue's news.
+            onDidStart: nil,
             // No drafter: see above.
             brief: nil
         )
@@ -142,6 +148,7 @@ final class DelegationCenter {
         isAutomatic: Bool,
         onDidPush: (@MainActor () async -> Void)?,
         onDidFinish: (@MainActor (DelegationOutcome) -> Void)?,
+        onDidStart: (@MainActor (DelegationStart) -> Void)?,
         brief: AgentBriefDrafter?
     ) -> DelegationModel {
         let configuration = settings.agentCLI
@@ -160,7 +167,11 @@ final class DelegationCenter {
         let worktree = checkout.map { checkout in
             GitWorktree(
                 checkout: checkout,
-                directory: GitWorktree.directory(repo: context.repo, number: context.number)
+                // Issue 128 and pull request 128 are two different pieces of work in the same
+                // repository, so they get two directories (ADR 0032's 2026-09-04 amendment).
+                directory: context.isIssue
+                    ? GitWorktree.directory(repo: context.repo, issueNumber: context.number)
+                    : GitWorktree.directory(repo: context.repo, number: context.number)
             )
         }
 
@@ -181,6 +192,7 @@ final class DelegationCenter {
             toasts: toasts,
             onDidPush: onDidPush,
             onDidFinish: onDidFinish,
+            onDidStart: onDidStart,
             brief: brief
         )
     }

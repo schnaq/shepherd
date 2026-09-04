@@ -136,6 +136,14 @@ final class WebhookCoordinator {
         dispatch(WebhookCoordinator.plan(for: outcome), database: database)
     }
 
+    /// Handles an issue that is now being worked on (ADR 0032's 2026-09-04 amendment).
+    /// - Parameters:
+    ///   - start: Which issue, and which assistant.
+    ///   - database: The local cache, used to describe the issue.
+    func handle(_ start: DelegationStart, database: DatabaseManager?) {
+        dispatch(WebhookCoordinator.plan(for: start), database: database)
+    }
+
     /// Sends the test event and reports the result.
     /// - Parameter secret: When given, signs with this instead of the stored one, so a freshly
     ///   pasted secret can be tested before it is written to the Keychain.
@@ -300,6 +308,26 @@ final class WebhookCoordinator {
             // may well be gone by the time the POST is attempted.
             summary: summary,
             occurredAt: queued.entry.queuedAt
+        )
+    }
+
+    /// The outbound event an issue handover amounts to.
+    /// - Parameter start: Which issue, and which assistant.
+    nonisolated static func plan(for start: DelegationStart) -> WebhookPlan {
+        WebhookPlan(
+            kind: .issueAssignedToAgent,
+            details: .issueAssignment(agent: start.agent, template: start.template),
+            // The identity's three fields name the *issue* here, as they do for a close.
+            identity: WebhookPullRequest.Identity(
+                prID: start.prID,
+                repo: start.repo,
+                number: start.number
+            ),
+            summary: nil,
+            // Looked up rather than carried: the row is in the database, because the section the
+            // handover was started from is what put it there.
+            issue: nil,
+            occurredAt: start.at
         )
     }
 

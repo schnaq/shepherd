@@ -30,6 +30,14 @@ enum WebhookEventKind: String, CaseIterable, Sendable, Codable, Hashable, Identi
     /// backoff has closed nothing. It is the one event whose envelope carries an `issue` object
     /// in place of `pullRequest` — see ``WebhookEvent/Subject``.
     case issueClosed = "issue.closed"
+    /// An issue was handed to a local assistant (ADR 0032's 2026-09-04 amendment).
+    ///
+    /// Fired when the run is **actually running** in its worktree, which is neither the click
+    /// nor the assignment comment reaching GitHub: a click can be followed by a missing
+    /// checkout or a branch git refuses to create, and the comment is queued locally and may
+    /// sit out a backoff. What is true at this one point is that something is working on the
+    /// issue — see ``DelegationStart``. Like ``issueClosed`` its envelope carries an `issue`.
+    case issueAssignedToAgent = "issue.assigned_to_agent"
     /// The "Send test event" button in Settings. Never emitted on its own.
     case test = "shepherd.test"
 
@@ -40,7 +48,15 @@ enum WebhookEventKind: String, CaseIterable, Sendable, Codable, Hashable, Identi
     /// The subject key is part of the wire contract, so this is the single place that decides
     /// it: a kind added later either says `true` here and carries an `issue`, or says `false`
     /// and carries a `pullRequest`. There is no third shape.
-    var isAboutAnIssue: Bool { self == .issueClosed }
+    var isAboutAnIssue: Bool {
+        switch self {
+        case .issueClosed, .issueAssignedToAgent:
+            return true
+        case .reviewSubmitted, .pullRequestMerged, .delegationFinished, .newReviewRequest,
+             .autoMergeQueued, .test:
+            return false
+        }
+    }
 
     /// The kinds the user can subscribe to in Settings.
     ///
@@ -59,6 +75,7 @@ enum WebhookEventKind: String, CaseIterable, Sendable, Codable, Hashable, Identi
         case .newReviewRequest: return String(localized: "A new review was requested from me")
         case .autoMergeQueued: return String(localized: "An automatic merge was queued")
         case .issueClosed: return String(localized: "An issue was closed")
+        case .issueAssignedToAgent: return String(localized: "An issue was handed to an agent")
         case .test: return String(localized: "Test event")
         }
     }
@@ -78,6 +95,8 @@ enum WebhookEventKind: String, CaseIterable, Sendable, Codable, Hashable, Identi
             return String(localized: "Fires when an auto-merge rule queued a merge — at the moment Shepherd decided, not when GitHub confirmed. The merge itself still sends \"A pull request was merged\".")
         case .issueClosed:
             return String(localized: "Fires when GitHub confirmed the close, with the reason. The payload describes the issue, not a pull request.")
+        case .issueAssignedToAgent:
+            return String(localized: "Fires when an agent is actually running on an issue you assigned it — not when you pressed the button. The payload describes the issue, not a pull request.")
         case .test:
             return String(localized: "Sent only when you press the button below.")
         }
@@ -385,6 +404,13 @@ enum WebhookEventDetails: Encodable, Sendable, Equatable {
     /// raw and unmapped — a receiver that routes on "was this actually fixed" wants the word
     /// GitHub records, not a vocabulary Shepherd invented.
     case issueClosed(reason: String)
+    /// ``WebhookEventKind/issueAssignedToAgent`` (ADR 0032).
+    ///
+    /// Two keys: which assistant is on it, and which task template the brief was rendered from —
+    /// the template's *name*, never its text. A template may quote the issue, and an envelope
+    /// that promises to say what happened rather than what was written must not carry a brief
+    /// (ADR 0012).
+    case issueAssignment(agent: String, template: String)
     /// ``WebhookEventKind/test``.
     case test(note: String)
 
@@ -395,6 +421,7 @@ enum WebhookEventDetails: Encodable, Sendable, Equatable {
         case relations, reviewDecision, checks
         case checkCount, matchedLabels
         case reason
+        case template
         case note
     }
 
@@ -423,6 +450,9 @@ enum WebhookEventDetails: Encodable, Sendable, Equatable {
             try container.encode(matchedLabels, forKey: .matchedLabels)
         case .issueClosed(let reason):
             try container.encode(reason, forKey: .reason)
+        case .issueAssignment(let agent, let template):
+            try container.encode(agent, forKey: .agent)
+            try container.encode(template, forKey: .template)
         case .test(let note):
             try container.encode(note, forKey: .note)
         }

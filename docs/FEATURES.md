@@ -81,6 +81,16 @@ The panel says what is still waiting, what is parked, and what Shepherd gave up 
 the pull-request panel, about the reviews and merges queued against the pull request you are
 looking at.
 
+And you can hand the issue to your own assistant without leaving it. *Assign to agent…* opens the
+delegation sheet with the issue as the task — title, labels and the description, prefilled and
+yours to edit — and Shepherd prepares a worktree on a branch it names after the issue, started
+from your default branch, so the work has somewhere to land. Unlike a delegation on a pull
+request, this run may finish the job and publish it, with the git and GitHub credentials your own
+tool already has; Shepherd still publishes nothing by itself, and the button in the sheet is there
+for a run whose environment cannot. The handover is queued as a comment on the issue, so a
+colleague looking at it sees that somebody is on it, and if you have webhooks switched on your
+automation hears `issue.assigned_to_agent` the moment the run really starts.
+
 And it is drivable from outside like everything else: `shepherd issue schnaq/review#128` opens one,
 `shepherd inbox issues` opens the section, and `shepherd://issue/…` does the same from a script or
 a Raycast command ([ADR 0013](adr/0013-deep-links-and-cli.md)). An issue a colleague sends you that

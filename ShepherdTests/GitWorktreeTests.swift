@@ -255,4 +255,132 @@ final class GitWorktreeTests: XCTestCase {
             XCTAssertTrue(runner.invocations.isEmpty)
         }
     }
+
+    // MARK: - New work, from an issue
+
+    private func issueWorktree(runner: RecordingProcessRunner) -> GitWorktree {
+        GitWorktree(
+            checkout: checkout,
+            directory: GitWorktree.directory(
+                repo: RepoRef(owner: "schnaq", name: "review"),
+                issueNumber: 128,
+                root: root
+            ),
+            managedRoot: root,
+            git: URL(fileURLWithPath: "/usr/bin/git"),
+            runner: runner
+        )
+    }
+
+    /// Answers the four reads `addForNewWork` makes, with the branch reported as absent.
+    private func newWorkRunner(
+        branchExists: Bool = false,
+        defaultBranch: String = "origin/main"
+    ) -> RecordingProcessRunner {
+        RecordingProcessRunner { invocation in
+            switch invocation.arguments.first {
+            case "symbolic-ref":
+                return ProcessResult(
+                    status: 0,
+                    standardOutput: defaultBranch + "\n",
+                    standardError: ""
+                )
+            case "rev-parse":
+                return ProcessResult(
+                    status: branchExists ? 0 : 1,
+                    standardOutput: "",
+                    standardError: ""
+                )
+            default:
+                return ProcessResult(status: 0, standardOutput: "", standardError: "")
+            }
+        }
+    }
+
+    func testAnIssueAndAPullRequestOfTheSameNumberGetDifferentDirectories() {
+        let repo = RepoRef(owner: "schnaq", name: "review")
+        let issue = GitWorktree.directory(repo: repo, issueNumber: 42, root: root)
+        let pullRequest = GitWorktree.directory(repo: repo, number: 42, root: root)
+        XCTAssertEqual(issue.lastPathComponent, "schnaq-review-issue42")
+        XCTAssertEqual(pullRequest.lastPathComponent, "schnaq-review-pr42")
+        XCTAssertNotEqual(issue, pullRequest, "one run would otherwise delete the other's work")
+    }
+
+    func testTheBranchAnIssueIsWorkedOnIsShepherdsToName() {
+        XCTAssertEqual(GitWorktree.branchName(issueNumber: 128), "agent/issue-128")
+    }
+
+    func testAddingForNewWorkStartsShepherdsBranchAtTheDefaultBranchTip() async throws {
+        let runner = newWorkRunner()
+        let tree = issueWorktree(runner: runner)
+        let base = try await tree.addForNewWork(branch: "agent/issue-128")
+
+        XCTAssertEqual(base, "origin/main")
+        XCTAssertEqual(
+            runner.arguments,
+            [
+                ["fetch", "origin"],
+                ["remote", "set-head", "origin", "--auto"],
+                ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
+                ["rev-parse", "--verify", "--quiet", "refs/heads/agent/issue-128"],
+                ["worktree", "add", "-b", "agent/issue-128", tree.directory.path, "origin/main"],
+            ]
+        )
+        // Every one of them runs in the user's clone: the worktree does not exist yet.
+        XCTAssertEqual(
+            Set(runner.invocations.compactMap(\.currentDirectory)),
+            [checkout.path]
+        )
+    }
+
+    func testAddingForNewWorkResumesABranchThatIsAlreadyThere() async throws {
+        // Handing the same issue over twice must not throw away the first run's commits.
+        let runner = newWorkRunner(branchExists: true)
+        let tree = issueWorktree(runner: runner)
+        try await tree.addForNewWork(branch: "agent/issue-128")
+
+        XCTAssertEqual(
+            runner.arguments.last,
+            ["worktree", "add", tree.directory.path, "agent/issue-128"],
+            "the existing branch is checked out rather than reset to the default branch"
+        )
+    }
+
+    func testAddingForNewWorkSaysSoWhenGitCannotNameTheDefaultBranch() async {
+        let runner = RecordingProcessRunner { invocation in
+            invocation.arguments.first == "symbolic-ref"
+                ? ProcessResult(status: 128, standardOutput: "", standardError: "not a ref")
+                : ProcessResult(status: 0, standardOutput: "", standardError: "")
+        }
+        let tree = issueWorktree(runner: runner)
+        do {
+            try await tree.addForNewWork(branch: "agent/issue-128")
+            XCTFail("expected the missing default branch to be reported")
+        } catch {
+            XCTAssertEqual(error as? GitWorktree.Failure, .noDefaultBranch)
+        }
+        XCTAssertFalse(
+            runner.arguments.contains { $0.first == "worktree" },
+            "guessing a branch name would put the work on top of the wrong thing"
+        )
+    }
+
+    func testAddingForNewWorkSurfacesAFailedFetch() async {
+        let runner = RecordingProcessRunner { invocation in
+            invocation.arguments.first == "fetch"
+                ? ProcessResult(status: 128, standardOutput: "", standardError: "no such remote")
+                : ProcessResult(status: 0, standardOutput: "", standardError: "")
+        }
+        do {
+            try await issueWorktree(runner: runner).addForNewWork(branch: "agent/issue-1")
+            XCTFail("expected the fetch failure to propagate")
+        } catch {
+            XCTAssertEqual(
+                error as? GitWorktree.Failure,
+                .commandFailed(command: "fetch", status: 128, message: "no such remote")
+            )
+        }
+        XCTAssertEqual(runner.arguments.count, 1, "nothing runs after a failed fetch")
+    }
+
 }

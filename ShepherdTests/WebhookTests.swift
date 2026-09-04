@@ -160,6 +160,7 @@ final class WebhookTests: XCTestCase {
             [
                 "delegation.finished",
                 "inbox.new_review_request",
+                "issue.assigned_to_agent",
                 "issue.closed",
                 "pr.auto_merge_queued",
                 "pr.merged",
@@ -169,12 +170,12 @@ final class WebhookTests: XCTestCase {
         )
         // The test event is delivered by a button, never subscribed to.
         XCTAssertFalse(WebhookEventKind.userSelectable.contains(.test))
-        XCTAssertEqual(WebhookEventKind.userSelectable.count, 6)
-        // Exactly one event describes an issue; every other one describes a pull request, and
-        // the two shapes are the whole vocabulary.
+        XCTAssertEqual(WebhookEventKind.userSelectable.count, 7)
+        // Two events describe an issue; every other one describes a pull request, and the two
+        // shapes are the whole vocabulary.
         XCTAssertEqual(
             WebhookEventKind.allCases.filter(\.isAboutAnIssue),
-            [.issueClosed]
+            [.issueClosed, .issueAssignedToAgent]
         )
         for kind in WebhookEventKind.allCases {
             XCTAssertFalse(kind.title.isEmpty)
@@ -752,6 +753,7 @@ final class WebhookTests: XCTestCase {
         settings.setWebhookEvent(.delegationFinished, isOn: false)
         settings.setWebhookEvent(.autoMergeQueued, isOn: false)
         settings.setWebhookEvent(.issueClosed, isOn: false)
+        settings.setWebhookEvent(.issueAssignedToAgent, isOn: false)
 
         let restored = AppSettings(defaults: defaults)
         XCTAssertTrue(restored.webhooksEnabled)
@@ -951,6 +953,50 @@ final class WebhookTests: XCTestCase {
         XCTAssertEqual(plan.occurredAt, occurredAt)
         XCTAssertNil(plan.summary)
         XCTAssertNil(plan.issue, "the event only names the issue; it is looked up")
+    }
+
+    func testAHandoverBecomesAnIssueAssignedToAgentEvent() throws {
+        let plan = WebhookCoordinator.plan(
+            for: DelegationStart(
+                prID: "I_kwDOissue",
+                repo: RepoRef(owner: "schnaq", name: "review"),
+                number: 128,
+                agent: "Example Agent",
+                template: "default",
+                at: occurredAt
+            )
+        )
+        XCTAssertEqual(plan.kind, .issueAssignedToAgent)
+        XCTAssertEqual(
+            plan.details,
+            .issueAssignment(agent: "Example Agent", template: "default")
+        )
+        XCTAssertEqual(plan.identity.prID, "I_kwDOissue", "the identity names the issue")
+        XCTAssertEqual(plan.identity.number, 128)
+        XCTAssertEqual(plan.occurredAt, occurredAt)
+        XCTAssertNil(plan.summary)
+        XCTAssertNil(plan.issue, "the event only names the issue; it is looked up")
+        XCTAssertTrue(plan.kind.isAboutAnIssue, "so the envelope carries an issue, not a pull request")
+    }
+
+    func testTheHandoverDetailsCarryTheAgentAndTheTemplatesNameOnly() throws {
+        let json = try nested(
+            try object(
+                WebhookEvent(
+                    event: .issueAssignedToAgent,
+                    issue: WebhookIssue(summary: issueRow()),
+                    details: .issueAssignment(agent: "Example Agent", template: "default"),
+                    occurredAt: occurredAt,
+                    deliveryID: deliveryID
+                )
+            ),
+            "details"
+        )
+        XCTAssertEqual(json.keys.sorted(), ["agent", "template"])
+        XCTAssertEqual(json["agent"] as? String, "Example Agent")
+        // A name, not the text: a template may quote the issue, and this envelope says what
+        // happened rather than what was written (ADR 0012).
+        XCTAssertEqual(json["template"] as? String, "default")
     }
 
     func testTheOtherFourIssueWritesAreSentButAreNotEventsThisVersionPromises() {

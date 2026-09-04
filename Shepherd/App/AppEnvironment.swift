@@ -572,6 +572,68 @@ final class AppEnvironment {
         }
     }
 
+    /// Hands an issue to the configured assistant (ADR 0032's 2026-09-04 amendment).
+    ///
+    /// The same ``DelegationCenter`` a pull-request delegation goes through, so the worktree
+    /// isolation, the one-run-per-target rule, the transcript and "Shepherd itself publishes
+    /// nothing" are the same code. What differs is what the run is allowed to do with the result,
+    /// and that is said by the preamble the origin selects — see ``DelegationPrompt``.
+    ///
+    /// The task text is rendered here and handed in, exactly as an automatic delegation hands in
+    /// its rendered rule template (ADR 0016): the body is a fetched detail the *section* has and
+    /// a context does not, and a brief that quoted no description would be a worse brief.
+    /// - Parameters:
+    ///   - row: The issue.
+    ///   - body: The issue body as Markdown source, when the panel has read it.
+    ///   - onDidStart: Called once the run is actually running, so the caller can record the
+    ///     handover on GitHub. Called *there* rather than on the click on purpose: a handover
+    ///     comment posted before the worktree exists would describe work nobody is doing.
+    /// - Returns: The delegation now on screen.
+    @discardableResult
+    func startIssueDelegation(
+        _ row: IssueRowSummary,
+        body: String = "",
+        onDidStart: (@MainActor (DelegationStart) -> Void)? = nil
+    ) -> DelegationModel {
+        let context = DelegationContext.issue(row)
+        let onDidPush: @MainActor () async -> Void = { [weak self] in
+            // The branch is on GitHub now, so the next sweep is what turns it into a row.
+            await self?.syncNow()
+        }
+        let onDidFinish: @MainActor (DelegationOutcome) -> Void = { [weak self] outcome in
+            guard let self else { return }
+            self.webhookCoordinator.handle(outcome, database: self.session?.database)
+        }
+        let announce: @MainActor (DelegationStart) -> Void = { [weak self] start in
+            guard let self else { return }
+            self.webhookCoordinator.handle(start, database: self.session?.database)
+            onDidStart?(start)
+        }
+        let model = delegation.open(
+            context: context,
+            settings: settings,
+            toasts: toasts,
+            onDidPush: onDidPush,
+            onDidFinish: onDidFinish,
+            onDidStart: announce,
+            // No drafter, and this is a missing argument rather than a check. The ✨ button's
+            // brief is built from a *pull request* — `AgentBriefDrafter.live` reads a
+            // `PullRequestDetail` by node id and `AgentBriefRequest` is shaped around a head
+            // commit and a review finding — and an issue has neither. A button that could only
+            // ever fail is worse than no button, and drafting an issue brief properly is its own
+            // piece of work (recorded in ADR 0032's 2026-09-04 amendment).
+            brief: nil
+        )
+        if !model.isBusy {
+            model.task = IssueDelegationPrompt.render(
+                template: context.taskTemplate ?? IssueDelegationPrompt.defaultTemplate,
+                issue: row,
+                body: body
+            )
+        }
+        return model
+    }
+
     /// Sends one confirmed message to the session that wrote the code (ADR 0030).
     ///
     /// The same ``DelegationCenter`` a button press goes through, so the one-run-per-pull-request

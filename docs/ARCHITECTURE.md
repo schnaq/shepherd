@@ -1434,14 +1434,20 @@ unknown content blocks and non-JSON lines are skipped, never fatal), `AgentCLIRu
 `Process`, a dedicated queue drains stdout line by line into an `AsyncStream`, `cancel()` sends
 `SIGTERM` then `SIGKILL`), and `GitWorktree`. `Features/Delegation/` is the **UI**:
 `DelegationModel` (the `idle → preparingWorktree → running → finished/failed/cancelled` state
-machine), `DelegationCenter` (one delegation per pull request; a second request while one is
+machine), `DelegationCenter` (one delegation per target; a second request while one is
 running reveals it instead of starting another) and `DelegationSheet`.
 
 Two seams carry the tests. `ProcessRunning` (`run(executable:arguments:currentDirectory:)`) is
 the only way `GitWorktree` reaches git, so the unit tests assert the **exact argv** of every
 command — fetch, `worktree add --detach`, status, diff-stat, commit, `push origin HEAD:<branch>`,
 `worktree remove --force` — without a repository on disk, including the refusal to delete
-anything outside `~/Library/Application Support/Shepherd/Worktrees`. `AgentRunning` is the seam
+anything outside `~/Library/Application Support/Shepherd/Worktrees`. Since ADR 0011's 2026-09-04
+amendment there is a second entry point for a delegation started from an *issue*:
+`addForNewWork(branch:)` fetches, asks git which branch `origin/HEAD` points at, and adds a
+worktree on a branch Shepherd named (`agent/issue-{number}`) at that branch's tip — resuming the
+branch when it already exists, so handing the same issue over twice does not throw away the first
+run's commits. Which branch is the default is asked of git rather than of GitHub, so this stays a
+local operation and adds no host. `AgentRunning` is the seam
 for the CLI, so the state machine is driven by scripted event lists.
 
 Three rules are not negotiable and are enforced in code, not by convention: **no shell, ever** —
@@ -1449,8 +1455,17 @@ the prompt is one element of an argv array and command templates are split by `S
 prompt cannot become a second command; **Shepherd never touches agent authentication** — the
 child inherits the environment verbatim, nothing added, nothing removed, and there is no
 credential field anywhere in the Delegation settings tab; **nothing is ever pushed
-automatically** — the agent works in a detached worktree and "Commit & push" is a button, using
-the user's own git credentials rather than Shepherd's GitHub token.
+automatically** — Shepherd's own code has no step that transmits, and "Commit & push" is a
+button, using the user's own git credentials rather than Shepherd's GitHub token.
+
+That third rule is about **Shepherd**, and ADR 0011's 2026-09-04 amendment is where the
+distinction had to be stated. A delegation started from a pull request works in a *detached*
+worktree and its preamble forbids a branch, a push and a pull request, because the diff is the
+reviewer's to publish. One started from an issue has nothing to review yet: it works on Shepherd's
+own branch and its preamble says the run may finish the job with the credentials its own tool
+already has — which is this ADR's standing rule that the child inherits that tool's
+authentication, stated rather than changed. `DelegationPrompt` selects the preamble by
+`DelegationContext.Origin`, and no code path Shepherd added pushes or opens a pull request.
 
 #### The session back-channel (ADR 0030)
 

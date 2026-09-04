@@ -790,3 +790,47 @@ is a wider read of a table this Mac already holds, and the rows it now carries a
 sweep was already keeping. The sweep, the retention window, the digest lines and the ⌘K index are
 untouched: this amendment is about which of the rows already on disk the section is willing to
 draw.
+
+## Amendment, 2026-09-04 — Sprint 4b: an issue can be handed to an assistant
+
+The last item of the plan, and the one the whole section was built for: *Assign to agent…* on the
+issue panel. It opens the delegation sheet ADR 0011 already owns, with the issue as the task, and
+the reviewer still presses Run. Four decisions are worth recording.
+
+**The task text is rendered and handed in, not derived.** `IssueDelegationPrompt` is
+`AutoDelegationPrompt`'s twin in ShepherdCore — pure, Linux-tested, `{number}`, `{repo}`,
+`{title}`, `{labels}`, `{body}` — and the panel renders it because the *body* is a fetched detail
+the section has and a `DelegationContext` does not. That is exactly how an automatic delegation
+hands in its rendered rule template (ADR 0016). The template is carried on the context so the
+sheet's own default renders the same one, and so the handover event can name it.
+
+The template says nothing about branches, pushing or pull requests, and that is deliberate: what a
+run may do with its result belongs to the preamble Shepherd controls, not to a template anybody
+may rewrite. A test asserts the absence.
+
+**The context reuses the pull-request fields, generically.** `prID` is the issue's node id,
+`number` its number, `headRefName` the branch Shepherd is about to create, `headRefOid` empty —
+new work has no commit to be pinned to. This is the trade the outbox already made in Sprint 4a for
+the same reason: renaming the fields would touch every pull-request call site for no behavioural
+change. GitHub's node ids are unique across issues and pull requests, so `DelegationCenter`'s
+one-run-per-target rule holds without knowing which kind it has.
+
+**The worktree and the branch are Shepherd's, and the ground rules are ADR 0011's.** See that
+ADR's 2026-09-04 amendment: a second preamble, a branch named `agent/issue-{number}`, a worktree
+started at the default branch's tip through `GitWorktree.addForNewWork(branch:)`, and a directory
+named `owner-repo-issue128` so issue 128 and pull request 128 cannot delete each other's work.
+Shepherd's own code still transmits nothing.
+
+**The ✨ brief button is deliberately absent from an issue handover.** `AgentBriefDrafter` reads
+a `PullRequestDetail` by node id and `AgentBriefRequest` is shaped around a head commit and a
+review finding; an issue has neither, so the button could only ever fail. Drafting a brief *from
+an issue* — its body, its acceptance criteria, its linked pull requests — is a different request
+shape and its own piece of work. The rendered template is what the sheet prefills until then, and
+it is the reviewer's to edit as always.
+
+**The handover is recorded twice, in two different registers.** On GitHub it is an ordinary queued
+comment through the same outbox path as every other issue write, so a colleague sees it. Outbound
+it is `issue.assigned_to_agent`, fired when the run is *actually running* rather than when the
+button was pressed — the plan's §11 has the argument, and the short version is that a click can be
+followed by a missing checkout and a queued comment can fail. Both say who is on it; neither
+carries the brief.

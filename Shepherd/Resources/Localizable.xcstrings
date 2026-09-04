@@ -2671,6 +2671,16 @@
         }
       }
     },
+    "An issue was handed to an agent": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Issue wurde an einen Agenten übergeben"
+          }
+        }
+      }
+    },
     "Answered: %@": {
       "localizations": {
         "de": {
@@ -2967,6 +2977,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Fragt ein Modell, warum dieser Check rot ist. Es kann nur lesen — die Checks, das Log, den Diff."
+          }
+        }
+      }
+    },
+    "Assign to agent…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An Agenten übergeben …"
           }
         }
       }
@@ -5201,6 +5221,16 @@
         }
       }
     },
+    "Fires when an agent is actually running on an issue you assigned it — not when you pressed the button. The payload describes the issue, not a pull request.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird ausgelöst, wenn ein Agent tatsächlich an einem Issue arbeitet, das du ihm übergeben hast – nicht wenn du den Knopf gedrückt hast. Die Nutzlast beschreibt das Issue, nicht einen Pull Request."
+          }
+        }
+      }
+    },
     "Fires when an auto-merge rule queued a merge — at the moment Shepherd decided, not when GitHub confirmed. The merge itself still sends \"A pull request was merged\".": {
       "localizations": {
         "de": {
@@ -5217,6 +5247,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Feuert, wenn die Outbox das Review wirklich gesendet hat, nicht wenn du die Taste drückst."
+          }
+        }
+      }
+    },
+    "Fix #%lld: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fix #%lld: %@"
           }
         }
       }
@@ -5547,6 +5587,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Diesen Pull Request an deinen lokalen Coding-Agenten geben"
+          }
+        }
+      }
+    },
+    "Handed to %@ via Shepherd, on branch `%@`.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Über Shepherd an %@ übergeben, auf Branch `%@`."
           }
         }
       }
@@ -7707,6 +7757,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Shepherd-Einstellungen öffnen"
+          }
+        }
+      }
+    },
+    "Open a delegation sheet with this issue as the task. Shepherd creates a worktree on its own branch and runs the assistant you configured; the handover is queued as a comment on the issue.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnet ein Delegationsfenster mit diesem Issue als Aufgabe. Shepherd legt einen Worktree auf einem eigenen Branch an und startet den Assistenten, den du konfiguriert hast; die Übergabe wird als Kommentar am Issue eingereiht."
           }
         }
       }
@@ -11571,6 +11631,16 @@
         }
       }
     },
+    "This issue is closed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Issue ist geschlossen"
+          }
+        }
+      }
+    },
     "This month": {
       "localizations": {
         "de": {
@@ -12361,6 +12431,16 @@
         }
       }
     },
+    "You are running inside a git worktree that Shepherd created for issue #%lld of %@. It is checked out on a new branch, %@, started from the tip of the repository's default branch. Shepherd named that branch; do not rename it and do not switch to another one.\n\nGround rules:\n- The work is yours to finish on this branch. When it is ready you may commit it, publish the branch and open a pull request, using the git and GitHub credentials you already have. If you cannot publish, commit anyway and say so in your final message: the reviewer can publish the worktree from Shepherd.\n- Solve the issue and nothing else. Do not reformat, rename or refactor anything the issue does not ask for.\n- Read the repository before you write: its tests, its conventions and its contribution notes are the specification, not a suggestion.\n- Prefer the project's existing tests and tooling over adding new ones.\n- If the issue is unclear or you would have to guess at intent, say so in your final message instead of guessing.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du läufst in einem git-Worktree, den Shepherd für Issue #%lld von %@ angelegt hat. Er ist auf einem neuen Branch ausgecheckt, %@, gestartet von der Spitze des Standard-Branches dieses Repositories. Shepherd hat diesen Branch benannt; benenne ihn nicht um und wechsle nicht auf einen anderen.\n\nGrundregeln:\n- Die Arbeit ist deine, und du darfst sie auf diesem Branch abschließen. Wenn sie fertig ist, darfst du committen, den Branch veröffentlichen und einen Pull Request öffnen – mit den git- und GitHub-Zugangsdaten, die du ohnehin hast. Wenn du nicht veröffentlichen kannst, committe trotzdem und sage es in deiner Abschlussnachricht: die Person, die review macht, kann den Worktree aus Shepherd heraus veröffentlichen.\n- Löse das Issue und nichts anderes. Formatiere, benenne und refaktoriere nichts, wonach das Issue nicht fragt.\n- Lies das Repository, bevor du schreibst: seine Tests, seine Konventionen und seine Hinweise zum Beitragen sind die Spezifikation, kein Vorschlag.\n- Nutze die vorhandenen Tests und Werkzeuge des Projekts, statt neue hinzuzufügen.\n- Wenn das Issue unklar ist oder du die Absicht erraten müsstest, sage das in deiner Abschlussnachricht, statt zu raten."
+          }
+        }
+      }
+    },
     "You have a local draft whose inline comments were written on an older commit. The approval keeps that draft, so it will be parked as a conflict rather than sent — open the pull request to check the comments against the new commit.": {
       "localizations": {
         "de": {
@@ -12757,6 +12837,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "fix"
+          }
+        }
+      }
+    },
+    "git could not tell which branch this repository's `origin` points at. Run `git remote set-head origin --auto` in your clone and try again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "git konnte nicht sagen, auf welchen Branch das `origin` dieses Repositories zeigt. Führe `git remote set-head origin --auto` in deinem Klon aus und versuche es erneut."
           }
         }
       }

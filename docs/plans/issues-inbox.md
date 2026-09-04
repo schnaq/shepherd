@@ -739,10 +739,57 @@ new entry.
   fallback becomes the primary and the plan is corrected here.
 - **`issue.assigned_to_agent` fires on the assignment comment's `mutationSent`**, not at delegation
   start — ADR 0012's rule is "what happened", and the comment is the visible record of it.
+  *Revised on 2026-09-04, see §11: the drain cannot tell an assignment comment from any other
+  issue comment, and a comment that fails would leave a running assistant unannounced.*
 - **One `InboxScreen` with a content-kind picker**, not a second top-level route: `j`/`k`, ⌘K, the
   focus session and the menu-bar item all address "the model that owns the selection" already, and
   a second route would duplicate the chrome for one segmented control's worth of difference.
 - **Sprint 4's ground-rule change to ADR 0011** (an issue-origin delegation may commit, push and
   open a pull request with the agent's own credentials; Shepherd itself still never pushes) is put
   to the owner before Sprint 4 starts. Sprints 1–3 do not depend on the answer.
+  *Resolved on 2026-09-04, see §11: it is not a change. ADR 0011 already inherits the CLI's own
+  authentication, so what the amendment does is state the rule and confine the difference to the
+  preamble's wording.*
 
+
+## 11. Sprint 4b, and two of §10's decisions revised (2026-09-04)
+
+**The handover event fires at the run, not at the comment.** §10 decided `issue.assigned_to_agent`
+would fire on the assignment comment's `mutationSent`, on ADR 0012's "what happened" rule. Two
+things found while building it say otherwise, and both are about the comment rather than about the
+rule.
+
+The first is technical and decisive: the drain announces a sent mutation as a
+`SentMutation.Kind`, and the kind for this write is `issueCommentAdded` — the same kind an
+ordinary triage comment produces. Nothing on an outbox row marks one comment as an assignment, so
+a hook there would either fire for *every* issue comment or need a second comment action invented
+only to be recognisable. Neither is worth it.
+
+The second is about honesty. A queued comment can sit out a backoff for minutes and can fail
+outright — non-retriably, when the engine was built without an `IssueWriting` port, which is the
+gap ADR 0032's Sprint 4a amendment had to make visible. An assistant would then be working on the
+issue with no event ever fired. The moment that cannot lie is the one where the worktree exists,
+the branch exists and the process is up, so `DelegationStart` is announced at the transition to
+`running` and the payload says what is true there. The comment is still queued, and it is still
+the record a colleague sees on GitHub; it is simply not the trigger.
+
+**The ground-rule question was answered by re-reading ADR 0011 rather than by widening it.** §10
+put "an issue-origin delegation may commit, push and open a pull request" to the owner as a
+ground-rule *change*. It turns out not to be one. ADR 0011 already decides that Shepherd runs the
+user's own CLI and inherits whatever authentication that CLI has, and that Shepherd's token is for
+the API and never reaches git. An assistant that can publish could always publish; the old
+preamble asked it not to, because on somebody else's pull request the diff was the reviewer's to
+push. On an issue it is not, so the second preamble says so — and Shepherd's own code gained no
+step that transmits anything: no new `git push`, no request to open a pull request, and the button
+a person presses is unchanged and remains the fallback (ADR 0011's 2026-09-04 amendment).
+
+**One thing §5.2 asked for was not built: the ✨ brief button on an issue handover.** The plan
+expected `AgentBriefDrafter` to be reused unchanged, and it cannot be. The drafter reads a
+`PullRequestDetail` by node id and `AgentBriefRequest` is built around a head commit and a review
+finding — an issue has neither, so the button would have failed every time it was pressed. The
+sheet prefills the rendered template instead, which is the reviewer's to edit as it always was,
+and drafting a brief *from an issue* is left as its own piece of work.
+
+If the owner wants the stricter reading anyway — the run commits and stops, even when it could
+publish — that is one sentence in `DelegationPrompt.issuePreamble` and one line in the ADR
+amendment. Nothing else in Sprint 4b depends on it.

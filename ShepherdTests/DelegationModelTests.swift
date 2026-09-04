@@ -140,13 +140,18 @@ final class DelegationModelTests: XCTestCase {
         worktree: Bool = true,
         readiness: DelegationModel.Readiness = .ready,
         isAutomatic: Bool = false,
+        context replacement: DelegationContext? = nil,
         onDidPush: (@MainActor () async -> Void)? = nil,
-        onDidFinish: (@MainActor (DelegationOutcome) -> Void)? = nil
+        onDidFinish: (@MainActor (DelegationOutcome) -> Void)? = nil,
+        onDidStart: (@MainActor (DelegationStart) -> Void)? = nil
     ) -> DelegationModel {
+        let context = replacement ?? self.context!
         let tree = worktree
             ? GitWorktree(
                 checkout: URL(fileURLWithPath: "/Users/dev/code/review"),
-                directory: GitWorktree.directory(repo: context.repo, number: context.number, root: root),
+                directory: context.isIssue
+                    ? GitWorktree.directory(repo: context.repo, issueNumber: context.number, root: root)
+                    : GitWorktree.directory(repo: context.repo, number: context.number, root: root),
                 managedRoot: root,
                 git: URL(fileURLWithPath: "/usr/bin/git"),
                 runner: git
@@ -161,7 +166,8 @@ final class DelegationModelTests: XCTestCase {
             isAutomatic: isAutomatic,
             toasts: nil,
             onDidPush: onDidPush,
-            onDidFinish: onDidFinish
+            onDidFinish: onDidFinish,
+            onDidStart: onDidStart
         )
     }
 
@@ -600,6 +606,176 @@ final class DelegationModelTests: XCTestCase {
         XCTAssertTrue(task.contains("Sources/App.swift"))
         XCTAssertTrue(task.contains("42"))
         XCTAssertTrue(task.contains("leaks the file handle"))
+    }
+
+    // MARK: - Handing over an issue
+
+    private final class StartCollector {
+        var starts: [DelegationStart] = []
+    }
+
+    private func issueRow(_ number: Int = 128) -> IssueRowSummary {
+        IssueRowSummary(
+            id: "I_\(number)",
+            repo: RepoRef(owner: "schnaq", name: "review"),
+            number: number,
+            title: "Sync stalls on a renamed branch",
+            author: ShepherdCore.Actor(login: "octocat", kind: .human),
+            createdAt: Date(timeIntervalSince1970: 1_788_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_788_100_000),
+            labels: ["bug"]
+        )
+    }
+
+    /// Answers the reads `addForNewWork` makes: a default branch, and no branch of ours yet.
+    private func gitRunnerForNewWork() -> RecordingProcessRunner {
+        RecordingProcessRunner { invocation in
+            switch invocation.arguments.first {
+            case "symbolic-ref":
+                return ProcessResult(status: 0, standardOutput: "origin/main\n", standardError: "")
+            case "rev-parse":
+                return ProcessResult(status: 1, standardOutput: "", standardError: "")
+            default:
+                return ProcessResult(status: 0, standardOutput: "", standardError: "")
+            }
+        }
+    }
+
+    func testAnIssueContextCarriesShepherdsBranchAndNoCommit() {
+        let context = DelegationContext.issue(issueRow())
+        XCTAssertEqual(context.origin, .issue)
+        XCTAssertTrue(context.isIssue)
+        XCTAssertEqual(context.prID, "I_128")
+        XCTAssertEqual(context.headRefName, "agent/issue-128")
+        XCTAssertEqual(
+            context.headRefOid,
+            "",
+            "new work has no commit to be pinned to; the worktree starts at the default branch"
+        )
+        XCTAssertEqual(context.taskTemplate, IssueDelegationPrompt.defaultTemplate)
+    }
+
+    func testTheIssuePreambleAllowsTheWorkToBeFinishedWhereTheOtherOneForbidsIt() {
+        let issuePreamble = DelegationPrompt.preamble(for: DelegationContext.issue(issueRow()))
+        let pullRequestPreamble = DelegationPrompt.preamble(for: context)
+
+        // The branch is named, and the name is Shepherd's.
+        XCTAssertTrue(issuePreamble.contains("agent/issue-128"))
+        XCTAssertTrue(issuePreamble.contains("#128"))
+        XCTAssertTrue(issuePreamble.contains("schnaq/review"))
+        // The point of having a second preamble at all: this run may finish the job.
+        XCTAssertTrue(issuePreamble.lowercased().contains("open a pull request"))
+        XCTAssertFalse(
+            issuePreamble.contains("Do not push"),
+            "the rule that fits an existing pull request is wrong for work that does not exist"
+        )
+        // And the pull-request preamble is untouched by any of it.
+        XCTAssertTrue(pullRequestPreamble.contains("Do not push"))
+        XCTAssertFalse(pullRequestPreamble.contains("agent/issue-"))
+    }
+
+    func testTheIssueTaskTextIsRenderedFromTheCarriedTemplate() {
+        let context = DelegationContext.issue(issueRow(), template: "Do {number} in {repo}.")
+        XCTAssertEqual(DelegationPrompt.defaultTask(for: context), "Do 128 in schnaq/review.")
+    }
+
+    func testTheCommitMessageForAnIssueClosesItOnGitHub() {
+        let model = makeModel(
+            runner: ScriptedAgentRunner(),
+            context: DelegationContext.issue(issueRow())
+        )
+        XCTAssertEqual(
+            model.commitMessage,
+            "Fix #128: Sync stalls on a renamed branch",
+            "`Fix #128` is GitHub's own closing keyword, so the pull request closes the issue"
+        )
+    }
+
+    func testAnIssueRunCreatesShepherdsBranchInsteadOfADetachedCheckout() async throws {
+        let git = gitRunnerForNewWork()
+        let model = makeModel(
+            runner: ScriptedAgentRunner(
+                events: [.result(AgentRunResult(isError: false, subtype: "success"))]
+            ),
+            git: git,
+            context: DelegationContext.issue(issueRow())
+        )
+        model.start()
+        await model.runTask?.value
+
+        let added = git.arguments.first { $0.first == "worktree" && $0.dropFirst().first == "add" }
+        XCTAssertEqual(
+            added?.prefix(4).map(String.init),
+            ["worktree", "add", "-b", "agent/issue-128"]
+        )
+        XCTAssertEqual(added?.last, "origin/main")
+        XCTAssertFalse(
+            git.arguments.contains { $0.contains("--detach") },
+            "a detached head has no branch for the work to land on"
+        )
+    }
+
+    func testAnIssueRunAnnouncesTheHandoverOnceItIsRunning() async throws {
+        let collector = StartCollector()
+        let model = makeModel(
+            runner: ScriptedAgentRunner(
+                events: [.result(AgentRunResult(isError: false, subtype: "success"))]
+            ),
+            git: gitRunnerForNewWork(),
+            context: DelegationContext.issue(issueRow()),
+            onDidStart: { collector.starts.append($0) }
+        )
+        XCTAssertTrue(collector.starts.isEmpty, "nothing is claimed before the run exists")
+
+        model.start()
+        await model.runTask?.value
+
+        XCTAssertEqual(collector.starts.count, 1, "one handover per run")
+        let start = try XCTUnwrap(collector.starts.first)
+        XCTAssertEqual(start.prID, "I_128")
+        XCTAssertEqual(start.number, 128)
+        XCTAssertEqual(start.repo, RepoRef(owner: "schnaq", name: "review"))
+        XCTAssertEqual(start.agent, AgentCLIConfiguration().kind.displayName)
+        XCTAssertEqual(start.template, "default", "the name of the template, never its text")
+    }
+
+    func testAPullRequestRunAnnouncesNoHandover() async throws {
+        // ``DelegationStart`` is an issue's news: a pull-request run is already described by its
+        // outcome, and there is no assignment to report.
+        let collector = StartCollector()
+        let model = makeModel(
+            runner: ScriptedAgentRunner(
+                events: [.result(AgentRunResult(isError: false, subtype: "success"))]
+            ),
+            git: gitRunnerWithDiffStat(),
+            onDidStart: { collector.starts.append($0) }
+        )
+        model.start()
+        await model.runTask?.value
+        XCTAssertTrue(collector.starts.isEmpty)
+    }
+
+    func testAFailingWorktreeNeverAnnouncesAHandover() async throws {
+        // This is why the event fires at the run rather than at the click: a branch git refused
+        // to create means nobody is working on the issue, and the comment on GitHub would be a
+        // claim with nothing behind it.
+        let git = RecordingProcessRunner { _ in
+            ProcessResult(status: 128, standardOutput: "", standardError: "fatal: no remote")
+        }
+        let collector = StartCollector()
+        let model = makeModel(
+            runner: ScriptedAgentRunner(),
+            git: git,
+            context: DelegationContext.issue(issueRow()),
+            onDidStart: { collector.starts.append($0) }
+        )
+        model.start()
+        await model.runTask?.value
+
+        guard case .failed = model.state else {
+            return XCTFail("expected a failed state, got \(model.state)")
+        }
+        XCTAssertTrue(collector.starts.isEmpty)
     }
 
     // MARK: - Centre

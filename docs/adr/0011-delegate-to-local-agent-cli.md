@@ -80,3 +80,47 @@ comes from (`docs/plans/apple-intelligence-v2.md` §3.E).
 Consequence: the delegation feature gains one request type, one provider method with a default
 implementation that declines, and one router call. A tier without a brief-shaped call says so in
 one line under the field instead of answering out of a different prompt.
+
+## Amendment (2026-09-04): a second preamble, for work that does not exist yet
+
+Everything above was written about an **existing pull request**: the worktree is detached at that
+pull request's head commit, the preamble forbids creating or switching a branch and forbids
+opening a pull request, and the reviewer reads the diff and publishes it with the button. Handing
+an *issue* to an assistant (ADR 0032's 2026-09-04 amendment) is the opposite situation. There is
+nothing to review yet, so a run that may not start a branch can only leave its work in a detached
+head nobody can push, and a preamble telling it not to open a pull request forbids the one outcome
+the handover exists for.
+
+So `DelegationPrompt` has two preambles, selected by `DelegationContext.Origin`:
+
+- `.pullRequest` and `.reviewFinding` keep the text above, word for word.
+- `.issue` gets one that says three new things. The worktree starts at the **tip of the
+  repository's default branch** rather than at a commit, on a branch **Shepherd** named
+  (`agent/issue-{number}`, from `GitWorktree.branchName(issueNumber:)`), and the run **may finish
+  the job**: commit it, publish the branch, open a pull request, using the git and GitHub
+  credentials its own tool already has.
+
+That last sentence changes no rule in this ADR; it states one. The decision above already says
+Shepherd runs the user's CLI and *inherits whatever authentication that CLI has*, and that
+Shepherd's token is for the API and is never handed to git. An assistant that can publish could
+always publish — what the old preamble did was ask it not to, because on a pull request that
+belonged to the reviewer. On an issue it does not.
+
+**What has not changed: Shepherd itself transmits nothing.** No code path added by that amendment
+calls `git push` or asks GitHub to open a pull request. The only push in the app is still
+`GitWorktree.push(toBranch:)` behind the button a person presses, and it is still the fallback for
+a run whose own environment cannot publish — which the new preamble tells the assistant to say so
+about, in its final message, rather than failing silently. The branch being Shepherd's is what
+makes that fallback work: the app knows the name, so the button has something to push.
+
+Two smaller consequences of the same amendment. `GitWorktree` gained `addForNewWork(branch:)`
+beside `prepare(branch:headOid:)`, and it asks **git** which branch is the default —
+`origin/HEAD`, refreshed with `git remote set-head --auto` — rather than asking GitHub, so this
+stays a local operation on a Mac that already has the repository and adds no host to
+CONTRIBUTING.md's list. And a worktree for an issue is named `owner-repo-issue128` rather than
+`owner-repo-pr128`, because issue 128 and pull request 128 are two different pieces of work whose
+runs must not delete each other's.
+
+Handing the same issue over twice **resumes** its branch rather than resetting it. The first run's
+commits are the user's work; a second worktree that quietly threw them away would be the worst
+available reading of "assign this again".

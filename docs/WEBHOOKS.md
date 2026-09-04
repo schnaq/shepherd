@@ -62,11 +62,11 @@ new events and new `details` keys are additive and stay at `v: 1`. Every key is 
 present — a value that does not apply is `null`, never omitted. Key *order* is alphabetical as
 an artefact of canonical encoding; JSON objects are unordered, so do not depend on it.
 
-One event — `issue.closed` — is about an **issue** rather than a pull request, and its envelope
-carries an `issue` object where the others carry `pullRequest`. Nothing else changes, and no
-event that existed before it gained, lost or renamed a key, so it stays at `v: 1`. Switch on
-`event` (or the `X-Shepherd-Event` header) and you already know which of the two you are getting;
-there is never both and never an empty one.
+Two events — `issue.closed` and `issue.assigned_to_agent` — are about an **issue** rather than a
+pull request, and their envelope carries an `issue` object where the others carry `pullRequest`.
+Nothing else changes, and no event that existed before them gained, lost or renamed a key, so
+they stay at `v: 1`. Switch on `event` (or the `X-Shepherd-Event` header) and you already know
+which of the two shapes you are getting; there is never both and never an empty one.
 
 ```json
 {
@@ -257,6 +257,32 @@ This fires only for issues **Shepherd** closed. An issue somebody closed on gith
 leaves the inbox on the next sweep, and the sweep cannot tell you why it went — the same
 reasoning that keeps `pr.merged` to merges Shepherd performed.
 
+### `issue.assigned_to_agent`
+
+An issue was handed to the local assistant you configured, and that assistant is **running**.
+Fires at the moment the run actually starts in its worktree — not when the button was pressed:
+a press can be followed by a missing checkout, a branch git refuses to create or a tool that
+will not start, and an event fired there would report work nobody is doing. The envelope carries
+an [`issue` object](#the-issue-object), **not** a `pullRequest`.
+
+```json
+{ "agent": "Example Agent", "template": "default" }
+```
+
+| Key | Values |
+| --- | --- |
+| `agent` | The display name of the assistant Shepherd started. |
+| `template` | `"default"` · `"custom"` — which task template the brief was rendered from. |
+
+`template` is a **name**, never the text: a template may quote the issue, and this envelope
+describes what happened rather than what was written. There is no brief, no issue body and no
+comment body in any payload.
+
+The handover is also recorded on GitHub as an ordinary comment on the issue, queued through the
+outbox like every other write — so a colleague looking at the issue sees it even if nothing is
+subscribed to this event. What the run is then allowed to do with its result is Shepherd's
+ground rules, not this event's business: see [ADR 0011](adr/0011-delegate-to-local-agent-cli.md).
+
 ### `shepherd.test`
 
 Sent only by the *Send test event* button, so you can wire a workflow up before any real event
@@ -313,5 +339,5 @@ server-side one.
 | Nothing arrives, no status line | The event is not ticked, or the toggle is off. A gated event is never an attempt. |
 | Signature never matches | The HMAC must be over the raw body bytes, and the secret must be byte-identical. |
 | No `pr.merged` for a pull request somebody else merged | By design; see above. |
-| `$json.pullRequest` is undefined | The event is `issue.closed`, which carries `issue` instead. Route on `event` first. |
+| `$json.pullRequest` is undefined | The event is `issue.closed` or `issue.assigned_to_agent`, which carry `issue` instead. Route on `event` first. |
 | No `issue.closed` for an issue closed on github.com | By design; see above. |

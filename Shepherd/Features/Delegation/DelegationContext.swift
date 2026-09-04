@@ -1,10 +1,16 @@
 import Foundation
 import ShepherdCore
 
-/// What a delegation is about: which pull request, and which finding (if any) started it.
+/// What a delegation is about: which pull request or issue, and which finding (if any) started it.
 ///
 /// The context is what turns a button press into a useful prompt. It is a plain value so the
 /// prompt builder can be tested without a session, a database or a network.
+///
+/// The fields are named after the pull request they were written for and are read **generically**
+/// when the origin is an issue (ADR 0032's 2026-09-04 amendment): ``prID`` is then the issue's
+/// node id, ``number`` its number, and ``headRefName`` the branch Shepherd is about to create for
+/// it. Renaming them would have touched every pull-request call site for no behavioural change,
+/// which is the trade the outbox already made for the same reason.
 struct DelegationContext: Sendable, Equatable, Identifiable {
     /// Where the delegation was started from.
     enum Origin: Sendable, Equatable {
@@ -12,9 +18,21 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
         case pullRequest
         /// One review thread, anchored to a file and possibly a line.
         case reviewFinding(path: String, line: Int?)
+        /// An issue handed over as new work (ADR 0032's 2026-09-04 amendment).
+        ///
+        /// A genuine third case rather than a flag on the two above, because the ground rules
+        /// differ: the other two stand on an existing pull request's commit and must not move a
+        /// branch, while this one has nothing to stand on and its whole point is work that does
+        /// not exist yet. Every switch over this enum answers a different question for it — the
+        /// preamble, the default task, the commit message and the worktree's own shape — which
+        /// is exactly the test for whether a case has earned itself.
+        case issue
     }
 
-    /// The pull request's node id — also the identity that keeps one sheet per pull request.
+    /// The pull request's node id — also the identity that keeps one sheet per target.
+    ///
+    /// The **issue's** node id when ``origin`` is ``Origin/issue``. GitHub's node ids are unique
+    /// across both, so the one-run-per-target rule holds without knowing which kind it is.
     var prID: String
     /// The repository.
     var repo: RepoRef
@@ -23,8 +41,15 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
     /// The pull request title.
     var title: String
     /// The head branch, which is what a push would go to.
+    ///
+    /// For ``Origin/issue`` this is the branch Shepherd assigned the work — it does not exist
+    /// yet, and creating it is the first thing the worktree does.
     var headRefName: String
     /// The head commit the worktree is created at.
+    ///
+    /// Empty for ``Origin/issue``, and that is not a missing value: new work has no commit to be
+    /// pinned to, so the worktree starts at the default branch's tip instead. Only the two
+    /// pull-request origins read this field.
     var headRefOid: String
     /// What started the delegation.
     var origin: Origin
@@ -41,6 +66,15 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
     /// and that decision cannot be made from bodies alone. A comment with no author here counts
     /// as the reviewer's own, because that is what a pending review's comments are.
     var findingCommentAuthors: [String]
+
+    /// The template the task text was rendered from, for an issue handover.
+    ///
+    /// `nil` for the pull-request origins, which have no template: their task text is built from
+    /// the pull request and the thread. It is carried rather than derived because the outbound
+    /// handover event reports **which** template was used (ADR 0012's envelope) and because the
+    /// sheet's own default has to render the same one the caller did — one template, read twice,
+    /// rather than two that agree until somebody changes one.
+    var taskTemplate: String?
 
     /// The session this delegation answers, when it answers one (ADR 0030).
     ///
@@ -63,6 +97,16 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
     /// `owner/name#123`.
     var slug: String { "\(repo.fullName)#\(number)" }
 
+    /// Whether this context is about an issue.
+    ///
+    /// A property rather than a comparison at each call site, because two of the three readers
+    /// are about *where the work happens* rather than about the origin as such: the worktree
+    /// directory an issue gets and the git entry point that creates it.
+    var isIssue: Bool {
+        if case .issue = origin { return true }
+        return false
+    }
+
     /// Creates a context.
     init(
         prID: String,
@@ -75,6 +119,7 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
         focusReasons: [String] = [],
         findingComments: [String] = [],
         findingCommentAuthors: [String] = [],
+        taskTemplate: String? = nil,
         session: SessionReference? = nil
     ) {
         self.prID = prID
@@ -87,6 +132,7 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
         self.focusReasons = focusReasons
         self.findingComments = findingComments
         self.findingCommentAuthors = findingCommentAuthors
+        self.taskTemplate = taskTemplate
         self.session = session
     }
 
@@ -136,6 +182,32 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
         )
     }
 
+    /// A context for an issue handed over as new work (ADR 0032's 2026-09-04 amendment).
+    ///
+    /// The branch is Shepherd's, from ``GitWorktree/branchName(issueNumber:)``, and there is no
+    /// commit: see ``headRefOid``. Nothing here reads the issue body — the *task text* does, and
+    /// it is rendered by ``ShepherdCore/IssueDelegationPrompt`` and handed to the run the way an
+    /// automatic delegation hands in its own rendered template (ADR 0016), so a caller with only
+    /// a row can still assign and one with the body can say more.
+    /// - Parameters:
+    ///   - row: The issue.
+    ///   - template: The task template to render, defaulting to the built-in one.
+    static func issue(
+        _ row: IssueRowSummary,
+        template: String = IssueDelegationPrompt.defaultTemplate
+    ) -> DelegationContext {
+        DelegationContext(
+            prID: row.id,
+            repo: row.repo,
+            number: row.number,
+            title: row.title,
+            headRefName: GitWorktree.branchName(issueNumber: row.number),
+            headRefOid: "",
+            origin: .issue,
+            taskTemplate: template
+        )
+    }
+
     /// A context for a finding addressed to the session that wrote the code (ADR 0030).
     ///
     /// The finding is the reviewer's own text, which is why ``findingCommentAuthors`` stays
@@ -174,12 +246,19 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
 /// Builds the prompt handed to the agent CLI.
 ///
 /// The prompt has two halves. The **preamble** is Shepherd's and is not editable: it tells the
-/// agent where it is, that it must not push, and that the change should stay small (ADR 0011's
-/// guardrails are not only flags). The **task** is the user's text, appended after it.
+/// agent where it is, what it may do with the result, and that the change should stay small
+/// (ADR 0011's guardrails are not only flags). The **task** is the user's text, appended after it.
+///
+/// There are two preambles, chosen by the origin, and what differs is the ground rules rather
+/// than the wording (ADR 0011's 2026-09-04 amendment). Addressing a pull request forbids a
+/// branch, a push and a pull request, because the reviewer reads the diff and publishes it. An
+/// issue is the opposite situation: there is nothing to review yet, so the work belongs on a
+/// branch and the run may finish the job with the credentials its own tool already has.
 enum DelegationPrompt {
     /// The fixed, Shepherd-controlled part of the prompt.
     /// - Parameter context: What the delegation is about.
     static func preamble(for context: DelegationContext) -> String {
+        if context.isIssue { return issuePreamble(for: context) }
         let shortOid = String(context.headRefOid.prefix(12))
         return String(
             localized: """
@@ -194,6 +273,42 @@ enum DelegationPrompt {
                 anything the task does not ask for.
                 - Prefer the project's existing tests and tooling over adding new ones.
                 - If the task is unclear or you would have to guess at intent, say so in your \
+                final message instead of guessing.
+                """
+        )
+    }
+
+    /// The preamble for an issue handed over as new work.
+    ///
+    /// Three things are said that the other preamble does not say, and each is a decision rather
+    /// than a nicety. The **branch is Shepherd's**, named after the issue, so the run never has
+    /// to invent a name and the app can find the work again. The worktree starts at the
+    /// repository's **default branch**, so a commit made here belongs to something. And the run
+    /// **may finish the job** — commit, publish, open a pull request — with whatever git and
+    /// GitHub credentials its own tool already has, which is ADR 0011's standing rule that
+    /// Shepherd inherits that tool's authentication and never touches it. Shepherd's own code
+    /// still transmits nothing: the only push it performs is the one a person presses.
+    /// - Parameter context: What the delegation is about.
+    private static func issuePreamble(for context: DelegationContext) -> String {
+        String(
+            localized: """
+                You are running inside a git worktree that Shepherd created for issue \
+                #\(context.number) of \(context.repo.fullName). It is checked out on a new \
+                branch, \(context.headRefName), started from the tip of the repository's \
+                default branch. Shepherd named that branch; do not rename it and do not switch \
+                to another one.
+
+                Ground rules:
+                - The work is yours to finish on this branch. When it is ready you may commit \
+                it, publish the branch and open a pull request, using the git and GitHub \
+                credentials you already have. If you cannot publish, commit anyway and say so \
+                in your final message: the reviewer can publish the worktree from Shepherd.
+                - Solve the issue and nothing else. Do not reformat, rename or refactor \
+                anything the issue does not ask for.
+                - Read the repository before you write: its tests, its conventions and its \
+                contribution notes are the specification, not a suggestion.
+                - Prefer the project's existing tests and tooling over adding new ones.
+                - If the issue is unclear or you would have to guess at intent, say so in your \
                 final message instead of guessing.
                 """
         )
@@ -215,6 +330,19 @@ enum DelegationPrompt {
                 lines.append(contentsOf: context.focusReasons.prefix(6).map { "- \($0)" })
             }
             return lines.joined(separator: "\n")
+
+        case .issue:
+            // Rendered from the same template the panel renders, with the two things a context
+            // does not carry left out: an assignment started from the issues section hands in
+            // its own task text (labels and body included) exactly as an automatic delegation
+            // hands in its rendered rule template, and this is what the sheet shows when nobody
+            // did — a link, a test, a context built from a row nobody had read.
+            return IssueDelegationPrompt.render(
+                template: context.taskTemplate ?? IssueDelegationPrompt.defaultTemplate,
+                number: context.number,
+                repo: context.repo,
+                title: context.title
+            )
 
         case .reviewFinding(let path, let line):
             var lines: [String] = []

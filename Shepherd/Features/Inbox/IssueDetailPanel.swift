@@ -19,7 +19,10 @@ import SwiftUI
 ///   *triage* writes are here since ADR 0032's Sprint 4a amendment — comment, label, assign to
 ///   me, close as completed or not planned, reopen — and every one of them is an ordinary outbox
 ///   row (ADR 0006): queued locally, sent by the drain, re-validated against the issue's
-///   `updatedAt` before it goes out. Nothing in this file calls `GitHubClient`.
+///   `updatedAt` before it goes out. Nothing in this file calls `GitHubClient`. *Assign to
+///   agent…* joined them on 2026-09-04 and is the one action that is not itself a write: it
+///   opens the delegation sheet, and the comment recording the handover is queued through the
+///   same path as every other one.
 struct IssueDetailPanel: View {
     @Environment(AppEnvironment.self) private var environment
     /// The issues model.
@@ -297,10 +300,55 @@ struct IssueDetailPanel: View {
                 )
             }
 
+            assignToAgentButton(row)
+
             stateMenu(row)
 
             Spacer(minLength: 0)
         }
+    }
+
+    /// Hands the issue to the configured assistant (ADR 0032's 2026-09-04 amendment).
+    ///
+    /// The sheet that opens is the one a pull-request delegation opens, with the task text
+    /// prefilled from the issue — title, labels and the body when the panel has read it — and the
+    /// reviewer still presses Run. What the run may do with the result is decided by the preamble
+    /// the origin selects, not here.
+    ///
+    /// The handover is also recorded **on GitHub**, as an ordinary queued comment, so a colleague
+    /// looking at the issue can see that somebody is on it. It is queued when the run actually
+    /// starts rather than on this click: a comment saying an assistant is working on the issue is
+    /// a claim, and the click is too early to make it — a missing checkout or a branch git
+    /// refuses would leave the claim standing with nothing behind it.
+    @ViewBuilder
+    private func assignToAgentButton(_ row: IssueRowSummary) -> some View {
+        Button {
+            environment.startIssueDelegation(
+                row,
+                body: model.detail?.bodyMarkdown ?? "",
+                onDidStart: { start in
+                    Task {
+                        _ = await model.comment(
+                            String(
+                                localized: "Handed to \(start.agent) via Shepherd, on branch `\(GitWorktree.branchName(issueNumber: row.number))`."
+                            ),
+                            on: row
+                        )
+                    }
+                }
+            )
+        } label: {
+            Text(String(localized: "Assign to agent…"))
+        }
+        .buttonStyle(SecondaryButtonStyle())
+        .disabled(row.state == .closed)
+        .help(
+            row.state == .closed
+                ? String(localized: "This issue is closed")
+                : String(
+                    localized: "Open a delegation sheet with this issue as the task. Shepherd creates a worktree on its own branch and runs the assistant you configured; the handover is queued as a comment on the issue."
+                )
+        )
     }
 
     /// The label picker, fed by the labels the section has already seen.

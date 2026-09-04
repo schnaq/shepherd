@@ -47,6 +47,35 @@ struct DelegationOutcome: Sendable, Equatable {
     var at: Date
 }
 
+/// That an issue was handed to an assistant, flattened to values (ADR 0032's 2026-09-04
+/// amendment).
+///
+/// ``DelegationOutcome``'s counterpart at the other end of the run, and it exists for exactly one
+/// consumer: the `issue.assigned_to_agent` webhook. The moment it describes is the moment the
+/// assistant is **actually running** in the worktree — not the click, and not the assignment
+/// comment reaching GitHub. A click can be followed by a missing checkout, a branch git refuses
+/// to create or a tool that will not start, and an event fired there would report work nobody is
+/// doing; the comment, in turn, is queued locally and may sit out a backoff for minutes. What is
+/// true at this one point is "something is working on this issue now", which is what the event
+/// name promises.
+///
+/// Only an issue-origin run announces one. The two pull-request origins are already covered by
+/// ``DelegationOutcome`` and have no assignment to report.
+struct DelegationStart: Sendable, Equatable {
+    /// The issue's node id.
+    var prID: String
+    /// The repository.
+    var repo: RepoRef
+    /// The issue number.
+    var number: Int
+    /// The agent CLI's display name.
+    var agent: String
+    /// Which task template the brief was rendered from — a name, never the text.
+    var template: String
+    /// When the run started.
+    var at: Date
+}
+
 /// Drives one delegation: prepare a worktree, run the agent, show what it did, let the user
 /// decide what happens to the result.
 ///
@@ -147,6 +176,10 @@ final class DelegationModel: Identifiable {
     private let toasts: ToastCenter?
     private let onDidPush: (@MainActor () async -> Void)?
     private let onDidFinish: (@MainActor (DelegationOutcome) -> Void)?
+    private let onDidStart: (@MainActor (DelegationStart) -> Void)?
+    /// Guards ``onDidStart`` against firing twice: a handover is announced once per run, and a
+    /// run that is restarted from the same sheet is a second handover of the same issue.
+    private var didAnnounceStart = false
 
     /// The run task, so tests (and `deinit`-time cleanup) can await it.
     private(set) var runTask: Task<Void, Never>?
@@ -176,6 +209,7 @@ final class DelegationModel: Identifiable {
     ///   - toasts: Where failures are surfaced.
     ///   - onDidPush: Called after a successful push, so the app can re-sync the pull request.
     ///   - onDidFinish: Called once when the run reaches a terminal state (ADR 0012).
+    ///   - onDidStart: Called once when an issue-origin run is actually running (ADR 0032).
     ///   - brief: How the ✨ button drafts the task text (plan §3.E). Left out — and therefore
     ///     `nil` — for every run a rule started.
     init(
@@ -188,6 +222,7 @@ final class DelegationModel: Identifiable {
         toasts: ToastCenter? = nil,
         onDidPush: (@MainActor () async -> Void)? = nil,
         onDidFinish: (@MainActor (DelegationOutcome) -> Void)? = nil,
+        onDidStart: (@MainActor (DelegationStart) -> Void)? = nil,
         brief: AgentBriefDrafter? = nil
     ) {
         self.context = context
@@ -200,6 +235,7 @@ final class DelegationModel: Identifiable {
         self.toasts = toasts
         self.onDidPush = onDidPush
         self.onDidFinish = onDidFinish
+        self.onDidStart = onDidStart
         self.brief = brief
         self.task = DelegationPrompt.defaultTask(for: context)
     }
@@ -273,6 +309,7 @@ final class DelegationModel: Identifiable {
         guard canStart, let worktree else { return }
         didCancel = false
         didAnnounceOutcome = false
+        didAnnounceStart = false
         lastResult = nil
         worktreeStatus = nil
         hasPushed = false
@@ -286,10 +323,17 @@ final class DelegationModel: Identifiable {
         runTask = Task { [weak self] in
             guard let self else { return }
             do {
-                try await worktree.prepare(
-                    branch: self.context.headRefName,
-                    headOid: self.context.headRefOid
-                )
+                if self.context.isIssue {
+                    // New work, so there is no commit to stand on: the worktree is created on
+                    // Shepherd's branch at the default branch's tip (ADR 0032's 2026-09-04
+                    // amendment). The two pull-request origins keep the detached checkout.
+                    try await worktree.addForNewWork(branch: self.context.headRefName)
+                } else {
+                    try await worktree.prepare(
+                        branch: self.context.headRefName,
+                        headOid: self.context.headRefOid
+                    )
+                }
             } catch {
                 self.fail(with: error)
                 return
@@ -305,6 +349,7 @@ final class DelegationModel: Identifiable {
             }
             self.session = session
             self.state = .running
+            self.announceStart()
             self.append(.note, String(localized: "Running \(self.agentName) in \(worktree.directory.lastPathComponent)"))
             if self.isAutomatic {
                 // A run nobody pressed a button for says so in its own transcript, not only in
@@ -404,6 +449,28 @@ final class DelegationModel: Identifiable {
         announce(.failed, message: message)
     }
 
+    /// Says that an issue is being worked on, exactly once per run.
+    ///
+    /// Called at the transition to ``State/running``, which is the first moment the statement is
+    /// true: the worktree exists, the branch exists and the assistant's process is up. Nothing is
+    /// announced for a pull-request origin — see ``DelegationStart``.
+    private func announceStart() {
+        guard !didAnnounceStart, context.isIssue, let onDidStart else { return }
+        didAnnounceStart = true
+        onDidStart(
+            DelegationStart(
+                prID: context.prID,
+                repo: context.repo,
+                number: context.number,
+                agent: agentName,
+                template: IssueDelegationPrompt.name(
+                    of: context.taskTemplate ?? IssueDelegationPrompt.defaultTemplate
+                ),
+                at: Date()
+            )
+        )
+    }
+
     /// Hands the finished run to whoever asked to be told, exactly once.
     /// - Parameters:
     ///   - status: How the run ended.
@@ -458,6 +525,10 @@ final class DelegationModel: Identifiable {
             return String(localized: "Address review feedback on #\(context.number)")
         case .reviewFinding(let path, _):
             return String(localized: "Address review finding in \(path)")
+        case .issue:
+            // GitHub's own closing keyword, so the pull request this branch becomes closes the
+            // issue it was assigned from without anybody having to remember to link them.
+            return String(localized: "Fix #\(context.number): \(context.title)")
         }
     }
 

@@ -33,6 +33,8 @@ struct GitWorktree: Sendable {
         case commandFailed(command: String, status: Int32, message: String)
         /// A path outside the managed worktrees directory was passed to ``remove()``.
         case pathOutsideManagedDirectory(String)
+        /// git could not say which branch `origin`'s HEAD points at.
+        case noDefaultBranch
 
         var errorDescription: String? {
             switch self {
@@ -45,6 +47,10 @@ struct GitWorktree: Sendable {
             case .pathOutsideManagedDirectory(let path):
                 return String(
                     localized: "Refusing to delete \(path): it is not inside Shepherd's worktrees directory."
+                )
+            case .noDefaultBranch:
+                return String(
+                    localized: "git could not tell which branch this repository's `origin` points at. Run `git remote set-head origin --auto` in your clone and try again."
                 )
             }
         }
@@ -107,6 +113,43 @@ struct GitWorktree: Sendable {
         root.appendingPathComponent(directoryName(repo: repo, number: number), isDirectory: true)
     }
 
+    /// The directory name for an issue: `owner-repo-issue128`.
+    ///
+    /// A vocabulary of its own rather than reusing the pull-request name, because the numbers
+    /// come from two different sequences: issue 128 and pull request 128 exist in the same
+    /// repository and would otherwise be handed the same directory — and the second run would
+    /// delete the first one's work on its way in (ADR 0032's 2026-09-04 amendment).
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - number: The issue number.
+    static func directoryName(repo: RepoRef, issueNumber number: Int) -> String {
+        "\(sanitize(repo.owner))-\(sanitize(repo.name))-issue\(number)"
+    }
+
+    /// The managed directory for an issue.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - number: The issue number.
+    ///   - root: The managed worktrees directory.
+    static func directory(
+        repo: RepoRef,
+        issueNumber number: Int,
+        root: URL = AppConfig.worktreesDirectory
+    ) -> URL {
+        root.appendingPathComponent(
+            directoryName(repo: repo, issueNumber: number),
+            isDirectory: true
+        )
+    }
+
+    /// The branch a delegation started from an issue works on.
+    ///
+    /// **Shepherd** names it, deterministically, rather than asking the assistant to invent one:
+    /// a name the app can predict is a name it can show in the sheet, put in the preamble and
+    /// find again when the same issue is handed over twice (ADR 0032's 2026-09-04 amendment).
+    /// - Parameter number: The issue number.
+    static func branchName(issueNumber number: Int) -> String { "agent/issue-\(number)" }
+
     /// Replaces anything that would create a nested path or an odd file name.
     private static func sanitize(_ component: String) -> String {
         String(component.map { $0 == "/" || $0 == ":" || $0 == "." ? "-" : $0 })
@@ -138,6 +181,92 @@ struct GitWorktree: Sendable {
             in: checkout,
             label: "worktree add"
         )
+    }
+
+    /// Adds a worktree for work that does not exist yet, on its own branch.
+    ///
+    /// The counterpart to ``prepare(branch:headOid:)``, and the difference is the whole point of
+    /// having two entry points. Addressing an existing pull request means standing on that pull
+    /// request's commit with no branch to move, so that one checks out a detached head. Working
+    /// on an issue means there is nothing to stand on yet: the worktree starts at the tip of the
+    /// repository's default branch, on a branch Shepherd named, and a commit made there belongs
+    /// to something (ADR 0032's 2026-09-04 amendment).
+    ///
+    /// Which branch is the default is asked of **git** rather than of GitHub: `origin/HEAD` is a
+    /// pointer every clone has, `git remote set-head --auto` refreshes it with the user's own
+    /// credentials, and that keeps this a local operation on a Mac that already has the
+    /// repository — no request, and nothing added to the host list in CONTRIBUTING.md.
+    ///
+    /// Handing the same issue over twice **resumes** the branch rather than resetting it: the
+    /// first run's commits are the user's work, and a second worktree that quietly threw them
+    /// away would be the worst possible reading of "assign this again".
+    /// - Parameter branch: The branch to create, from ``branchName(issueNumber:)``.
+    /// - Returns: The ref the branch was started from, e.g. `origin/main`, for the transcript.
+    @discardableResult
+    func addForNewWork(branch: String) async throws -> String {
+        try await run(["fetch", "origin"], in: checkout, label: "fetch")
+        // Best-effort: a clone made before the default branch was renamed still points at the
+        // old name, and this is the cheap way to notice. A failure here is not fatal — the
+        // pointer may already be right, and ``defaultBranchRef()`` is what actually decides.
+        _ = try? await run(
+            ["remote", "set-head", "origin", "--auto"],
+            in: checkout,
+            label: "remote set-head"
+        )
+        let base = try await defaultBranchRef()
+        if FileManager.default.fileExists(atPath: directory.path) {
+            // A worktree left behind by a previous run or a crash, cleaned up rather than
+            // failing the whole delegation — ``prepare(branch:headOid:)``'s reasoning exactly.
+            try? await remove()
+        }
+        try FileManager.default.createDirectory(
+            at: directory.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        if await hasLocalBranch(branch) {
+            try await run(
+                ["worktree", "add", directory.path, branch],
+                in: checkout,
+                label: "worktree add"
+            )
+        } else {
+            try await run(
+                ["worktree", "add", "-b", branch, directory.path, base],
+                in: checkout,
+                label: "worktree add"
+            )
+        }
+        return base
+    }
+
+    /// What `origin`'s HEAD points at, e.g. `origin/main`.
+    private func defaultBranchRef() async throws -> String {
+        let result = try? await run(
+            ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"],
+            in: checkout,
+            label: "symbolic-ref"
+        )
+        let ref = result?.trimmedOutput ?? ""
+        // A clone whose `origin/HEAD` was never set answers with a failure or with nothing, and
+        // guessing `main` here would put the branch on top of whatever that name happens to be
+        // in a repository that calls its default something else. The error names the one command
+        // that fixes it instead.
+        guard !ref.isEmpty else { throw Failure.noDefaultBranch }
+        return ref
+    }
+
+    /// Whether the local repository already has this branch.
+    ///
+    /// Asked before creating one, rather than creating one and reading the failure: `git
+    /// worktree add -b` fails for more reasons than "the branch exists", and a retry that
+    /// swallowed the first error would report the wrong one.
+    private func hasLocalBranch(_ branch: String) async -> Bool {
+        let result = try? await runner.run(
+            executable: git,
+            arguments: ["rev-parse", "--verify", "--quiet", "refs/heads/\(branch)"],
+            currentDirectory: checkout
+        )
+        return result?.isSuccess ?? false
     }
 
     /// Removes the worktree and prunes git's administrative record of it.
