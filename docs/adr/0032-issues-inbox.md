@@ -773,6 +773,16 @@ The ⌘K row keeps its chip and loses its comment's claim. Whether an issue is a
 the first thing a reader wants off a search result, so the chip is worth its width; it is simply no
 longer a warning that the click goes nowhere.
 
+### One sentence in Sprint 4a's amendment was never true
+
+That amendment describes the issue panel's queue line as showing "the two outbox states the
+pull-request side shows" plus a third. The pull-request side showed none of them: it had the
+one-shot alert a parked review raises once and the account-wide counts, and nothing at all about
+one pull request. The line was written in good faith about a symmetry that did not exist. It exists
+now — ADR 0006's 2026-09-04 amendment gives `InboxDetailPanel` the same three indicators — so the
+sentence has become true rather than being corrected, which is the only way a dated record should
+ever change its meaning.
+
 ### What this does not change
 
 No new host, no new request, no new table, no migration and no setting. The section's observation

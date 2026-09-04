@@ -57,9 +57,9 @@ the same host, at the same cadence — and if they fail, the review inbox does n
 The rail asks the five questions a triage pass asks. **Is this still open?** — it is, unless you
 say otherwise: *Closed* is there for the fortnight Shepherd holds on to an issue after it closes,
 so the one you finished on Tuesday is still somewhere, and the rail says how many rather than
-leaving you to wonder. **Has anything been started on this?** — the facet reads whether a machine already has a
-pull request open that would close the issue, so *Nothing started yet* is the pile you are actually
-looking for. Then **labels**, **age** — bucketed by when the issue was *opened*, because an issue
+leaving you to wonder. **Has anything been started on this?** — the facet reads whether a machine
+already has a pull request open that would close the issue, so *Nothing started yet* is the pile
+you are actually looking for. Then **labels**, **age** — bucketed by when the issue was *opened*, because an issue
 somebody commented on this morning has not become a new issue — and **repository**. Each row
 carries the provenance chip you already know from the review inbox, a small glyph when an agent is
 on it, its labels, its comment count, and a *Closed* chip when that is what it is.
@@ -77,7 +77,9 @@ offers *Reopen* instead. Every one of those is queued locally first and sent in 
 same way an approval is — so it works in a tunnel — and every one of them is checked against the
 issue before it goes out: if somebody relabelled, commented on or closed the issue between your
 click and the send, Shepherd parks the write and tells you rather than overwriting what they did.
-The panel says what is still waiting and what is parked.
+The panel says what is still waiting, what is parked, and what Shepherd gave up on — and so does
+the pull-request panel, about the reviews and merges queued against the pull request you are
+looking at.
 
 And it is drivable from outside like everything else: `shepherd issue schnaq/review#128` opens one,
 `shepherd inbox issues` opens the section, and `shepherd://issue/…` does the same from a script or
