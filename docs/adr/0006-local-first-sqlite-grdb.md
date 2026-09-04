@@ -67,3 +67,37 @@ back at GitHub from a settings window would be the blind submit this ADR exists 
 parked row, and it cannot pull a row out from under a drain that is currently sending it.
 
 No schema change: `lastError` and `attemptCount` are columns the outbox has always had.
+
+## Amendment (2026-09-04): the third state is visible on the pull request it belongs to
+
+The amendment above made a row the drain gave up on *countable* — three standing counts, published
+by `SignedInSession`, said in Settings → Sync, the title bar and the morning digest. All three are
+account-wide, and that turned out to be the wrong altitude for the question a reviewer actually
+asks. They press Approve, GitHub refuses the write, and the pull request in front of them looks
+exactly as it did before: the only per-pull-request word about the queue was the one-shot alert a
+*parked* review raises once (`DraftConflictQueue`), which says nothing about the other two states
+and nothing at all to somebody who was away when it appeared. "Somewhere in this account, one write
+failed" is not an answer you can act on while looking at the pull request it failed for.
+
+So the pull-request detail panel says all three about the one pull request on screen —
+`InboxDetailPanel.queueStatus(_:)`, backed by `InboxModel.queuedWriteCount(for:)`,
+`parkedWriteCount(for:)` and `failedWriteCount(for:)`. It is the line the issues panel has carried
+since ADR 0032's Sprint 4a amendment, with the same symbols, the same colours and two of the same
+three sentences — the parked one names a pull request rather than an issue, so it is its own
+string — and it is deliberately only a *statement*: Retry and Discard stay in Settings → Sync,
+which the failed indicator names, because those two buttons exist for a person who has just changed
+a token or a branch rule and wants to see the whole queue.
+
+**This side observes the outbox; the issue side re-reads it.** That asymmetry is not an oversight,
+and it is worth stating because it looks like one. A pull-request write is queued from four
+different places — the list's bulk triage (ADR 0015), the detail panel, the review composer, and
+automatic merging (ADR 0018), which queues with nobody watching — so there is no single call site
+that could re-read the queue after enqueuing, and inventing one would leave the three it did not
+know about silently stale. `observeOutboxItems()` is therefore a `ValueObservation` like every other
+source this ADR describes, and the panel simply renders what the queue last said. Every issue write
+goes through one model instead (`IssueInboxModel`), which is why a cheap re-read after each enqueue
+and each drain is honest there. The price of the difference is one more observation on a table that
+holds tens of rows.
+
+No schema change and no new request: this is one more `SELECT` of the `outbox` table, and the write
+path, the preflight and `mutationSent` are untouched.

@@ -324,6 +324,21 @@ final class InboxModel {
     /// would put a pull request under a header its badge was not counted for.
     private(set) var trust: TrustLaneSnapshot = .empty
 
+    /// Every row the outbox is holding — queued, in flight, parked or failed (ADR 0006).
+    ///
+    /// Observed rather than re-read after each write, unlike ``IssueInboxModel/pendingWrites``,
+    /// because a write against a pull request is queued from four different places: the list's
+    /// bulk triage, the detail panel, the review composer and automatic merging. There is no
+    /// single call site that could re-read the queue afterwards, so the queue announces itself
+    /// instead — which also means an unattended merge shows up in the panel without the panel
+    /// knowing that automation exists.
+    ///
+    /// The whole outbox rather than one pull request's rows, because the observation is per
+    /// model and the selection moves with `j`/`k`: re-subscribing on every cursor move would
+    /// trade one `SELECT` per outbox write for one per keystroke, over a table that holds tens
+    /// of rows.
+    private(set) var outboxItems: [OutboxItem] = []
+
     /// The two-keystroke state machine (`r a`, `g r`, …).
     var keySequence = KeySequenceState()
 
@@ -333,6 +348,7 @@ final class InboxModel {
     private var roundsTask: Task<Void, Never>?
     private var sessionsTask: Task<Void, Never>?
     private var trustTask: Task<Void, Never>?
+    private var outboxTask: Task<Void, Never>?
     /// The rows the rounds chips were last computed for, as `id:head` pairs.
     private var roundsSignature = ""
     /// The rows the session glyphs were last read for, as `id:head` pairs.
@@ -349,7 +365,7 @@ final class InboxModel {
 
     // MARK: - Observation
 
-    /// Starts observing the inbox table. Safe to call more than once.
+    /// Starts observing the inbox table and the outbox. Safe to call more than once.
     func startObserving() {
         guard observationTask == nil else { return }
         let stream = session.database.observeInbox()
@@ -362,6 +378,13 @@ final class InboxModel {
                 self.refreshReviewRounds()
                 self.refreshSessionReferences()
                 self.refreshTrustLanes()
+            }
+        }
+        let writes = session.database.observeOutboxItems()
+        outboxTask = Task { [weak self] in
+            for await items in writes {
+                guard let self else { return }
+                self.outboxItems = items
             }
         }
     }
@@ -380,6 +403,8 @@ final class InboxModel {
         sessionsTask = nil
         trustTask?.cancel()
         trustTask = nil
+        outboxTask?.cancel()
+        outboxTask = nil
     }
 
     /// Recomputes the rounds chips, but only when the rows they describe have moved.
@@ -740,6 +765,95 @@ final class InboxModel {
         if row.isDraft { score -= 40 }
         if row.reviewDecision == .approved { score -= 30 }
         return score
+    }
+
+    // MARK: - Queued writes (ADR 0006)
+
+    /// The outbox rows targeting one pull request.
+    /// - Parameter row: The pull request.
+    func queuedWrites(for row: PullRequestSummary) -> [OutboxItem] {
+        InboxModel.queuedWrites(outboxItems, for: row)
+    }
+
+    /// How many writes are queued or in flight for one pull request.
+    /// - Parameter row: The pull request.
+    func queuedWriteCount(for row: PullRequestSummary) -> Int {
+        InboxModel.queuedWriteCount(outboxItems, for: row)
+    }
+
+    /// How many writes the drain parked for one pull request because it moved on underneath them.
+    /// - Parameter row: The pull request.
+    func parkedWriteCount(for row: PullRequestSummary) -> Int {
+        InboxModel.parkedWriteCount(outboxItems, for: row)
+    }
+
+    /// How many writes for one pull request were given up on.
+    ///
+    /// The third state a queued write can end in: the drain fails a row **non-retriably** on a
+    /// 4xx from GitHub, and on anything else it establishes that retrying cannot help. Such a row
+    /// is neither waiting nor parked, so neither of the two counts above sees it — and it never
+    /// goes away by itself, which is exactly why it has to be on screen rather than only in the
+    /// account-wide count in the title bar.
+    /// - Parameter row: The pull request.
+    func failedWriteCount(for row: PullRequestSummary) -> Int {
+        InboxModel.failedWriteCount(outboxItems, for: row)
+    }
+
+    /// The rows out of `items` that target one pull request, in the order they were queued.
+    ///
+    /// Taking the rows as an argument rather than reading ``outboxItems``, exactly as
+    /// ``priorityScore(_:)`` takes a row: this is what the panel's line says, and stating it as a
+    /// function of the queue makes it assertable without a ``SignedInSession``, which the tests
+    /// have no way to build. The four instance methods above are the same four questions asked of
+    /// whatever the observation last handed over.
+    /// - Parameters:
+    ///   - items: The outbox rows to look in.
+    ///   - row: The pull request.
+    /// - Returns: The matching rows. An outbox row's ``ShepherdCore/OutboxItem/prID`` is the
+    ///   node id of its target, which for these four functions is always a pull request.
+    nonisolated static func queuedWrites(
+        _ items: [OutboxItem],
+        for row: PullRequestSummary
+    ) -> [OutboxItem] {
+        items.filter { $0.prID == row.id }
+    }
+
+    /// How many of `items` are queued or in flight for one pull request.
+    ///
+    /// A row that is already being sent still counts: from the user's point of view it has not
+    /// landed yet, which is the rule the account-wide `pendingOutboxCount()` applies too.
+    /// - Parameters:
+    ///   - items: The outbox rows to look in.
+    ///   - row: The pull request.
+    nonisolated static func queuedWriteCount(
+        _ items: [OutboxItem],
+        for row: PullRequestSummary
+    ) -> Int {
+        InboxModel.queuedWrites(items, for: row)
+            .filter { $0.state == .pending || $0.state == .sending }
+            .count
+    }
+
+    /// How many of `items` the drain parked for one pull request.
+    /// - Parameters:
+    ///   - items: The outbox rows to look in.
+    ///   - row: The pull request.
+    nonisolated static func parkedWriteCount(
+        _ items: [OutboxItem],
+        for row: PullRequestSummary
+    ) -> Int {
+        InboxModel.queuedWrites(items, for: row).filter { $0.state == .conflicted }.count
+    }
+
+    /// How many of `items` were given up on for one pull request.
+    /// - Parameters:
+    ///   - items: The outbox rows to look in.
+    ///   - row: The pull request.
+    nonisolated static func failedWriteCount(
+        _ items: [OutboxItem],
+        for row: PullRequestSummary
+    ) -> Int {
+        InboxModel.queuedWrites(items, for: row).filter { $0.state == .failed }.count
     }
 
     // MARK: - Deep links

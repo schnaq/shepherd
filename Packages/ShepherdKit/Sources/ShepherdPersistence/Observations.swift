@@ -87,6 +87,37 @@ extension DatabaseManager {
         )
     }
 
+    /// Streams every row the outbox is holding, oldest first.
+    ///
+    /// The three counts above answer "what is the account's queue doing?"; this answers "what is
+    /// the queue holding for *this* pull request?", which needs the rows rather than a number.
+    ///
+    /// Observed rather than re-read on demand, and that is the one place the pull-request side
+    /// differs from the issue side. A write against a pull request is queued from four different
+    /// places — the list's bulk triage, the detail panel, the review composer and automatic
+    /// merging — so there is no single call site that could re-read the queue after enqueuing and
+    /// no honest place to put such a read. Every issue write goes through one model instead, which
+    /// is why a cheap re-read after each one is enough there. The cost of the difference is one
+    /// more `ValueObservation` on a table that holds tens of rows at most.
+    /// - Returns: A stream that finishes when the caller stops iterating or the observation
+    ///   fails.
+    public func observeOutboxItems() -> AsyncStream<[OutboxItem]> {
+        let writer = self.writer
+        let observation = ValueObservation.tracking { db -> [OutboxItem] in
+            try DatabaseManager.loadOutboxItems(db)
+        }
+        return AsyncStream { continuation in
+            let queue = DispatchQueue(label: "com.schnaq.shepherd.observation.outbox.items")
+            let cancellable = observation.start(
+                in: writer,
+                scheduling: .async(onQueue: queue),
+                onError: { _ in continuation.finish() },
+                onChange: { value in continuation.yield(value) }
+            )
+            continuation.onTermination = { _ in cancellable.cancel() }
+        }
+    }
+
     private func observeOutboxCount(matching predicate: String, label: String) -> AsyncStream<Int> {
         let writer = self.writer
         let observation = ValueObservation.tracking { db -> Int in

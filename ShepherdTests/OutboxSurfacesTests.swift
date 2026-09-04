@@ -7,6 +7,8 @@ import XCTest
 
 /// The app's side of the third outbox state (ADR 0006): the rows Settings → Sync lists, the words
 /// it lists them with, and what its two buttons actually do to the queue.
+/// `PullRequestQueueStatusTests` below covers the other half of the same subject — what the
+/// pull-request panel says about the writes queued for the one pull request on screen.
 ///
 /// The *counting* is covered on the Linux runner — `DraftAndOutboxTests` owns
 /// `failedOutboxCount()`, `failedOutboxItems()` and `retryOutboxItem(id:)` — so what is left here
@@ -126,5 +128,154 @@ final class OutboxSurfacesTests: XCTestCase {
         let named = listed.map { SyncSettingsTab.actionName($0.action) }
         XCTAssertEqual(listed.map(\.id), [doomed.id])
         XCTAssertEqual(named, [SyncSettingsTab.actionName(doomed.action)])
+    }
+}
+
+/// What the pull-request detail panel says about the outbox rows targeting one pull request
+/// (ADR 0006's 2026-09-04 amendment): the three counts `InboxDetailPanel.queueStatus(_:)` draws,
+/// and the observation they follow.
+///
+/// The counting is asserted through `InboxModel`'s static form rather than through an instance,
+/// for the reason the suite above gives for needing no session either: `InboxModel` is built from
+/// a `SignedInSession`, which wants the Keychain and the real database file, so standing one up
+/// here would test the wiring of a test rather than the panel. The instance methods the panel
+/// calls are one-line applications of these four functions to whatever the observation last handed
+/// over, and the last test drives that observation for real.
+///
+/// Deliberately not `@MainActor`, unlike its neighbour: nothing here touches main-actor state, and
+/// the `AsyncStream` iterator in the last test stays in one isolation domain that way.
+final class PullRequestQueueStatusTests: XCTestCase {
+    private let repo = RepoRef(owner: "schnaq", name: "review")
+    private let moment = Date(timeIntervalSince1970: 1_788_162_000)
+
+    /// A row carrying only what the queue line reads: its node id, which is an outbox row's
+    /// `prID`, and the number the queue stores beside it.
+    private func pullRequest(id: String, number: Int) -> PullRequestSummary {
+        PullRequestSummary(
+            id: id,
+            repo: repo,
+            number: number,
+            title: "Pull request \(number)",
+            author: ShepherdCore.Actor(login: "octocat", kind: .human),
+            updatedAt: moment,
+            createdAt: moment,
+            headRefName: "feature",
+            headRefOid: "abc123",
+            baseRefName: "main"
+        )
+    }
+
+    private func write(
+        _ action: OutboxAction,
+        on row: PullRequestSummary,
+        state: OutboxState = .pending
+    ) -> OutboxItem {
+        OutboxItem(
+            prID: row.id,
+            repo: repo,
+            number: row.number,
+            action: action,
+            createdAt: moment,
+            state: state
+        )
+    }
+
+    func testAQueuedWriteIsCountedForItsOwnPullRequestAndNotForAnother() {
+        let mine = pullRequest(id: "PR_1", number: 182)
+        let other = pullRequest(id: "PR_2", number: 183)
+        let draft = ReviewDraft(prID: mine.id, verdict: .approve, basedOnHeadOid: "abc123")
+        let items = [
+            write(.submitReview(draft), on: mine),
+            write(.resolveThread(threadID: "PRRT_1"), on: mine, state: .sending),
+        ]
+
+        XCTAssertEqual(
+            InboxModel.queuedWriteCount(items, for: mine),
+            2,
+            "a row already in flight has still not landed"
+        )
+        XCTAssertEqual(InboxModel.queuedWrites(items, for: mine).count, 2)
+        XCTAssertEqual(
+            InboxModel.queuedWriteCount(items, for: other),
+            0,
+            "the queue is read per target, so a neighbour's write is not this pull request's news"
+        )
+        XCTAssertTrue(InboxModel.queuedWrites(items, for: other).isEmpty)
+    }
+
+    func testAParkedWriteIsCountedAsParkedRatherThanAsWaiting() {
+        // A parked row never leaves that state on its own, so counting it as waiting would
+        // promise a send that is never coming.
+        let mine = pullRequest(id: "PR_1", number: 182)
+        let other = pullRequest(id: "PR_2", number: 183)
+        let items = [
+            write(
+                .merge(method: "squash", expectedHeadOid: "abc123"),
+                on: mine,
+                state: .conflicted
+            ),
+            write(.resolveThread(threadID: "PRRT_9"), on: other),
+        ]
+
+        XCTAssertEqual(InboxModel.parkedWriteCount(items, for: mine), 1)
+        XCTAssertEqual(InboxModel.queuedWriteCount(items, for: mine), 0)
+        XCTAssertEqual(InboxModel.failedWriteCount(items, for: mine), 0)
+        XCTAssertEqual(InboxModel.parkedWriteCount(items, for: other), 0)
+        XCTAssertEqual(InboxModel.queuedWriteCount(items, for: other), 1)
+    }
+
+    func testAWriteTheDrainGaveUpOnIsCountedAsFailedAndAsNeitherOfTheOtherTwo() {
+        // The state that was on nobody's screen for a pull request: a 4xx from GitHub ends here,
+        // and the row never moves again by itself.
+        let mine = pullRequest(id: "PR_1", number: 182)
+        let items = [
+            write(.markReadyForReview, on: mine, state: .failed),
+            write(.replyToComment(commentDatabaseID: 7, body: "thanks"), on: mine),
+        ]
+
+        XCTAssertEqual(InboxModel.failedWriteCount(items, for: mine), 1)
+        XCTAssertEqual(
+            InboxModel.parkedWriteCount(items, for: mine),
+            0,
+            "a failed row is not parked"
+        )
+        XCTAssertEqual(
+            InboxModel.queuedWriteCount(items, for: mine),
+            1,
+            "and it is not waiting: the row still waiting is the other one"
+        )
+    }
+
+    func testTheCountsFollowTheOutboxObservation() async throws {
+        // The panel's line is fed by `observeOutboxItems()` rather than by a re-read, because a
+        // pull-request write is queued from four different places. So the chain that matters is
+        // "write to the outbox, the observation speaks, the counts change".
+        let database = try DatabaseManager.inMemory()
+        let mine = pullRequest(id: "PR_1", number: 182)
+        var iterator = database.observeOutboxItems().makeAsyncIterator()
+        let empty = await iterator.next()
+        XCTAssertEqual(empty?.count, 0, "the observation speaks once as soon as it starts")
+        XCTAssertEqual(InboxModel.queuedWriteCount(empty ?? [], for: mine), 0)
+
+        let queued = write(.merge(method: "squash", expectedHeadOid: "abc123"), on: mine)
+        try await database.enqueue(queued)
+        let afterEnqueue = await iterator.next()
+        XCTAssertEqual(InboxModel.queuedWriteCount(afterEnqueue ?? [], for: mine), 1)
+        XCTAssertEqual(InboxModel.failedWriteCount(afterEnqueue ?? [], for: mine), 0)
+
+        try await database.markOutboxItemFailed(
+            id: queued.id,
+            error: "405 Method Not Allowed",
+            now: moment,
+            retriable: false
+        )
+        let afterFailure = await iterator.next()
+        XCTAssertEqual(
+            InboxModel.failedWriteCount(afterFailure ?? [], for: mine),
+            1,
+            "the drain giving up is what the panel has to be able to say"
+        )
+        XCTAssertEqual(InboxModel.queuedWriteCount(afterFailure ?? [], for: mine), 0)
+        XCTAssertEqual(InboxModel.parkedWriteCount(afterFailure ?? [], for: mine), 0)
     }
 }

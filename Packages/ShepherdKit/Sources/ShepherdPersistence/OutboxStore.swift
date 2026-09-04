@@ -186,9 +186,23 @@ extension DatabaseManager {
 
     /// Every row currently in the outbox, newest last. Used by the Settings screen and tests.
     public func allOutboxItems() async throws -> [OutboxItem] {
-        let records = try await writer.read { db in
-            try OutboxRecord.fetchAll(db, sql: "SELECT * FROM outbox ORDER BY createdAt ASC")
+        try await writer.read { db in
+            try DatabaseManager.loadOutboxItems(db)
         }
+    }
+
+    /// The whole-outbox query, shared by ``allOutboxItems()`` and ``observeOutboxItems()``.
+    ///
+    /// One definition rather than the same `SELECT` written twice: the ordering is part of what
+    /// callers see — a panel lists a pull request's writes in the order they were queued — and
+    /// two copies of a query are two chances for that to stop being true. A row whose payload
+    /// cannot be decoded is dropped rather than thrown: the outbox is append-only history, and one
+    /// unreadable row must not hide the rest of the queue from the surfaces that describe it.
+    static func loadOutboxItems(_ db: Database) throws -> [OutboxItem] {
+        let records = try OutboxRecord.fetchAll(
+            db,
+            sql: "SELECT * FROM outbox ORDER BY createdAt ASC"
+        )
         return records.compactMap { try? $0.outboxItem() }
     }
 

@@ -372,15 +372,17 @@ struct IssueDetailPanel: View {
 
     /// What the outbox is holding for this issue.
     ///
-    /// The two states the pull-request side shows — waiting to be sent, and parked because the
-    /// target moved on underneath the write (ADR 0006) — plus the third one it does not: a write
-    /// the drain **gave up on**. That is not a theoretical state here. An issue row is failed
-    /// non-retriably whenever the engine was built without an `IssueWriting` port, and GitHub's
-    /// own 4xx answers end the same way; a row in it is neither waiting nor parked, so without
-    /// this line the click simply looked as though it had worked. All three are said about one
-    /// issue rather than about the whole account: the standing counts in Settings → Sync and the
-    /// title bar are unchanged, and this line is what makes them findable from where the write was
-    /// queued.
+    /// All three states a queued write can end in (ADR 0006): waiting to be sent, parked because
+    /// the target moved on underneath the write, and given up on. This panel said all three
+    /// first — when it was written the pull-request side said none of them about one pull request,
+    /// and ``InboxDetailPanel/queueStatus(_:)`` is the same line on that side since.
+    ///
+    /// The third one is not a theoretical state here: an issue row is failed non-retriably
+    /// whenever the engine was built without an `IssueWriting` port, and GitHub's own 4xx answers
+    /// end the same way; a row in it is neither waiting nor parked, so without this line the click
+    /// simply looked as though it had worked. All three are said about one issue rather than about
+    /// the whole account: the standing counts in Settings → Sync and the title bar are unchanged,
+    /// and this line is what makes them findable from where the write was queued.
     @ViewBuilder
     private func queueStatus(_ row: IssueRowSummary) -> some View {
         let queued = model.queuedWriteCount(for: row)

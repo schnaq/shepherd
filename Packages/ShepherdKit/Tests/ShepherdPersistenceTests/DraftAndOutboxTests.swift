@@ -705,6 +705,39 @@ final class ObservationTests: XCTestCase {
         XCTAssertEqual(stillConflicted, 0)
     }
 
+    func testObserveOutboxItemsEmitsTheRowsAndFollowsAWriteToThem() async throws {
+        // The rows rather than a count, because the surface behind this observation says something
+        // about one pull request: the three standing counts are account-wide.
+        let database = try DatabaseManager.inMemory()
+        var iterator = database.observeOutboxItems().makeAsyncIterator()
+        let empty = await iterator.next()
+        XCTAssertEqual(empty?.count, 0)
+
+        let queued = OutboxItem(
+            prID: "PR_1",
+            repo: PersistenceFixtures.repo,
+            number: 128,
+            action: .resolveThread(threadID: "PRRT_1")
+        )
+        try await database.enqueue(queued)
+        let afterEnqueue = await iterator.next()
+        let stored = try XCTUnwrap(afterEnqueue?.first)
+        XCTAssertEqual(afterEnqueue?.count, 1)
+        XCTAssertEqual(stored.id, queued.id)
+        XCTAssertEqual(stored.prID, "PR_1")
+        XCTAssertEqual(stored.state, OutboxState.pending)
+
+        try await database.markOutboxItemConflicted(id: queued.id, reason: "head moved")
+        let afterParking = await iterator.next()
+        let parked = try XCTUnwrap(afterParking?.first)
+        XCTAssertEqual(parked.state, OutboxState.conflicted)
+        XCTAssertEqual(
+            parked.lastError,
+            "head moved",
+            "a parked row keeps the reason, which is what the panel's tooltip is about"
+        )
+    }
+
     func testObserveConflictedOutboxCount() async throws {
         let database = try DatabaseManager.inMemory()
         let parked = OutboxItem(

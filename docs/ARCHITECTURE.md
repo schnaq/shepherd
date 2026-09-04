@@ -488,6 +488,13 @@ rows the user can *act* on, which is why the store also carries `failedOutboxIte
 Settings → Sync names) and `retryOutboxItem(id:)` (back to `pending`, `attemptCount` and
 `nextAttemptAt` reset, guarded on `state = 'failed'` so a row a drain is currently sending cannot be
 pulled out from under it); `deleteOutboxItem(id:)` is the discard on the other button.
+Beside the three counts, `observeOutboxItems()` streams the *rows* themselves (ADR 0006's
+2026-09-04 amendment) — the same `SELECT` as `allOutboxItems()`, shared as
+`DatabaseManager.loadOutboxItems(_:)` so the ordering cannot drift between the two. It exists
+because a count cannot answer "what is queued for *this* pull request", and it is observed rather
+than re-read because a pull-request write is queued from four places (bulk triage, the detail
+panel, the review composer, automatic merging) with no single call site that could re-read
+afterwards. The issue side re-reads instead, since every issue write goes through one model.
 
 One read crosses tables rather than serving a screen: `viewerReviewComments(login:since:)` joins
 `review_comments → review_threads → pull_requests` and returns the signed-in user's own posted
@@ -997,12 +1004,14 @@ the keyboard cursor that `j`/`k` moves and the detail panel follows, and `marks`
 Marks are pruned to the visible rows on every list change, so a bulk action can only ever act on
 rows the user can see.
 
-`InboxModel` subscribes to `DatabaseManager.observeInbox()`; `ReviewModel` subscribes to
-`observeDraft(prID:)`. Detail fetches read the cached `PullRequestDetail` first and only then
-refresh from GitHub, so opening a pull request offline shows the last-known state instead of a
-spinner (ADR 0006). Grouping uses `InboxGrouper`; the sort order inside a section is applied by
-the app on top of it (`priority` / `recentlyUpdated` / `oldestFirst`), with a deterministic
-`InboxModel.priorityScore` so two sweeps of the same data never reshuffle the list.
+`InboxModel` subscribes to `DatabaseManager.observeInbox()` and to `observeOutboxItems()`, the
+second one so the detail panel can say what the queue is holding for the selected pull request;
+`ReviewModel` subscribes to `observeDraft(prID:)`. Detail fetches read the cached
+`PullRequestDetail` first and only then refresh from GitHub, so opening a pull request offline
+shows the last-known state instead of a spinner (ADR 0006). Grouping uses `InboxGrouper`; the sort
+order inside a section is applied by the app on top of it (`priority` / `recentlyUpdated` /
+`oldestFirst`), with a deterministic `InboxModel.priorityScore` so two sweeps of the same data
+never reshuffle the list.
 
 ### Menu-bar quick inbox
 
@@ -1085,14 +1094,15 @@ duplicate the toolbar, the digest card, the Settings sheet and the palette overl
   `OutboxItem` and asks the engine to drain — nothing in `Features/Inbox/` calls `GitHubClient` for
   a mutation, which is the same rule `PullRequestActions` states below. The label picker is fed by
   the labels the section has already seen in that repository (a `GET /repos/…/labels` would be a
-  new request on every panel for a list the sweep already wrote), and the panel shows the two
-  outbox states the pull-request side shows — waiting to be sent, parked, and given up on —
-  about this one issue, the third counted by `failedWriteCount(for:)` and drawn in the failure
-  colour. An issue row fails non-retriably whenever the engine was built without an
-  `IssueWriting` port, and a 4xx from GitHub ends the same way; such a row is neither pending nor
-  conflicted, so without that line the click looked as though it had worked. This panel had the
-  line first; the account-wide surfaces (Settings → Sync, the title bar, the digest) caught up
-  afterwards. No new global shortcuts: the issues section already refuses `r a`, `m` and `x`.
+  new request on every panel for a list the sweep already wrote), and the panel shows all three
+  outbox states — waiting to be sent, parked, and given up on — about this one issue, the third
+  counted by `failedWriteCount(for:)` and drawn in the failure colour. An issue row fails
+  non-retriably whenever the engine was built without an `IssueWriting` port, and a 4xx from
+  GitHub ends the same way; such a row is neither pending nor conflicted, so without that line the
+  click looked as though it had worked. This panel had the line first: the account-wide surfaces
+  (Settings → Sync, the title bar, the digest) caught up next, and the pull-request panel got the
+  same three indicators in ADR 0006's 2026-09-04 amendment. No new global shortcuts: the issues
+  section already refuses `r a`, `m` and `x`.
 
 ### Morning digest (opt-in, local, no scheduler)
 
@@ -1236,8 +1246,10 @@ alert offering to re-open the review rather than submitting against the wrong co
 per parked review, queued in `DraftConflictQueue` so a drain that parks several shows all of them,
 with `conflictedOutboxCount()` behind the standing count in Settings → Sync and the title bar.
 A row the drain **gave up on** raises no alert at all — there is no draft to re-apply and retrying
-cannot help — so the standing `failedOutboxCount()` beside it is the whole surface, and Settings →
-Sync's OUTBOX card is where those rows are named and either retried or discarded.
+cannot help — so what says so is standing rather than momentary: `failedOutboxCount()` in the title
+bar and the digest, `InboxDetailPanel.queueStatus(_:)` on the pull request the row belongs to
+(ADR 0006's 2026-09-04 amendment), and Settings → Sync's OUTBOX card, which is the only one of the
+three where a row can be retried or discarded.
 
 Bulk triage (ADR 0015) is the same surface used *n* times, on purpose. `PullRequestActions.queue(_:method:)`
 takes a confirmed `BulkTriagePlan`, persists each draft and enqueues each row exactly as the
