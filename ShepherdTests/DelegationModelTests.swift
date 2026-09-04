@@ -703,12 +703,11 @@ final class DelegationModelTests: XCTestCase {
         model.start()
         await model.runTask?.value
 
-        let added = git.arguments.first { $0.first == "worktree" && $0.dropFirst().first == "add" }
-        XCTAssertEqual(
-            added?.prefix(4).map(String.init),
-            ["worktree", "add", "-b", "agent/issue-128"]
+        let added = try XCTUnwrap(
+            git.arguments.first { $0.first == "worktree" && $0.dropFirst().first == "add" }
         )
-        XCTAssertEqual(added?.last, "origin/main")
+        XCTAssertEqual(Array(added.prefix(4)), ["worktree", "add", "-b", "agent/issue-128"])
+        XCTAssertEqual(added.last, "origin/main")
         XCTAssertFalse(
             git.arguments.contains { $0.contains("--detach") },
             "a detached head has no branch for the work to land on"
