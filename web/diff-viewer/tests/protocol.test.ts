@@ -45,7 +45,7 @@ describe('envelope', () => {
 
   it('enumerates every message type in both directions', () => {
     expect([...INBOUND_MESSAGE_TYPES].sort()).toEqual(
-      ['loadFile', 'revealLine', 'setDraftComments', 'setTheme', 'setThreads'].sort(),
+      ['focusEditor', 'loadFile', 'revealLine', 'setDraftComments', 'setTheme', 'setThreads'].sort(),
     );
     expect([...OUTBOUND_MESSAGE_TYPES].sort()).toEqual(
       ['addComment', 'commentClicked', 'ready', 'viewportChanged'].sort(),

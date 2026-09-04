@@ -282,6 +282,14 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
     case setDraftComments([BridgeDraftComment])
     /// Scroll a line into view.
     case revealLine(line: Int, side: BridgeSide)
+    /// Put the keyboard focus in the editor.
+    ///
+    /// The one command with no payload. It exists because the keyboard has a boundary the mouse
+    /// does not: what a reviewer does to a *file* is a key in the native screen, and what they do
+    /// to a *line* is Monaco's, so somebody working without a mouse needs a way across
+    /// (ADR 0033's amendment). Sending it twice focuses twice, which is why the view sends it off
+    /// a request token rather than off a value it can compare.
+    case focusEditor
 
     /// The `type` discriminator of this message.
     var messageType: String {
@@ -291,6 +299,7 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
         case .setThreads: return "setThreads"
         case .setDraftComments: return "setDraftComments"
         case .revealLine: return "revealLine"
+        case .focusEditor: return "focusEditor"
         }
     }
 
@@ -347,6 +356,9 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
                 line: line,
                 side: try container.decode(BridgeSide.self, forKey: .side)
             )
+        case "focusEditor":
+            // Nothing to decode: the type is the whole message.
+            self = .focusEditor
         default:
             throw BridgeProtocolError.unknownMessageType(type)
         }
@@ -375,6 +387,9 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
         case .revealLine(let line, let side):
             try container.encode(line, forKey: .line)
             try container.encode(side, forKey: .side)
+        case .focusEditor:
+            // The envelope above is the whole message.
+            break
         }
     }
 }

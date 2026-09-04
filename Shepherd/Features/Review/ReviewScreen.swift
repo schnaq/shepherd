@@ -194,6 +194,10 @@ struct ReviewScreen: View {
                 // Set only by the CI diagnosis card's `file:line` link (plan §3.F); the viewer
                 // acts on a change of it and ignores it otherwise.
                 revealLine: model.revealLine,
+                // Raised by `c` pressed outside the diff (ADR 0033's amendment): the native
+                // screen owns the keys that act on a *file*, the editor owns the keys that act
+                // on a *line*, and this is the one command that carries the keyboard across.
+                focusRequest: model.focusEditorRequest,
                 onEvent: { event in model.handle(event) }
             )
         } else if let path = model.selectedPath {
@@ -341,6 +345,15 @@ struct ReviewScreen: View {
         }
         if character == "v", let path = model.selectedPath {
             Task { await model.toggleViewed(path: path, actions: actions) }
+            return .handled
+        }
+        // `c` reaches this handler only when the diff does *not* have the focus — inside it the
+        // editor takes the key and comments on the cursor's line. So the honest thing for it to
+        // do here is hand the keyboard over, which is the step that was missing: every review
+        // action had a key except the one that needed a cursor, because there was no way to get
+        // a cursor without a mouse (ADR 0033's amendment).
+        if character == "c" {
+            model.requestEditorFocus()
             return .handled
         }
         // The session's own two keys, handled before the two-keystroke machine and only while a

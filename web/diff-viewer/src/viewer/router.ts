@@ -11,6 +11,7 @@ export interface ViewerPort {
   setThreads(threads: readonly Thread[]): void;
   setDraftComments(comments: readonly DraftComment[]): void;
   revealLine(line: number, side: Side): void;
+  focusEditor(): void;
 }
 
 /** Dispatches one validated inbound message. Exhaustive over `InboundMessage`. */
@@ -30,6 +31,9 @@ export function routeInbound(message: InboundMessage, port: ViewerPort): void {
       return;
     case 'revealLine':
       port.revealLine(message.line, message.side);
+      return;
+    case 'focusEditor':
+      port.focusEditor();
       return;
     default: {
       const exhaustive: never = message;

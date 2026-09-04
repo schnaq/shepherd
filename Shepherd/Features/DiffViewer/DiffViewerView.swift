@@ -38,6 +38,12 @@ struct DiffViewerView: NSViewRepresentable {
     var draftComments: [BridgeDraftComment] = []
     /// A line to reveal after loading, if any.
     var revealLine: Int?
+    /// A token that asks for the keyboard focus to move into the editor.
+    ///
+    /// A counter rather than a flag, because "focus now" is an event and not a state: the caller
+    /// raises it, the view sends the command once, and raising it again sends it again. Zero is
+    /// "nobody has asked", which is what a screen that never hands focus over stays at.
+    var focusRequest: Int = 0
     /// Called on the main actor for every message the viewer sends back.
     var onEvent: (DiffViewerEvent) -> Void
 
@@ -84,7 +90,8 @@ struct DiffViewerView: NSViewRepresentable {
             fontSize: fontSize,
             threads: threads,
             draftComments: draftComments,
-            revealLine: revealLine
+            revealLine: revealLine,
+            focusRequest: focusRequest
         )
     }
 
@@ -150,6 +157,7 @@ struct DiffViewerView: NSViewRepresentable {
         private var sentThreads: [BridgeThread]?
         private var sentDrafts: [BridgeDraftComment]?
         private var sentRevealLine: Int?
+        private var sentFocusRequest = 0
 
         /// Creates a coordinator.
         /// - Parameter onEvent: The event sink.
@@ -178,7 +186,8 @@ struct DiffViewerView: NSViewRepresentable {
             fontSize: Double,
             threads: [BridgeThread],
             draftComments: [BridgeDraftComment],
-            revealLine: Int?
+            revealLine: Int?,
+            focusRequest: Int
         ) {
             if sentTheme != theme || sentFontSize != fontSize {
                 sentTheme = theme
@@ -216,6 +225,12 @@ struct DiffViewerView: NSViewRepresentable {
             if let revealLine, sentRevealLine != revealLine, revealLine >= 1 {
                 sentRevealLine = revealLine
                 send(.revealLine(line: revealLine, side: .right))
+            }
+            // Last, and after `loadFile`: focus follows the content it is being handed to, and a
+            // command queued before the bundle is ready is flushed in this order too.
+            if focusRequest > sentFocusRequest {
+                sentFocusRequest = focusRequest
+                send(.focusEditor)
             }
         }
 

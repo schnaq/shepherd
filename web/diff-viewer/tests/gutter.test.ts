@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { addCommentTarget, gutterHit, hitChanged, MouseTargetType } from '../src/viewer/gutter.js';
+import { addCommentTarget, cursorHit, gutterHit, hitChanged, MouseTargetType } from '../src/viewer/gutter.js';
 
 describe('gutterHit', () => {
   const base = { lineNumber: 5, side: 'right', lineCount: 40 } as const;
@@ -108,5 +108,38 @@ describe('addCommentTarget', () => {
     expect(addCommentTarget(hit, 12)).toEqual({ line: 9, side: 'right' });
     expect(addCommentTarget(hit, 0)).toEqual({ line: 9, side: 'right' });
     expect(addCommentTarget(hit, 2.5)).toEqual({ line: 9, side: 'right' });
+  });
+});
+
+describe('cursorHit', () => {
+  const base = { lineNumber: 5, side: 'right', lineCount: 40 } as const;
+
+  it('asks nothing about the pointer, because the keyboard has none', () => {
+    // The whole difference between the two entry points: `gutterHit` refuses a line the pointer
+    // is not over the gutter of, and the cursor is never over a gutter at all.
+    expect(cursorHit(base)).toEqual({ line: 5, side: 'right' });
+    expect(gutterHit({ ...base, targetType: MouseTargetType.CONTENT_TEXT })).toBeNull();
+  });
+
+  it('applies the same line rules the pointer path applies', () => {
+    expect(cursorHit({ ...base, lineNumber: null })).toBeNull();
+    expect(cursorHit({ ...base, lineNumber: undefined })).toBeNull();
+    expect(cursorHit({ ...base, lineNumber: 0 })).toBeNull();
+    expect(cursorHit({ ...base, lineNumber: 2.5 })).toBeNull();
+    expect(cursorHit({ ...base, lineNumber: 41 })).toBeNull();
+    expect(cursorHit({ ...base, lineNumber: 40 })).toEqual({ line: 40, side: 'right' });
+  });
+
+  it('refuses a line that is not part of the diff', () => {
+    // A comment on one of the blank lines the reconstruction pads the gaps with is a comment
+    // GitHub refuses — and it refuses the whole review with it. The keyboard must not be the
+    // way around that guard.
+    const commentable = new Set([5, 9]);
+    expect(cursorHit({ ...base, commentable })).toEqual({ line: 5, side: 'right' });
+    expect(cursorHit({ ...base, lineNumber: 6, commentable })).toBeNull();
+  });
+
+  it('arms the original pane too, so a deletion can be commented on by keyboard', () => {
+    expect(cursorHit({ ...base, side: 'left' })).toEqual({ line: 5, side: 'left' });
   });
 });

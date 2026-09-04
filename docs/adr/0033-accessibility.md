@@ -64,3 +64,37 @@ claims that the lists now say what they show, and that what remains is named.
   what fixing it means.
 - No behaviour changes for a user who is not using a screen reader, except that Return now starts
   a delegation from the sheet that offers one.
+
+## Amendment (2026-09-04): the keyboard reaches a line
+
+The gap this ADR named first among the projects is closed. Leaving a comment on a line was the one
+review action with no key at all: approve, request changes, submit, merge and walking the files are
+all keys, and the gutter's "+" was wired to `onMouseMove`/`onMouseDown` and nothing else.
+
+`c` does it, which is the letter GitHub's own diff uses, and there are **two halves** because the
+keyboard has a boundary the mouse does not. Inside the editor Monaco takes the key and comments on
+the cursor's line. Outside it — in the file list, the header, anywhere the native screen has
+focus — the same key hands the focus over, and the second press comments. One key, two steps, and
+the arrow keys move between them.
+
+Three decisions inside that are worth keeping:
+
+**The line rules have one definition.** A comment may only be left on a line that is in range and
+is genuinely part of the diff rather than one of the blank lines the reconstruction pads the gaps
+between hunks with — GitHub refuses a comment on one of those, and refuses the whole review with
+it. That guard lived in `gutterHit`, mixed together with the mouse's own question of whether the
+pointer was over the gutter at all. It is now `cursorHit`, which asks only about the line, and
+`gutterHit` is that plus the pointer question. The keyboard cannot become the way around a guard
+the mouse respects.
+
+**`onKeyDown`, not `addAction`.** The obvious API is the one that does not exist here:
+`addAction` and `addCommand` belong to `IStandaloneCodeEditor`, and a diff editor's two panes are
+plain `ICodeEditor`s. The key is swallowed only once a commentable line has been found, so an
+unhandled `c` keeps travelling and a key the native screen owns still reaches it.
+
+**`focusEditor` is a command with no payload.** The bridge gained one inbound message whose type
+is the whole message, with fixtures on both sides like every other. It is sent off a *request
+token* rather than a value the view compares, because handing over focus is an event: asking twice
+has to send twice. Its invalid fixture is a version mismatch, which is the only way a message with
+no payload can be wrong — the same shape `ready.invalid.json` has on the way out, and the fixture
+test now names both rather than one.

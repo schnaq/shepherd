@@ -124,12 +124,26 @@ export interface RevealLineMessage {
   readonly side: Side;
 }
 
+/**
+ * Put the keyboard focus in the editor.
+ *
+ * The one command with no payload, and the reason it exists is the keyboard: everything a
+ * reviewer can do to a *file* is a key in the native screen, and everything they can do to a
+ * *line* is Monaco's, so somebody driving the app without a mouse needs a way across that
+ * boundary. Sending this is that way (ADR 0033's amendment).
+ */
+export interface FocusEditorMessage {
+  readonly v: ProtocolVersion;
+  readonly type: 'focusEditor';
+}
+
 export type InboundMessage =
   | LoadFileMessage
   | SetThemeMessage
   | SetThreadsMessage
   | SetDraftCommentsMessage
-  | RevealLineMessage;
+  | RevealLineMessage
+  | FocusEditorMessage;
 
 export type InboundMessageType = InboundMessage['type'];
 
@@ -139,6 +153,7 @@ export const INBOUND_MESSAGE_TYPES: readonly InboundMessageType[] = [
   'setThreads',
   'setDraftComments',
   'revealLine',
+  'focusEditor',
 ];
 
 // ---------------------------------------------------------------------------------------------
@@ -426,6 +441,11 @@ export function parseInbound(value: unknown): ParseResult<InboundMessage> {
       if (!isSide(msg['side'])) return fail('revealLine.side: expected "left" | "right"');
       return ok({ v: PROTOCOL_VERSION, type: 'revealLine', line: msg['line'], side: msg['side'] });
     }
+    case 'focusEditor':
+      // Nothing to validate: the command is the whole message. An unknown extra key is ignored
+      // here as it is for every other type — the envelope's version is what a breaking change
+      // would move.
+      return ok({ v: PROTOCOL_VERSION, type: 'focusEditor' });
     default:
       return fail(`message.type: unknown inbound message type ${JSON.stringify(type)}`);
   }

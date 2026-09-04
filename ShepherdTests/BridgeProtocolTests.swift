@@ -11,7 +11,7 @@ import XCTest
 final class BridgeProtocolTests: XCTestCase {
     /// Message types that travel Swift → web.
     private static let commandTypes: Set<String> = [
-        "loadFile", "setTheme", "setThreads", "setDraftComments", "revealLine",
+        "loadFile", "setTheme", "setThreads", "setDraftComments", "revealLine", "focusEditor",
     ]
 
     /// Message types that travel web → Swift.

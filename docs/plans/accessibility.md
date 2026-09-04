@@ -38,9 +38,9 @@ to avoid.
 answer rather than the fallback — a diff a person can walk with the arrow keys is a better product
 for everybody, not an accommodation.
 
-## 2. An inline comment needs a mouse
+## 2. An inline comment needs a mouse — **done, 2026-09-04**
 
-**What is true today.** The "+" affordance in the gutter is wired to `editor.onMouseMove` and
+**What was true until then.** The "+" affordance in the gutter is wired to `editor.onMouseMove` and
 `onMouseDown` in `web/diff-viewer/src/viewer/gutter.ts`; nothing in `monacoViewer.ts` registers a
 keybinding or a Monaco action, and `ReviewModel`'s `.addComment` case is only ever fed by that
 bridge event. `ReviewScreen`'s keyboard handler has `v` for *mark viewed* and no way to open the
@@ -48,7 +48,8 @@ inline composer on the line the cursor is on. Every other review action — appr
 changes, submit, merge, walk the files — is keyboard-driven, which makes this the one hole in an
 otherwise deliberate keyboard story.
 
-**What it takes.** Monaco already knows where the cursor is, so this is a bridge addition rather
+**What it looked like it would take** (kept as written, because one line of it turned out to be
+wrong — see below). Monaco already knows where the cursor is, so this is a bridge addition rather
 than a redesign: a Monaco action registered with `editor.addAction` and a keybinding, which emits
 the same `addComment` event the mouse path emits, for the cursor's line instead of the hovered
 one. Then one entry in `ReviewScreen`'s key handler for the case where focus is in the app rather
@@ -57,6 +58,18 @@ already covers the event shape, so the contract does not move.
 
 **One decision to make:** which key. `c` is free in the review screen's vocabulary and is what
 GitHub's own keyboard shortcuts use for a comment.
+
+**What was built.** `c` it is, and there are two halves because the keyboard has a boundary the
+mouse does not. Inside the editor Monaco takes the key and comments on the cursor's line, through
+`cursorHit` — the same line rules the pointer's path uses, extracted so the two cannot disagree
+about which lines may carry a comment. Outside it, the same key hands the focus over, through a
+new payload-less `focusEditor` command on the bridge (with fixtures on both sides, as every
+message has). So: `c` to get a cursor, `c` to comment on it, arrows to move between.
+
+`onKeyDown` rather than `addAction`, because `addAction` and `addCommand` belong to
+`IStandaloneCodeEditor` and a diff editor's two panes are plain `ICodeEditor`s — worth writing
+down, since the obvious API is the one that does not exist here. The key is only swallowed once a
+commentable line has been found, so an unhandled `c` still reaches the native screen.
 
 ## 3. Larger Text does nothing
 

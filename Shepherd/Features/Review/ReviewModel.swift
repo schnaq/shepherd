@@ -103,6 +103,11 @@ final class ReviewModel {
     /// else. It is deliberately not cleared afterwards: the viewer only acts on a *change* of
     /// this value, so clearing it would either do nothing or cost a second command for no reason.
     private(set) var revealLine: Int?
+    /// How many times the keyboard has asked to be moved into the diff editor.
+    ///
+    /// A counter rather than a flag, for ``DiffViewerView/focusRequest``'s reason: handing the
+    /// focus over is an event, and asking twice has to send twice.
+    private(set) var focusEditorRequest = 0
     /// Which tab is showing.
     var tab: Tab = .files
     /// Which round the file list and the diff viewer are showing (ADR 0028).
@@ -795,6 +800,15 @@ final class ReviewModel {
             return
         }
         self.selectedPath = paths[min(max(0, index + offset), paths.count - 1)]
+    }
+
+    /// Asks for the keyboard focus to move into the diff editor.
+    ///
+    /// What `c` does when the diff does not have the focus. Inside the editor the same key
+    /// comments on the cursor's line, so the two together are the keyboard path to an inline
+    /// comment: one press to get a cursor, one to comment on it (ADR 0033's amendment).
+    func requestEditorFocus() {
+        focusEditorRequest += 1
     }
 
     /// Shows one file in the diff viewer, scrolled to a line.

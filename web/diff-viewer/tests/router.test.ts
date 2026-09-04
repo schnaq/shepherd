@@ -16,6 +16,7 @@ function fakePort(): { port: ViewerPort; calls: Call[] } {
     setThreads: (t: readonly Thread[]) => calls.push({ name: 'setThreads', payload: t }),
     setDraftComments: (c: readonly DraftComment[]) => calls.push({ name: 'setDraftComments', payload: c }),
     revealLine: (line: number, side: Side) => calls.push({ name: 'revealLine', payload: { line, side } }),
+    focusEditor: () => calls.push({ name: 'focusEditor', payload: undefined }),
   };
   return { port, calls };
 }
@@ -39,6 +40,7 @@ describe('routeInbound', () => {
       { v: 1, type: 'setThreads', threads: [] },
       { v: 1, type: 'setDraftComments', comments: [] },
       { v: 1, type: 'revealLine', line: 5, side: 'left' },
+      { v: 1, type: 'focusEditor' },
     ];
 
     for (const message of messages) routeInbound(message, port);
@@ -49,6 +51,7 @@ describe('routeInbound', () => {
       'setThreads',
       'setDraftComments',
       'revealLine',
+      'focusEditor',
     ]);
     expect(calls[0]?.payload).toBe(loadFile);
     expect(calls[4]?.payload).toEqual({ line: 5, side: 'left' });

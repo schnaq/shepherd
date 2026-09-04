@@ -54,9 +54,22 @@ export interface GutterHit {
   readonly side: Side;
 }
 
-/** @returns the line to arm the “+” on, or `null` when the pointer is not over a gutter line. */
-export function gutterHit(probe: GutterProbe): GutterHit | null {
-  if (!GUTTER_TARGETS.has(probe.targetType)) return null;
+/**
+ * Everything a gutter probe carries except where the pointer was — which is what a *cursor* has
+ * too, and the reason this type exists: a comment reached by the keyboard is subject to exactly
+ * the same line rules as one reached by the mouse (in range, and part of the diff rather than
+ * one of the blank lines the reconstruction pads the gaps with), and two copies of those rules
+ * would be two chances for the keyboard path to offer a comment GitHub refuses.
+ */
+export type CursorProbe = Omit<GutterProbe, 'targetType'>;
+
+/**
+ * @returns the line a comment may be left on, or `null` when this one may not carry one.
+ *
+ * The line rules, with no opinion about how the line was chosen. ``gutterHit`` adds the mouse's
+ * question — is the pointer over the gutter at all — and the keyboard asks this one directly.
+ */
+export function cursorHit(probe: CursorProbe): GutterHit | null {
   const line = probe.lineNumber;
   if (typeof line !== 'number' || !Number.isInteger(line) || line < 1) return null;
   if (probe.lineCount >= 0 && line > probe.lineCount) return null;
@@ -64,6 +77,12 @@ export function gutterHit(probe: GutterProbe): GutterHit | null {
     return null;
   }
   return { line, side: probe.side };
+}
+
+/** @returns the line to arm the “+” on, or `null` when the pointer is not over a gutter line. */
+export function gutterHit(probe: GutterProbe): GutterHit | null {
+  if (!GUTTER_TARGETS.has(probe.targetType)) return null;
+  return cursorHit(probe);
 }
 
 /** `true` when the armed line changed and decorations need re-applying. */

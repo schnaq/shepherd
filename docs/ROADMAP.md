@@ -352,10 +352,10 @@ remain and each is a project rather than a label; what they would take is in
       plus ARIA in the bundle first; the real answer is a native, keyboard-walkable rendering of
       the patch, which `PatchReconstructor` already has the pieces for and which is a better diff
       for everybody
-- [ ] **An inline comment needs a mouse.** The gutter's "+" is wired to mouse events only, in an
-      app whose keyboard vocabulary is otherwise thorough. A Monaco action with a keybinding
-      emitting the same bridge event the mouse emits, plus one key in the review screen — `c`, as
-      GitHub uses
+- [x] **An inline comment needs a mouse.** Fixed 2026-09-04: `c` inside the diff comments on the
+      cursor's line through the same line rules the pointer's path uses, and `c` outside it hands
+      the keyboard over through a new payload-less `focusEditor` bridge command. So the whole
+      review — pick a file, read it, comment on a line, submit — is keys the whole way through
 - [ ] **macOS's Larger Text does nothing.** 419 `Font.system(size:)` call sites against two
       semantic styles, so the OS setting has no effect anywhere. Needs a type scale in `Theme` and
       a decision about the dense fixed-height rows, not a find-and-replace

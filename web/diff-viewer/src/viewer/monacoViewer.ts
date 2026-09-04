@@ -18,7 +18,7 @@ import type {
 } from '../bridge/protocol.js';
 import { makeAddComment, makeDraftClicked, makeThreadClicked, makeViewportChanged } from '../bridge/protocol.js';
 import type { OutboundSink } from '../bridge/transport.js';
-import { addCommentTarget, gutterHit, hitChanged, type GutterHit } from './gutter.js';
+import { addCommentTarget, cursorHit, gutterHit, hitChanged, type GutterHit } from './gutter.js';
 import { registerLanguages, resolveLanguage } from './languages.js';
 import type { ViewerPort } from './router.js';
 import { clampFontSize, documentThemeClass, THEME_IDS, THEMES } from './themes.js';
@@ -209,6 +209,17 @@ export class MonacoDiffViewer implements ViewerPort {
     editor.setPosition({ lineNumber: target, column: 1 });
   }
 
+  /**
+   * Puts the keyboard focus in the editor.
+   *
+   * The pane the reviewer would expect: the modified side, which is the one they are reading and
+   * the only one in inline mode. From there the arrow keys move the cursor and `c` comments on
+   * the line it is on, which is the whole point of handing focus over (ADR 0033's amendment).
+   */
+  focusEditor(): void {
+    this.editorFor('right').focus();
+  }
+
   // -- lifecycle -----------------------------------------------------------------------------
 
   dispose(): void {
@@ -266,6 +277,39 @@ export class MonacoDiffViewer implements ViewerPort {
         commentable: this.commentable[side],
       });
       if (hit === null) return;
+      const target = addCommentTarget(hit);
+      this.post(makeAddComment(target.line, target.side, target.startLine));
+    });
+
+    // The same comment, reached by the keyboard. Until this existed, leaving an inline comment
+    // was the one review action with no key at all — in an app where approving, requesting
+    // changes, submitting, merging and walking the files are all keys (ADR 0033's amendment).
+    //
+    // `c` is the letter GitHub's own diff uses, and it is free here because the editor is
+    // read-only: a keystroke that would otherwise type a character types nothing. The action
+    // asks the *cursor's* line the same question the pointer's line is asked — in range, and
+    // part of the diff rather than one of the blank lines the reconstruction pads gaps with —
+    // through `cursorHit`, so the two paths cannot come to different conclusions about which
+    // lines may carry a comment. A line that may not simply does nothing, which is what the
+    // pointer does over it too.
+    //
+    // `onKeyDown` rather than `addAction`, and that is not a preference: `addAction` and
+    // `addCommand` belong to `IStandaloneCodeEditor`, and a diff editor's two panes are plain
+    // `ICodeEditor`s. This is the seam both panes actually have.
+    editor.onKeyDown((event) => {
+      if (event.keyCode !== monaco.KeyCode.KeyC) return;
+      if (event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return;
+      const hit = cursorHit({
+        lineNumber: editor.getPosition()?.lineNumber ?? null,
+        side,
+        lineCount: editor.getModel()?.getLineCount() ?? -1,
+        commentable: this.commentable[side],
+      });
+      if (hit === null) return;
+      // Only once a line has been found: an unhandled `c` must keep travelling, so that a key
+      // the native screen owns still reaches it when the cursor is somewhere a comment cannot go.
+      event.preventDefault();
+      event.stopPropagation();
       const target = addCommentTarget(hit);
       this.post(makeAddComment(target.line, target.side, target.startLine));
     });

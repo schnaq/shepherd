@@ -36,6 +36,8 @@ interface FakeCodeEditor {
   onMouseMove(handler: (event: unknown) => void): void;
   onMouseLeave(handler: () => void): void;
   onMouseDown(handler: (event: unknown) => void): void;
+  onKeyDown(handler: (event: unknown) => void): void;
+  focus(): void;
   createDecorationsCollection(): { set(): void };
   getModel(): FakeModel | null;
   getVisibleRanges(): { startLineNumber: number }[];
@@ -60,6 +62,8 @@ function makeCodeEditor(): FakeCodeEditor {
     onMouseMove: () => undefined,
     onMouseLeave: () => undefined,
     onMouseDown: () => undefined,
+    onKeyDown: () => undefined,
+    focus: () => undefined,
     createDecorationsCollection: () => ({ set: () => undefined }),
     getModel: () => editor.model,
     getVisibleRanges: () => [{ startLineNumber: 1 }],
