@@ -237,60 +237,21 @@ struct InboxDetailPanel: View {
 
     /// What the outbox is holding for this pull request (ADR 0006).
     ///
-    /// The three states a queued write can end in, said about the pull request they belong to:
-    /// waiting to be sent, parked because the pull request moved on underneath the write, and
-    /// given up on. Until this line the panel said none of them — a review GitHub refused left the
-    /// pull request looking untouched — and the only per-pull-request word about the queue was the
-    /// one-shot alert a parked review raises once (`DraftConflictQueue`), which a user who was away
-    /// when it appeared never sees again.
-    ///
     /// It sits at the top of the action bar rather than among the cards, directly above the
     /// buttons that queued it: the sentence a reviewer needs is "the approval you pressed has not
     /// gone out yet", and it is worth reading in the same glance as the button.
     ///
-    /// The standing counts in Settings → Sync, the title bar and the morning digest are unchanged
-    /// and remain account-wide; this line is what makes them findable from where the write was
-    /// queued, and it deliberately carries no Retry or Discard button — those belong to
-    /// Settings → Sync, which the failed indicator names.
-    @ViewBuilder
+    /// Until this line the panel said none of the three — a review GitHub refused left the pull
+    /// request looking untouched — and the only per-pull-request word about the queue was the
+    /// one-shot alert a parked review raises once (`DraftConflictQueue`), which a user who was
+    /// away when it appeared never sees again.
     private func queueStatus(_ row: PullRequestSummary) -> some View {
-        let queued = model.queuedWriteCount(for: row)
-        let parked = model.parkedWriteCount(for: row)
-        let failed = model.failedWriteCount(for: row)
-        if queued > 0 || parked > 0 || failed > 0 {
-            HStack(spacing: 6) {
-                if queued > 0 {
-                    Image(systemName: "tray.full")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Theme.pending)
-                    Text(String(localized: "\(queued) waiting to be sent"))
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textSecondary)
-                }
-                if parked > 0 {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Theme.failure)
-                    Text(String(localized: "\(parked) parked — the pull request moved on"))
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textSecondary)
-                }
-                if failed > 0 {
-                    Image(systemName: "xmark.octagon")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Theme.failure)
-                    Text(String(localized: "\(failed) failed — see Settings → Sync"))
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.failure)
-                }
-                Spacer(minLength: 0)
-            }
-            .help(
-                String(
-                    localized: "Shepherd writes every change to a local queue first and sends it in the background. A parked write is one the pull request changed underneath; a failed one was given up on and will not be retried. Settings → Sync lists them."
-                )
-            )
-        }
+        QueueStatusLine(
+            queued: model.queuedWriteCount(for: row),
+            parked: model.parkedWriteCount(for: row),
+            failed: model.failedWriteCount(for: row),
+            target: .pullRequest
+        )
     }
 }
 

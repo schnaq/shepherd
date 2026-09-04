@@ -348,6 +348,125 @@ struct RailSectionHeader: View {
     }
 }
 
+// MARK: - Queued writes
+
+/// Which kind of node a ``QueueStatusLine`` is describing (ADR 0006).
+///
+/// The outbox holds writes against pull requests and against issues, and the line's one
+/// target-specific sentence is why this exists: a reviewer looking at a pull request must not be
+/// told that an *issue* moved on underneath their write.
+enum QueueStatusTarget {
+    /// A pull request, as ``InboxDetailPanel`` shows it.
+    case pullRequest
+    /// An issue, as ``IssueDetailPanel`` shows it.
+    case issue
+
+    /// The parked indicator's sentence.
+    /// - Parameter parked: How many writes the drain parked.
+    func parkedMessage(_ parked: Int) -> String {
+        switch self {
+        case .pullRequest:
+            return String(localized: "\(parked) parked — the pull request moved on")
+        case .issue:
+            return String(localized: "\(parked) parked — the issue moved on")
+        }
+    }
+
+    /// The tooltip the whole line carries.
+    var help: String {
+        switch self {
+        case .pullRequest:
+            return String(
+                localized: "Shepherd writes every change to a local queue first and sends it in the background. A parked write is one the pull request changed underneath; a failed one was given up on and will not be retried. Settings → Sync lists them."
+            )
+        case .issue:
+            return String(
+                localized: "Shepherd writes every change to a local queue first and sends it in the background. A parked write is one the issue changed underneath; a failed one was given up on and will not be retried. Settings → Sync lists them."
+            )
+        }
+    }
+}
+
+/// What the outbox is holding for one pull request or one issue, in one line (ADR 0006).
+///
+/// The three states a queued write can end in: waiting to be sent, parked because the target
+/// moved on underneath the write, and given up on. Three counts of zero draw nothing at all,
+/// which is what lets a panel drop this in unconditionally — ``AsyncActionStatusLine``'s
+/// arrangement, for the same reason.
+///
+/// One view rather than the same `HStack` in both detail panels: the two lines are the same three
+/// symbols, the same three colours and two of the same three sentences (ADR 0006's 2026-09-04
+/// amendment), and a queue that looked like two different features depending on which panel it
+/// was under would be the only lasting effect of writing it twice. What differs travels with the
+/// target — ``QueueStatusTarget`` carries the sentence that names it — and each panel keeps its
+/// own reason for showing the line where it shows it.
+///
+/// The standing counts in Settings → Sync, the title bar and the morning digest are unchanged and
+/// remain account-wide; this line is what makes them findable from where the write was queued.
+/// It deliberately carries no Retry or Discard button on either side: those belong to
+/// Settings → Sync, which the failed indicator names, because they exist for somebody who has
+/// just changed a token or a branch rule and wants to see the whole queue.
+struct QueueStatusLine: View {
+    /// How many writes are queued or in flight.
+    let queued: Int
+    /// How many the drain parked because the target moved on.
+    let parked: Int
+    /// How many the drain gave up on.
+    let failed: Int
+    /// Which kind of node the three counts are about.
+    let target: QueueStatusTarget
+
+    var body: some View {
+        if queued > 0 || parked > 0 || failed > 0 {
+            HStack(spacing: 6) {
+                if queued > 0 {
+                    indicator(
+                        String(localized: "\(queued) waiting to be sent"),
+                        systemImage: "tray.full",
+                        symbolTint: Theme.pending,
+                        textTint: Theme.textSecondary
+                    )
+                }
+                if parked > 0 {
+                    indicator(
+                        target.parkedMessage(parked),
+                        systemImage: "exclamationmark.triangle",
+                        symbolTint: Theme.failure,
+                        textTint: Theme.textSecondary
+                    )
+                }
+                if failed > 0 {
+                    indicator(
+                        String(localized: "\(failed) failed — see Settings → Sync"),
+                        systemImage: "xmark.octagon",
+                        symbolTint: Theme.failure,
+                        textTint: Theme.failure
+                    )
+                }
+                Spacer(minLength: 0)
+            }
+            .help(target.help)
+        }
+    }
+
+    /// One indicator: its symbol and its sentence, handed to the line as two siblings rather than
+    /// as a nested stack, so that all three of them keep the one spacing.
+    @ViewBuilder
+    private func indicator(
+        _ message: String,
+        systemImage: String,
+        symbolTint: Color,
+        textTint: Color
+    ) -> some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 10))
+            .foregroundStyle(symbolTint)
+        Text(message)
+            .font(.system(size: 11))
+            .foregroundStyle(textTint)
+    }
+}
+
 // MARK: - Small helpers
 
 extension ReviewDecision {

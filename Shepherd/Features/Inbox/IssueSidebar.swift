@@ -148,11 +148,9 @@ struct IssueSidebar: View {
 
     /// The open/closed facet (ADR 0032's 2026-09-04 amendment).
     ///
-    /// Drawn as soon as either half is populated, which is deliberately *not* the
-    /// agent-pull-request facet's "both or nothing" rule: *Open* is the selection the section
-    /// starts on, so this is the row that says what the list is currently leaving out, and a rail
-    /// that waited for a closed issue to exist would hide it exactly when there is nothing else on
-    /// screen to explain the empty list.
+    /// Drawn as soon as either half is populated rather than only when both are, which is
+    /// deliberately *not* the agent-pull-request facet's rule below —
+    /// ``ShepherdCore/IssueFacets/stateFacets(_:)`` is where that difference and its reason live.
     @ViewBuilder
     private var stateFacet: some View {
         let facets = model.stateFacets

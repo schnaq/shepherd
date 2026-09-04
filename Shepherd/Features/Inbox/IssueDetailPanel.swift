@@ -420,56 +420,20 @@ struct IssueDetailPanel: View {
 
     /// What the outbox is holding for this issue.
     ///
-    /// All three states a queued write can end in (ADR 0006): waiting to be sent, parked because
-    /// the target moved on underneath the write, and given up on. This panel said all three
-    /// first — when it was written the pull-request side said none of them about one pull request,
-    /// and ``InboxDetailPanel/queueStatus(_:)`` is the same line on that side since.
+    /// This panel said all three states first, and ``InboxDetailPanel/queueStatus(_:)`` is the
+    /// same line on the pull-request side since (ADR 0006's 2026-09-04 amendment).
     ///
-    /// The third one is not a theoretical state here: an issue row is failed non-retriably
+    /// The third of them is not a theoretical state here: an issue row is failed non-retriably
     /// whenever the engine was built without an `IssueWriting` port, and GitHub's own 4xx answers
     /// end the same way; a row in it is neither waiting nor parked, so without this line the click
-    /// simply looked as though it had worked. All three are said about one issue rather than about
-    /// the whole account: the standing counts in Settings → Sync and the title bar are unchanged,
-    /// and this line is what makes them findable from where the write was queued.
-    @ViewBuilder
+    /// simply looked as though it had worked.
     private func queueStatus(_ row: IssueRowSummary) -> some View {
-        let queued = model.queuedWriteCount(for: row)
-        let parked = model.parkedWriteCount(for: row)
-        let failed = model.failedWriteCount(for: row)
-        if queued > 0 || parked > 0 || failed > 0 {
-            HStack(spacing: 6) {
-                if queued > 0 {
-                    Image(systemName: "tray.full")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Theme.pending)
-                    Text(String(localized: "\(queued) waiting to be sent"))
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textSecondary)
-                }
-                if parked > 0 {
-                    Image(systemName: "exclamationmark.triangle")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Theme.failure)
-                    Text(String(localized: "\(parked) parked — the issue moved on"))
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textSecondary)
-                }
-                if failed > 0 {
-                    Image(systemName: "xmark.octagon")
-                        .font(.system(size: 10))
-                        .foregroundStyle(Theme.failure)
-                    Text(String(localized: "\(failed) failed — see Settings → Sync"))
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.failure)
-                }
-                Spacer(minLength: 0)
-            }
-            .help(
-                String(
-                    localized: "Shepherd writes every change to a local queue first and sends it in the background. A parked write is one the issue changed underneath; a failed one was given up on and will not be retried. Settings → Sync lists them."
-                )
-            )
-        }
+        QueueStatusLine(
+            queued: model.queuedWriteCount(for: row),
+            parked: model.parkedWriteCount(for: row),
+            failed: model.failedWriteCount(for: row),
+            target: .issue
+        )
     }
 
     /// One toast per queued write, which is the confirmation of the click.

@@ -326,12 +326,11 @@ final class InboxModel {
 
     /// Every row the outbox is holding — queued, in flight, parked or failed (ADR 0006).
     ///
-    /// Observed rather than re-read after each write, unlike ``IssueInboxModel/pendingWrites``,
-    /// because a write against a pull request is queued from four different places: the list's
-    /// bulk triage, the detail panel, the review composer and automatic merging. There is no
-    /// single call site that could re-read the queue afterwards, so the queue announces itself
-    /// instead — which also means an unattended merge shows up in the panel without the panel
-    /// knowing that automation exists.
+    /// Observed rather than re-read after each write, unlike ``IssueInboxModel/pendingWrites``
+    /// (``ShepherdPersistence/DatabaseManager/observeOutboxItems()`` explains why the two sides
+    /// differ). The consequence worth naming on this side is that the queue announces itself, so
+    /// an unattended merge shows up in the panel without the panel knowing that automation
+    /// exists.
     ///
     /// The whole outbox rather than one pull request's rows, because the observation is per
     /// model and the selection moves with `j`/`k`: re-subscribing on every cursor move would
