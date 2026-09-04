@@ -134,3 +134,36 @@ keeps recommending the native, keyboard-walkable rendering of the patch as the r
 than the fallback: a diff a person can walk with the arrow keys is a better product for everybody.
 This amendment buys the possibility that the cheap half is most of the answer, at the price of two
 messages on a bridge that already had five.
+
+## Amendment (2026-09-04): `[` and `]` reach a deleted line
+
+The keyboard path to an inline comment left one line out of reach, and the test that proved `c`
+works in the original pane is the same test that showed why: `c` comments wherever the cursor is,
+but nothing put the cursor in the original pane. `focusEditor` always landed in the modified one —
+the pane a reviewer reads — and a *deleted* line exists nowhere else. So the one thing left needing
+a mouse was a comment on a deletion, which is a large share of what review comments are about.
+
+`[` is the original pane and `]` the modified one, where they sit on the keyboard and on the
+screen. They work on both sides of the boundary, which is the point: inside the editor Monaco takes
+them, and on the native screen they raise the same focus request `c` raises, so a reviewer coming
+from the file list does not have to land in the wrong pane first and cross over. `focusEditor`
+gained an optional additive `side` for that — absent still means the modified pane, so the message
+means today what it meant yesterday.
+
+**Brackets rather than a letter, and that is the decision here.** Every free letter had the same
+defect: a letter must be free as a bare key in the review screen *and* as the second half of
+`r …` and `g …`, because the editor needs the same key and cannot see that a prefix is armed on
+the native side. It would swallow the second key of `g s` exactly as the first version of `c`
+swallowed the second key of `r c`. `[` and `]` are in no sequence at all, so the collision cannot
+arise; on the native side they still defer to an armed prefix, which rejects them and disarms.
+
+Two smaller decisions came with it. Crossing panes puts the cursor on the target pane's first
+visible line, but only if the cursor is not already on screen: the panes scroll together, so an
+untouched pane's cursor sits on line 1 while the reviewer reads line 400, and the first arrow key
+would drag the whole diff back to the top — while a reviewer crossing *back* should find the line
+they left. And in inline mode there is no second pane to cross to, so the key is left alone and
+travels on rather than being swallowed for nothing.
+
+**What this does not settle.** The same thing the amendments above do not settle: whether VoiceOver
+actually reads any of it. This closes a keyboard gap, which is a different gap from the one that
+needs a Mac and somebody listening.

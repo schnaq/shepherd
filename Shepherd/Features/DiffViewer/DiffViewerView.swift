@@ -44,6 +44,11 @@ struct DiffViewerView: NSViewRepresentable {
     /// raises it, the view sends the command once, and raising it again sends it again. Zero is
     /// "nobody has asked", which is what a screen that never hands focus over stays at.
     var focusRequest: Int = 0
+    /// Which pane the pending ``focusRequest`` wants, read only when that token advances.
+    ///
+    /// The modified side unless somebody asks otherwise: it is the one a reviewer reads. The
+    /// original side is how a comment on a deleted line is reached.
+    var focusSide: BridgeSide = .right
     /// Whether a screen reader is running, as macOS sees it.
     ///
     /// Monaco's `accessibilitySupport: 'auto'` cannot work this out from inside a `WKWebView`:
@@ -248,7 +253,7 @@ struct DiffViewerView: NSViewRepresentable {
             // command queued before the bundle is ready is flushed in this order too.
             if view.focusRequest > sentFocusRequest {
                 sentFocusRequest = view.focusRequest
-                send(.focusEditor)
+                send(.focusEditor(side: view.focusSide))
             }
         }
 

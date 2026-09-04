@@ -108,6 +108,10 @@ final class ReviewModel {
     /// A counter rather than a flag, for ``DiffViewerView/focusRequest``'s reason: handing the
     /// focus over is an event, and asking twice has to send twice.
     private(set) var focusEditorRequest = 0
+    /// Which pane the most recent ``requestEditorFocus(side:)`` asked for.
+    ///
+    /// Read only when ``focusEditorRequest`` advances, so it cannot go stale on its own.
+    private(set) var focusEditorSide: BridgeSide = .right
     /// Which tab is showing.
     var tab: Tab = .files
     /// Which round the file list and the diff viewer are showing (ADR 0028).
@@ -808,12 +812,15 @@ final class ReviewModel {
         self.selectedPath = paths[min(max(0, index + offset), paths.count - 1)]
     }
 
-    /// Asks for the keyboard focus to move into the diff editor.
+    /// Asks for the keyboard focus to move into one pane of the diff editor.
     ///
-    /// What `c` does when the diff does not have the focus. Inside the editor the same key
-    /// comments on the cursor's line, so the two together are the keyboard path to an inline
-    /// comment: one press to get a cursor, one to comment on it (ADR 0033's amendment).
-    func requestEditorFocus() {
+    /// What `c` does when the diff does not have the focus, and what `[` and `]` do by naming a
+    /// pane. Inside the editor the same keys act on a line: `c` comments on the cursor's, the
+    /// brackets cross between the panes. So the pair is the keyboard path to an inline comment —
+    /// one press to get a cursor, one to comment on it — and the side is what makes it reach a
+    /// *deleted* line, which exists only in the original pane (ADR 0033's amendment).
+    func requestEditorFocus(side: BridgeSide = .right) {
+        focusEditorSide = side
         focusEditorRequest += 1
     }
 

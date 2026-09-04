@@ -42,6 +42,24 @@ const FONT_FAMILY = 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "
 
 const MODEL_SCHEME = 'shepherd';
 
+/**
+ * Which pane a bracket asks for, or `null` for any other key.
+ *
+ * `[` is the original side and `]` the modified one, which is where they sit on the keyboard and
+ * on the screen.
+ */
+function bracketSide(keyCode: number): Side | null {
+  if (keyCode === monaco.KeyCode.BracketLeft) return 'left';
+  if (keyCode === monaco.KeyCode.BracketRight) return 'right';
+  return null;
+}
+
+/** Takes a key out of circulation — only ever called once it has actually done something. */
+function swallow(event: monaco.IKeyboardEvent): void {
+  event.preventDefault();
+  event.stopPropagation();
+}
+
 interface MountedZone {
   readonly zone: Zone;
   readonly editor: monaco.editor.ICodeEditor;
@@ -228,14 +246,18 @@ export class MonacoDiffViewer implements ViewerPort {
   }
 
   /**
-   * Puts the keyboard focus in the editor.
+   * Puts the keyboard focus in one pane of the diff.
    *
-   * The pane the reviewer would expect: the modified side, which is the one they are reading and
-   * the only one in inline mode. From there the arrow keys move the cursor and `c` comments on
-   * the line it is on, which is the whole point of handing focus over (ADR 0033's amendment).
+   * From there the arrow keys move the cursor and `c` comments on the line it is on, which is the
+   * whole point of handing focus over (ADR 0033's amendment). Which pane matters: the modified
+   * side is the one a reviewer reads, and the original side is the only place a *deleted* line
+   * exists to be commented on. In inline mode there is one pane holding both, and `editorFor`
+   * already says so.
    */
-  focusEditor(): void {
-    this.editorFor('right').focus();
+  focusEditor(side: Side): void {
+    const editor = this.editorFor(side);
+    this.anchorCursor(editor);
+    editor.focus();
   }
 
   /**
@@ -322,34 +344,87 @@ export class MonacoDiffViewer implements ViewerPort {
     // was the one review action with no key at all — in an app where approving, requesting
     // changes, submitting, merging and walking the files are all keys (ADR 0033's amendment).
     //
-    // `c` is the letter GitHub's own diff uses, and it is free here because the editor is
-    // read-only: a keystroke that would otherwise type a character types nothing. The action
-    // asks the *cursor's* line the same question the pointer's line is asked — in range, and
-    // part of the diff rather than one of the blank lines the reconstruction pads gaps with —
-    // through `cursorHit`, so the two paths cannot come to different conclusions about which
-    // lines may carry a comment. A line that may not simply does nothing, which is what the
-    // pointer does over it too.
+    // The editor's own key map — the keys a reviewer aims at a *line*, as opposed to the ones
+    // the native screen aims at a file. Each one is swallowed only if it did something, so an
+    // unhandled key keeps travelling and still reaches the screen that owns it.
     //
     // `onKeyDown` rather than `addAction`, and that is not a preference: `addAction` and
     // `addCommand` belong to `IStandaloneCodeEditor`, and a diff editor's two panes are plain
     // `ICodeEditor`s. This is the seam both panes actually have.
     editor.onKeyDown((event) => {
-      if (event.keyCode !== monaco.KeyCode.KeyC) return;
+      // A modified key belongs to somebody else — ⌘C copies the selection, and nothing here
+      // may take that away.
       if (event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return;
-      const hit = cursorHit({
-        lineNumber: editor.getPosition()?.lineNumber ?? null,
-        side,
-        lineCount: editor.getModel()?.getLineCount() ?? -1,
-        commentable: this.commentable[side],
-      });
-      if (hit === null) return;
-      // Only once a line has been found: an unhandled `c` must keep travelling, so that a key
-      // the native screen owns still reaches it when the cursor is somewhere a comment cannot go.
-      event.preventDefault();
-      event.stopPropagation();
-      const target = addCommentTarget(hit);
-      this.post(makeAddComment(target.line, target.side, target.startLine));
+      if (event.keyCode === monaco.KeyCode.KeyC) {
+        if (this.commentOnCursor(editor, side)) swallow(event);
+        return;
+      }
+      const target = bracketSide(event.keyCode);
+      if (target !== null && this.crossToPane(target)) swallow(event);
     });
+  }
+
+  /**
+   * `c`: asks for a composer on the line the cursor is on. Answers whether it did.
+   *
+   * `c` is the letter GitHub's own diff uses, and it is free here because the editor is
+   * read-only: a keystroke that would otherwise type a character types nothing. The *cursor's*
+   * line is asked the same question the pointer's line is asked — in range, and part of the diff
+   * rather than one of the blank lines the reconstruction pads gaps with — through `cursorHit`,
+   * so the two paths cannot come to different conclusions about which lines may carry a comment.
+   * A line that may not simply does nothing, which is what the pointer does over it too.
+   */
+  private commentOnCursor(editor: monaco.editor.ICodeEditor, side: Side): boolean {
+    const hit = cursorHit({
+      lineNumber: editor.getPosition()?.lineNumber ?? null,
+      side,
+      lineCount: editor.getModel()?.getLineCount() ?? -1,
+      commentable: this.commentable[side],
+    });
+    if (hit === null) return false;
+    const target = addCommentTarget(hit);
+    this.post(makeAddComment(target.line, target.side, target.startLine));
+    return true;
+  }
+
+  /**
+   * `[` and `]`: move the keyboard to the original or the modified pane. Answers whether it did.
+   *
+   * This is the whole of commenting on a deleted line without a pointer. `c` already works in
+   * either pane — the original one posts `side: "left"` — but nothing moved the cursor *into*
+   * that pane, so a deletion stayed mouse-only.
+   *
+   * Brackets rather than a letter, and not for want of a free letter: a letter can also be the
+   * second half of a two-keystroke command over in the native screen (`r c`, `g s`), and the
+   * editor cannot see that a prefix is armed over there — so it would swallow the second key and
+   * kill the sequence. `[` and `]` are in no sequence at all, and they read as left and right.
+   *
+   * Inline mode has one pane carrying both sides, so there is no other side to cross to and the
+   * key is left for whoever else wants it.
+   */
+  private crossToPane(side: Side): boolean {
+    if (this.mode === 'inline') return false;
+    this.focusEditor(side);
+    return true;
+  }
+
+  /**
+   * Puts the cursor somewhere visible before a pane takes the keyboard.
+   *
+   * A pane nobody has been in yet has its cursor on line 1, and the two panes scroll together —
+   * so crossing into the original pane a hundred lines down would hand the keyboard to a line
+   * nowhere near what is on screen, and the first arrow key would drag the whole diff back to
+   * the top. Only when the cursor is *not* already on screen, so that crossing back returns to
+   * the line it was left on rather than to the top of the viewport.
+   */
+  private anchorCursor(editor: monaco.editor.ICodeEditor): void {
+    const ranges = editor.getVisibleRanges();
+    const first = ranges[0];
+    const last = ranges[ranges.length - 1];
+    if (first === undefined || last === undefined) return;
+    const line = editor.getPosition()?.lineNumber;
+    if (line !== undefined && line >= first.startLineNumber && line <= last.endLineNumber) return;
+    editor.setPosition({ lineNumber: first.startLineNumber, column: 1 });
   }
 
   private arm(hit: GutterHit | null): void {

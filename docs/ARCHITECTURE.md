@@ -613,11 +613,13 @@ Swift → web (`postMessage` via `evaluateJavaScript("shepherd.receive(…)")`):
 - `setThreads` `{threads: [{id, line, side, resolved, outdated, comments:[{author, bodyHTML, createdAt, isAgent}]}]}`
 - `setDraftComments` `{comments: [{localID, line, side, body}]}`
 - `revealLine` `{line, side}`
-- `focusEditor` `{}` — hands the keyboard to the modified pane. The one command with no payload:
-  everything a reviewer does to a *file* is a key in the native screen, everything they do to a
-  *line* is Monaco's, and `c` pressed outside the diff sends this so the next `c` can comment on
-  the cursor's line (ADR 0033). Swift sends it off a *request token* rather than a value it
-  compares, because focus is an event: asking twice must send twice.
+- `focusEditor` `{side?}` — hands the keyboard to one pane. Everything a reviewer does to a
+  *file* is a key in the native screen, everything they do to a *line* is Monaco's, and `c`
+  pressed outside the diff sends this so the next `c` can comment on the cursor's line
+  (ADR 0033). `side` is optional and absent means the modified pane, the shape the command had
+  before `[` and `]` gave the keyboard a way into the original one — where deleted lines live.
+  Swift sends it off a *request token* rather than a value it compares, because focus is an
+  event: asking twice must send twice.
 - `setAccessibility` `{screenReader}` — turns Monaco's `accessibilitySupport` on and raises its
   `accessibilityPageSize`. Monaco's own `'auto'` detection is a browser's and cannot see that
   VoiceOver is reading the window this web view is embedded in; macOS can, so the app is the
@@ -963,12 +965,21 @@ takes a router.
   exposes every action *and* searches the pull requests in the inbox by content (ADR 0019);
   `j`/`k` row navigation; two-keystroke review actions
   (`r a` approve, `r c` comment, `r x` request changes, `r f` focus review session, `m` merge
-  dialog); `x` ticks a row for bulk triage (⌘-click / ⇧-click do the same with the mouse,
+  dialog); in a review `c` asks for an inline comment — the diff's own keyboard below — and `[`
+  and `]` name its two panes; `x` ticks a row for bulk triage (⌘-click / ⇧-click do the same with the mouse,
   ADR 0015); undo toast instead of confirm dialogs wherever the action is reversible — the merge
   sheet, the bulk-triage sheet and "end a session with pull requests still in it" are the three
   exceptions, because none of them is undoable.
 - Inside a focus review session two more single keys are live, and only there: `n` next,
   `d` done & next (below).
+- The diff has a keyboard of its own, and the boundary is deliberate: the native screen owns the
+  keys that act on a *file*, Monaco owns the keys that act on a *line*, and three keys cross it.
+  `c` outside the diff hands the keyboard over, `c` inside comments on the cursor's line, and
+  `[` / `]` move between the original and the modified pane — which is what makes a comment on a
+  *deleted* line reachable, since a deletion exists only in the original pane. Brackets rather
+  than letters on purpose: a letter must be free both as a bare key here and as the second half
+  of `r …` / `g …`, and the editor cannot see that a prefix is armed on this side. Every one of
+  these keys is swallowed only once it has done something, so an unhandled key still travels.
 - Dark & light mode from day one: semantic color tokens only (`Color.shepherd*` asset
   catalog), theme piped into Monaco via `setTheme`.
 - Every user-visible string goes through `String(localized:)` — or, for a SwiftUI literal title,

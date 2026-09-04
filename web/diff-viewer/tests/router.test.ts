@@ -16,7 +16,7 @@ function fakePort(): { port: ViewerPort; calls: Call[] } {
     setThreads: (t: readonly Thread[]) => calls.push({ name: 'setThreads', payload: t }),
     setDraftComments: (c: readonly DraftComment[]) => calls.push({ name: 'setDraftComments', payload: c }),
     revealLine: (line: number, side: Side) => calls.push({ name: 'revealLine', payload: { line, side } }),
-    focusEditor: () => calls.push({ name: 'focusEditor', payload: undefined }),
+    focusEditor: (side: Side) => calls.push({ name: 'focusEditor', payload: side }),
     setAccessibility: (screenReader: boolean) =>
       calls.push({ name: 'setAccessibility', payload: screenReader }),
   };
@@ -59,7 +59,17 @@ describe('routeInbound', () => {
     ]);
     expect(calls[0]?.payload).toBe(loadFile);
     expect(calls[4]?.payload).toEqual({ line: 5, side: 'left' });
+    // A message with no side means the modified pane, and the router is where that is read.
+    expect(calls[5]?.payload).toBe('right');
     expect(calls[6]?.payload).toBe(true);
+  });
+
+  it('passes the side through when the message names one', () => {
+    const { port, calls } = fakePort();
+
+    routeInbound({ v: 1, type: 'focusEditor', side: 'left' }, port);
+
+    expect(calls).toEqual([{ name: 'focusEditor', payload: 'left' }]);
   });
 
   it('unwraps the arrays for setThreads / setDraftComments', () => {

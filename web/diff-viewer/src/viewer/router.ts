@@ -11,7 +11,7 @@ export interface ViewerPort {
   setThreads(threads: readonly Thread[]): void;
   setDraftComments(comments: readonly DraftComment[]): void;
   revealLine(line: number, side: Side): void;
-  focusEditor(): void;
+  focusEditor(side: Side): void;
   setAccessibility(screenReader: boolean): void;
 }
 
@@ -34,7 +34,10 @@ export function routeInbound(message: InboundMessage, port: ViewerPort): void {
       port.revealLine(message.line, message.side);
       return;
     case 'focusEditor':
-      port.focusEditor();
+      // A message with no `side` means the modified pane: that is what this command meant before
+      // there was a way to ask for the other one. Reading the default here keeps the port's
+      // signature total, so the viewer never has to ask what "no side" meant.
+      port.focusEditor(message.side ?? 'right');
       return;
     case 'setAccessibility':
       port.setAccessibility(message.screenReader);

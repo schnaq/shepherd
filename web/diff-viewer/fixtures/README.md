@@ -37,7 +37,7 @@ Swift → web:
 | `setThreads` | `setThreads.valid.json` | `comments[0].isAgent` is the string `"false"` |
 | `setDraftComments` | `setDraftComments.valid.json` | `line: 0` — line numbers are 1-based |
 | `revealLine` | `revealLine.valid.json` | `side: "modified"` is not `left`/`right` |
-| `focusEditor` | `focusEditor.valid.json` | `v: 2` — a message with no payload can only be wrong in its envelope |
+| `focusEditor` | `focusEditor.valid.json`, `focusEditor.valid-side.json` | `v: 2` — the envelope is all a message whose only field is optional can get wrong |
 | `setAccessibility` | `setAccessibility.valid.json` | `screenReader: "yes"` is a string, not a boolean |
 
 Web → Swift:
@@ -51,7 +51,9 @@ Web → Swift:
 
 ## Optional fields
 
-`loadFile` has two, both additive, which is why the protocol version stays 1 for either.
+Three, all additive, which is why the protocol version stays 1 for every one of them.
+
+`loadFile` has two.
 
 `commentableLines`: `loadFile.valid.json` and `loadFile.valid-inline.json` omit it (which means
 "every line is commentable"), and `loadFile.valid-commentable.json` carries it.
@@ -59,6 +61,10 @@ Web → Swift:
 `paneLabels`: only `loadFile.valid-labels.json` carries it; omitting it leaves Monaco's own
 default aria label in place. Both shapes must decode on both sides — that is the whole point of
 an additive field.
+
+`focusEditor.side`: `focusEditor.valid.json` omits it, which means the modified pane — what the
+command meant before there was another pane to ask for — and `focusEditor.valid-side.json`
+carries `"left"`, which is how a comment on a deleted line is reached.
 
 ## Rules
 

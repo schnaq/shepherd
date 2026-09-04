@@ -49,10 +49,12 @@ interface FakeCodeEditor {
   getPosition(): { lineNumber: number } | null;
   createDecorationsCollection(): { set(): void };
   getModel(): FakeModel | null;
-  getVisibleRanges(): { startLineNumber: number }[];
+  /** The lines on screen — what `anchorCursor` reads before a pane takes the keyboard. */
+  visibleRanges: { startLineNumber: number; endLineNumber: number }[];
+  getVisibleRanges(): { startLineNumber: number; endLineNumber: number }[];
   changeViewZones(callback: (accessor: FakeZoneAccessor) => void): void;
   revealLineInCenterIfOutsideViewport(): void;
-  setPosition(): void;
+  setPosition(position: { lineNumber: number }): void;
 }
 
 interface FakeZoneAccessor {
@@ -87,7 +89,8 @@ function makeCodeEditor(): FakeCodeEditor {
     getPosition: () => editor.position,
     createDecorationsCollection: () => ({ set: () => undefined }),
     getModel: () => editor.model,
-    getVisibleRanges: () => [{ startLineNumber: 1 }],
+    visibleRanges: [{ startLineNumber: 1, endLineNumber: 20 }],
+    getVisibleRanges: () => editor.visibleRanges,
     changeViewZones: (callback) => {
       callback({
         addZone: () => {
@@ -103,7 +106,9 @@ function makeCodeEditor(): FakeCodeEditor {
       });
     },
     revealLineInCenterIfOutsideViewport: () => undefined,
-    setPosition: () => undefined,
+    setPosition: (position) => {
+      editor.position = position;
+    },
   };
   return editor;
 }
@@ -151,7 +156,7 @@ vi.mock('monaco-editor/editor/editor.api', () => {
   };
   return {
     editor,
-    KeyCode: { KeyC: 41 },
+    KeyCode: { KeyC: 41, BracketLeft: 92, BracketRight: 94 },
     Uri: {
       from: (parts: { scheme: string; authority: string; path: string }) => ({
         toString: () => `${parts.scheme}://${parts.authority}${parts.path}`,
@@ -228,6 +233,9 @@ const pressC = {
   preventDefault: () => undefined,
   stopPropagation: () => undefined,
 };
+
+const pressBracketLeft = { ...pressC, keyCode: 92 };
+const pressBracketRight = { ...pressC, keyCode: 94 };
 
 describe('MonacoDiffViewer.loadFile', () => {
   beforeEach(() => {
@@ -361,6 +369,7 @@ describe('the keyboard path to an inline comment', () => {
     for (const editor of [originalEditor, modifiedEditor]) {
       editor.position = null;
       editor.focused = false;
+      editor.visibleRanges = [{ startLineNumber: 1, endLineNumber: 20 }];
     }
   });
 
@@ -454,8 +463,104 @@ describe('MonacoDiffViewer.focusEditor', () => {
     const viewer = makeViewer();
     modifiedEditor.focused = false;
 
-    viewer.focusEditor();
+    viewer.focusEditor('right');
 
     expect(modifiedEditor.focused).toBe(true);
+  });
+
+  it('focuses the original pane when the app asks for it', () => {
+    // The native screen's own `[`: a reviewer who wants to comment on a deletion should not have
+    // to land in the modified pane first and cross over.
+    const viewer = makeViewer();
+    originalEditor.focused = false;
+
+    viewer.focusEditor('left');
+
+    expect(originalEditor.focused).toBe(true);
+  });
+});
+
+describe('crossing between the panes with the brackets', () => {
+  beforeEach(() => {
+    liveURIs.clear();
+    for (const editor of [originalEditor, modifiedEditor]) {
+      editor.position = null;
+      editor.focused = false;
+      editor.visibleRanges = [{ startLineNumber: 1, endLineNumber: 20 }];
+    }
+  });
+
+  it('`[` hands the keyboard to the original pane, `]` hands it back', () => {
+    const { viewer } = makeListeningViewer();
+    viewer.loadFile(message());
+
+    modifiedEditor.keyHandler?.(pressBracketLeft);
+    expect(originalEditor.focused).toBe(true);
+
+    modifiedEditor.focused = false;
+    originalEditor.keyHandler?.(pressBracketRight);
+    expect(modifiedEditor.focused).toBe(true);
+  });
+
+  it('reaches a comment on a deleted line, which is the whole point', () => {
+    const { viewer, posted } = makeListeningViewer();
+    viewer.loadFile(message());
+    modifiedEditor.position = { lineNumber: 2 };
+
+    // `[` to cross, `c` to comment: the deletion is now reachable without a pointer.
+    modifiedEditor.keyHandler?.(pressBracketLeft);
+    originalEditor.keyHandler?.(pressC);
+
+    expect(posted).toEqual([{ v: 1, type: 'addComment', line: 1, side: 'left' }]);
+  });
+
+  it('puts the cursor where the reviewer is looking', () => {
+    // A pane nobody has been in has its cursor on line 1. Crossing into it a hundred lines down
+    // must not hand the keyboard to a line that is off screen, or the first arrow key drags the
+    // whole diff back to the top.
+    const { viewer } = makeListeningViewer();
+    viewer.loadFile(message());
+    originalEditor.visibleRanges = [{ startLineNumber: 100, endLineNumber: 120 }];
+
+    modifiedEditor.keyHandler?.(pressBracketLeft);
+
+    expect(originalEditor.position).toEqual({ lineNumber: 100, column: 1 });
+  });
+
+  it('leaves a cursor that is already on screen where it was', () => {
+    const { viewer } = makeListeningViewer();
+    viewer.loadFile(message());
+    originalEditor.visibleRanges = [{ startLineNumber: 100, endLineNumber: 120 }];
+    originalEditor.position = { lineNumber: 105 };
+
+    modifiedEditor.keyHandler?.(pressBracketLeft);
+
+    expect(originalEditor.position).toEqual({ lineNumber: 105 });
+  });
+
+  it('has no other side to cross to in inline mode, and says so by letting the key travel', () => {
+    const { viewer } = makeListeningViewer();
+    viewer.loadFile(message({ mode: 'inline' }));
+    const travelled = { prevented: false };
+    const press = {
+      ...pressBracketLeft,
+      preventDefault: () => {
+        travelled.prevented = true;
+      },
+    };
+
+    modifiedEditor.keyHandler?.(press);
+
+    expect(originalEditor.focused).toBe(false);
+    expect(travelled.prevented).toBe(false);
+  });
+
+  it('ignores a bracket that carries a modifier', () => {
+    const { viewer } = makeListeningViewer();
+    viewer.loadFile(message());
+
+    modifiedEditor.keyHandler?.({ ...pressBracketLeft, metaKey: true });
+
+    expect(originalEditor.focused).toBe(false);
   });
 });

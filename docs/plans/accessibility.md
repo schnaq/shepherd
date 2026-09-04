@@ -92,13 +92,21 @@ message has). So: `c` to get a cursor, `c` to comment on it, arrows to move betw
 down, since the obvious API is the one that does not exist here. The key is only swallowed once a
 commentable line has been found, so an unhandled `c` still reaches the native screen.
 
-**What it left open: a deleted line.** `c` works in *either* pane — the original pane's handler
-posts `side: "left"`, and there is a test for it — but `focusEditor` always lands in the modified
-pane, which is the one a reviewer is reading. So a comment on a deletion is still mouse-only,
-because nothing crosses from one pane to the other without a pointer. Fixing it is one key inside
-the editor, and the reason it is not just picked here is that the review screen's keyboard
-vocabulary is normative in `docs/ARCHITECTURE.md`: which letter means "the other side" is a
-decision about the app's language, not an implementation detail. `[`/`]` and `s` are all free.
+**What it left open, and then closed: a deleted line.** `c` works in *either* pane — the original
+pane's handler posts `side: "left"`, and there is a test for it — but `focusEditor` always landed
+in the modified pane, which is the one a reviewer is reading. So a comment on a deletion was still
+mouse-only, because nothing crossed from one pane to the other without a pointer.
+
+`[` is the original pane now and `]` the modified one, on both sides of the boundary: Monaco takes
+them inside the editor, and on the native screen they raise the same focus request `c` raises,
+through a new optional `side` on `focusEditor`. Brackets and not a letter, because every free
+letter had the same defect — it must be free as a bare key *and* as the second half of `r …` and
+`g …`, and the editor cannot see that a prefix is armed on the native side, so it would swallow
+the second key of `g s` exactly as `c` first swallowed the second key of `r c`. `[` and `]` are in
+no sequence, so the collision cannot arise. Crossing puts the cursor on the target pane's first
+visible line unless it is already on screen, because the panes scroll together and an untouched
+pane's cursor is on line 1. Inline mode has one pane carrying both sides, so there the key travels
+on. Recorded in ADR 0033's third amendment.
 
 ## 3. Larger Text does nothing
 

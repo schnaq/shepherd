@@ -107,6 +107,28 @@ final class InteractionTests: XCTestCase {
         }
     }
 
+    func testTheBracketsBelongToTheDiffAndArmNothing() {
+        // `[` and `]` cross between the diff's two panes, which is how a comment on a deleted
+        // line is reached without a pointer. The sequence machine must leave them alone: it may
+        // neither claim them as commands nor arm a prefix on them, or the review screen's own
+        // handler would never see the second one.
+        var state = KeySequenceState()
+        for key: Character in ["[", "]"] {
+            XCTAssertEqual(state.consume(key), .unhandled, "\(key) is not the machine's key")
+            XCTAssertFalse(state.isAwaitingSecondKey(), "\(key) armed something")
+        }
+    }
+
+    func testAnArmedPrefixSwallowsTheBracketAndDisarms() {
+        // The `r c` collision again, from the other side: while `r` is armed the bracket goes to
+        // the machine, which rejects it *and* forgets the prefix — so the next bracket means the
+        // diff again rather than being read as a second key.
+        var state = KeySequenceState()
+        XCTAssertEqual(state.consume("r"), .awaitingSecondKey("r"))
+        XCTAssertEqual(state.consume("["), .unhandled)
+        XCTAssertFalse(state.isAwaitingSecondKey(), "the rejected second key left the prefix armed")
+    }
+
     func testAPrefixNobodyCompletedStopsBlockingTheBareKey() {
         // Same clock rule as `consume`: an `r` from a minute ago is forgotten, so `c` means the
         // diff again rather than being held for a sequence that will never finish.

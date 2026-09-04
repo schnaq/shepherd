@@ -49,6 +49,20 @@ final class BridgeProtocolTests: XCTestCase {
         }
     }
 
+    func testFocusEditorWithoutASideMeansTheModifiedPane() throws {
+        // The side is additive: `focusEditor` shipped without one, and a message that still comes
+        // without one has to keep meaning what it meant — the pane a reviewer reads.
+        let data = Data(#"{"v":1,"type":"focusEditor"}"#.utf8)
+        let decoded = try JSONDecoder().decode(DiffViewerCommand.self, from: data)
+        XCTAssertEqual(decoded, .focusEditor(side: .right))
+    }
+
+    func testFocusEditorCarriesTheOriginalPaneWhenAsked() throws {
+        let data = Data(#"{"v":1,"type":"focusEditor","side":"left"}"#.utf8)
+        let decoded = try JSONDecoder().decode(DiffViewerCommand.self, from: data)
+        XCTAssertEqual(decoded, .focusEditor(side: .left))
+    }
+
     func testValidFixturesDecodeAndRoundTrip() throws {
         let decoder = JSONDecoder()
         let encoder = JSONEncoder()

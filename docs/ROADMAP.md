@@ -355,11 +355,12 @@ remain and each is a project rather than a label; what they would take is in
       which `PatchReconstructor` already has the pieces for and which is a better diff for
       everybody
 - [x] **An inline comment needs a mouse.** Fixed 2026-09-04: `c` inside the diff comments on the
-      cursor's line through the same line rules the pointer's path uses, and `c` outside it hands
-      the keyboard over through a new payload-less `focusEditor` bridge command. Picking a file,
-      reading it, commenting on an added or changed line and submitting are all keys now; a
-      comment on a *deleted* line still needs the mouse, because nothing crosses to the original
-      pane without a pointer (the plan says what that would take)
+      cursor's line through the same line rules the pointer's path uses, `c` outside it hands the
+      keyboard over through a new `focusEditor` bridge command, and `[` / `]` move between the
+      original and the modified pane — which is what reaches a comment on a *deleted* line, since
+      a deletion exists only on the original side. Picking a file, reading it, commenting on any
+      line of it and submitting are all keys now. Brackets rather than letters because a letter
+      would collide with the second half of `r …` / `g …`, which the editor cannot see
 - [ ] **macOS's Larger Text does nothing.** 419 `Font.system(size:)` call sites against two
       semantic styles, so the OS setting has no effect anywhere. Needs a type scale in `Theme` and
       a decision about the dense fixed-height rows, not a find-and-replace

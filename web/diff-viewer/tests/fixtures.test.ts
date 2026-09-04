@@ -74,9 +74,9 @@ describe('shared bridge fixtures', () => {
   });
 
   it('carries v:1 on every fixture except the deliberate version-mismatch ones', () => {
-    // Two messages carry nothing but their envelope — `ready` on the way out and `focusEditor`
-    // on the way in — so the envelope is the only thing an invalid fixture for them *can* get
-    // wrong. Their rejected case is a version mismatch, on purpose.
+    // Two messages require nothing but their envelope — `ready` on the way out and
+    // `focusEditor` on the way in, whose only field is optional — so a version mismatch is the
+    // rejection their invalid fixture is for. On purpose, and it is the envelope's own rule.
     const versionMismatch = new Set(['ready.invalid.json', 'focusEditor.invalid.json']);
     for (const fixture of fixtures) {
       const envelope = fixture.json as { v?: unknown; type?: unknown };

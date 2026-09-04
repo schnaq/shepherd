@@ -145,14 +145,23 @@ export interface RevealLineMessage {
 /**
  * Put the keyboard focus in the editor.
  *
- * The one command with no payload, and the reason it exists is the keyboard: everything a
- * reviewer can do to a *file* is a key in the native screen, and everything they can do to a
- * *line* is Monaco's, so somebody driving the app without a mouse needs a way across that
- * boundary. Sending this is that way (ADR 0033's amendment).
+ * The reason it exists is the keyboard: everything a reviewer can do to a *file* is a key in the
+ * native screen, and everything they can do to a *line* is Monaco's, so somebody driving the app
+ * without a mouse needs a way across that boundary. Sending this is that way (ADR 0033's
+ * amendment).
  */
 export interface FocusEditorMessage {
   readonly v: ProtocolVersion;
   readonly type: 'focusEditor';
+  /**
+   * Which pane the cursor should land in.
+   *
+   * Optional, and additive for the same reason `loadFile`'s `paneLabels` is: a message without
+   * it means the modified pane, which is what this command meant before there was a way to ask
+   * for the other one — and is still the pane a reviewer reads. Asking for `'left'` is how a
+   * comment on a *deleted* line is reached without a pointer.
+   */
+  readonly side?: Side;
 }
 
 /**
@@ -505,11 +514,16 @@ export function parseInbound(value: unknown): ParseResult<InboundMessage> {
       }
       return ok({ v: PROTOCOL_VERSION, type: 'setAccessibility', screenReader });
     }
-    case 'focusEditor':
-      // Nothing to validate: the command is the whole message. An unknown extra key is ignored
-      // here as it is for every other type — the envelope's version is what a breaking change
-      // would move.
-      return ok({ v: PROTOCOL_VERSION, type: 'focusEditor' });
+    case 'focusEditor': {
+      // The command is almost the whole message: `side` is optional, and absent means the
+      // modified pane. An unknown extra key is ignored here as it is for every other type —
+      // the envelope's version is what a breaking change would move.
+      const base: FocusEditorMessage = { v: PROTOCOL_VERSION, type: 'focusEditor' };
+      const side = msg['side'];
+      if (side === undefined || side === null) return ok(base);
+      if (!isSide(side)) return fail('focusEditor.side: expected "left" | "right"');
+      return ok({ ...base, side });
+    }
     default:
       return fail(`message.type: unknown inbound message type ${JSON.stringify(type)}`);
   }

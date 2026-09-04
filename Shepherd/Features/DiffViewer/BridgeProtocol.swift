@@ -325,14 +325,18 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
     /// view can see that VoiceOver is reading the window around it. macOS tells the app, so the
     /// app is the honest source (ADR 0033's second amendment).
     case setAccessibility(screenReader: Bool)
-    /// Put the keyboard focus in the editor.
+    /// Put the keyboard focus in one pane of the diff.
     ///
-    /// The one command with no payload. It exists because the keyboard has a boundary the mouse
-    /// does not: what a reviewer does to a *file* is a key in the native screen, and what they do
-    /// to a *line* is Monaco's, so somebody working without a mouse needs a way across
-    /// (ADR 0033's amendment). Sending it twice focuses twice, which is why the view sends it off
-    /// a request token rather than off a value it can compare.
-    case focusEditor
+    /// It exists because the keyboard has a boundary the mouse does not: what a reviewer does to
+    /// a *file* is a key in the native screen, and what they do to a *line* is Monaco's, so
+    /// somebody working without a mouse needs a way across (ADR 0033's amendment). The side is
+    /// how a comment on a *deleted* line is reached: deletions only exist in the original pane.
+    /// Sending this twice focuses twice, which is why the view sends it off a request token
+    /// rather than off a value it can compare.
+    ///
+    /// On the wire the side is optional, and absent means `.right` — the shape the command had
+    /// before there was another pane to ask for.
+    case focusEditor(side: BridgeSide)
 
     /// The `type` discriminator of this message.
     var messageType: String {
@@ -406,8 +410,11 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
                 side: try container.decode(BridgeSide.self, forKey: .side)
             )
         case "focusEditor":
-            // Nothing to decode: the type is the whole message.
-            self = .focusEditor
+            // The side is optional on the wire: a message without one means the modified pane,
+            // which is what this command meant before there was a way to ask for the other one.
+            self = .focusEditor(
+                side: try container.decodeIfPresent(BridgeSide.self, forKey: .side) ?? .right
+            )
         case "setAccessibility":
             self = .setAccessibility(
                 screenReader: try container.decode(Bool.self, forKey: .screenReader)
@@ -441,9 +448,8 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
         case .revealLine(let line, let side):
             try container.encode(line, forKey: .line)
             try container.encode(side, forKey: .side)
-        case .focusEditor:
-            // The envelope above is the whole message.
-            break
+        case .focusEditor(let side):
+            try container.encode(side, forKey: .side)
         case .setAccessibility(let screenReader):
             try container.encode(screenReader, forKey: .screenReader)
         }

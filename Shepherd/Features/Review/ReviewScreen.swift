@@ -197,10 +197,12 @@ struct ReviewScreen: View {
                 // Set only by the CI diagnosis card's `file:line` link (plan §3.F); the viewer
                 // acts on a change of it and ignores it otherwise.
                 revealLine: model.revealLine,
-                // Raised by `c` pressed outside the diff (ADR 0033's amendment): the native
-                // screen owns the keys that act on a *file*, the editor owns the keys that act
-                // on a *line*, and this is the one command that carries the keyboard across.
+                // Raised by `c`, `[` and `]` pressed outside the diff (ADR 0033's amendment):
+                // the native screen owns the keys that act on a *file*, the editor owns the keys
+                // that act on a *line*, and this is the command that carries the keyboard across.
+                // The side is what makes a deleted line reachable — `[` is the original pane.
                 focusRequest: model.focusEditorRequest,
+                focusSide: model.focusEditorSide,
                 screenReader: isVoiceOverEnabled,
                 onEvent: { event in model.handle(event) }
             )
@@ -363,6 +365,19 @@ struct ReviewScreen: View {
         // second key as well.
         if character == "c", !model.isAwaitingSecondKey {
             model.requestEditorFocus()
+            return .handled
+        }
+        // `[` and `]` name a pane, here and inside the editor alike: the original side and the
+        // modified one, where they sit on the keyboard and on the screen. Without them a comment
+        // on a *deleted* line stayed mouse-only, because `c` lands in the modified pane and a
+        // deletion exists only in the other one.
+        //
+        // Brackets rather than a letter deliberately: a letter would have to be free as a bare
+        // key *and* as the second half of `r …` and `g …`, and the editor — which needs the same
+        // key — cannot see that a prefix is armed over here. The guard below is the same one `c`
+        // needs, for the same reason.
+        if character == "[" || character == "]", !model.isAwaitingSecondKey {
+            model.requestEditorFocus(side: character == "[" ? .left : .right)
             return .handled
         }
         // The session's own two keys, handled before the two-keystroke machine and only while a
