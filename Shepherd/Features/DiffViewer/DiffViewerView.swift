@@ -296,7 +296,7 @@ struct DiffViewerView: NSViewRepresentable {
         /// - Parameters:
         ///   - url: The URL to check.
         ///   - root: The bundle directory, or `nil` when there is none.
-        static func isInsideBundle(_ url: URL, root: URL?) -> Bool {
+        nonisolated static func isInsideBundle(_ url: URL, root: URL?) -> Bool {
             guard let root, url.isFileURL else { return false }
             let base = root.standardizedFileURL.resolvingSymlinksInPath().path
             let target = url.standardizedFileURL.resolvingSymlinksInPath().path
