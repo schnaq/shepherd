@@ -4,6 +4,7 @@ on:
   push:
     branches: ["main", "claude/**"]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   diff-viewer:
@@ -72,6 +73,7 @@ jobs:
         run: |
           xcodebuild -version
           xcodebuild -showsdks | grep -i macosx || true
+          echo "::notice title=Toolchain::$(xcodebuild -version | tr '\n' ' ')- SDKs: $(xcodebuild -showsdks | grep -o 'macosx[0-9.]*' | tr '\n' ' ')"
       - name: Build diff viewer bundle
         run: npm ci && npm run build
         working-directory: web/diff-viewer
