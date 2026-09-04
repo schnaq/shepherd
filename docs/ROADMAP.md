@@ -359,8 +359,10 @@ remain and each is a project rather than a label; what they would take is in
       keyboard over through a new `focusEditor` bridge command, and `[` / `]` move between the
       original and the modified pane — which is what reaches a comment on a *deleted* line, since
       a deletion exists only on the original side. Picking a file, reading it, commenting on any
-      line of it and submitting are all keys now. Brackets rather than letters because a letter
-      would collide with the second half of `r …` / `g …`, which the editor cannot see
+      line of it and submitting are all keys now — in the side-by-side diff; the inline display
+      mode has one pane carrying both sides, so the brackets are inert there by design. Brackets
+      rather than letters because a letter would collide with the second half of `r …` / `g …`,
+      which the editor cannot see
 - [ ] **macOS's Larger Text does nothing.** Mechanism built 2026-09-04: `Theme.type(_:weight:)`
       names a text style rather than a point size, which scales itself — no environment to read,
       because macOS's styles already do it. 64 call sites across six surfaces have moved, chosen

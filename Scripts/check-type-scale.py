@@ -20,6 +20,14 @@ So this lists the surfaces that have moved and fails if a fixed size reappears i
 surface to the list is the second half of migrating it. Python 3 standard library only; it runs on
 the Linux job, because that is where an agent working on this repo has no Xcode at all
 (`docs/ARCHITECTURE.md` § Verification reality check).
+
+Two things it has to get right, and the first one is why it does not just grep lines. A call that
+outgrows the line length gets wrapped — `.font(\n    .system(\n        size: 12\n    )\n)` is an
+ordinary thing for a formatter or a contributor to produce — and a per-line pattern walks straight
+past it, which would make this gate a comfort rather than a check. So the search runs over the
+whole file with a pattern that tolerates newlines. The second is that a fixed size *written about*
+is not a fixed size used: the rule gets documented in comments, including in these very files, so
+comments and string literals are blanked before the search rather than matched.
 """
 
 from __future__ import annotations
@@ -41,10 +49,70 @@ MIGRATED = (
     "Shepherd/Features/Inbox/IssueCommentSheet.swift",
 )
 
-# A fixed point size, either spelling: SwiftUI's own or `Theme.mono`'s numeric overload. A
-# parameterised size (`.system(size: size)`) is not one — the caller decides, and a caller in a
-# migrated file has to pass something from the scale anyway.
-FIXED = re.compile(r"\.system\(size:\s*\d|Theme\.mono\(\s*\d")
+# A fixed point size, either spelling: SwiftUI's own or `Theme.mono`'s numeric overload. `\s*`
+# rather than a space at every join, so a wrapped call is caught as readily as a one-liner. A
+# *parameterised* size (`.system(size: size)`) is deliberately not matched — the caller decides,
+# and a caller in a migrated file has to pass something from the scale anyway.
+FIXED = re.compile(r"\.\s*system\s*\(\s*size:\s*\d|Theme\s*\.\s*mono\s*\(\s*\d")
+
+
+def without_comments_and_strings(source: str) -> str:
+    """Blank out comments and string literals, keeping every newline so line numbers survive.
+
+    Deliberately a small scanner rather than a regex: Swift block comments nest, and a `//`
+    inside a string is not a comment. It does not know raw strings (`#"…"#`), which none of the
+    listed surfaces uses; the cost of that gap is a false positive, which fails loudly rather
+    than quietly, and quietly is the direction that matters here.
+    """
+    out: list[str] = []
+    index, length, depth = 0, len(source), 0
+    while index < length:
+        character = source[index]
+        pair = source[index:index + 2]
+        if depth > 0:                                  # inside /* … */, which nests
+            if pair == "/*":
+                depth += 1
+                out.append("  ")
+                index += 2
+            elif pair == "*/":
+                depth -= 1
+                out.append("  ")
+                index += 2
+            else:
+                out.append("\n" if character == "\n" else " ")
+                index += 1
+        elif pair == "/*":
+            depth = 1
+            out.append("  ")
+            index += 2
+        elif pair == "//":
+            while index < length and source[index] != "\n":
+                out.append(" ")
+                index += 1
+        elif source[index:index + 3] == '"""':
+            out.append("   ")
+            index += 3
+            while index < length and source[index:index + 3] != '"""':
+                out.append("\n" if source[index] == "\n" else " ")
+                index += 1
+            out.append("   ")
+            index += 3
+        elif character == '"':
+            out.append(" ")
+            index += 1
+            while index < length and source[index] != '"':
+                if source[index] == "\\" and index + 1 < length:
+                    out.append("  ")
+                    index += 2
+                    continue
+                out.append("\n" if source[index] == "\n" else " ")
+                index += 1
+            out.append(" ")
+            index += 1
+        else:
+            out.append(character)
+            index += 1
+    return "".join(out)
 
 
 def main() -> int:
@@ -54,9 +122,13 @@ def main() -> int:
         if not path.is_file():
             findings.append(f"{name}: listed as migrated but not on disk")
             continue
-        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-            if FIXED.search(line):
-                findings.append(f"{name}:{number}: fixed point size — {line.strip()}")
+        source = path.read_text(encoding="utf-8")
+        scanned = without_comments_and_strings(source)
+        lines = source.splitlines()
+        for match in FIXED.finditer(scanned):
+            number = scanned.count("\n", 0, match.start()) + 1
+            quoted = lines[number - 1].strip() if number <= len(lines) else ""
+            findings.append(f"{name}:{number}: fixed point size — {quoted}")
 
     if findings:
         print("Fixed font sizes in surfaces that are on the type scale:", file=sys.stderr)

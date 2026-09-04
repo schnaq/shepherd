@@ -224,7 +224,9 @@ press it again and the composer opens on the line the cursor is on. Inside the d
 walk the file, and `[` and `]` move between the original and the modified pane — which is how you
 comment on a *deleted* line, since a deletion exists only on the original side. So picking a file,
 reading it, commenting on any line of it and submitting are all keys
-([ADR 0033](adr/0033-accessibility.md)). A line the diff does not actually contain, one of the
+([ADR 0033](adr/0033-accessibility.md)). The bracket pair wants the side-by-side diff: turn inline
+diffs on and there is a single pane carrying both sides, with no other side to cross to, so the
+keys deliberately do nothing there. A line the diff does not actually contain, one of the
 blank ones that pad the gaps between hunks, is refused exactly as it is for a click, because GitHub
 refuses a comment on it and the review with it.
 
