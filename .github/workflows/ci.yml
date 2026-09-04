@@ -34,6 +34,11 @@ jobs:
       # fine and silently shows English (ADR 0022). Python 3 stdlib only, no setup step.
       - name: Check the String Catalog against the source
         run: python3 Scripts/check-localization.py
+      # Same reason, different invariant: a `.font(.system(size:))` added to a surface that has
+      # moved onto the type scale compiles fine and then refuses to grow with macOS's Larger Text
+      # setting, next to text that does (ADR 0033).
+      - name: Check the type scale
+        run: python3 Scripts/check-type-scale.py
       - uses: swift-actions/setup-swift@v2
         with:
           swift-version: "6.1"

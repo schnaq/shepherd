@@ -58,14 +58,14 @@ struct ClosingIssuesCard: View {
         } label: {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: ClosingIssuesCard.symbol(for: issue.state))
-                    .font(.system(size: 11))
+                    .font(Theme.type(.subheadline))
                     .foregroundStyle(ClosingIssuesCard.color(for: issue.state))
                     .frame(width: 14)
                 Text(ClosingIssuesCard.label(for: issue))
-                    .font(Theme.mono(12))
+                    .font(Theme.mono(.callout))
                     .foregroundStyle(Theme.accentText)
                 Text(issue.title)
-                    .font(.system(size: 12))
+                    .font(Theme.type(.callout))
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -74,7 +74,7 @@ struct ClosingIssuesCard: View {
                 }
                 Spacer(minLength: 4)
                 Text(ClosingIssuesCard.stateTitle(for: issue.state))
-                    .font(.system(size: 11))
+                    .font(Theme.type(.subheadline))
                     .foregroundStyle(Theme.textMuted)
             }
             .frame(maxWidth: .infinity, alignment: .leading)

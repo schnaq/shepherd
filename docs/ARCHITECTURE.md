@@ -982,6 +982,12 @@ takes a router.
   these keys is swallowed only once it has done something, so an unhandled key still travels.
 - Dark & light mode from day one: semantic color tokens only (`Color.shepherd*` asset
   catalog), theme piped into Monaco via `setTheme`.
+- Text sizes go through `Theme.type(_:weight:)` (or `Theme.mono(_:weight:)`), which name a
+  `Font.TextStyle` and therefore grow with macOS's Larger Text setting; `Font.system(size:)` is a
+  fixed measurement that ignores it. The migration off the fixed sizes is partial on purpose — a
+  surface moves only when every size in it maps exactly onto a style, so the change is invisible
+  at the default size — and `Scripts/check-type-scale.py` lists what has moved and fails CI on a
+  fixed size reappearing there (ADR 0033, `docs/plans/accessibility.md` §3).
 - Every user-visible string goes through `String(localized:)` — or, for a SwiftUI literal title,
   through `LocalizedStringKey`, which is the same table — with English as the key language and
   German shipped in `Shepherd/Resources/Localizable.xcstrings` (ADR 0022). The language follows

@@ -114,6 +114,21 @@ bumping a dependency that ships inside the app also means a line in
   `Packages/ShepherdKit` (no user-visible strings by decision), the web diff viewer (ADR 0003 keeps
   that boundary at the bridge protocol), and literal syntax inside translated text — placeholders
   like `{prompt}`, flag names, example values (`owner/repo`, `github_pat_…`) and shortcut names.
+- **Text size** goes through `Theme.type(_:weight:)` — or `Theme.mono(_:weight:)` for paths and
+  slugs — which name a `Font.TextStyle`. `Font.system(size:)` is a fixed measurement and does not
+  take part in macOS's Larger Text setting, so text spelled that way never grows for a low-vision
+  user (ADR 0033).
+
+  ```sh
+  python3 Scripts/check-type-scale.py   # stdlib only, no Xcode, runs on Linux
+  ```
+
+  The migration off the fixed sizes is partial on purpose: a surface moves only when *every* size
+  in it maps exactly onto a text style, so the change is invisible at the default size, and the
+  script lists the surfaces that have moved and fails on a fixed size reappearing in one. Adding a
+  surface to that list is the second half of migrating it. If a size you need has no exact style
+  behind it — a half point, 8, 9 — that is a visual decision rather than a mechanical one and
+  belongs in `docs/plans/accessibility.md` §3, not in a rounding.
 - Adding a **setting** has a second obligation: carry it in `SyncedSettingsDocument` and in both
   directions of `SettingsSyncApplier` (ADR 0014), or it silently stops travelling between a user's
   Macs. The two functions are deliberately mirror images — diff them by eye — and

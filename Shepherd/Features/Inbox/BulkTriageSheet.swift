@@ -41,10 +41,10 @@ struct BulkTriageSheet: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(plan.action.confirmationTitle(count: plan.eligible.count))
-                .font(.system(size: 15, weight: .semibold))
+                .font(Theme.type(.title3, weight: .semibold))
                 .foregroundStyle(Theme.textStrong)
             Text(plan.action.explanation)
-                .font(.system(size: 12))
+                .font(Theme.type(.callout))
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -91,7 +91,7 @@ struct BulkTriageSheet: View {
             ))
             .fixedSize(horizontal: false, vertical: true)
         }
-        .font(.system(size: 11))
+        .font(Theme.type(.subheadline))
         .foregroundStyle(Theme.textMuted)
     }
 
@@ -135,11 +135,11 @@ struct BulkTriageRowView: View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             CheckDotView(state: entry.pullRequest.checkRollup?.state)
             Text(entry.pullRequest.slug)
-                .font(Theme.mono(11))
+                .font(Theme.mono(.subheadline))
                 .foregroundStyle(Theme.textMuted)
                 .layoutPriority(1)
             Text(entry.pullRequest.title)
-                .font(.system(size: 12))
+                .font(Theme.type(.callout))
                 .foregroundStyle(entry.isEligible ? Theme.text : Theme.textMuted)
                 .lineLimit(1)
                 .truncationMode(.tail)

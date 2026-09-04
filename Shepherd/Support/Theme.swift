@@ -131,9 +131,43 @@ enum Theme {
 
     // MARK: - Metrics
 
-    /// The monospaced font used for repo slugs, paths and diff counts.
+    /// The monospaced font used for repo slugs, paths and diff counts, at a fixed point size.
+    ///
+    /// Kept for the surfaces that pin a row height around it; ``mono(_:weight:)`` below is the
+    /// one that grows.
     static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
         .system(size: size, weight: weight, design: .monospaced)
+    }
+
+    // MARK: - Type scale
+
+    /// The app's text sizes, as *text styles* rather than point sizes — which is the whole of
+    /// taking part in macOS's Larger Text setting.
+    ///
+    /// `Font.system(size:)` is a fixed measurement and ignores that setting entirely, so a
+    /// low-vision user's system preference did nothing at all in Shepherd: worse than clipping,
+    /// because the standard remedy silently had no effect (ADR 0033's fourth amendment). A text
+    /// style is the same size by default and grows when the user asks it to.
+    ///
+    /// The mapping is deliberately the identity at the default size — on macOS `.body` is 13pt,
+    /// `.callout` 12, `.subheadline` 11, `.footnote` 10, `.title3` 15, `.title` 22 — so adopting
+    /// this changes nothing whatsoever until somebody turns the setting up. Sizes with no exact
+    /// style behind them (8, 9, and the half points) deliberately stay fixed rather than being
+    /// rounded onto one, because rounding would change the app at the default size, which is a
+    /// visual decision and not a mechanical one.
+    ///
+    /// One function rather than a property per style, so the weighted form reads like the plain
+    /// one and so a later decision — retune the scale, cap how far it grows — is made here
+    /// instead of at several hundred call sites. `.headline` is deliberately absent: it carries
+    /// a semibold weight of its own, which would silently double up on a call site that already
+    /// asks for one.
+    static func type(_ style: Font.TextStyle, weight: Font.Weight = .regular) -> Font {
+        .system(style, design: .default, weight: weight)
+    }
+
+    /// ``type(_:weight:)``'s monospaced sibling, for the same reason.
+    static func mono(_ style: Font.TextStyle, weight: Font.Weight = .regular) -> Font {
+        .system(style, design: .monospaced, weight: weight)
     }
 
     /// Tint used behind a chip of a given colour.

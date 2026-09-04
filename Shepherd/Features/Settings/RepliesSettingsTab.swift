@@ -44,13 +44,13 @@ struct RepliesSettingsTab: View {
                 Text(String(
                     localized: "Named pieces of Markdown you can drop into any comment field: the inline comment composer, the review summary, and a thread reply. The insert button next to each field lists them in this order, so put the ones you use most at the top."
                 ))
-                .font(.system(size: 11))
+                .font(Theme.type(.subheadline))
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
 
                 if environment.settings.savedReplies.isEmpty {
                     Text(String(localized: "None yet."))
-                        .font(.system(size: 12))
+                        .font(Theme.type(.callout))
                         .foregroundStyle(Theme.textMuted)
                 }
 
@@ -87,19 +87,19 @@ struct RepliesSettingsTab: View {
                 Text(String(
                     localized: "A summary a new review starts from, per repository. Match one repository with schnaq/review or a whole owner with schnaq/* — * and ? are the wildcards. An exact pattern wins over a wildcard, a longer wildcard wins over a shorter one, and if two are equally specific the one listed first wins."
                 ))
-                .font(.system(size: 11))
+                .font(Theme.type(.subheadline))
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
                 Text(String(
                     localized: "A template only ever fills an empty review. A pull request you have already written a comment, a summary or a verdict for is never touched."
                 ))
-                .font(.system(size: 11))
+                .font(Theme.type(.subheadline))
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
 
                 if environment.settings.reviewTemplates.isEmpty {
                     Text(String(localized: "None yet."))
-                        .font(.system(size: 12))
+                        .font(Theme.type(.callout))
                         .foregroundStyle(Theme.textMuted)
                 }
 
@@ -149,14 +149,14 @@ struct RepliesSettingsTab: View {
                 Text(String(
                     localized: "A review comment you have written at least three times in the last thirty days, on at least two pull requests of the same repository. Shepherd finds these on this Mac, from your own comments only, and never sends them anywhere. On the review screen each one offers to draft a rule for that repository's agent instructions."
                 ))
-                .font(.system(size: 11))
+                .font(Theme.type(.subheadline))
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
 
                 let findings = environment.recurringFindings.everyFinding
                 if findings.isEmpty {
                     Text(String(localized: "Nothing yet."))
-                        .font(.system(size: 12))
+                        .font(Theme.type(.callout))
                         .foregroundStyle(Theme.textMuted)
                 }
 
@@ -175,7 +175,7 @@ struct RepliesSettingsTab: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(finding.repo.fullName)
-                        .font(Theme.mono(12))
+                        .font(Theme.mono(.callout))
                         .foregroundStyle(Theme.text)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -197,7 +197,7 @@ struct RepliesSettingsTab: View {
                 }
                 // The reviewer's own sentence, so the non-localising `Text` overload.
                 Text(finding.exemplar)
-                    .font(.system(size: 11))
+                    .font(Theme.type(.subheadline))
                     .foregroundStyle(Theme.textMuted)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -208,14 +208,14 @@ struct RepliesSettingsTab: View {
                     environment.recurringFindings.showAgain(finding)
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 11))
+                .font(Theme.type(.subheadline))
                 .foregroundStyle(Theme.accentText)
             } else {
                 Button(String(localized: "Hide")) {
                     environment.recurringFindings.dismiss(finding)
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 11))
+                .font(Theme.type(.subheadline))
                 .foregroundStyle(Theme.textSecondary)
             }
         }
@@ -243,7 +243,7 @@ struct RepliesSettingsTab: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(title)
-                        .font(isTitleMonospaced ? Theme.mono(12) : .system(size: 12, weight: .medium))
+                        .font(isTitleMonospaced ? Theme.mono(.callout) : Theme.type(.callout, weight: .medium))
                         .foregroundStyle(Theme.text)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -256,31 +256,31 @@ struct RepliesSettingsTab: View {
                     }
                 }
                 Text(detail)
-                    .font(.system(size: 11))
+                    .font(Theme.type(.subheadline))
                     .foregroundStyle(Theme.textMuted)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
             Spacer(minLength: 6)
             Button(action: onUp) {
-                Image(systemName: "chevron.up").font(.system(size: 10, weight: .bold))
+                Image(systemName: "chevron.up").font(Theme.type(.footnote, weight: .bold))
             }
             .buttonStyle(.plain)
             .foregroundStyle(Theme.textSecondary)
             .help(String(localized: "Move up"))
             Button(action: onDown) {
-                Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold))
+                Image(systemName: "chevron.down").font(Theme.type(.footnote, weight: .bold))
             }
             .buttonStyle(.plain)
             .foregroundStyle(Theme.textSecondary)
             .help(String(localized: "Move down"))
             Button(String(localized: "Edit"), action: onEdit)
                 .buttonStyle(.plain)
-                .font(.system(size: 11))
+                .font(Theme.type(.subheadline))
                 .foregroundStyle(Theme.accentText)
             Button(String(localized: "Remove"), action: onRemove)
                 .buttonStyle(.plain)
-                .font(.system(size: 11))
+                .font(Theme.type(.subheadline))
                 .foregroundStyle(Theme.failure)
         }
     }
@@ -324,7 +324,7 @@ struct SavedReplyEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(String(localized: "Saved reply"))
-                .font(.system(size: 15, weight: .semibold))
+                .font(Theme.type(.title3, weight: .semibold))
                 .foregroundStyle(Theme.textStrong)
 
             LabeledField(
@@ -346,7 +346,7 @@ struct SavedReplyEditor: View {
             Text(String(
                 localized: "Markdown, inserted exactly as typed. It is appended to whatever the comment field already holds, after a blank line."
             ))
-            .font(.system(size: 11))
+            .font(Theme.type(.subheadline))
             .foregroundStyle(Theme.textMuted)
             .fixedSize(horizontal: false, vertical: true)
 
@@ -401,7 +401,7 @@ struct ReviewTemplateEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(String(localized: "Review template"))
-                .font(.system(size: 15, weight: .semibold))
+                .font(Theme.type(.title3, weight: .semibold))
                 .foregroundStyle(Theme.textStrong)
 
             LabeledField(
@@ -418,7 +418,7 @@ struct ReviewTemplateEditor: View {
                 Text(String(
                     localized: "Patterns are matched against owner/name, so a pattern without a “/” never matches anything."
                 ))
-                .font(.system(size: 11))
+                .font(Theme.type(.subheadline))
                 .foregroundStyle(Theme.pending)
                 .fixedSize(horizontal: false, vertical: true)
             }
@@ -431,7 +431,7 @@ struct ReviewTemplateEditor: View {
             Text(String(
                 localized: "Used as the summary of a new review on a matching repository. An existing draft — a comment, a summary, a verdict — is never overwritten."
             ))
-            .font(.system(size: 11))
+            .font(Theme.type(.subheadline))
             .foregroundStyle(Theme.textMuted)
             .fixedSize(horizontal: false, vertical: true)
 

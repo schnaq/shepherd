@@ -21,15 +21,15 @@ struct MergeSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(String(localized: "Merge \(summary.slug)"))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(Theme.type(.title3, weight: .semibold))
                     .foregroundStyle(Theme.textStrong)
                 Text(summary.title)
-                    .font(.system(size: 12))
+                    .font(Theme.type(.callout))
                     .foregroundStyle(Theme.textSecondary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("\(summary.headRefName) → \(summary.baseRefName)")
-                    .font(Theme.mono(11))
+                    .font(Theme.mono(.subheadline))
                     .foregroundStyle(Theme.textMuted)
             }
 
@@ -41,7 +41,7 @@ struct MergeSheet: View {
                 Text(String(
                     localized: "Branch deletion is not wired up yet — ShepherdKit's outbox does not model it, so Shepherd will not pretend to do it."
                 ))
-                .font(.system(size: 11))
+                .font(Theme.type(.subheadline))
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
             }
@@ -53,7 +53,7 @@ struct MergeSheet: View {
                     Text(warning)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .font(.system(size: 12))
+                .font(Theme.type(.callout))
                 .foregroundStyle(Theme.textSecondary)
             }
 

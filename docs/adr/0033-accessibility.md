@@ -167,3 +167,45 @@ travels on rather than being swallowed for nothing.
 **What this does not settle.** The same thing the amendments above do not settle: whether VoiceOver
 actually reads any of it. This closes a keyboard gap, which is a different gap from the one that
 needs a Mac and somebody listening.
+
+## Amendment (2026-09-04): a type scale, and why the migration is deliberately partial
+
+The third gap the plan named is that `Font.system(size:)` — 421 call sites of it — is a fixed
+measurement that ignores macOS's Larger Text setting entirely. That is worse than text clipping: a
+low-vision user turns the standard remedy up and nothing anywhere in the app responds.
+
+The plan expected a type scale that reads the current size category. It does not need to, and the
+reason is worth recording because it is what made this cheap: `Theme` is a case-less enum of static
+members with no environment to read a size category *from*, and macOS's text styles already scale
+themselves. So `Theme.type(_:weight:)` takes a `Font.TextStyle` rather than a point size, with a
+monospaced sibling for the paths and slugs, and that is the entire mechanism — no `@ScaledMetric`,
+no environment threaded through several hundred call sites. `.headline` is deliberately not in the
+scale: it carries a semibold weight of its own, which would double up on a call site that already
+asks for one.
+
+**The migration is a third done, and the stopping point is a design decision rather than effort.**
+The mapping is the identity at the default size — `.body` is 13pt on macOS, `.callout` 12,
+`.subheadline` 11, `.footnote` 10, `.title3` 15, `.title` 22 — so a surface whose every size is on
+that list moves without changing a pixel until somebody turns the setting up. Six surfaces were
+exactly on it and have moved, 64 call sites: the automation and replies settings tabs, the merge,
+bulk-triage and issue-comment sheets, and the closing-issues card.
+
+The rest are not on the list. They are built on half points and on 8 and 9 — one card uses 8, 9,
+10.5 and 11.5 together — and macOS has no text style at any of those sizes. Rounding is a redesign
+rather than a migration: 8, 9 and 10.5 all land on the same 10pt style, so four deliberate sizes
+collapse into two and the card's hierarchy flattens. Migrating only the exact sizes inside such a
+file is worse again — an 11pt heading that grows above a 10.5pt body that does not. So the rule is
+whole surfaces or none, and `Scripts/check-type-scale.py` holds the boundary: it lists what has
+moved and fails CI when a fixed size reappears in one of them, because a `.font(.system(size: 12))`
+added to a migrated file looks exactly like the code around it and compiles without complaint.
+
+The surfaces that pin a row height around `lineLimit(1)` — the two list rows, the rail, the review
+header, the composer bars — are out of scope on purpose and not by oversight: letting their text
+grow means letting the row height follow it, which changes how the lists look for everybody. That
+is the redesign the plan calls the direction of travel.
+
+**What this does not settle**, and it is the same shape as the amendments above: whether macOS's
+Text Size setting actually reaches SwiftUI's text styles is not knowable from a Linux container.
+It is the only mechanism there is, so this is the precondition either way — but the six migrated
+surfaces are now a cheap way to find out. Turn Larger Text up, open Settings → Automation, and
+either the labels grow or they do not.

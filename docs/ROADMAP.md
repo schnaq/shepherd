@@ -361,9 +361,14 @@ remain and each is a project rather than a label; what they would take is in
       a deletion exists only on the original side. Picking a file, reading it, commenting on any
       line of it and submitting are all keys now. Brackets rather than letters because a letter
       would collide with the second half of `r …` / `g …`, which the editor cannot see
-- [ ] **macOS's Larger Text does nothing.** 419 `Font.system(size:)` call sites against two
-      semantic styles, so the OS setting has no effect anywhere. Needs a type scale in `Theme` and
-      a decision about the dense fixed-height rows, not a find-and-replace
+- [ ] **macOS's Larger Text does nothing.** Mechanism built 2026-09-04: `Theme.type(_:weight:)`
+      names a text style rather than a point size, which scales itself — no environment to read,
+      because macOS's styles already do it. 64 call sites across six surfaces have moved, chosen
+      because every size in them maps exactly onto a style, so the change is the identity at the
+      default size; `Scripts/check-type-scale.py` fails CI if a fixed size reappears in one. The
+      rest waits on a display, not on effort: the dense surfaces are built on half points and on
+      8 and 9, where rounding onto the OS scale flattens four sizes into two and is a redesign
+      rather than a migration (the plan states the decision)
 - [ ] Colour contrast against WCAG ratios, deliberately not audited from the repository: two
       themes resolved per appearance means measuring rendered pairs on a real display. Same
       session as the VoiceOver verification above

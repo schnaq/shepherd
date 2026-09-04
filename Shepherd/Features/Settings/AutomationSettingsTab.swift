@@ -74,14 +74,14 @@ struct AutomationSettingsTab: View {
                 )
                 if let problem = urlProblem {
                     Label(problem, systemImage: "exclamationmark.triangle")
-                        .font(.system(size: 11))
+                        .font(Theme.type(.subheadline))
                         .foregroundStyle(Theme.pending)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Text(String(
                     localized: "Paste an n8n Webhook node's URL (or any endpoint that accepts a JSON POST). https everywhere, or http for a server on this machine. Nothing is ever sent anywhere else."
                 ))
-                .font(.system(size: 11))
+                .font(Theme.type(.subheadline))
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
             }
@@ -98,7 +98,7 @@ struct AutomationSettingsTab: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Toggle(kind.title, isOn: eventBinding(kind))
                         Text(kind.explanation)
-                            .font(.system(size: 11))
+                            .font(Theme.type(.subheadline))
                             .foregroundStyle(Theme.textMuted)
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -115,7 +115,7 @@ struct AutomationSettingsTab: View {
                 CardTitle(String(localized: "SIGNING SECRET (OPTIONAL)"))
                 HStack(spacing: 8) {
                     Text(String(localized: "Secret"))
-                        .font(.system(size: 12))
+                        .font(Theme.type(.callout))
                         .foregroundStyle(Theme.textSecondary)
                         .frame(width: 74, alignment: .leading)
                     SecureField(String(localized: "leave empty for unsigned"), text: secretBinding)
@@ -124,7 +124,7 @@ struct AutomationSettingsTab: View {
                 Text(String(
                     localized: "With a secret set, every request carries X-Shepherd-Signature: sha256=<HMAC-SHA256 of the body>. That is the same shape as GitHub's X-Hub-Signature-256, so a verification step built for GitHub works unchanged. The secret is stored in your Keychain, next to the GitHub token."
                 ))
-                .font(.system(size: 11))
+                .font(Theme.type(.subheadline))
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
                 HStack(spacing: 8) {
@@ -134,13 +134,13 @@ struct AutomationSettingsTab: View {
                     .buttonStyle(SecondaryButtonStyle(height: 28))
                     if model.hasStoredWebhookSecret {
                         Text(String(localized: "A secret is stored."))
-                            .font(.system(size: 11))
+                            .font(Theme.type(.subheadline))
                             .foregroundStyle(Theme.textMuted)
                     }
                 }
                 if let saveError {
                     Text(saveError)
-                        .font(.system(size: 11))
+                        .font(Theme.type(.subheadline))
                         .foregroundStyle(Theme.failure)
                 }
             }
@@ -172,14 +172,14 @@ struct AutomationSettingsTab: View {
                             ? "checkmark.circle"
                             : "exclamationmark.triangle"
                     )
-                    .font(.system(size: 11))
+                    .font(Theme.type(.subheadline))
                     .foregroundStyle(delivery.isSuccess ? Theme.textMuted : Theme.pending)
                     .fixedSize(horizontal: false, vertical: true)
                 }
                 Text(String(
                     localized: "A failing webhook never interrupts a review, a merge or a sync: Shepherd tries twice, then gives up quietly and says so here."
                 ))
-                .font(.system(size: 11))
+                .font(Theme.type(.subheadline))
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
             }
@@ -193,7 +193,7 @@ struct AutomationSettingsTab: View {
                 Text(String(
                     localized: "The payload says what happened — repository, number, title, author, provenance, verdict — and nothing more. No review text, no comment bodies, no diffs and no agent output leave your Mac. Events fire only after the action really succeeded, and only while the toggle above is on."
                 ))
-                .font(.system(size: 12))
+                .font(Theme.type(.callout))
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             }
@@ -233,7 +233,7 @@ struct AutomationSettingsTab: View {
                 ),
                 systemImage: "exclamationmark.triangle"
             )
-            .font(.system(size: 11))
+            .font(Theme.type(.subheadline))
             .foregroundStyle(Theme.pending)
             .fixedSize(horizontal: false, vertical: true)
         }
@@ -249,7 +249,7 @@ struct AutomationSettingsTab: View {
             Text(String(
                 localized: "Comma-separated, with * and ? as wildcards. Leave it empty for every repository in your inbox."
             ))
-            .font(.system(size: 11))
+            .font(Theme.type(.subheadline))
             .foregroundStyle(Theme.textMuted)
             .fixedSize(horizontal: false, vertical: true)
             LabeledField(
@@ -260,7 +260,7 @@ struct AutomationSettingsTab: View {
             Text(String(
                 localized: "Comma-separated. A pull request has to carry every label listed here, which is how you opt single pull requests in instead of whole repositories. Leave it empty to require none."
             ))
-            .font(.system(size: 11))
+            .font(Theme.type(.subheadline))
             .foregroundStyle(Theme.textMuted)
             .fixedSize(horizontal: false, vertical: true)
         }
@@ -278,7 +278,7 @@ struct AutomationSettingsTab: View {
             Text(String(
                 localized: "The same method the merge sheet and bulk triage use — whichever you merged with last. Changing it here changes it there."
             ))
-            .font(.system(size: 11))
+            .font(Theme.type(.subheadline))
             .foregroundStyle(Theme.textMuted)
             .fixedSize(horizontal: false, vertical: true)
         }
@@ -287,13 +287,13 @@ struct AutomationSettingsTab: View {
     private var autoMergeSummary: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(autoMergeSentence)
-                .font(.system(size: 12))
+                .font(Theme.type(.callout))
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             Text(String(
                 localized: "Each pull request is queued at most once per commit: a merge Shepherd could not send — because somebody pushed in between — waits for you in Settings → Sync rather than being tried again against the new commit."
             ))
-            .font(.system(size: 11))
+            .font(Theme.type(.subheadline))
             .foregroundStyle(Theme.textMuted)
             .fixedSize(horizontal: false, vertical: true)
         }
@@ -310,19 +310,19 @@ struct AutomationSettingsTab: View {
                             environment.autoMergeStore.clear()
                         }
                         .buttonStyle(.plain)
-                        .font(.system(size: 11))
+                        .font(Theme.type(.subheadline))
                         .foregroundStyle(Theme.accentText)
                     }
                 }
                 if environment.autoMerge.auditEntries.isEmpty {
                     Text(String(localized: "Nothing yet. Every automatic merge is recorded here, on this Mac only."))
-                        .font(.system(size: 12))
+                        .font(Theme.type(.callout))
                         .foregroundStyle(Theme.textMuted)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
                     ForEach(environment.autoMerge.auditEntries) { entry in
                         Text(auditLine(for: entry))
-                            .font(.system(size: 11))
+                            .font(Theme.type(.subheadline))
                             .foregroundStyle(Theme.textSecondary)
                             .textSelection(.enabled)
                             .fixedSize(horizontal: false, vertical: true)
@@ -405,7 +405,7 @@ struct AutomationSettingsTab: View {
                 Text(String(
                     localized: "The inbox splits into Short look and Full review. A pull request is a short look only when CI is green, the diff is within both numbers below, and it touches no workflow, auth, secret, migration or deleted-test file."
                 ))
-                .font(.system(size: 11))
+                .font(Theme.type(.subheadline))
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
                 TrustThresholdRow(
@@ -419,13 +419,13 @@ struct AutomationSettingsTab: View {
                     range: TrustThresholdRow.lineRange
                 )
                 Text(trustLaneSentence)
-                    .font(.system(size: 12))
+                    .font(Theme.type(.callout))
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(String(
                     localized: "Both numbers travel to your other Macs. A track record never moves a pull request between the lanes — it only colours the chip and orders rows inside a lane."
                 ))
-                .font(.system(size: 11))
+                .font(Theme.type(.subheadline))
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
             }
@@ -439,19 +439,19 @@ struct AutomationSettingsTab: View {
                 Text(String(
                     localized: "Loads the pull requests your repositories closed in the last 90 days, so each agent's chip can say how much of its work was merged and how much came back out. At most 500 per repository, read once and kept up to date by the sync from then on."
                 ))
-                .font(.system(size: 11))
+                .font(Theme.type(.subheadline))
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
                 trackRecordButtons
                 if let progress = environment.trackRecord.progress {
                     Text(TrackRecordProgressLine.text(for: progress))
-                        .font(.system(size: 11))
+                        .font(Theme.type(.subheadline))
                         .foregroundStyle(Theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let result = environment.trackRecord.lastResult {
                     Text(TrackRecordProgressLine.text(for: result))
-                        .font(.system(size: 11))
+                        .font(Theme.type(.subheadline))
                         .foregroundStyle(Theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                     // Every failure as one line, in the words the server gave: a run over six
@@ -461,7 +461,7 @@ struct AutomationSettingsTab: View {
                             TrackRecordProgressLine.text(for: failure),
                             systemImage: "exclamationmark.triangle"
                         )
-                        .font(.system(size: 11))
+                        .font(Theme.type(.subheadline))
                         .foregroundStyle(Theme.failure)
                         .fixedSize(horizontal: false, vertical: true)
                     }
@@ -469,7 +469,7 @@ struct AutomationSettingsTab: View {
                 Text(String(
                     localized: "\(environment.trackRecord.storedOutcomeCount) closed pull requests stored on this Mac. This history is not synced."
                 ))
-                .font(.system(size: 11))
+                .font(Theme.type(.subheadline))
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
             }
@@ -504,7 +504,7 @@ struct AutomationSettingsTab: View {
                     environment.trackRecord.clearHistory(database: database)
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 11))
+                .font(Theme.type(.subheadline))
                 .foregroundStyle(Theme.accentText)
             }
             Spacer(minLength: 0)
@@ -644,12 +644,12 @@ private struct TrustThresholdRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Text(title)
-                .font(.system(size: 12))
+                .font(Theme.type(.callout))
                 .foregroundStyle(Theme.textSecondary)
                 .frame(width: 74, alignment: .leading)
             Stepper(value: value, in: range) {
                 Text("\(value.wrappedValue)")
-                    .font(Theme.mono(12))
+                    .font(Theme.mono(.callout))
                     .monospacedDigit()
                     .foregroundStyle(Theme.text)
             }

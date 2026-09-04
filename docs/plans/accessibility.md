@@ -108,7 +108,7 @@ visible line unless it is already on screen, because the panes scroll together a
 pane's cursor is on line 1. Inline mode has one pane carrying both sides, so there the key travels
 on. Recorded in ADR 0033's third amendment.
 
-## 3. Larger Text does nothing
+## 3. Larger Text does nothing — **the mechanism is in, the migration is a third open**
 
 **What is true today.** 419 call sites use `Font.system(size:)` — a fixed point size — against two
 semantic text styles in the whole app. `Font.system(size:)` does not participate in macOS's
@@ -138,6 +138,39 @@ control for, and a user who has already set Larger Text should not have to find 
 **Recommendation:** the second, with `Theme` growing a type scale that reads the current size
 category so the choice is made in one place rather than at 419 call sites, and the first as the
 direction of travel.
+
+**What was built, 2026-09-04.** The recommendation above was right about the shape and wrong about
+the mechanism, in a way worth writing down: a type scale does *not* need to read the size category,
+because `Theme` is a case-less namespace of statics with no environment to read one from. macOS's
+text styles already scale themselves. So `Theme.type(_:weight:)` and a monospaced sibling name a
+`Font.TextStyle` instead of a point size, and that is the whole mechanism — no `@ScaledMetric`, no
+environment plumbing, nothing threaded through several hundred call sites.
+
+The migration is the part that is a third done, and the stopping point is not effort. The mapping
+is the *identity at the default size* — on macOS `.body` is 13pt, `.callout` 12, `.subheadline` 11,
+`.footnote` 10, `.title3` 15, `.title` 22 — so a surface whose sizes are all on that list moves
+without changing a pixel until somebody turns the setting up. **64 call sites across six surfaces**
+were on it exactly and have moved: the automation and replies settings tabs, the merge, bulk-triage
+and issue-comment sheets, and the closing-issues card. `Scripts/check-type-scale.py` lists them and
+fails CI on a fixed size reappearing in one, because a boundary nobody checks erodes.
+
+**Why the rest stopped, and what the decision is.** The remaining surfaces are not on that list.
+They are built on half points and on 8 and 9 — `ClaimsEvidenceCard` alone uses 8, 9, 10.5 and 11.5
+— and macOS has no text style at any of those. Rounding them onto the scale is not a migration but
+a *redesign*: 8, 9 and 10.5 all round to the same 10pt style, so four deliberate sizes in one card
+collapse into two and the card's hierarchy flattens. Migrating only the exact sizes in such a file
+is worse still — the 11pt heading would grow while the 10.5pt body under it stayed put.
+
+So the open question is a visual one and needs a display: **may the dense surfaces move onto the OS
+scale, accepting up to a point of movement and a flatter hierarchy where two of their sizes meet?**
+The alternative is to keep them fixed and leave Larger Text working in Settings, the sheets and the
+panels but not in the cards and the lists, which is defensible and is where the app stands now.
+
+**And one thing this cannot verify.** Whether macOS's Text Size setting reaches SwiftUI's text
+styles at all is not knowable from a Linux container. It is the only mechanism there is, so the
+migration is the precondition either way — but the six surfaces above are now the cheap way to
+*check*: turn Larger Text up on a Mac, open Settings → Automation, and either the labels grow or
+the answer is no. Same afternoon as the VoiceOver and contrast checks below.
 
 ## What is deliberately not on this list
 

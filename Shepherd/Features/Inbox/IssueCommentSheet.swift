@@ -28,10 +28,10 @@ struct IssueCommentSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(String(localized: "Comment on \(row.slug)"))
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(Theme.type(.title3, weight: .semibold))
                     .foregroundStyle(Theme.textStrong)
                 Text(row.title)
-                    .font(.system(size: 12))
+                    .font(Theme.type(.callout))
                     .foregroundStyle(Theme.textSecondary)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -41,7 +41,7 @@ struct IssueCommentSheet: View {
             ComposerTextEditor(text: $text, height: 160)
 
             Text(String(localized: "Queued locally and posted in the background. Markdown, as on GitHub."))
-                .font(.system(size: 11))
+                .font(Theme.type(.subheadline))
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
 
