@@ -132,6 +132,7 @@ What the design does and does not protect against, stated plainly.
 | Anyone who obtains bucket credentials *and* the passphrase | Everything | Full compromise, including the GitHub token. This is the trust boundary and it is exactly one secret wide. |
 | A network observer | TLS to the endpoint | Nothing beyond the fact that Shepherd talked to a bucket. |
 | A tamperer with write access | — | Cannot forge or modify a readable object: the payload and every metadata field are authenticated. They can replace the object with a valid envelope of their own, which will fail to decrypt under the user's passphrase. |
+| A tamperer who **keeps an old object** they captured earlier | — | Can put a *previously valid* document back in the bucket, and it will decrypt: the envelope authenticates its contents, not its freshness. What that reintroduces on the next download is a since-rotated token or key. Not forgery and not silent — the download is manual, and the confirmation names the device that sealed the document and the date it was sealed before anything is written. Accepted rather than solved: detecting a rollback needs this Mac to remember what it last uploaded, and the row below is the cheaper answer for a single-user tool. |
 | Someone with the user's unlocked Mac | Everything the Mac has anyway | Out of scope, as for every other secret Shepherd holds. |
 
 Two consequences follow, and both are deliberate:
