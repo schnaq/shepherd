@@ -92,3 +92,11 @@ jobs:
         run: |
           xcodebuild -project Shepherd.xcodeproj -scheme Shepherd -configuration Debug \
             -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO test
+      # The same question as the step near the top of this job, asked again at the very end:
+      # the tail of the log then answers "which Xcode built this" on its own, without the
+      # whole build having to be downloaded to reach the first few lines.
+      - name: Repeat the toolchain at the end of the log
+        if: always()
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks | grep -o 'macosx[0-9.]*' | sort -u | tr '\n' ' '
