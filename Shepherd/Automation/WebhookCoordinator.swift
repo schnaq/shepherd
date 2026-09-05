@@ -277,7 +277,10 @@ final class WebhookCoordinator {
             }
 
         case .prMerged, .prUpdated, .checksFailedOnOwnPR, .changesRequestedOnOwnPR,
-             .draftConflict, .syncFailed:
+             .draftConflict, .sweepCompleted, .syncFailed:
+            // `sweepCompleted` says only that Shepherd is still talking to GitHub, which is a
+            // fact about this Mac rather than about a pull request; a receiver that wanted a
+            // heartbeat would want one on a schedule, not one per sweep.
             return nil
         }
     }

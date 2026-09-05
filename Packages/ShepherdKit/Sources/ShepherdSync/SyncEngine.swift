@@ -333,6 +333,13 @@ public actor SyncEngine {
             sweepRequested = false
             try await runSweep()
         } while sweepRequested && !Task.isCancelled
+        // Here rather than at the end of `runSweep()`, so the coalescing above stays invisible to
+        // consumers: a burst that turned into two passes is still one sweep as far as anybody
+        // outside this actor is concerned, and the caller that was folded into a running sweep and
+        // returned early above does not announce a completion of its own either. A throw skips
+        // this line entirely, which is what makes the event mean "the inbox is now as current as
+        // GitHub" rather than the much weaker "the loop came round again".
+        emit(.sweepCompleted(SweepCompletion(finishedAt: now())))
     }
 
     private func runSweep() async throws {

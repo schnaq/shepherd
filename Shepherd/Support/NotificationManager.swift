@@ -162,12 +162,15 @@ final class NotificationManager {
                 title: String(localized: "Review not sent · \(conflict.repo.fullName)#\(conflict.number)"),
                 body: String(localized: "The pull request got new commits. Re-review before submitting.")
             )
-        case .changesRequestedOnOwnPR, .prMerged, .prUpdated, .mutationSent, .syncFailed:
+        case .changesRequestedOnOwnPR, .prMerged, .prUpdated, .mutationSent, .sweepCompleted,
+             .syncFailed:
             // A mutation the user just triggered themselves needs no notification — the toast
             // already said so, and the webhook dispatcher takes it from here (ADR 0012).
             // `changesRequestedOnOwnPR` exists for the auto-delegation rules (ADR 0016) and gets
             // no notification category of its own: the review already shows up in the inbox, and
-            // an automatic start announces itself below.
+            // an automatic start announces itself below. `sweepCompleted` is the routine
+            // heartbeat of a working account — every two minutes, whether or not anything
+            // happened — and notifying on it would be the loudest possible way to say nothing.
             return nil
         }
     }

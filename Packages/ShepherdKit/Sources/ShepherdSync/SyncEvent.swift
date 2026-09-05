@@ -201,6 +201,33 @@ public struct ChangesRequested: Sendable, Hashable, Codable {
     public var isTransition: Bool { wasTracked && previousDecision != .changesRequested }
 }
 
+/// A sweep ran all the way to the end without failing.
+///
+/// The one payload in this file that describes no pull request, and that is exactly why it had to
+/// exist. Every other case reports something the sweep *found*, so an account with nothing open
+/// produced no event at all — and the app, which learned "we are in touch with GitHub" only from
+/// those events, went on saying "Not synced yet" in the title bar for as long as the account
+/// stayed quiet, while the engine was in fact sweeping every two minutes. "The sweep came back" is
+/// a different fact from "the sweep found something", and only the engine can state it.
+///
+/// A struct rather than a bare `Date`, for ``SentMutation``'s reason: the payloads here are
+/// flattened values, and a named type can gain a field later without every `case sweepCompleted`
+/// pattern in the app having to be rewritten around it.
+public struct SweepCompletion: Sendable, Hashable, Codable {
+    /// When the sweep finished, read from the engine's own clock.
+    ///
+    /// Carried rather than left to the consumer's `Date()`, so the "Synced · 32 s ago" indicator
+    /// counts from the moment the sweep actually came back rather than from the moment the main
+    /// actor got round to the event.
+    public var finishedAt: Date
+
+    /// Creates a completion notice.
+    /// - Parameter finishedAt: When the sweep finished.
+    public init(finishedAt: Date) {
+        self.finishedAt = finishedAt
+    }
+}
+
 /// Something the sync engine noticed that the app may want to tell the user about.
 ///
 /// The app maps these onto macOS notifications; the engine itself has no opinion about
@@ -227,6 +254,11 @@ public enum SyncEvent: Sendable, Hashable {
     case draftConflict(DraftConflict)
     /// An outbox row reached GitHub. The one point where a write is known to have succeeded.
     case mutationSent(SentMutation)
+    /// A sweep finished without failing — **including** a sweep that found nothing.
+    ///
+    /// The only case a quiet cycle emits, and the only one that means "the local database is now
+    /// as current as GitHub". See ``SweepCompletion`` for why that needed saying out loud.
+    case sweepCompleted(SweepCompletion)
     /// A sync step failed.
     case syncFailed(SyncFailure)
 }

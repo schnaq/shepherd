@@ -78,6 +78,41 @@ struct EmptyStateView: View {
     }
 }
 
+/// ``EmptyStateView``'s sibling for a list that has nothing to show *yet*.
+///
+/// Same geometry, same type sizes, same muted colours, with a `ProgressView` where the symbol
+/// goes. It exists because an empty list a second after signing in and an empty list after the
+/// sweep came back are the same pixels and opposite claims: "No one is waiting on you" is a
+/// statement of fact, and Shepherd cannot make it before it has asked GitHub. The spinner is the
+/// part that says the sentence is not final yet, so it is a component rather than a modifier on
+/// the empty state — a caller has to choose one or the other, and choosing is the point.
+struct LoadingStateView: View {
+    /// The headline: what is happening, not what was found.
+    var title: String
+    /// An optional second line, saying what is being looked for.
+    var message: String?
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ProgressView()
+                .controlSize(.small)
+            Text(title)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Theme.textSecondary)
+            if let message {
+                Text(message)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textMuted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: 320)
+        .padding(28)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
 /// The bordered, control-coloured `TextEditor` every Markdown field in the app uses.
 ///
 /// Extracted because the review summary, the inline comment composer and the two Settings editors

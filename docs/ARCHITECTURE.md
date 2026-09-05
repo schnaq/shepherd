@@ -577,6 +577,16 @@ carries the retroactive case — a detail fetch that sees a review *by the viewe
 (`SyncConfiguration.viewerLogin`) on a head the pull request is still on, with no baseline for that
 head yet, writes one from the files it just stored.
 
+One `SyncEvent` is about no pull request at all: `.sweepCompleted(SweepCompletion)` is yielded by
+`performSweep()` once a sweep has run to the end without throwing, including a sweep that found
+nothing — every other case reports something the sweep *found*, so a quiet account emitted nothing,
+`SignedInSession.lastSyncedAt` stayed `nil` and the title bar said "Not synced yet" indefinitely
+while the engine swept every two minutes. It is emitted once per `performSweep()` rather than once
+per `runSweep()`, so the coalescing of overlapping requests stays invisible, and it is what
+`SignedInSession.hasCompletedFirstSweep` is set from — the flag the inbox and the menu bar use to
+tell "no sweep has come back yet" from "nobody is waiting on you", which the local `SELECT`'s
+`hasLoaded` cannot do because on a fresh database it is true within a second of signing in.
+
 One `SyncEvent` is not about telling the user anything: `.mutationSent(SentMutation)` is yielded
 by the drain **after** a row is recorded as sent, and it is the only place in the system where
 "this write really reached GitHub" is observable. Anything that must not fire on a mere intent —

@@ -690,6 +690,8 @@ final class WebhookTests: XCTestCase {
                 )
             ),
             .syncFailed(SyncFailure(stage: .outbox, message: "nope")),
+            // A heartbeat about this Mac rather than a fact about a pull request.
+            .sweepCompleted(SweepCompletion(finishedAt: occurredAt)),
             // Sent, but not one of the four events v1 promises.
             .mutationSent(mutation(.replyPosted)),
             .mutationSent(mutation(.threadResolved)),

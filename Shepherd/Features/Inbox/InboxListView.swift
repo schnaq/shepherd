@@ -126,6 +126,13 @@ struct InboxListView: View {
         if !model.hasLoaded {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if isAwaitingFirstSweep {
+            LoadingStateView(
+                title: String(localized: "Checking your repositories…"),
+                message: String(
+                    localized: "Pull requests waiting on you, yours, and the ones you are part of."
+                )
+            )
         } else if model.visibleRows.isEmpty {
             EmptyStateView(
                 systemImage: "checkmark.circle",
@@ -260,6 +267,20 @@ struct InboxListView: View {
         case .humans: return String(localized: "Humans")
         case nil: return nil
         }
+    }
+
+    /// Whether the list is empty because Shepherd has not finished asking GitHub yet.
+    ///
+    /// Two conditions, and the second one is what keeps a facet honest. `hasLoaded` only says the
+    /// local `SELECT` came back, which on a fresh database happens within a second of signing in
+    /// while the sweep's five search queries are still in flight — so the empty state's "No one is
+    /// waiting on you" was being drawn as a settled fact before anything had been asked. And the
+    /// test is on ``InboxModel/allRows`` rather than on the *visible* rows on purpose: a rail
+    /// selection or a filter that hides everything still has rows behind it, so it keeps its own
+    /// "clear it to see everything again" sentence instead of being told the sync is still
+    /// running.
+    private var isAwaitingFirstSweep: Bool {
+        model.allRows.isEmpty && !model.session.hasCompletedFirstSweep
     }
 
     private var emptyMessage: String {

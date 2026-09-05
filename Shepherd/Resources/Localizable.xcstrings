@@ -3741,6 +3741,16 @@
         }
       }
     },
+    "Checking your repositories…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Repositories werden geprüft…"
+          }
+        }
+      }
+    },
     "Checks": {
       "localizations": {
         "de": {
@@ -8387,6 +8397,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pull Requests"
+          }
+        }
+      }
+    },
+    "Pull requests waiting on you, yours, and the ones you are part of.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pull Requests, die auf dich warten, deine eigenen und die, an denen du beteiligt bist."
           }
         }
       }

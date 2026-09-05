@@ -24,6 +24,16 @@ final class SignedInSession {
 
     /// When the last successful sweep finished, for the title-bar indicator.
     var lastSyncedAt: Date?
+    /// Whether a sweep has run all the way to the end since this session started.
+    ///
+    /// Three near-neighbours that mean different things, and the inbox needs this one:
+    /// ``lastSyncedAt`` is a *timestamp* and is also moved by a queued write reaching GitHub;
+    /// ``hasLoadedInbox`` says the local `SELECT` came back, which on a fresh database is true
+    /// within a second of signing in while the sweep's search queries are still in flight. This is
+    /// the only one that answers "may a surface claim there is nothing waiting for you" — until it
+    /// is `true`, an empty list means "not asked yet" rather than "nobody is waiting", and those
+    /// are opposite claims drawn with the same pixels.
+    private(set) var hasCompletedFirstSweep = false
     /// Whether a manual sync is in flight.
     var isSyncing = false
     /// The most recent sync failure, shown as a dot in the title bar.
@@ -261,7 +271,11 @@ final class SignedInSession {
         isSyncing = true
         defer { isSyncing = false }
         try await syncEngine.syncNow()
+        // Set here as well as from the event below, and not because the event is unreliable: it
+        // arrives on the event task a hop later, and ⌘R is the one path where somebody is looking
+        // at the indicator at the moment it should change.
         lastSyncedAt = Date()
+        hasCompletedFirstSweep = true
         lastSyncError = nil
     }
 
@@ -303,8 +317,22 @@ final class SignedInSession {
         switch event {
         case .syncFailed(let failure):
             lastSyncError = failure.message
+        case .sweepCompleted(let completion):
+            // The event that fixes the quiet account. Every case below reports something the
+            // sweep *found*, so an account with nothing open reached none of them, `lastSyncedAt`
+            // stayed `nil` and the title bar said "Not synced yet" indefinitely while the engine
+            // swept every two minutes. The engine's own clock rather than `Date()`, so
+            // "Synced · 32 s ago" counts from when the sweep came back rather than from when this
+            // actor got round to the event.
+            lastSyncedAt = completion.finishedAt
+            hasCompletedFirstSweep = true
+            lastSyncError = nil
         case .newReviewRequest, .checksFailedOnOwnPR, .changesRequestedOnOwnPR, .prMerged,
              .prUpdated, .mutationSent:
+            // Kept beside the case above rather than folded into it: these are emitted *during* a
+            // sweep, so they move the indicator as soon as there is evidence GitHub answered,
+            // without waiting for the detail fetches the same cycle still has to make. They
+            // deliberately do not set `hasCompletedFirstSweep` — the sweep has not finished.
             lastSyncedAt = Date()
             lastSyncError = nil
         case .draftConflict:

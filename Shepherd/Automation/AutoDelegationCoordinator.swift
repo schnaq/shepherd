@@ -161,7 +161,10 @@ final class AutoDelegationCoordinator {
                 isTransition: requested.isTransition
             )
         case .newReviewRequest, .prMerged, .prUpdated, .draftConflict, .mutationSent,
-             .syncFailed:
+             .sweepCompleted, .syncFailed:
+            // `sweepCompleted` is the emptiest of them all and belongs here for the strongest
+            // version of the reason above: it carries no pull request at all, so there is nothing
+            // a rule could even be about.
             return nil
         }
     }

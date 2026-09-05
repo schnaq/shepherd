@@ -74,6 +74,27 @@ struct MenuBarInboxView: View {
         return MenuBarQuickInbox.make(from: session.inboxRows)
     }
 
+    /// Whether a sweep has come back since this session started.
+    ///
+    /// Signed out the answer is `false`, which never reaches a caller: the headline this gates is
+    /// only drawn once there is a session to have an inbox at all.
+    private var hasCompletedFirstSweep: Bool {
+        environment.session?.hasCompletedFirstSweep ?? false
+    }
+
+    /// The headline over an empty quick inbox.
+    ///
+    /// The same distinction `InboxListView` draws, because it is the same ambiguity: this menu is
+    /// often the first thing somebody opens after signing in, and until a sweep has come back
+    /// "Nothing to review" is not a finding but a question nobody has asked yet. Only the headline
+    /// changes — the line under it is true either way — so the menu gains no sentence of its own
+    /// to keep in step with the inbox's.
+    private var emptyHeadline: String {
+        hasCompletedFirstSweep
+            ? String(localized: "Nothing to review")
+            : String(localized: "Checking your repositories…")
+    }
+
     // MARK: - Header
 
     private func header(_ quickInbox: MenuBarQuickInbox?) -> some View {
@@ -99,7 +120,7 @@ struct MenuBarInboxView: View {
     private func rows(for quickInbox: MenuBarQuickInbox) -> some View {
         if quickInbox.isEmpty {
             VStack(alignment: .leading, spacing: 3) {
-                Text(String(localized: "Nothing to review"))
+                Text(emptyHeadline)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Theme.textSecondary)
                 Text(String(localized: "New review requests show up here on their own."))

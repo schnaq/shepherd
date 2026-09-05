@@ -161,6 +161,46 @@ final class SyncLoopTests: XCTestCase {
         XCTAssertFalse(running)
     }
 
+    /// Bug 1 in its original shape: the *loop*, on an account where nothing is open, has to tell
+    /// the app it swept. `syncNow()` was never the broken path — ⌘R sets the indicator itself —
+    /// so the assertion belongs on the loop rather than only on the actor's method.
+    func testTheSweepLoopReportsCompletionsOnAQuietAccount() async throws {
+        let github = MockGitHub()
+        await github.setSearchResults([[]])
+        let store = try DatabaseManager.inMemory()
+        let engine = SyncEngine(
+            github: github,
+            store: store,
+            configuration: SyncConfiguration(),
+            sleeper: BoundedSleeper(allowedSleeps: 1),
+            now: { Date(timeIntervalSince1970: 1_788_162_000) }
+        )
+
+        let collector = EventCollector()
+        let stream = engine.events
+        let task = Task {
+            for await event in stream {
+                await collector.append(event)
+            }
+        }
+
+        await engine.start()
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await engine.shutdown()
+        _ = await task.value
+
+        let emitted = await collector.events
+        XCTAssertTrue(
+            emitted.contains { event in
+                if case .sweepCompleted(let completion) = event {
+                    return completion.finishedAt == Date(timeIntervalSince1970: 1_788_162_000)
+                }
+                return false
+            },
+            "a sweep that found nothing still has to say it ran, or the title bar never moves"
+        )
+    }
+
     func testSweepFailuresInTheLoopBecomeEventsRatherThanCrashes() async throws {
         let github = MockGitHub()
         await github.setSearchError(.rateLimited(retryAfter: 30, resetAt: nil))

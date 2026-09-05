@@ -337,6 +337,9 @@ final class AutoDelegationTests: XCTestCase {
                 )
             ),
             .syncFailed(SyncFailure(stage: .sweep, message: "nope")),
+            // The one event that names no pull request at all, so there is nothing a rule could
+            // even be about.
+            .sweepCompleted(SweepCompletion(finishedAt: clock)),
         ]
         for event in ignored {
             XCTAssertNil(

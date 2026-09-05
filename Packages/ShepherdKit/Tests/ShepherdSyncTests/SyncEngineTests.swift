@@ -462,6 +462,116 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertTrue(emitted.isEmpty, "syncNow throws rather than emitting")
     }
 
+    // MARK: - Sweep completion
+
+    /// The whole point of the event: an account with nothing open emits none of the other cases,
+    /// so before this one existed a healthy quiet account was indistinguishable from an engine
+    /// that had never run.
+    func testASweepThatFoundNothingStillReportsThatItCompleted() async throws {
+        let github = MockGitHub()
+        await github.setSearchResults([[]])
+        let store = try DatabaseManager.inMemory()
+        let engine = makeEngine(github: github, store: store)
+
+        let emitted = try await events(from: engine) {
+            try await engine.syncNow()
+        }
+
+        let completions = emitted.compactMap { event -> SweepCompletion? in
+            if case .sweepCompleted(let completion) = event { return completion }
+            return nil
+        }
+        XCTAssertEqual(completions.count, 1)
+        XCTAssertEqual(
+            completions.first?.finishedAt,
+            clock,
+            "the timestamp is the engine's clock, not the consumer's"
+        )
+        XCTAssertEqual(
+            emitted.count,
+            1,
+            "a quiet sweep has exactly this one thing to say"
+        )
+    }
+
+    func testEverySuccessfulSweepReportsACompletion() async throws {
+        let github = MockGitHub()
+        let summaries = [SyncFixtures.summary(id: "PR_1", number: 1)]
+        await github.setSearchResults([summaries, summaries])
+        let store = try DatabaseManager.inMemory()
+        let engine = makeEngine(github: github, store: store)
+
+        let emitted = try await events(from: engine) {
+            try await engine.syncNow()
+            try await engine.syncNow()
+        }
+
+        let completions = emitted.filter { event in
+            if case .sweepCompleted = event { return true }
+            return false
+        }
+        XCTAssertEqual(completions.count, 2, "it reports the cycle, not a change in the cycle")
+    }
+
+    func testAFailedSweepReportsNoCompletion() async throws {
+        let github = MockGitHub()
+        await github.setSearchError(.rateLimited(retryAfter: 30, resetAt: nil))
+        let store = try DatabaseManager.inMemory()
+        let engine = makeEngine(github: github, store: store)
+
+        let collector = EventCollector()
+        let stream = engine.events
+        let task = Task {
+            for await event in stream {
+                await collector.append(event)
+            }
+        }
+        do {
+            try await engine.syncNow()
+            XCTFail("expected the sweep to throw")
+        } catch {
+            // Expected: the completion must not survive the throw, or the title bar would say
+            // "Synced" about a sweep that never reached GitHub.
+        }
+        await engine.shutdown()
+        _ = await task.value
+
+        let emitted = await collector.events
+        XCTAssertFalse(
+            emitted.contains { event in
+                if case .sweepCompleted = event { return true }
+                return false
+            }
+        )
+    }
+
+    /// Two overlapping requests are coalesced into one running sweep plus one follow-up pass
+    /// (`performSweep()`), and that arrangement is the engine's business: a consumer sees one
+    /// sweep because one sweep is what it was asked for.
+    func testCoalescedSweepsReportOneCompletion() async throws {
+        let github = MockGitHub()
+        await github.setSearchResults([[SyncFixtures.summary(id: "PR_1", number: 1)]])
+        let store = try DatabaseManager.inMemory()
+        let engine = makeEngine(github: github, store: store)
+
+        let emitted = try await events(from: engine) {
+            await github.closeGate()
+            let first = Task { try await engine.syncNow() }
+            try await waitForGate(github, count: 1)
+            try await engine.syncNow()
+            await github.openGate()
+            try await first.value
+        }
+
+        let completions = emitted.filter { event in
+            if case .sweepCompleted = event { return true }
+            return false
+        }
+        XCTAssertEqual(completions.count, 1)
+        let calls = await github.searchCallCount
+        XCTAssertEqual(calls, 2, "two search rounds, still one sweep as far as anyone can tell")
+    }
+
     // MARK: - Sweep re-entrancy
 
     /// Waits until `count` scripted calls are parked on the mock's gate.
