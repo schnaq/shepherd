@@ -294,7 +294,10 @@ final class SettingsSyncTests: XCTestCase {
             diffRenderer: .native,
             // Non-default like every other field here, and non-default for this one means *off*:
             // the menu-bar item ships inserted.
-            showsMenuBarExtra: false
+            showsMenuBarExtra: false,
+            // And the same again: an agent's pull request opens on Conversation out of the box,
+            // so the non-default value of the reviewer who wants the diff first is *off*.
+            opensAgentPullRequestsOnConversation: false
         )
         document.triage = SyncedSettingsDocument.TriageGroup(defaultMergeMethod: .rebase)
         document.composer = SyncedSettingsDocument.ComposerGroup(
@@ -685,9 +688,13 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertEqual(document.appearance.diffFontSize, 15)
         // An unknown appearance raw value falls back rather than failing the document.
         XCTAssertEqual(document.appearance.appearance, .system)
-        // A document written before the menu-bar item existed must leave it *on*: it is the one
-        // field in the document whose default is true.
+        // A document written before the menu-bar item existed must leave it *on*: its default is
+        // true, because the item ships inserted rather than as an opt-in.
         XCTAssertTrue(document.appearance.showsMenuBarExtra)
+        // And a document written before an agent's pull request could open on Conversation must
+        // leave that on too, for the same reason — an absent key is an older writer, never a
+        // reviewer who switched it off (ADR 0026's amendment).
+        XCTAssertTrue(document.appearance.opensAgentPullRequestsOnConversation)
         // A group that is absent entirely is the local default.
         XCTAssertEqual(document.notifications, SyncedSettingsDocument.NotificationGroup())
         XCTAssertEqual(document.delegation.agentCLI, AgentCLIConfiguration())
@@ -1122,6 +1129,9 @@ final class SettingsSyncTests: XCTestCase {
         // A Mac that hid the menu-bar item hides it here too; the scene's `isInserted` binding
         // reads this setting, so there is nothing else to apply.
         XCTAssertFalse(settings.showsMenuBarExtra)
+        // The tab a review opens on is a preference, not per-Mac UI state, so it travels with the
+        // rest of them (ADR 0026's amendment).
+        XCTAssertFalse(settings.opensAgentPullRequestsOnConversation)
         XCTAssertEqual(settings.defaultMergeMethod, .rebase)
         // Saved replies and templates travel in their own order — it is the order of the insert
         // menu and the last tie-breaker of the template match.

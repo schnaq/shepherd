@@ -121,7 +121,8 @@ enum SettingsSyncApplier {
             diffWrapsLines: settings.diffWrapsLines,
             diffUsesInlineMode: settings.diffUsesInlineMode,
             diffRenderer: settings.diffRenderer,
-            showsMenuBarExtra: settings.showsMenuBarExtra
+            showsMenuBarExtra: settings.showsMenuBarExtra,
+            opensAgentPullRequestsOnConversation: settings.opensAgentPullRequestsOnConversation
         )
         document.triage = SyncedSettingsDocument.TriageGroup(
             defaultMergeMethod: settings.defaultMergeMethod
@@ -259,6 +260,11 @@ enum SettingsSyncApplier {
         // directly, so the item appears or disappears as soon as the value changes — whether it
         // changed in Settings or arrived in a document.
         settings.showsMenuBarExtra = document.appearance.showsMenuBarExtra
+        // A preference rather than per-Mac UI state, so it travels: a reviewer who wants the diff
+        // first wants it on both Macs. Nothing to apply beyond the value — the next review to open
+        // reads it, and a review already on screen has spent its one choice (ADR 0026's amendment).
+        settings.opensAgentPullRequestsOnConversation =
+            document.appearance.opensAgentPullRequestsOnConversation
 
         settings.defaultMergeMethod = document.triage.defaultMergeMethod
 

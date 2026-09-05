@@ -451,7 +451,8 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         }
     }
 
-    /// Theme, inbox ordering, diff-viewer chrome and the menu-bar item.
+    /// Theme, inbox ordering, diff-viewer chrome, the menu-bar item, and which tab a review opens
+    /// on.
     struct AppearanceGroup: Codable, Sendable, Equatable {
         /// Dark, light or system.
         var appearance: AppearanceSetting
@@ -469,10 +470,17 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         var diffRenderer: DiffRenderer
         /// Whether the menu-bar quick inbox is inserted.
         ///
-        /// The one field in this document that defaults to *true*: the item is on out of the box,
-        /// so a document written before the quick inbox existed has to leave it on. Every other
-        /// flag here is an opt-in, where an absent key correctly means "off".
+        /// Defaults to *true* rather than to "off", because the item is on out of the box: a
+        /// document written before the quick inbox existed carries no key for it and must not
+        /// read as "the other Mac switched it off". ``SearchGroup``'s two switches are the same
+        /// shape for the same reason.
         var showsMenuBarExtra: Bool
+        /// Whether an agent's pull request opens on Conversation when it claims something
+        /// (ADR 0026's amendment).
+        ///
+        /// Defaults to *true* for the field above's reason: it ships on, so an absent key means
+        /// "written before this existed" rather than "switched off".
+        var opensAgentPullRequestsOnConversation: Bool
 
         /// Creates the group.
         init(
@@ -483,7 +491,8 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
             diffWrapsLines: Bool = false,
             diffUsesInlineMode: Bool = false,
             diffRenderer: DiffRenderer = .automatic,
-            showsMenuBarExtra: Bool = true
+            showsMenuBarExtra: Bool = true,
+            opensAgentPullRequestsOnConversation: Bool = true
         ) {
             self.appearance = appearance
             self.inboxGroupBy = inboxGroupBy
@@ -493,12 +502,14 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
             self.diffUsesInlineMode = diffUsesInlineMode
             self.diffRenderer = diffRenderer
             self.showsMenuBarExtra = showsMenuBarExtra
+            self.opensAgentPullRequestsOnConversation = opensAgentPullRequestsOnConversation
         }
 
         private enum CodingKeys: String, CodingKey {
             case appearance, inboxGroupBy, inboxSortOrder
             case diffFontSize, diffWrapsLines, diffUsesInlineMode, diffRenderer
             case showsMenuBarExtra
+            case opensAgentPullRequestsOnConversation
         }
 
         init(from decoder: any Decoder) throws {
@@ -514,6 +525,10 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
             diffUsesInlineMode = container.syncedValue(.diffUsesInlineMode, default: false)
             diffRenderer = container.syncedValue(.diffRenderer, default: DiffRenderer.automatic)
             showsMenuBarExtra = container.syncedValue(.showsMenuBarExtra, default: true)
+            opensAgentPullRequestsOnConversation = container.syncedValue(
+                .opensAgentPullRequestsOnConversation,
+                default: true
+            )
         }
     }
 

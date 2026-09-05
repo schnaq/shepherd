@@ -101,7 +101,10 @@ final class InteractionTests: XCTestCase {
 
     func testABareKeyLeavesNothingArmed() {
         var state = KeySequenceState()
-        for key: Character in ["j", "k", "m", "x", "q", "c", "v"] {
+        // `t` is in this list for `c`'s reason rather than `q`'s: the review screen switches the
+        // Files/Conversation tabs on it, so the machine must neither claim it nor arm a prefix on
+        // it (ADR 0026's amendment).
+        for key: Character in ["j", "k", "m", "x", "q", "c", "v", "t"] {
             _ = state.consume(key)
             XCTAssertFalse(state.isAwaitingSecondKey(), "bare \(key) armed something")
         }

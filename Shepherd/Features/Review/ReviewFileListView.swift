@@ -234,7 +234,7 @@ struct ReviewFileHeader: View {
     }
 
     private var tabBinding: Binding<ReviewModel.Tab> {
-        Binding(get: { model.tab }, set: { model.tab = $0 })
+        Binding(get: { model.tab }, set: { model.setTab($0) })
     }
 
     private var roundBinding: Binding<RoundView> {

@@ -340,7 +340,7 @@ struct ReviewScreen: View {
         case .selectPrevious:
             model.moveFileSelection(by: -1)
         case .openSelection:
-            model.tab = .files
+            model.setTab(.files)
         case .approve:
             submit(.approve)
         case .requestChanges:
@@ -409,6 +409,16 @@ struct ReviewScreen: View {
         // rather than being eaten by a view that had no answer for it.
         if character == "u", !model.isAwaitingSecondKey, model.canReloadPendingUpdate {
             model.reloadPendingUpdate()
+            return .handled
+        }
+        // `t` for *tab*: Files and Conversation, back and forth. Free both as a bare key and as
+        // the second half of a sequence — `r` and `g` are the only prefixes, and neither claims
+        // it — and a letter rather than ⇥, which macOS spends on moving the focus ring. It is
+        // the other half of opening an agent's pull request on Conversation: a reviewer who
+        // wanted the diff has to be able to get there without reaching for the mouse. The guard
+        // is the one `c` needs, for the same reason.
+        if character == "t", !model.isAwaitingSecondKey {
+            model.setTab(model.tab == .files ? .conversation : .files)
             return .handled
         }
         // `c` reaches this handler only when the diff does *not* have the focus — inside it the

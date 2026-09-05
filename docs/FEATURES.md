@@ -226,6 +226,14 @@ multi-comment pending reviews, approve / request changes / comment, reply to and
 threads, CI check status, and merge (merge / squash / rebase) — complete GitHub review parity,
 natively wrapped. Drafts survive restart and offline; a staleness check runs before a submit.
 
+An agent's pull request opens on **Conversation** rather than on the diff whenever its description
+actually claims something — tests added, only one module touched, nothing breaking, fixes #142 —
+so the first thing you see is those claims beside what Shepherd found, rather than a file list you
+would have had to leave to reach them. Everything else opens on Files as it always did, the choice
+is made once when the pull request opens and never afterwards, `t` switches between the two tabs,
+and Settings → Appearance → Review screen turns the whole thing off if you would rather always
+start in the diff.
+
 The screen stays current while you are on it. Whatever the background sweep learns about the pull
 request lands in the review you have open: CI turning green, a colleague answering a thread, an
 approval, the mergeable state the merge dialog warns from. All of that is applied silently, exactly
@@ -372,7 +380,8 @@ lists what the description claims and what the diff and CI show, and the judgeme
 data Shepherd already fetched: nothing stored. On an agent's pull request it opens
 expanded; on a person's it is a header you can open
 ([ADR 0008](adr/0008-agent-provenance-first-class.md)). A description that claims nothing gets no
-card at all.
+card at all — and, for the same reason, does not move the pull request off the diff: an agent's
+pull request opens on this card only when there is one.
 
 Opening the card also lets Apple's on-device model read that same description once, for the
 phrasings the patterns miss. A line it found carries a small **Read by the model** tag and is

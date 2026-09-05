@@ -178,7 +178,11 @@ final class ReviewModel {
     /// Read only when ``focusEditorRequest`` advances, so it cannot go stale on its own.
     private(set) var focusEditorSide: BridgeSide = .right
     /// Which tab is showing.
-    var tab: Tab = .files
+    ///
+    /// Written only through ``setTab(_:)``, for ``roundView``'s reason: which tab a review opens
+    /// on is a decision made once, and every path that changes it afterwards is the reviewer
+    /// saying so.
+    private(set) var tab: Tab = .files
     /// Which round the file list and the diff viewer are showing (ADR 0028).
     private(set) var roundView: RoundView = .all {
         // The other half of the reset above: the two rounds are two different documents of the
@@ -253,6 +257,15 @@ final class ReviewModel {
     /// Once they have, a background refresh must not move them back: the default is only a
     /// default, and it is decided once per opened review.
     private var hasChosenRoundView = false
+
+    /// Whether the tab this review opens on has been decided.
+    ///
+    /// ``hasChosenRoundView``'s twin, and it exists for exactly the same once-only reason. Set by
+    /// the first detail to arrive *and* by ``setTab(_:)``, which covers both halves of "only at
+    /// open": the cached detail and the fresh fetch behind it are one open rather than two, a
+    /// live refresh and a Reload after a push are not an open at all, and a reviewer who reached
+    /// for the picker while the fetch was still in flight has already said where they want to be.
+    private var hasChosenTab = false
 
     private var draftTask: Task<Void, Never>?
     private var detailTask: Task<Void, Never>?
@@ -568,6 +581,16 @@ final class ReviewModel {
         pendingDetail = nil
         if !hasEndedOnGitHub { notice = nil }
         self.detail = detail
+        // The one place the tab default is spent, and the flag is what keeps it to the *first*
+        // detail: this function runs again for the fresh fetch behind the cached row, for the
+        // banner's Reload, and for nothing a reviewer would call a new open.
+        if !hasChosenTab {
+            hasChosenTab = true
+            tab = ReviewModel.defaultTab(
+                for: detail,
+                opensAgentPullRequestsOnConversation: settings.opensAgentPullRequestsOnConversation
+            )
+        }
         priorities = FilePrioritizer.prioritize(
             detail.files,
             context: PrioritizationContext(totalChangedLines: detail.summary.churn)
@@ -679,6 +702,62 @@ final class ReviewModel {
         clampSelection()
     }
 
+    // MARK: - Which tab a review opens on
+
+    /// Which tab a review opens on.
+    ///
+    /// Conversation for an agent's pull request whose description actually claims something,
+    /// Files for everything else — which is every human pull request, and every agent one whose
+    /// description asserts nothing to check. The reason is ADR 0026's amendment: the
+    /// claims-vs-evidence card is the one surface in the app that knows something github.com does
+    /// not, and putting it a click away on every single pull request buried the difference.
+    ///
+    /// **"An agent wrote it"** is ``ShepherdCore/ActorKind/agentIdentity`` being non-`nil` — the
+    /// same test the card's own expansion, ``ShepherdCore/AutoMergePolicy`` and the bulk-triage
+    /// plan all use, so a bot that is not a recognised agent counts as a person here too, exactly
+    /// as it does on the card.
+    ///
+    /// **"It claims something"** is ``ShepherdCore/ClaimExtractor/extract(from:)``, the card's own
+    /// tier-1 pass: compiled regular expressions over the description and nothing else. That is
+    /// the whole reason it can be asked here — the tab has to be decided synchronously, in the
+    /// same turn the detail arrives, and asking a model would mean the review opened on one tab
+    /// and moved to another under the reviewer, and on a different tab on a Mac without the
+    /// model. It is also what makes the answer agree with the card by construction: an empty
+    /// extraction is precisely the case ``ShepherdCore/ClaimsEvidenceReport/build(detail:summary:)``
+    /// turns into an empty report and the card draws nothing for, so this can never open the
+    /// Conversation tab on a card that is not there.
+    ///
+    /// Pure and `static` so the rule is unit-tested rather than inferred from task ordering, the
+    /// same treatment ``defaultRoundView(for:)`` gets.
+    /// - Parameters:
+    ///   - detail: The pull request the screen has just been given.
+    ///   - opensAgentPullRequestsOnConversation: The reviewer's preference. With it off the answer
+    ///     is always Files, for the reviewer who wants the diff first whatever wrote the
+    ///     description.
+    /// - Returns: The tab to open on.
+    static func defaultTab(
+        for detail: PullRequestDetail,
+        opensAgentPullRequestsOnConversation: Bool
+    ) -> Tab {
+        guard opensAgentPullRequestsOnConversation else { return .files }
+        guard detail.summary.author.kind.agentIdentity != nil else { return .files }
+        return ClaimExtractor.extract(from: detail.bodyMarkdown).isEmpty ? .files : .conversation
+    }
+
+    /// Switches the right-hand area between the diff and the conversation.
+    ///
+    /// Every path that moves the tab goes through here — the picker, `t`, a finding that lost its
+    /// anchor, a card's link into a file — because all of them are the reviewer saying where they
+    /// want to be, and the default above must not outlive that.
+    /// - Parameter tab: The tab to show.
+    func setTab(_ tab: Tab) {
+        // Unconditionally, and before the guard: clicking the tab you are already on is still a
+        // choice, and a detail arriving a moment later must not move you off it.
+        hasChosenTab = true
+        guard tab != self.tab else { return }
+        self.tab = tab
+    }
+
     /// Shows one finding: its file and line, or the conversation when the anchor is gone.
     ///
     /// An outdated finding's line is a number in the head that was reviewed, so it is not used
@@ -687,7 +766,7 @@ final class ReviewModel {
     /// - Parameter finding: The finding the reviewer clicked.
     func jump(to finding: ReviewFinding) {
         guard let path = finding.path, let line = finding.line, !finding.isLineOutdated else {
-            tab = .conversation
+            setTab(.conversation)
             activeThreadID = finding.threadID
             return
         }
@@ -1310,7 +1389,7 @@ final class ReviewModel {
             setRoundView(.all)
         }
         selectedPath = path
-        tab = .files
+        setTab(.files)
         revealLine = line
     }
 

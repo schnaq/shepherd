@@ -8141,6 +8141,16 @@
         }
       }
     },
+    "Open agent pull requests on Conversation": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pull Requests von Agents auf „Conversation“ öffnen"
+          }
+        }
+      }
+    },
     "Open full review": {
       "localizations": {
         "de": {
@@ -8877,6 +8887,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "REVIEW-PRIORITÄT"
+          }
+        }
+      }
+    },
+    "REVIEW SCREEN": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "REVIEW-ANSICHT"
           }
         }
       }
@@ -10827,6 +10847,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Von einer automatischen Delegationsregel gestartet. Es wird nichts gepusht — du reviewst und pushst den Diff weiterhin selbst."
+          }
+        }
+      }
+    },
+    "Starts on the claims and evidence when an agent wrote the description; the diff is one keystroke away (t).": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beginnt bei den Behauptungen und Belegen, wenn ein Agent die Beschreibung geschrieben hat; der Diff ist einen Tastendruck entfernt (t)."
           }
         }
       }

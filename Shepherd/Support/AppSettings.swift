@@ -115,6 +115,8 @@ final class AppSettings {
             Keys.defaultMergeMethod,
             default: MergeMethod.squash
         )
+        self.opensAgentPullRequestsOnConversation = defaults
+            .object(forKey: Keys.opensAgentOnConversation) as? Bool ?? true
         self.diffFontSize = defaults.object(forKey: Keys.diffFontSize) as? Double ?? 13
         self.diffWrapsLines = defaults.object(forKey: Keys.diffWraps) as? Bool ?? false
         self.diffUsesInlineMode = defaults.object(forKey: Keys.diffInline) as? Bool ?? false
@@ -378,6 +380,24 @@ final class AppSettings {
     /// (ADR 0015).
     var defaultMergeMethod: MergeMethod {
         didSet { Self.write(defaults, defaultMergeMethod, Keys.defaultMergeMethod) }
+    }
+
+    // MARK: - Review screen
+
+    /// Whether an agent's pull request opens on Conversation when its description claims something
+    /// the claims-vs-evidence card can check (ADR 0026's amendment).
+    ///
+    /// On by default, because that card is the reason an agent's pull request looks different in
+    /// Shepherd than it does on github.com. Off is for the reviewer who wants the diff first
+    /// whatever wrote the description — ``ReviewModel/defaultTab(for:opensAgentPullRequestsOnConversation:)``
+    /// then answers Files for everything, which is what the app always did.
+    var opensAgentPullRequestsOnConversation: Bool {
+        didSet {
+            defaults.set(
+                opensAgentPullRequestsOnConversation,
+                forKey: Keys.opensAgentOnConversation
+            )
+        }
     }
 
     // MARK: - Diff viewer
@@ -849,6 +869,7 @@ final class AppSettings {
         static let groupBy = "inbox.groupBy"
         static let sortOrder = "inbox.sortOrder"
         static let defaultMergeMethod = "review.defaultMergeMethod"
+        static let opensAgentOnConversation = "review.opensAgentPullRequestsOnConversation"
         static let diffFontSize = "diff.fontSize"
         static let diffWraps = "diff.wraps"
         static let diffInline = "diff.inline"

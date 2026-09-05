@@ -1491,12 +1491,14 @@ struct IntelligenceSettingsTab: View {
 
 // MARK: - Appearance
 
-/// Dark, light or system, the diff viewer's chrome, and whether the menu-bar quick inbox is
-/// inserted.
+/// Dark, light or system, the diff viewer's chrome, whether the menu-bar quick inbox is inserted,
+/// and which tab a review opens on.
 ///
 /// The menu-bar toggle lives here rather than on its own tab or under Sync: it decides whether a
 /// piece of Shepherd's chrome is on screen, which is the question this tab answers — and the
-/// synced document keeps it in `appearance` for the same reason.
+/// synced document keeps it in `appearance` for the same reason. The review-screen toggle is here
+/// on the same argument: "which half of the screen do I land on" is a question about what is in
+/// front of the reviewer, not about how a review is submitted.
 struct AppearanceSettingsTab: View {
     @Environment(AppEnvironment.self) private var environment
 
@@ -1527,6 +1529,22 @@ struct AppearanceSettingsTab: View {
                     Toggle(String(localized: "Show in menu bar"), isOn: menuBarBinding)
                     Text(String(
                         localized: "On by default. The menu-bar item shows how many pull requests are waiting for your review and opens a short list of them; clicking one opens it in the main window. Switching this off removes the item — nothing else changes, and no sync of its own runs either way."
+                    ))
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Card {
+                VStack(alignment: .leading, spacing: 8) {
+                    CardTitle(String(localized: "REVIEW SCREEN"))
+                    Toggle(
+                        String(localized: "Open agent pull requests on Conversation"),
+                        isOn: conversationFirstBinding
+                    )
+                    Text(String(
+                        localized: "Starts on the claims and evidence when an agent wrote the description; the diff is one keystroke away (t)."
                     ))
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.textMuted)
@@ -1583,6 +1601,16 @@ struct AppearanceSettingsTab: View {
             // Nothing to apply: `MenuBarExtra(isInserted:)` in `ShepherdApp` reads this setting,
             // so the item appears and disappears with the toggle.
             set: { environment.settings.showsMenuBarExtra = $0 }
+        )
+    }
+
+    private var conversationFirstBinding: Binding<Bool> {
+        Binding(
+            get: { environment.settings.opensAgentPullRequestsOnConversation },
+            // Nothing to apply: the setting is read once, by the next review to open. A review
+            // already on screen keeps the tab it opened on, which is the same once-only rule the
+            // reviewer's own click on the picker obeys (ADR 0026's amendment).
+            set: { environment.settings.opensAgentPullRequestsOnConversation = $0 }
         )
     }
 

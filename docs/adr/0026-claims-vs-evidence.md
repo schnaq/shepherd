@@ -290,3 +290,53 @@ German differs from its English — the only way from inside the app to say "the
 and it was used" — with a `default`-less `switch` beside the sample list that stops compiling when
 a case is added. The `ShepherdCore` tests assert the structured kind and the English sentence
 side by side, so a change to either is a change somebody meant.
+
+## Amendment (2026-09-05): the card is what an agent's pull request opens on
+
+Nothing about the card changes: same four claim shapes, same evidence rules, same no-score rule,
+same single exit, same tiers. What changes is *where the reviewer is standing when it is drawn*.
+
+The card lived on the Conversation tab and every pull request opened on Files, so the one surface
+in Shepherd that knows something github.com does not was one click away — on every pull request,
+every time, for the whole life of the app. An audit of what a first session can actually reach
+rated that the most buried differentiator in the product, and it is a fair verdict: a feature you
+have to know about before you can find it is a feature most people never find.
+
+**So an agent-authored pull request whose description yields at least one claim opens on
+Conversation, and everything else opens on Files as before.** The rule is
+`ReviewModel.defaultTab(for:opensAgentPullRequestsOnConversation:)` — pure, `static` and tested,
+the treatment `defaultRoundView(for:)` already gets.
+
+- **"An agent wrote it"** is `ActorKind.agentIdentity != nil`, the same test this ADR's
+  *Collapsed for people, expanded for agents* rule uses, and the same one `AutoMergePolicy` and
+  the bulk-triage plan gate on. A bot that is not a recognised agent is a person here too, exactly
+  as it is for the expansion. There is no second definition of "this is an agent" in the app and
+  this does not add one.
+- **"It claims something"** is `ClaimExtractor.extract(from:)` — the deterministic tier-1 pass,
+  compiled `NSRegularExpression`s over the description and nothing else. It is emphatically *not*
+  the on-device pass: the tab has to be decided in the same turn the detail arrives, and a default
+  that waited for a model would move the reviewer's screen under them after the fact and would
+  land on a different tab on a Mac without the model. It is also what makes the tab and the card
+  agree by construction, since an empty extraction is precisely the case that yields an empty
+  report and draws no card — this can never open the Conversation tab onto nothing.
+- **Only at open, and never again.** `hasChosenTab` mirrors `hasChosenRoundView`: the default is
+  spent on the first detail to arrive, so the fresh fetch behind the cached row does not re-decide
+  it, a live refresh does not, and Reload after a push does not. The flag is also set by every
+  path that moves the tab afterwards, so a reviewer who reached for the picker while the fetch was
+  still in flight keeps the tab they chose. A default that could reassert itself is not a default,
+  it is a rule.
+- **One switch.** `AppSettings.opensAgentPullRequestsOnConversation`, on by default, in
+  Settings → Appearance → Review screen, and in the synced document like every other preference
+  (ADR 0014) — "I want the diff first" is a fact about the reviewer, not about the Mac. With it
+  off the function answers Files for everything, which is exactly what the app did before this
+  amendment.
+- **`t` switches the tabs.** The review screen had a key for every action but this one, and
+  opening somewhere new without a key back would have traded one buried surface for another. It
+  is a bare key in `ReviewScreen.handleKey` beside `u`, `c`, `[` and `]`, guarded by
+  `isAwaitingSecondKey` for the reason they are: `r` and `g` are the only prefixes and neither
+  claims `t`.
+
+What this does **not** do is act, rank or judge. No verdict is formed, nothing is submitted,
+nothing is fetched that was not fetched before, and the card the reviewer lands on is the same
+card with the same absent score. The only thing that moved is which half of the screen is in
+front of them when the pull request opens.
