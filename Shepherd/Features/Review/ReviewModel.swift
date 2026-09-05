@@ -96,7 +96,14 @@ final class ReviewModel {
     private(set) var isMissingFromInbox = false
 
     /// The file being shown in the diff viewer.
-    var selectedPath: String?
+    var selectedPath: String? {
+        // ``selectedDiffRow`` is an index into *this* file's rows, so it cannot survive the file
+        // changing: the same index in the next file names an unrelated line, and a shorter file
+        // would leave it past the end. Compared against the old value because a background
+        // refresh re-selects the same path routinely, and that must not throw away a cursor the
+        // reviewer is standing on.
+        didSet { if selectedPath != oldValue { selectedDiffRow = nil } }
+    }
     /// A line the viewer should scroll to once it has the file.
     ///
     /// Set by ``reveal(path:line:)`` — the CI diagnosis card's `file:line` link — and by nothing
@@ -115,7 +122,18 @@ final class ReviewModel {
     /// Which tab is showing.
     var tab: Tab = .files
     /// Which round the file list and the diff viewer are showing (ADR 0028).
-    private(set) var roundView: RoundView = .all
+    private(set) var roundView: RoundView = .all {
+        // The other half of the reset above: the two rounds are two different documents of the
+        // same file, so a row index means something else in each of them.
+        didSet { if roundView != oldValue { selectedDiffRow = nil } }
+    }
+    /// The row the native diff list is standing on, as an index into its rows.
+    ///
+    /// Session-only and deliberately not persisted: it is a cursor, not a preference, and a
+    /// reviewer coming back to a pull request tomorrow wants the top of the file rather than the
+    /// line they happened to leave. It is cleared whenever the file or the round changes — see
+    /// the two `didSet`s above — because both of those change which rows exist.
+    private(set) var selectedDiffRow: Int?
     /// What changed since the head this reviewer last reviewed, when a baseline exists.
     private(set) var round: SinceReviewRound?
     /// Review priorities of the interdiff's files.
@@ -474,7 +492,26 @@ final class ReviewModel {
         )
     }
 
-    /// Which lines the viewer may arm its gutter on.
+    /// The same file as ``selectedContent``, in the shape the native list draws.
+    ///
+    /// The rows come out of the same walk that built the two documents, and the two sets come
+    /// out of ``commentableLineSets(in:)`` — so the list and Monaco cannot come to different
+    /// conclusions about which lines may carry a comment. That is the first item of the contract
+    /// in `docs/plans/accessible-diff.md`, and this is one of its two call sites.
+    var selectedListContent: DiffListContent? {
+        guard let file = selectedFile,
+              let reconstruction = selectedReconstruction
+        else { return nil }
+        let sets = commentableLineSets(in: reconstruction)
+        return DiffListContent(
+            path: file.path,
+            rows: reconstruction.rows,
+            commentableLeft: sets.left,
+            commentableRight: sets.right
+        )
+    }
+
+    /// Which lines may carry a comment, for whichever renderer is drawing.
     ///
     /// In ``RoundView/all`` this is simply what the patch contained. In
     /// ``RoundView/sinceReview`` the document is a synthesized diff of two heads: its right-hand
@@ -482,21 +519,39 @@ final class ReviewModel {
     /// on a line the pull request's *own* patch also contains — GitHub rejects an entire review
     /// when one `comments[].line` is not part of the diff. The left-hand side is the head that
     /// was reviewed and has no valid anchors at all, so it is empty rather than omitted.
+    ///
+    /// This is the function, and ``commentableLines(in:)`` below is only its sorted-array
+    /// spelling for the bridge's JSON. Both renderers land here, which is the point: the rule
+    /// that a padding line is unclickable — and the narrowing this applies on top of it — is now
+    /// a call site rather than an intention, and a second renderer cannot quietly grow a second
+    /// answer to the same question.
     /// - Parameter reconstruction: The reconstruction being shown.
-    private func commentableLines(
+    /// - Returns: The commentable base-side and head-side lines.
+    private func commentableLineSets(
         in reconstruction: PatchReconstructor.Reconstruction
-    ) -> BridgeCommentableLines {
+    ) -> (left: Set<Int>, right: Set<Int>) {
         guard roundView == .sinceReview else {
-            return BridgeCommentableLines(
-                left: reconstruction.commentableOriginalLines.sorted(),
-                right: reconstruction.commentableModifiedLines.sorted()
+            return (
+                left: reconstruction.commentableOriginalLines,
+                right: reconstruction.commentableModifiedLines
             )
         }
         let allowed = currentReconstruction?.commentableModifiedLines ?? []
-        return BridgeCommentableLines(
+        return (
             left: [],
-            right: reconstruction.commentableModifiedLines.intersection(allowed).sorted()
+            right: reconstruction.commentableModifiedLines.intersection(allowed)
         )
+    }
+
+    /// The same answer as ``commentableLineSets(in:)``, in the two sorted arrays the bridge's
+    /// JSON is defined in terms of.
+    /// - Parameter reconstruction: The reconstruction being shown.
+    /// - Returns: The bridge payload.
+    private func commentableLines(
+        in reconstruction: PatchReconstructor.Reconstruction
+    ) -> BridgeCommentableLines {
+        let sets = commentableLineSets(in: reconstruction)
+        return BridgeCommentableLines(left: sets.left.sorted(), right: sets.right.sorted())
     }
 
     /// How many inline comments are waiting in the draft.
@@ -812,6 +867,60 @@ final class ReviewModel {
         self.selectedPath = paths[min(max(0, index + offset), paths.count - 1)]
     }
 
+    /// Moves the native diff list's cursor.
+    ///
+    /// Hunk headers are **not** skipped, and that is a decision rather than an omission. Skipping
+    /// them would make `j` and `k` a little faster for a reviewer who can see at a glance where
+    /// one hunk ends and the next begins. Landing on them is the only way a reviewer who cannot
+    /// see that gets told it: the header row is where "the file jumps from line 41 to line 214"
+    /// is said, and Monaco says it to a screen reader nowhere at all. This list exists for
+    /// exactly that reader, so the extra keystroke per hunk is the cheaper of the two costs.
+    /// - Parameter offset: `+1` or `-1`.
+    func moveDiffRowSelection(by offset: Int) {
+        guard let rows = selectedListContent?.rows, !rows.isEmpty else {
+            selectedDiffRow = nil
+            return
+        }
+        // A cursor that is `nil` — or that a background refresh left past the end of a shorter
+        // file — starts again at the top rather than being moved from a position it no longer has.
+        guard let current = selectedDiffRow, rows.indices.contains(current) else {
+            selectedDiffRow = 0
+            return
+        }
+        selectedDiffRow = min(max(0, current + offset), rows.count - 1)
+    }
+
+    /// Puts the native diff list's cursor on one row, for a click.
+    /// - Parameter index: The row index.
+    func selectDiffRow(_ index: Int) {
+        guard let rows = selectedListContent?.rows, rows.indices.contains(index) else { return }
+        selectedDiffRow = index
+    }
+
+    /// Opens the composer on the selected row, or does nothing when the row takes no comment.
+    ///
+    /// What `c` does inside the native list. It goes through ``handle(_:)`` rather than building
+    /// a ``ComposerRequest`` here, and that is the second item of the contract in
+    /// `docs/plans/accessible-diff.md`: the bridge's request and the list's request are the same
+    /// request, demonstrably, because there is one place that turns "line and side" into an open
+    /// composer. The only thing done at this call is the conversion from ``DiffSide`` to the
+    /// ``BridgeSide`` the event is defined in terms of — the event's own spelling of the same
+    /// two-valued fact.
+    func requestCommentOnSelectedRow() {
+        guard let content = selectedListContent,
+              let index = selectedDiffRow,
+              content.rows.indices.contains(index),
+              let anchor = content.anchor(for: content.rows[index])
+        else { return }
+        handle(
+            .addComment(
+                line: anchor.line,
+                side: anchor.side == .left ? .left : .right,
+                startLine: nil
+            )
+        )
+    }
+
     /// Asks for the keyboard focus to move into one pane of the diff editor.
     ///
     /// What `c` does when the diff does not have the focus, and what `[` and `]` do by naming a
@@ -819,6 +928,10 @@ final class ReviewModel {
     /// brackets cross between the panes. So the pair is the keyboard path to an inline comment —
     /// one press to get a cursor, one to comment on it — and the side is what makes it reach a
     /// *deleted* line, which exists only in the original pane (ADR 0033's amendment).
+    ///
+    /// The native list reads the same counter and ignores the side: it is one column, so it has
+    /// no second pane to be sent to, and a deleted line is simply a row in it. Two renderers, one
+    /// answer to "who has the keyboard now".
     func requestEditorFocus(side: BridgeSide = .right) {
         focusEditorSide = side
         focusEditorRequest += 1

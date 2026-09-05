@@ -186,26 +186,44 @@ struct ReviewScreen: View {
                 message: String(localized: "No file changed since the head you reviewed.")
             )
         } else if let content = model.selectedContent {
-            DiffViewerView(
-                content: content,
-                mode: model.settings.diffUsesInlineMode ? .inline : .sideBySide,
-                wrap: model.settings.diffWrapsLines,
-                theme: colorScheme == .dark ? .dark : .light,
-                fontSize: model.settings.diffFontSize,
-                threads: model.bridgeThreads,
-                draftComments: model.bridgeDraftComments,
-                // Set only by the CI diagnosis card's `file:line` link (plan §3.F); the viewer
-                // acts on a change of it and ignores it otherwise.
-                revealLine: model.revealLine,
-                // Raised by `c`, `[` and `]` pressed outside the diff (ADR 0033's amendment):
-                // the native screen owns the keys that act on a *file*, the editor owns the keys
-                // that act on a *line*, and this is the command that carries the keyboard across.
-                // The side is what makes a deleted line reachable — `[` is the original pane.
-                focusRequest: model.focusEditorRequest,
-                focusSide: model.focusEditorSide,
-                screenReader: isVoiceOverEnabled,
-                onEvent: { event in model.handle(event) }
-            )
+            // The one branch that chooses a renderer. Everything around it — the file header, the
+            // round picker, the findings list, the composer bar, the thread popover — keys off the
+            // model rather than off which of the two is drawing, so none of it knows or cares.
+            if usesNativeList, let listContent = model.selectedListContent {
+                DiffListView(
+                    model: model,
+                    content: listContent,
+                    fontSize: model.settings.diffFontSize,
+                    wraps: model.settings.diffWrapsLines,
+                    // `c`, `[` and `]` pressed on the native screen raise this counter; in this
+                    // mode it moves the keyboard into the list rather than into Monaco. One
+                    // mechanism, because it is one question: who has the keyboard now.
+                    focusRequest: model.focusEditorRequest,
+                    onExit: { isFileListFocused = true }
+                )
+            } else {
+                DiffViewerView(
+                    content: content,
+                    mode: model.settings.diffUsesInlineMode ? .inline : .sideBySide,
+                    wrap: model.settings.diffWrapsLines,
+                    theme: colorScheme == .dark ? .dark : .light,
+                    fontSize: model.settings.diffFontSize,
+                    threads: model.bridgeThreads,
+                    draftComments: model.bridgeDraftComments,
+                    // Set only by the CI diagnosis card's `file:line` link (plan §3.F); the
+                    // viewer acts on a change of it and ignores it otherwise.
+                    revealLine: model.revealLine,
+                    // Raised by `c`, `[` and `]` pressed outside the diff (ADR 0033's
+                    // amendment): the native screen owns the keys that act on a *file*, the
+                    // editor owns the keys that act on a *line*, and this is the command that
+                    // carries the keyboard across. The side is what makes a deleted line
+                    // reachable — `[` is the original pane.
+                    focusRequest: model.focusEditorRequest,
+                    focusSide: model.focusEditorSide,
+                    screenReader: isVoiceOverEnabled,
+                    onEvent: { event in model.handle(event) }
+                )
+            }
         } else if let path = model.selectedPath {
             DiffUnavailableView(path: path)
         } else {
@@ -214,6 +232,21 @@ struct ReviewScreen: View {
                 title: String(localized: "Pick a file"),
                 message: String(localized: "Files are ordered by review priority, riskiest first.")
             )
+        }
+    }
+
+    /// Whether the native, walkable list draws the diff rather than Monaco.
+    ///
+    /// The setting decides, and ``DiffRenderer/automatic`` decides by asking whether a screen
+    /// reader is listening — which is a runtime condition rather than a stored one, and the reason
+    /// that setting is three states and not a toggle. `accessibilityVoiceOverEnabled` is live, so
+    /// turning VoiceOver on mid-review swaps the renderer under the reviewer rather than waiting
+    /// for the next launch.
+    private var usesNativeList: Bool {
+        switch model.settings.diffRenderer {
+        case .native: return true
+        case .web: return false
+        case .automatic: return isVoiceOverEnabled
         }
     }
 

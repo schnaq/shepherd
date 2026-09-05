@@ -511,6 +511,16 @@
         }
       }
     },
+    "%lld comment threads.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Kommentar-Threads."
+          }
+        }
+      }
+    },
     "%lld comments": {
       "localizations": {
         "de": {
@@ -1351,6 +1361,16 @@
         }
       }
     },
+    "%lld pending comments.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld offene Kommentare."
+          }
+        }
+      }
+    },
     "%lld pt": {
       "localizations": {
         "de": {
@@ -1841,6 +1861,16 @@
         }
       }
     },
+    "1 comment thread.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 Kommentar-Thread."
+          }
+        }
+      }
+    },
     "1 fact": {
       "localizations": {
         "de": {
@@ -1917,6 +1947,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "1 deiner Pull Requests braucht Aufmerksamkeit"
+          }
+        }
+      }
+    },
+    "1 pending comment.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 offener Kommentar."
           }
         }
       }
@@ -2457,6 +2497,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dich als Zuständige:n hinzufügen, ohne jemanden zu entfernen"
+          }
+        }
+      }
+    },
+    "Added": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hinzugefügt"
           }
         }
       }
@@ -3167,6 +3217,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Basis-URL"
+          }
+        }
+      }
+    },
+    "Base line %lld.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeile %lld der base-Seite."
           }
         }
       }
@@ -5691,6 +5751,16 @@
         }
       }
     },
+    "Hunk starting at base line %lld and head line %lld.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hunk ab Zeile %lld der base-Seite und Zeile %lld der head-Seite."
+          }
+        }
+      }
+    },
     "INBOX SWEEP": {
       "localizations": {
         "de": {
@@ -6311,6 +6381,16 @@
         }
       }
     },
+    "Line %lld.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeile %lld."
+          }
+        }
+      }
+    },
     "Line list": {
       "localizations": {
         "de": {
@@ -6927,6 +7007,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Für diese Art von Session ist kein Befehl konfiguriert. Lege einen unter Einstellungen → Delegation fest."
+          }
+        }
+      }
+    },
+    "No comment can be left on this line.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf dieser Zeile kann kein Kommentar hinterlassen werden."
           }
         }
       }
@@ -8777,6 +8867,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Aus der Auswahl entfernen (x)"
+          }
+        }
+      }
+    },
+    "Removed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entfernt"
           }
         }
       }
