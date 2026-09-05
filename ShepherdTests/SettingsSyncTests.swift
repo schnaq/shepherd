@@ -291,6 +291,7 @@ final class SettingsSyncTests: XCTestCase {
             diffFontSize: 16,
             diffWrapsLines: true,
             diffUsesInlineMode: true,
+            diffRenderer: .native,
             // Non-default like every other field here, and non-default for this one means *off*:
             // the menu-bar item ships inserted.
             showsMenuBarExtra: false
@@ -1117,6 +1118,7 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertEqual(settings.diffFontSize, 16)
         XCTAssertTrue(settings.diffWrapsLines)
         XCTAssertTrue(settings.diffUsesInlineMode)
+        XCTAssertEqual(settings.diffRenderer, .native)
         // A Mac that hid the menu-bar item hides it here too; the scene's `isInserted` binding
         // reads this setting, so there is nothing else to apply.
         XCTAssertFalse(settings.showsMenuBarExtra)

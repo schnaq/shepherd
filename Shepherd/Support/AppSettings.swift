@@ -118,6 +118,7 @@ final class AppSettings {
         self.diffFontSize = defaults.object(forKey: Keys.diffFontSize) as? Double ?? 13
         self.diffWrapsLines = defaults.object(forKey: Keys.diffWraps) as? Bool ?? false
         self.diffUsesInlineMode = defaults.object(forKey: Keys.diffInline) as? Bool ?? false
+        self.diffRenderer = Self.read(defaults, Keys.diffRenderer, default: DiffRenderer.automatic)
         self.accountLogin = defaults.string(forKey: Keys.accountLogin)
         self.accountAvatarURL = defaults.url(forKey: Keys.accountAvatar)
         self.accountAuthKind = Self.read(defaults, Keys.accountAuthKind, default: AuthKind.pat)
@@ -392,6 +393,11 @@ final class AppSettings {
     /// Whether the diff is shown inline rather than side by side.
     var diffUsesInlineMode: Bool {
         didSet { defaults.set(diffUsesInlineMode, forKey: Keys.diffInline) }
+    }
+
+    /// Which diff view renders changes: Monaco, the native list, or automatic between them.
+    var diffRenderer: DiffRenderer {
+        didSet { Self.write(defaults, diffRenderer, Keys.diffRenderer) }
     }
 
     // MARK: - Delegation (ADR 0011)
@@ -816,6 +822,7 @@ final class AppSettings {
         static let diffFontSize = "diff.fontSize"
         static let diffWraps = "diff.wraps"
         static let diffInline = "diff.inline"
+        static let diffRenderer = "diff.renderer"
         static let accountLogin = "account.login"
         static let accountAvatar = "account.avatarURL"
         static let accountAuthKind = "account.authKind"

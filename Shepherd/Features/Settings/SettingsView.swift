@@ -1537,6 +1537,19 @@ struct AppearanceSettingsTab: View {
             Card {
                 VStack(alignment: .leading, spacing: 10) {
                     CardTitle(String(localized: "DIFF VIEWER"))
+                    Picker(String(localized: "Diff renderer"), selection: diffRendererBinding) {
+                        ForEach(DiffRenderer.allCases) { renderer in
+                            Text(renderer.title).tag(renderer)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    Text(String(
+                        localized: "Automatic switches to the line list while VoiceOver is running, and uses the rich viewer otherwise. Choose Rich viewer or Line list to always use that one, screen reader or not."
+                    ))
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
                     HStack(spacing: 12) {
                         Text(String(localized: "Font size"))
                             .font(.system(size: 12))
@@ -1591,6 +1604,13 @@ struct AppearanceSettingsTab: View {
         Binding(
             get: { environment.settings.diffUsesInlineMode },
             set: { environment.settings.diffUsesInlineMode = $0 }
+        )
+    }
+
+    private var diffRendererBinding: Binding<DiffRenderer> {
+        Binding(
+            get: { environment.settings.diffRenderer },
+            set: { environment.settings.diffRenderer = $0 }
         )
     }
 }

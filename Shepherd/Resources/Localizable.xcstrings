@@ -3091,6 +3091,16 @@
         }
       }
     },
+    "Automatic switches to the line list while VoiceOver is running, and uses the rich viewer otherwise. Choose Rich viewer or Line list to always use that one, screen reader or not.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„Automatisch“ wechselt zur Zeilenliste, solange VoiceOver läuft, und nutzt sonst die erweiterte Ansicht. Wähle „Erweiterte Ansicht“ oder „Zeilenliste“, um immer bei dieser zu bleiben – mit oder ohne Screenreader."
+          }
+        }
+      }
+    },
     "Automation": {
       "localizations": {
         "de": {
@@ -4647,6 +4657,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Auf dem Gerät diagnostiziert"
+          }
+        }
+      }
+    },
+    "Diff renderer": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diff-Darstellung"
           }
         }
       }
@@ -6287,6 +6307,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zeile %lld der %@-Seite ist nicht Teil dieses Diffs. GitHub nimmt Kommentare nur auf Zeilen an, die der Patch wirklich enthält."
+          }
+        }
+      }
+    },
+    "Line list": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeilenliste"
           }
         }
       }
@@ -9157,6 +9187,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Review · %lld offen"
+          }
+        }
+      }
+    },
+    "Rich viewer": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erweiterte Ansicht"
           }
         }
       }

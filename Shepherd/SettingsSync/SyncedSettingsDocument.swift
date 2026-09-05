@@ -465,6 +465,8 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         var diffWrapsLines: Bool
         /// Whether the diff is shown inline.
         var diffUsesInlineMode: Bool
+        /// Which diff view renders changes: Monaco, the native list, or automatic between them.
+        var diffRenderer: DiffRenderer
         /// Whether the menu-bar quick inbox is inserted.
         ///
         /// The one field in this document that defaults to *true*: the item is on out of the box,
@@ -480,6 +482,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
             diffFontSize: Double = 13,
             diffWrapsLines: Bool = false,
             diffUsesInlineMode: Bool = false,
+            diffRenderer: DiffRenderer = .automatic,
             showsMenuBarExtra: Bool = true
         ) {
             self.appearance = appearance
@@ -488,12 +491,13 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
             self.diffFontSize = diffFontSize
             self.diffWrapsLines = diffWrapsLines
             self.diffUsesInlineMode = diffUsesInlineMode
+            self.diffRenderer = diffRenderer
             self.showsMenuBarExtra = showsMenuBarExtra
         }
 
         private enum CodingKeys: String, CodingKey {
             case appearance, inboxGroupBy, inboxSortOrder
-            case diffFontSize, diffWrapsLines, diffUsesInlineMode
+            case diffFontSize, diffWrapsLines, diffUsesInlineMode, diffRenderer
             case showsMenuBarExtra
         }
 
@@ -508,6 +512,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
             diffFontSize = container.syncedValue(.diffFontSize, default: 13)
             diffWrapsLines = container.syncedValue(.diffWrapsLines, default: false)
             diffUsesInlineMode = container.syncedValue(.diffUsesInlineMode, default: false)
+            diffRenderer = container.syncedValue(.diffRenderer, default: DiffRenderer.automatic)
             showsMenuBarExtra = container.syncedValue(.showsMenuBarExtra, default: true)
         }
     }
