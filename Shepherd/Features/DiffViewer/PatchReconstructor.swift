@@ -123,7 +123,19 @@ enum PatchReconstructor {
         var result: [Hunk] = []
         var current: Hunk?
 
-        for rawLine in patch.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n") {
+        var rawLines = patch.replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
+        // The empty component after a terminating newline is not a line. Neither producer this
+        // app has emits one — GitHub's `files[].patch` ends without a newline, and the
+        // interdiff's synthesized patch is `joined(separator:)` — but a patch from anywhere else
+        // does (`git diff` for one), and the cost of the difference is not cosmetic: an empty
+        // component falls into the "unchanged empty line" branch below, so it would be appended
+        // to *both* documents and inserted into *both* commentable sets. A reviewer could then
+        // put a comment on a line that is not in the diff, which GitHub refuses — taking the
+        // whole review with it. `UnifiedPatch.hunks(in:)` in ShepherdCore has always dropped it;
+        // this is the same rule, so the two readings of a patch agree.
+        if rawLines.last == "" { rawLines.removeLast() }
+
+        for rawLine in rawLines {
             if rawLine.hasPrefix("@@") {
                 if let current { result.append(current) }
                 current = header(rawLine).map {

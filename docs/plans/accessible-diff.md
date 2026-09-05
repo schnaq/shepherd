@@ -63,16 +63,36 @@ on each side** — are computed during the walk and then thrown away.
 So step one is a richer `Reconstruction`: a `[PatchLine]` alongside the two documents, each line
 carrying its kind, its original and modified numbers where they exist, and its text. **Derived in
 the same single walk that builds the strings**, so the two shapes cannot describe different files.
-That is the whole reason to do it inside `PatchReconstructor` rather than in a new parser next to
-it: a second parser is a second truth.
 
-And step one-and-a-half, which is worth doing on its own account: **move `PatchReconstructor` into
-`Packages/ShepherdKit`.** It imports nothing but `Foundation` and `ShepherdCore` today, and both
-types it needs — `ChangedFile` and `DiffSide` — are already in `ShepherdCore`. But it sits in the
-app target, so `PatchReconstructorTests` runs only under `xcodebuild` on the macOS runner. The
-patch parser is the most fiddly pure logic in the app (twelve tests, and they cover a deleted SQL
-comment that looks like a `---` header) and it is *not exercised on the Linux leg at all*. That is
-backwards, and it makes the claim "this new view's text is testable on Linux" false until it moves.
+Which brings up the thing this plan first got wrong. "A second parser is a second truth" was
+written as a warning about a hypothetical. There are **already two**, deliberately: `UnifiedPatch`
+in `ShepherdCore` (ADR 0028's interdiff — the head side of a patch, plus hunk and header
+reading/writing, Linux-tested) and `PatchReconstructor` in the app target (both sides plus the
+commentable sets, macOS-tested). `UnifiedPatch`'s own doc comment says why — *"that type stays
+where it is, because it also produces the viewer's commentable-line sets and is tested against the
+bridge"* — and that was a reasonable call for two consumers with different needs.
+
+The duplication is not abstract. `header(_:)` is the same twenty lines in both files, and
+`hunks(in:)` was the same walk with **one behavioural difference**: `UnifiedPatch` drops the empty
+component a terminating newline leaves behind, and `PatchReconstructor` did not. Two functions of
+the same name and contract disagreeing about the end of a file is not a style question — the empty
+component reads as an unchanged empty line, so it would have been appended to both documents *and*
+inserted into both commentable sets, and a comment on a line that is not in the diff is one GitHub
+refuses along with the whole review. It was not a live bug, and that was checked rather than
+assumed: GitHub's `files[].patch` ends without a newline (read off a real API response) and the
+interdiff's synthesized patch is `joined(separator: "\n")`. It was a trap set for the third
+producer, and `git diff` is one. The guard and its test are now in both.
+
+A third consumer is what changes the calculus. Two parsers for two shapes was a trade; three
+consumers where two want the same structured lines is a reason to have **one** parser producing a
+`[PatchLine]`, from which the two documents, the commentable sets and the interdiff's head-side
+array are all derived. That is step one properly stated, and it subsumes step one-and-a-half:
+**`PatchReconstructor` moves into `Packages/ShepherdKit`**, beside `UnifiedPatch`. It imports
+nothing but `Foundation` and `ShepherdCore` today and both types it needs — `ChangedFile` and
+`DiffSide` — are already there. As things stand it sits in the app target, so its twelve tests
+(they cover a deleted SQL comment that serialises as a `---` header) run only under `xcodebuild` on
+the macOS runner: the app's fiddliest pure logic is *not exercised on the Linux leg at all*, which
+also makes the claim "this new view's text is testable on Linux" false until it moves.
 
 ## The view
 

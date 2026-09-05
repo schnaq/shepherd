@@ -32,6 +32,29 @@ final class PatchReconstructorTests: XCTestCase {
         XCTAssertEqual(result.firstChangedLine, 2)
     }
 
+    func testATerminatingNewlineChangesNothing() {
+        // No producer this app has ends a patch with a newline — GitHub's `files[].patch` does
+        // not, and the interdiff synthesizes its patch with `joined(separator:)` — so this is a
+        // guard against a third one rather than a fix. It is worth a test because of what the
+        // difference costs: the empty component after the newline reads as an unchanged empty
+        // line, which lands in *both* documents and in *both* commentable sets, and a comment on
+        // a line that is not in the diff is one GitHub refuses along with the whole review.
+        let patch = """
+            @@ -1,3 +1,3 @@
+             let a = 1
+            -let b = 2
+            +let b = 3
+             let c = 4
+            """
+        let terminated = PatchReconstructor.reconstruct(patch: patch + "\n")
+        let bare = PatchReconstructor.reconstruct(patch: patch)
+
+        XCTAssertEqual(terminated, bare, "a terminating newline changed the reconstruction")
+        XCTAssertEqual(terminated.modified, "let a = 1\nlet b = 3\nlet c = 4")
+        XCTAssertEqual(terminated.commentableModifiedLines, [1, 2, 3], "line 4 does not exist")
+        XCTAssertEqual(terminated.commentableOriginalLines, [1, 2, 3], "line 4 does not exist")
+    }
+
     func testAddedFileHasAnEmptyOriginal() {
         let patch = """
             @@ -0,0 +1,2 @@
