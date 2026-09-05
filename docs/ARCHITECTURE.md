@@ -983,6 +983,15 @@ takes a router.
   than letters on purpose: a letter must be free both as a bare key here and as the second half
   of `r …` / `g …`, and the editor cannot see that a prefix is armed on this side. Every one of
   these keys is swallowed only once it has done something, so an unhandled key still travels.
+- The diff has **two** renderers: Monaco, as above, and a native SwiftUI list
+  (`DiffListView`/`DiffRowText`) that draws the same file as one row per line, walkable with `j`/`k`
+  and announced to VoiceOver one row at a time. `DiffRenderer` (`automatic` / `web` / `native`)
+  picks between them — `automatic` follows `accessibilityVoiceOverEnabled` live, so the renderer
+  can swap mid-review. Only three things have to agree between them: which lines may carry a
+  comment (`ReviewModel.commentableLineSets(in:)`), what a comment means
+  (`handle(.addComment(line:side:))`), and which round is showing (`roundView`); syntax
+  highlighting, word-level diffs, side-by-side layout, folding and the minimap are free to differ,
+  and stay Monaco-only (ADR 0034).
 - Dark & light mode from day one: semantic color tokens only (`Color.shepherd*` asset
   catalog), theme piped into Monaco via `setTheme`.
 - Text sizes go through `Theme.type(_:weight:)` (or `Theme.mono(_:weight:)`), which name a

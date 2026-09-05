@@ -12,6 +12,11 @@ This is what that would take. It is written as a plan and not as an ADR on purpo
 decided the *opposite* thing on good grounds, and a second renderer is a decision to make with eyes
 open, not a detail to slip in. The ADR gets written when it is built.
 
+**It is built, 2026-09-05.** The decision this plan worked out, and the shape it shipped in, are
+recorded in [ADR 0034](../adr/0034-native-diff-renderer.md) rather than repeated here. What follows
+is kept as the path that led there — the reasoning that decided the contract, and the two things
+this plan got wrong along the way and corrected — with what shipped marked in place.
+
 ## What ADR 0003 actually decided, and what this is not
 
 ADR 0003 chose Monaco in a `WKWebView` because there is no Monaco-equivalent Swift library and
@@ -35,9 +40,9 @@ line rules and the cursor's line rules were extracted into one function — `cur
 conclusions about which lines may carry a comment."* The same move, one level up:
 
 1. **Which lines may carry a comment.** Today `PatchReconstructor.Reconstruction` carries
-   `commentableOriginalLines` / `commentableModifiedLines`, and `ReviewModel.commentableLines(in:)`
-   narrows them for the "since my review" round (ADR 0028). Both renderers read *that*, computed
-   once. A padding line the reconstruction inserted between hunks must be as unclickable in the
+   `commentableOriginalLines` / `commentableModifiedLines`, and a narrowing for the "since my
+   review" round (ADR 0028) applies on top of them. Both renderers must read *that*, computed once.
+   A padding line the reconstruction inserted between hunks must be as unclickable in the
    native list as it is in Monaco, because GitHub rejects a comment on one and rejects the whole
    review with it.
 2. **What a comment means.** A line number plus a side, through the same `ReviewModel` entry point
@@ -51,6 +56,12 @@ side-by-side layout, folding, the minimap. **Feature parity is not the goal and 
 otherwise is what would make this expensive.** The native view is a different product — a linear,
 walkable, announced list of hunks — and it earns its place by being better at the thing Monaco is
 worst at, not by catching up.
+
+**Built exactly this way.** `ReviewModel.commentableLineSets(in:)` is the one function that answers
+item 1, with `commentableLines(in:)` as only its sorted-array spelling for the bridge; the native
+list's `requestCommentOnSelectedRow()` is item 2, ending at the same `handle(_:)`'s `.addComment`
+the bridge event reaches; and the list reads `roundView` for item 3 exactly as recommended, never
+setting it. ADR 0034 records the contract as shipped.
 
 ## The prerequisite: the model throws away exactly what a list needs
 
@@ -122,8 +133,16 @@ the claim "this new view's text is testable on Linux" false until it moved.
 
 **That half is done, 2026-09-05**, as a pure move and nothing else: the type is
 `ShepherdCore/Review/PatchReconstructor.swift` with its members `public`, and its twelve tests are
-`ShepherdCoreTests/PatchReconstructorTests.swift`. The per-line model is not done — one walk that
-everything else derives from is still the design step this section is about.
+`ShepherdCoreTests/PatchReconstructorTests.swift`.
+
+**The per-line model is done too, the same day.** Not as a new type — `PatchRow` moved out of
+`Claims/ClaimPattern.swift` into `Review/`, exactly as this section predicted a page ago, because a
+patch line is a patch line whoever walked it. `Reconstruction` gained `rows: [DiffRow]`, an enum of
+a hunk header or a `PatchRow`, filled in during the same walk that builds the two documents and
+the commentable sets — so a row's line number and the number that walk put in a commentable set are
+the same variable, not two counters that could drift. This is not the "one walk" that would also
+collapse `PatchWalker` and `IntelligenceDiffWindow.rows(in:)`; that collapse is still not done, and
+still not mechanical, for the reason the paragraphs above it give.
 
 ## The view
 
@@ -154,6 +173,14 @@ exist to render Markdown into sanitised HTML for a web view; a native row wants 
 SwiftUI's own Markdown. That is one less HTML rendering path in the app, which is a security
 simplification as well as a simpler view.
 
+**Built as described.** `DiffListView` is the `ScrollViewReader` + `LazyVStack`, `DiffRowText` is
+the app-side extension that turns a row into one sentence, and the counts come from
+`threadsForSelectedFile` / `draft?.comments` exactly as planned. Two differences from the sketch
+above, both narrower than it: a context row's kind is not spoken at all, not merely de-emphasised —
+"Context." two hundred times turned out to be worse than saying nothing — and `j`/`k` land on a
+hunk header rather than skipping it, so a reader who cannot see the gap between hunks is told about
+it instead of having it skipped past. ADR 0034 records both as decisions, not omissions.
+
 ## Where it plugs in
 
 One branch. `ReviewScreen.diffOrPlaceholder`'s `else if let content = model.selectedContent`
@@ -161,32 +188,35 @@ currently builds `DiffViewerView(…)`; the switch chooses between that and the 
 around it — the file header, the round switch, `SinceReviewFindingsView`, the composer bar, the
 thread popover — keys off `model` rather than off which renderer is drawing, so none of it moves.
 
-**Which renderer, and who decides.** The recommendation is two rules rather than a three-way
-control: the native list is used when VoiceOver is running, *and* a setting in the existing DIFF
-VIEWER card can ask for it always. Automatic-on-VoiceOver because the Monaco path's screen-reader
-behaviour is still unverified and this one is built for it; a setting as well because the plan's own
-argument is that a walkable diff is a better product for everybody, and a sighted keyboard user
-should be able to choose it. A new `AppSettings` boolean carries the second obligation
-`CONTRIBUTING.md` states: `SyncedSettingsDocument`, both directions of `SettingsSyncApplier`, and a
-`SettingsSyncTests` round-trip, or it silently stops travelling between a user's Macs.
+**Built this way**, with the open question below decided rather than left open. `usesNativeList` in
+`ReviewScreen` is the one branch, and it reads `model.settings.diffRenderer`.
 
-Open question worth naming rather than deciding here: whether a VoiceOver user who *prefers* Monaco
-can get it back. Two rules cannot express that; a three-state enum can (`automatic` / `web` /
-`native`), which is what `Tab` and `RoundView` already are. It costs one enum and one picker, and
-it is the difference between a default and a lock.
+Open question, decided rather than merely named: whether a VoiceOver user who *prefers* Monaco can
+get it back. Two rules — automatic on VoiceOver, plus a setting that forces the list on — cannot
+express that, because "automatic" would still be a lock the moment VoiceOver is running. `DiffRenderer`
+is a three-state enum instead (`automatic` / `web` / `native`), the shape `Tab` and `RoundView`
+already use, so Monaco stays reachable for a screen-reader user who wants it. It carries the sync
+obligation `CONTRIBUTING.md` states — `SyncedSettingsDocument`, both directions of
+`SettingsSyncApplier`, a `SettingsSyncTests` round-trip — same as any other setting. ADR 0034
+records why three states rather than two rules.
 
-## What it costs, honestly
+## What it cost, honestly
 
 - A second renderer to keep in step with the first — bounded by the three-point contract above, and
-  no wider. If that boundary is not held, this becomes the thing ADR 0003 avoided.
-- `PatchReconstructor` gains a per-line model. The move to ShepherdCore it needed first is already
-  paid for and cost less than this bullet expected — no `project.yml` change (both targets glob
-  their directories) and no import change at any call site — and the app's most fiddly pure logic
-  already runs on both CI legs. What is left is the per-line model itself.
-- A localisation surface of the same order as `EvidenceFactText` — a sentence per line kind, plus
-  the counts. The gate (`Scripts/check-localization.py`) will name every key that is missing, and
-  an interpolated `Int` also needs its line in that script's hand-checked type table.
-- One setting, with the sync obligation.
+  no wider. That boundary is now something to hold, not just a design intent; ADR 0034 is where it
+  is written down as a decision rather than a hope.
+- `PatchReconstructor` gained a per-line model, reusing `PatchRow` rather than inventing one — the
+  move to ShepherdCore it needed first cost less than this bullet expected (no `project.yml` change,
+  no import change at any call site), and paid for itself again here.
+- A localisation surface of the same order as `EvidenceFactText`, delivered: a sentence per line
+  kind, the line-number phrasing, the counts, and two new entries
+  (`originalStart`, `modifiedStart`) in `Scripts/check-localization.py`'s hand-checked `Int` table
+  for the hunk header.
+- One setting, with the sync obligation paid: `SyncedSettingsDocument`, both directions of
+  `SettingsSyncApplier`, a `SettingsSyncTests` round-trip.
+- Two costs this plan did not anticipate in this much detail, named honestly in ADR 0034 instead of
+  here: the CI-diagnosis card's `file:line` link reaches Monaco but not the native list yet, and the
+  reconstruction is now parsed once per keystroke in the list rather than once per file selection.
 
 ## What this does not settle
 
@@ -194,9 +224,9 @@ Whether the announcements are *good*. A sentence that reads correctly in a plan 
 exhausting at forty lines a minute, and the only way to know is a Mac, VoiceOver, and somebody
 listening — the same session that owes an answer on §1's `setAccessibility`, on §3's Larger Text,
 and on the contrast pass. Those four checks are written out in order in
-[accessibility.md](accessibility.md) § "What to check on a Mac". This plan makes that session worth
-having: today there is nothing to listen to but Monaco.
+[accessibility.md](accessibility.md) § "What to check on a Mac", and check 2 there now has
+something to listen to besides Monaco.
 
-And one of those checks decides whether this plan is needed at all: if VoiceOver already reads the
-Monaco diff well, the native list drops from "the real answer" to a nice-to-have for keyboard users.
-It is worth building either way, but not with the same urgency, and that is not knowable from here.
+That check no longer decides whether this plan was worth carrying out — it was, and it is built —
+but it still decides how much of the wording above needs to change before the list is worth
+choosing over Monaco day to day.

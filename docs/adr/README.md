@@ -37,6 +37,8 @@ founder interview (2026-08-31) combined with three research reports (see
 | 0029 | [The feedback loop: a recurring finding becomes a drafted agent rule](0029-feedback-loop-agent-rules.md) | Accepted (v1.2) |
 | 0030 | [The session back-channel: a finding addressed to the session that wrote the code, through the user's own CLI](0030-session-back-channel.md) | Accepted (v1.2) |
 | 0032 | [Issues as a second inbox citizen: own sweep, own tables, own search index](0032-issues-inbox.md) | Accepted |
+| 0033 | [A list row says what it shows, and the gaps are written down rather than implied](0033-accessibility.md) | Accepted |
+| 0034 | [A native diff renderer beside Monaco, held to a three-point contract](0034-native-diff-renderer.md) | Accepted |
 
 Format: lightweight [MADR](https://adr.github.io/madr/)-style — Context, Decision, Consequences.
 New decisions get the next number; superseded ADRs are marked, never deleted.

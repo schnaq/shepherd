@@ -347,17 +347,19 @@ The lists now say what they show, and colour is no longer the only carrier anywh
 remain and each is a project rather than a label; what they would take is in
 [`docs/plans/accessibility.md`](plans/accessibility.md).
 
-- [ ] **The diff is silent with VoiceOver.** Half done, 2026-09-04: the app now tells the bundle
-      when VoiceOver is running (`setAccessibility`), because Monaco's own `auto` detection is a
-      browser's and cannot see it from inside a `WKWebView`, and each pane says which pane it is.
-      Whether WebKit carries what Monaco puts in its accessibility tree needs a Mac and somebody
-      listening; the real answer is still a native, keyboard-walkable rendering of the patch,
-      which is a better diff for everybody and now has a plan of its own
-      (`docs/plans/accessible-diff.md`): what two renderers must agree on is three things — which
-      lines may carry a comment, what a comment means, and which round is showing — and everything
-      else, syntax highlighting included, is deliberately free to differ. `PatchReconstructor` has
-      fewer of the pieces than that bullet assumed: it keeps two padded documents and two line
-      sets, and throws away per line whether it was added, deleted or context
+- [ ] **The diff is silent with VoiceOver.** Both halves built, 2026-09-05. The cheap half shipped
+      2026-09-04: the app tells the bundle when VoiceOver is running (`setAccessibility`), because
+      Monaco's own `auto` detection is a browser's and cannot see it from inside a `WKWebView`, and
+      each pane says which pane it is. The expensive half has now shipped too: a second, native
+      rendering of the diff, one row per line, walkable with `j`/`k` and the arrow keys and
+      announced one row at a time — chosen automatically while VoiceOver is running, or by hand in
+      Settings → Appearance (Automatic / Rich viewer / Line list, ADR 0034). What the two
+      renderers must agree on is three things — which lines may carry a comment, what a comment
+      means, and which round is showing — and everything else, syntax highlighting included, is
+      deliberately free to differ, which is what keeps a second renderer from becoming two to
+      maintain. What is still unverified is whether either renderer actually reads well: that needs
+      a Mac, VoiceOver and somebody listening, in `docs/plans/accessibility.md` § "What to check on
+      a Mac"
 - [x] **An inline comment needs a mouse.** Fixed 2026-09-04: `c` inside the diff comments on the
       cursor's line through the same line rules the pointer's path uses, `c` outside it hands the
       keyboard over through a new `focusEditor` bridge command, and `[` / `]` move between the

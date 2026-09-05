@@ -7,7 +7,7 @@ not fit in a label, and this is what each of the three would actually take.
 
 Ordered by what a person hits first, which is not the order of effort.
 
-## 1. The diff is silent (the big one) — **cheap half done, 2026-09-04**
+## 1. The diff is silent (the big one) — **both halves built, 2026-09-05**
 
 **What is true today.** The diff pane is `monaco.editor.createDiffEditor` in a `WKWebView`
 (ADR 0003), `readOnly: true`, with Monaco's `accessibilitySupport` left at `'auto'`. Monaco's
@@ -53,16 +53,25 @@ both when it stops, so the cost is paid only by the person who needs it. And eac
 because the app is localised and the bundle is not. Monaco's own label is the same sentence on
 both sides, which is the one fact a person needs the moment `c` hands them a cursor.
 
-**What is still open, and it is the important half.** None of this can be verified from a Linux
+**What was still open, and then built.** The Monaco half of this cannot be verified from a Linux
 container: whether WebKit's accessibility tree carries what Monaco puts in it needs a Mac,
-VoiceOver, and somebody listening. Until somebody has listened, the honest description of the diff
-is "possibly readable" rather than "readable". The native rendering above is still the real answer
-and is still worth building for its own sake — it now has a plan of its own,
-[accessible-diff.md](accessible-diff.md), which works out what has to stay in step between two
-renderers and what is free to differ, because that boundary is the whole cost. One thing it turned
-up that belongs here: `PatchReconstructor`, the app's fiddliest piece of pure logic, sat in the app
-target and so was not exercised on the Linux CI leg at all. It has since moved into
-`ShepherdCore/Review/`, its twelve tests with it, and both legs run them now.
+VoiceOver, and somebody listening. Until somebody has listened, the honest description of the
+Monaco path is "possibly readable" rather than "readable" — but the diff is no longer only that
+path. The native rendering this section called the real answer is built: a second, native list of
+hunk headers and lines, one row per line, walkable with `j`/`k` and the arrow keys and announced to
+VoiceOver one row at a time, chosen automatically the moment VoiceOver starts running or by hand in
+Settings. It has a plan of its own, [accessible-diff.md](accessible-diff.md), which worked out what
+has to stay in step between two renderers and what is free to differ — the whole of the cost — and
+the decision itself, once it shipped, is recorded in
+[ADR 0034](../adr/0034-native-diff-renderer.md). One thing the plan turned up that belongs here:
+`PatchReconstructor`, the app's fiddliest piece of pure logic, sat in the app target and so was not
+exercised on the Linux CI leg at all. It has since moved into `ShepherdCore/Review/`, its tests with
+it, and both legs run them now.
+
+There is, deliberately, still something unverified: whether the native list's own announcements
+read well aloud is exactly as unknowable from here as Monaco's accessibility tree was. That is
+check 2 below, and it now asks a narrower question than it used to — not whether to build the
+native list, but how much of its wording needs to change before it is worth reaching for.
 
 ## 2. An inline comment needs a mouse — **done, 2026-09-04**
 
@@ -205,19 +214,30 @@ the other migrated surfaces. Everything else is still fixed by design, so a scre
 grows is not necessarily a bug — check it against the list in `Scripts/check-type-scale.py`.
 
 **2. Does VoiceOver read the diff?** (§1, the one this whole plan turns on.) ⌘F5, open any pull
-request, pick a file. The app now tells Monaco a screen reader is listening, and each pane says
-which pane it is.
+request, pick a file. There are now two renderers to check, in Settings → Appearance → Diff
+renderer: the app tells Monaco a screen reader is listening and each pane says which one it is; the
+native list (ADR 0034) draws the same diff as one row per line and is meant to be read this way
+from the start.
 
+Rich viewer (Monaco):
 - Does VO announce entering the editor, and does it say *which side* — "Original, ReviewModel.swift"
   or "Geändert, ReviewModel.swift"?
 - Do the arrow keys move it line by line, and does it read the line?
 - Does `c` open the composer on the line VO is on? Does `[` cross to the original pane and read
   from there?
 
-*It reads* → the cheap half was most of the answer and the native list becomes a nice-to-have.
-*It does not, or only in fragments* → that is the answer the native list exists for, and
-[accessible-diff.md](accessible-diff.md) is what it would take. Either way this is the fact
-nothing in the repository can supply.
+Line list (native):
+- Does `j`/`k` read each row as one sentence — kind, line number, code, comment count?
+- Does a hunk header get announced when the cursor lands on it, and does a context row stay quiet
+  about being context?
+- Does `c` open the composer on the selected row?
+
+This check no longer decides *whether* the native list was worth building — it is built either way
+— it decides how much of what it says needs to change before it is worth reaching for over Monaco:
+*Monaco reads well* → the list is a keyboard convenience more than a necessity for this reviewer.
+*Monaco reads poorly or not at all* → the list is where their diff review actually happens, and its
+wording is what check 4 below is about. Either way this is the fact nothing in the repository can
+supply.
 
 **3. Contrast.** Deliberately not audited from here, because two themes resolved per appearance
 means measuring rendered pairs rather than reading hex values. Digital Color Meter on the pairs
@@ -226,9 +246,10 @@ backgrounds — in both appearances. WCAG AA is 4.5:1 for text, 3:1 for a graphi
 carries information. Colour is nowhere the only carrier any more (ADR 0033), so a failure here is
 a legibility bug rather than a comprehension one.
 
-**4. How the announcements actually sound.** Only once (2) says something is being read. A sentence
-that reads well in a document can be exhausting at forty lines a minute — that is a judgement about
-wording, and wording is cheap to change once somebody has listened.
+**4. How the announcements actually sound.** Only once (2) says something is being read — on either
+renderer, and now there is the native list to judge as well as Monaco. A sentence that reads well in
+a document can be exhausting at forty lines a minute — that is a judgement about wording, and
+wording is cheap to change once somebody has listened.
 
 What to bring back: for (1) a yes or no, for (2) roughly where it breaks down, for (3) the pairs
 that fail. Nothing needs to be measured precisely; every one of these is a decision about what to

@@ -230,6 +230,28 @@ keys deliberately do nothing there. A line the diff does not actually contain, o
 blank ones that pad the gaps between hunks, is refused exactly as it is for a click, because GitHub
 refuses a comment on it and the review with it.
 
+### A diff you can walk, line by line
+
+Settings → Appearance → Diff renderer offers three choices: **Automatic**, **Rich viewer**, and
+**Line list**. Rich viewer is Monaco, described above. Line list is a second, native rendering of
+the same diff — hunk headers and lines in one column, each line its own row, walkable with `j`/`k`
+and the arrow keys, and announced to VoiceOver one row at a time rather than as an undifferentiated
+block of text. Automatic, the default, switches to the line list the moment VoiceOver starts
+running and back to Monaco when it stops; Rich viewer and Line list pin one or the other regardless,
+for a screen-reader user who prefers Monaco's shortcuts as much as for a sighted keyboard user who
+simply likes the list better. Font size and line wrapping follow whichever is showing; the
+side-by-side/inline switch has nothing to draw in a single column, so the list ignores it
+([ADR 0034](adr/0034-native-diff-renderer.md)).
+
+Commenting works the same way it does in Monaco — `j`/`k` to the line, `c` to open the composer —
+but there is no pane to cross: a deleted line is simply a row in the list, so reaching it needs no
+bracket at all. The list does not attempt syntax highlighting, word-level diffs, side-by-side
+layout, folding, or a minimap; those stay Monaco's, on purpose, so the two renderers stay in step
+only on what a comment needs and differ freely on everything else. One gap, named rather than
+hidden: a `file:line` link — from the "Why is CI red?" card, the claims card, or a "Since your
+review" finding — opens the right file in the line list exactly as it does in the rich viewer, but
+does not yet scroll to the line inside it.
+
 ### Review-priority file ordering
 
 Changed files are grouped and ranked by what deserves your attention first — deterministic
@@ -299,7 +321,8 @@ to the evidence for it, one line each:
   or commit messages.* — with a ✓ or a · in front of each bullet.
 
 Every fact is a sentence and every fact with a file behind it is a link: one click puts you on that
-line in the diff. On a German Mac the facts are German too, down to the plurals — the paths, the
+line in the diff (in the rich viewer — see "A diff you can walk" below for the line list). On a
+German Mac the facts are German too, down to the plurals — the paths, the
 issue numbers and the quoted lines of code are of course left exactly as they are. A ✗ line also
 offers **Turn into a comment**, which drops the claim and the facts under it into your review
 summary — in **English**, because that comment goes to GitHub, where the author reads it — and
@@ -363,7 +386,8 @@ against.
 Under it, your findings from that round, each with what became of it: **Addressed** when the lines
 your comment hangs on changed, **Unchanged** when neither the lines nor the thread moved, **Moved**
 when the file was renamed or the lines around it shifted, **Replied** when somebody answered you.
-Click one to jump to the file and line. "Addressed" says the lines changed and nothing more —
+Click one to jump to the file and line, the same reach the claims card's links have above.
+"Addressed" says the lines changed and nothing more —
 Shepherd has not judged the fix, the thread stays open, and resolving it is still your button. The
 inbox row carries the short version before you open anything: *"3 rounds · 2 findings unchanged"*.
 

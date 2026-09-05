@@ -57,6 +57,12 @@ npm run build   # emits ../../Shepherd/Resources/DiffViewer/dist — commit the 
 The Swift⇄web bridge protocol is a contract: change `src/bridge/protocol.ts`,
 `BridgeProtocol.swift`, the shared fixtures, and `docs/ARCHITECTURE.md` together.
 
+The diff has a second renderer beside this one: `Shepherd/Features/DiffViewer/DiffListView.swift`
+and `DiffRowText.swift` draw the same patch natively for the keyboard and VoiceOver (ADR 0034). A
+change to what a diff row shows or which lines may carry a comment has two renderers to keep in
+step, not one — check `PatchReconstructor.Reconstruction.rows` and `ReviewModel.commentableLineSets(in:)`
+before assuming a bridge-side fix is the whole fix.
+
 ## Working on the release pipeline
 
 `Scripts/release.sh` is the whole thing — build, Developer-ID sign, DMG, notarize, staple,
