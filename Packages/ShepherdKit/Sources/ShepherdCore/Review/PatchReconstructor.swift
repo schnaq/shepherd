@@ -15,6 +15,13 @@ import Foundation
 /// requirement: review threads and draft comments are anchored by absolute line number, and an
 /// off-by-N would attach a comment to the wrong line. Because the filler is identical on both
 /// sides, Monaco treats it as unchanged and never highlights it.
+///
+/// A native list needs the opposite of two documents: it has to announce each line as it draws
+/// it — added, removed or context, and which number it carries on each side. Those facts are
+/// known during the walk anyway, so ``Reconstruction/rows`` keeps them instead of discarding
+/// them. One walk answers both questions, which is the point: a second walk is a second reading
+/// of the same patch, and two readings that disagree are a bug waiting for the input that tells
+/// them apart.
 public enum PatchReconstructor {
     /// The two documents a diff editor needs.
     public struct Reconstruction: Hashable, Sendable {
@@ -33,6 +40,8 @@ public enum PatchReconstructor {
         public var commentableOriginalLines: Set<Int>
         /// The lines of ``modified`` that came from the patch rather than from the padding.
         public var commentableModifiedLines: Set<Int>
+        /// The diff as a walkable sequence of hunk headers and lines.
+        public var rows: [DiffRow]
 
         // Deliberately no `public` initialiser. The two commentable-line sets are derived from
         // the same walk that built the two documents, so a ``Reconstruction`` whose fields were
@@ -47,6 +56,19 @@ public enum PatchReconstructor {
         public func commentableLines(on side: DiffSide) -> Set<Int> {
             side == .left ? commentableOriginalLines : commentableModifiedLines
         }
+    }
+
+    /// One entry of ``Reconstruction/rows``.
+    ///
+    /// It is nested here beside ``Reconstruction`` because it means nothing on its own: a row is
+    /// a row *of a reconstruction*, numbered by the same walk, and reading it as
+    /// `PatchReconstructor.DiffRow` says so at every use site. ``PatchRow`` is the type that had
+    /// to move out, because a patch line is a patch line whoever walked it.
+    public enum DiffRow: Hashable, Sendable {
+        /// A hunk's `@@` header, carrying the line each side starts at.
+        case hunk(originalStart: Int, modifiedStart: Int)
+        /// One line of the patch.
+        case line(PatchRow)
     }
 
     /// Reconstructs both sides of a changed file.
@@ -66,10 +88,23 @@ public enum PatchReconstructor {
         var firstChangedLine: Int?
         var commentableOriginal: Set<Int> = []
         var commentableModified: Set<Int> = []
+        // Every row below reads its line numbers off `original.count` and `modified.count` —
+        // the same two counts that fill the commentable-line sets beside it — rather than off a
+        // pair of counters kept for the rows alone. A row's number and the set it must belong
+        // to are then literally the same variable, and cannot drift apart. A pair of counters
+        // that are supposed to agree is precisely the shape of the bug fixed on this branch
+        // last week, where a trailing newline made two copies of `hunks(in:)` disagree about
+        // the end of a file; what a drift would cost here is a row offering a comment on a line
+        // the sets do not contain, and GitHub refuses such a comment along with the whole
+        // review.
+        var rows: [DiffRow] = []
 
         for hunk in UnifiedPatch.hunks(in: patch) {
             while original.count < max(0, hunk.originalStart - 1) { original.append("") }
             while modified.count < max(0, hunk.modifiedStart - 1) { modified.append("") }
+            // The inter-hunk padding above produces no rows: a list shows the hunks with a
+            // header between them, which is what the header row is for.
+            rows.append(.hunk(originalStart: hunk.originalStart, modifiedStart: hunk.modifiedStart))
 
             for line in hunk.lines {
                 guard let marker = line.first else {
@@ -78,6 +113,16 @@ public enum PatchReconstructor {
                     modified.append("")
                     commentableOriginal.insert(original.count)
                     commentableModified.insert(modified.count)
+                    rows.append(
+                        .line(
+                            PatchRow(
+                                kind: .context,
+                                text: "",
+                                baseLine: original.count,
+                                headLine: modified.count
+                            )
+                        )
+                    )
                     continue
                 }
                 let content = String(line.dropFirst())
@@ -86,10 +131,34 @@ public enum PatchReconstructor {
                     modified.append(content)
                     commentableModified.insert(modified.count)
                     if firstChangedLine == nil { firstChangedLine = modified.count }
+                    // The base side has no line for an addition, so it names the base line the
+                    // addition sits in front of.
+                    rows.append(
+                        .line(
+                            PatchRow(
+                                kind: .added,
+                                text: content,
+                                baseLine: original.count + 1,
+                                headLine: modified.count
+                            )
+                        )
+                    )
                 case "-":
                     original.append(content)
                     commentableOriginal.insert(original.count)
                     if firstChangedLine == nil { firstChangedLine = max(1, modified.count + 1) }
+                    // Mirror image: the deleted line has no head-side number, so it names the
+                    // head line the deletion sits in front of.
+                    rows.append(
+                        .line(
+                            PatchRow(
+                                kind: .removed,
+                                text: content,
+                                baseLine: original.count,
+                                headLine: modified.count + 1
+                            )
+                        )
+                    )
                 case "\\":
                     // "\ No newline at end of file" — metadata, not content.
                     continue
@@ -100,6 +169,16 @@ public enum PatchReconstructor {
                     modified.append(content)
                     commentableOriginal.insert(original.count)
                     commentableModified.insert(modified.count)
+                    rows.append(
+                        .line(
+                            PatchRow(
+                                kind: .context,
+                                text: content,
+                                baseLine: original.count,
+                                headLine: modified.count
+                            )
+                        )
+                    )
                 }
             }
         }
@@ -109,7 +188,8 @@ public enum PatchReconstructor {
             modified: modified.joined(separator: "\n"),
             firstChangedLine: firstChangedLine,
             commentableOriginalLines: commentableOriginal,
-            commentableModifiedLines: commentableModified
+            commentableModifiedLines: commentableModified,
+            rows: rows
         )
     }
 }

@@ -264,36 +264,6 @@ enum ClaimText {
     }
 }
 
-/// One line of a unified diff with the line numbers it sits at on both sides.
-///
-/// Only the head-side number is used for a link (that is the number GitHub's review API and the
-/// diff viewer both speak), but the base-side one is tracked because a deletion advances only one
-/// of the two counters — getting that wrong shifts every line after the first hunk.
-struct PatchRow: Sendable, Hashable {
-    /// Which side of the diff a row exists on.
-    enum Kind: Sendable, Hashable {
-        /// A `+` row: it exists only after the change.
-        case added
-        /// A `-` row: it existed only before the change.
-        case removed
-        /// A context row: unchanged, present on both sides.
-        case context
-    }
-
-    /// Whether the row was added, removed or is context.
-    var kind: Kind
-    /// The row's text with the diff marker removed.
-    var text: String
-    /// The base-side line the row sits at, or would sit at.
-    var baseLine: Int
-    /// The head-side line the row sits at, or would sit at.
-    ///
-    /// For a removed row this is the head line the deletion sits *in front of* — the line a
-    /// reviewer following a link lands on, because the deleted line itself has no head-side
-    /// number of its own.
-    var headLine: Int
-}
-
 /// Walks a unified diff into rows, tracking both sides' line numbers.
 ///
 /// The arithmetic is ``IntelligenceDiffWindow``'s, deliberately: that is the numbering GitHub's

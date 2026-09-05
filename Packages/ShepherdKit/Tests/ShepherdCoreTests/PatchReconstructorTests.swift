@@ -207,4 +207,218 @@ final class PatchReconstructorTests: XCTestCase {
         let file = ChangedFile(path: "logo.png", status: .modified, patch: nil)
         XCTAssertNil(PatchReconstructor.reconstruct(file))
     }
+
+    // MARK: - Rows
+
+    func testTheRowsOfASimpleModificationNameBothSidesOfEveryLine() {
+        let patch = """
+            @@ -1,3 +1,3 @@
+             let a = 1
+            -let b = 2
+            +let b = 3
+             let c = 4
+            """
+        let result = PatchReconstructor.reconstruct(patch: patch)
+
+        // Pinned as one literal so that a kind, a text and either line number cannot change
+        // without this failing: the four facts a list row renders are one fact together.
+        XCTAssertEqual(
+            result.rows,
+            [
+                .hunk(originalStart: 1, modifiedStart: 1),
+                .line(PatchRow(kind: .context, text: "let a = 1", baseLine: 1, headLine: 1)),
+                .line(PatchRow(kind: .removed, text: "let b = 2", baseLine: 2, headLine: 2)),
+                .line(PatchRow(kind: .added, text: "let b = 3", baseLine: 3, headLine: 2)),
+                .line(PatchRow(kind: .context, text: "let c = 4", baseLine: 3, headLine: 3)),
+            ]
+        )
+    }
+
+    func testARemovedRowNamesTheHeadLineTheDeletionSitsInFrontOf() {
+        // Two additions before the deletion pull the two sides apart, so the answer differs
+        // from the head-side count at the moment the deletion is read. Without that gap the
+        // right answer and the naive one coincide and the test proves nothing.
+        let result = PatchReconstructor.reconstruct(patch: Self.twoSidesPulledApart)
+        let removed = Self.lineRows(of: result).filter { $0.kind == .removed }
+
+        XCTAssertEqual(removed.count, 1)
+        XCTAssertEqual(removed.first?.text, "three")
+        XCTAssertEqual(removed.first?.baseLine, 3, "the deleted line is base line 3")
+        XCTAssertEqual(
+            removed.first?.headLine,
+            5,
+            "the deletion sits in front of head line 5, not at the head count of 4"
+        )
+        // …and head line 5 is the line a reviewer following that number lands on.
+        XCTAssertEqual(result.modified.components(separatedBy: "\n")[4], "four")
+    }
+
+    func testAnAddedRowNamesTheBaseLineTheAdditionSitsInFrontOf() {
+        let result = PatchReconstructor.reconstruct(patch: Self.twoSidesPulledApart)
+        let added = Self.lineRows(of: result).filter { $0.kind == .added }
+
+        XCTAssertEqual(added.map(\.text), ["inserted", "another"])
+        XCTAssertEqual(added.last?.headLine, 3, "the second addition is head line 3")
+        XCTAssertEqual(
+            added.last?.baseLine,
+            2,
+            "the addition sits in front of base line 2, not at the base count of 1"
+        )
+        // …and base line 2 is the line it was inserted ahead of.
+        XCTAssertEqual(result.original.components(separatedBy: "\n")[1], "two")
+    }
+
+    func testEveryRowsLineNumberIsCommentableOnTheSideItExistsOn() {
+        // The invariant the row model rests on: a row's number and the commentable set for its
+        // side come from the same count, so a row can never offer a comment on a line GitHub
+        // would reject. Checked over every row of a two-hunk patch, not a spot check.
+        let patch = """
+            @@ -1,3 +1,4 @@
+             alpha
+            -beta
+            +BETA
+            +gamma
+             delta
+            @@ -20,3 +21,3 @@
+             twenty
+            -twentyone
+            +TWENTYONE
+             twentytwo
+            """
+        let result = PatchReconstructor.reconstruct(patch: patch)
+        let rows = Self.lineRows(of: result)
+
+        for row in rows {
+            if row.kind != .added {
+                XCTAssertTrue(
+                    result.commentableOriginalLines.contains(row.baseLine),
+                    "\(row.kind) row \"\(row.text)\" claims base line \(row.baseLine)"
+                )
+            }
+            if row.kind != .removed {
+                XCTAssertTrue(
+                    result.commentableModifiedLines.contains(row.headLine),
+                    "\(row.kind) row \"\(row.text)\" claims head line \(row.headLine)"
+                )
+            }
+        }
+        // A loop that ran over the wrong rows, or over none, would pass in silence.
+        XCTAssertEqual(rows.count, 9)
+        XCTAssertEqual(rows.filter { $0.kind == .removed }.count, 2)
+        XCTAssertEqual(rows.filter { $0.kind == .added }.count, 3)
+        XCTAssertEqual(rows.filter { $0.kind == .context }.count, 4)
+    }
+
+    func testTheGapBetweenHunksProducesNoRows() {
+        // The same fixture the padding test uses: seven filler lines between the hunks, which
+        // are in both documents and in neither commentable set. A list shows hunks with a
+        // header between them, so the filler is not a row either.
+        let patch = """
+            @@ -1,2 +1,2 @@
+             one
+            -two
+            +TWO
+            @@ -10,2 +10,2 @@
+             ten
+            -eleven
+            +ELEVEN
+            """
+        let result = PatchReconstructor.reconstruct(patch: patch)
+
+        // Six patch lines and two headers, and nothing at all for the gap between them.
+        XCTAssertEqual(result.rows.count, 8)
+        for row in Self.lineRows(of: result) {
+            if row.kind != .added {
+                XCTAssertFalse(
+                    (3...9).contains(row.baseLine),
+                    "base line \(row.baseLine) is filler"
+                )
+            }
+            if row.kind != .removed {
+                XCTAssertFalse(
+                    (3...9).contains(row.headLine),
+                    "head line \(row.headLine) is filler"
+                )
+            }
+            XCTAssertFalse(row.text.isEmpty, "a filler line reached the rows")
+        }
+    }
+
+    func testTheNoNewlineMarkerProducesNoRow() {
+        let patch = """
+            @@ -1,1 +1,1 @@
+            -old
+            \\ No newline at end of file
+            +new
+            """
+        let result = PatchReconstructor.reconstruct(patch: patch)
+
+        // The marker is metadata about the file's last byte, not a line anyone can comment on,
+        // so it is absent from the rows exactly as it is absent from the two documents.
+        XCTAssertEqual(
+            result.rows,
+            [
+                .hunk(originalStart: 1, modifiedStart: 1),
+                .line(PatchRow(kind: .removed, text: "old", baseLine: 1, headLine: 1)),
+                .line(PatchRow(kind: .added, text: "new", baseLine: 2, headLine: 1)),
+            ]
+        )
+    }
+
+    func testATwoHunkPatchYieldsOneHeaderRowPerHunk() {
+        let result = PatchReconstructor.reconstruct(patch: Self.twoHunksWithUnequalStarts)
+        let headers = result.rows.filter { row -> Bool in
+            if case .hunk = row { return true }
+            return false
+        }
+
+        // The first hunk is a net addition of one line, so the second hunk starts one line
+        // further along on the head side than on the base side. A header that reported one of
+        // the two numbers for both sides would be caught here rather than by a reader.
+        XCTAssertEqual(
+            headers,
+            [.hunk(originalStart: 1, modifiedStart: 1), .hunk(originalStart: 20, modifiedStart: 21)]
+        )
+    }
+
+    // MARK: - Row fixtures and helpers
+
+    /// A hunk whose two sides drift apart: two lines added, then one removed, then context.
+    ///
+    /// Base is `one two three four`, head is `one inserted another two four`, so the removed
+    /// line's head number and the added lines' base numbers are all different from the count of
+    /// the side they were read on — which is what makes an assertion about them mean anything.
+    private static let twoSidesPulledApart = """
+        @@ -1,4 +1,5 @@
+         one
+        +inserted
+        +another
+         two
+        -three
+         four
+        """
+
+    private static let twoHunksWithUnequalStarts = """
+        @@ -1,3 +1,4 @@
+         alpha
+        -beta
+        +BETA
+        +gamma
+         delta
+        @@ -20,3 +21,3 @@
+         twenty
+        -twentyone
+        +TWENTYONE
+         twentytwo
+        """
+
+    /// The `.line` rows of a reconstruction, in order, with the headers dropped.
+    private static func lineRows(
+        of reconstruction: PatchReconstructor.Reconstruction
+    ) -> [PatchRow] {
+        reconstruction.rows.compactMap { row -> PatchRow? in
+            guard case let .line(patchRow) = row else { return nil }
+            return patchRow
+        }
+    }
 }
