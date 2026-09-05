@@ -48,6 +48,9 @@ than a guess.
 <td>📊 <b>Menu-bar quick inbox</b><br>The number of pull requests waiting on your review, and the top ones one click away — off the same local data, so it costs no extra API call.</td>
 </tr>
 <tr>
+<td colspan="2">📒 <b>The fleet</b><br>Every agent Shepherd has seen, and what became of its pull requests: merged, closed, reverted, rounds of changes and how often its first push was green — across every repository, then one repository at a time underneath, plus at most three sentences the counts below them support. Counts, never a score: no rank, no ordinal, no sortable rate, no traffic-light colour, and no page for a person.</td>
+</tr>
+<tr>
 <td colspan="2">🔎 <b>Semantic ⌘K search</b><br>Type what a pull request was <i>about</i> — “flaky login test” finds “Retry the auth suite” — over titles, labels, branches, descriptions and the diffs you have opened. On-device embeddings, stored in your own SQLite, never sent to an AI endpoint; <code>owner/repo#128</code> still wins outright.</td>
 </tr>
 <tr><th colspan="2" align="left">Automate</th></tr>
@@ -123,6 +126,7 @@ next key.
 shepherd open schnaq/review#128        # …/review/128 and a github.com PR URL work too
 shepherd inbox needs-my-review         # mine · involved · approved-by-me
 shepherd inbox --filter agent:claude-code   # humans · bots · agent:<id> · repo:<owner>/<name>
+shepherd fleet                         # every agent; add an id for one agent's page
 shepherd sync                          # sweep every repository now
 shepherd settings automation           # jump to a Settings tab
 ```
@@ -135,6 +139,7 @@ bookmark, `open(1)`, an n8n *Execute Command* node — can drive Shepherd
 | --- | --- |
 | `shepherd://pr/<owner>/<repo>/<number>` | Open that pull request's review screen |
 | `shepherd://inbox` · `shepherd://inbox?filter=<token>` | Inbox, optionally filtered |
+| `shepherd://fleet` · `shepherd://fleet/<agent-id>` | The fleet, optionally on one agent's page |
 | `shepherd://sync` | Run one sweep now |
 | `shepherd://settings` · `shepherd://settings/<tab>` | Open Settings, optionally on a tab |
 

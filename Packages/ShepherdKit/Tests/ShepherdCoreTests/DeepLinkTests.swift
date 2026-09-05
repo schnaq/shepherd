@@ -157,6 +157,47 @@ final class DeepLinkParsingTests: XCTestCase {
         XCTAssertNil(parse("shepherd://inbox/mine"))
     }
 
+    // MARK: - The fleet (ADR 0035)
+
+    func testParsesTheFleet() {
+        XCTAssertEqual(parse("shepherd://fleet"), .fleet(agentID: nil))
+        XCTAssertEqual(parse("shepherd://fleet/"), .fleet(agentID: nil))
+        XCTAssertEqual(parse("shepherd:fleet"), .fleet(agentID: nil))
+        XCTAssertEqual(
+            parse("shepherd://fleet/claude-code"),
+            .fleet(agentID: "claude-code")
+        )
+        // Registry ids are lower-cased, exactly as `filter=agent:<id>` lower-cases them: one id
+        // spelled two ways must not become two agents.
+        XCTAssertEqual(
+            parse("shepherd://FLEET/Claude-Code"),
+            .fleet(agentID: "claude-code")
+        )
+        XCTAssertEqual(
+            parse("shepherd://fleet/re%76iewer.bot_2"),
+            .fleet(agentID: "reviewer.bot_2")
+        )
+    }
+
+    func testRejectsMalformedFleetLinks() {
+        // One segment or none. A second segment is a rejection rather than something to ignore,
+        // for the reason `pr/…/files` is.
+        XCTAssertNil(parse("shepherd://fleet/claude-code/repos"))
+        XCTAssertNil(parse("shepherd://fleet/a/b"))
+        // An id that is not an id: a space, an encoded separator, a non-ASCII look-alike, and one
+        // over the sixty-four character limit.
+        XCTAssertNil(parse("shepherd://fleet/claude%20code"))
+        XCTAssertNil(parse("shepherd://fleet/claude%2Fcode"))
+        XCTAssertNil(parse("shepherd://fleet/%D1%95chnaq"))
+        XCTAssertNil(parse("shepherd://fleet/" + String(repeating: "a", count: 65)))
+        // The authority tricks the whole grammar refuses, on this command too.
+        XCTAssertNil(parse("shepherd://fleet/claude-code#top"))
+        XCTAssertNil(parse("shepherd://fleet:8080/claude-code"))
+        XCTAssertNil(parse("shepherd://user:secret@fleet/claude-code"))
+        // A near miss on the command word is not the command.
+        XCTAssertNil(parse("shepherd://fleets"))
+    }
+
     // MARK: - Sync and settings
 
     func testParsesSync() {
@@ -199,6 +240,11 @@ final class DeepLinkParsingTests: XCTestCase {
                 .urlString,
             "shepherd://inbox?filter=repo%3Aschnaq%2Freview"
         )
+        XCTAssertEqual(DeepLink.fleet(agentID: nil).urlString, "shepherd://fleet")
+        XCTAssertEqual(
+            DeepLink.fleet(agentID: "claude-code").urlString,
+            "shepherd://fleet/claude-code"
+        )
         XCTAssertEqual(DeepLink.sync.urlString, "shepherd://sync")
         XCTAssertEqual(
             DeepLink.settings(tab: .intelligence).urlString,
@@ -222,6 +268,9 @@ final class DeepLinkParsingTests: XCTestCase {
             .inbox(filter: .agent(id: "claude-code")),
             .inbox(filter: .repository(RepoRef(owner: "schnaq", name: "review"))),
             .inbox(filter: .issues),
+            .fleet(agentID: nil),
+            .fleet(agentID: "claude-code"),
+            .fleet(agentID: "a.b_c-2"),
             .sync,
         ] + SettingsDeepLinkTab.allCases.map { DeepLink.settings(tab: $0) }
 
@@ -351,6 +400,47 @@ final class ShepherdCommandLineTests: XCTestCase {
         XCTAssertThrowsError(try invocation("inbox", "mine", "bots"))
     }
 
+    func testFleetTakesAnOptionalAgentID() throws {
+        XCTAssertEqual(try invocation("fleet"), .open(.fleet(agentID: nil)))
+        XCTAssertEqual(
+            try invocation("fleet", "claude-code"),
+            .open(.fleet(agentID: "claude-code"))
+        )
+        // The CLI lower-cases through the same validator the URL parser uses, so the two
+        // spellings of one id cannot disagree about which agent was asked for.
+        XCTAssertEqual(
+            try invocation("fleet", "Claude-Code"),
+            .open(.fleet(agentID: "claude-code"))
+        )
+        XCTAssertThrowsError(try invocation("fleet", "claude-code", "extra"))
+        // A hyphen is legal *inside* an id, so a mistyped option would otherwise resolve to an
+        // agent nobody has.
+        XCTAssertThrowsError(try invocation("fleet", "--all")) { error in
+            XCTAssertEqual(error as? ShepherdCommandLine.Failure, .unknownOption("--all"))
+        }
+        XCTAssertThrowsError(try invocation("fleet", "claude code")) { error in
+            XCTAssertEqual(
+                error as? ShepherdCommandLine.Failure,
+                .invalidAgentID("claude code")
+            )
+        }
+        // A login is not an id, and the message has to be the one that says so.
+        XCTAssertThrowsError(try invocation("fleet", "schnaq/review")) { error in
+            XCTAssertEqual(
+                error as? ShepherdCommandLine.Failure,
+                .invalidAgentID("schnaq/review")
+            )
+        }
+    }
+
+    func testUsageNamesTheFleetVerb() {
+        // ADR 0013 couples the grammar and the help text: `--help` is where the URL scheme is
+        // discoverable without the docs, so a verb that is not in it is a verb nobody finds.
+        XCTAssertTrue(ShepherdCommandLine.usage.contains("shepherd fleet [<agent-id>]"))
+        XCTAssertTrue(ShepherdCommandLine.usage.contains("shepherd fleet claude-code"))
+        XCTAssertTrue(ShepherdCommandLine.usage.contains("AGENT IDS"))
+    }
+
     func testSyncAndSettings() throws {
         XCTAssertEqual(try invocation("sync"), .open(.sync))
         XCTAssertThrowsError(try invocation("sync", "now"))
@@ -374,6 +464,8 @@ final class ShepherdCommandLineTests: XCTestCase {
             ["inbox"],
             ["inbox", "bots"],
             ["inbox", "--filter", "repo:schnaq/review"],
+            ["fleet"],
+            ["fleet", "claude-code"],
             ["sync"],
             ["settings", "delegation"],
         ]

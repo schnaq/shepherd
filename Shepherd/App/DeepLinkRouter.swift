@@ -112,6 +112,18 @@ extension AppEnvironment {
         case .inbox(let filter):
             route = .inbox
             pendingInboxFilter = filter.map { Pending($0) }
+        case .fleet(let agentID):
+            // Straight to the method the rail row, the ⌘K command and the track-record popover
+            // all use (ADR 0035), rather than assigning ``route`` here: `openFleet(agentID:)`
+            // also ends a running focus session, and a link that navigated *without* ending it
+            // would leave the session's bar on screen naming a pull request the window is no
+            // longer showing. One implementation of "show the fleet", exactly as `.pullRequest`
+            // has one of "open the review screen".
+            //
+            // An id the registry does not know needs nothing here: the grammar guarantees it is
+            // *shaped* like an id (never a login), and answering an unknown one is the screen's
+            // job, which is where the list it would fall back to already is.
+            openFleet(agentID: agentID)
         case .sync:
             toasts.info(String(localized: "Syncing all repositories…"))
             Task { await syncNow() }

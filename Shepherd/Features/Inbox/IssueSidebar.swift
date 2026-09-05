@@ -106,14 +106,14 @@ struct ContentKindPicker: View {
 // MARK: - The issues rail
 
 /// The left rail while the issues section is showing: STATE, the agent-pull-request facet,
-/// LABELS, AGE, REPOSITORIES, Settings (ADR 0032).
+/// LABELS, AGE, REPOSITORIES, and the two pinned rows — Fleet and Settings (ADR 0032, ADR 0035).
 ///
 /// A view of its own rather than a `ContentKind` branch inside ``InboxSidebar``, because the two
 /// rails share no section: there is no smart view, no lane, no risk and no agent facet here, and
 /// a single view carrying both sets would be one `if` per section with nothing in common
 /// underneath. What *is* shared is the row (``RailRow``), the section header
-/// (``RailSectionHeader``) and the Settings row (``RailSettingsRow``), which is where the
-/// consistency actually has to live.
+/// (``RailSectionHeader``) and the two pinned rows (``RailFleetRow``, ``RailSettingsRow``),
+/// which is where the consistency actually has to live.
 ///
 /// The section order is the order a triage pass reads them in: whether the issue is still open at
 /// all, then what nobody has started on, then what it is about, then how long it has been sitting
@@ -140,7 +140,14 @@ struct IssueSidebar: View {
         .scrollContentBackground(.hidden)
         .background(Theme.panel)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            RailSettingsRow(action: onOpenSettings)
+            // Two pinned rows, the fleet above Settings. Above, because the fleet is a place a
+            // reviewer goes *while* triaging and Settings is where they go when they have
+            // stopped — and the bottom edge is the one anchor in this rail that does not move as
+            // facets appear and disappear (ADR 0035).
+            VStack(spacing: 0) {
+                RailFleetRow()
+                RailSettingsRow(action: onOpenSettings)
+            }
         }
     }
 

@@ -2,7 +2,7 @@ import ShepherdCore
 import SwiftUI
 
 /// The left rail: smart views, the LANES facet, the RISK facet, the AGENTS facet, the
-/// REPOSITORIES facet, Settings.
+/// REPOSITORIES facet, and the two pinned rows at the bottom — Fleet and Settings.
 struct InboxSidebar: View {
     /// The inbox model.
     let model: InboxModel
@@ -25,7 +25,14 @@ struct InboxSidebar: View {
         .scrollContentBackground(.hidden)
         .background(Theme.panel)
         .safeAreaInset(edge: .bottom, spacing: 0) {
-            RailSettingsRow(action: onOpenSettings)
+            // Two pinned rows, the fleet above Settings. Above, because the fleet is a place a
+            // reviewer goes *while* triaging and Settings is where they go when they have
+            // stopped — and the bottom edge is the one anchor in this rail that does not move as
+            // facets appear and disappear (ADR 0035).
+            VStack(spacing: 0) {
+                RailFleetRow()
+                RailSettingsRow(action: onOpenSettings)
+            }
         }
     }
 

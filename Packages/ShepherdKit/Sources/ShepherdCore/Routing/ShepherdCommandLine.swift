@@ -16,6 +16,7 @@ import Foundation
 /// shepherd issue <owner>/<repo>/<number>
 /// shepherd issue https://github.com/<owner>/<repo>/issues/<number>
 /// shepherd inbox [<filter> | --filter <filter>]
+/// shepherd fleet [<agent-id>]
 /// shepherd sync
 /// shepherd settings [<tab>]
 /// shepherd --help | --version
@@ -54,6 +55,14 @@ public enum ShepherdCommandLine {
         case invalidIssueReference(String)
         /// The inbox filter is not one of the known tokens.
         case invalidInboxFilter(String)
+        /// The fleet argument is not a well-formed agent-registry id (ADR 0035).
+        ///
+        /// A case of its own rather than a reused one, for ``invalidIssueReference(_:)``'s
+        /// reason: the thing to say here is *which* identifier was expected. Somebody who typed
+        /// a collaborator's login at `shepherd fleet` has to be told that the fleet is addressed
+        /// by registry id, not merely that the argument was wrong — the fleet has no page for a
+        /// person to reach, and this message is where that is discoverable from a terminal.
+        case invalidAgentID(String)
         /// The settings tab is not one of the known tabs.
         case unknownSettingsTab(String)
 
@@ -83,6 +92,12 @@ public enum ShepherdCommandLine {
                     \(InboxDeepLinkFilter.keywordTokens.joined(separator: ", ")), \
                     agent:<id> or repo:<owner>/<name>.
                     """
+            case .invalidAgentID(let id):
+                return """
+                    Could not read “\(id)” as an agent. Use the agent's registry id, as in \
+                    “shepherd fleet claude-code” — letters, digits, “-”, “_” and “.”, never a \
+                    GitHub login.
+                    """
             case .unknownSettingsTab(let tab):
                 return """
                     Unknown settings tab “\(tab)”. Use one of \
@@ -100,6 +115,7 @@ public enum ShepherdCommandLine {
           shepherd open <pull request>     Open a pull request in Shepherd's review screen
           shepherd issue <issue>           Open an issue in Shepherd's issues inbox
           shepherd inbox [<filter>]        Show the inbox, optionally filtered
+          shepherd fleet [<agent-id>]      Show every agent Shepherd has seen, or one agent's page
           shepherd sync                    Sweep every repository now
           shepherd settings [<tab>]        Open Settings on a tab
           shepherd --help | --version
@@ -118,6 +134,11 @@ public enum ShepherdCommandLine {
           needs-my-review, mine, involved, approved-by-me, issues
           humans, bots, agent:<id>, repo:<owner>/<name>
 
+        AGENT IDS
+          The registry ids Shepherd knows an agent by — the same ones agent:<id> takes.
+          The bundled ones and your own are listed in Settings → Agents.
+          Never a GitHub login: the fleet counts agents, not people.
+
         SETTINGS TABS
           account, sync, agents, intelligence, delegation, automation, appearance
 
@@ -127,6 +148,8 @@ public enum ShepherdCommandLine {
           shepherd inbox issues
           shepherd inbox needs-my-review
           shepherd inbox --filter agent:claude-code
+          shepherd fleet
+          shepherd fleet claude-code
           shepherd sync
 
         Every command works by opening a shepherd:// URL, so Shepherd itself does the work —
@@ -178,6 +201,23 @@ public enum ShepherdCommandLine {
                 throw Failure.invalidInboxFilter(token)
             }
             return .open(.inbox(filter: filter))
+
+        case "fleet":
+            // A verb rather than an inbox filter token, because the fleet is a screen of its own
+            // and not a narrowing of the inbox (ADR 0035) — `inbox issues` is a token precisely
+            // because that one *is* the same screen. The argument is optional: `shepherd fleet`
+            // is the list, which is the invocation somebody types from muscle memory.
+            guard let id = rest.first else { return .open(.fleet(agentID: nil)) }
+            if let extra = rest.dropFirst().first { throw Failure.unexpectedArgument(extra) }
+            // Before the character rules, because a hyphen is a legal character *in* an id and
+            // `--verbose` would otherwise be accepted as one: a mistyped option has to say
+            // "unknown option" rather than resolve to an agent nobody has, which is `inbox`'s
+            // rule for the same reason.
+            if id.hasPrefix("-") { throw Failure.unknownOption(id) }
+            guard let agentID = DeepLinkValidation.agentID(id) else {
+                throw Failure.invalidAgentID(id)
+            }
+            return .open(.fleet(agentID: agentID))
 
         case "sync":
             if let extra = rest.first { throw Failure.unexpectedArgument(extra) }

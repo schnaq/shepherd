@@ -197,6 +197,55 @@ final class TrustLaneUITests: XCTestCase {
         XCTAssertFalse(sentence.contains("%"), "a rate with an empty denominator is not invented")
     }
 
+    // MARK: - The popover's way into the fleet (ADR 0035)
+
+    func testOnlyAnAgentsBadgeCarriesAnIDIntoTheFleet() {
+        // The gate, at the surface a reviewer actually clicks. A person and a generic bot both
+        // answer `nil`, so the popover on their badge has no button — the fleet is a ledger of
+        // agents, and there is deliberately no route from this row to a page about a colleague.
+        XCTAssertEqual(
+            TrackRecordBadge.fleetAgentID(
+                for: ShepherdCore.Actor(
+                    login: "claude[bot]",
+                    kind: .agent(
+                        AgentIdentity(
+                            id: "claude-code",
+                            displayName: "Claude Code",
+                            matchedBy: .login
+                        )
+                    )
+                )
+            ),
+            "claude-code"
+        )
+        XCTAssertNil(
+            TrackRecordBadge.fleetAgentID(
+                for: ShepherdCore.Actor(login: "christian", kind: .human)
+            )
+        )
+        XCTAssertNil(
+            TrackRecordBadge.fleetAgentID(
+                for: ShepherdCore.Actor(login: "dependabot[bot]", kind: .bot)
+            )
+        )
+    }
+
+    func testTheFleetButtonIsAbsentForAHumanRatherThanDisabled() {
+        // Absent, not disabled: a greyed-out "See every repository" on a colleague's badge would
+        // still say that such a page exists for them, which is the claim ADR 0035 refuses to make.
+        XCTAssertFalse(TrackRecordPopover.offersFleet(agentID: nil))
+        XCTAssertTrue(TrackRecordPopover.offersFleet(agentID: "claude-code"))
+        XCTAssertEqual(
+            TrackRecordPopover.offersFleet(
+                agentID: TrackRecordBadge.fleetAgentID(
+                    for: ShepherdCore.Actor(login: "christian", kind: .human)
+                )
+            ),
+            false,
+            "the row's own author, through the derivation the row uses"
+        )
+    }
+
     func testTheRoundsTextDropsAPointlessDecimal() {
         XCTAssertEqual(TrackRecordBadge.roundsText(2), "2")
         XCTAssertEqual(TrackRecordBadge.roundsText(0.5), "0.5")

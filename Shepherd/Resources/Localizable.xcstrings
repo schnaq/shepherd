@@ -5341,6 +5341,16 @@
         }
       }
     },
+    "Every agent Shepherd has seen, and what became of its pull requests.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Agent, den Shepherd je gesehen hat, und was aus seinen Pull Requests geworden ist."
+          }
+        }
+      }
+    },
     "Every allowed tool runs unattended, including shell commands.": {
       "localizations": {
         "de": {
@@ -5647,6 +5657,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Behebt Issue #%lld"
+          }
+        }
+      }
+    },
+    "Fleet": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flotte"
           }
         }
       }
@@ -10171,6 +10191,16 @@
         }
       }
     },
+    "See every repository": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle Repositorys ansehen"
+          }
+        }
+      }
+    },
     "See how each agent's pull requests have fared in your repositories — rounds, merges, reverts.": {
       "localizations": {
         "de": {
@@ -10701,6 +10731,16 @@
         }
       }
     },
+    "Show Agent Fleet": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent-Flotte anzeigen"
+          }
+        }
+      }
+    },
     "Show Inbox": {
       "localizations": {
         "de": {
@@ -10767,6 +10807,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pull Requests in Spotlight zeigen"
+          }
+        }
+      }
+    },
+    "Show the agent fleet": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent-Flotte anzeigen"
           }
         }
       }

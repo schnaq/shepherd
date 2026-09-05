@@ -121,6 +121,35 @@ final class DeepLinkRoutingTests: XCTestCase {
         )
     }
 
+    // MARK: - The fleet (ADR 0035)
+
+    func testAFleetLinkCarriesTheRegistryIDOntoTheRoute() throws {
+        // The end-to-end shape a script produces, as the inbox-filter test above does it: a URL
+        // in, the value the app navigates on out. `run(_:in:)` hands exactly this id to
+        // `openFleet(agentID:)`, which puts it on `Route.fleet(agentID:)` — so what is worth
+        // pinning here is that the id survives the trip and is the registry's lower-cased
+        // spelling rather than whatever was typed.
+        let url = try XCTUnwrap(URL(string: "shepherd://fleet/Claude-Code"))
+        guard case .fleet(let agentID) = try XCTUnwrap(DeepLink.parse(url)) else {
+            return XCTFail("expected a fleet link")
+        }
+        XCTAssertEqual(agentID, "claude-code")
+        XCTAssertEqual(
+            AppEnvironment.Route.fleet(agentID: agentID),
+            .fleet(agentID: "claude-code")
+        )
+    }
+
+    func testABareFleetLinkIsTheWholeListRatherThanAnAgent() throws {
+        let url = try XCTUnwrap(URL(string: "shepherd://fleet"))
+        guard case .fleet(let agentID) = try XCTUnwrap(DeepLink.parse(url)) else {
+            return XCTFail("expected a fleet link")
+        }
+        XCTAssertNil(agentID)
+        XCTAssertEqual(AppEnvironment.Route.fleet(agentID: agentID), .fleet(agentID: nil))
+        XCTAssertNotEqual(AppEnvironment.Route.fleet(agentID: nil), .inbox)
+    }
+
     // MARK: - Fixtures
 
     private func summary(id: String, repo: RepoRef, number: Int) -> PullRequestSummary {

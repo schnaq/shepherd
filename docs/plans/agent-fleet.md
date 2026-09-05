@@ -271,3 +271,46 @@ Both migrations of this plan share **v5** (outcomes, snapshots) so the schema mo
   `api.github.com`); no new host.
 - Strings in the catalog, checker green; new settings in the sync document with fixtures.
 - ADR written and linked from `docs/adr/README.md`; `docs/FEATURES.md` paragraph; roadmap ticked.
+
+---
+
+## Amendment (2026-09-05): the leaderboard rejection is reversed, and what was built is not one
+
+§0 lists four things "recorded so they are not re-proposed without a new reason": a team/roles
+model, an audit export, cost dashboards, and **an agent leaderboard**. The fourth is now built and
+shipped as **the fleet** — a screen per agent with counts on it — and this is the record of that
+reversal. The other three stand exactly as written.
+
+The reason the rejection was right and is now spent is one distinction §0 did not draw. It rejected
+a *ranking*; what was missing was a *ledger*. The interview's own numbers are what forced the
+difference into view: ten to forty agent pull requests a week **across repositories**, and §2.B's
+badge — the thing built to answer "how has this author done" — is scoped to one author in one
+repository and stops at exactly the boundary the work crosses. The aggregate that answers the wider
+question was already in the code and had never been called:
+`TrackRecord.compute(outcomes:subject:repo:since:)` takes `repo: RepoRef?` with `nil` documented as
+"every repository". So the thing that was actually missing was a caller, not a scoreboard.
+
+A list of agents with rates beside them is one keystroke away from being a leaderboard, so the
+difference is not left to restraint. Four rules make it a property of the code:
+
+1. **No rate is ever a sort key.** `FleetRoster.make` answers in one fixed order — open pull
+   requests descending, then most recent close, then name — and the ordering function takes no
+   parameter. There is no sort picker and no sortable column, because there is nothing for one to
+   call.
+2. **No ordinal, no total, no cross-agent table.** The list row and the detail page are the only
+   two views, and neither renders a position, a "top", a fleet-wide average or an "N of M agents".
+3. **No colour that implies a grade.** The fleet does not use `TrackRecord.chipColor` / `chipTone`
+   at all. It prints counts and the agent's identifying palette colour, and nothing else.
+4. **The one cross-agent statement is a bounded pair.** `FleetNotice.revertShareGap` names two
+   agents in one repository with four counts, no third party and no ordinal, and renders the
+   identical sentence on both of the two pages it belongs to.
+
+And the fleet is a ledger of *agents*, not of people, in four places rather than by convention:
+membership is `outcome.agentName != nil`; neither `FleetAgent` nor `FleetRepositoryRecord` has a
+login field, so `PullRequestOutcome.authorLogin` is discarded by the builder; `shepherd://fleet/<id>`
+resolves registry ids and never logins; and the track-record popover's way in is *absent* rather
+than disabled when the badge's author is a human or a generic bot.
+
+Recorded in full, with the three notice rules and their thresholds, in
+[ADR 0035](../adr/0035-the-fleet.md). Nothing in §2.B changes: the lane gate is still CI, size and
+sensitive paths, and a history still never moves a pull request between lanes.

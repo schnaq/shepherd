@@ -19,6 +19,19 @@ final class SignedInSession {
     let database: DatabaseManager
     /// The GitHub façade.
     let github: GitHubClient
+    /// The provenance rules this session's rows were labelled with (ADR 0008).
+    ///
+    /// The same value ``github`` was built with, kept rather than let go of. It is held here for
+    /// one reason: it is the only thing in the app that can turn an **agent-registry id** back
+    /// into a display name, and `shepherd://fleet/<agent-id>` addresses the fleet by id
+    /// (ADR 0035) while a stored outcome remembers only the name
+    /// (``ShepherdCore/PullRequestOutcome/agentName``). Without it a link would have nothing to
+    /// resolve against and would have to fall back to the list.
+    ///
+    /// A value type, seeded once from the user's registry overrides at sign-in, so this is a
+    /// second reference and not a second detector: editing the registry in Settings restarts the
+    /// session, which is what makes one snapshot per session correct rather than stale.
+    let agentDetector: AgentDetector
     /// The background sync loops.
     let syncEngine: SyncEngine
 
@@ -97,11 +110,13 @@ final class SignedInSession {
         account: Account,
         database: DatabaseManager,
         github: GitHubClient,
+        agentDetector: AgentDetector,
         syncEngine: SyncEngine
     ) {
         self.account = account
         self.database = database
         self.github = github
+        self.agentDetector = agentDetector
         self.syncEngine = syncEngine
     }
 
@@ -177,6 +192,7 @@ final class SignedInSession {
             account: account,
             database: database,
             github: github,
+            agentDetector: detector,
             syncEngine: engine
         )
     }

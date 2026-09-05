@@ -15,6 +15,8 @@ import Foundation
 /// shepherd://issue/<owner>/<repo>/<number>
 /// shepherd://inbox
 /// shepherd://inbox?filter=<token>
+/// shepherd://fleet
+/// shepherd://fleet/<agent-id>
 /// shepherd://sync
 /// shepherd://settings
 /// shepherd://settings/<tab>
@@ -40,6 +42,21 @@ public enum DeepLink: Hashable, Sendable {
     case issue(repo: RepoRef, number: Int)
     /// Show the inbox, optionally with one rail filter applied.
     case inbox(filter: InboxDeepLinkFilter?)
+    /// Show the fleet, optionally opening one agent's page (ADR 0035).
+    ///
+    /// The argument is an **agent-registry id** — `claude-code`, the thing
+    /// `shepherd://inbox?filter=agent:<id>` already addresses — and never a GitHub login. That is
+    /// the third of the structural layers that keep the fleet a ledger of agents rather than of
+    /// people: the type has nowhere to put a person, the roster's membership test is
+    /// `agentName != nil`, and this grammar accepts only the id *shape*
+    /// (``DeepLinkValidation/agentID(_:)``), which is not the shape a login is looked up by. A
+    /// link naming somebody therefore does not open a page about them; the fleet has no page for
+    /// a person to reach, so it resolves to nothing on the screen.
+    ///
+    /// `nil` is the whole fleet, which is what `shepherd://fleet` means. An id the registry does
+    /// not know is a valid link the screen answers by showing the list — the parser's job is the
+    /// character rules, and which agents exist is not a fact ShepherdCore has.
+    case fleet(agentID: String?)
     /// Run one sweep now.
     case sync
     /// Open Settings on a tab.
@@ -95,6 +112,14 @@ public enum DeepLink: Hashable, Sendable {
             guard !trimmed.isEmpty else { return .inbox(filter: nil) }
             guard let filter = InboxDeepLinkFilter(token: trimmed) else { return nil }
             return .inbox(filter: filter)
+
+        case "fleet":
+            // `fleet` on its own is the list; `fleet/<agent-id>` is one agent's page. Two
+            // segments is a rejection rather than "the first one wins", exactly as a trailing
+            // `/files` is on a pull-request link (ADR 0013).
+            if rest.isEmpty { return .fleet(agentID: nil) }
+            guard rest.count == 1, let id = DeepLinkValidation.agentID(rest[0]) else { return nil }
+            return .fleet(agentID: id)
 
         case "sync":
             guard rest.isEmpty else { return nil }
@@ -165,6 +190,9 @@ public enum DeepLink: Hashable, Sendable {
         case .inbox(let filter):
             guard let filter else { return "\(DeepLink.scheme)://inbox" }
             return "\(DeepLink.scheme)://inbox?filter=\(DeepLink.encode(filter.token))"
+        case .fleet(let agentID):
+            guard let agentID else { return "\(DeepLink.scheme)://fleet" }
+            return "\(DeepLink.scheme)://fleet/\(DeepLink.encode(agentID))"
         case .sync:
             return "\(DeepLink.scheme)://sync"
         case .settings(let tab):

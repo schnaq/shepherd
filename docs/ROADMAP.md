@@ -455,7 +455,15 @@ remain and each is a project rather than a label; what they would take is in
 ## Later / explorations
 
 - Checkout-and-run integration (open worktree in editor/terminal for local verification)
-- Team dashboards (review load, agent PR statistics)
+- ~~Team dashboards (review load, **agent PR statistics**)~~ — **the agent half is built**
+  (ADR 0035). The fleet lists every agent Shepherd has seen with what became of its pull requests,
+  and gives each one a page: the aggregate across every repository, the same counting one
+  repository at a time underneath it, and at most three sentences the numbers below them support.
+  It is deliberately not a dashboard and deliberately not a ranking — no rate is a sort key, there
+  is no ordinal, no total and no cross-agent table, and the one sentence that names two agents
+  names exactly two. **The team half is not built and is not planned**: review load is a fact about
+  people, and the fleet has nowhere to put a person by construction. That stays where the plan's
+  §0 left it, with roles, the audit export and the cost ledger.
 - iPad companion (ShepherdKit is already platform-independent)
 
 ## Non-goals

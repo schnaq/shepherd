@@ -184,6 +184,44 @@ struct ShowInboxIntent: AppIntent {
     }
 }
 
+/// Shows the fleet — every agent Shepherd has seen (ADR 0035).
+///
+/// ``ShowInboxIntent`` with one thing changed, which is what an intent over this grammar is
+/// supposed to be: it resolves nothing, builds ``ShepherdCore/DeepLink/fleet(agentID:)`` and hands
+/// it to `open(_:)`, so the queue-until-signed-in slot and every other awkward part of the routing
+/// stay in the one implementation they already have.
+///
+/// **No agent parameter, deliberately.** A picker over agents would need an `AppEntity` with a
+/// query behind it, and that entity would be an *exported list of the agents this user works with*
+/// — the sort of thing ADR 0021 keeps out of Spotlight for the same reason it keeps descriptions
+/// out. The whole fleet is one tap from here and the list is the screen's own job, so the entity
+/// would buy a keystroke and cost a new surface. `shepherd://fleet/<agent-id>` addresses one agent
+/// for anybody who wants that, and it does it without enumerating anything.
+///
+/// It has no Siri phrase either: ``ShepherdShortcuts`` is a deliberately short list of things
+/// worth saying out loud without configuring anything, and "show me the fleet" is a screen to look
+/// at rather than an answer to hear. Like ``OpenPullRequestIntent`` and ``OpenSettingsIntent``, it
+/// is an action in the Shortcuts gallery for a user who wants to build with it.
+struct ShowFleetIntent: AppIntent {
+    static var title: LocalizedStringResource { "Show Agent Fleet" }
+
+    static var openAppWhenRun: Bool { true }
+
+    /// Required by `AppIntent`.
+    init() {}
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        // No session required, for ``ShowInboxIntent``'s reason: a link that arrives before
+        // sign-in is queued and replayed, and saying so is the toast's job rather than this
+        // intent's.
+        let environment = try IntentBridge.requireEnvironment()
+        environment.open(.fleet(agentID: nil))
+        environment.revealWindow()
+        return .result()
+    }
+}
+
 /// Runs one sweep now — the ⌘R path (ADR 0021).
 struct SyncNowIntent: AppIntent {
     static var title: LocalizedStringResource { "Sync Now" }

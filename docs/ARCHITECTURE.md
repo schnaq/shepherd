@@ -345,7 +345,10 @@ Pure logic in `ShepherdCore` (all unit-tested):
 - `DeepLink` (`Routing/`) — the whole `shepherd://` grammar as a value: `parse(URL) -> DeepLink?`
   and `urlString` in the other direction, round-trip tested. Strict by construction (closed
   vocabularies, GitHub's own character rules, decoding *after* the path split), because a URL is
-  untrusted input. Companion: `ShepherdCommandLine`, the `shepherd` CLI's argv grammar, kept in
+  untrusted input. `fleet` is the one command whose argument is optional — `shepherd://fleet` is
+  the list and `shepherd://fleet/<agent-id>` one agent's page — and its segment is validated as an
+  **agent-registry id**, never a login, which is one of the four places ADR 0035 keeps the fleet a
+  ledger of agents rather than of people. Companion: `ShepherdCommandLine`, the `shepherd` CLI's argv grammar, kept in
   the same folder so the grammar the CLI writes and the grammar the app reads cannot drift
   (ADR 0013).
 
@@ -1045,11 +1048,18 @@ database or the network lives in `SignedInSession`, so those things cannot exist
 signed-out state. `SignedInSession.make(…)` wires the stack in the order
 `Packages/ShepherdKit/README.md` prescribes: `DatabaseManager` → `GitHubClient`
 (`KeychainTokenStore` behind `RefreshingTokenProvider`, `DatabaseConditionalCache`,
-`AgentDetector` seeded with the user's registry overrides) → `SyncEngine`.
+`AgentDetector` seeded with the user's registry overrides) → `SyncEngine`. The detector is also
+*kept* — `SignedInSession.agentDetector` — rather than let go of after the client is built: it is
+the only thing in the app that can turn an agent-registry id back into a display name, which is
+what `shepherd://fleet/<agent-id>` needs, since a stored outcome remembers the name and not the id
+(ADR 0035). It is a value type snapshotted once per session, and editing the registry in Settings
+restarts the session, so there is no staleness to manage.
 
-Within the signed-in window a second, smaller route drives the screen: `.inbox` or
-`.review(prID)`. The review screen is full-window (as in the mockups) rather than a third
-navigation column.
+Within the signed-in window a second, smaller route drives the screen: `.inbox`, `.review(prID)`
+or `.fleet(agentID:)` (ADR 0035). The review screen and the fleet are both full-window (as in the
+mockups) rather than a third navigation column; the fleet is a route rather than a third value in
+the inbox's content-kind picker because, unlike issues, it owns no pull-request selection and
+nothing in it is a thing to triage.
 
 `ShepherdApp` has three scenes: the one `WindowGroup`, the standard `Settings` window, and the
 menu-bar quick inbox (below).
@@ -1457,9 +1467,12 @@ app target rather than ShepherdKit.
 `AppEnvironment.open(deepLinkURL:)` (`App/DeepLinkRouter.swift`). Everything interesting about the
 parsing is in `ShepherdCore`; the app layer only routes, and it routes through the surfaces that
 already exist: `.pullRequest` → `openReview(prID:)`, `.issue` → `openIssue(issueID:)`,
-`.sync` → `syncNow()`, `.inbox`/`.settings` → `route` plus a pending request the inbox screen
-consumes — the same "raise it, let the screen that owns the state run it" mechanism as
-`PendingAction`. `InboxRailSelection` is the pure value that maps a filter token onto rail state,
+`.fleet` → `openFleet(agentID:)` (ADR 0035), `.sync` → `syncNow()`, `.inbox`/`.settings` → `route`
+plus a pending request the inbox screen consumes — the same "raise it, let the screen that owns the
+state run it" mechanism as `PendingAction`. `.fleet` goes through the method rather than assigning
+`route` here for the reason `.pullRequest` does: `openFleet(agentID:)` also ends a running focus
+session, and a link that navigated without ending it would leave the session's bar naming a pull
+request the window no longer shows. `InboxRailSelection` is the pure value that maps a filter token onto rail state,
 so the mapping is testable without a session; its smart view is **optional**, and the one token
 that answers `nil` is `filter=issues`, which names the inbox *section* rather than a rail state
 (ADR 0032).
@@ -1478,7 +1491,7 @@ Two behaviours are worth knowing because they are the robust rather than the obv
 
 `shepherd` (`ShepherdCLI/`, target `ShepherdCLI`, product name `shepherd`) is a thin URL builder:
 `ShepherdCommandLine.parse` → `DeepLink` → `NSWorkspace.shared.open`. Its verbs are `open`,
-`issue`, `inbox`, `sync` and `settings`; `open` and `issue` share one reference reader,
+`issue`, `inbox`, `fleet`, `sync` and `settings`; `open` and `issue` share one reference reader,
 parameterised on the github.com path segment, so the two cannot drift into accepting different
 spellings. It links `ShepherdCore`
 only. That is deliberate and is the security boundary — no token, no database, no network, so it
@@ -1984,7 +1997,8 @@ and file status is a case the domain has, every CI fixture is a 30–60 line tai
 something to measure — and the whole class skips itself unless `SHEPHERD_EVAL=1`, because it
 measures a model rather than the code);
 and the app-side half of deep linking (resolving `owner/repo#number` against cached rows, filter
-token → rail state). The `shepherd://` grammar itself is tested in `ShepherdCoreTests` instead, so it
-runs on the Linux runner too. The web
+token → rail state, and a `shepherd://fleet/<agent-id>` link keeping the registry's lower-cased id
+all the way onto `Route.fleet(agentID:)`). The `shepherd://` grammar itself is tested in
+`ShepherdCoreTests` instead, so it runs on the Linux runner too. The web
 bundle is likewise added to the app target as a
 folder reference (`Shepherd/Resources/DiffViewer`) so `index.html` keeps its relative links.

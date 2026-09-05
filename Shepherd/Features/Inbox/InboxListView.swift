@@ -535,7 +535,11 @@ struct InboxRowView: View {
             // Beside the chip it describes, and before the triage chip, so the row reads
             // "who · how they have done · what this is".
             if let trackRecord {
-                TrackRecordBadge(authorName: badgeAuthorName, record: trackRecord)
+                TrackRecordBadge(
+                    authorName: badgeAuthorName,
+                    agentID: TrackRecordBadge.fleetAgentID(for: row.author),
+                    record: trackRecord
+                )
                     .layoutPriority(1)
             }
 

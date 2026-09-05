@@ -200,6 +200,62 @@ The two thresholds travel to your other Macs; the history does not — it is reb
 there, which is why the popover says *on this Mac*. *Clear history* empties it, and the lanes carry
 on working, because they never read it.
 
+### The fleet: every agent, and what became of its work
+
+The badge on an inbox row answers *this agent, this repository*. **Fleet** — a row pinned at the
+bottom of the rail, in both the pull-request and the issues sections — answers the wider one. It
+lists every agent Shepherd has ever seen, each with how much of its work is open in your inbox
+right now, how much of that is waiting on you, and what happened to the pull requests it closed in
+the last ninety days: merged, closed without merging, reverted, how many repositories it works in,
+when it last finished something.
+
+Click an agent and you get its page. The counts across **every** repository first, then — always,
+never folded away — the same counting one repository at a time, then the pull requests of its that
+are open right now, each one a click from its review screen. A rate over four repositories can hide
+a single bad one, which is why the average is never shown without the rows it was averaged from.
+
+Underneath the aggregate, at most three sentences, stated without being asked and only when the
+numbers below them say so:
+
+> The last 4 pull requests this agent closed in `konduit/api` all had changes requested at least
+> once.
+
+> Its first push is green in 9 of 20 pull requests to `konduit/api`, and in 41 of 50 across the
+> other 3 repositories Shepherd has counted.
+
+> In `konduit/api`, 3 of its 24 merges were reverted; 0 of the other agent's 19 were.
+
+Each names a repository, so you can check it against the grid right below it, and each comes with
+the counts rather than only the percentage — no number on this page is one nothing else on it adds
+up to. The thresholds are deliberately shy: three in a row before a streak is worth mentioning
+(twice is a coincidence), five measured pull requests on each side and a thirty-point gap before
+two rates are compared, ten merges and two reverts before one agent's revert share is set beside
+another's. That last sentence is the only one that names two agents, it names exactly two, and it
+renders identically on both of their pages.
+
+**None of it is a grade.** There is no score, no rank, no position, no "top", no fleet-wide average
+and no sortable column — the list comes back in one fixed order and there is nothing to re-sort it
+by. The chip colours that tint an inbox row are not used here at all; an agent gets its own
+identifying colour and its counts, and nothing that looks like a traffic light. And it is a ledger
+of **agents**, never of people: an agent's pull requests are often pushed with your own token, and
+there is nowhere on this screen — not in the data, not in the deep link, not in the button that
+brought you here — for a person's login to appear.
+
+Four ways in, all of them navigation: the rail row, ⌘K → *Show the agent fleet*, `shepherd fleet`
+(or `shepherd fleet claude-code`) and the `shepherd://fleet` links behind it, and — the one you
+will actually use — **See every repository** at the bottom of the track-record popover, which takes
+you straight to that agent's page. On a human's badge that button is not there, because that page
+does not exist.
+
+The numbers come from the same ninety days of closed pull requests the badges are counted from, so
+the two can never disagree, and they need the same one-time history load (Settings → Automation →
+*Load track record*, or the offer the inbox makes you once). Until you have run it the fleet lists
+your agents with their open counts and em-dashes on the closed side, and offers the load in place
+with the same progress line. A repository with nothing counted in the window shows an em-dash
+rather than 0 %, because "nothing was counted" and "none of it was green" are different things —
+and a repository whose history outlived your inbox is marked *history only* rather than quietly
+reading like a quiet week ([ADR 0035](adr/0035-the-fleet.md)).
+
 ### A morning digest, built on your Mac
 
 Switch it on and once a day — nine o'clock by default, weekdays only if you like — Shepherd tells

@@ -395,6 +395,21 @@ struct CommandPaletteView: View {
                 environment.settings.groupBy = .reviewState
             }
         )
+        // Outside the `if case .inbox` and `if case .review` blocks below, so it is offered from
+        // both routes: the fleet is about the agents whose work fills either screen, and the
+        // question "how has this one been doing" is asked at least as often *while reading a diff*
+        // as from the list (ADR 0035). Its title spells out "agent" because the rail row it
+        // duplicates is called Fleet, and between the two spellings a reviewer types one of them.
+        result.append(
+            PaletteCommand(
+                id: "fleet",
+                section: inbox,
+                title: String(localized: "Show the agent fleet"),
+                systemImage: "person.2.badge.gearshape"
+            ) {
+                environment.openFleet()
+            }
+        )
         result.append(
             PaletteCommand(
                 id: "appearance",
