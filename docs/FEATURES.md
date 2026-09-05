@@ -759,7 +759,11 @@ if you want to help with a bug, you open the folder and attach the file yourself
 Everything lives in a SQLite database on your Mac ([ADR 0006](adr/0006-local-first-sqlite-grdb.md)).
 GitHub is a sync target, not a backend. Writes go through a persisted outbox, so an approval you
 pressed offline is still an approval when the network comes back — and a queued approval has
-approved nothing until it lands. Settings → Sync is where the queue is accounted for: how many
+approved nothing until it lands. The toast says which of the two happened: *"Approved
+schnaq/review#182."* only once the row really reached GitHub, *"Approval queued for …"* while it is
+still on this Mac, and *"Review held back — … changed since you started"* when the pull request
+moved on and the review was parked instead of sent. A merge says *"Merged …"* when it lands,
+whenever the drain got to it. Settings → Sync is where the queue is accounted for: how many
 writes are waiting, how many were parked because the pull request moved on, and — named one by one,
 with the reason and a Retry or Discard button — the ones GitHub refused outright, which are the
 only ones that will never leave the queue on their own. No server, no telemetry, no account other than your GitHub login;

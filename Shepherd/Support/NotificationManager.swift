@@ -165,7 +165,10 @@ final class NotificationManager {
         case .changesRequestedOnOwnPR, .prMerged, .prUpdated, .mutationSent, .sweepCompleted,
              .syncFailed:
             // A mutation the user just triggered themselves needs no notification — the toast
-            // already said so, and the webhook dispatcher takes it from here (ADR 0012).
+            // says so, and the webhook dispatcher takes it from here (ADR 0012). That argument
+            // used to be half true for a merge, whose toast could only say "queued": the app now
+            // toasts the merge when the drain reports it sent (`AppEnvironment.confirmMerge(_:)`),
+            // so the toast really does say it and this stays silent.
             // `changesRequestedOnOwnPR` exists for the auto-delegation rules (ADR 0016) and gets
             // no notification category of its own: the review already shows up in the inbox, and
             // an automatic start announces itself below. `sweepCompleted` is the routine

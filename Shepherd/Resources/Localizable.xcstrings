@@ -2821,6 +2821,16 @@
         }
       }
     },
+    "Approval queued for %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Approval für %@ eingereiht."
+          }
+        }
+      }
+    },
     "Approve": {
       "localizations": {
         "de": {
@@ -3661,6 +3671,16 @@
         }
       }
     },
+    "Change request queued for %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Request Changes für %@ eingereiht."
+          }
+        }
+      }
+    },
     "Change the guardrails in Settings → Delegation": {
       "localizations": {
         "de": {
@@ -4191,6 +4211,16 @@
         }
       }
     },
+    "Commented on %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ kommentiert."
+          }
+        }
+      }
+    },
     "Comment…": {
       "localizations": {
         "de": {
@@ -4321,6 +4351,26 @@
         }
       }
     },
+    "Could not mark %@ ready for review": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ konnte nicht als bereit für ein Review markiert werden"
+          }
+        }
+      }
+    },
+    "Could not merge %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ konnte nicht gemergt werden"
+          }
+        }
+      }
+    },
     "Could not open %@#%lld": {
       "localizations": {
         "de": {
@@ -4431,6 +4481,26 @@
         }
       }
     },
+    "Could not send the reply to %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Antwort auf %@ konnte nicht gesendet werden"
+          }
+        }
+      }
+    },
+    "Could not send the review for %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Review für %@ konnte nicht gesendet werden"
+          }
+        }
+      }
+    },
     "Could not update the pull request": {
       "localizations": {
         "de": {
@@ -4447,6 +4517,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Der Thread konnte nicht aktualisiert werden"
+          }
+        }
+      }
+    },
+    "Could not update the thread on %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Thread in %@ konnte nicht aktualisiert werden"
           }
         }
       }
@@ -6701,6 +6781,16 @@
         }
       }
     },
+    "Merge held back — %@ changed since you started. See the alert.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge zurückgehalten — %@ hat sich geändert, seit du angefangen hast. Siehe Hinweis."
+          }
+        }
+      }
+    },
     "Merge pull request…": {
       "localizations": {
         "de": {
@@ -6727,6 +6817,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Auswahl mergen…"
+          }
+        }
+      }
+    },
+    "Merged %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ gemergt."
           }
         }
       }
@@ -7367,6 +7467,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nicht ausgewählt"
+          }
+        }
+      }
+    },
+    "Not sent — %@ changed since you started.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht gesendet — %@ hat sich geändert, seit du angefangen hast."
           }
         }
       }
@@ -8791,6 +8901,16 @@
         }
       }
     },
+    "Ready for review queued.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markierung „bereit für ein Review“ eingereiht."
+          }
+        }
+      }
+    },
     "Rebase and merge": {
       "localizations": {
         "de": {
@@ -9041,6 +9161,16 @@
         }
       }
     },
+    "Reply sent.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Antwort gesendet."
+          }
+        }
+      }
+    },
     "Reply…": {
       "localizations": {
         "de": {
@@ -9207,6 +9337,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zuerst reviewen"
+          }
+        }
+      }
+    },
+    "Review held back — %@ changed since you started. See the alert.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review zurückgehalten — %@ hat sich geändert, seit du angefangen hast. Siehe Hinweis."
           }
         }
       }
@@ -11937,6 +12077,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Thread aufgelöst."
+          }
+        }
+      }
+    },
+    "Thread update queued.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thread-Änderung eingereiht."
           }
         }
       }

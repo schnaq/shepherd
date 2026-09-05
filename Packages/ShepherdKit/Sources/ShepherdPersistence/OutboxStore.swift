@@ -184,6 +184,31 @@ extension DatabaseManager {
         }
     }
 
+    /// One row by its identity, or `nil` when the outbox no longer holds it.
+    ///
+    /// The read behind ``ShepherdCore/OutboxWriteOutcome/init(row:)``: a caller that has just
+    /// enqueued a write and drained asks what became of *its* row, and the answer is already in
+    /// the queue — gone means sent, ``ShepherdCore/OutboxState/conflicted`` means parked,
+    /// ``ShepherdCore/OutboxState/failed`` means given up on. One indexed lookup by primary key,
+    /// rather than ``allOutboxItems()`` and a `first(where:)` over a table the caller does not
+    /// care about.
+    ///
+    /// A row whose payload no longer decodes throws rather than being skipped, unlike the list
+    /// reads above: those describe a queue and must not hide the rest of it, while this one
+    /// answers a question about a single row, and "no such row" would be a wrong answer.
+    /// - Parameter id: The row's identity.
+    /// - Returns: The row, or `nil` when it is not in the outbox any more.
+    public func outboxItem(id: UUID) async throws -> OutboxItem? {
+        let record = try await writer.read { db in
+            try OutboxRecord.fetchOne(
+                db,
+                sql: "SELECT * FROM outbox WHERE id = ?",
+                arguments: [id.uuidString]
+            )
+        }
+        return try record?.outboxItem()
+    }
+
     /// Every row currently in the outbox, newest last. Used by the Settings screen and tests.
     public func allOutboxItems() async throws -> [OutboxItem] {
         try await writer.read { db in

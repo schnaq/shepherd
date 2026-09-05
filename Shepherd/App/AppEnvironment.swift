@@ -451,6 +451,7 @@ final class AppEnvironment {
         if case .draftConflict(let conflict) = event {
             draftConflicts.raise(conflict)
         }
+        confirmMerge(event)
         // Fire-and-forget by construction: the coordinator spawns its own task and swallows
         // every failure, so a broken webhook cannot slow down or break the sync (ADR 0012).
         webhookCoordinator.handle(event, database: session?.database)
@@ -464,6 +465,35 @@ final class AppEnvironment {
                 automatic: true
             )
         }
+    }
+
+    /// Says so when a merge actually lands.
+    ///
+    /// The merge is the one write whose *landing* nothing else reported. At the button the most
+    /// that can honestly be said is "Merge queued for …", because the drain re-checks the head
+    /// commit and can park the row instead (ADR 0006) — so ``PullRequestActions`` says nothing
+    /// there once the row is really gone, and ``NotificationManager/payload(for:settings:)``
+    /// deliberately posts nothing for ``ShepherdSync/SyncEvent/mutationSent(_:)``. Without this
+    /// the loop never closed.
+    ///
+    /// Merges only. An approval already says "Approved …" the moment the drain sent it, so a
+    /// second toast per action would be noise rather than news, and the queued half of every
+    /// other write is confirmed by the row leaving the queue.
+    ///
+    /// It also covers the merge this window never queued: a row drained later, by the sweep loop
+    /// or after the network came back, arrives here exactly the same way — and so does an
+    /// automatic one (ADR 0018). That is deliberate rather than an oversight of
+    /// ``PullRequestActions/announcesSuccess``: that flag silences the *queueing* toast for rows
+    /// nobody asked for one by one, while a branch that really got merged while nobody was
+    /// watching is the one thing about the pass worth saying out loud, once per merge.
+    /// - Parameter event: The event the sync engine emitted.
+    private func confirmMerge(_ event: SyncEvent) {
+        guard case .mutationSent(let sent) = event, case .merged = sent.kind else { return }
+        // Built here rather than carried on the event: ``ShepherdSync/SentMutation`` holds the
+        // repository and the number and spends no fetch on describing itself, which is the same
+        // two fields the draft-conflict notification spells a slug out of.
+        let slug = "\(sent.repo.fullName)#\(sent.number)"
+        toasts.success(String(localized: "Merged \(slug)."))
     }
 
     // MARK: - Automatic merging (ADR 0018)

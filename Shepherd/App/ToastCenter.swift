@@ -8,7 +8,11 @@ import SwiftUI
 /// is reversible" — and, just as importantly, errors are surfaced here rather than printed.
 struct Toast: Identifiable, Sendable {
     /// How the toast is tinted.
-    enum Kind: Sendable {
+    ///
+    /// `Equatable` so a test can assert which tint a write's outcome earned: a parked write and a
+    /// refused one say different things *and* look different, and the second half is as much a
+    /// part of the message as the first.
+    enum Kind: Sendable, Equatable {
         /// Something worked.
         case success
         /// Something needs attention but is not fatal.

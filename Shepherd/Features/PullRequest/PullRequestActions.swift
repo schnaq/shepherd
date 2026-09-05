@@ -9,6 +9,12 @@ import ShepherdPersistence
 /// ADR 0006 is explicit: outbound mutations are written to SQLite first and executed by the
 /// sync engine, so an approval survives a crash, a quit or a tunnel. Nothing here calls
 /// `GitHubClient` directly for a mutation that the outbox models.
+///
+/// Every toast here is worded by what the drain *did* with the row rather than by what the user
+/// asked for. The drain can park a write as a conflict or give up on it, and a screen that says
+/// "Approved schnaq/review#182." either way is followed a second later by an alert saying the
+/// review was never sent — so the outcome is read back off the queue and the sentence chosen
+/// from it (``ShepherdCore/OutboxWriteOutcome``, ``enqueue(_:on:)``).
 @MainActor
 struct PullRequestActions {
     /// The active session.
@@ -78,8 +84,8 @@ struct PullRequestActions {
                 body: body
             )
             try await session.database.saveDraft(draft)
-            try await enqueue(.submitReview(draft), on: summary)
-            toasts.success(confirmation(for: verdict, summary: summary))
+            let outcome = try await enqueue(.submitReview(draft), on: summary)
+            announce(outcome, of: .review(verdict), on: summary)
             onDidQueueVerdict?(summary.id)
         } catch {
             toasts.failure(error, context: String(localized: "Could not queue the review"))
@@ -97,11 +103,11 @@ struct PullRequestActions {
         body: String
     ) async {
         do {
-            try await enqueue(
+            let outcome = try await enqueue(
                 .replyToComment(commentDatabaseID: commentDatabaseID, body: body),
                 on: summary
             )
-            toasts.success(String(localized: "Reply queued."))
+            announce(outcome, of: .reply, on: summary)
         } catch {
             toasts.failure(error, context: String(localized: "Could not queue the reply"))
         }
@@ -118,15 +124,11 @@ struct PullRequestActions {
         resolved: Bool
     ) async {
         do {
-            try await enqueue(
+            let outcome = try await enqueue(
                 resolved ? .resolveThread(threadID: threadID) : .unresolveThread(threadID: threadID),
                 on: summary
             )
-            toasts.success(
-                resolved
-                    ? String(localized: "Thread resolved.")
-                    : String(localized: "Thread reopened.")
-            )
+            announce(outcome, of: .thread(resolved: resolved), on: summary)
         } catch {
             toasts.failure(error, context: String(localized: "Could not update the thread"))
         }
@@ -140,13 +142,11 @@ struct PullRequestActions {
     ///   - method: Merge, squash or rebase.
     func merge(_ summary: PullRequestSummary, method: MergeMethod) async {
         do {
-            try await enqueue(
+            let outcome = try await enqueue(
                 .merge(method: method.rawValue, expectedHeadOid: summary.headRefOid),
                 on: summary
             )
-            if announcesSuccess {
-                toasts.success(String(localized: "Merge queued for \(summary.slug)."))
-            }
+            announce(outcome, of: .merge, on: summary)
             onDidQueueVerdict?(summary.id)
         } catch {
             toasts.failure(error, context: String(localized: "Could not queue the merge"))
@@ -253,8 +253,8 @@ struct PullRequestActions {
     /// - Parameter summary: The pull request.
     func markReadyForReview(_ summary: PullRequestSummary) async {
         do {
-            try await enqueue(.markReadyForReview, on: summary)
-            toasts.success(String(localized: "Marked ready for review."))
+            let outcome = try await enqueue(.markReadyForReview, on: summary)
+            announce(outcome, of: .readyForReview, on: summary)
         } catch {
             toasts.failure(error, context: String(localized: "Could not update the pull request"))
         }
@@ -300,28 +300,216 @@ struct PullRequestActions {
         }
     }
 
-    // MARK: - Plumbing
+    // MARK: - What the user asked for
 
-    private func enqueue(_ action: OutboxAction, on summary: PullRequestSummary) async throws {
-        try await session.database.enqueue(
-            OutboxItem(
-                prID: summary.id,
-                repo: summary.repo,
-                number: summary.number,
-                action: action
-            )
-        )
-        await session.drainOutbox()
+    /// Which write a toast is about, in the terms the user pressed a button in.
+    ///
+    /// A small enum of its own rather than the ``ShepherdCore/OutboxAction`` the row carries: the
+    /// sentence is about what the *person* asked for, and two actions the outbox barely tells
+    /// apart — resolving a thread and reopening one — are two different pieces of news.
+    enum WriteKind: Sendable, Hashable {
+        /// A review verdict.
+        case review(ReviewVerdict)
+        /// A reply to an existing review comment.
+        case reply
+        /// A review thread resolved (`true`) or reopened (`false`).
+        case thread(resolved: Bool)
+        /// A merge.
+        case merge
+        /// Taking the pull request out of draft state.
+        case readyForReview
     }
 
-    private func confirmation(
-        for verdict: ReviewVerdict,
-        summary: PullRequestSummary
-    ) -> String {
-        switch verdict {
-        case .approve: return String(localized: "Approved \(summary.slug).")
-        case .requestChanges: return String(localized: "Requested changes on \(summary.slug).")
-        case .comment: return String(localized: "Review comment queued for \(summary.slug).")
+    /// The toast an outcome deserves, or `nil` when that outcome is announced elsewhere.
+    ///
+    /// `static` and pure so the wording can be asserted on its own. The app's tests cannot build
+    /// a ``SignedInSession`` — it wants the Keychain and the real database file — and the wording
+    /// is the whole point of this path, so it is written where a test can reach it.
+    /// - Parameters:
+    ///   - outcome: What the drain did with the row.
+    ///   - write: What the user asked for.
+    ///   - slug: The pull request, as `owner/repo#123`.
+    /// - Returns: The toast to show, or `nil` when nothing is to be said here.
+    static func announcement(
+        for outcome: OutboxWriteOutcome,
+        of write: WriteKind,
+        slug: String
+    ) -> Toast? {
+        switch outcome {
+        case .sent:
+            guard let message = sentMessage(write, slug: slug) else { return nil }
+            return Toast(message: message, kind: .success)
+        case .queued:
+            return Toast(message: queuedMessage(write, slug: slug), kind: .success)
+        case .parked:
+            // A warning rather than a failure, because nothing is lost: the draft is still on
+            // disk, and the alert this sentence points at is where it is re-applied or discarded
+            // (``DraftConflictQueue``, ADR 0006). The reason the row carries is not shown — it
+            // names two commit SHAs, and "the pull request changed" is the part a person acts on.
+            return Toast(message: parkedMessage(write, slug: slug), kind: .warning, duration: 8)
+        case .failed(let reason):
+            let sentence = failedMessage(write, slug: slug)
+            // The shape ``ToastCenter/failure(_:context:)`` builds, for its reason: what GitHub
+            // or the drain said is one untranslated sentence from somewhere else, so it is
+            // appended after the translated one rather than interpolated into it.
+            return Toast(
+                message: reason.map { "\(sentence): \($0)" } ?? sentence,
+                kind: .failure,
+                duration: 8
+            )
+        }
+    }
+
+    /// What to say about a write that actually reached GitHub.
+    private static func sentMessage(_ write: WriteKind, slug: String) -> String? {
+        switch write {
+        case .review(.approve):
+            return String(localized: "Approved \(slug).")
+        case .review(.requestChanges):
+            return String(localized: "Requested changes on \(slug).")
+        case .review(.comment):
+            return String(localized: "Commented on \(slug).")
+        case .reply:
+            return String(localized: "Reply sent.")
+        case .thread(let resolved):
+            return resolved
+                ? String(localized: "Thread resolved.")
+                : String(localized: "Thread reopened.")
+        case .merge:
+            // Said once, from the other end: a merge that lands is announced by
+            // `AppEnvironment.handle(_:)` off ``ShepherdSync/SyncEvent/mutationSent(_:)``, which
+            // is also the only thing that can announce a merge a *later* drain sent. Saying it
+            // here as well would put two toasts on screen for one merge.
+            return nil
+        case .readyForReview:
+            return String(localized: "Marked ready for review.")
+        }
+    }
+
+    /// What to say about a write that is on disk but has not landed yet.
+    ///
+    /// Not a failure and not a lie: an offline approval, a backoff or a drain that is still
+    /// running is the ordinary local-first promise (ADR 0006), and the queue keeps it.
+    private static func queuedMessage(_ write: WriteKind, slug: String) -> String {
+        switch write {
+        case .review(.approve):
+            return String(localized: "Approval queued for \(slug).")
+        case .review(.requestChanges):
+            return String(localized: "Change request queued for \(slug).")
+        case .review(.comment):
+            return String(localized: "Review comment queued for \(slug).")
+        case .reply:
+            return String(localized: "Reply queued.")
+        case .thread:
+            // One sentence for both directions: which way the toggle went is on screen behind
+            // the toast, and "queued" is the whole of what this adds to it.
+            return String(localized: "Thread update queued.")
+        case .merge:
+            return String(localized: "Merge queued for \(slug).")
+        case .readyForReview:
+            return String(localized: "Ready for review queued.")
+        }
+    }
+
+    /// What to say about a write the drain parked because the pull request moved on.
+    private static func parkedMessage(_ write: WriteKind, slug: String) -> String {
+        switch write {
+        case .review:
+            return String(
+                localized: "Review held back — \(slug) changed since you started. See the alert."
+            )
+        case .merge:
+            return String(
+                localized: "Merge held back — \(slug) changed since you started. See the alert."
+            )
+        case .reply, .thread, .readyForReview:
+            // Nothing parks these three today — only a review draft and a merge are checked
+            // against the head commit — but the outcome is read off the queue rather than
+            // guessed, so the sentence exists for the day the drain learns to park one of them.
+            // It points at no alert, because only a parked *review* raises one (ADR 0006).
+            return String(localized: "Not sent — \(slug) changed since you started.")
+        }
+    }
+
+    /// What to say about a write the drain gave up on. No full stop: a reason is appended.
+    private static func failedMessage(_ write: WriteKind, slug: String) -> String {
+        switch write {
+        case .review:
+            return String(localized: "Could not send the review for \(slug)")
+        case .reply:
+            return String(localized: "Could not send the reply to \(slug)")
+        case .thread:
+            return String(localized: "Could not update the thread on \(slug)")
+        case .merge:
+            return String(localized: "Could not merge \(slug)")
+        case .readyForReview:
+            return String(localized: "Could not mark \(slug) ready for review")
+        }
+    }
+
+    // MARK: - Plumbing
+
+    /// Shows the toast the outcome deserves.
+    ///
+    /// ``announcesSuccess`` gates the two outcomes that are merely the queue doing its job —
+    /// sent and still queued — and never the two that need somebody: a pass nobody watched
+    /// (ADR 0018) still has to say when its write was parked or refused, which is exactly what
+    /// that property has always claimed.
+    /// - Parameters:
+    ///   - outcome: What the drain did with the row.
+    ///   - write: What the user asked for.
+    ///   - summary: The pull request it targeted.
+    private func announce(
+        _ outcome: OutboxWriteOutcome,
+        of write: WriteKind,
+        on summary: PullRequestSummary
+    ) {
+        switch outcome {
+        case .sent, .queued:
+            guard announcesSuccess else { return }
+        case .parked, .failed:
+            break
+        }
+        guard let toast = Self.announcement(for: outcome, of: write, slug: summary.slug) else {
+            return
+        }
+        toasts.show(toast)
+    }
+
+    /// Writes one row, drains, and reads back what became of *that* row.
+    ///
+    /// The read is the whole mechanism. ``ShepherdSync/SyncEngine/drainOutbox()`` returns nothing
+    /// and needs to return nothing: the queue already records every outcome ADR 0006 defines — a
+    /// sent row is deleted, a parked one is ``ShepherdCore/OutboxState/conflicted`` with its
+    /// reason, a refused one is ``ShepherdCore/OutboxState/failed`` with GitHub's — so the row
+    /// this call just wrote is looked up by its own id afterwards. Reading the store rather than
+    /// plumbing an outcome out of the engine also answers correctly when a *concurrent* drain was
+    /// the one that sent the row, which a return value could not.
+    /// - Parameters:
+    ///   - action: The mutation.
+    ///   - summary: The pull request it targets.
+    /// - Returns: What became of the row.
+    /// - Throws: When the local write fails — the one failure that is not an outcome, because
+    ///   nothing was queued at all.
+    private func enqueue(
+        _ action: OutboxAction,
+        on summary: PullRequestSummary
+    ) async throws -> OutboxWriteOutcome {
+        let item = OutboxItem(
+            prID: summary.id,
+            repo: summary.repo,
+            number: summary.number,
+            action: action
+        )
+        try await session.database.enqueue(item)
+        await session.drainOutbox()
+        do {
+            let row = try await session.database.outboxItem(id: item.id)
+            return OutboxWriteOutcome(row: row)
+        } catch {
+            // The row was written and only the read back failed, so "still queued" is both the
+            // honest answer and the one that promises least.
+            return .queued
         }
     }
 }

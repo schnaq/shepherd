@@ -197,6 +197,54 @@ public struct OutboxItem: Sendable, Codable, Hashable, Identifiable {
     }
 }
 
+/// What became of one outbox row, read back after a drain.
+///
+/// The outbox already records this and has done since ADR 0006: a row that reached GitHub is
+/// deleted, a row the drain parked is ``OutboxState/conflicted`` with its reason in
+/// ``OutboxItem/lastError``, and a row the drain gave up on is ``OutboxState/failed`` with the
+/// same. So this is a *reading* of the queue rather than a second record of it — the drain
+/// returns nothing and needs to return nothing, and a caller that wants to know what happened to
+/// the row it just wrote looks that row up afterwards.
+///
+/// It exists because "I queued it" and "it happened" are different sentences and a user who is
+/// told the second one when only the first is true has been lied to: a parked review is followed
+/// by an alert saying it was never sent.
+public enum OutboxWriteOutcome: Sendable, Hashable {
+    /// The row left the queue, which it only does by being sent.
+    case sent
+    /// Still queued — offline, waiting out a backoff, or in flight in a drain that has not come
+    /// back yet. This is the ordinary local-first promise rather than a problem: the row is on
+    /// disk and the engine keeps trying until it lands.
+    case queued
+    /// Parked because the target moved on underneath the write. It is never retried on its own,
+    /// so only the user can move it from here.
+    case parked(reason: String?)
+    /// Given up on, because retrying cannot fix what went wrong.
+    case failed(reason: String?)
+
+    /// Reads the outcome off the row as the drain left it.
+    /// - Parameter row: The row as the outbox holds it now, or `nil` when it is no longer there.
+    public init(row: OutboxItem?) {
+        guard let row else {
+            self = .sent
+            return
+        }
+        switch row.state {
+        case .pending, .sending:
+            self = .queued
+        case .conflicted:
+            self = .parked(reason: row.lastError)
+        case .failed:
+            self = .failed(reason: row.lastError)
+        case .succeeded:
+            // No row is ever stored in this state — a sent row is deleted outright by the
+            // store's `markOutboxItemSucceeded(id:)`, which is the `nil` above — but the case
+            // exists in the model, and answering anything but "sent" for it would be wrong.
+            self = .sent
+        }
+    }
+}
+
 /// The retry schedule for failed outbox rows.
 ///
 /// Exponential with a ceiling: a GitHub outage must not turn into a request storm, and a

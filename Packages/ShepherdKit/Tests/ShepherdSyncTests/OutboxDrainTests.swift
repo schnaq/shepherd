@@ -666,4 +666,75 @@ final class OutboxDrainTests: XCTestCase {
             .issueReopened
         )
     }
+
+    // MARK: - Reading the outcome back off the queue
+
+    /// The mechanism the write-path toasts are worded from: after a drain, the row a caller
+    /// enqueued says what became of it, without the drain returning anything.
+    func testASentRowReadsBackAsSent() async throws {
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        let id = try await enqueue(.resolveThread(threadID: "PRRT_1"), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        await engine.drainOutbox()
+
+        let row = try await store.outboxItem(id: id)
+        XCTAssertNil(row, "a sent row is deleted, which is the only way one leaves the queue")
+        XCTAssertEqual(OutboxWriteOutcome(row: row), .sent)
+    }
+
+    func testAParkedRowReadsBackAsParkedWithItsReason() async throws {
+        let github = MockGitHub()
+        await github.setHeadOid("head-2", repo: repo, number: 1)
+        let store = try DatabaseManager.inMemory()
+        let pending = draft(headOid: "head-1")
+        try await store.saveDraft(pending)
+        let id = try await enqueue(.submitReview(pending), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        await engine.drainOutbox()
+
+        let row = try await store.outboxItem(id: id)
+        XCTAssertEqual(row?.state, .conflicted)
+        guard case .parked(let reason) = OutboxWriteOutcome(row: row) else {
+            return XCTFail("a review the head moved under is parked, not sent")
+        }
+        XCTAssertEqual(reason?.contains("head-2"), true)
+    }
+
+    func testARefusedRowReadsBackAsFailedWithWhatGitHubSaid() async throws {
+        let github = MockGitHub()
+        await github.setHeadOid("head-1", repo: repo, number: 1)
+        await github.setSubmitError(.validationFailed(message: "line not in diff"))
+        let store = try DatabaseManager.inMemory()
+        let id = try await enqueue(.submitReview(draft(headOid: "head-1")), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        await engine.drainOutbox()
+
+        let row = try await store.outboxItem(id: id)
+        XCTAssertEqual(row?.state, .failed)
+        guard case .failed(let reason) = OutboxWriteOutcome(row: row) else {
+            return XCTFail("a 4xx is given up on rather than parked")
+        }
+        XCTAssertEqual(reason?.contains("line not in diff"), true)
+    }
+
+    func testARetryableFailureReadsBackAsStillQueued() async throws {
+        // The outcome that is not news: the row is on disk, the engine will try again, and the
+        // toast may still promise what the outbox promises (ADR 0006).
+        let github = MockGitHub()
+        await github.setHeadOid("head-1", repo: repo, number: 1)
+        await github.setSubmitError(.server(status: 502, message: "bad gateway"))
+        let store = try DatabaseManager.inMemory()
+        let id = try await enqueue(.submitReview(draft(headOid: "head-1")), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        await engine.drainOutbox()
+
+        let row = try await store.outboxItem(id: id)
+        XCTAssertEqual(row?.state, .pending)
+        XCTAssertEqual(OutboxWriteOutcome(row: row), .queued)
+    }
 }
