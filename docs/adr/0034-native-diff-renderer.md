@@ -118,6 +118,12 @@ consistent.
   layout. If the contract's boundary is ever widened past these three things, this becomes the
   maintenance cost ADR 0003 was written to avoid; holding it is now this ADR's job, not the
   plan's.
+- **A line with several threads offers only one of them from the list.** `activeThreadID` is a
+  single id and the popover shows one conversation, so ⏎ on a row has to pick: the first
+  unresolved thread, and the first thread otherwise — an unresolved one is a question still
+  waiting, a resolved one is a record. The row's count still says how many there are, and Monaco
+  reaches all of them. A picker on the row was rejected as more UI than the case is worth; if it
+  turns out to matter, the shape to reach for is the conversation tab, not a second popover.
 - **`revealLine` reaches only Monaco.** The CI diagnosis card's `file:line` link
   (`ReviewModel.reveal(path:line:)`, ADR 0024) opens the right file in either renderer, but scrolls
   to the named line only in the Monaco branch — the native list has no line-to-row map and no

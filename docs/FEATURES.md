@@ -245,7 +245,10 @@ side-by-side/inline switch has nothing to draw in a single column, so the list i
 
 Commenting works the same way it does in Monaco — `j`/`k` to the line, `c` to open the composer —
 but there is no pane to cross: a deleted line is simply a row in the list, so reaching it needs no
-bracket at all. The list does not attempt syntax highlighting, word-level diffs, side-by-side
+bracket at all. With a mouse, double-click a row to comment on it. A line that already carries a
+conversation says so, and ⏎ opens it — or a click on the bubble. Where a line carries more than
+one, ⏎ opens the first one still unresolved, and the rest stay reachable in the rich viewer. The
+list does not attempt syntax highlighting, word-level diffs, side-by-side
 layout, folding, or a minimap; those stay Monaco's, on purpose, so the two renderers stay in step
 only on what a comment needs and differ freely on everything else. One gap, named rather than
 hidden: a `file:line` link — from the "Why is CI red?" card, the claims card, or a "Since your
