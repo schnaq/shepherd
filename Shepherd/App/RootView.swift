@@ -55,6 +55,12 @@ struct SignedInRootView: View {
             case .review(let prID):
                 ReviewScreen(session: session, settings: environment.settings, prID: prID)
                     .id(prID)
+            case .fleet(let agentID):
+                // No `.id(agentID)` beside it, unlike the review screen above: the agent is a
+                // *selection* inside one screen rather than the subject the screen is built for,
+                // so re-creating the view when a link names a second agent would throw away a
+                // roster that has just been counted. `FleetScreen` watches the value instead.
+                FleetScreen(session: session, agentID: agentID)
             }
 
             if environment.isCommandPaletteVisible {

@@ -31,6 +31,20 @@ final class AppEnvironment {
         case inbox
         /// The full-window review screen for one pull request.
         case review(prID: String)
+        /// The fleet: every agent Shepherd has counted, or one of them.
+        ///
+        /// A route rather than a third `ContentKind` beside the pull requests and the issues
+        /// (ADR 0032): that picker exists because both of its sections own a *pull-request-shaped
+        /// selection* the toolbar, `j`/`k`, ⌘K and the focus session all address, and the fleet
+        /// owns none — it selects an agent, and nothing outside the screen has an opinion about
+        /// which one.
+        ///
+        /// The agent travels as its **registry id** and never as a display name, which is the
+        /// third of the three structural layers that keep this screen about agents rather than
+        /// about people: an id is something the registry has and a login is not, so a link cannot
+        /// be made to name a person by naming them. `nil` is the whole fleet with nothing
+        /// selected; an id no agent carries is shown as such rather than silently ignored.
+        case fleet(agentID: String?)
     }
 
     /// The current phase.
@@ -1115,6 +1129,30 @@ final class AppEnvironment {
     /// Clears the issue request after the inbox has revealed it.
     func clearPendingIssueSelection() {
         pendingIssueSelection = nil
+    }
+
+    /// Opens the fleet, on one agent or on the whole list.
+    ///
+    /// ``openIssue(issueID:)``'s sibling, and the one entry point every surface that names an
+    /// agent goes through — a `shepherd://fleet/…` link, a ⌘K row, the rail, the track-record
+    /// popover's footer — so "show me this agent" has one implementation for the same reason
+    /// opening a review or an issue does.
+    ///
+    /// A running focus session ends first and **without announcing**, exactly as opening an issue
+    /// does and for that method's reason: the user has left the queue, so the session ends rather
+    /// than leaving a bar on screen naming a pull request the screen below it is not about — and
+    /// the completion view is raised *after* the route changes, so a summary announced here would
+    /// never be shown and would instead sit in this container until the next time the user
+    /// happened to reach the inbox. That is the toast it replaced: a report about something the
+    /// reader has since stopped doing.
+    ///
+    /// There is no `pending…` request beside this one, unlike the issue above: the fleet's
+    /// selection is *in* the route, so there is no screen-owned state for the container to reach
+    /// into and nothing to clear afterwards.
+    /// - Parameter agentID: The registry id of the agent to select, or `nil` for the whole fleet.
+    func openFleet(agentID: String? = nil) {
+        if reviewSession != nil { endReviewSession(announcing: false) }
+        route = .fleet(agentID: agentID)
     }
 
     /// Returns to the inbox.

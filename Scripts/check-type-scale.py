@@ -50,6 +50,16 @@ MIGRATED = (
     "Shepherd/Features/Review/ReviewUpdateBanner.swift",
     "Shepherd/Features/Inbox/TrackRecordNoticeView.swift",
     "Shepherd/Features/Review/ReviewSessionSummaryView.swift",
+    # The fleet (plan §7), on the scale from birth rather than migrated onto it: every size in it
+    # was chosen out of `Theme.type(_:weight:)` in the first place, so there was never a fixed
+    # measurement to round. It is listed here for the same reason the migrated surfaces are — the
+    # boundary is what erodes, and a `.font(.system(size: 12))` added to one of these files would
+    # look exactly like the code around it.
+    "Shepherd/Features/Fleet/FleetScreen.swift",
+    "Shepherd/Features/Fleet/FleetAgentRow.swift",
+    "Shepherd/Features/Fleet/FleetAgentDetail.swift",
+    "Shepherd/Features/Fleet/FleetNoticeText.swift",
+    "Shepherd/Features/Fleet/FleetModel.swift",
 )
 
 # A fixed point size, either spelling: SwiftUI's own or `Theme.mono`'s numeric overload. `\s*`
