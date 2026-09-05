@@ -1221,6 +1221,46 @@
         }
       }
     },
+    "%lld of your own pull requests are still open.": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld deiner eigenen Pull Requests ist noch offen."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld deiner eigenen Pull Requests sind noch offen."
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld of your own pull requests is still open."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld of your own pull requests are still open."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld of your pull requests need attention": {
       "localizations": {
         "de": {
@@ -4911,6 +4951,16 @@
         }
       }
     },
+    "Done": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fertig"
+          }
+        }
+      }
+    },
     "Done & next": {
       "localizations": {
         "de": {
@@ -6181,6 +6231,16 @@
         }
       }
     },
+    "It reads the pull requests your repositories closed in the last 90 days, at most 500 per repository, and the sync keeps it current from then on.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liest die Pull Requests, die deine Repositories in den letzten 90 Tagen geschlossen haben, höchstens 500 pro Repository — danach hält die Synchronisierung sie aktuell."
+          }
+        }
+      }
+    },
     "It was merged, closed, or dropped out of the sweep.": {
       "localizations": {
         "de": {
@@ -6457,6 +6517,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Diesen für später liegen lassen und zum nächsten Pull Request gehen"
+          }
+        }
+      }
+    },
+    "Left in the queue": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch in der Warteschlange"
           }
         }
       }
@@ -6851,6 +6921,16 @@
         }
       }
     },
+    "Merged or closed meanwhile": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inzwischen gemergt oder geschlossen"
+          }
+        }
+      }
+    },
     "Merge…": {
       "localizations": {
         "de": {
@@ -7007,6 +7087,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Weder die verankerten Zeilen noch der Thread haben sich seit deinem Review geändert."
+          }
+        }
+      }
+    },
+    "New review requests land here on their own; ⌘R checks now.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Review-Anfragen landen hier von selbst; ⌘R prüft sofort."
           }
         }
       }
@@ -7477,6 +7567,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nicht in deiner Inbox – öffnet %@ auf GitHub."
+          }
+        }
+      }
+    },
+    "Not now": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jetzt nicht"
           }
         }
       }
@@ -9491,6 +9591,16 @@
         }
       }
     },
+    "Reviewed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gereviewt"
+          }
+        }
+      }
+    },
     "Rich viewer": {
       "localizations": {
         "de": {
@@ -9791,6 +9901,16 @@
         }
       }
     },
+    "See how each agent's pull requests have fared in your repositories — rounds, merges, reverts.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sieh, wie sich die Pull Requests jedes Agents in deinen Repositories geschlagen haben — Runden, Merges, Reverts."
+          }
+        }
+      }
+    },
     "Select": {
       "localizations": {
         "de": {
@@ -9951,12 +10071,32 @@
         }
       }
     },
+    "Session complete": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sitzung fertig"
+          }
+        }
+      }
+    },
     "Session complete — %@ · %@": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Sitzung fertig — %@ · %@"
+          }
+        }
+      }
+    },
+    "Session ended": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sitzung beendet"
           }
         }
       }
@@ -10537,6 +10677,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Überfliegen"
+          }
+        }
+      }
+    },
+    "Skipped": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Übersprungen"
           }
         }
       }
@@ -12847,6 +12997,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "DEINE ERWEITERUNGEN"
+          }
+        }
+      }
+    },
+    "You are caught up.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du bist durch."
           }
         }
       }

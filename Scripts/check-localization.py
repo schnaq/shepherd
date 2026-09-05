@@ -147,6 +147,7 @@ INTEGER_EXPRESSIONS = frozenset(
         "model.pendingCommentCount",
         "models.count",
         "number",
+        "openPullRequestsOfMine",
         "original",
         "originalStart",
         "outcome.failed.count",

@@ -307,6 +307,22 @@ final class ReviewSessionTests: XCTestCase {
         XCTAssertEqual(summary.message, "Session complete — 1 reviewed, 1 skipped, 1 gone · 10 s")
     }
 
+    func testTheCompletionViewsHeadlineDrawsTheSameDistinctionTheSentenceDoes() {
+        var ranOut = session(1)
+        _ = ranOut.completeCurrent(present: allPresent(in: ranOut))
+        XCTAssertEqual(ranOut.summary(at: Date(timeIntervalSince1970: 1_005)).title, "Session complete")
+
+        var endedEarly = session(4)
+        _ = endedEarly.completeCurrent(present: allPresent(in: endedEarly))
+        let summary = endedEarly.summary(at: Date(timeIntervalSince1970: 1_005))
+        XCTAssertEqual(summary.remaining, 3)
+        XCTAssertEqual(
+            summary.title,
+            "Session ended",
+            "never 'complete' while pull requests are still in the queue"
+        )
+    }
+
     func testASummaryTakenBeforeTheStartNeverReportsANegativeDuration() {
         let running = session(2)
         XCTAssertEqual(

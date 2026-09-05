@@ -65,15 +65,29 @@ struct InboxScreen: View {
         } content: {
             centre
                 // Above the list header, as a top safe-area inset — the same mechanism the shortcut
-                // bar and the review session bar use, so the card is chrome around the list rather
-                // than a row inside it, and the list keeps its own focus and key handling.
+                // bar and the review session bar use, so the cards are chrome around the list
+                // rather than rows inside it, and the list keeps its own focus and key handling.
                 .safeAreaInset(edge: .top, spacing: 0) {
-                    if let report = environment.digest.report {
-                        DigestCardView(
-                            report: report,
-                            onShow: show,
-                            onDismiss: { environment.digest.dismiss() }
-                        )
+                    VStack(spacing: 0) {
+                        if let report = environment.digest.report {
+                            DigestCardView(
+                                report: report,
+                                onShow: show,
+                                onDismiss: { environment.digest.dismiss() }
+                            )
+                        }
+                        // Under the digest on the rare morning both are up: the digest is about
+                        // the night that just passed and expires by itself, while this is about a
+                        // feature and is answered once (ADR 0027's 2026-09-05 amendment). Only
+                        // over the pull requests, because it is an offer to count *their*
+                        // authors' history — an issue has no track record.
+                        if contentKind == .pullRequests, model.showsTrackRecordNotice {
+                            TrackRecordNoticeView(
+                                onAnswer: {
+                                    environment.settings.hasDismissedTrackRecordNotice = true
+                                }
+                            )
+                        }
                     }
                 }
                 .navigationSplitViewColumnWidth(min: 380, ideal: 640)
@@ -89,6 +103,10 @@ struct InboxScreen: View {
             // than at construction for ``intelligence``'s reason: the coordinator belongs to the
             // app's lifetime, the screen is rebuilt whenever the route changes.
             model.triage = environment.triage
+            // Handed over here for ``triage``'s reason once more. The inbox reads it for one
+            // question only — whether to offer the backfill — and the count it asks is refreshed
+            // below (ADR 0027's 2026-09-05 amendment).
+            model.trackRecordCoordinator = environment.trackRecord
             model.startObserving()
             // Handed over here rather than at construction, for `model.intelligence`'s reason:
             // the screen is rebuilt whenever the route changes, and a queued write has to reach
@@ -98,6 +116,9 @@ struct InboxScreen: View {
             // A deep link raised while the review screen was showing routes here first; the
             // request is waiting in the container by the time this screen appears.
             consumeDeepLinkRequests()
+            // One indexed `SELECT COUNT(*)`, and the notice's third condition: an inbox that
+            // already has a history must not be offered one.
+            await environment.refreshTrackRecordCount()
         }
         .onChange(of: environment.intelligence.configuration) { _, _ in
             model.intelligence = environment.intelligence
@@ -113,6 +134,9 @@ struct InboxScreen: View {
         }
         .onChange(of: environment.trackRecord.historyVersion) { _, _ in
             model.refreshTrustLanes()
+            // And the count the notice reads, which the same three events move: a finished
+            // backfill, *Clear history*, and a sign-out.
+            Task { await environment.refreshTrackRecordCount() }
         }
         .onDisappear {
             model.stopObserving()
@@ -153,6 +177,29 @@ struct InboxScreen: View {
                 .frame(width: 620, height: 460)
                 .id(settingsTab)
         }
+        // The end of a focus session, on the screen the session returns to. Here
+        // rather than on the review screen because ``AppEnvironment/endReviewSession(announcing:)``
+        // routes back to the inbox first — by the time there is something to show, the review
+        // screen it was showing has gone.
+        .sheet(isPresented: sessionSummaryBinding) {
+            if let summary = environment.reviewSessionSummary {
+                ReviewSessionSummaryView(summary: summary)
+            }
+        }
+    }
+
+    /// Whether the focus session's completion view is up.
+    ///
+    /// A binding onto the container's optional rather than a `@State` mirror of it: the summary
+    /// is set from outside this screen, and a copy here would have to be kept in step with the
+    /// one place that can set it.
+    private var sessionSummaryBinding: Binding<Bool> {
+        Binding(
+            get: { environment.reviewSessionSummary != nil },
+            set: { isPresented in
+                if !isPresented { environment.clearReviewSessionSummary() }
+            }
+        )
     }
 
     // MARK: - The three panes

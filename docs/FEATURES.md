@@ -189,6 +189,13 @@ button — and from then on the sync keeps it current by itself: when a pull req
 the inbox, Shepherd reads its final state once. Reverts are found by reading titles and
 descriptions (`Revert "…"`, `This reverts commit …`), never by asking GitHub about commits.
 
+You do not have to go and find that button. The first time the inbox has finished a sweep and is
+showing a pull request an agent wrote, a notice above the list offers the same run in place, with
+what it unlocks in one sentence and what it costs — the last ninety days, at most five hundred per
+repository — in the next; it shows the same progress line the Settings card shows while it runs,
+because it *is* the same run. It is offered once: *Not now* ends it, so does a run that came back,
+and it is a note about this Mac rather than a preference, so it does not travel to your other ones.
+
 The two thresholds travel to your other Macs; the history does not — it is rebuilt by a button
 there, which is why the popover says *on this Mac*. *Clear history* empties it, and the lanes carry
 on working, because they never read it.
@@ -304,8 +311,9 @@ requests is twenty keystrokes and no mouse.
 
 The queue is frozen the moment you start it — pull requests that land while you work wait in the
 inbox instead of pushing your progress bar backwards — and anything that gets merged or closed in
-the meantime is skipped with a note when you reach it. It finishes with "Session complete — 9
-reviewed, 3 skipped" and how long it took. Nothing is persisted: a session is a sitting.
+the meantime is skipped with a note when you reach it. It finishes on the inbox with a small
+summary — what you reviewed, what you skipped, what was merged or closed underneath you, and how
+long it took — that Return or Escape closes. Nothing is persisted: a session is a sitting.
 
 ### Bulk triage for the agent flood
 

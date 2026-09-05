@@ -325,10 +325,12 @@ final class AppEnvironment {
     /// Signs out and deletes both the credential and the local cache (ADR 0006).
     func signOutAndErase() async {
         let current = session
-        // Dropped before the route changes and without the closing toast: the queue named pull
+        // Dropped before the route changes and without the closing summary: the queue named pull
         // requests of the account that is leaving, and there is nothing to report about a
-        // session the user did not end.
+        // session the user did not end. A summary still on screen from an earlier session names
+        // that account's work too, so it goes with it.
         reviewSession = nil
+        reviewSessionSummary = nil
         route = .inbox
         phase = .signedOut
         // A queued deep link belongs to the account that was signed in.
@@ -534,6 +536,50 @@ final class AppEnvironment {
                 self.webhookCoordinator.handle(write, database: session.database)
             }
         }
+    }
+
+    // MARK: - The track record (ADR 0027)
+
+    /// The repositories a backfill would read: the ones the inbox knows, in a stable order.
+    ///
+    /// The inbox's own rows rather than a listing call, which is the whole reason this feature
+    /// adds no endpoint beyond the search: Shepherd already knows which repositories the user
+    /// reviews in, because it is syncing pull requests from them.
+    var trackRecordBackfillRepositories: [RepoRef] {
+        guard let session else { return [] }
+        var seen = Set<String>()
+        var result: [RepoRef] = []
+        for row in session.inboxRows where seen.insert(row.repo.fullName.lowercased()).inserted {
+            result.append(row.repo)
+        }
+        return result.sorted()
+    }
+
+    /// Starts the one-time backfill, from whichever surface offered it.
+    ///
+    /// Here rather than on the Settings tab that used to own it, because there are two surfaces
+    /// offering the same run since ADR 0027's 2026-09-05 amendment — the tab and the inbox's
+    /// notice — and a second copy of "which repositories, read by what, stored where" could only
+    /// ever drift from this one. The *progress* is shared without arranging anything: both
+    /// surfaces read ``trackRecord``, which is the coordinator that owns the run, so they show
+    /// the same line at the same moment.
+    func startTrackRecordBackfill() {
+        guard let session else { return }
+        trackRecord.start(
+            repos: trackRecordBackfillRepositories,
+            reader: session.github,
+            store: session.database
+        )
+    }
+
+    /// Re-reads how many outcomes are on disk, for the two surfaces that show a count.
+    ///
+    /// One indexed `SELECT COUNT(*)`. It is asked for rather than observed because only two
+    /// things change it — a finished run and *Clear history* — and both bump
+    /// ``TrackRecordCoordinator/historyVersion``, which is what the callers watch.
+    func refreshTrackRecordCount() async {
+        guard let session else { return }
+        await trackRecord.refreshStoredCount(database: session.database)
     }
 
     // MARK: - Actions
@@ -1034,7 +1080,7 @@ final class AppEnvironment {
         // different pull request than the screen below it. The session's own advance sets its
         // cursor first, so it never trips this.
         if let running = reviewSession, running.current?.id != prID {
-            endReviewSession()
+            endReviewSession(announcing: false)
         }
         pendingReviewVerdict = verdict
         route = .review(prID: prID)
@@ -1058,7 +1104,7 @@ final class AppEnvironment {
     /// request while the screen below it shows an issue would be worse than no bar.
     /// - Parameter issueID: The issue's GraphQL node id.
     func openIssue(issueID: String) {
-        if reviewSession != nil { endReviewSession() }
+        if reviewSession != nil { endReviewSession(announcing: false) }
         route = .inbox
         pendingIssueSelection = Pending(issueID)
     }
@@ -1093,6 +1139,19 @@ final class AppEnvironment {
     /// Deliberately transient — see ``ReviewSession`` — and therefore not in ``AppSettings`` and
     /// not in the encrypted settings document (ADR 0014).
     private(set) var reviewSession: ReviewSession?
+    /// What the last session did, for as long as its completion view is on screen.
+    ///
+    /// The end of a focus session used to be a seven-second toast — the same banner a failed
+    /// clipboard copy gets — for the one moment in this app where somebody has finished
+    /// something. It is a small view on the inbox now, and the summary is held here rather than
+    /// by that screen because ``endReviewSession(announcing:)`` is also what routes back to it:
+    /// the screen that shows this is built *after* the route changes, so the numbers have to be
+    /// waiting for it rather than handed to it.
+    ///
+    /// Transient for ``reviewSession``'s reason, and one degree more so: it describes a sitting
+    /// that has already ended, so nothing about it belongs in ``AppSettings`` or in the encrypted
+    /// settings document (ADR 0014).
+    var reviewSessionSummary: ReviewSession.Summary?
 
     /// Starts a session over the pull requests currently waiting for the user's review.
     ///
@@ -1156,15 +1215,29 @@ final class AppEnvironment {
     /// The one exit: the queue running out, "End session", a confirmed Escape and
     /// ``closeReview()`` all come through here, so there is one place that can leave
     /// ``reviewSession`` set.
-    func endReviewSession() {
+    /// - Parameter announcing: Whether the completion view comes up. `false` for the two exits
+    ///   that are somebody *navigating away* rather than finishing — opening a pull request that
+    ///   is not the one under the cursor, and opening an issue — because both of those set
+    ///   ``route`` again immediately afterwards, so a summary raised here would not be shown and
+    ///   would instead sit in this container until the next time the user happened to reach the
+    ///   inbox. That is exactly the toast this replaced: a report about something the reader has
+    ///   since stopped doing.
+    func endReviewSession(announcing: Bool = true) {
         guard let running = reviewSession else { return }
         // Cleared first: `route = .inbox` below goes through nothing that could re-enter, but
         // `closeReview()` calls this method, and a session still set would recurse.
         reviewSession = nil
         route = .inbox
-        toasts.show(
-            Toast(message: running.summary().message, kind: .success, duration: 7)
-        )
+        guard announcing else { return }
+        // Set after the route rather than before it, so the inbox is what the completion view
+        // comes up over. There is no toast beside it: one completion surface, or the two would
+        // say the same thing twice and the quieter one would win by staying.
+        reviewSessionSummary = running.summary()
+    }
+
+    /// Closes the completion view.
+    func clearReviewSessionSummary() {
+        reviewSessionSummary = nil
     }
 
     /// The pull requests the local inbox still holds — what "has not vanished" means.

@@ -303,6 +303,15 @@ final class InboxModel {
     /// the app's lifetime rather than to a screen's, and every screen that shows a chip reads the
     /// same one. Assigned exactly where ``intelligence`` is, in ``InboxScreen``'s `task`.
     var triage: TriageCoordinator?
+    /// The coordinator that owns the track-record backfill and the stored history (ADR 0027).
+    ///
+    /// A reference rather than a copy and optional for ``triage``'s reason, twice over: the run
+    /// belongs to the app's lifetime rather than to a screen's, and a model built in a test has
+    /// no app around it to take one from. Assigned in the same place ``triage`` is. Only the
+    /// notice reads it — the badges themselves come from ``trust``, which is recomputed from the
+    /// table on every refresh, because a coordinator holding a copy of them could only ever be a
+    /// second answer to the same question.
+    var trackRecordCoordinator: TrackRecordCoordinator?
     /// Whether a detail refresh is in flight.
     private(set) var isRefreshingDetail = false
     /// The return address of each row whose cached head commits carry one (ADR 0030).
@@ -564,6 +573,131 @@ final class InboxModel {
     /// The rail counts for the smart views.
     func count(for view: SmartView) -> Int {
         allRows.filter(view.matches).count
+    }
+
+    /// Whether any rail facet is narrowing the list.
+    ///
+    /// The one definition of "a filter is on". The header's chip and the empty state's sentence
+    /// each asked the same four-part question before, and the notice and the caught-up state
+    /// below would have been a third and a fourth spelling of it — which is three chances for
+    /// one of them to disagree with the others about whether the list on screen is the whole
+    /// list.
+    var hasActiveFilter: Bool {
+        provenanceFilter != nil || repoFilter != nil || riskFilter != nil || laneFilter != nil
+    }
+
+    // MARK: - The track-record notice (ADR 0027's 2026-09-05 amendment)
+
+    /// Whether the inbox should offer to load the track record.
+    var showsTrackRecordNotice: Bool {
+        InboxModel.showsTrackRecordNotice(
+            hasCompletedFirstSweep: session.hasCompletedFirstSweep,
+            rows: allRows,
+            storedOutcomeCount: trackRecordCoordinator?.storedOutcomeCount ?? 0,
+            isDismissed: settings.hasDismissedTrackRecordNotice
+        )
+    }
+
+    /// The four conditions the one-time offer is made under.
+    ///
+    /// A function of its inputs rather than a chain of `if`s inside a view, for
+    /// ``queuedWrites(_:for:)``'s reason: this is the whole of "when does anybody see this", it
+    /// has four branches, and three of them are states that are awkward to reach by hand in a
+    /// window. Each condition is a different way of being wrong:
+    ///
+    /// - **The sweep has finished.** Before it has, an inbox with no agent rows is an inbox
+    ///   nobody has looked in yet, so the offer would be withheld from exactly the account it is
+    ///   for (``SignedInSession/hasCompletedFirstSweep``).
+    /// - **Something an agent opened is in the inbox.** The track record counts agents' closed
+    ///   pull requests, so in an inbox with none of them the backfill would read up to five
+    ///   hundred pull requests per repository and put no badge anywhere. The test is
+    ///   ``ShepherdCore/ActorKind/agentIdentity``, which is the same question
+    ///   ``ShepherdCore/BulkTriagePlan`` and ``ShepherdCore/AutoMergePolicy`` ask about an author.
+    /// - **Nothing is stored yet.** With a history on disk the badges are already on the rows,
+    ///   and the offer has answered itself.
+    /// - **It has not been answered.** By *Not now*, or by a run that came back
+    ///   (``AppSettings/hasDismissedTrackRecordNotice``).
+    ///
+    /// A run that is *in flight* is deliberately not a condition. It stores nothing until it
+    /// finishes, so the count is still zero and the notice stays up by itself — which is what
+    /// lets it carry the progress line rather than vanishing under the press that started it.
+    /// - Parameters:
+    ///   - hasCompletedFirstSweep: Whether a sweep has run to the end in this session.
+    ///   - rows: Every cached inbox row.
+    ///   - storedOutcomeCount: How many closed pull requests are on disk.
+    ///   - isDismissed: Whether the offer has already been answered.
+    /// - Returns: Whether to draw the notice.
+    nonisolated static func showsTrackRecordNotice(
+        hasCompletedFirstSweep: Bool,
+        rows: [PullRequestSummary],
+        storedOutcomeCount: Int,
+        isDismissed: Bool
+    ) -> Bool {
+        guard !isDismissed, hasCompletedFirstSweep, storedOutcomeCount == 0 else { return false }
+        return rows.contains { $0.author.kind.agentIdentity != nil }
+    }
+
+    // MARK: - Inbox Zero
+
+    /// Whether the list should draw the designed caught-up state instead of the generic empty one.
+    var showsInboxZero: Bool {
+        InboxModel.showsInboxZero(
+            smartView: smartView,
+            hasCompletedFirstSweep: session.hasCompletedFirstSweep,
+            hasActiveFilter: hasActiveFilter,
+            rows: allRows
+        )
+    }
+
+    /// Whether an empty list is the good kind of empty.
+    ///
+    /// "Nothing matches this filter" and "nobody is waiting on you" are the same pixels and
+    /// opposite news, and until now they were the same ``EmptyStateView`` as well. Three of the
+    /// four conditions are there to be sure it is the second one: the rail has to be on the pile
+    /// that can be cleared, no facet may be hiding anything, and the sweep has to have come
+    /// back — which is ``InboxListView``'s `isAwaitingFirstSweep` argument applied to a view
+    /// that is empty while other rows exist, and therefore does not reach it.
+    /// - Parameters:
+    ///   - smartView: The selected rail row.
+    ///   - hasCompletedFirstSweep: Whether a sweep has run to the end in this session.
+    ///   - hasActiveFilter: Whether a facet is narrowing the list.
+    ///   - rows: Every cached inbox row.
+    /// - Returns: Whether to draw the caught-up state.
+    nonisolated static func showsInboxZero(
+        smartView: SmartView,
+        hasCompletedFirstSweep: Bool,
+        hasActiveFilter: Bool,
+        rows: [PullRequestSummary]
+    ) -> Bool {
+        guard smartView == .needsMyReview, hasCompletedFirstSweep, !hasActiveFilter else {
+            return false
+        }
+        return !rows.contains(where: SmartView.needsMyReview.matches)
+    }
+
+    /// The caught-up state's second line.
+    var inboxZeroMessage: String {
+        InboxModel.inboxZeroMessage(
+            openPullRequestsOfMine: allRows.filter { $0.myRelation.contains(.author) }.count
+        )
+    }
+
+    /// What to say under "You are caught up.".
+    ///
+    /// Deliberately useful rather than decorative, and there are two useful things to say. When
+    /// the user has work of their own still open, the next place to look is one rail row down and
+    /// the line says how much is waiting there. When they have not, there is nothing to point at
+    /// and the honest thing is what will bring the next review request: the sweep, by itself, or
+    /// ⌘R for somebody who does not want to wait for it.
+    /// - Parameter openPullRequestsOfMine: How many cached rows the user opened.
+    /// - Returns: The line.
+    nonisolated static func inboxZeroMessage(openPullRequestsOfMine: Int) -> String {
+        guard openPullRequestsOfMine > 0 else {
+            return String(localized: "New review requests land here on their own; ⌘R checks now.")
+        }
+        return String(
+            localized: "\(openPullRequestsOfMine) of your own pull requests are still open."
+        )
     }
 
     /// The provenance facets present in the current data, with counts.

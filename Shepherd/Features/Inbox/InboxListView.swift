@@ -134,11 +134,19 @@ struct InboxListView: View {
                 )
             )
         } else if model.visibleRows.isEmpty {
-            EmptyStateView(
-                systemImage: "checkmark.circle",
-                title: String(localized: "Nothing to review"),
-                message: emptyMessage
-            )
+            // Two empty states, because an empty list means two opposite things. The designed one
+            // is for the pile actually being cleared; the generic one is still what a filter with
+            // no matches gets, and what the three other rails get, because "you have no open pull
+            // requests" is not an achievement.
+            if model.showsInboxZero {
+                InboxZeroView(message: model.inboxZeroMessage)
+            } else {
+                EmptyStateView(
+                    systemImage: "checkmark.circle",
+                    title: String(localized: "Nothing to review"),
+                    message: emptyMessage
+                )
+            }
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
@@ -284,8 +292,7 @@ struct InboxListView: View {
     }
 
     private var emptyMessage: String {
-        if model.provenanceFilter != nil || model.repoFilter != nil || model.riskFilter != nil
-            || model.laneFilter != nil {
+        if model.hasActiveFilter {
             return String(localized: "No pull request matches this filter. Clear it to see everything again.")
         }
         switch model.smartView {
@@ -336,6 +343,66 @@ struct InboxListView: View {
         case .unhandled:
             return .ignored
         }
+    }
+}
+
+/// The inbox actually being empty, as opposed to a filter matching nothing.
+///
+/// Inbox Zero and the end of a focus session are the only two moments this app has anything to
+/// celebrate, and both of them were a plain string: this one was the same ``EmptyStateView``,
+/// with the same muted grey tick, that "no pull request matches this filter" gets. A tick that
+/// means "you are done" and a tick that means "there is nothing here" should not be the same
+/// tick.
+///
+/// So: a larger sealed check in the success colour rather than a muted outline, a headline that
+/// says it, and a second line that is *useful* — either where the user's own work is or what will
+/// bring the next review request (``InboxModel/inboxZeroMessage(openPullRequestsOfMine:)``).
+/// There is no sound and no confetti; the reward for finishing a review queue is a quiet screen.
+///
+/// The entrance is one quarter-second fade and a very small scale, and it is **off** when the
+/// system's Reduce Motion is on (ADR 0033). That switch is why the animation is driven by a state
+/// flag rather than by a `.transition`: with motion reduced the flag is simply set outside
+/// `withAnimation`, so the view arrives at its final opacity and scale in one frame instead of
+/// animating a shorter distance.
+struct InboxZeroView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The second line: what to look at next, or what will bring the next review request.
+    let message: String
+
+    /// Whether the entrance has run. `false` for exactly one frame.
+    @State private var hasEntered = false
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "checkmark.seal")
+                .font(.system(size: 36, weight: .light))
+                .foregroundStyle(Theme.success)
+            Text(String(localized: "You are caught up."))
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Theme.textStrong)
+            Text(message)
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.textMuted)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: 320)
+        .padding(28)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .opacity(hasEntered ? 1 : 0)
+        .scaleEffect(hasEntered ? 1 : 0.96)
+        .onAppear {
+            guard !reduceMotion else {
+                hasEntered = true
+                return
+            }
+            withAnimation(.easeOut(duration: 0.25)) { hasEntered = true }
+        }
+        // Combined and *not* relabelled, which is the other half of ADR 0033's rule: with no
+        // `.accessibilityLabel` beside it the children keep their own labels, so this is
+        // announced as the headline followed by the line under it — everything it draws, in the
+        // order it draws it. The symbol carries no label of its own and adds nothing.
+        .accessibilityElement(children: .combine)
     }
 }
 

@@ -48,6 +48,8 @@ MIGRATED = (
     "Shepherd/Features/Inbox/BulkTriageSheet.swift",
     "Shepherd/Features/Inbox/IssueCommentSheet.swift",
     "Shepherd/Features/Review/ReviewUpdateBanner.swift",
+    "Shepherd/Features/Inbox/TrackRecordNoticeView.swift",
+    "Shepherd/Features/Review/ReviewSessionSummaryView.swift",
 )
 
 # A fixed point size, either spelling: SwiftUI's own or `Theme.mono`'s numeric overload. `\s*`

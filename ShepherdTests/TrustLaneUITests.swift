@@ -289,6 +289,96 @@ final class TrustLaneUITests: XCTestCase {
         XCTAssertTrue(line.hasSuffix("no access"), "the server's own words end the line")
     }
 
+    // MARK: - The inbox's one-time offer (ADR 0027's 2026-09-05 amendment)
+
+    func testTheOfferIsMadeOnceTheSweepIsBackAndAnAgentHasWrittenSomething() {
+        XCTAssertTrue(
+            InboxModel.showsTrackRecordNotice(
+                hasCompletedFirstSweep: true,
+                rows: [summary(id: "PR_1", author: agent())],
+                storedOutcomeCount: 0,
+                isDismissed: false
+            )
+        )
+    }
+
+    func testAnInboxWithNoAgentInItIsNotOfferedAHistoryOfAgents() {
+        XCTAssertFalse(
+            InboxModel.showsTrackRecordNotice(
+                hasCompletedFirstSweep: true,
+                rows: [summary(id: "PR_1", author: human())],
+                storedOutcomeCount: 0,
+                isDismissed: false
+            ),
+            "the backfill would read five hundred pull requests per repository and badge nothing"
+        )
+    }
+
+    func testAStoredHistoryAnswersTheOfferByItself() {
+        XCTAssertFalse(
+            InboxModel.showsTrackRecordNotice(
+                hasCompletedFirstSweep: true,
+                rows: [summary(id: "PR_1", author: agent())],
+                storedOutcomeCount: 412,
+                isDismissed: false
+            ),
+            "the badges are already on the rows"
+        )
+    }
+
+    func testAnAnsweredOfferIsNotMadeAgain() {
+        XCTAssertFalse(
+            InboxModel.showsTrackRecordNotice(
+                hasCompletedFirstSweep: true,
+                rows: [summary(id: "PR_1", author: agent())],
+                storedOutcomeCount: 0,
+                isDismissed: true
+            )
+        )
+    }
+
+    func testNothingIsOfferedBeforeTheFirstSweepHasComeBack() {
+        // The empty-inbox case the loading state already covers, and the one under it: an inbox
+        // that has rows but has not finished being swept is not yet a statement about anything.
+        XCTAssertFalse(
+            InboxModel.showsTrackRecordNotice(
+                hasCompletedFirstSweep: false,
+                rows: [],
+                storedOutcomeCount: 0,
+                isDismissed: false
+            )
+        )
+        XCTAssertFalse(
+            InboxModel.showsTrackRecordNotice(
+                hasCompletedFirstSweep: false,
+                rows: [summary(id: "PR_1", author: agent())],
+                storedOutcomeCount: 0,
+                isDismissed: false
+            )
+        )
+    }
+
+    @MainActor
+    func testTheDismissalIsOffOnAFreshInstallAndSurvivesARelaunch() {
+        let name = "com.schnaq.shepherd.tests.trackRecordNotice.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: name) else {
+            return XCTFail("a fresh suite name always opens")
+        }
+        defer { UserDefaults.standard.removePersistentDomain(forName: name) }
+
+        let fresh = AppSettings(defaults: defaults)
+        XCTAssertFalse(
+            fresh.hasDismissedTrackRecordNotice,
+            "an install that has never been offered the backfill has not answered"
+        )
+
+        fresh.hasDismissedTrackRecordNotice = true
+        XCTAssertTrue(AppSettings(defaults: defaults).hasDismissedTrackRecordNotice)
+
+        fresh.hasDismissedTrackRecordNotice = false
+        XCTAssertFalse(AppSettings(defaults: defaults).hasDismissedTrackRecordNotice)
+    }
+
     // MARK: - Fixtures
 
     private func summary(

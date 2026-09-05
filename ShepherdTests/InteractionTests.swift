@@ -272,6 +272,76 @@ final class InteractionTests: XCTestCase {
         XCTAssertFalse(ProvenanceFilter.humans.matches(row))
     }
 
+    // MARK: - Inbox Zero
+
+    func testTheCaughtUpStateIsDrawnOnlyWhenTheReviewPileIsActuallyClear() {
+        let mine = summary(id: "a", relation: [.author])
+        XCTAssertTrue(
+            InboxModel.showsInboxZero(
+                smartView: .needsMyReview,
+                hasCompletedFirstSweep: true,
+                hasActiveFilter: false,
+                rows: [mine]
+            ),
+            "nothing is waiting on the user, even though the inbox is not empty"
+        )
+        XCTAssertFalse(
+            InboxModel.showsInboxZero(
+                smartView: .needsMyReview,
+                hasCompletedFirstSweep: true,
+                hasActiveFilter: false,
+                rows: [mine, summary(id: "b", relation: [.reviewRequested])]
+            )
+        )
+    }
+
+    func testTheCaughtUpStateWaitsForTheSweepAndStandsDownForAFilterAndForTheOtherRails() {
+        XCTAssertFalse(
+            InboxModel.showsInboxZero(
+                smartView: .needsMyReview,
+                hasCompletedFirstSweep: false,
+                hasActiveFilter: false,
+                rows: []
+            ),
+            "an empty pile nobody has asked GitHub about yet is not an achievement"
+        )
+        XCTAssertFalse(
+            InboxModel.showsInboxZero(
+                smartView: .needsMyReview,
+                hasCompletedFirstSweep: true,
+                hasActiveFilter: true,
+                rows: []
+            ),
+            "a facet that matches nothing keeps its own 'clear it' sentence"
+        )
+        for view in SmartView.allCases where view != .needsMyReview {
+            XCTAssertFalse(
+                InboxModel.showsInboxZero(
+                    smartView: view,
+                    hasCompletedFirstSweep: true,
+                    hasActiveFilter: false,
+                    rows: []
+                ),
+                "\(view.rawValue): having no open pull requests of your own is not being caught up"
+            )
+        }
+    }
+
+    func testTheSecondLinePointsAtTheUsersOwnWorkWhenThereIsAny() {
+        let withOwnWork = InboxModel.inboxZeroMessage(openPullRequestsOfMine: 3)
+        XCTAssertTrue(withOwnWork.contains("3"))
+        XCTAssertFalse(
+            withOwnWork.contains("⌘R"),
+            "there is somewhere to look next, so the line says where rather than how to wait"
+        )
+
+        let withNone = InboxModel.inboxZeroMessage(openPullRequestsOfMine: 0)
+        XCTAssertTrue(
+            withNone.contains("⌘R"),
+            "with nothing to point at, the useful thing is what brings the next review request"
+        )
+    }
+
     // MARK: - Bulk-triage selection (ADR 0015)
 
     func testTickingAndUntickingOneRow() {

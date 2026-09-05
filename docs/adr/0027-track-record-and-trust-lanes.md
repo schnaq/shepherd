@@ -243,3 +243,40 @@ it is pressed on.
   condition that could *widen* the short lane — history, an author allow-list, a label — needs a
   new ADR, because "the gate is CI, size and sensitive paths, and nothing else" is the whole reason
   this one is acceptable.
+
+## Amendment (2026-09-05): the backfill stays manual, and the inbox offers it once
+
+The decision above is unchanged: the backfill reads up to five hundred closed pull requests per
+repository, the user did not ask for it, and it therefore runs only when somebody presses a
+button. What this ADR did not settle is how anybody finds out that the button is there. It is on
+the second card of the Automation tab of a Settings sheet, so for a reviewer who never opened that
+sheet the badge, the LANES rail and the whole feature were not switched off — they were invisible,
+which is worse, because there is nothing visible to switch back on.
+
+So the inbox makes the offer, once, in the place the badges would appear: a notice above the list
+with one sentence about what it unlocks and one about what it costs, a *Load track record* that
+starts the run and a *Not now* that ends the offer. It is shown under exactly four conditions —
+the first sweep has come back, at least one row in the inbox was written by a detected agent,
+nothing is stored yet, and the offer has not already been answered — and those four are a pure
+function with a test per branch (`InboxModel.showsTrackRecordNotice`) rather than a chain of `if`s
+inside a view, because three of the four are states that are awkward to reach by hand in a window.
+A run that is *in flight* is deliberately not one of the conditions: it stores nothing until it
+finishes, so the notice stays up by itself and can carry the progress line rather than vanishing
+under the press that started it.
+
+**One run, not two.** The repositories to read, the reader and the store moved out of the Settings
+tab and onto `AppEnvironment.startTrackRecordBackfill()`, which both surfaces call, and the
+progress both of them show is `TrackRecordCoordinator`'s — the coordinator that owns the run. So
+starting a backfill from the inbox and then opening Settings shows one run at one position, which
+is the property a second copy of "which repositories, read by what, stored where" could not have
+kept.
+
+**The dismissal does not travel**, and that is not an exception to ADR 0014's obligation but the
+category `digestLastDeliveredAt` and `settingsSyncLastUploadAt` are already in: device state that
+lives in `AppSettings` because it is one flag with no rules attached. Nothing about it is a
+preference — it records that a hint has been read on this Mac. The second half of the argument is
+this ADR's own: the thing the hint offers is the history, which is kept off the wire here as
+device state a second Mac rebuilds by pressing the same button there, so a dismissal that
+travelled would switch the offer off on exactly the Mac that still has no track record and no
+other way of learning it could have one. It is stored beside the two thresholds in `AppSettings`
+and deliberately nowhere in `SyncedSettingsDocument`.

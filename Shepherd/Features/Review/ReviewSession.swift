@@ -86,7 +86,7 @@ struct ReviewSession: Equatable, Sendable {
         }
     }
 
-    /// What a finished session did, for the closing toast.
+    /// What a finished session did, for the completion view it closes with.
     struct Summary: Equatable, Sendable {
         /// How many entries the queue held.
         var total: Int
@@ -101,7 +101,24 @@ struct ReviewSession: Equatable, Sendable {
         /// How long the session lasted.
         var duration: TimeInterval
 
-        /// The closing toast's text.
+        /// The completion view's headline.
+        ///
+        /// The same distinction ``message`` draws below and for the same reason: a queue that ran
+        /// out is complete, and a session left with pull requests still in it is not.
+        var title: String {
+            remaining > 0
+                ? String(localized: "Session ended")
+                : String(localized: "Session complete")
+        }
+
+        /// The whole summary as one sentence.
+        ///
+        /// This was the closing toast, and the toast is gone: a focus session is one
+        /// of the two moments this app has anything to celebrate, and a banner that fades after
+        /// seven seconds is the same surface a failed clipboard copy gets. It survives as the
+        /// *spoken* form of ``ReviewSessionSummaryView``, which is announced as one element — so
+        /// the sentence a screen-reader user hears and the rows a sighted user reads are the same
+        /// numbers assembled once rather than twice.
         ///
         /// Two shapes rather than one: a queue that ran out is "complete", a session ended with
         /// pull requests still in it is not, and writing "complete" over an early exit would be
@@ -127,7 +144,7 @@ struct ReviewSession: Equatable, Sendable {
 
     /// The frozen queue, in the order it will be worked through.
     let items: [Item]
-    /// When the session started, for the duration in the closing toast.
+    /// When the session started, for the duration in the closing summary.
     let startedAt: Date
 
     /// Where the cursor is. `items.count` means "ran out".
@@ -253,7 +270,7 @@ struct ReviewSession: Equatable, Sendable {
 
     /// What the session did, as of a moment.
     /// - Parameter date: "Now" — injectable, so the duration is testable.
-    /// - Returns: The summary the closing toast reads.
+    /// - Returns: The summary the completion view reads.
     func summary(at date: Date = Date()) -> Summary {
         Summary(
             total: items.count,

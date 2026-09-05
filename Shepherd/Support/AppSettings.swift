@@ -144,6 +144,8 @@ final class AppSettings {
         self.trustLaneMaxChangedLines = defaults
             .object(forKey: Keys.trustLaneMaxChangedLines) as? Int
             ?? TrustLaneConfiguration.default.maxChangedLines
+        self.hasDismissedTrackRecordNotice = defaults
+            .object(forKey: Keys.trackRecordNoticeDismissed) as? Bool ?? false
         self.semanticSearchEnabled = defaults
             .object(forKey: Keys.semanticSearch) as? Bool ?? true
         self.spotlightExportEnabled = defaults
@@ -495,6 +497,34 @@ final class AppSettings {
         didSet { defaults.set(trustLaneMaxChangedLines, forKey: Keys.trustLaneMaxChangedLines) }
     }
 
+    /// Whether the inbox's one-time offer to load the track record has been answered
+    /// (ADR 0027's 2026-09-05 amendment).
+    ///
+    /// The backfill stays manual — it reads up to five hundred closed pull requests per
+    /// repository and the user did not ask for that — but until now nothing in the app said the
+    /// button existed, so the badge, the LANES rail and the whole feature were invisible to
+    /// anyone who never opened Settings → Automation. The inbox makes the offer once instead,
+    /// and this is the "once": it is set by *Not now* and by a run that came back, so the
+    /// question is asked exactly one time however it was answered.
+    ///
+    /// **Deliberately not carried in ``SyncedSettingsDocument``**, and it is not an exception to
+    /// ADR 0014's obligation but the same category ``digestLastDeliveredAt`` and
+    /// ``settingsSyncLastUploadAt`` are in: device state that happens to live here because it is
+    /// one flag with no rules attached. Nothing about it is a preference — it records that a hint
+    /// has been read on *this* Mac, which is the shape "this Mac has already delivered today"
+    /// has.
+    ///
+    /// The second half of the argument is ADR 0027's own. The thing the hint offers is the
+    /// stored history, which that ADR keeps off the wire for its own reasons and expects a second
+    /// Mac to rebuild by pressing the same button there. A dismissal that travelled would
+    /// therefore switch the offer off on exactly the Mac that still has no track record and no
+    /// other way of learning that it could have one.
+    var hasDismissedTrackRecordNotice: Bool {
+        didSet {
+            defaults.set(hasDismissedTrackRecordNotice, forKey: Keys.trackRecordNoticeDismissed)
+        }
+    }
+
     /// The two thresholds as the pure classifier wants them.
     ///
     /// The one place the lane's inputs are assembled from settings, so the inbox, the rail's
@@ -832,6 +862,7 @@ final class AppSettings {
         static let autoMerge = "automation.autoMergeRules"
         static let trustLaneMaxFiles = "trust.laneMaxFiles"
         static let trustLaneMaxChangedLines = "trust.laneMaxChangedLines"
+        static let trackRecordNoticeDismissed = "trust.trackRecordNoticeDismissed"
         static let semanticSearch = "search.semanticIndexEnabled"
         static let spotlightExport = "search.spotlightExportEnabled"
         static let savedReplies = "review.savedReplies"

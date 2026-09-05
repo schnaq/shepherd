@@ -47,16 +47,13 @@ struct AutomationSettingsTab: View {
         .task {
             model.loadWebhookSecret(store: environment.secretStore)
             loadAutoMergeFields()
-            if let database = environment.session?.database {
-                await environment.trackRecord.refreshStoredCount(database: database)
-            }
+            await environment.refreshTrackRecordCount()
         }
         // The stored count is the one number on this tab that a *finished run* changes, and a
         // finished run changes no row anywhere else — so it is re-read off the coordinator's
         // history counter rather than polled (ADR 0027).
         .onChange(of: environment.trackRecord.historyVersion) { _, _ in
-            guard let database = environment.session?.database else { return }
-            Task { await environment.trackRecord.refreshStoredCount(database: database) }
+            Task { await environment.refreshTrackRecordCount() }
         }
     }
 
@@ -488,12 +485,12 @@ struct AutomationSettingsTab: View {
                     .controlSize(.small)
             } else {
                 Button(String(localized: "Load track record")) {
-                    startBackfill()
+                    environment.startTrackRecordBackfill()
                 }
                 .buttonStyle(SecondaryButtonStyle(height: 28))
-                .disabled(backfillRepositories.isEmpty)
+                .disabled(environment.trackRecordBackfillRepositories.isEmpty)
                 .help(
-                    backfillRepositories.isEmpty
+                    environment.trackRecordBackfillRepositories.isEmpty
                         ? String(localized: "Nothing to load yet: sync an inbox first.")
                         : String(localized: "Reads the last 90 days of closed pull requests, one repository at a time.")
                 )
@@ -509,30 +506,6 @@ struct AutomationSettingsTab: View {
             }
             Spacer(minLength: 0)
         }
-    }
-
-    /// The repositories the backfill would read: the ones the inbox knows, in a stable order.
-    ///
-    /// The inbox's own rows rather than a listing call, which is the whole reason this feature
-    /// adds no endpoint beyond the search: Shepherd already knows which repositories the user
-    /// reviews in, because it is syncing pull requests from them.
-    private var backfillRepositories: [RepoRef] {
-        guard let session = environment.session else { return [] }
-        var seen = Set<String>()
-        var result: [RepoRef] = []
-        for row in session.inboxRows where seen.insert(row.repo.fullName.lowercased()).inserted {
-            result.append(row.repo)
-        }
-        return result.sorted()
-    }
-
-    private func startBackfill() {
-        guard let session = environment.session else { return }
-        environment.trackRecord.start(
-            repos: backfillRepositories,
-            reader: session.github,
-            store: session.database
-        )
     }
 
     /// The thresholds as one plain sentence, so nobody has to infer them from two steppers.
