@@ -79,4 +79,43 @@ final class UnifiedPatchTests: XCTestCase {
         XCTAssertEqual(written, "@@ -12,7 +14,9 @@")
         XCTAssertEqual(UnifiedPatch.header(written).map { [$0.0, $0.1] }, [12, 14])
     }
+
+    func testCarriageReturnsAreStrippedFromTheContentToo() {
+        // Worth stating precisely, because the two readings of these bytes are the same bytes.
+        // A patch "with CRLF separators" and a patch of a CRLF *file* — where git writes LF
+        // separators and each content line keeps the file's own trailing `\r` — are
+        // indistinguishable: both are `…content\r\n…`. So this normalisation is not only about
+        // accepting Windows separators; it always takes the carriage return off the content as
+        // well. That is what the viewer wants (an invisible CR would otherwise be drawn, and
+        // quoted into comment bodies), it is what nothing had written down, and line numbers are
+        // unaffected either way. The assertion below is the one that shows it: a surviving `\r`
+        // would make the lines unequal.
+        let patch = "@@ -1,2 +1,2 @@\r\n kept\r\n-old\r\n+new\r\n"
+        let hunk = UnifiedPatch.hunks(in: patch).first
+
+        XCTAssertEqual(hunk?.lines, [" kept", "-old", "+new"])
+        XCTAssertEqual(UnifiedPatch.reconstruct(after: patch), ["kept", "new"])
+        XCTAssertEqual(hunk?.originalStart, 1)
+    }
+
+    func testTheNoNewlineMarkerIsMetadataRatherThanALine() {
+        // `\ No newline at end of file` is the one body line that is not content. Counted as a
+        // line it would shift every following line number by one, which is the number review
+        // threads are anchored by.
+        let patch = """
+            @@ -1,1 +1,1 @@
+            -old
+            \\ No newline at end of file
+            +new
+            \\ No newline at end of file
+            """
+        XCTAssertEqual(UnifiedPatch.reconstruct(after: patch), ["new"])
+    }
+
+    func testAPatchWithNoHunkHeaderYieldsNothing() {
+        XCTAssertEqual(UnifiedPatch.hunks(in: "").count, 0)
+        XCTAssertEqual(UnifiedPatch.hunks(in: "just some text\nand more").count, 0)
+        XCTAssertEqual(UnifiedPatch.reconstruct(after: nil), [])
+        XCTAssertEqual(UnifiedPatch.reconstruct(after: "no hunks here"), [])
+    }
 }
