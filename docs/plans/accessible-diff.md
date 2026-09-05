@@ -186,5 +186,10 @@ it is the difference between a default and a lock.
 Whether the announcements are *good*. A sentence that reads correctly in a plan can still be
 exhausting at forty lines a minute, and the only way to know is a Mac, VoiceOver, and somebody
 listening — the same session that owes an answer on §1's `setAccessibility`, on §3's Larger Text,
-and on the contrast pass. This plan makes that session worth having: today there is nothing to
-listen to but Monaco.
+and on the contrast pass. Those four checks are written out in order in
+[accessibility.md](accessibility.md) § "What to check on a Mac". This plan makes that session worth
+having: today there is nothing to listen to but Monaco.
+
+And one of those checks decides whether this plan is needed at all: if VoiceOver already reads the
+Monaco diff well, the native list drops from "the real answer" to a nice-to-have for keyboard users.
+It is worth building either way, but not with the same urgency, and that is not knowable from here.

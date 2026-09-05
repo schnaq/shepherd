@@ -182,3 +182,53 @@ Colour contrast. The palette was not audited against WCAG ratios, because the ap
 light theme, `Theme` resolves every colour per appearance, and checking that properly means
 measuring rendered pairs on a real display rather than reading hex values. It belongs in the same
 session as the VoiceOver verification above: one Mac, one afternoon, both.
+
+## What to check on a Mac, in one place
+
+Four things in this plan and in [accessible-diff.md](accessible-diff.md) cannot be settled from a
+Linux container, and they were scattered across three documents. They are one afternoon, in this
+order, because each one's answer changes what the next is worth.
+
+**1. Does macOS's text-size setting reach SwiftUI at all?** (§3, 15 minutes, do it first.) System
+Settings → Appearance → Text Size, turn it up. Open Shepherd → Settings → Automation. Those labels
+go through `Theme.type(_:weight:)`, which names a text style rather than a point size.
+
+- *They grow* → the mechanism works, and the open question is only how far the migration should go
+  (the decision at the end of §3).
+- *They do not* → `Font.system(_ style:)` does not participate on macOS either, the migration is
+  worth nothing as it stands, and the answer is `@ScaledMetric` per view or a Shepherd-level
+  setting after all. Say so and the six migrated surfaces get reverted rather than extended.
+
+Same trip, second window: the Merge sheet, the bulk-triage sheet and the closing-issues card are
+the other migrated surfaces. Everything else is still fixed by design, so a screen where nothing
+grows is not necessarily a bug — check it against the list in `Scripts/check-type-scale.py`.
+
+**2. Does VoiceOver read the diff?** (§1, the one this whole plan turns on.) ⌘F5, open any pull
+request, pick a file. The app now tells Monaco a screen reader is listening, and each pane says
+which pane it is.
+
+- Does VO announce entering the editor, and does it say *which side* — "Original, ReviewModel.swift"
+  or "Geändert, ReviewModel.swift"?
+- Do the arrow keys move it line by line, and does it read the line?
+- Does `c` open the composer on the line VO is on? Does `[` cross to the original pane and read
+  from there?
+
+*It reads* → the cheap half was most of the answer and the native list becomes a nice-to-have.
+*It does not, or only in fragments* → that is the answer the native list exists for, and
+[accessible-diff.md](accessible-diff.md) is what it would take. Either way this is the fact
+nothing in the repository can supply.
+
+**3. Contrast.** Deliberately not audited from here, because two themes resolved per appearance
+means measuring rendered pairs rather than reading hex values. Digital Color Meter on the pairs
+that carry meaning: the triage chips, the CI dots, the priority dots, muted text on card
+backgrounds — in both appearances. WCAG AA is 4.5:1 for text, 3:1 for a graphical object that
+carries information. Colour is nowhere the only carrier any more (ADR 0033), so a failure here is
+a legibility bug rather than a comprehension one.
+
+**4. How the announcements actually sound.** Only once (2) says something is being read. A sentence
+that reads well in a document can be exhausting at forty lines a minute — that is a judgement about
+wording, and wording is cheap to change once somebody has listened.
+
+What to bring back: for (1) a yes or no, for (2) roughly where it breaks down, for (3) the pairs
+that fail. Nothing needs to be measured precisely; every one of these is a decision about what to
+build next, not a metric.
