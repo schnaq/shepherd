@@ -55,8 +55,9 @@ final class UnifiedPatchTests: XCTestCase {
              SELECT 2
             """
         let hunk = UnifiedPatch.hunks(in: patch).first
-        XCTAssertEqual(hunk?.lines.count, 3, "the deleted comment was dropped as a file header")
-        XCTAssertEqual(UnifiedPatch.reconstruct(after: patch), ["SELECT 1", "SELECT 2"])
+        // The line itself, not just the count: a `-` row never reaches the head side either way,
+        // so asserting the *reconstruction* here would hold whether the guard existed or not.
+        XCTAssertEqual(hunk?.lines, [" SELECT 1", "--- a/a.txt", " SELECT 2"])
     }
 
     func testTextBeforeTheFirstHeaderIsIgnored() {

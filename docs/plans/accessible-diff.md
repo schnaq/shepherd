@@ -60,9 +60,21 @@ documents and computes the diff itself. It is the wrong shape for a list, and no
 per-line facts a list must announce — **is this line added, deleted or context; what is its number
 on each side** — are computed during the walk and then thrown away.
 
-So step one is a richer `Reconstruction`: a `[PatchLine]` alongside the two documents, each line
-carrying its kind, its original and modified numbers where they exist, and its text. **Derived in
-the same single walk that builds the strings**, so the two shapes cannot describe different files.
+So step one looked like a richer `Reconstruction`: a `[PatchLine]` alongside the two documents,
+each line carrying its kind, its original and modified numbers, and its text.
+
+**It already exists, and finding that out is the most useful thing in this plan.** `PatchWalker`
+in `Claims/ClaimPattern.swift` walks a patch into `PatchRow { kind, text, baseLine, headLine }` —
+added, removed or context, the text with its marker stripped, and *both* sides' numbers. It is in
+`ShepherdCore`, it is tested on Linux, and it was written for the claims feature (ADR 0026). The
+native list's line model is therefore not work to be done; it is a type to be reused, or at most
+extended. What it does not carry is whether a line may take a comment, which stays where it is —
+that is the first item of the contract above and belongs to the reconstruction, not to the walk.
+
+One rule in it is worth knowing before reusing it: a *removed* row's `headLine` is the head line
+the deletion sits **in front of**, because a deleted line has no head-side number of its own. That
+is exactly the fact the list has to announce, so it is the right rule — but it is a rule, not an
+accident, and a second implementation would have to make the same choice deliberately.
 
 Which brings up the thing this plan first got wrong. "A second parser is a second truth" was
 written as a warning about a hypothetical. There are **already two**, deliberately: `UnifiedPatch`
@@ -83,10 +95,23 @@ assumed: GitHub's `files[].patch` ends without a newline (read off a real API re
 interdiff's synthesized patch is `joined(separator: "\n")`. It was a trap set for the third
 producer, and `git diff` is one. The guard and its test are now in both.
 
-A third consumer is what changes the calculus. Two parsers for two shapes was a trade; three
-consumers where two want the same structured lines is a reason to have **one** parser producing a
-`[PatchLine]`, from which the two documents, the commentable sets and the interdiff's head-side
-array are all derived. That is step one properly stated, and it subsumes step one-and-a-half:
+And there are not two walks over this grammar. There are **four**: `UnifiedPatch` (hunks, headers,
+the head side — now also serving the reconstructor), `PatchReconstructor` (the two documents and
+the commentable sets), `PatchWalker` (the rows above), and `IntelligenceDiffWindow.rows(in:)`
+(rows again, for the CI-diagnosis window, whose doc comment says its arithmetic is the
+reconstructor's "deliberately"). Each of the last two re-does the `@@` split, the CRLF
+normalisation, the trailing-newline guard and the base/head arithmetic.
+
+Collapsing those two is the obvious next simplification and it is **not** mechanical, which is why
+it is named here rather than done: they differ where their jobs differ. `PatchRow` fixes a
+removed row's `headLine` to the line the deletion precedes, for links; `IntelligenceDiffWindow`'s
+row carries `isHeader`, because a window may start mid-hunk and has to synthesize a header for it.
+One walk could serve both, and deciding what it yields is a design step, not a find-and-replace.
+
+A third consumer is what changes the calculus. Two parsers for two shapes was a trade; four
+walks where three want structured lines is a reason to have **one**, from which the two documents,
+the commentable sets, the interdiff's head-side array and the rows are all derived. That is step
+one properly stated, and it subsumes step one-and-a-half:
 **`PatchReconstructor` moves into `Packages/ShepherdKit`**, beside `UnifiedPatch`. It imports
 nothing but `Foundation` and `ShepherdCore` today and both types it needs — `ChangedFile` and
 `DiffSide` — are already there. As things stand it sits in the app target, so its twelve tests

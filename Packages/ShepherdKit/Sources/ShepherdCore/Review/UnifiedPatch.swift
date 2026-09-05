@@ -2,13 +2,21 @@ import Foundation
 
 /// Reading and writing unified diffs, as pure text (ADR 0028).
 ///
-/// This is the one place that reads the grammar. The app target reconstructs *both* sides of a
-/// patch for the Monaco viewer (`Shepherd/Features/DiffViewer/PatchReconstructor.swift`) and
-/// keeps the viewer's commentable-line sets, which is more than the interdiff needs and depends
-/// on `ChangedFile`; but it splits its hunks with ``hunks(in:)`` here rather than with a copy.
-/// It used to be a copy, and the copies had drifted — the same twenty lines of ``header(_:)``
-/// in both files, and a `hunks(in:)` that disagreed about the end of a file. Two readings of a
+/// The viewer and the interdiff read the grammar here. The app target reconstructs *both* sides
+/// of a patch for Monaco (`Shepherd/Features/DiffViewer/PatchReconstructor.swift`) and keeps the
+/// viewer's commentable-line sets, which is more than the interdiff needs and depends on
+/// `ChangedFile`; but it splits its hunks with ``hunks(in:)`` here rather than with a copy. It
+/// used to be a copy, and the copies had drifted — the same twenty lines of ``header(_:)`` in
+/// both files, and a `hunks(in:)` that disagreed about the end of a file. Two readings of a
 /// patch that disagree are a bug waiting for the input that tells them apart.
+///
+/// **Two more walks over the same grammar live in this package**, and saying otherwise would
+/// invite the next reader to believe the consolidation is finished: `PatchWalker` in
+/// `Claims/ClaimPattern.swift` and `IntelligenceDiffWindow.rows(in:)` each re-implement the
+/// `@@` split, the CRLF normalisation and the trailing-newline guard, and each tracks both
+/// sides' line numbers itself. They are not wrong today — each carries the same guards — but the
+/// sentence above applies to them exactly as much, and `docs/plans/accessible-diff.md` records
+/// what unifying them would involve and why it is not a mechanical move.
 ///
 /// What the interdiff needs on top of that, and needs on Linux: the *head* side of a patch as
 /// an array of lines, and a way to write a synthesized patch back out so the viewer can render
