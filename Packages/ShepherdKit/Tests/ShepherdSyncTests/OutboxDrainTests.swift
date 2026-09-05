@@ -11,7 +11,7 @@ final class OutboxDrainTests: XCTestCase {
 
     private func makeEngine(
         github: MockGitHub,
-        store: DatabaseManager,
+        store: any SyncStoring,
         issueWrites: (any IssueWriting)? = nil,
         branchDeletion: (any BranchDeleting)? = nil
     ) -> SyncEngine {
@@ -307,6 +307,107 @@ final class OutboxDrainTests: XCTestCase {
         XCTAssertEqual(log, ["merge #1"])
         let remaining = try await store.allOutboxItems()
         XCTAssertTrue(remaining.isEmpty, "the merge is a merge either way")
+    }
+
+    // MARK: - A merge that has already landed (ADR 0006)
+
+    func testAMergeGitHubHasAlreadyLandedIsSentRatherThanFailed() async throws {
+        // The crash window this closes: the merge reached GitHub, the app died before the row
+        // was marked succeeded, and the next launch sent the row again. GitHub answers a merge
+        // on an already-merged pull request with the same `405` it answers one that cannot be
+        // merged at all with — so without the read, a merge that landed is parked as failed.
+        let github = MockGitHub()
+        await github.setMergeError(.notMergeable(message: "Pull Request is not mergeable"))
+        await github.setIsMerged(true, number: 1)
+        await github.setBranchContext(
+            HeadBranchContext(
+                headRefName: "agent/token-store",
+                headRepositoryFullName: repo.fullName,
+                defaultBranchName: "main"
+            ),
+            repo: repo,
+            number: 1
+        )
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(
+            .merge(method: "squash", expectedHeadOid: "head-1", deletesHeadBranch: true),
+            in: store
+        )
+        let engine = makeEngine(github: github, store: store, branchDeletion: github)
+
+        let emitted = await drainCollectingEvents(engine)
+
+        XCTAssertEqual(sentMutations(in: emitted).map(\.kind), [.merged(method: "squash")])
+        XCTAssertFalse(
+            emitted.contains { event in
+                if case .syncFailed = event { return true }
+                return false
+            },
+            "a merge that landed is not a failure, whichever attempt it landed on"
+        )
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty, "the row is gone, exactly as after a merge GitHub took")
+        let deleted = await github.deletedBranches
+        XCTAssertEqual(
+            deleted.map(\.name),
+            ["agent/token-store"],
+            "and the follow-up runs, because the merge did happen"
+        )
+        let probes = await github.mergedProbes
+        XCTAssertEqual(probes, ["\(repo.fullName)#1"], "asked once, and only on the refusal")
+    }
+
+    func testAMergeGitHubRefusesAndHasNotMergedIsStillAFailure() async throws {
+        let github = MockGitHub()
+        await github.setMergeError(.notMergeable(message: "Pull Request is not mergeable"))
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(.merge(method: "squash", expectedHeadOid: "head-1"), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        let emitted = await drainCollectingEvents(engine)
+
+        let stored = try await store.allOutboxItems()
+        XCTAssertEqual(stored.first?.state, .failed)
+        XCTAssertEqual(stored.first?.lastError?.contains("cannot be merged"), true)
+        XCTAssertTrue(
+            sentMutations(in: emitted).isEmpty,
+            "nothing reached GitHub, so nothing may claim it did"
+        )
+        let probes = await github.mergedProbes
+        XCTAssertEqual(probes.count, 1, "the refusal is checked, once")
+    }
+
+    func testTheRowIsMarkedSucceededBeforeTheHeadBranchIsDeleted() async throws {
+        // Everything between the merge and the mark is a window in which a crash costs the
+        // *merge*: the row is reset to pending on the next launch and re-sent. The deletion is
+        // two more round-trips, so it sits outside that window rather than inside it.
+        let github = MockGitHub()
+        await github.setBranchContext(
+            HeadBranchContext(
+                headRefName: "agent/token-store",
+                headRepositoryFullName: repo.fullName,
+                defaultBranchName: "main"
+            ),
+            repo: repo,
+            number: 1
+        )
+        let database = try DatabaseManager.inMemory()
+        _ = try await enqueue(
+            .merge(method: "squash", expectedHeadOid: "head-1", deletesHeadBranch: true),
+            in: database
+        )
+        let engine = makeEngine(
+            github: github,
+            store: MarkRecordingStore(wrapping: database, loggingInto: github),
+            branchDeletion: github
+        )
+
+        await engine.drainOutbox()
+
+        let log = await github.writeLog
+        XCTAssertEqual(log, ["merge #1", "mark succeeded", "delete agent/token-store"])
+        let remaining = try await database.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty)
     }
 
     // MARK: - Announcing what actually reached GitHub (ADR 0012)

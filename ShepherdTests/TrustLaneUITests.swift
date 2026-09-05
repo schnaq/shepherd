@@ -345,6 +345,7 @@ final class TrustLaneUITests: XCTestCase {
             InboxModel.showsTrackRecordNotice(
                 hasCompletedFirstSweep: true,
                 rows: [summary(id: "PR_1", author: agent())],
+                hasReadStoredCount: true,
                 storedOutcomeCount: 0,
                 isDismissed: false
             )
@@ -356,10 +357,27 @@ final class TrustLaneUITests: XCTestCase {
             InboxModel.showsTrackRecordNotice(
                 hasCompletedFirstSweep: true,
                 rows: [summary(id: "PR_1", author: human())],
+                hasReadStoredCount: true,
                 storedOutcomeCount: 0,
                 isDismissed: false
             ),
             "the backfill would read five hundred pull requests per repository and badge nothing"
+        )
+    }
+
+    func testACountThatHasNotBeenReadYetOffersNothing() {
+        // The first body evaluation happens before the screen's `.task` has run, so the count is
+        // still its initial zero — which is also what "nothing is stored" looks like. Offering on
+        // it would flash the notice at an account that has a history and then take it away.
+        XCTAssertFalse(
+            InboxModel.showsTrackRecordNotice(
+                hasCompletedFirstSweep: true,
+                rows: [summary(id: "PR_1", author: agent())],
+                hasReadStoredCount: false,
+                storedOutcomeCount: 0,
+                isDismissed: false
+            ),
+            "zero means nothing until somebody has counted"
         )
     }
 
@@ -368,6 +386,7 @@ final class TrustLaneUITests: XCTestCase {
             InboxModel.showsTrackRecordNotice(
                 hasCompletedFirstSweep: true,
                 rows: [summary(id: "PR_1", author: agent())],
+                hasReadStoredCount: true,
                 storedOutcomeCount: 412,
                 isDismissed: false
             ),
@@ -380,6 +399,7 @@ final class TrustLaneUITests: XCTestCase {
             InboxModel.showsTrackRecordNotice(
                 hasCompletedFirstSweep: true,
                 rows: [summary(id: "PR_1", author: agent())],
+                hasReadStoredCount: true,
                 storedOutcomeCount: 0,
                 isDismissed: true
             )
@@ -393,6 +413,7 @@ final class TrustLaneUITests: XCTestCase {
             InboxModel.showsTrackRecordNotice(
                 hasCompletedFirstSweep: false,
                 rows: [],
+                hasReadStoredCount: true,
                 storedOutcomeCount: 0,
                 isDismissed: false
             )
@@ -401,6 +422,7 @@ final class TrustLaneUITests: XCTestCase {
             InboxModel.showsTrackRecordNotice(
                 hasCompletedFirstSweep: false,
                 rows: [summary(id: "PR_1", author: agent())],
+                hasReadStoredCount: true,
                 storedOutcomeCount: 0,
                 isDismissed: false
             )

@@ -127,6 +127,22 @@ final class LiveReviewTests: XCTestCase {
         XCTAssertEqual(ReviewModel.change(shown: shown, fresh: shown), .unchanged)
     }
 
+    // MARK: - The cached read never overtakes the observation
+
+    func testTheCachedDetailIsAppliedOnlyToAnEmptyScreen() {
+        // `load()` starts the observation first and then reads the cache, so a sweep that wrote
+        // between the two has already delivered the newer row. The cached read is then the older
+        // copy, and applying it would put the earlier checks and threads back on screen and clear
+        // the banner with them.
+        XCTAssertTrue(ReviewModel.shouldApplyCached(shown: nil))
+        XCTAssertFalse(
+            ReviewModel.shouldApplyCached(
+                shown: detail(headRefOid: "head-1", commits: [commit("c1", at: 0)])
+            ),
+            "the observation got there first, and it is the fresher of the two"
+        )
+    }
+
     // MARK: - A moved head is held back
 
     func testAPushIsHeldBackWithTheNumberOfNewCommits() {

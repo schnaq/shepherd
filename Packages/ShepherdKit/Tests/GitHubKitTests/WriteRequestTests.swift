@@ -286,6 +286,55 @@ final class WriteRequestTests: XCTestCase {
         }
     }
 
+    // MARK: - "Has it already been merged?" (ADR 0005's second 2026-09-05 amendment)
+
+    func testAMergedPullRequestAnswersTheProbeWithTrue() async throws {
+        let transport = MockTransport()
+        await transport.route("/merge", Fixture.empty(status: 204))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let isMerged = try await client.isPullRequestMerged(repo: repo, number: 128)
+
+        XCTAssertTrue(isMerged)
+        let request = await transport.onlyRequest()
+        XCTAssertEqual(request?.method, "GET")
+        XCTAssertEqual(
+            request?.url.absoluteString,
+            "https://api.github.com/repos/schnaq/review/pulls/128/merge"
+        )
+        XCTAssertNil(request?.body, "the probe is a read and sends nothing")
+    }
+
+    func testAPullRequestThatIsNotMergedAnswersFalseRatherThanThrowing() async throws {
+        // `404` is this endpoint's word for "no" rather than a failure. Throwing it would make
+        // the drain unable to tell "it is not merged" from "we could not ask", and the second one
+        // must never be read as the first.
+        let transport = MockTransport()
+        await transport.route("/merge", Fixture.empty(status: 404))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let isMerged = try await client.isPullRequestMerged(repo: repo, number: 128)
+
+        XCTAssertFalse(isMerged)
+    }
+
+    func testAProbeThatCouldNotBeMadeIsStillAnError() async throws {
+        // Every other status keeps being an error, which is what stops a rate-limited or broken
+        // read from being reported as "not merged".
+        let transport = MockTransport()
+        await transport.route("/merge", Fixture.empty(status: 401))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            _ = try await client.isPullRequestMerged(repo: repo, number: 128)
+            XCTFail("expected the probe to throw")
+        } catch let error as GitHubError {
+            guard case .unauthorized = error else {
+                return XCTFail("expected .unauthorized, got \(error)")
+            }
+        }
+    }
+
     // MARK: - Branch deletion (ADR 0005's 2026-09-05 amendment)
 
     func testDeletingABranchIsOneDeleteToTheRefsEndpoint() async throws {

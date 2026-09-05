@@ -52,7 +52,7 @@ private struct FleetSnapshot: Sendable {
 /// Which of the three states with nothing much to show the fleet is in (plan §6).
 ///
 /// A named decision rather than a chain of `if`s inside a view, for
-/// ``InboxModel/showsTrackRecordNotice(hasCompletedFirstSweep:rows:storedOutcomeCount:isDismissed:)``'s
+/// ``InboxModel/showsTrackRecordNotice(hasCompletedFirstSweep:rows:hasReadStoredCount:storedOutcomeCount:isDismissed:)``'s
 /// reason: two of the three are states that are awkward to reach by hand in a window, and a
 /// screen that shows the wrong one is a screen that lies about whether Shepherd has counted
 /// anything.

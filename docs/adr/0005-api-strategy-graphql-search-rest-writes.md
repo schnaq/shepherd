@@ -87,3 +87,32 @@ nobody approving a pull request approved a branch deletion.
 The write itself is `DELETE /repos/{o}/{r}/git/refs/heads/{branch}` — REST, like every other write
 in this ADR. The branch name goes into the path unencoded so `URLComponents` percent-encodes what a
 path segment may not carry while leaving `/` a separator: `feature/thing` is one ref, not two.
+
+## Amendment (2026-09-05, after the above): the deletion moves behind the mark
+
+The amendment above says the drain deletes the head branch "after `PUT …/merge` has come back and
+before the row is marked succeeded". That ordering is wrong, and this replaces it: the deletion now
+runs **after** `markOutboxItemSucceeded(id:)`, as a follow-up step the drain keys on the action.
+Everything else about it is unchanged — same two calls, same two guards, same silence on failure,
+same single `mutationSent`.
+
+The reason is the crash window. A row is only removed from the outbox once `execute` has returned,
+and `OutboxStore` resets any row still in `sending` to `pending` on the next launch (ADR 0006). The
+branch deletion is two network round-trips, so performing it before the mark made that window two
+round-trips wide for the one action in the app that must not be sent twice: a second `PUT …/merge`
+on a merged pull request is a `405`, `405` is not retryable, and the drain would park the row as
+failed with "cannot be merged" — for a merge that had landed. After the mark the window is gone. A
+crash in the follow-up costs a branch that stays behind, which the repository's own "automatically
+delete head branches" setting or a click on GitHub clears up, and the next launch finds a row that
+is already gone.
+
+**A merge GitHub says has already landed is a success, not a failure.** The window can never be
+closed completely — a crash between GitHub committing the merge and the response arriving is outside
+anybody's reach — so the re-sent merge is handled rather than merely made unlikely. When
+`PUT …/merge` comes back `405`, the drain asks one question before believing it:
+`GET /repos/{o}/{r}/pulls/{n}/merge`, which answers `204` when the pull request is merged and `404`
+when it is not. A `204` means the queued merge did land, on some earlier attempt, and the row is
+completed exactly as a merge GitHub accepted would be — same `mutationSent(.merged)`, same
+follow-up, same removal. A `404` means the pull request genuinely cannot be merged and the row is
+parked as before. It is a read, it is made only on the refusal, and it is on `api.github.com` —
+the host this ADR has always used and no new one.

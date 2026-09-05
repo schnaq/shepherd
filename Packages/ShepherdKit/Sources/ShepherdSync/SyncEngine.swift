@@ -876,6 +876,7 @@ public actor SyncEngine {
                             )
                         )
                     )
+                    await followUp(for: item)
                 case .conflict(let conflict):
                     try await store.markOutboxItemConflicted(
                         id: item.id,
@@ -904,6 +905,27 @@ public actor SyncEngine {
         // go straight back into the queue rather than sitting in `sending` until relaunch.
         if index < items.count {
             try? await store.releaseOutboxItems(ids: items[index...].map(\.id))
+        }
+    }
+
+    /// The best-effort tidying-up a sent row leaves behind, run **after** the row is gone.
+    ///
+    /// Keyed on the action here rather than done inside ``execute(_:)``, and the position is the
+    /// whole point of it. Everything between a write reaching GitHub and
+    /// ``ShepherdPersistence/DatabaseManager/markOutboxItemSucceeded(id:)`` is a window in which
+    /// a crash costs the *write*: the row is left in `sending`, the next launch resets it to
+    /// `pending`, and the mutation is sent a second time. Branch deletion is two network
+    /// round-trips, so doing it before the mark made that window two round-trips wide for the one
+    /// action that cannot be sent twice — a second merge is a `405`, which is not retryable.
+    /// After the mark there is no window left: a crash here costs a branch that stays behind and
+    /// nothing else, and the next launch finds a row that is already gone.
+    /// - Parameter item: The row that has just been marked succeeded.
+    private func followUp(for item: OutboxItem) async {
+        switch item.action {
+        case .merge(_, _, let deletesHeadBranch) where deletesHeadBranch:
+            await deleteHeadBranch(of: item)
+        default:
+            return
         }
     }
 
@@ -973,17 +995,32 @@ public actor SyncEngine {
             try await github.unresolveThread(id: threadID)
             return .sent
 
-        case .merge(let method, let expectedHeadOid, let deletesHeadBranch):
-            _ = try await github.mergePullRequest(
-                repo: item.repo,
-                number: item.number,
-                method: MergeMethod(rawValue: method) ?? .merge,
-                expectedHeadOid: expectedHeadOid,
-                commitTitle: nil
-            )
-            if deletesHeadBranch {
-                await deleteHeadBranch(of: item)
+        case .merge(let method, let expectedHeadOid, _):
+            do {
+                _ = try await github.mergePullRequest(
+                    repo: item.repo,
+                    number: item.number,
+                    method: MergeMethod(rawValue: method) ?? .merge,
+                    expectedHeadOid: expectedHeadOid,
+                    commitTitle: nil
+                )
+            } catch GitHubError.notMergeable(let message) {
+                // GitHub answers a merge on a pull request that is *already merged* with the same
+                // `405` it answers one that cannot be merged at all with, and `405` is not
+                // retryable — so without this the row would be parked as failed with "cannot be
+                // merged" for a merge that landed. That is not a hypothetical: a row is only
+                // marked succeeded after `execute` returns, so a crash in between leaves a
+                // `sending` row that the next launch resets to `pending` and sends again.
+                // One read tells the two apart, and it is only made on the refusal.
+                guard try await github.isPullRequestMerged(
+                    repo: item.repo,
+                    number: item.number
+                ) else {
+                    throw GitHubError.notMergeable(message: message)
+                }
             }
+            // The head branch is deliberately *not* deleted here: it is the drain's follow-up,
+            // run only once the row is gone — see `followUp(for:)`.
             return .sent
 
         case .markReadyForReview:
@@ -1070,10 +1107,10 @@ public actor SyncEngine {
     /// pass (ADR 0005's 2026-09-05 amendment).
     ///
     /// Nothing in here can fail the merge, and that is the whole shape of it. By the time this
-    /// runs the pull request is merged *on GitHub*: a row that reported failure for a thing that
-    /// had succeeded would be retried, and the retry would be a merge GitHub refuses — or a merge
-    /// the user re-queues by hand, having been told theirs did not land. So every way out of this
-    /// function is silent and the row is marked succeeded either way.
+    /// runs the pull request is merged *on GitHub* and the row has already left the queue: a row
+    /// that reported failure for a thing that had succeeded would be retried, and the retry would
+    /// be a merge GitHub refuses — or a merge the user re-queues by hand, having been told theirs
+    /// did not land. So every way out of this function is silent.
     ///
     /// The guards are read here rather than only in the merge sheet because the sheet is not the
     /// only thing that queues a merge, and because they are facts about GitHub rather than about
@@ -1082,7 +1119,7 @@ public actor SyncEngine {
     /// writes for every request — including the `422 Reference does not exist` that a repository
     /// with "automatically delete head branches" switched on produces, which is that repository
     /// having already done this for us rather than anything worth a warning.
-    /// - Parameter item: The merge row that has just been sent.
+    /// - Parameter item: The merge row that has just been sent and marked succeeded.
     private func deleteHeadBranch(of item: OutboxItem) async {
         // An engine built without the port deletes nothing, exactly as one built without a
         // snapshot writer keeps no baseline (ADR 0028).

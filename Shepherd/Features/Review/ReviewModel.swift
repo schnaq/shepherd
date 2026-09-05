@@ -329,7 +329,8 @@ final class ReviewModel {
         loadTask?.cancel()
         loadTask = Task { [weak self] in
             guard let self else { return }
-            if let cached = try? await self.session.database.fetchPullRequestDetail(id: self.prID) {
+            if let cached = try? await self.session.database.fetchPullRequestDetail(id: self.prID),
+               ReviewModel.shouldApplyCached(shown: self.detail) {
                 self.apply(cached)
             }
             self.isRefreshing = true
@@ -433,6 +434,23 @@ final class ReviewModel {
         case .refresh:
             refresh(fresh, replacing: shown)
         }
+    }
+
+    /// Whether the cached detail ``load()`` reads may be put on the screen.
+    ///
+    /// Pure and `static` for ``change(shown:fresh:)``'s reason, and what it answers is a race
+    /// rather than a question about two values: ``observeDetail()`` is started before ``load()``
+    /// reads, so a sweep that wrote fresh detail in between has already delivered it, and the
+    /// cached read is then an *older* copy of the same row. Routing it through ``received(_:)``
+    /// would not save it — same head, so it classifies as ``ObservedChange/refresh`` and the
+    /// checks, threads and review decision on screen would be replaced by the older ones, and
+    /// ``apply(_:)`` would additionally clear ``notice`` and ``pendingDetail``. The observation
+    /// is the better source the moment it has spoken, so the cached read only fills an empty
+    /// screen; the refresh below it is what brings a stale one forward.
+    /// - Parameter shown: The detail the screen is showing, or `nil` when it is showing none.
+    /// - Returns: `true` when the cached read is the only thing there is.
+    static func shouldApplyCached(shown: PullRequestDetail?) -> Bool {
+        shown == nil
     }
 
     /// Classifies an observed detail against the one on screen.

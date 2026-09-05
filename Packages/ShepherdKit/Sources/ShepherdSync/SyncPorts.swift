@@ -40,6 +40,13 @@ public protocol PullRequestFetching: Sendable {
         expectedHeadOid: String?,
         commitTitle: String?
     ) async throws -> String?
+    /// Whether a pull request has already been merged.
+    ///
+    /// Asked only when a merge was refused, and only to tell the two things GitHub answers a
+    /// merge with `405` apart: a pull request that cannot be merged, and one that is merged
+    /// already. The second is what a merge row re-sent after a crash finds, and reporting it as
+    /// a failure would tell the user a merge that landed did not.
+    func isPullRequestMerged(repo: RepoRef, number: Int) async throws -> Bool
     /// Takes a pull request out of draft state.
     func markReadyForReview(pullRequestID: String) async throws
 }

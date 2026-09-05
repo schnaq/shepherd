@@ -23,6 +23,9 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
     var detailError: GitHubError?
     var submitError: GitHubError?
     var mergeError: GitHubError?
+    /// What the already-merged probe answers, keyed by number. A missing key answers `false` —
+    /// "GitHub has not merged this", which is what every test that never scripts it means.
+    var mergedPullRequests: [Int: Bool] = [:]
     /// What each pull request answers the branch-deletion probe with, keyed by `owner/name#n`.
     var branchContexts: [String: HeadBranchContext] = [:]
     var branchContextError: GitHubError?
@@ -36,11 +39,16 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
     private(set) var replies: [(commentID: Int, body: String)] = []
     private(set) var merges: [(number: Int, method: MergeMethod, sha: String?)] = []
     private(set) var branchContextRequests: [String] = []
+    /// `owner/name#number` for every already-merged probe, in order. The claim worth asserting is
+    /// that it is made *only* when a merge came back refused.
+    private(set) var mergedProbes: [String] = []
     private(set) var deletedBranches: [(repo: RepoRef, name: String)] = []
-    /// Merges and branch deletions in the order they were asked for.
+    /// Merges and branch deletions in the order they were asked for, and — when a test wires up
+    /// ``MarkRecordingStore`` — the moment the sent row left the queue.
     ///
-    /// A single list rather than two, because the order is the assertion: a branch may only be
-    /// deleted *after* the merge that made it a leftover (ADR 0005's 2026-09-05 amendment).
+    /// A single list rather than two, because the order is the assertion twice over: a branch may
+    /// only be deleted *after* the merge that made it a leftover, and only after the row has been
+    /// marked succeeded (ADR 0005's 2026-09-05 amendment, ADR 0006).
     private(set) var writeLog: [String] = []
     private(set) var readyForReview: [String] = []
     private(set) var headOidRequests: [String] = []
@@ -109,6 +117,17 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
 
     func setMergeError(_ error: GitHubError?) {
         mergeError = error
+    }
+
+    /// Scripts what the already-merged probe answers for one pull request.
+    func setIsMerged(_ isMerged: Bool, number: Int) {
+        mergedPullRequests[number] = isMerged
+    }
+
+    /// Notes something that happened somewhere else — the store's mark, in the ordering test — so
+    /// that one array carries the whole sequence.
+    func record(_ entry: String) {
+        writeLog.append(entry)
     }
 
     func setBranchContext(_ context: HeadBranchContext, repo: RepoRef, number: Int) {
@@ -205,6 +224,11 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
         return "merged-sha"
     }
 
+    func isPullRequestMerged(repo: RepoRef, number: Int) async throws -> Bool {
+        mergedProbes.append("\(repo.fullName)#\(number)")
+        return mergedPullRequests[number] ?? false
+    }
+
     func markReadyForReview(pullRequestID: String) async throws {
         readyForReview.append(pullRequestID)
     }
@@ -228,6 +252,93 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
         if let deleteBranchError { throw deleteBranchError }
         deletedBranches.append((repo: repo, name: name))
         writeLog.append("delete \(name)")
+    }
+}
+
+/// A ``ShepherdSync/SyncStoring`` that forwards everything to a real ``DatabaseManager`` and
+/// notes the one call whose *position* matters: the moment a sent row leaves the queue.
+///
+/// The drain's other outbox assertions read the database back once the drain is over, which says
+/// what happened but not when. "The merge row was marked succeeded before the head branch was
+/// deleted" is a claim about order, and it is the whole of the crash-safety argument (ADR 0006):
+/// a crash after the mark costs the tidying-up, while a crash before it costs the merge, which
+/// is re-sent on the next launch and refused with a `405`.
+///
+/// It logs into ``MockGitHub/writeLog`` rather than into an array of its own, because the
+/// assertion spans both doubles and two arrays cannot be interleaved after the fact.
+actor MarkRecordingStore: SyncStoring {
+    private let wrapped: DatabaseManager
+    private let log: MockGitHub
+
+    init(wrapping wrapped: DatabaseManager, loggingInto log: MockGitHub) {
+        self.wrapped = wrapped
+        self.log = log
+    }
+
+    func markOutboxItemSucceeded(id: UUID) async throws {
+        try await wrapped.markOutboxItemSucceeded(id: id)
+        // Recorded after the call, so the entry means "this has happened" rather than "this is
+        // about to".
+        await log.record("mark succeeded")
+    }
+
+    // MARK: - Plain forwarding
+
+    func savePullRequestSummaries(
+        _ summaries: [PullRequestSummary],
+        pruneMissing: Bool
+    ) async throws {
+        try await wrapped.savePullRequestSummaries(summaries, pruneMissing: pruneMissing)
+    }
+
+    func fetchInbox(filter: InboxFilter) async throws -> [PullRequestSummary] {
+        try await wrapped.fetchInbox(filter: filter)
+    }
+
+    func savePullRequestDetail(_ detail: PullRequestDetail) async throws {
+        try await wrapped.savePullRequestDetail(detail)
+    }
+
+    func fetchDraft(prID: String) async throws -> ReviewDraft? {
+        try await wrapped.fetchDraft(prID: prID)
+    }
+
+    func deleteDraft(prID: String) async throws {
+        try await wrapped.deleteDraft(prID: prID)
+    }
+
+    func claimReadyOutboxItems(now: Date, limit: Int) async throws -> [OutboxItem] {
+        try await wrapped.claimReadyOutboxItems(now: now, limit: limit)
+    }
+
+    func releaseOutboxItems(ids: [UUID]) async throws {
+        try await wrapped.releaseOutboxItems(ids: ids)
+    }
+
+    func markOutboxItemFailed(
+        id: UUID,
+        error: String,
+        now: Date,
+        retriable: Bool
+    ) async throws {
+        try await wrapped.markOutboxItemFailed(
+            id: id,
+            error: error,
+            now: now,
+            retriable: retriable
+        )
+    }
+
+    func markOutboxItemConflicted(id: UUID, reason: String) async throws {
+        try await wrapped.markOutboxItemConflicted(id: id, reason: reason)
+    }
+
+    func syncState(forKey key: String) async throws -> String? {
+        try await wrapped.syncState(forKey: key)
+    }
+
+    func setSyncState(_ value: String?, forKey key: String) async throws {
+        try await wrapped.setSyncState(value, forKey: key)
     }
 }
 

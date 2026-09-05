@@ -25,6 +25,14 @@ final class TrackRecordCoordinator {
     private(set) var lastResult: TrackRecordBackfillResult?
     /// How many outcomes are on disk, refreshed after every run and after a clear.
     private(set) var storedOutcomeCount = 0
+    /// Whether ``storedOutcomeCount`` has ever been read from the database.
+    ///
+    /// The count alone cannot say this: it starts at `0`, and `0` is also the answer that means
+    /// "nothing is stored", which the inbox's one-time offer reads as *make the offer*. The first
+    /// body evaluation happens before the screen's `.task` has run, so an account with a history
+    /// would flash the notice for one frame and then lose it. This is the flag that makes "not
+    /// counted yet" a third answer rather than a wrong one.
+    private(set) var hasReadStoredCount = false
     /// Bumped whenever the stored history is replaced, so the inbox knows to recount.
     ///
     /// A counter rather than a `Bool` or a notification: the inbox's `onChange` fires on a *new*
@@ -103,6 +111,9 @@ final class TrackRecordCoordinator {
     /// - Parameter database: The database to count in.
     func refreshStoredCount(database: DatabaseManager) async {
         storedOutcomeCount = (try? await database.pullRequestOutcomeCount()) ?? 0
+        // Set even when the count could not be read: a database that refuses to answer is not a
+        // reason to offer a backfill, and the next refresh will ask again.
+        hasReadStoredCount = true
     }
 
     /// Forgets everything on sign-out, exactly as the other coordinators do.
@@ -117,6 +128,9 @@ final class TrackRecordCoordinator {
         progress = nil
         lastResult = nil
         storedOutcomeCount = 0
+        // The count that was read belonged to the account that just left, so the next one has to
+        // be read again before anything may be concluded from it.
+        hasReadStoredCount = false
         historyVersion += 1
     }
 

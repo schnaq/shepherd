@@ -19,8 +19,8 @@ import SwiftUI
 ///
 /// It sits where ``DigestCardView`` sits, as a top safe-area inset above the list, and it goes for
 /// good in three ways: *Not now*, a run that came back, and a history on disk that makes the offer
-/// pointless — the four conditions are
-/// ``InboxModel/showsTrackRecordNotice(hasCompletedFirstSweep:rows:storedOutcomeCount:isDismissed:)``.
+/// pointless — the five conditions are
+/// ``InboxModel/showsTrackRecordNotice(hasCompletedFirstSweep:rows:hasReadStoredCount:storedOutcomeCount:isDismissed:)``.
 struct TrackRecordNoticeView: View {
     @Environment(AppEnvironment.self) private var environment
     /// Records that the offer has been answered, whichever way it was.

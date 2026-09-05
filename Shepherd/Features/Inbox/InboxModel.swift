@@ -593,16 +593,17 @@ final class InboxModel {
         InboxModel.showsTrackRecordNotice(
             hasCompletedFirstSweep: session.hasCompletedFirstSweep,
             rows: allRows,
+            hasReadStoredCount: trackRecordCoordinator?.hasReadStoredCount ?? false,
             storedOutcomeCount: trackRecordCoordinator?.storedOutcomeCount ?? 0,
             isDismissed: settings.hasDismissedTrackRecordNotice
         )
     }
 
-    /// The four conditions the one-time offer is made under.
+    /// The five conditions the one-time offer is made under.
     ///
     /// A function of its inputs rather than a chain of `if`s inside a view, for
     /// ``queuedWrites(_:for:)``'s reason: this is the whole of "when does anybody see this", it
-    /// has four branches, and three of them are states that are awkward to reach by hand in a
+    /// has five branches, and four of them are states that are awkward to reach by hand in a
     /// window. Each condition is a different way of being wrong:
     ///
     /// - **The sweep has finished.** Before it has, an inbox with no agent rows is an inbox
@@ -613,6 +614,12 @@ final class InboxModel {
     ///   hundred pull requests per repository and put no badge anywhere. The test is
     ///   ``ShepherdCore/ActorKind/agentIdentity``, which is the same question
     ///   ``ShepherdCore/BulkTriagePlan`` and ``ShepherdCore/AutoMergePolicy`` ask about an author.
+    /// - **The count has been read.** ``TrackRecordCoordinator/storedOutcomeCount`` starts at
+    ///   zero, and zero is also what "nothing is stored" looks like, so before the first
+    ///   `SELECT COUNT(*)` comes back the condition below cannot tell the two apart. The screen's
+    ///   `.task` runs after the first body evaluation, so without this an account that has a
+    ///   history would be offered one for a frame
+    ///   (``TrackRecordCoordinator/hasReadStoredCount``).
     /// - **Nothing is stored yet.** With a history on disk the badges are already on the rows,
     ///   and the offer has answered itself.
     /// - **It has not been answered.** By *Not now*, or by a run that came back
@@ -624,16 +631,19 @@ final class InboxModel {
     /// - Parameters:
     ///   - hasCompletedFirstSweep: Whether a sweep has run to the end in this session.
     ///   - rows: Every cached inbox row.
+    ///   - hasReadStoredCount: Whether `storedOutcomeCount` has been read from the database yet.
     ///   - storedOutcomeCount: How many closed pull requests are on disk.
     ///   - isDismissed: Whether the offer has already been answered.
     /// - Returns: Whether to draw the notice.
     nonisolated static func showsTrackRecordNotice(
         hasCompletedFirstSweep: Bool,
         rows: [PullRequestSummary],
+        hasReadStoredCount: Bool,
         storedOutcomeCount: Int,
         isDismissed: Bool
     ) -> Bool {
-        guard !isDismissed, hasCompletedFirstSweep, storedOutcomeCount == 0 else { return false }
+        guard !isDismissed, hasCompletedFirstSweep, hasReadStoredCount, storedOutcomeCount == 0
+        else { return false }
         return rows.contains { $0.author.kind.agentIdentity != nil }
     }
 

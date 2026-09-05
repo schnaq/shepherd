@@ -970,6 +970,40 @@ public actor GitHubClient {
         }
     }
 
+    /// Whether a pull request has already been merged.
+    ///
+    /// `GET /repos/{owner}/{repo}/pulls/{number}/merge` — the same path
+    /// ``mergePullRequest(repo:number:method:expectedHeadOid:commitTitle:)`` writes to, read
+    /// rather than written, and the one endpoint that answers with a status code and no body at
+    /// all: `204` when the pull request is merged, `404` when it is not. So the `404` is an
+    /// *answer* here rather than a failure, and it is the only status this swallows — anything
+    /// else is thrown, because "we could not ask" must never read as "it is not merged": the
+    /// drain would then report a merge that landed as a failure, which is the whole reason this
+    /// exists.
+    ///
+    /// Uncached on purpose, for ``issueState(repo:number:)``'s reason: a probe that can be
+    /// answered out of a conditional cache is not a probe.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - number: The pull request number.
+    /// - Returns: `true` when GitHub says the pull request is merged.
+    /// - Throws: Whatever the transport or the status mapping produced, `404` excepted.
+    public func isPullRequestMerged(repo: RepoRef, number: Int) async throws -> Bool {
+        do {
+            _ = try await performREST(
+                method: "GET",
+                path: "/repos/\(repo.owner)/\(repo.name)/pulls/\(number)/merge",
+                queryItems: [],
+                body: nil,
+                useCache: false,
+                resource: "\(repo.fullName)#\(number) merged"
+            )
+            return true
+        } catch GitHubError.notFound {
+            return false
+        }
+    }
+
     // MARK: - Branch deletion (ADR 0005's 2026-09-05 amendment)
 
     /// Reads the three facts a queued branch deletion is decided on.

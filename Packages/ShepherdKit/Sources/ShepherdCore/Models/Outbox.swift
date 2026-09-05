@@ -482,6 +482,15 @@ public enum OutboxWriteOutcome: Sendable, Hashable {
     case failed(reason: String?)
 
     /// Reads the outcome off the row as the drain left it.
+    ///
+    /// **Correct only for an id no other caller can already know.** A missing row reads as
+    /// ``sent`` because the drain deletes a row it sent — but so does *Discard* in
+    /// Settings → Sync (`DatabaseManager.deleteOutboxItem(id:)`, ADR 0006's 2026-09-03
+    /// amendment), and from here the two are indistinguishable. What makes the reading safe is
+    /// the caller rather than the row: `PullRequestActions.enqueue` reads back only an id it has
+    /// just minted and has handed to nobody, so nothing can have discarded that row in between.
+    /// An id that came from somewhere a user could have reached — a list, a screen that has been
+    /// open for a while — needs the row's own state instead.
     /// - Parameter row: The row as the outbox holds it now, or `nil` when it is no longer there.
     public init(row: OutboxItem?) {
         guard let row else {
