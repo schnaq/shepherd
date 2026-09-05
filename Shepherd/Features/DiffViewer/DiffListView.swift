@@ -22,28 +22,89 @@ struct DiffListContent: Hashable, Sendable {
     /// Commentable head-side lines, already narrowed for the round being shown.
     var commentableRight: Set<Int>
 
+    /// Which of the two numbers a row carries are the row's *own*.
+    ///
+    /// ``ShepherdCore/PatchRow`` fills both in on every row, and on a changed row one of them
+    /// belongs to a different line: an added row's ``ShepherdCore/PatchRow/baseLine`` names the
+    /// base line it sits *in front of*, and a removed row's ``ShepherdCore/PatchRow/headLine``
+    /// the head line the deletion sits in front of. Both are useful facts about a *neighbour*,
+    /// and neither is this row's number.
+    ///
+    /// Everything downstream is a reading of this one value: ``identity`` anchors a comment and
+    /// names the line out loud, and ``DiffListView`` fills its two gutter columns from ``base``
+    /// and ``head``. So the number a row shows, the number it announces and the number a comment
+    /// on it lands on cannot come apart — which matters most in the last of the three, because a
+    /// comment on a line outside the diff is one GitHub refuses along with the entire review.
+    enum LineNumbers: Hashable, Sendable {
+        /// An added row: it exists on the head side only, where it now is.
+        case headOnly(Int)
+        /// A removed row: it existed on the base side only, where it used to be.
+        case baseOnly(Int)
+        /// A context row: unchanged, so it is the same line on both sides and owns both numbers.
+        case both(base: Int, head: Int)
+
+        /// The row's own base-side number, or `nil` when it has none.
+        var base: Int? {
+            switch self {
+            case .headOnly: return nil
+            case .baseOnly(let line): return line
+            case .both(let line, _): return line
+            }
+        }
+
+        /// The row's own head-side number, or `nil` when it has none.
+        var head: Int? {
+            switch self {
+            case .headOnly(let line): return line
+            case .baseOnly: return nil
+            case .both(_, let line): return line
+            }
+        }
+
+        /// The one side the row *is*, and its number there.
+        ///
+        /// The head side whenever the row has a head-side number of its own: an added row is the
+        /// line it now exists at, and a context row is read as the file as it will be, which is
+        /// the document a review is written against. A removed row is the only row without one,
+        /// and the base side is where it is.
+        var identity: (side: DiffSide, line: Int) {
+            switch self {
+            case .headOnly(let line): return (.right, line)
+            case .baseOnly(let line): return (.left, line)
+            case .both(_, let head): return (.right, head)
+            }
+        }
+    }
+
+    /// Which of a row's two numbers are its own.
+    ///
+    /// The one switch. The rule is short and every case of it is load-bearing:
+    ///
+    /// | row | base | head |
+    /// | --- | --- | --- |
+    /// | added | none — it did not exist before | the line it now is |
+    /// | removed | the line it used to be | none — it no longer exists |
+    /// | context | the line it was | the line it still is |
+    /// - Parameter row: The line.
+    /// - Returns: The numbers it owns.
+    static func lineNumbers(of row: PatchRow) -> LineNumbers {
+        switch row.kind {
+        case .added: return .headOnly(row.headLine)
+        case .removed: return .baseOnly(row.baseLine)
+        case .context: return .both(base: row.baseLine, head: row.headLine)
+        }
+    }
+
     /// Which side's line number a row *is*, before asking whether it may carry a comment.
     ///
-    /// One switch, so that the number a row announces and the number a comment on it would be
-    /// anchored to cannot come apart. The rule is short and every case of it is load-bearing:
-    ///
-    /// | row | number |
-    /// | --- | --- |
-    /// | added | the head-side line, which is where it now exists |
-    /// | removed | the base-side line, which is where it used to |
-    /// | context | the head-side line, the file as it will be |
-    ///
-    /// The other side's number is never consulted, and that is the whole guard: an added row's
-    /// ``ShepherdCore/PatchRow/baseLine`` names the base line it sits *in front of*, a number
-    /// that belongs to a different line, and a comment on a line outside the diff is one GitHub
-    /// refuses along with the entire review.
+    /// Kept as its own name because it is what a *comment* is anchored with and what the spoken
+    /// sentence names the line by, and both read better for asking that question rather than for
+    /// the pair; the answer itself comes from ``lineNumbers(of:)``, so there is still one switch
+    /// deciding which of a row's two numbers belongs to it.
     /// - Parameter row: The line.
     /// - Returns: The side it lives on and its number there.
     static func lineIdentity(of row: PatchRow) -> (side: DiffSide, line: Int) {
-        switch row.kind {
-        case .added, .context: return (.right, row.headLine)
-        case .removed: return (.left, row.baseLine)
-        }
+        lineNumbers(of: row).identity
     }
 
     /// Where a comment on a row would be anchored, or `nil` when the row takes none.
@@ -145,6 +206,11 @@ struct DiffListView: View {
         let value = content.rows[index]
         let isSelected = model.selectedDiffRow == index
         let counts = commentCounts(for: value, threads: threads, drafts: drafts)
+        // Only a *published* thread is opened by clicking the indicator. The count beside it also
+        // counts the reviewer's own drafts, and those are reached by the double-click below, which
+        // opens the composer with the draft already in it — so a draft-only indicator has nothing
+        // of its own to do and lets the click fall through to the row rather than eating it.
+        let opensThreadAt: Int? = counts.threads > 0 ? index : nil
         Group {
             switch value {
             case .hunk(let originalStart, let modifiedStart):
@@ -157,11 +223,21 @@ struct DiffListView: View {
                 lineRow(
                     patchRow,
                     isSelected: isSelected,
-                    commentCount: counts.threads + counts.drafts
+                    commentCount: counts.threads + counts.drafts,
+                    opensThreadAt: opensThreadAt
                 )
             }
         }
         .contentShape(Rectangle())
+        // One tap picks the row, two open the composer on it: the inbox list's split, where a
+        // click selects and a double-click opens what was selected. It is the mouse's way to the
+        // composer, which the list otherwise had none of — Monaco has the gutter "+", and a
+        // hover affordance here would be a second mechanism for a job this one already does.
+        //
+        // Declared before the single tap, as in the inbox list. The order is not cosmetic: the
+        // gesture attached first is the one closer to the view, and a single tap recognised there
+        // would end the sequence before a second click could arrive.
+        .onTapGesture(count: 2) { comment(at: index) }
         .onTapGesture { select(index) }
         // One element per row, and the whole sentence as its label. Left alone, `.combine` reads
         // out two line numbers, a lone "+" and the code as separate things — and an
@@ -228,7 +304,12 @@ struct DiffListView: View {
             }
     }
 
-    private func lineRow(_ row: PatchRow, isSelected: Bool, commentCount: Int) -> some View {
+    private func lineRow(
+        _ row: PatchRow,
+        isSelected: Bool,
+        commentCount: Int,
+        opensThreadAt threadRow: Int?
+    ) -> some View {
         // Top-aligned rather than baseline-aligned: a non-wrapping row's code sits inside its
         // own scroll view, which has no text baseline to align to, and a gutter a point smaller
         // than the code is what a code editor looks like anyway.
@@ -236,15 +317,18 @@ struct DiffListView: View {
             // A removed line has no head-side number of its own and an added line no base-side
             // one — `PatchRow` fills those in with the line the change sits *in front of*, which
             // is a useful fact and a different line, so the column stays blank rather than
-            // printing somebody else's number as if it were this row's.
-            number(row.kind == .added ? nil : row.baseLine)
-            number(row.kind == .removed ? nil : row.headLine)
+            // printing somebody else's number as if it were this row's. Which is which is asked
+            // rather than restated: it is the same rule that anchors a comment on the row, and a
+            // second spelling of it here could quietly stop agreeing with the first.
+            let numbers = DiffListContent.lineNumbers(of: row)
+            number(numbers.base)
+            number(numbers.head)
             Text(verbatim: marker(for: row.kind))
                 .font(Theme.mono(CGFloat(fontSize), weight: .semibold))
                 .foregroundStyle(markerTint(for: row.kind) ?? Theme.textMuted)
                 .frame(width: 14, alignment: .center)
             code(row.text)
-            commentIndicator(commentCount)
+            commentIndicator(commentCount, opensThreadAt: threadRow)
         }
         .padding(.vertical, 1)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -290,9 +374,9 @@ struct DiffListView: View {
     }
 
     @ViewBuilder
-    private func commentIndicator(_ count: Int) -> some View {
+    private func commentIndicator(_ count: Int, opensThreadAt threadRow: Int?) -> some View {
         if count > 0 {
-            HStack(spacing: 3) {
+            let indicator = HStack(spacing: 3) {
                 Image(systemName: "bubble.left.fill")
                     .font(.system(size: 9))
                 Text(verbatim: "\(count)")
@@ -300,6 +384,18 @@ struct DiffListView: View {
             }
             .foregroundStyle(Theme.accentText)
             .padding(.horizontal, 8)
+            if let threadRow {
+                // The indicator gets its own tap target rather than the row being made to mean two
+                // things: clicking the bubble opens the conversation it is announcing. Attached
+                // here, on a child of the row, so it takes the click ahead of the row's own
+                // gestures — and only when there is a thread to open, so the rest of the time the
+                // click falls through to selecting the row like any other part of it.
+                indicator
+                    .contentShape(Rectangle())
+                    .onTapGesture { openThread(at: threadRow) }
+            } else {
+                indicator
+            }
         }
     }
 
@@ -363,7 +459,7 @@ struct DiffListView: View {
         return counts
     }
 
-    // MARK: - Keyboard
+    // MARK: - Mouse
 
     /// A click picks the row *and* takes the keyboard, so the next `c` acts on what was clicked.
     /// - Parameter index: The row that was clicked.
@@ -372,7 +468,46 @@ struct DiffListView: View {
         isFocused = true
     }
 
+    /// What a double-click does: pick the row, then comment on it — the two steps `c` takes, in
+    /// one gesture, so a reviewer with a mouse reaches the composer the way one with a keyboard
+    /// does. A row that takes no comment does nothing, exactly as `c` does on it.
+    /// - Parameter index: The row that was double-clicked.
+    private func comment(at index: Int) {
+        select(index)
+        // The rows the list was drawn from can be replaced by a background refresh between the
+        // draw and the click, and `selectDiffRow` refuses an index the new rows do not have.
+        // Acting anyway would open the composer on whatever row the cursor was left standing on
+        // rather than the one under the pointer.
+        guard model.selectedDiffRow == index else { return }
+        model.requestCommentOnSelectedRow()
+    }
+
+    /// What a click on the comment indicator does: pick the row, then open its thread.
+    /// - Parameter index: The row whose indicator was clicked.
+    private func openThread(at index: Int) {
+        select(index)
+        // The same stale-index guard as above, for the same reason: a thread opened here must be
+        // the one belonging to the row that was clicked.
+        guard model.selectedDiffRow == index else { return }
+        model.openThreadOnSelectedRow()
+    }
+
+    // MARK: - Keyboard
+
     private func handle(_ press: KeyPress) -> KeyPress.Result {
+        // "Open what is selected", which is what Return means in the inbox list — there a pull
+        // request, here the conversation already hanging on the line. Without it a row announced
+        // a thread it offered no way of reaching, which is the worse half of a missing feature.
+        //
+        // ⌘ is excluded for the inbox list's reason: ⇧⌘⏎ is "Start Review Session" in the Review
+        // menu, and this must not read a menu shortcut as "open the row".
+        //
+        // Ignored rather than handled when the row carries no thread, so the key travels on
+        // instead of being eaten by a view that had no answer for it — the same call the brackets
+        // make below.
+        if press.matches(.return), !press.modifiers.contains(.command) {
+            return model.openThreadOnSelectedRow() ? .handled : .ignored
+        }
         if press.matches(.downArrow) {
             model.moveDiffRowSelection(by: 1)
             return .handled

@@ -25,6 +25,10 @@ import ShepherdCore
 /// - **A row that cannot take a comment says so.** In "Since your review" the round narrows what
 ///   GitHub will accept, and a reviewer who presses `c` and hears nothing would have no way of
 ///   telling that from a key that did not arrive.
+/// - **A row that carries a conversation says how to reach it.** Announcing that something is
+///   there and leaving no way to it is worse than silence, and this reader has no indicator to
+///   click at — so the count and the key that opens it are one phrase, never one without the
+///   other.
 extension PatchReconstructor.DiffRow {
     /// The row as the one sentence VoiceOver reads.
     /// - Parameters:
@@ -96,19 +100,28 @@ extension PatchReconstructor.DiffRow {
             : String(localized: "Line \(line).", bundle: bundle)
     }
 
-    /// How many published threads hang on the line.
+    /// How many published threads hang on the line, and how to read one.
     ///
     /// Two keys picked on the count rather than one plural variation, the shape
     /// ``EvidenceFactText`` uses: it keeps the singular a sentence a translator can write freely
     /// rather than a slot in a table.
+    ///
+    /// The count and the way in are one phrase because they were briefly two, and the row said
+    /// only the first: it announced a conversation and offered nothing that would open it. A fact
+    /// a reviewer cannot act on is worse than one left unsaid, and worst for the reader this whole
+    /// view exists for, who has no indicator to click at. Four words, because the sentence around
+    /// them is already long.
     /// - Parameters:
     ///   - count: How many there are; never zero at this call.
     ///   - bundle: Where to look the catalog up.
     /// - Returns: The phrase.
     private static func threads(count: Int, bundle: Bundle) -> String {
-        count == 1
-            ? String(localized: "1 comment thread.", bundle: bundle)
-            : String(localized: "\(count) comment threads.", bundle: bundle)
+        SpokenRow.sentence([
+            count == 1
+                ? String(localized: "1 comment thread.", bundle: bundle)
+                : String(localized: "\(count) comment threads.", bundle: bundle),
+            String(localized: "Press Return to open.", bundle: bundle),
+        ])
     }
 
     /// How many of the reviewer's own unsent comments hang on the line.

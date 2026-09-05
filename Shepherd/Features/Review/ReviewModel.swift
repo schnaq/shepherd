@@ -132,7 +132,9 @@ final class ReviewModel {
     /// Session-only and deliberately not persisted: it is a cursor, not a preference, and a
     /// reviewer coming back to a pull request tomorrow wants the top of the file rather than the
     /// line they happened to leave. It is cleared whenever the file or the round changes — see
-    /// the two `didSet`s above — because both of those change which rows exist.
+    /// the two `didSet`s above — because both of those change which rows exist, and clamped into
+    /// the rows a refresh leaves behind by ``clampDiffRowSelection()``, which is where the
+    /// difference between the two is argued.
     private(set) var selectedDiffRow: Int?
     /// What changed since the head this reviewer last reviewed, when a baseline exists.
     private(set) var round: SinceReviewRound?
@@ -326,6 +328,34 @@ final class ReviewModel {
             || !visiblePriorities.contains(where: { $0.file.path == selectedPath }) {
             selectedPath = visiblePriorities.first?.file.path
         }
+        // After the path, never before: assigning it clears the row cursor when the file actually
+        // changed, and what is left to do here is the case that assignment cannot see.
+        clampDiffRowSelection()
+    }
+
+    /// Keeps ``selectedDiffRow`` inside the rows that now exist.
+    ///
+    /// The two `didSet`s clear the cursor when the *file* or the *round* changes, because a row
+    /// index means something else in a different document. Neither fires when a refresh replaces
+    /// ``detail`` with a newly fetched patch of the same file in the same round — and that patch
+    /// can have fewer rows, or the same rows shifted by a hunk that grew.
+    ///
+    /// Clamped rather than reset, and that is the decision worth stating. The index staying in
+    /// bounds is not the problem — nothing crashes, and ``DiffListContent/anchor(for:)`` re-reads
+    /// the row it now names, so no comment can land on the wrong line. What drifts is the
+    /// cursor's *meaning*, and resetting to the top would answer that by throwing away the place
+    /// a reviewer is standing on every time a background sweep lands, which is the worse of the
+    /// two: a cursor that moved a line or two is recoverable with `j` and `k`, a cursor sent back
+    /// to the top of a nine-hundred-line diff is not.
+    private func clampDiffRowSelection() {
+        // The cursor first, the rows second: rebuilding them parses the patch, and a review with
+        // no cursor in the list — every review the rich viewer is drawing — has nothing to clamp.
+        guard let current = selectedDiffRow else { return }
+        guard let rows = selectedListContent?.rows, !rows.isEmpty else {
+            selectedDiffRow = nil
+            return
+        }
+        selectedDiffRow = min(current, rows.count - 1)
     }
 
     // MARK: - Since your review (ADR 0028)
@@ -919,6 +949,52 @@ final class ReviewModel {
                 startLine: nil
             )
         )
+    }
+
+    /// The published thread the native list's cursor would open, or `nil` when its row has none.
+    ///
+    /// The line is the row's own — ``DiffListContent/lineIdentity(of:)`` again — because a thread
+    /// on a deleted line is a base-side thread, and looking on the head side would find none and
+    /// quietly report that the row has nothing to open.
+    ///
+    /// **When a line carries several.** ``activeThread`` is one id and the popover shows one
+    /// conversation, and a row has one key to press, so this needs a rule rather than a picker:
+    /// the first thread on the line that is still *unresolved*, and the first thread otherwise.
+    /// An unresolved thread is the one still waiting for an answer, which is what a reviewer has
+    /// stopped on the row for; a resolved one is a record of a question already settled. The
+    /// order within each is ``threadsForSelectedFile``'s, which is GitHub's own — oldest first,
+    /// so the same press always opens the same thread. The row's sentence still says how many
+    /// there are, and every one of them stays reachable in the rich viewer, where a thread is a
+    /// card that is clicked rather than a count that is announced.
+    private var threadOnSelectedDiffRow: ReviewThread? {
+        guard let content = selectedListContent,
+              let index = selectedDiffRow,
+              content.rows.indices.contains(index),
+              case .line(let patchRow) = content.rows[index]
+        else { return nil }
+        let identity = DiffListContent.lineIdentity(of: patchRow)
+        let onTheLine = threadsForSelectedFile.filter {
+            $0.side == identity.side && $0.line == identity.line
+        }
+        return onTheLine.first { !$0.isResolved } ?? onTheLine.first
+    }
+
+    /// Opens the conversation on the selected row, if it has one.
+    ///
+    /// What Return does inside the native list, and what a click on a row's comment indicator
+    /// does. It goes through ``handle(_:)`` for ``requestCommentOnSelectedRow()``'s reason: the
+    /// gutter click in the rich viewer and the key press in the list open the *same* thread the
+    /// same way, because there is one place that turns "this thread" into an open popover. The
+    /// event carries a thread's GraphQL node id and nothing else, which is precisely what a row
+    /// has, so the shared path costs nothing to take.
+    /// - Returns: Whether there was a thread to open — which is how the key press knows whether
+    ///   to report itself handled, so Return on a row without one travels on rather than being
+    ///   swallowed.
+    @discardableResult
+    func openThreadOnSelectedRow() -> Bool {
+        guard let thread = threadOnSelectedDiffRow else { return false }
+        handle(.commentClicked(.thread(thread.id)))
+        return true
     }
 
     /// Asks for the keyboard focus to move into one pane of the diff editor.
