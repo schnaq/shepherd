@@ -304,7 +304,7 @@ enum InlineCommentDraftBuilder {
         let range = anchor.lineRange
         var rows: [Row] = []
 
-        for hunk in PatchReconstructor.hunks(in: patch) {
+        for hunk in UnifiedPatch.hunks(in: patch) {
             // Synthesised rather than copied: the header's line counts are re-derivable and the
             // section heading GitHub puts after the second `@@` is not context, it is noise.
             rows.append(

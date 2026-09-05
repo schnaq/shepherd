@@ -2,14 +2,19 @@ import Foundation
 
 /// Reading and writing unified diffs, as pure text (ADR 0028).
 ///
-/// The app target already reconstructs both sides of a patch for the Monaco viewer
-/// (`Shepherd/Features/DiffViewer/PatchReconstructor.swift`); that type stays where it is,
-/// because it also produces the viewer's commentable-line sets and is tested against the
-/// bridge. What the interdiff needs is smaller and has to run on Linux: the *head* side of a
-/// patch as an array of lines, and a way to write a synthesized patch back out so the viewer
-/// can render it through the same `loadFile` path.
+/// This is the one place that reads the grammar. The app target reconstructs *both* sides of a
+/// patch for the Monaco viewer (`Shepherd/Features/DiffViewer/PatchReconstructor.swift`) and
+/// keeps the viewer's commentable-line sets, which is more than the interdiff needs and depends
+/// on `ChangedFile`; but it splits its hunks with ``hunks(in:)`` here rather than with a copy.
+/// It used to be a copy, and the copies had drifted — the same twenty lines of ``header(_:)``
+/// in both files, and a `hunks(in:)` that disagreed about the end of a file. Two readings of a
+/// patch that disagree are a bug waiting for the input that tells them apart.
 ///
-/// Both halves follow the same rule as the app-side reconstructor, and the rule is
+/// What the interdiff needs on top of that, and needs on Linux: the *head* side of a patch as
+/// an array of lines, and a way to write a synthesized patch back out so the viewer can render
+/// it through the same `loadFile` path.
+///
+/// Every part of this follows one rule, and the rule is
 /// load-bearing: **line numbers are absolute**. GitHub only sends the hunks, so the gaps
 /// between them are padded with empty lines, which keeps a 1-based line number in this array
 /// equal to the same line number in GitHub's diff — the number review threads and draft
@@ -89,8 +94,13 @@ public enum UnifiedPatch {
         var current: Hunk?
         let normalised = patch.replacingOccurrences(of: "\r\n", with: "\n")
         var rawLines = normalised.components(separatedBy: "\n")
-        // A unified diff ends with a newline; the empty component after it is not a line, and
-        // keeping it would pad every reconstructed file with one phantom line at the end.
+        // The empty component after a terminating newline is not a line. Neither producer this
+        // app has emits one — GitHub's `files[].patch` ends without a newline, and the
+        // interdiff's own patch is `joined(separator:)` — but a patch from anywhere else does
+        // (`git diff` for one), and what it costs is not cosmetic. An empty component has no
+        // marker character, so the app-side reconstructor reads it as an unchanged empty line
+        // and puts it in *both* documents and *both* commentable-line sets; a comment on a line
+        // that is not in the diff is one GitHub refuses, along with the whole review.
         if rawLines.last == "" { rawLines.removeLast() }
         for rawLine in rawLines {
             if rawLine.hasPrefix("@@") {
@@ -100,6 +110,12 @@ public enum UnifiedPatch {
                 }
                 continue
             }
+            // Only `@@` is structural. GitHub's `files[].patch` starts at the first hunk header
+            // and never carries `diff --git` / `index` / `---` / `+++` lines, so filtering for
+            // them here only ever eats real content: a deleted `-- SQL comment` serialises as
+            // `--- SQL comment`, and dropping it shifts every following original-side line
+            // number by one. Anything before the first `@@` is ignored anyway, because `current`
+            // is still nil.
             current?.lines.append(rawLine)
         }
         if let current { result.append(current) }

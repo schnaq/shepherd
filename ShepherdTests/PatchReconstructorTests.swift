@@ -5,19 +5,6 @@ import XCTest
 
 /// The patch → two-documents mapping the diff viewer depends on.
 final class PatchReconstructorTests: XCTestCase {
-    func testHeaderParsing() {
-        XCTAssertEqual(
-            PatchReconstructor.header("@@ -12,7 +14,9 @@ func thing()").map { [$0.0, $0.1] },
-            [12, 14]
-        )
-        XCTAssertEqual(
-            PatchReconstructor.header("@@ -0,0 +1 @@").map { [$0.0, $0.1] },
-            [0, 1]
-        )
-        XCTAssertNil(PatchReconstructor.header("not a hunk header"))
-        XCTAssertNil(PatchReconstructor.header("@@ nonsense @@"))
-    }
-
     func testSimpleModification() {
         let patch = """
             @@ -1,3 +1,3 @@
