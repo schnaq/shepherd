@@ -275,3 +275,25 @@ public struct IssueCapture: Sendable {
         self.queries = queries
     }
 }
+
+/// The slice of ``GitHubKit/GitHubClient`` the drain deletes a merged head branch through
+/// (ADR 0005's 2026-09-05 amendment).
+///
+/// A port of its own rather than two more requirements on ``PullRequestFetching``, for
+/// ``IssueWriting``'s reason: the inbox port is what the engine's loops need in order to *run*,
+/// and every double in every sweep test implements all of it. These two calls are made by one
+/// branch of one outbox action, only when the user ticked a box, and a test that queues a merge
+/// needs no sweep at all.
+///
+/// ``headBranchContext(repo:number:)`` is first in the list because it is first in the drain: the
+/// deletion below it is not attempted until it has answered, and an engine built without this
+/// port deletes nothing.
+public protocol BranchDeleting: Sendable {
+    /// Reads the head branch, its repository and the base repository's default branch.
+    func headBranchContext(repo: RepoRef, number: Int) async throws -> HeadBranchContext
+    /// Deletes a branch by name.
+    func deleteBranch(repo: RepoRef, name: String) async throws
+}
+
+/// `GitHubClient` already has exactly this shape; the conformance is the contract check.
+extension GitHubClient: BranchDeleting {}

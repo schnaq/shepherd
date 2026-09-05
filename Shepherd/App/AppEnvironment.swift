@@ -529,6 +529,9 @@ final class AppEnvironment {
                 rows: rows,
                 existingOutbox: queuedWrites,
                 write: { summary, method in
+                    // No branch deletion: `deletesHeadBranch` keeps its default. A rule may only
+                    // record a decision a human already made (ADR 0018), and nobody ticked a box
+                    // about a branch — widening what an unattended rule does needs a new ADR.
                     await actions.merge(summary, method: method)
                 }
             )

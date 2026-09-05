@@ -12,12 +12,14 @@ final class OutboxDrainTests: XCTestCase {
     private func makeEngine(
         github: MockGitHub,
         store: DatabaseManager,
-        issueWrites: (any IssueWriting)? = nil
+        issueWrites: (any IssueWriting)? = nil,
+        branchDeletion: (any BranchDeleting)? = nil
     ) -> SyncEngine {
         SyncEngine(
             github: github,
             store: store,
             issueWrites: issueWrites,
+            branchDeletion: branchDeletion,
             configuration: SyncConfiguration(),
             sleeper: RecordingSleeper(),
             now: { Date(timeIntervalSince1970: 1_788_162_000) }
@@ -146,6 +148,165 @@ final class OutboxDrainTests: XCTestCase {
 
         let headChecks = await github.headOidRequests
         XCTAssertEqual(headChecks, ["schnaq/review#1"])
+    }
+
+    // MARK: - Deleting the merged head branch (ADR 0005's 2026-09-05 amendment)
+
+    func testAMergeThatAsksForItDeletesTheHeadBranchAfterTheMerge() async throws {
+        let github = MockGitHub()
+        await github.setBranchContext(
+            HeadBranchContext(
+                headRefName: "agent/token-store",
+                headRepositoryFullName: repo.fullName,
+                defaultBranchName: "main"
+            ),
+            repo: repo,
+            number: 1
+        )
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(
+            .merge(method: "squash", expectedHeadOid: "head-1", deletesHeadBranch: true),
+            in: store
+        )
+        let engine = makeEngine(github: github, store: store, branchDeletion: github)
+
+        await engine.drainOutbox()
+
+        // The order is the assertion: a branch is only a leftover once the merge has landed.
+        let log = await github.writeLog
+        XCTAssertEqual(log, ["merge #1", "delete agent/token-store"])
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testABranchDeletionThatFailsStillLeavesTheMergeSucceeded() async throws {
+        // The whole reason the deletion is swallowed: the merge already happened on GitHub, and
+        // a row that reported failure would be retried into a merge GitHub refuses.
+        let github = MockGitHub()
+        await github.setDeleteBranchError(.server(status: 500, message: "boom"))
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(
+            .merge(method: "squash", expectedHeadOid: "head-1", deletesHeadBranch: true),
+            in: store
+        )
+        let engine = makeEngine(github: github, store: store, branchDeletion: github)
+
+        await engine.drainOutbox()
+
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty, "the merge row left the queue")
+        let merges = await github.merges
+        XCTAssertEqual(merges.count, 1, "and the merge was not sent a second time")
+
+        // A second drain has nothing left to send, which is the same statement from the other
+        // side: nothing was queued for a retry.
+        await engine.drainOutbox()
+        let mergesAfterSecondDrain = await github.merges
+        XCTAssertEqual(mergesAfterSecondDrain.count, 1)
+    }
+
+    func testAProbeThatFailsDeletesNothingAndStillSucceeds() async throws {
+        let github = MockGitHub()
+        await github.setBranchContextError(.server(status: 502, message: "bad gateway"))
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(
+            .merge(method: "squash", expectedHeadOid: "head-1", deletesHeadBranch: true),
+            in: store
+        )
+        let engine = makeEngine(github: github, store: store, branchDeletion: github)
+
+        await engine.drainOutbox()
+
+        let deleted = await github.deletedBranches
+        XCTAssertTrue(deleted.isEmpty, "a guard that could not be evaluated is a refusal")
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testAMergeThatDoesNotAskForItNeverEvenProbes() async throws {
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(.merge(method: "squash", expectedHeadOid: "head-1"), in: store)
+        let engine = makeEngine(github: github, store: store, branchDeletion: github)
+
+        await engine.drainOutbox()
+
+        let probes = await github.branchContextRequests
+        XCTAssertTrue(probes.isEmpty, "the request is only made when the row asked for a deletion")
+        let deleted = await github.deletedBranches
+        XCTAssertTrue(deleted.isEmpty)
+    }
+
+    func testAForksHeadBranchIsNeverDeleted() async throws {
+        let github = MockGitHub()
+        await github.setBranchContext(
+            HeadBranchContext(
+                headRefName: "patch-1",
+                headRepositoryFullName: "someone-else/review",
+                defaultBranchName: "main"
+            ),
+            repo: repo,
+            number: 1
+        )
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(
+            .merge(method: "merge", expectedHeadOid: "head-1", deletesHeadBranch: true),
+            in: store
+        )
+        let engine = makeEngine(github: github, store: store, branchDeletion: github)
+
+        await engine.drainOutbox()
+
+        let deleted = await github.deletedBranches
+        XCTAssertTrue(deleted.isEmpty, "the branch of a cross-repository pull request is not ours")
+        let log = await github.writeLog
+        XCTAssertEqual(log, ["merge #1"])
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testTheRepositorysDefaultBranchIsNeverDeleted() async throws {
+        // A pull request from `main` into a release branch is an ordinary thing to open.
+        let github = MockGitHub()
+        await github.setBranchContext(
+            HeadBranchContext(
+                headRefName: "main",
+                headRepositoryFullName: repo.fullName,
+                defaultBranchName: "main"
+            ),
+            repo: repo,
+            number: 1
+        )
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(
+            .merge(method: "merge", expectedHeadOid: "head-1", deletesHeadBranch: true),
+            in: store
+        )
+        let engine = makeEngine(github: github, store: store, branchDeletion: github)
+
+        await engine.drainOutbox()
+
+        let deleted = await github.deletedBranches
+        XCTAssertTrue(deleted.isEmpty)
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testAnEngineWithoutTheBranchPortMergesAndDeletesNothing() async throws {
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(
+            .merge(method: "squash", expectedHeadOid: "head-1", deletesHeadBranch: true),
+            in: store
+        )
+        let engine = makeEngine(github: github, store: store)
+
+        await engine.drainOutbox()
+
+        let log = await github.writeLog
+        XCTAssertEqual(log, ["merge #1"])
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty, "the merge is a merge either way")
     }
 
     // MARK: - Announcing what actually reached GitHub (ADR 0012)

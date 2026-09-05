@@ -18,10 +18,11 @@ struct AutoMergeQueuedWrite: Sendable, Equatable {
 /// How a queued merge reaches the outbox.
 ///
 /// A seam rather than a dependency, the same shape as ``WebhookPosting`` and
-/// ``DigestCoordinator``'s input source: in the app it is ``PullRequestActions/merge(_:method:)`` —
-/// literally the function the merge sheet's button calls — and in the tests it is a closure that
-/// records what it was asked to write. There is deliberately no way for this file to reach
-/// GitHub, or even the database, on its own (ADR 0006: one write path).
+/// ``DigestCoordinator``'s input source: in the app it is
+/// ``PullRequestActions/merge(_:method:deletesHeadBranch:)`` — literally the function the merge
+/// sheet's button calls, with the branch deletion left at its default of `false` — and in the
+/// tests it is a closure that records what it was asked to write. There is deliberately no way for
+/// this file to reach GitHub, or even the database, on its own (ADR 0006: one write path).
 typealias AutoMergeWriting = @MainActor (PullRequestSummary, MergeMethod) async -> Void
 
 /// Queues merges for pull requests that satisfy every one of the user's rules (ADR 0018).

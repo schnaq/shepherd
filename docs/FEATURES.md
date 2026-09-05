@@ -225,6 +225,12 @@ bridge — [ADR 0003](adr/0003-monaco-diff-viewer-in-wkwebview.md)), inline comm
 multi-comment pending reviews, approve / request changes / comment, reply to and resolve review
 threads, CI check status, and merge (merge / squash / rebase) — complete GitHub review parity,
 natively wrapped. Drafts survive restart and offline; a staleness check runs before a submit.
+The merge sheet's *Delete the branch afterwards* box is remembered the way the merge method is, and
+the deletion rides along in the same queued write rather than in a second one: it happens only once
+the merge has actually landed, it is skipped for a fork's branch and for a repository's default
+branch, and a deletion that fails never turns a merge that worked into a merge you are told to try
+again ([ADR 0005](adr/0005-api-strategy-graphql-search-rest-writes.md)). Nothing unattended ever
+deletes a branch — neither bulk triage nor an automatic merge rule ticks that box.
 
 An agent's pull request opens on **Conversation** rather than on the diff whenever its description
 actually claims something — tests added, only one module touched, nothing breaking, fixes #142 —

@@ -174,12 +174,17 @@ final class BulkTriagePlanTests: XCTestCase {
         XCTAssertEqual(write.item.prID, "PR_approved")
         XCTAssertEqual(write.item.repo, Fixtures.repo)
         XCTAssertEqual(write.item.state, .pending)
-        guard case .merge(let method, let expectedHeadOid) = write.item.action else {
+        let mergeAction = write.item.action
+        guard case .merge(let method, let expectedHeadOid, let deletesHeadBranch) = mergeAction
+        else {
             XCTFail("expected a merge action")
             return
         }
         XCTAssertEqual(method, "rebase")
         XCTAssertEqual(expectedHeadOid, "abc123")
+        // The bulk dialog has no box for it, so the plan may never tick one
+        // (ADR 0005's 2026-09-05 amendment).
+        XCTAssertFalse(deletesHeadBranch)
     }
 
     func testAnApprovalReusesTheLocalDraftInsteadOfDiscardingItsComments() throws {

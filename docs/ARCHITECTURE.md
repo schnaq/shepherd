@@ -404,6 +404,12 @@ Pure logic in `ShepherdCore` (all unit-tested):
   - `submitReview(_ draft: ReviewDraft, on:) async throws` — REST
     `POST /pulls/{n}/reviews` with full `comments` array; maps verdict to `event`
   - `replyToComment/resolveThread/unresolveThread/mergePullRequest/markReadyForReview…`
+  - `headBranchContext(repo:number:)` / `deleteBranch(repo:name:)` — the two halves of the merge
+    sheet's "delete the branch afterwards" (ADR 0005's 2026-09-05 amendment): one small GraphQL
+    read of the head branch, the repository it lives in and the base repository's default branch,
+    then `DELETE /git/refs/heads/{branch}`. Asked for only by a merge outbox row that carries
+    `deletesHeadBranch`, and the drain swallows whatever the deletion says — the merge has already
+    happened by then
   - `notifications(since:) async throws -> (items, pollInterval)` — honors `X-Poll-Interval`
   - `jobLog(repo:jobID:) async throws -> String` — `GET /actions/jobs/{id}/logs` for "why is CI
     red?" (ADR 0024). GitHub answers `302` to a short-lived, self-signed blob URL on its own

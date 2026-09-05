@@ -95,6 +95,13 @@ public actor SyncEngine {
     /// drain that sends a queued comment needs no sweep, and a sweep needs no writer. `nil` means
     /// an issue row in the outbox is parked as failed with one sentence rather than sent blind.
     private let issueWrites: (any IssueWriting)?
+    /// Where the drain deletes a merged pull request's head branch, when the app wired one up
+    /// (ADR 0005's 2026-09-05 amendment).
+    ///
+    /// Optional for ``snapshots``'s reason rather than ``issueWrites``'s: a merge row whose
+    /// deletion cannot be carried out is still a merge, so `nil` costs the user nothing but the
+    /// tidying-up — where a `nil` issue writer would mean sending an issue write blind.
+    private let branchDeletion: (any BranchDeleting)?
     private let configuration: SyncConfiguration
     private let sleeper: any Sleeping
     private let now: @Sendable () -> Date
@@ -138,6 +145,10 @@ public actor SyncEngine {
     ///     Sprint 4a amendment). `nil` — the default — means the drain refuses an issue row
     ///     instead of sending it, which is how every caller that predates the issue writes
     ///     builds an engine.
+    ///   - branchDeletion: Where a merged pull request's head branch is read and deleted
+    ///     (ADR 0005's 2026-09-05 amendment). `nil` — the default — means a merge row that asks
+    ///     for the deletion is merged and nothing more, which is how every caller that predates
+    ///     branch deletion builds an engine.
     ///   - configuration: Tunables.
     ///   - sleeper: The delay abstraction; tests inject one that does not wait.
     ///   - now: Clock injection point for tests.
@@ -148,6 +159,7 @@ public actor SyncEngine {
         outcomes: OutcomeCapture? = nil,
         issues: IssueCapture? = nil,
         issueWrites: (any IssueWriting)? = nil,
+        branchDeletion: (any BranchDeleting)? = nil,
         configuration: SyncConfiguration = SyncConfiguration(),
         sleeper: any Sleeping = SystemSleeper(),
         now: @escaping @Sendable () -> Date = { Date() }
@@ -158,6 +170,7 @@ public actor SyncEngine {
         self.outcomes = outcomes
         self.issues = issues
         self.issueWrites = issueWrites
+        self.branchDeletion = branchDeletion
         self.configuration = configuration
         self.sleeper = sleeper
         self.now = now
@@ -960,7 +973,7 @@ public actor SyncEngine {
             try await github.unresolveThread(id: threadID)
             return .sent
 
-        case .merge(let method, let expectedHeadOid):
+        case .merge(let method, let expectedHeadOid, let deletesHeadBranch):
             _ = try await github.mergePullRequest(
                 repo: item.repo,
                 number: item.number,
@@ -968,6 +981,9 @@ public actor SyncEngine {
                 expectedHeadOid: expectedHeadOid,
                 commitTitle: nil
             )
+            if deletesHeadBranch {
+                await deleteHeadBranch(of: item)
+            }
             return .sent
 
         case .markReadyForReview:
@@ -1048,6 +1064,37 @@ public actor SyncEngine {
                 return .sent
             }
         }
+    }
+
+    /// Deletes the merged pull request's head branch, when the row asked for it and both guards
+    /// pass (ADR 0005's 2026-09-05 amendment).
+    ///
+    /// Nothing in here can fail the merge, and that is the whole shape of it. By the time this
+    /// runs the pull request is merged *on GitHub*: a row that reported failure for a thing that
+    /// had succeeded would be retried, and the retry would be a merge GitHub refuses — or a merge
+    /// the user re-queues by hand, having been told theirs did not land. So every way out of this
+    /// function is silent and the row is marked succeeded either way.
+    ///
+    /// The guards are read here rather than only in the merge sheet because the sheet is not the
+    /// only thing that queues a merge, and because they are facts about GitHub rather than about
+    /// the click: a pull request can be re-targeted, and a fork can be deleted, between the tick
+    /// and the drain. What a refusal or a failure leaves behind is the request-log entry GitHubKit
+    /// writes for every request — including the `422 Reference does not exist` that a repository
+    /// with "automatically delete head branches" switched on produces, which is that repository
+    /// having already done this for us rather than anything worth a warning.
+    /// - Parameter item: The merge row that has just been sent.
+    private func deleteHeadBranch(of item: OutboxItem) async {
+        // An engine built without the port deletes nothing, exactly as one built without a
+        // snapshot writer keeps no baseline (ADR 0028).
+        guard let branchDeletion else { return }
+        // An unanswerable guard is a refusal: a probe that failed says nothing about the branch,
+        // and "we could not check whether this is a fork" is not permission to delete it.
+        guard let context = try? await branchDeletion.headBranchContext(
+            repo: item.repo,
+            number: item.number
+        ) else { return }
+        guard let branch = context.deletableBranch(in: item.repo) else { return }
+        try? await branchDeletion.deleteBranch(repo: item.repo, name: branch)
     }
 
     /// What the staleness probe found: either a writer to go ahead with, or the outcome to park
@@ -1178,7 +1225,7 @@ public actor SyncEngine {
         case .replyToComment: return .replyPosted
         case .resolveThread: return .threadResolved
         case .unresolveThread: return .threadUnresolved
-        case .merge(let method, _): return .merged(method: method)
+        case .merge(let method, _, _): return .merged(method: method)
         case .markReadyForReview: return .markedReadyForReview
         case .addIssueComment: return .issueCommentAdded
         case .addIssueLabel(let name, _): return .issueLabelAdded(name: name)

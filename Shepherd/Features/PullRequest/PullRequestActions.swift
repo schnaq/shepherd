@@ -140,10 +140,22 @@ struct PullRequestActions {
     /// - Parameters:
     ///   - summary: The pull request.
     ///   - method: Merge, squash or rebase.
-    func merge(_ summary: PullRequestSummary, method: MergeMethod) async {
+    ///   - deletesHeadBranch: Whether to delete the head branch once the merge has landed
+    ///     (ADR 0005's 2026-09-05 amendment). Defaults to `false`, which is what the automatic
+    ///     rules get: ADR 0018 lets a rule *record* a decision a human made, and a deletion
+    ///     nobody ticked would be a wider decision than the approval it stands on.
+    func merge(
+        _ summary: PullRequestSummary,
+        method: MergeMethod,
+        deletesHeadBranch: Bool = false
+    ) async {
         do {
             let outcome = try await enqueue(
-                .merge(method: method.rawValue, expectedHeadOid: summary.headRefOid),
+                .merge(
+                    method: method.rawValue,
+                    expectedHeadOid: summary.headRefOid,
+                    deletesHeadBranch: deletesHeadBranch
+                ),
                 on: summary
             )
             announce(outcome, of: .merge, on: summary)

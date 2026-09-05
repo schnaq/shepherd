@@ -40,12 +40,20 @@ public enum OutboxAction: Sendable, Codable, Hashable {
     case resolveThread(threadID: String)
     /// Unresolve a review thread by its GraphQL node id.
     case unresolveThread(threadID: String)
-    /// Merge the pull request.
+    /// Merge the pull request, and optionally delete its head branch afterwards.
+    ///
+    /// The deletion is a *field of the merge* rather than a row of its own, because a merge and
+    /// the tidying-up that follows it are one intent: two rows could be drained by two different
+    /// Macs, or in two different sweeps, and a branch deleted by a machine whose merge row was
+    /// still queued would be a deletion of something that had not been merged yet.
     /// - Parameters:
     ///   - method: `"merge"`, `"squash"` or `"rebase"`. A raw string so that `ShepherdCore`
     ///     stays free of GitHub-specific types.
     ///   - expectedHeadOid: The head SHA the user saw, sent as a merge precondition.
-    case merge(method: String, expectedHeadOid: String?)
+    ///   - deletesHeadBranch: Whether the head branch is to be deleted once the merge has landed.
+    ///     Defaults to `false`, which is how every caller that predates branch deletion queues a
+    ///     merge — the automatic rules (ADR 0018) and bulk triage (ADR 0015) among them.
+    case merge(method: String, expectedHeadOid: String?, deletesHeadBranch: Bool = false)
     /// Take the pull request out of draft state.
     case markReadyForReview
     /// Post a comment on the issue (ADR 0032).
@@ -118,6 +126,257 @@ public enum OutboxAction: Sendable, Codable, Hashable {
     /// Which is also what decides how ``OutboxItem``'s three target fields are to be read — see
     /// that type's own note.
     public var targetsIssue: Bool { basedOnIssueUpdatedAt != nil }
+
+    // MARK: - Coding
+
+    // The compiler would synthesise all of this, and did until the merge case grew a third
+    // associated value. Synthesised decoding of an enum payload is *strict* — every associated
+    // value is a required key — so a merge row queued by a build that predates
+    // ``deletesHeadBranch`` would stop decoding the moment the field was added, and
+    // ``ShepherdPersistence/DatabaseManager/claimReadyOutboxItems(now:limit:)`` skips a row whose
+    // payload no longer decodes. A user who queued a merge on the train and updated Shepherd
+    // before landing would find the merge quietly gone.
+    //
+    // So the coding is written out by hand, in exactly the shape the compiler produced — one
+    // object whose single key names the case, holding the associated values under their labels
+    // (or `_0` where there is no label) — with one difference: the new field is read
+    // *tolerantly*, the way ``AutoDelegationRules`` reads a field an older document does not carry.
+    // An absent key means the row was queued before branch deletion existed, and such a merge
+    // must not start deleting a branch because the app was updated.
+
+    /// The single key of an encoded action: the case's own name.
+    private enum CodingKeys: String, CodingKey {
+        case submitReview, replyToComment, resolveThread, unresolveThread, merge
+        case markReadyForReview
+        case addIssueComment, addIssueLabel, addIssueAssignee, closeIssue, reopenIssue
+    }
+
+    /// The payload keys of ``submitReview(_:)`` — one unlabelled value, so `_0`.
+    private enum SubmitReviewKeys: String, CodingKey {
+        case _0
+    }
+
+    /// The payload keys of ``replyToComment(commentDatabaseID:body:)``.
+    private enum ReplyToCommentKeys: String, CodingKey {
+        case commentDatabaseID, body
+    }
+
+    /// The payload keys of the two thread actions, which carry the same one value.
+    private enum ThreadKeys: String, CodingKey {
+        case threadID
+    }
+
+    /// The payload keys of ``merge(method:expectedHeadOid:deletesHeadBranch:)``.
+    private enum MergeKeys: String, CodingKey {
+        case method, expectedHeadOid, deletesHeadBranch
+    }
+
+    /// The payload keys of ``addIssueComment(body:basedOnUpdatedAt:)``.
+    private enum IssueCommentKeys: String, CodingKey {
+        case body, basedOnUpdatedAt
+    }
+
+    /// The payload keys of ``addIssueLabel(name:basedOnUpdatedAt:)``.
+    private enum IssueLabelKeys: String, CodingKey {
+        case name, basedOnUpdatedAt
+    }
+
+    /// The payload keys of ``addIssueAssignee(login:basedOnUpdatedAt:)``.
+    private enum IssueAssigneeKeys: String, CodingKey {
+        case login, basedOnUpdatedAt
+    }
+
+    /// The payload keys of ``closeIssue(reason:basedOnUpdatedAt:)``.
+    private enum CloseIssueKeys: String, CodingKey {
+        case reason, basedOnUpdatedAt
+    }
+
+    /// The payload keys of ``reopenIssue(basedOnUpdatedAt:)``.
+    private enum ReopenIssueKeys: String, CodingKey {
+        case basedOnUpdatedAt
+    }
+
+    /// Encodes the action as `{"<case>": {<associated values>}}`.
+    public func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .submitReview(let draft):
+            var nested = container.nestedContainer(
+                keyedBy: SubmitReviewKeys.self,
+                forKey: .submitReview
+            )
+            try nested.encode(draft, forKey: ._0)
+        case .replyToComment(let commentDatabaseID, let body):
+            var nested = container.nestedContainer(
+                keyedBy: ReplyToCommentKeys.self,
+                forKey: .replyToComment
+            )
+            try nested.encode(commentDatabaseID, forKey: .commentDatabaseID)
+            try nested.encode(body, forKey: .body)
+        case .resolveThread(let threadID):
+            var nested = container.nestedContainer(
+                keyedBy: ThreadKeys.self,
+                forKey: .resolveThread
+            )
+            try nested.encode(threadID, forKey: .threadID)
+        case .unresolveThread(let threadID):
+            var nested = container.nestedContainer(
+                keyedBy: ThreadKeys.self,
+                forKey: .unresolveThread
+            )
+            try nested.encode(threadID, forKey: .threadID)
+        case .merge(let method, let expectedHeadOid, let deletesHeadBranch):
+            var nested = container.nestedContainer(keyedBy: MergeKeys.self, forKey: .merge)
+            try nested.encode(method, forKey: .method)
+            try nested.encodeIfPresent(expectedHeadOid, forKey: .expectedHeadOid)
+            try nested.encode(deletesHeadBranch, forKey: .deletesHeadBranch)
+        case .markReadyForReview:
+            // The case has no associated values, so its payload is the empty object the
+            // compiler's own synthesis writes.
+            try container.encode([String: String](), forKey: .markReadyForReview)
+        case .addIssueComment(let body, let basedOnUpdatedAt):
+            var nested = container.nestedContainer(
+                keyedBy: IssueCommentKeys.self,
+                forKey: .addIssueComment
+            )
+            try nested.encode(body, forKey: .body)
+            try nested.encode(basedOnUpdatedAt, forKey: .basedOnUpdatedAt)
+        case .addIssueLabel(let name, let basedOnUpdatedAt):
+            var nested = container.nestedContainer(
+                keyedBy: IssueLabelKeys.self,
+                forKey: .addIssueLabel
+            )
+            try nested.encode(name, forKey: .name)
+            try nested.encode(basedOnUpdatedAt, forKey: .basedOnUpdatedAt)
+        case .addIssueAssignee(let login, let basedOnUpdatedAt):
+            var nested = container.nestedContainer(
+                keyedBy: IssueAssigneeKeys.self,
+                forKey: .addIssueAssignee
+            )
+            try nested.encode(login, forKey: .login)
+            try nested.encode(basedOnUpdatedAt, forKey: .basedOnUpdatedAt)
+        case .closeIssue(let reason, let basedOnUpdatedAt):
+            var nested = container.nestedContainer(
+                keyedBy: CloseIssueKeys.self,
+                forKey: .closeIssue
+            )
+            try nested.encode(reason, forKey: .reason)
+            try nested.encode(basedOnUpdatedAt, forKey: .basedOnUpdatedAt)
+        case .reopenIssue(let basedOnUpdatedAt):
+            var nested = container.nestedContainer(
+                keyedBy: ReopenIssueKeys.self,
+                forKey: .reopenIssue
+            )
+            try nested.encode(basedOnUpdatedAt, forKey: .basedOnUpdatedAt)
+        }
+    }
+
+    /// Decodes an action written by this build or by any build before it.
+    /// - Parameter decoder: The decoder holding one stored `outbox.payload`.
+    /// - Throws: A ``Swift/DecodingError`` when the object does not name exactly one known
+    ///   action, or when a value the action has always carried is missing.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        guard container.allKeys.count == 1, let key = container.allKeys.first else {
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(
+                    codingPath: container.codingPath,
+                    debugDescription: "An outbox payload names exactly one action."
+                )
+            )
+        }
+        switch key {
+        case .submitReview:
+            let nested = try container.nestedContainer(
+                keyedBy: SubmitReviewKeys.self,
+                forKey: .submitReview
+            )
+            let draft = try nested.decode(ReviewDraft.self, forKey: ._0)
+            self = .submitReview(draft)
+        case .replyToComment:
+            let nested = try container.nestedContainer(
+                keyedBy: ReplyToCommentKeys.self,
+                forKey: .replyToComment
+            )
+            let commentDatabaseID = try nested.decode(Int.self, forKey: .commentDatabaseID)
+            let body = try nested.decode(String.self, forKey: .body)
+            self = .replyToComment(commentDatabaseID: commentDatabaseID, body: body)
+        case .resolveThread:
+            let nested = try container.nestedContainer(
+                keyedBy: ThreadKeys.self,
+                forKey: .resolveThread
+            )
+            let threadID = try nested.decode(String.self, forKey: .threadID)
+            self = .resolveThread(threadID: threadID)
+        case .unresolveThread:
+            let nested = try container.nestedContainer(
+                keyedBy: ThreadKeys.self,
+                forKey: .unresolveThread
+            )
+            let threadID = try nested.decode(String.self, forKey: .threadID)
+            self = .unresolveThread(threadID: threadID)
+        case .merge:
+            let nested = try container.nestedContainer(keyedBy: MergeKeys.self, forKey: .merge)
+            let method = try nested.decode(String.self, forKey: .method)
+            let expectedHeadOid = try nested.decodeIfPresent(
+                String.self,
+                forKey: .expectedHeadOid
+            )
+            // The tolerant read this whole hand-written coding exists for: a row queued before
+            // the field existed carries no key, and "the user did not ask for a deletion" is the
+            // only honest reading of that.
+            let deletesHeadBranch = (try? nested.decodeIfPresent(
+                Bool.self,
+                forKey: .deletesHeadBranch
+            )).flatMap { $0 } ?? false
+            self = .merge(
+                method: method,
+                expectedHeadOid: expectedHeadOid,
+                deletesHeadBranch: deletesHeadBranch
+            )
+        case .markReadyForReview:
+            self = .markReadyForReview
+        case .addIssueComment:
+            let nested = try container.nestedContainer(
+                keyedBy: IssueCommentKeys.self,
+                forKey: .addIssueComment
+            )
+            let body = try nested.decode(String.self, forKey: .body)
+            let updatedAt = try nested.decode(Date.self, forKey: .basedOnUpdatedAt)
+            self = .addIssueComment(body: body, basedOnUpdatedAt: updatedAt)
+        case .addIssueLabel:
+            let nested = try container.nestedContainer(
+                keyedBy: IssueLabelKeys.self,
+                forKey: .addIssueLabel
+            )
+            let name = try nested.decode(String.self, forKey: .name)
+            let updatedAt = try nested.decode(Date.self, forKey: .basedOnUpdatedAt)
+            self = .addIssueLabel(name: name, basedOnUpdatedAt: updatedAt)
+        case .addIssueAssignee:
+            let nested = try container.nestedContainer(
+                keyedBy: IssueAssigneeKeys.self,
+                forKey: .addIssueAssignee
+            )
+            let login = try nested.decode(String.self, forKey: .login)
+            let updatedAt = try nested.decode(Date.self, forKey: .basedOnUpdatedAt)
+            self = .addIssueAssignee(login: login, basedOnUpdatedAt: updatedAt)
+        case .closeIssue:
+            let nested = try container.nestedContainer(
+                keyedBy: CloseIssueKeys.self,
+                forKey: .closeIssue
+            )
+            let reason = try nested.decode(IssueCloseReason.self, forKey: .reason)
+            let updatedAt = try nested.decode(Date.self, forKey: .basedOnUpdatedAt)
+            self = .closeIssue(reason: reason, basedOnUpdatedAt: updatedAt)
+        case .reopenIssue:
+            let nested = try container.nestedContainer(
+                keyedBy: ReopenIssueKeys.self,
+                forKey: .reopenIssue
+            )
+            let updatedAt = try nested.decode(Date.self, forKey: .basedOnUpdatedAt)
+            self = .reopenIssue(basedOnUpdatedAt: updatedAt)
+        }
+    }
 }
 
 /// Where an outbox row is in its lifecycle.

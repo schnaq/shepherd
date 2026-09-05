@@ -178,6 +178,10 @@ public struct BulkTriagePlan: Sendable, Equatable {
                     result.append(
                         BulkTriageWrite(
                             item: item(
+                                // `deletesHeadBranch` stays at its default of `false`: the bulk
+                                // dialog has no such box, and forty branches deleted behind one
+                                // confirmation is not something to infer from a tick that meant
+                                // "merge these" (ADR 0005's 2026-09-05 amendment).
                                 action: .merge(
                                     method: mergeMethod,
                                     // The head the user saw, so the drain's merge preflight can

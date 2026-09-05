@@ -92,12 +92,15 @@ final class BulkTriageOutboxTests: XCTestCase {
             items.map { "\($0.prID):\($0.action.kind)" },
             ["PR_1:submitReview", "PR_1:merge", "PR_2:merge"]
         )
-        guard case .merge(let method, let expectedHeadOid) = items[1].action else {
+        let mergeAction = items[1].action
+        guard case .merge(let method, let expectedHeadOid, let deletesHeadBranch) = mergeAction
+        else {
             XCTFail("expected a merge action")
             return
         }
         XCTAssertEqual(method, "rebase")
         XCTAssertEqual(expectedHeadOid, "head1")
+        XCTAssertFalse(deletesHeadBranch, "bulk triage deletes no branches")
 
         // The drain claims rows oldest first, so the approval is sent before its merge.
         let claimed = try await database.claimReadyOutboxItems()

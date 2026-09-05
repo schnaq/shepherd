@@ -970,6 +970,67 @@ public actor GitHubClient {
         }
     }
 
+    // MARK: - Branch deletion (ADR 0005's 2026-09-05 amendment)
+
+    /// Reads the three facts a queued branch deletion is decided on.
+    ///
+    /// ``headRefOid(repo:number:)``'s sibling, and it exists for the same reason: the outbox row
+    /// names a repository and a number, and everything else a write needs has to be read back at
+    /// the moment the write goes out. A merged pull request still answers all four fields —
+    /// GitHub keeps `headRefName` as a plain string even once the branch is gone — so this is
+    /// asked *after* the merge, where it costs nothing when the merge never happened.
+    /// - Parameters:
+    ///   - repo: The base repository — the one the merge was made in.
+    ///   - number: The pull request number.
+    /// - Returns: The head branch's name, the repository it lives in and the base repository's
+    ///   default branch. Any field GitHub did not answer is `nil`, which
+    ///   ``HeadBranchContext/deletableBranch(in:)`` reads as a refusal.
+    public func headBranchContext(repo: RepoRef, number: Int) async throws -> HeadBranchContext {
+        let data: HeadBranchContextData = try await graphQL(
+            document: GraphQLDocuments.headBranchContext,
+            variables: [
+                "owner": .string(repo.owner),
+                "name": .string(repo.name),
+                "number": .int(number),
+            ],
+            resource: "\(repo.fullName)#\(number) head branch",
+            isIdempotent: true
+        )
+        let pullRequest = data.repository?.pullRequest
+        return HeadBranchContext(
+            headRefName: pullRequest?.headRefName,
+            headRepositoryFullName: pullRequest?.headRepository?.nameWithOwner,
+            defaultBranchName: data.repository?.defaultBranchRef?.name
+        )
+    }
+
+    /// Deletes a branch.
+    ///
+    /// `DELETE /repos/{o}/{r}/git/refs/heads/{branch}` — REST, like every other write (ADR 0005).
+    /// The branch name goes into the path unencoded on purpose: `URLComponents` percent-encodes
+    /// what a path segment may not contain while leaving `/` a separator, which is exactly right
+    /// for a ref — `feature/thing` is one ref, not two segments GitHub would have to guess at.
+    ///
+    /// It reports failure the way every other write does, and the *caller* decides what that is
+    /// worth: the drain swallows it, because by then the merge has already happened.
+    /// - Parameters:
+    ///   - repo: The repository the branch lives in.
+    ///   - name: The branch name, without the `refs/heads/` prefix.
+    /// - Throws: ``GitHubError/notFound(resource:)`` or
+    ///   ``GitHubError/validationFailed(message:)`` when the ref is already gone — which is what
+    ///   a repository with "automatically delete head branches" switched on will usually say —
+    ///   and whatever else the status maps to.
+    public func deleteBranch(repo: RepoRef, name: String) async throws {
+        _ = try await performREST(
+            method: "DELETE",
+            path: "/repos/\(repo.owner)/\(repo.name)/git/refs/heads/\(name)",
+            queryItems: [],
+            body: nil,
+            useCache: false,
+            resource: "\(repo.fullName) branch \(name)"
+        )
+    }
+
     // MARK: - Issue writes (ADR 0032's Sprint 4a amendment)
 
     /// Reads an issue's current `updatedAt` — the staleness probe for a queued triage write.

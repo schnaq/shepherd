@@ -286,6 +286,129 @@ final class WriteRequestTests: XCTestCase {
         }
     }
 
+    // MARK: - Branch deletion (ADR 0005's 2026-09-05 amendment)
+
+    func testDeletingABranchIsOneDeleteToTheRefsEndpoint() async throws {
+        let transport = MockTransport()
+        await transport.route("/git/refs/heads/", Fixture.empty(status: 204))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        try await client.deleteBranch(repo: repo, name: "agent/token-store")
+
+        let request = await transport.onlyRequest()
+        XCTAssertEqual(request?.method, "DELETE")
+        XCTAssertEqual(
+            request?.url.absoluteString,
+            "https://api.github.com/repos/schnaq/review/git/refs/heads/agent/token-store"
+        )
+        XCTAssertNil(request?.body, "a ref deletion carries no body")
+    }
+
+    func testABranchNameKeepsItsSlashesAndPercentEncodesTheRest() async throws {
+        // The two halves of the same rule: `feature/thing` is *one* ref with a slash in it, so
+        // the slash stays a path separator, while anything a path segment may not carry is
+        // encoded rather than sent raw.
+        let transport = MockTransport()
+        await transport.route("/git/refs/heads/", Fixture.empty(status: 204))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        try await client.deleteBranch(repo: repo, name: "feature/über")
+
+        let request = await transport.onlyRequest()
+        XCTAssertEqual(
+            request?.url.absoluteString,
+            "https://api.github.com/repos/schnaq/review/git/refs/heads/feature/%C3%BCber"
+        )
+    }
+
+    func testADeletedRefIsAnOrdinaryTypedError() async throws {
+        // What a repository with "automatically delete head branches" switched on answers with.
+        // GitHubKit maps it like any other 422; deciding that it is *not* a problem is the
+        // drain's job, not the client's.
+        let transport = MockTransport()
+        await transport.route(
+            "/git/refs/heads/",
+            Fixture.response(json: "{\"message\":\"Reference does not exist\"}", status: 422)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            try await client.deleteBranch(repo: repo, name: "agent/token-store")
+            XCTFail("expected a validation error")
+        } catch let error as GitHubError {
+            guard case .validationFailed(let message) = error else {
+                return XCTFail("expected .validationFailed, got \(error)")
+            }
+            XCTAssertTrue(message.contains("Reference does not exist"))
+        }
+    }
+
+    func testTheHeadBranchContextReadsTheBranchItsRepositoryAndTheDefaultBranch() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "ShepherdHeadBranchContext",
+            Fixture.response(json: """
+            {"data":{"repository":{"defaultBranchRef":{"name":"main"},
+            "pullRequest":{"headRefName":"agent/token-store",
+            "headRepository":{"nameWithOwner":"schnaq/review"}}}}}
+            """)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let context = try await client.headBranchContext(repo: repo, number: 128)
+
+        XCTAssertEqual(context.headRefName, "agent/token-store")
+        XCTAssertEqual(context.headRepositoryFullName, "schnaq/review")
+        XCTAssertEqual(context.defaultBranchName, "main")
+        XCTAssertEqual(context.deletableBranch(in: repo), "agent/token-store")
+    }
+
+    func testTheGuardsRefuseAForkTheDefaultBranchAndAnUnansweredQuestion() {
+        // A pure function, so the rule a merged branch is deleted under can be read without a
+        // network at all — and every refusal below is a fact about GitHub, not an error.
+        XCTAssertNil(
+            HeadBranchContext(
+                headRefName: "patch-1",
+                headRepositoryFullName: "someone-else/review",
+                defaultBranchName: "main"
+            ).deletableBranch(in: repo),
+            "a fork's branch is not ours to delete"
+        )
+        XCTAssertNil(
+            HeadBranchContext(
+                headRefName: "main",
+                headRepositoryFullName: "schnaq/review",
+                defaultBranchName: "main"
+            ).deletableBranch(in: repo),
+            "a pull request from main into a release branch must not delete main"
+        )
+        XCTAssertNil(
+            HeadBranchContext(
+                headRefName: "agent/token-store",
+                headRepositoryFullName: nil,
+                defaultBranchName: "main"
+            ).deletableBranch(in: repo),
+            "an unanswerable guard is a refusal, not permission"
+        )
+        XCTAssertNil(
+            HeadBranchContext(
+                headRefName: "agent/token-store",
+                headRepositoryFullName: "schnaq/review",
+                defaultBranchName: nil
+            ).deletableBranch(in: repo),
+            "a repository whose default branch is unknown keeps every branch"
+        )
+        XCTAssertEqual(
+            HeadBranchContext(
+                headRefName: "agent/token-store",
+                headRepositoryFullName: "Schnaq/Review",
+                defaultBranchName: "main"
+            ).deletableBranch(in: repo),
+            "agent/token-store",
+            "GitHub's slugs are case-insensitive, so the repository comparison is too"
+        )
+    }
+
     // MARK: - Issue writes (ADR 0032's Sprint 4a amendment)
 
     func testAnIssueCommentIsOnePostToTheIssuesCommentsEndpoint() async throws {

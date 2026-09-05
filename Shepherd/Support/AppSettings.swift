@@ -117,6 +117,8 @@ final class AppSettings {
         )
         self.opensAgentPullRequestsOnConversation = defaults
             .object(forKey: Keys.opensAgentOnConversation) as? Bool ?? true
+        self.deletesBranchAfterMerge = defaults
+            .object(forKey: Keys.deletesBranchAfterMerge) as? Bool ?? false
         self.diffFontSize = defaults.object(forKey: Keys.diffFontSize) as? Double ?? 13
         self.diffWrapsLines = defaults.object(forKey: Keys.diffWraps) as? Bool ?? false
         self.diffUsesInlineMode = defaults.object(forKey: Keys.diffInline) as? Bool ?? false
@@ -398,6 +400,17 @@ final class AppSettings {
                 forKey: Keys.opensAgentOnConversation
             )
         }
+    }
+
+    /// Whether the merge sheet opens with "delete the branch afterwards" ticked.
+    ///
+    /// Remembered the way ``defaultMergeMethod`` is, and for the same reason: the sheet writes
+    /// straight through, so it is "what you did last time" rather than a preference nobody would
+    /// go and find. Off by default — the irreversible half of an irreversible action is not
+    /// something to opt people into — and read by the merge sheet alone: bulk triage (ADR 0015)
+    /// and the automatic rules (ADR 0018) queue merges that delete nothing, whatever this says.
+    var deletesBranchAfterMerge: Bool {
+        didSet { defaults.set(deletesBranchAfterMerge, forKey: Keys.deletesBranchAfterMerge) }
     }
 
     // MARK: - Diff viewer
@@ -870,6 +883,7 @@ final class AppSettings {
         static let sortOrder = "inbox.sortOrder"
         static let defaultMergeMethod = "review.defaultMergeMethod"
         static let opensAgentOnConversation = "review.opensAgentPullRequestsOnConversation"
+        static let deletesBranchAfterMerge = "merge.deletesBranchAfterMerge"
         static let diffFontSize = "diff.fontSize"
         static let diffWraps = "diff.wraps"
         static let diffInline = "diff.inline"

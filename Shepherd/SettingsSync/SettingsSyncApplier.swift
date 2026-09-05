@@ -125,7 +125,8 @@ enum SettingsSyncApplier {
             opensAgentPullRequestsOnConversation: settings.opensAgentPullRequestsOnConversation
         )
         document.triage = SyncedSettingsDocument.TriageGroup(
-            defaultMergeMethod: settings.defaultMergeMethod
+            defaultMergeMethod: settings.defaultMergeMethod,
+            deletesBranchAfterMerge: settings.deletesBranchAfterMerge
         )
         document.composer = SyncedSettingsDocument.ComposerGroup(
             savedReplies: settings.savedReplies,
@@ -267,6 +268,7 @@ enum SettingsSyncApplier {
             document.appearance.opensAgentPullRequestsOnConversation
 
         settings.defaultMergeMethod = document.triage.defaultMergeMethod
+        settings.deletesBranchAfterMerge = document.triage.deletesBranchAfterMerge
 
         // Replaced wholesale rather than merged, like every other setting: two lists of authored
         // text have no conflict resolution a machine could guess, and the confirmation dialog in

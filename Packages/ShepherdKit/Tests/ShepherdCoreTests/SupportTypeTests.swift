@@ -142,6 +142,7 @@ final class ModelCodingTests: XCTestCase {
             .resolveThread(threadID: "RT_1"),
             .unresolveThread(threadID: "RT_2"),
             .merge(method: "squash", expectedHeadOid: "abc"),
+            .merge(method: "merge", expectedHeadOid: nil, deletesHeadBranch: true),
             .markReadyForReview,
         ]
         for action in actions {
@@ -152,7 +153,7 @@ final class ModelCodingTests: XCTestCase {
             actions.map(\.kind),
             [
                 "submitReview", "replyToComment", "resolveThread", "unresolveThread",
-                "merge", "markReadyForReview",
+                "merge", "merge", "markReadyForReview",
             ]
         )
     }
@@ -205,6 +206,51 @@ final class ModelCodingTests: XCTestCase {
             try JSONDecoder().decode(OutboxAction.self, from: legacy),
             .resolveThread(threadID: "RT_legacy")
         )
+    }
+
+    func testAMergeRowQueuedBeforeBranchDeletionDecodesAsNotDeleting() throws {
+        // The bytes an older build wrote for a merge, before the case grew a third value
+        // (ADR 0005's 2026-09-05 amendment). It has to keep decoding, and it has to decode as
+        // *not* deleting: a user who queued a merge on the train and updated Shepherd before
+        // landing did not ask for a branch to be deleted.
+        let legacy = Data(#"{"merge":{"method":"squash","expectedHeadOid":"abc"}}"#.utf8)
+        XCTAssertEqual(
+            try JSONDecoder().decode(OutboxAction.self, from: legacy),
+            .merge(method: "squash", expectedHeadOid: "abc", deletesHeadBranch: false)
+        )
+        // The same row without a head precondition at all — the shape a nil optional was
+        // written as.
+        let headless = Data(#"{"merge":{"method":"merge"}}"#.utf8)
+        XCTAssertEqual(
+            try JSONDecoder().decode(OutboxAction.self, from: headless),
+            .merge(method: "merge", expectedHeadOid: nil, deletesHeadBranch: false)
+        )
+    }
+
+    func testTheEncodedShapeIsStillTheOneOlderBuildsWrote() throws {
+        // The coding of this enum is written out by hand so that the merge case could gain a
+        // field tolerantly, which puts the *whole* payload format under this test rather than
+        // under the compiler: one object, keyed by the case's name, values under their labels
+        // and `_0` where there is no label.
+        func encoded(_ action: OutboxAction) throws -> String {
+            String(decoding: try JSONEncoder().encode(action), as: UTF8.self)
+        }
+        XCTAssertEqual(
+            try encoded(.resolveThread(threadID: "RT_1")),
+            #"{"resolveThread":{"threadID":"RT_1"}}"#
+        )
+        XCTAssertEqual(try encoded(.markReadyForReview), #"{"markReadyForReview":{}}"#)
+        XCTAssertTrue(
+            try encoded(.submitReview(ReviewDraft(prID: "PR_1", basedOnHeadOid: "abc")))
+                .hasPrefix(#"{"submitReview":{"_0":{"#),
+            "an unlabelled associated value is still `_0`"
+        )
+        let merge = try encoded(
+            .merge(method: "rebase", expectedHeadOid: "abc", deletesHeadBranch: true)
+        )
+        XCTAssertTrue(merge.contains(#""method":"rebase""#))
+        XCTAssertTrue(merge.contains(#""expectedHeadOid":"abc""#))
+        XCTAssertTrue(merge.contains(#""deletesHeadBranch":true"#))
     }
 
     func testTheCloseReasonsAreGitHubsOwnTwoWords() {

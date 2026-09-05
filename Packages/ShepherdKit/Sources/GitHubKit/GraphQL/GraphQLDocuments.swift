@@ -584,6 +584,28 @@ public enum GraphQLDocuments {
     }
     """
 
+    /// The three facts a queued branch deletion is decided on (ADR 0005's 2026-09-05 amendment).
+    ///
+    /// ``pullRequestHead``'s shape and ``pullRequestHead``'s reason: it is read at the moment the
+    /// drain is about to delete something, because a deletion cannot be undone and the cached
+    /// inbox row was written by a sweep that may be two minutes old. `headRepository` is what
+    /// tells a fork's branch from ours, and `defaultBranchRef` is the one branch a merge may
+    /// never tidy away.
+    ///
+    /// Four fields on two nodes of a repository Shepherd is already talking to — no new host, and
+    /// only asked at all when the merge row says the user ticked the box.
+    public static let headBranchContext = """
+    query ShepherdHeadBranchContext($owner: String!, $name: String!, $number: Int!) {
+      repository(owner: $owner, name: $name) {
+        defaultBranchRef { name }
+        pullRequest(number: $number) {
+          headRefName
+          headRepository { nameWithOwner }
+        }
+      }
+    }
+    """
+
     /// Resolve a review thread. GraphQL-only — REST has no equivalent.
     public static let resolveReviewThread = """
     mutation ShepherdResolveThread($threadId: ID!) {

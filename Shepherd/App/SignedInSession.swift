@@ -162,6 +162,11 @@ final class SignedInSession {
             // the row when it has moved, which is `ReviewDraft.basedOnHeadOid`'s rule on the
             // other kind of node.
             issueWrites: github,
+            // And the port the drain deletes a merged head branch through (ADR 0005's
+            // 2026-09-05 amendment). The same client once more, and it is only ever asked
+            // anything when a merge row carries `deletesHeadBranch` — the box the merge sheet
+            // remembers, which nothing automatic ever ticks.
+            branchDeletion: github,
             configuration: SyncConfiguration(
                 sweepInterval: sweepInterval,
                 viewerLogin: account.login

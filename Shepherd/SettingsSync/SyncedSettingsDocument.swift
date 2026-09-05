@@ -536,15 +536,21 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
     struct TriageGroup: Codable, Sendable, Equatable {
         /// The merge method the merge sheet and the bulk-triage dialog open on.
         var defaultMergeMethod: MergeMethod
+        /// Whether the merge sheet opens with "delete the branch afterwards" ticked.
+        var deletesBranchAfterMerge: Bool
 
         /// Creates the group.
-        /// - Parameter defaultMergeMethod: The remembered merge method.
-        init(defaultMergeMethod: MergeMethod = .squash) {
+        /// - Parameters:
+        ///   - defaultMergeMethod: The remembered merge method.
+        ///   - deletesBranchAfterMerge: The remembered answer to "delete the branch afterwards".
+        init(defaultMergeMethod: MergeMethod = .squash, deletesBranchAfterMerge: Bool = false) {
             self.defaultMergeMethod = defaultMergeMethod
+            self.deletesBranchAfterMerge = deletesBranchAfterMerge
         }
 
         private enum CodingKeys: String, CodingKey {
             case defaultMergeMethod
+            case deletesBranchAfterMerge
         }
 
         init(from decoder: any Decoder) throws {
@@ -552,6 +558,12 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
             defaultMergeMethod = container.syncedValue(
                 .defaultMergeMethod,
                 default: MergeMethod.squash
+            )
+            // A document from a build that predates this field must not read as "the user ticked
+            // it": branch deletion is off until somebody says otherwise, on every Mac.
+            deletesBranchAfterMerge = container.syncedValue(
+                .deletesBranchAfterMerge,
+                default: false
             )
         }
     }

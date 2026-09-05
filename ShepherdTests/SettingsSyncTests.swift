@@ -299,7 +299,13 @@ final class SettingsSyncTests: XCTestCase {
             // so the non-default value of the reviewer who wants the diff first is *off*.
             opensAgentPullRequestsOnConversation: false
         )
-        document.triage = SyncedSettingsDocument.TriageGroup(defaultMergeMethod: .rebase)
+        document.triage = SyncedSettingsDocument.TriageGroup(
+            defaultMergeMethod: .rebase,
+            // Non-default means *on* here: branch deletion ships off, because it is the
+            // irreversible half of the one action Shepherd cannot undo (ADR 0005's 2026-09-05
+            // amendment).
+            deletesBranchAfterMerge: true
+        )
         document.composer = SyncedSettingsDocument.ComposerGroup(
             savedReplies: [
                 SavedReply(id: syncTestReplyID, name: "Needs a test", body: "Please add a test."),
@@ -732,6 +738,10 @@ final class SettingsSyncTests: XCTestCase {
         // flag is not a constraint (plan §3.K).
         XCTAssertTrue(document.intelligence.openAICompatibleSovereigntyCountries.isEmpty)
         XCTAssertFalse(document.intelligence.openAICompatibleZeroRetention)
+        // A document written before branch deletion existed must leave it off: the box is the
+        // irreversible half of the one irreversible action, and an absent key is not consent
+        // (ADR 0005's 2026-09-05 amendment).
+        XCTAssertFalse(document.triage.deletesBranchAfterMerge)
         // A document written before diagnostics existed leaves them off rather than on.
         XCTAssertEqual(document.diagnostics, SyncedSettingsDocument.DiagnosticsGroup())
         XCTAssertFalse(document.diagnostics.isEnabled)
@@ -1133,6 +1143,7 @@ final class SettingsSyncTests: XCTestCase {
         // rest of them (ADR 0026's amendment).
         XCTAssertFalse(settings.opensAgentPullRequestsOnConversation)
         XCTAssertEqual(settings.defaultMergeMethod, .rebase)
+        XCTAssertTrue(settings.deletesBranchAfterMerge)
         // Saved replies and templates travel in their own order — it is the order of the insert
         // menu and the last tie-breaker of the template match.
         XCTAssertEqual(settings.savedReplies.map(\.name), ["Needs a test", "Nit"])

@@ -212,6 +212,25 @@ struct IssueStateData: Decodable {
     var repository: Repository?
 }
 
+/// The payload of ``GraphQLDocuments/headBranchContext`` (ADR 0005's 2026-09-05 amendment).
+struct HeadBranchContextData: Decodable {
+    struct Repository: Decodable {
+        struct Ref: Decodable {
+            var name: String?
+        }
+        struct PullRequest: Decodable {
+            struct HeadRepository: Decodable {
+                var nameWithOwner: String?
+            }
+            var headRefName: String?
+            var headRepository: HeadRepository?
+        }
+        var defaultBranchRef: Ref?
+        var pullRequest: PullRequest?
+    }
+    var repository: Repository?
+}
+
 /// The payload of the resolve/unresolve mutations.
 struct ResolveThreadData: Decodable {
     struct Payload: Decodable {

@@ -9,7 +9,7 @@ import ShepherdPersistence
 /// Records what the engine asked for so the delta logic can be asserted on directly: the
 /// point of the sweep is that it *does not* fetch details for pull requests that did not
 /// change.
-actor MockGitHub: PullRequestFetching {
+actor MockGitHub: PullRequestFetching, BranchDeleting {
     /// One entry per sweep, consumed in order. The last entry repeats.
     var searchResults: [[PullRequestSummary]] = []
     /// Details keyed by `owner/name#number`; missing keys are synthesised from the summary.
@@ -23,6 +23,10 @@ actor MockGitHub: PullRequestFetching {
     var detailError: GitHubError?
     var submitError: GitHubError?
     var mergeError: GitHubError?
+    /// What each pull request answers the branch-deletion probe with, keyed by `owner/name#n`.
+    var branchContexts: [String: HeadBranchContext] = [:]
+    var branchContextError: GitHubError?
+    var deleteBranchError: GitHubError?
 
     private(set) var searchCallCount = 0
     private(set) var detailRequests: [String] = []
@@ -31,6 +35,13 @@ actor MockGitHub: PullRequestFetching {
     private(set) var unresolvedThreads: [String] = []
     private(set) var replies: [(commentID: Int, body: String)] = []
     private(set) var merges: [(number: Int, method: MergeMethod, sha: String?)] = []
+    private(set) var branchContextRequests: [String] = []
+    private(set) var deletedBranches: [(repo: RepoRef, name: String)] = []
+    /// Merges and branch deletions in the order they were asked for.
+    ///
+    /// A single list rather than two, because the order is the assertion: a branch may only be
+    /// deleted *after* the merge that made it a leftover (ADR 0005's 2026-09-05 amendment).
+    private(set) var writeLog: [String] = []
     private(set) var readyForReview: [String] = []
     private(set) var headOidRequests: [String] = []
     private(set) var notificationCallCount = 0
@@ -98,6 +109,18 @@ actor MockGitHub: PullRequestFetching {
 
     func setMergeError(_ error: GitHubError?) {
         mergeError = error
+    }
+
+    func setBranchContext(_ context: HeadBranchContext, repo: RepoRef, number: Int) {
+        branchContexts["\(repo.fullName)#\(number)"] = context
+    }
+
+    func setBranchContextError(_ error: GitHubError?) {
+        branchContextError = error
+    }
+
+    func setDeleteBranchError(_ error: GitHubError?) {
+        deleteBranchError = error
     }
 
     func setDetailError(_ error: GitHubError?) {
@@ -178,11 +201,33 @@ actor MockGitHub: PullRequestFetching {
     ) async throws -> String? {
         if let mergeError { throw mergeError }
         merges.append((number: number, method: method, sha: expectedHeadOid))
+        writeLog.append("merge #\(number)")
         return "merged-sha"
     }
 
     func markReadyForReview(pullRequestID: String) async throws {
         readyForReview.append(pullRequestID)
+    }
+
+    // MARK: - BranchDeleting
+
+    func headBranchContext(repo: RepoRef, number: Int) async throws -> HeadBranchContext {
+        let key = "\(repo.fullName)#\(number)"
+        branchContextRequests.append(key)
+        if let branchContextError { throw branchContextError }
+        // An unscripted pull request answers "an ordinary branch of this repository", so a test
+        // that is only about the order of the two calls needs to script nothing.
+        return branchContexts[key] ?? HeadBranchContext(
+            headRefName: "agent/branch-\(number)",
+            headRepositoryFullName: repo.fullName,
+            defaultBranchName: "main"
+        )
+    }
+
+    func deleteBranch(repo: RepoRef, name: String) async throws {
+        if let deleteBranchError { throw deleteBranchError }
+        deletedBranches.append((repo: repo, name: name))
+        writeLog.append("delete \(name)")
     }
 }
 

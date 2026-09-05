@@ -3311,16 +3311,6 @@
         }
       }
     },
-    "Branch deletion is not wired up yet — ShepherdKit's outbox does not model it, so Shepherd will not pretend to do it.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Das Löschen des Branch ist noch nicht angeschlossen — der Outbox von ShepherdKit fehlt das Modell dafür, und Shepherd tut nicht so, als könnte es das."
-          }
-        }
-      }
-    },
     "Branches": {
       "localizations": {
         "de": {
@@ -9187,6 +9177,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Der Worktree wurde entfernt."
+          }
+        }
+      }
+    },
+    "Removes the head branch once the merge has landed. Skipped for forks and for a repository's default branch.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entfernt den Head-Branch, sobald der Merge durch ist. Bei Forks und beim Default-Branch eines Repositorys wird das übersprungen."
           }
         }
       }
