@@ -221,8 +221,8 @@ public struct InterdiffHunk: Sendable, Codable, Hashable {
         var currentLine = max(1, currentStart)
         var delta = 0
         for body in lines {
-            // An entirely empty body line is an unchanged empty line, the same reading the
-            // app-side reconstructor gives it.
+            // An entirely empty body line is an unchanged empty line, the same reading
+            // `PatchReconstructor` gives it.
             switch body.first ?? " " {
             case "+":
                 if currentLine >= line { return delta }

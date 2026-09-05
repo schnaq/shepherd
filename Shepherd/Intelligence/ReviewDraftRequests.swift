@@ -286,9 +286,9 @@ enum InlineCommentDraftBuilder {
 
     /// Cuts the marked-up window out of a unified patch.
     ///
-    /// Line numbers are tracked exactly the way ``PatchReconstructor`` tracks them — that is the
-    /// same arithmetic GitHub's `comments[].line` is in, so the line the reviewer clicked is the
-    /// line that gets marked.
+    /// Line numbers are tracked exactly the way ``ShepherdCore/PatchReconstructor`` tracks them —
+    /// that is the same arithmetic GitHub's `comments[].line` is in, so the line the reviewer
+    /// clicked is the line that gets marked.
     /// - Parameters:
     ///   - patch: The file's unified diff, as GitHub returns it.
     ///   - anchor: Where the comment is anchored.

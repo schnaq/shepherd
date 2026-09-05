@@ -25,7 +25,7 @@ final class UnifiedPatchTests: XCTestCase {
 
     func testATerminatingNewlineAddsNoLine() {
         // The empty component a trailing newline leaves behind is not a line. It matters because
-        // of what the app-side reconstructor does with one: no marker character means "unchanged
+        // of what `PatchReconstructor` does with one: no marker character means "unchanged
         // empty line", so it would land in both documents and in both commentable-line sets, and
         // a comment on a line that is not in the diff is one GitHub refuses along with the whole
         // review.

@@ -60,8 +60,9 @@ is "possibly readable" rather than "readable". The native rendering above is sti
 and is still worth building for its own sake — it now has a plan of its own,
 [accessible-diff.md](accessible-diff.md), which works out what has to stay in step between two
 renderers and what is free to differ, because that boundary is the whole cost. One thing it turned
-up that belongs here: `PatchReconstructor`, the app's fiddliest piece of pure logic, sits in the app
-target and so is not exercised on the Linux CI leg at all.
+up that belongs here: `PatchReconstructor`, the app's fiddliest piece of pure logic, sat in the app
+target and so was not exercised on the Linux CI leg at all. It has since moved into
+`ShepherdCore/Review/`, its twelve tests with it, and both legs run them now.
 
 ## 2. An inline comment needs a mouse — **done, 2026-09-04**
 

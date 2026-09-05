@@ -2,13 +2,13 @@ import Foundation
 
 /// Reading and writing unified diffs, as pure text (ADR 0028).
 ///
-/// The viewer and the interdiff read the grammar here. The app target reconstructs *both* sides
-/// of a patch for Monaco (`Shepherd/Features/DiffViewer/PatchReconstructor.swift`) and keeps the
-/// viewer's commentable-line sets, which is more than the interdiff needs and depends on
-/// `ChangedFile`; but it splits its hunks with ``hunks(in:)`` here rather than with a copy. It
-/// used to be a copy, and the copies had drifted — the same twenty lines of ``header(_:)`` in
-/// both files, and a `hunks(in:)` that disagreed about the end of a file. Two readings of a
-/// patch that disagree are a bug waiting for the input that tells them apart.
+/// The viewer and the interdiff read the grammar here. ``PatchReconstructor``, beside this file,
+/// reconstructs *both* sides of a patch for Monaco and keeps the viewer's commentable-line sets,
+/// which is more than the interdiff needs and depends on `ChangedFile`; but it splits its hunks
+/// with ``hunks(in:)`` here rather than with a copy. It used to be a copy, and the copies had
+/// drifted — the same twenty lines of ``header(_:)`` in both files, and a `hunks(in:)` that
+/// disagreed about the end of a file. Two readings of a patch that disagree are a bug waiting
+/// for the input that tells them apart.
 ///
 /// **Two more walks over the same grammar live in this package**, and saying otherwise would
 /// invite the next reader to believe the consolidation is finished: `PatchWalker` in
@@ -106,8 +106,8 @@ public enum UnifiedPatch {
         // app has emits one — GitHub's `files[].patch` ends without a newline, and the
         // interdiff's own patch is `joined(separator:)` — but a patch from anywhere else does
         // (`git diff` for one), and what it costs is not cosmetic. An empty component has no
-        // marker character, so the app-side reconstructor reads it as an unchanged empty line
-        // and puts it in *both* documents and *both* commentable-line sets; a comment on a line
+        // marker character, so `PatchReconstructor` reads it as an unchanged empty line and
+        // puts it in *both* documents and *both* commentable-line sets; a comment on a line
         // that is not in the diff is one GitHub refuses, along with the whole review.
         if rawLines.last == "" { rawLines.removeLast() }
         for rawLine in rawLines {

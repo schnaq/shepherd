@@ -177,10 +177,9 @@ public enum IntelligenceDiffWindow {
 
     /// Walks a patch into rows, tracking both sides' line numbers.
     ///
-    /// The arithmetic is the app target's `PatchReconstructor`'s, deliberately: that is the
-    /// numbering GitHub's review API speaks, so a line named here is the line a reviewer sees.
-    /// Anything before the first `@@` is ignored, and `\ No newline at end of file` is metadata
-    /// rather than a line.
+    /// The arithmetic is ``PatchReconstructor``'s, deliberately: that is the numbering GitHub's
+    /// review API speaks, so a line named here is the line a reviewer sees. Anything before the
+    /// first `@@` is ignored, and `\ No newline at end of file` is metadata rather than a line.
     /// - Parameter patch: The patch text.
     /// - Returns: The rows, in order.
     private static func rows(in patch: String) -> [Row] {

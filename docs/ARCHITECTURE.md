@@ -286,17 +286,20 @@ Pure logic in `ShepherdCore` (all unit-tested):
   depending on which half of the palette answers it. One divergence: a query that is nothing but a
   `risk:`/`kind:` token returns nothing here, because a triage verdict is a statement about a pull
   request. `SearchDocument` and `SearchRanker` are untouched.
-- `Interdiff` / `FindingState` / `ReviewFindings` / `UnifiedPatch` (`Review/`) — the whole of
-  "since my review" as pure text work (ADR 0028). `UnifiedPatch.reconstruct(after:)` rebuilds the
-  *head* side of a unified patch as lines, padding the gaps between hunks so a 1-based index is
-  GitHub's own line number; the app-target `PatchReconstructor` stays where it is, because it also
-  produces the viewer's commentable-line sets. `Interdiff.compute(before:after:)` pairs the two
-  rounds' `ChangedFile` lists by path (a rename by `previousPath`), diffs the reconstructions line
-  by line — common prefix/suffix by scanning, the middle by LCS, with a cell cap past which the
-  region becomes one replacing hunk — and returns one `InterdiffFile` per file that differs, each
-  carrying its hunks *and* a synthesized unified patch in GitHub's own shape, so the Monaco viewer
-  renders a round through the existing `loadFile` message. Identical files are omitted; a rename is
-  listed even when its content did not change.
+- `Interdiff` / `FindingState` / `ReviewFindings` / `UnifiedPatch` / `PatchReconstructor`
+  (`Review/`) — the whole of "since my review" as pure text work (ADR 0028), plus the two documents
+  the diff viewer renders. `UnifiedPatch.reconstruct(after:)` rebuilds the *head* side of a unified
+  patch as lines, padding the gaps between hunks so a 1-based index is GitHub's own line number;
+  `PatchReconstructor` rebuilds *both* sides from the same `hunks(in:)` and keeps the viewer's
+  commentable-line sets, which is more than the interdiff needs. It lives here rather than in the
+  app target so that the app's fiddliest pure logic is exercised on the Linux leg.
+  `Interdiff.compute(before:after:)` pairs the two rounds' `ChangedFile` lists by path (a rename by
+  `previousPath`), diffs the reconstructions line by line — common prefix/suffix by scanning, the
+  middle by LCS, with a cell cap past which the region becomes one replacing hunk — and returns
+  one `InterdiffFile` per file that differs, each carrying its hunks *and* a synthesized unified
+  patch in GitHub's own shape, so the Monaco viewer renders a round through the existing
+  `loadFile` message. Identical files are omitted; a rename is listed even when its content did not
+  change.
   `FindingState.classify(thread:interdiff:viewerLogin:)` maps one thread's anchor — `line` on the
   current side, `originalLine` on the reviewed side for an outdated thread, never backfilled from
   one another — onto those hunks and answers `addressed` / `moved` / `replied` / `unchanged` in
@@ -1300,14 +1303,15 @@ disabled with an explanation), and dismissing an existing review.
 
 ### Diff viewer: reconstructing both sides from the patch
 
-`ChangedFile.patch` is a unified diff; Monaco wants two documents. `PatchReconstructor` builds
-them from the hunks: context lines go to both sides, `-` lines only to the original, `+` lines
-only to the modified, and **the gaps between hunks are padded with empty lines on both sides**.
-The padding is what keeps 1-based line numbers identical to GitHub's — review threads and draft
-comments are anchored by absolute line number, so an off-by-N would attach comments to the
-wrong lines. Because the filler is identical on both sides, the diff editor treats it as
-unchanged and never highlights it. When `patch` is `nil` (binary or truncated) the webview is
-not created at all; a native `DiffUnavailableView` takes its place.
+`ChangedFile.patch` is a unified diff; Monaco wants two documents. `PatchReconstructor`
+(`ShepherdCore/Review/`, so its tests run on both CI legs) builds them from the hunks: context
+lines go to both sides, `-` lines only to the original, `+` lines only to the modified, and **the
+gaps between hunks are padded with empty lines on both sides**. The padding is what keeps 1-based
+line numbers identical to GitHub's — review threads and draft comments are anchored by absolute
+line number, so an off-by-N would attach comments to the wrong lines. Because the filler is
+identical on both sides, the diff editor treats it as unchanged and never highlights it. When
+`patch` is `nil` (binary or truncated) the webview is not created at all; a native
+`DiffUnavailableView` takes its place.
 
 `MarkdownHTML` is the Swift half of the bridge's `bodyHTML` contract: it escapes everything
 first and then emits a fixed, tiny tag set (`p`, `br`, `code`, `pre`, `strong`, `em`, `ul`,

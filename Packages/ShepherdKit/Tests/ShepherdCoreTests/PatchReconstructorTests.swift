@@ -1,9 +1,14 @@
-import ShepherdCore
+import Foundation
 import XCTest
 
-@testable import Shepherd
+@testable import ShepherdCore
 
 /// The patch → two-documents mapping the diff viewer depends on.
+///
+/// These cases used to run only under `xcodebuild`, because `PatchReconstructor` sat in the app
+/// target — the same gap `UnifiedPatchTests` closed for the grammar underneath it, left open for
+/// the fiddliest pure logic in the app. The type moved into this package and its tests came with
+/// it, so both legs exercise them now (`docs/ARCHITECTURE.md` § Verification reality check).
 final class PatchReconstructorTests: XCTestCase {
     func testSimpleModification() {
         let patch = """
@@ -201,14 +206,5 @@ final class PatchReconstructorTests: XCTestCase {
     func testBinaryFileHasNoReconstruction() {
         let file = ChangedFile(path: "logo.png", status: .modified, patch: nil)
         XCTAssertNil(PatchReconstructor.reconstruct(file))
-    }
-
-    func testLanguageMapping() {
-        XCTAssertEqual(MonacoLanguage.id(forPath: "Sources/App/Main.swift"), "swift")
-        XCTAssertEqual(MonacoLanguage.id(forPath: "web/src/main.ts"), "typescript")
-        XCTAssertEqual(MonacoLanguage.id(forPath: "Dockerfile"), "dockerfile")
-        XCTAssertEqual(MonacoLanguage.id(forPath: "Cargo.toml"), "toml")
-        XCTAssertEqual(MonacoLanguage.id(forPath: "LICENSE"), "plaintext")
-        XCTAssertEqual(MonacoLanguage.id(forPath: "deploy/values.YAML"), "yaml")
     }
 }

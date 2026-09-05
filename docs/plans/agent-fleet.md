@@ -46,7 +46,7 @@ data model below does not preclude them.
 | `CommitInfo.trailers` parsed from every head commit | `ShepherdCore/Models/CommitInfo.swift` | E (the `Claude-Session:` return address) |
 | `PullRequestDetail`: body, files with `patch`, review threads, timeline, check runs, commits | `ShepherdCore/Models/PullRequest.swift`, GRDB | A, C |
 | `FilePrioritizer` risk hints ("touches auth", "deletes tests", lockfile-only, generated) | `ShepherdCore/Heuristics/` | A, B |
-| `PatchReconstructor` (unified diff → before/after) and the Monaco bridge | `Shepherd/Features/DiffViewer/` | C |
+| `PatchReconstructor` (unified diff → before/after) and the Monaco bridge | `ShepherdCore/Review/PatchReconstructor.swift`, `Shepherd/Features/DiffViewer/` | C |
 | Local delegation to the coding-agent CLI in a worktree, `DelegationContext` | `Shepherd/Features/Delegation/`, ADR 0011 | D, E |
 | Saved-reply suggester: on-device sentence embeddings, cosine ranking, per-snippet cache | `ShepherdCore/Review/SavedReplySuggestion.swift`, `Features/Review/SavedReplySuggestionCoordinator.swift` | D (recurring-finding detection) |
 | Structured triage verdict per pull request (kind, risk, reason) and the Risk facet | `ShepherdCore/Triage/`, `Features/Triage/`, ADR 0023 | B (a lane input) |

@@ -54,7 +54,7 @@ worst at, not by catching up.
 
 ## The prerequisite: the model throws away exactly what a list needs
 
-`PatchReconstructor` (`Shepherd/Features/DiffViewer/PatchReconstructor.swift`) produces two padded
+`PatchReconstructor` (`ShepherdCore/Review/PatchReconstructor.swift`) produces two padded
 `String` documents plus two `Set<Int>`. That is the right shape for Monaco, which wants two
 documents and computes the diff itself. It is the wrong shape for a list, and not by a little: the
 per-line facts a list must announce — **is this line added, deleted or context; what is its number
@@ -77,12 +77,13 @@ is exactly the fact the list has to announce, so it is the right rule — but it
 accident, and a second implementation would have to make the same choice deliberately.
 
 Which brings up the thing this plan first got wrong. "A second parser is a second truth" was
-written as a warning about a hypothetical. There are **already two**, deliberately: `UnifiedPatch`
-in `ShepherdCore` (ADR 0028's interdiff — the head side of a patch, plus hunk and header
-reading/writing, Linux-tested) and `PatchReconstructor` in the app target (both sides plus the
-commentable sets, macOS-tested). `UnifiedPatch`'s own doc comment says why — *"that type stays
-where it is, because it also produces the viewer's commentable-line sets and is tested against the
-bridge"* — and that was a reasonable call for two consumers with different needs.
+written as a warning about a hypothetical. There were **already two**, deliberately:
+`UnifiedPatch` in `ShepherdCore` (ADR 0028's interdiff — the head side of a patch, plus hunk and
+header reading/writing, Linux-tested) and `PatchReconstructor` in the app target (both sides plus
+the commentable sets, macOS-tested). The reason on record in ADR 0028 was that the second type
+also produces the viewer's commentable-line sets and is tested against the bridge — a reasonable
+call for two consumers with different needs. There are still two, and both are in
+`ShepherdCore/Review/` now; the move is the step below and it is done.
 
 The duplication is not abstract. `header(_:)` is the same twenty lines in both files, and
 `hunks(in:)` was the same walk with **one behavioural difference**: `UnifiedPatch` drops the empty
@@ -112,12 +113,17 @@ A third consumer is what changes the calculus. Two parsers for two shapes was a 
 walks where three want structured lines is a reason to have **one**, from which the two documents,
 the commentable sets, the interdiff's head-side array and the rows are all derived. That is step
 one properly stated, and it subsumes step one-and-a-half:
-**`PatchReconstructor` moves into `Packages/ShepherdKit`**, beside `UnifiedPatch`. It imports
-nothing but `Foundation` and `ShepherdCore` today and both types it needs — `ChangedFile` and
-`DiffSide` — are already there. As things stand it sits in the app target, so its twelve tests
-(they cover a deleted SQL comment that serialises as a `---` header) run only under `xcodebuild` on
-the macOS runner: the app's fiddliest pure logic is *not exercised on the Linux leg at all*, which
-also makes the claim "this new view's text is testable on Linux" false until it moves.
+**`PatchReconstructor` moves into `Packages/ShepherdKit`**, beside `UnifiedPatch`. It imported
+nothing but `Foundation` and `ShepherdCore`, and both types it needs — `ChangedFile` and
+`DiffSide` — were already there. While it sat in the app target its twelve tests (they cover a
+deleted SQL comment that serialises as a `---` header) ran only under `xcodebuild` on the macOS
+runner: the app's fiddliest pure logic was *not exercised on the Linux leg at all*, which also made
+the claim "this new view's text is testable on Linux" false until it moved.
+
+**That half is done, 2026-09-05**, as a pure move and nothing else: the type is
+`ShepherdCore/Review/PatchReconstructor.swift` with its members `public`, and its twelve tests are
+`ShepherdCoreTests/PatchReconstructorTests.swift`. The per-line model is not done — one walk that
+everything else derives from is still the design step this section is about.
 
 ## The view
 
@@ -173,9 +179,10 @@ it is the difference between a default and a lock.
 
 - A second renderer to keep in step with the first — bounded by the three-point contract above, and
   no wider. If that boundary is not held, this becomes the thing ADR 0003 avoided.
-- `PatchReconstructor` gains a per-line model and moves target. The move touches `project.yml` and
-  the imports of everything that uses it; the gain is that the app's most fiddly pure logic finally
-  runs on both CI legs.
+- `PatchReconstructor` gains a per-line model. The move to ShepherdCore it needed first is already
+  paid for and cost less than this bullet expected — no `project.yml` change (both targets glob
+  their directories) and no import change at any call site — and the app's most fiddly pure logic
+  already runs on both CI legs. What is left is the per-line model itself.
 - A localisation surface of the same order as `EvidenceFactText` — a sentence per line kind, plus
   the counts. The gate (`Scripts/check-localization.py`) will name every key that is missing, and
   an interpolated `Int` also needs its line in that script's hand-checked type table.

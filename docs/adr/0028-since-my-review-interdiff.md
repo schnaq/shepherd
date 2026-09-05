@@ -84,14 +84,15 @@ the review screen then shows no segmented control at all rather than a tab built
 
 `ShepherdCore/Review/Interdiff.swift` compares the two rounds' `ChangedFile` lists. Per path it
 reconstructs the *head side* of each round's patch with `UnifiedPatch.reconstruct(after:)` — a
-small pure reader in ShepherdCore; the app-target `PatchReconstructor` stays where it is, because
-it also produces the viewer's commentable-line sets and is tested against the bridge — and diffs
-the two documents line by line (common prefix and suffix by scanning, the middle by LCS, with a
-cell cap beyond which the region is reported as one replacing hunk). Files identical across the
-rounds are omitted; a rename is listed even when its content is unchanged.
+small pure reader in ShepherdCore; `PatchReconstructor` stayed in the app target when this was
+decided, because it also produces the viewer's commentable-line sets and is tested against the
+bridge, and it has since moved into `ShepherdCore/Review/` beside that reader so its own tests run
+on Linux too — and diffs the two documents line by line (common prefix and suffix by scanning, the
+middle by LCS, with a cell cap beyond which the region is reported as one replacing hunk). Files
+identical across the rounds are omitted; a rename is listed even when its content is unchanged.
 
 **Line numbers are absolute on both sides.** Both reconstructions pad the gaps between hunks, the
-way the app-side reconstructor does, so a 1-based line in either document is the line number GitHub
+way `PatchReconstructor` does, so a 1-based line in either document is the line number GitHub
 uses — which is what lets a review thread's anchor be looked up in the interdiff without a second
 mapping. The consequence to know: a region neither round patched is padding on both sides, so it
 compares equal; a region *one* round patched and the other did not compares content against

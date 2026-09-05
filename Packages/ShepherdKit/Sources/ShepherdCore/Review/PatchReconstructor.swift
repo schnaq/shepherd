@@ -1,5 +1,4 @@
 import Foundation
-import ShepherdCore
 
 /// Rebuilds the two sides of a diff from GitHub's unified patch.
 ///
@@ -16,28 +15,36 @@ import ShepherdCore
 /// requirement: review threads and draft comments are anchored by absolute line number, and an
 /// off-by-N would attach a comment to the wrong line. Because the filler is identical on both
 /// sides, Monaco treats it as unchanged and never highlights it.
-enum PatchReconstructor {
+public enum PatchReconstructor {
     /// The two documents a diff editor needs.
-    struct Reconstruction: Hashable, Sendable {
+    public struct Reconstruction: Hashable, Sendable {
         /// The left-hand (base) document.
-        var original: String
+        public var original: String
         /// The right-hand (head) document.
-        var modified: String
+        public var modified: String
         /// The 1-based line the first change lands on in the modified document, for scrolling.
-        var firstChangedLine: Int?
+        public var firstChangedLine: Int?
         /// The lines of ``original`` that came from the patch rather than from the padding.
         ///
         /// Only these may carry a comment. The inter-hunk filler is indistinguishable from
         /// real content once it is in the document, and GitHub rejects the *whole* review —
         /// summary and every valid inline comment with it — when one `comments[].line` is not
         /// part of the diff.
-        var commentableOriginalLines: Set<Int>
+        public var commentableOriginalLines: Set<Int>
         /// The lines of ``modified`` that came from the patch rather than from the padding.
-        var commentableModifiedLines: Set<Int>
+        public var commentableModifiedLines: Set<Int>
+
+        // Deliberately no `public` initialiser. The two commentable-line sets are derived from
+        // the same walk that built the two documents, so a ``Reconstruction`` whose fields were
+        // supplied separately could claim a line is commentable that the documents do not
+        // contain — and a comment on a line that is not in the diff is one GitHub refuses along
+        // with the whole review. ``UnifiedPatch/Hunk`` has a public initialiser because it is a
+        // plain value with nothing to hold together; this type is only ever correct when
+        // ``reconstruct(patch:)`` makes it.
 
         /// The commentable lines for one side of the diff.
         /// - Parameter side: Which document to ask about.
-        func commentableLines(on side: DiffSide) -> Set<Int> {
+        public func commentableLines(on side: DiffSide) -> Set<Int> {
             side == .left ? commentableOriginalLines : commentableModifiedLines
         }
     }
@@ -45,7 +52,7 @@ enum PatchReconstructor {
     /// Reconstructs both sides of a changed file.
     /// - Parameter file: The changed file, whose ``ShepherdCore/ChangedFile/patch`` may be `nil`.
     /// - Returns: The two documents, or `nil` when GitHub sent no patch (binary or truncated).
-    static func reconstruct(_ file: ChangedFile) -> Reconstruction? {
+    public static func reconstruct(_ file: ChangedFile) -> Reconstruction? {
         guard let patch = file.patch, !patch.isEmpty else { return nil }
         return reconstruct(patch: patch)
     }
@@ -53,7 +60,7 @@ enum PatchReconstructor {
     /// Reconstructs both sides from raw unified-diff text.
     /// - Parameter patch: The patch, as GitHub returns it (starting at the first `@@`).
     /// - Returns: The two documents.
-    static func reconstruct(patch: String) -> Reconstruction {
+    public static func reconstruct(patch: String) -> Reconstruction {
         var original: [String] = []
         var modified: [String] = []
         var firstChangedLine: Int?
