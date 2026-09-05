@@ -232,6 +232,27 @@ extension DatabaseManager {
         }
     }
 
+    /// The single-outcome query, shared by ``observePullRequestOutcome(prID:)``.
+    ///
+    /// The row-shaped sibling of ``hasPullRequestOutcome(prID:)``, and it exists for one reader:
+    /// an open review screen, which needs to know not only *that* the pull request under it left
+    /// the inbox but *how* — a merge and an abandonment are two different sentences to put in
+    /// front of somebody who was halfway through reviewing it.
+    /// - Parameters:
+    ///   - db: The database connection to read from.
+    ///   - prID: The pull request's node id.
+    /// - Returns: The stored outcome, or `nil` when the pull request has none.
+    static func loadPullRequestOutcome(
+        _ db: Database,
+        prID: String
+    ) throws -> PullRequestOutcome? {
+        try PullRequestOutcomeRecord.fetchOne(
+            db,
+            sql: "SELECT * FROM pull_request_outcomes WHERE prID = ?",
+            arguments: [prID]
+        )?.outcome
+    }
+
     // MARK: - Deleting
 
     /// Deletes one repository's outcomes.

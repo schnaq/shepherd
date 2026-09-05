@@ -54,6 +54,73 @@ extension DatabaseManager {
         }
     }
 
+    /// Streams one pull request's cached detail.
+    ///
+    /// ``observeDraft(prID:)``'s other half for the review screen: the draft is what the reviewer
+    /// is writing, and this is what everybody else is doing to the pull request meanwhile. The
+    /// sweep re-fetches a detail whenever `updatedAt` or the head commit moved and stores it
+    /// through ``savePullRequestDetail(_:)``, so this is how an open review learns that CI turned
+    /// green, that a colleague answered a thread, or that the branch was pushed to — none of
+    /// which used to reach a screen that had already fetched once.
+    ///
+    /// Emits `nil` when the pull request is not, or no longer, cached: a sweep prunes what its
+    /// search stopped returning and the detail rows cascade away with it, which is the local
+    /// signal that the pull request left the inbox.
+    ///
+    /// The tracked region is the whole of `pull_requests` and its children — the primary key is a
+    /// node id rather than a rowid, so GRDB cannot narrow it to one row — which means a sweep
+    /// writing *any* pull request re-runs this query. That is one local read per sweep
+    /// transaction while a review is open, and the caller compares the value it gets against the
+    /// one it is showing rather than acting on the notification itself.
+    /// - Parameter prID: The pull request's node id.
+    /// - Returns: A stream of the current detail.
+    public func observePullRequestDetail(prID: String) -> AsyncStream<PullRequestDetail?> {
+        let writer = self.writer
+        let observation = ValueObservation.tracking { db -> PullRequestDetail? in
+            try DatabaseManager.loadPullRequestDetail(db, id: prID)
+        }
+        return AsyncStream { continuation in
+            let queue = DispatchQueue(label: "com.schnaq.shepherd.observation.detail")
+            let cancellable = observation.start(
+                in: writer,
+                scheduling: .async(onQueue: queue),
+                onError: { _ in continuation.finish() },
+                onChange: { value in continuation.yield(value) }
+            )
+            continuation.onTermination = { _ in cancellable.cancel() }
+        }
+    }
+
+    /// Streams how one pull request ended, once the sweep has read it (ADR 0027).
+    ///
+    /// A second observation rather than one more field on ``observePullRequestDetail(prID:)``,
+    /// because the two facts land apart and in that order: the prune removes the inbox row first,
+    /// and the outcome is read from GitHub *after* it, in the same sweep. A screen watching only
+    /// the detail would therefore see the pull request vanish and never learn whether it was
+    /// merged or abandoned.
+    ///
+    /// An outcome row is never deleted — the whole point of the table is that it outlives the
+    /// pull request it describes — so a value here means "this is how it ended the last time it
+    /// ended", not "it has ended". The caller pairs it with the detail's disappearance.
+    /// - Parameter prID: The pull request's node id.
+    /// - Returns: A stream of the stored outcome, or `nil` while there is none.
+    public func observePullRequestOutcome(prID: String) -> AsyncStream<PullRequestOutcome?> {
+        let writer = self.writer
+        let observation = ValueObservation.tracking { db -> PullRequestOutcome? in
+            try DatabaseManager.loadPullRequestOutcome(db, prID: prID)
+        }
+        return AsyncStream { continuation in
+            let queue = DispatchQueue(label: "com.schnaq.shepherd.observation.outcome")
+            let cancellable = observation.start(
+                in: writer,
+                scheduling: .async(onQueue: queue),
+                onError: { _ in continuation.finish() },
+                onChange: { value in continuation.yield(value) }
+            )
+            continuation.onTermination = { _ in cancellable.cancel() }
+        }
+    }
+
     /// Streams the number of mutations waiting in the outbox.
     /// - Returns: A stream of pending counts.
     public func observePendingOutboxCount() -> AsyncStream<Int> {

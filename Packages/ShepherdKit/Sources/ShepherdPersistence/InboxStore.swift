@@ -283,78 +283,84 @@ extension DatabaseManager {
     /// - Returns: The detail record, or `nil` when the pull request is not cached.
     public func fetchPullRequestDetail(id: String) async throws -> PullRequestDetail? {
         try await writer.read { db in
-            guard let record = try PullRequestRecord.fetchOne(
+            try DatabaseManager.loadPullRequestDetail(db, id: id)
+        }
+    }
+
+    /// The detail query, shared by ``fetchPullRequestDetail(id:)`` and
+    /// ``observePullRequestDetail(prID:)``.
+    static func loadPullRequestDetail(_ db: Database, id: String) throws -> PullRequestDetail? {
+        guard let record = try PullRequestRecord.fetchOne(
+            db,
+            sql: "SELECT * FROM pull_requests WHERE id = ?",
+            arguments: [id]
+        ) else { return nil }
+
+        let viewedPaths = try Set(
+            String.fetchAll(
                 db,
-                sql: "SELECT * FROM pull_requests WHERE id = ?",
-                arguments: [id]
-            ) else { return nil }
-
-            let viewedPaths = try Set(
-                String.fetchAll(
-                    db,
-                    sql: "SELECT path FROM viewed_files WHERE prID = ? AND headRefOid = ?",
-                    arguments: [id, record.headRefOid]
-                )
+                sql: "SELECT path FROM viewed_files WHERE prID = ? AND headRefOid = ?",
+                arguments: [id, record.headRefOid]
             )
+        )
 
-            let fileRecords = try ChangedFileRecord.fetchAll(
-                db,
-                sql: "SELECT * FROM changed_files WHERE prID = ? ORDER BY sortIndex ASC",
-                arguments: [id]
-            )
-            let files: [ChangedFile] = fileRecords.map { fileRecord in
-                var file = fileRecord.changedFile
-                file.isViewed = viewedPaths.contains(file.path)
-                return file
-            }
+        let fileRecords = try ChangedFileRecord.fetchAll(
+            db,
+            sql: "SELECT * FROM changed_files WHERE prID = ? ORDER BY sortIndex ASC",
+            arguments: [id]
+        )
+        let files: [ChangedFile] = fileRecords.map { fileRecord in
+            var file = fileRecord.changedFile
+            file.isViewed = viewedPaths.contains(file.path)
+            return file
+        }
 
-            let threadRecords = try ReviewThreadRecord.fetchAll(
-                db,
-                sql: "SELECT * FROM review_threads WHERE prID = ? ORDER BY sortIndex ASC",
-                arguments: [id]
-            )
-            var threads: [ReviewThread] = []
-            threads.reserveCapacity(threadRecords.count)
-            for threadRecord in threadRecords {
-                let commentRecords = try ReviewCommentRecord.fetchAll(
-                    db,
-                    sql: """
-                        SELECT * FROM review_comments
-                        WHERE threadID = ? ORDER BY sortIndex ASC
-                        """,
-                    arguments: [threadRecord.id]
-                )
-                threads.append(
-                    threadRecord.reviewThread(comments: commentRecords.map(\.reviewComment))
-                )
-            }
-
-            let checkRecords = try CheckRunRecord.fetchAll(
-                db,
-                sql: "SELECT * FROM check_runs WHERE prID = ? ORDER BY sortIndex ASC",
-                arguments: [id]
-            )
-
-            let closingIssueRecords = try PullRequestClosingIssueRecord.fetchAll(
+        let threadRecords = try ReviewThreadRecord.fetchAll(
+            db,
+            sql: "SELECT * FROM review_threads WHERE prID = ? ORDER BY sortIndex ASC",
+            arguments: [id]
+        )
+        var threads: [ReviewThread] = []
+        threads.reserveCapacity(threadRecords.count)
+        for threadRecord in threadRecords {
+            let commentRecords = try ReviewCommentRecord.fetchAll(
                 db,
                 sql: """
-                    SELECT * FROM pull_request_closing_issues
-                    WHERE prID = ? ORDER BY sortIndex ASC
+                    SELECT * FROM review_comments
+                    WHERE threadID = ? ORDER BY sortIndex ASC
                     """,
-                arguments: [id]
+                arguments: [threadRecord.id]
             )
-
-            return PullRequestDetail(
-                summary: record.summary,
-                bodyMarkdown: record.bodyMarkdown ?? "",
-                commits: record.commits,
-                files: files,
-                threads: threads,
-                timeline: record.timeline,
-                checks: checkRecords.map(\.checkRun),
-                closingIssues: closingIssueRecords.map(\.reference)
+            threads.append(
+                threadRecord.reviewThread(comments: commentRecords.map(\.reviewComment))
             )
         }
+
+        let checkRecords = try CheckRunRecord.fetchAll(
+            db,
+            sql: "SELECT * FROM check_runs WHERE prID = ? ORDER BY sortIndex ASC",
+            arguments: [id]
+        )
+
+        let closingIssueRecords = try PullRequestClosingIssueRecord.fetchAll(
+            db,
+            sql: """
+                SELECT * FROM pull_request_closing_issues
+                WHERE prID = ? ORDER BY sortIndex ASC
+                """,
+            arguments: [id]
+        )
+
+        return PullRequestDetail(
+            summary: record.summary,
+            bodyMarkdown: record.bodyMarkdown ?? "",
+            commits: record.commits,
+            files: files,
+            threads: threads,
+            timeline: record.timeline,
+            checks: checkRecords.map(\.checkRun),
+            closingIssues: closingIssueRecords.map(\.reference)
+        )
     }
 
     // MARK: - Viewed files

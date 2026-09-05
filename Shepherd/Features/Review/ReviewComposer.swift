@@ -30,6 +30,7 @@ struct ReviewComposerBar: View {
                 Text(String(localized: "Comment"))
             }
             .buttonStyle(SecondaryButtonStyle(height: 30))
+            .disabled(model.hasEndedOnGitHub)
             .help(String(localized: "Comment (r c)"))
 
             Button {
@@ -38,6 +39,7 @@ struct ReviewComposerBar: View {
                 Text(String(localized: "Request changes"))
             }
             .buttonStyle(SecondaryButtonStyle(height: 30, tint: Theme.failure))
+            .disabled(model.hasEndedOnGitHub)
             .help(String(localized: "Request changes (r x)"))
 
             Button {
@@ -50,6 +52,10 @@ struct ReviewComposerBar: View {
             }
             .buttonStyle(SuccessButtonStyle(height: 30))
             .keyboardShortcut(.return, modifiers: .command)
+            // The three verdict buttons go dark together once GitHub has merged or closed the
+            // pull request under them, because none of the three has anywhere to land any more
+            // (``ReviewModel/hasEndedOnGitHub``). `.disabled` takes ⌘⏎ with it.
+            .disabled(model.hasEndedOnGitHub)
             .help(String(localized: "Submit review (⌘⏎)"))
         }
         .padding(.horizontal, 14)
@@ -217,7 +223,7 @@ struct SubmitReviewSheet: View {
                 }
                 .buttonStyle(SuccessButtonStyle())
                 .keyboardShortcut(.defaultAction)
-                .disabled(model.isSubmitting || needsSummary)
+                .disabled(model.isSubmitting || needsSummary || model.hasEndedOnGitHub)
                 .help(needsSummary
                     ? String(localized: "Write a summary first — GitHub rejects a “request changes” or “comment” review without one.")
                     : String(localized: "Queue the review"))

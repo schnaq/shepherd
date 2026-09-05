@@ -4071,6 +4071,16 @@
         }
       }
     },
+    "Closed on GitHub.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf GitHub geschlossen."
+          }
+        }
+      }
+    },
     "Closes #%lld": {
       "localizations": {
         "de": {
@@ -6831,6 +6841,16 @@
         }
       }
     },
+    "Merged on GitHub.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf GitHub gemergt."
+          }
+        }
+      }
+    },
     "Merge…": {
       "localizations": {
         "de": {
@@ -8971,6 +8991,16 @@
         }
       }
     },
+    "Reload": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neu laden"
+          }
+        }
+      }
+    },
     "Remember passphrase in Keychain": {
       "localizations": {
         "de": {
@@ -10297,6 +10327,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Den Issues-Bereich zeigen, wo die geschlossenen noch stehen"
+          }
+        }
+      }
+    },
+    "Show the new commits (u)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die neuen Commits anzeigen (u)"
           }
         }
       }
@@ -12337,6 +12377,56 @@
           "stringUnit": {
             "state": "translated",
             "value": "Auflösung aufheben"
+          }
+        }
+      }
+    },
+    "Updated on GitHub — %lld new commits.": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Auf GitHub aktualisiert — %lld neuer Commit."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Auf GitHub aktualisiert — %lld neue Commits."
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Updated on GitHub — %lld new commit."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Updated on GitHub — %lld new commits."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Updated on GitHub — new commits.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf GitHub aktualisiert — neue Commits."
           }
         }
       }

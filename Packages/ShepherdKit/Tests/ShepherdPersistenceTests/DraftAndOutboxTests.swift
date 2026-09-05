@@ -662,6 +662,33 @@ final class ObservationTests: XCTestCase {
         XCTAssertEqual(first??.comments.count, 2)
     }
 
+    func testObservePullRequestDetailSeesADetailWriteLandAfterTheFirstValue() async throws {
+        // The whole point of the review screen's detail observation: the sweep stores a fresh
+        // detail (`SyncEngine` calls `savePullRequestDetail`) and an already-open screen has to
+        // hear about it, which before this it never did.
+        let database = try DatabaseManager.inMemory()
+        try await database.savePullRequestSummaries([PersistenceFixtures.summary()])
+
+        var iterator = database.observePullRequestDetail(prID: "PR_1").makeAsyncIterator()
+        let first = await iterator.next()
+        XCTAssertEqual(first??.id, "PR_1")
+        XCTAssertEqual(first??.files.count, 0, "no detail has been fetched for this row yet")
+
+        try await database.savePullRequestDetail(PersistenceFixtures.detail())
+        let second = await iterator.next()
+        XCTAssertEqual(second??.files.count, 2)
+        XCTAssertEqual(second??.threads.count, 2)
+    }
+
+    func testObservePullRequestDetailEmitsNilForAPullRequestThatIsNotCached() async throws {
+        // What a prune looks like from the review screen: the row is gone and the detail rows
+        // cascaded with it.
+        let database = try DatabaseManager.inMemory()
+        var iterator = database.observePullRequestDetail(prID: "PR_missing").makeAsyncIterator()
+        let first = await iterator.next()
+        XCTAssertNil(first ?? nil)
+    }
+
     func testObservePendingOutboxCount() async throws {
         let database = try DatabaseManager.inMemory()
         try await database.enqueue(

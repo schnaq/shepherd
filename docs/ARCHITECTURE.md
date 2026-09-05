@@ -1058,7 +1058,18 @@ rows the user can see.
 
 `InboxModel` subscribes to `DatabaseManager.observeInbox()` and to `observeOutboxItems()`, the
 second one so the detail panel can say what the queue is holding for the selected pull request;
-`ReviewModel` subscribes to `observeDraft(prID:)`. Detail fetches read the cached
+`ReviewModel` subscribes to `observeDraft(prID:)`, `observePullRequestDetail(prID:)` and
+`observePullRequestOutcome(prID:)`. The second of those is what keeps an *open* review screen
+current: the sweep re-fetches a detail whenever `updatedAt` or the head commit moved and stores it,
+and the observation is how the screen hears about it. What it then does is decided by the head
+commit alone (`ReviewModel.change(shown:fresh:)`, pure and unit-tested) — the same head means a
+byte-identical diff, so the checks, the review decision, the mergeable state and the threads are
+folded in through `refresh(_:)`, which touches no navigation state; a different head is *held back*
+in a banner, because every inline comment in the pending review is anchored to a line number of the
+head on screen. The third observation exists because the two halves of "it ended" arrive apart: the
+prune removes the inbox row first and the outcome (ADR 0027) is read from GitHub after it, and only
+the pair means the pull request was merged or closed — a row that leaves the inbox while still open
+changes nothing on the screen. Detail fetches read the cached
 `PullRequestDetail` first and only then refresh from GitHub, so opening a pull request offline
 shows the last-known state instead of a spinner (ADR 0006). Grouping uses `InboxGrouper`; the sort
 order inside a section is applied by the app on top of it (`priority` / `recentlyUpdated` /

@@ -42,6 +42,12 @@ struct ReviewScreen: View {
                 onDelegate: delegate
             )
             Divider().overlay(Theme.border)
+            // Above everything the review is made of, because it is about all of it: the file
+            // list, the diff and the composer are all showing a head commit that GitHub may have
+            // moved past.
+            if let notice = model.notice {
+                ReviewUpdateBanner(notice: notice) { model.reloadPendingUpdate() }
+            }
             HStack(spacing: 0) {
                 ReviewFileListView(model: model)
                     .frame(width: 292)
@@ -99,6 +105,11 @@ struct ReviewScreen: View {
         .sheet(isPresented: $model.isSubmitSheetPresented) {
             SubmitReviewSheet(model: model, actions: actions)
         }
+        // The sheet's warning — "checks are failing", "GitHub reports conflicts" — is built from
+        // the row it is handed, and the row is ``ReviewModel/summary``, which is the observed
+        // detail's own summary. So the closure is read again whenever the detail observation
+        // writes, and a merge dialog left open while CI turns red says so rather than repeating
+        // what was true when it opened.
         .sheet(isPresented: $model.isMergeSheetPresented) {
             if let summary = model.summary {
                 MergeSheet(summary: summary, actions: actions, settings: environment.settings)
@@ -337,6 +348,7 @@ struct ReviewScreen: View {
         case .comment:
             submit(.comment)
         case .merge:
+            guard !model.hasEndedOnGitHub else { return }
             model.isMergeSheetPresented = true
         case .startReviewSession:
             // Re-freezing the queue while a session is running would restart the count the user
@@ -362,6 +374,10 @@ struct ReviewScreen: View {
     }
 
     private func submit(_ verdict: ReviewVerdict) {
+        // The keys and the palette reach the same three verdicts the composer bar's buttons do,
+        // so they need the same refusal: a review submitted against a pull request that has
+        // already been merged or closed would sit in the outbox until the drain threw it away.
+        guard !model.hasEndedOnGitHub else { return }
         model.pendingVerdict = verdict
         model.isSubmitSheetPresented = true
     }
@@ -384,6 +400,15 @@ struct ReviewScreen: View {
         }
         if character == "v", let path = model.selectedPath {
             Task { await model.toggleViewed(path: path, actions: actions) }
+            return .handled
+        }
+        // `u` for *update*: the banner's Reload as a key. Free both as a bare key and as the
+        // second half of a sequence — `r` and `g` are the only prefixes and neither claims it —
+        // and deliberately not ⌘R, which is the app's Sync Now and writes to the database rather
+        // than to this screen. Ignored when there is nothing held back, so the key travels on
+        // rather than being eaten by a view that had no answer for it.
+        if character == "u", !model.isAwaitingSecondKey, model.canReloadPendingUpdate {
+            model.reloadPendingUpdate()
             return .handled
         }
         // `c` reaches this handler only when the diff does *not* have the focus — inside it the
@@ -525,6 +550,7 @@ struct ReviewHeaderView: View {
                 }
             }
             .buttonStyle(SecondaryButtonStyle(height: 30, tint: Theme.accentText))
+            .disabled(model.hasEndedOnGitHub)
 
             Button(action: onMerge) {
                 HStack(spacing: 6) {
@@ -533,7 +559,7 @@ struct ReviewHeaderView: View {
                 }
             }
             .buttonStyle(SuccessButtonStyle(height: 30))
-            .disabled(model.summary?.mergeable == .conflicting)
+            .disabled(model.summary?.mergeable == .conflicting || model.hasEndedOnGitHub)
             .help(String(localized: "Merge (m)"))
         }
         .padding(.horizontal, 16)

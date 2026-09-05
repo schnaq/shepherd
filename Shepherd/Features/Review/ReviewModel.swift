@@ -67,6 +67,46 @@ final class ReviewModel {
         }
     }
 
+    /// What the banner above the review screen says, when GitHub has moved on without it.
+    ///
+    /// One slot for three facts, because they are the same kind of fact: something happened on
+    /// GitHub that this screen cannot simply absorb. Which one is showing also decides whether
+    /// the screen still takes a verdict — see ``ReviewModel/hasEndedOnGitHub``.
+    enum Notice: Equatable {
+        /// The head branch was pushed to, with how many commits are new when that is derivable.
+        case newCommits(count: Int?)
+        /// The pull request was merged on GitHub.
+        case merged
+        /// The pull request was closed on GitHub without being merged.
+        case closed
+
+        /// Whether this is the end of the pull request, so no verdict and no merge can land on
+        /// it any more.
+        var endsTheReview: Bool {
+            switch self {
+            case .merged, .closed: return true
+            case .newCommits: return false
+            }
+        }
+
+        /// Whether the banner draws a Reload — only a push has anything to reload into.
+        var offersReload: Bool {
+            if case .newCommits = self { return true }
+            return false
+        }
+    }
+
+    /// What an observed detail does to the one already on screen.
+    enum ObservedChange: Equatable {
+        /// Nothing a reviewer can see moved, so nothing happens at all.
+        case unchanged
+        /// The same head commit, so the diff is byte-identical and the volatile facts can be
+        /// folded in where the reviewer is standing.
+        case refresh
+        /// A different head commit, so the fresh detail waits behind the banner.
+        case newCommits(count: Int?)
+    }
+
     /// The active session.
     let session: SignedInSession
     /// Preferences (diff mode, wrap, font size).
@@ -88,6 +128,24 @@ final class ReviewModel {
     private(set) var isRefreshing = false
     /// Whether a submit is in flight.
     private(set) var isSubmitting = false
+    /// What the banner above the screen is saying, or `nil` when GitHub has said nothing new.
+    private(set) var notice: Notice?
+    /// The fresh detail behind a ``Notice/newCommits(count:)``, waiting for Reload.
+    ///
+    /// Held rather than applied, and that is the whole of behaviour rule two: every inline
+    /// comment in the pending review is anchored to a line number of the head commit on screen,
+    /// and GitHub refuses — or worse, misplaces — a comment whose line is not part of the diff it
+    /// is submitted against. So a push is *announced*; swapping the document under the reviewer's
+    /// cursor is the one thing a background observation must never do.
+    private var pendingDetail: PullRequestDetail?
+    /// Whether the pull request's inbox row has gone.
+    ///
+    /// The prune's own signal that the pull request left the user's search (ADR 0027), and half
+    /// of what the "merged"/"closed" banner needs; ``observedOutcome`` is the other half.
+    private var hasLeftTheInbox = false
+    /// How the pull request ended, when the sweep has read it (ADR 0027).
+    private var observedOutcome: PullRequestOutcome?
+
     /// Set when the pull request is not (or no longer) in the local inbox.
     ///
     /// A sweep prunes everything its search did not return — a merged pull request, or one
@@ -197,6 +255,8 @@ final class ReviewModel {
     private var hasChosenRoundView = false
 
     private var draftTask: Task<Void, Never>?
+    private var detailTask: Task<Void, Never>?
+    private var outcomeTask: Task<Void, Never>?
     private var loadTask: Task<Void, Never>?
     private var intelligenceTask: Task<Void, Never>?
     private var roundTask: Task<Void, Never>?
@@ -222,9 +282,16 @@ final class ReviewModel {
 
     // MARK: - Loading
 
-    /// Loads the cached detail, then refreshes it, and starts observing the draft.
+    /// Loads the cached detail, then refreshes it, and starts observing.
+    ///
+    /// Three streams rather than one fetch: the draft the reviewer is writing, the pull request
+    /// itself, and — for the one fact the pull request stops being able to carry — how it ended.
+    /// Everything after the first fetch arrives through them, which is what makes an open review
+    /// screen stop being a photograph of the moment it was opened.
     func start() {
         observeDraft()
+        observeDetail()
+        observeOutcome()
         load()
     }
 
@@ -232,6 +299,10 @@ final class ReviewModel {
     func stop() {
         draftTask?.cancel()
         draftTask = nil
+        detailTask?.cancel()
+        detailTask = nil
+        outcomeTask?.cancel()
+        outcomeTask = nil
         loadTask?.cancel()
         loadTask = nil
         intelligenceTask?.cancel()
@@ -286,6 +357,188 @@ final class ReviewModel {
         }
     }
 
+    private func observeDetail() {
+        guard detailTask == nil else { return }
+        let stream = session.database.observePullRequestDetail(prID: prID)
+        detailTask = Task { [weak self] in
+            for await value in stream {
+                guard let self else { return }
+                self.received(value)
+            }
+        }
+    }
+
+    private func observeOutcome() {
+        guard outcomeTask == nil else { return }
+        let stream = session.database.observePullRequestOutcome(prID: prID)
+        outcomeTask = Task { [weak self] in
+            for await value in stream {
+                guard let self else { return }
+                self.observedOutcome = value
+                self.noteEndOnGitHub()
+            }
+        }
+    }
+
+    /// Decides what an observed detail does to a review that is already open.
+    ///
+    /// The head commit is the whole rule (behaviour rules one and two). Same head, and the diff
+    /// is byte-identical, so everything the pull request's *state* can do — checks, review
+    /// decision, mergeability, new threads and replies — is applied in place and the reviewer
+    /// notices nothing. Different head, and the document the pending review is anchored against
+    /// has been replaced, so the screen says so and waits.
+    /// - Parameter fresh: What the database now holds, or `nil` when the row has gone.
+    private func received(_ fresh: PullRequestDetail?) {
+        guard let fresh else {
+            // The inbox row was pruned and the detail cascaded with it. What is deliberately not
+            // done here is clearing ``detail``: blanking a diff somebody is reading is the worst
+            // possible way to tell them the pull request was merged, and the banner tells them
+            // without taking anything away.
+            hasLeftTheInbox = true
+            noteEndOnGitHub()
+            return
+        }
+        if hasLeftTheInbox {
+            // The row came back — reopened, or simply matching the user's facets again — so what
+            // the banner said about its end has stopped being true.
+            hasLeftTheInbox = false
+            if hasEndedOnGitHub { notice = nil }
+        }
+        guard let shown = detail else {
+            apply(fresh)
+            return
+        }
+        switch ReviewModel.change(shown: shown, fresh: fresh) {
+        case .unchanged:
+            return
+        case .newCommits(let count):
+            // A pull request that has ended keeps its banner: reloading the diff of a merged pull
+            // request is of no use to anybody, and the sentence that matters is the other one.
+            guard !hasEndedOnGitHub else { return }
+            pendingDetail = fresh
+            notice = .newCommits(count: count)
+        case .refresh:
+            refresh(fresh, replacing: shown)
+        }
+    }
+
+    /// Classifies an observed detail against the one on screen.
+    ///
+    /// The head commit is the whole rule, and the equality check in front of it is behaviour rule
+    /// five: the sweep rewrites the whole detail whenever anything about the pull request moved,
+    /// and the reviewer's own submitted review is one of the things that moves it, so a value
+    /// equal to the one on screen is the ordinary case rather than the odd one and must produce
+    /// no event of any kind.
+    ///
+    /// Pure and `static` so the three answers are unit-tested rather than inferred from task
+    /// ordering, the same treatment ``defaultRoundView(for:)`` gets.
+    /// - Parameters:
+    ///   - shown: The detail the screen is showing.
+    ///   - fresh: The detail the database now holds.
+    /// - Returns: What the screen should do with it.
+    static func change(shown: PullRequestDetail, fresh: PullRequestDetail) -> ObservedChange {
+        guard fresh != shown else { return .unchanged }
+        guard fresh.summary.headRefOid == shown.summary.headRefOid else {
+            return .newCommits(count: newCommitCount(shown: shown.commits, fresh: fresh.commits))
+        }
+        return .refresh
+    }
+
+    /// Puts "merged" or "closed" in the banner once both halves of that fact are known.
+    ///
+    /// Both halves, because neither is enough on its own: an outcome row is never deleted, so a
+    /// pull request that was closed and then reopened still has one and it describes the previous
+    /// ending; and a vanished inbox row means only that the search stopped returning the pull
+    /// request, which happens to open ones too when the user's facets stop matching. A pull
+    /// request that leaves the inbox while still open therefore changes nothing on this screen,
+    /// which is right — it is still open, and the review still submits.
+    private func noteEndOnGitHub() {
+        guard let ended = ReviewModel.endNotice(
+            hasLeftTheInbox: hasLeftTheInbox,
+            outcome: observedOutcome
+        ) else { return }
+        notice = ended
+        // Nothing to reload into: the diff on screen is the last one there will ever be.
+        pendingDetail = nil
+    }
+
+    /// What a vanished inbox row and a stored outcome say when they are read together.
+    ///
+    /// Pure and `static` for ``change(shown:fresh:)``'s reason, and the pairing is the point: an
+    /// outcome alone is not an ending, and a vanished row alone is not one either.
+    /// - Parameters:
+    ///   - hasLeftTheInbox: Whether the prune has removed the pull request's row.
+    ///   - outcome: The stored outcome, when there is one.
+    /// - Returns: The banner's sentence, or `nil` when the pull request has not ended.
+    static func endNotice(hasLeftTheInbox: Bool, outcome: PullRequestOutcome?) -> Notice? {
+        guard hasLeftTheInbox, let outcome else { return nil }
+        return outcome.merged ? .merged : .closed
+    }
+
+    /// Applies an observed detail that shares the head commit the screen is showing.
+    ///
+    /// The half of ``apply(_:)`` that is safe to run under a reviewer's cursor. What it leaves
+    /// alone is everything that is theirs rather than GitHub's: ``selectedPath``,
+    /// ``selectedDiffRow``, ``tab``, ``roundView``, ``summaryText`` and the open composer are
+    /// untouched, and so are the two once-per-opened-review decisions ``apply(_:)`` also makes —
+    /// ``requestFocusHints(for:)``, which would re-ask a provider on every sweep, and
+    /// ``applyReviewTemplateIfNeeded()``, whose guards exist for exactly this reason.
+    ///
+    /// The interdiff is recomputed only when the threads moved, because that is the only input to
+    /// it that can move while the head does not: both rounds' files are what they were, so the
+    /// diff itself cannot have changed and only a finding's state can (ADR 0028). The baseline is
+    /// never touched here at all.
+    /// - Parameters:
+    ///   - fresh: The detail to fold in.
+    ///   - shown: The detail it replaces, for the one comparison this has to make.
+    private func refresh(_ fresh: PullRequestDetail, replacing shown: PullRequestDetail) {
+        let threadsMoved = fresh.threads != shown.threads
+        detail = fresh
+        priorities = FilePrioritizer.prioritize(
+            fresh.files,
+            context: PrioritizationContext(totalChangedLines: fresh.summary.churn)
+        )
+        viewedPaths = Set(fresh.files.filter(\.isViewed).map(\.path))
+        if threadsMoved {
+            loadRound(for: fresh)
+        }
+    }
+
+    /// Applies the update the banner is holding back, and clears the banner.
+    ///
+    /// The full ``apply(_:)`` this time, because the head moved: the files, their priorities and
+    /// the interdiff are all about a different set of commits than the ones that were on screen.
+    /// ADR 0028's baseline is not disturbed by this — the round is recomputed against the *stored*
+    /// snapshot of the head this reviewer reviewed, which is precisely what has to stay put while
+    /// the branch moves on top of it.
+    func reloadPendingUpdate() {
+        guard let update = pendingDetail else { return }
+        apply(update)
+    }
+
+    /// How many commits the observed detail has that the one on screen did not.
+    ///
+    /// `nil` when either side carries no commit list, because a detail fetch that learned nothing
+    /// about the commits would otherwise make every one of them look new — and `nil` again when
+    /// the count comes out at zero, because a banner reading "0 new commits" says less than the
+    /// bare sentence does.
+    ///
+    /// A force-push therefore counts the whole branch, which is deliberate: a rebase replaces
+    /// every commit, and every one of the replacements is a commit this reviewer has not seen.
+    ///
+    /// Pure and `static` so the number in the banner is unit-tested rather than inferred from task
+    /// ordering, the same treatment ``defaultRoundView(for:)`` gets.
+    /// - Parameters:
+    ///   - shown: The commits of the head on screen.
+    ///   - fresh: The commits of the head GitHub now has.
+    /// - Returns: The number of new commits, or `nil` when none can be named.
+    static func newCommitCount(shown: [CommitInfo], fresh: [CommitInfo]) -> Int? {
+        guard !shown.isEmpty, !fresh.isEmpty else { return nil }
+        let known = Set(shown.map(\.oid))
+        let count = fresh.filter { !known.contains($0.oid) }.count
+        return count > 0 ? count : nil
+    }
+
     /// Fills the summary from the repository's review template, if the rules allow it.
     ///
     /// Called from the two places that can complete the picture — the draft observation and the
@@ -309,6 +562,11 @@ final class ReviewModel {
     }
 
     private func apply(_ detail: PullRequestDetail) {
+        // Applying *is* the answer to the banner, from wherever the call came: what was being
+        // held back is now what the screen shows. The "it ended" notice is the one that survives,
+        // because it is not about a document anybody could reload.
+        pendingDetail = nil
+        if !hasEndedOnGitHub { notice = nil }
         self.detail = detail
         priorities = FilePrioritizer.prioritize(
             detail.files,
@@ -455,6 +713,21 @@ final class ReviewModel {
 
     /// The pull request's inbox row.
     var summary: PullRequestSummary? { detail?.summary }
+
+    /// Whether the banner is offering to show a head commit the screen is not showing yet.
+    var canReloadPendingUpdate: Bool {
+        notice?.offersReload == true && pendingDetail != nil
+    }
+
+    /// Whether GitHub has ended this pull request while the review was open.
+    ///
+    /// What disables approving, requesting changes and merging — the same shape
+    /// ``isMissingFromInbox`` gives the screen, one step earlier: that one answers "there is
+    /// nothing here to show", this one answers "there is, and none of it can be acted on any
+    /// more". A verdict queued against a merged pull request would sit in the outbox until the
+    /// drain's staleness check refused it, so the buttons say so before the click rather than a
+    /// toast saying so afterwards.
+    var hasEndedOnGitHub: Bool { notice?.endsTheReview == true }
 
     /// The priorities the file list shows in the current round view.
     var visiblePriorities: [FilePriority] {

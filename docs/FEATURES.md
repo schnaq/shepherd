@@ -219,6 +219,17 @@ multi-comment pending reviews, approve / request changes / comment, reply to and
 threads, CI check status, and merge (merge / squash / rebase) — complete GitHub review parity,
 natively wrapped. Drafts survive restart and offline; a staleness check runs before a submit.
 
+The screen stays current while you are on it. Whatever the background sweep learns about the pull
+request lands in the review you have open: CI turning green, a colleague answering a thread, an
+approval, the mergeable state the merge dialog warns from. All of that is applied silently, exactly
+where you are — the file you picked, the line your cursor is on and the text in the composer do not
+move. A **new push** is the one thing that is not applied silently: it replaces the head commit
+every comment in your pending review is anchored to, so the screen says *"Updated on GitHub — 2 new
+commits"* in a strip above the diff and waits for you to press **Reload** (or `u`). And if the pull
+request is merged or closed while you are reading it, the same strip says so and the approve,
+request-changes and merge buttons go dark, rather than letting you queue a verdict that has nowhere
+to land.
+
 And an inline comment does not need the mouse. Press `c` and the keyboard moves into the diff;
 press it again and the composer opens on the line the cursor is on. Inside the diff the arrow keys
 walk the file, and `[` and `]` move between the original and the modified pane — which is how you
