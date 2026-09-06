@@ -36,6 +36,7 @@ founder interview (2026-08-31) combined with three research reports (see
 | 0028 | [Since my review: a local snapshot at submit time, the interdiff computed on the Mac](0028-since-my-review-interdiff.md) | Accepted (v1.2) |
 | 0029 | [The feedback loop: a recurring finding becomes a drafted agent rule](0029-feedback-loop-agent-rules.md) | Accepted (v1.2) |
 | 0030 | [The session back-channel: a finding addressed to the session that wrote the code, through the user's own CLI](0030-session-back-channel.md) | Accepted (v1.2) |
+| 0031 | [A model you bring: `MLXLanguageModel` as the second on-device tier](0031-a-model-you-bring.md) | Proposed (Accepted when the macOS 27 toolchain commit lands) |
 | 0032 | [Issues as a second inbox citizen: own sweep, own tables, own search index](0032-issues-inbox.md) | Accepted |
 | 0033 | [A list row says what it shows, and the gaps are written down rather than implied](0033-accessibility.md) | Accepted |
 | 0034 | [A native diff renderer beside Monaco, held to a three-point contract](0034-native-diff-renderer.md) | Accepted |

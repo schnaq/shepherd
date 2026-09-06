@@ -74,7 +74,9 @@ This is the most important finding of this research and should drive the archite
   - `PrivateCloudComputeLanguageModel` (32K, cloud, reasoning levels)
   - `CoreAILanguageModel` (bring-your-own model, point it at your own weights)
   - `MLXLanguageModel` (pass a Hugging Face model id, framework handles MLX loading —
-    open-weight models like Qwen2.5-Coder become a one-line swap)
+    open-weight models like Qwen2.5-Coder become a one-line swap) — **wrong on two counts,
+    corrected 2026-09-06 below: it is not an Apple type, it is not in the SDK, and there is no
+    initialiser that takes a model id**
   - Community packages, and **Anthropic and Google are shipping native Swift packages
     conforming to the same protocol** (verified 2026-09-03: Anthropic's is
     `ClaudeForFoundationModels`, v0.1.0 beta, macOS 27; Google's lives inside the Firebase
@@ -90,6 +92,96 @@ better framed as "the on-device tier alone is a dealbreaker for whole-diff
 summarization, but Apple has since built the exact provider-abstraction this project
 would otherwise have to invent itself" — which changes the recommended architecture
 (§4) more than it changes the viability of on-device-only.
+
+### Corrections, 2026-09-06 — verified against primary sources
+
+Second correction pass, made because [`docs/plans/macos-27.md`](../plans/macos-27.md) says every
+macOS 27 item re-verifies its API before code is written and that these notes record what the
+re-verification found. Primary sources this time, not write-ups: the
+[`ml-explore/mlx-swift-lm`](https://github.com/ml-explore/mlx-swift-lm) sources on `main` (README,
+`MLXLanguageModel.swift`, `Package.swift`, `LICENSE`), Apple's DocC JSON under
+[developer.apple.com/documentation/foundationmodels](https://developer.apple.com/documentation/foundationmodels),
+Apple's [Improving the safety of generative model output](https://developer.apple.com/documentation/foundationmodels/improving-the-safety-of-generative-model-output),
+Hugging Face's [downloading models](https://huggingface.co/docs/hub/models-downloading) guidance,
+and Apple's releases feed. Seven findings, in the order the plan uses them.
+
+**1. The toolchain has not shipped.** Xcode 27 is still beta 6 (27A5252f, 2026-08-24), host
+requirement macOS 26.4+, Apple Silicon. macOS 27 is at developer beta 8; no GA date has been
+announced; there is an Apple event on 2026-09-09 and a public release is expected mid-September.
+**The GM SDK has not shipped**, so everything below is verified against sources and documentation
+rather than against a compiler. *(Apple releases RSS.)*
+
+**2. `MLXLanguageModel` is not an SDK type — this is a third-party dependency decision.** It lives
+in the open-source package `ml-explore/mlx-swift-lm`, module `MLXFoundationModels`, and *conforms
+to* `FoundationModels.LanguageModel`, which is the part Apple ships. It is gated by
+`#if canImport(FoundationModels, _version: 2)` and by a SwiftPM trait, `FoundationModelsIntegration`
+(on by default); below the 27 SDK the module compiles empty. Its dependencies are
+`ml-explore/mlx-swift` and `swiftlang/swift-syntax` and nothing else — **no Hugging Face Swift
+package**: the `HuggingFace` and `Tokenizers` modules are internal targets of `mlx-swift-lm` itself.
+Licences: `mlx-swift-lm` MIT, `mlx-swift` MIT, `swift-syntax` Apache-2.0 (a compile-time macro
+dependency only). *(github.com/ml-explore/mlx-swift-lm — README, `Package.swift`, `LICENSE`.)*
+
+**3. There is no `MLXLanguageModel(modelID:)`, and capabilities are declared rather than
+discovered.** The one public initialiser is
+`init(configuration: ModelConfiguration, capabilities: [LanguageModelCapabilities.Capability] = [.guidedGeneration], configurationResolver:, weightsLocation: @Sendable (String) -> URL, load: ContainerLoader)`.
+The ergonomic entry is a macro —
+`#huggingFaceLanguageModel(configuration: LLMRegistry.qwen3_0_6b_4bit, capabilities: [.reasoning])`
+— which wires the Hugging Face download and tokenizer loading. **Capabilities are declared at
+construction and never inferred**, and a request beyond them throws
+`LanguageModelError.unsupportedCapability`. Confirmed real in the sources: `.guidedGeneration`
+(xgrammar-constrained `@Generable`), `.toolCalling`, `.reasoning`, `.vision` (image `Attachment`;
+gated, and it throws if images arrive without it), plus streaming through
+`respond(to:model:streamingInto:)`. *(github.com/ml-explore/mlx-swift-lm — `MLXLanguageModel.swift`.)*
+
+**4. Download location and hosts.** Default path resolution goes through an internal `HubCache`;
+the exact default literal path is **not verifiable from the sources**, but it follows the Hugging
+Face convention — `~/.cache/huggingface/hub`, which is *not* an app-container path. The host app can
+control the location completely by using the direct init with its own `weightsLocation:`/`load:`
+closures (the README shows a shared-volume example). Downloads start at `huggingface.co` and
+redirect to CDN hosts under **`hf.co`** — `cdn-lfs.hf.co`, `cdn-lfs-us-1.hf.co`,
+`cas-server.xethub.hf.co`, historically `cdn-lfs.huggingface.co` — and Hugging Face's own
+allowlisting guidance is the two suffixes `huggingface.co` and `hf.co`.
+*(huggingface.co/docs/hub/models-downloading; mlx-swift-lm README.)*
+
+**5. The error deprecation is confirmed.** `LanguageModelSession.GenerationError` is **deprecated at
+27.0**: "Use `LanguageModelError`, `SystemLanguageModel.Error`, or `LanguageModelSession.Error`
+instead… You must update to Xcode 27 to catch the new error types". `LanguageModelError`'s cases are
+`.contextSizeExceeded`, `.rateLimited`, `.refusal`, `.timeout`, `.guardrailViolation`,
+`.unsupportedCapability`, `.unsupportedTranscriptContent`, `.unsupportedGenerationGuide`,
+`.unsupportedLanguageOrLocale`. In the same pass, `ContextOptions.ReasoningLevel` is settled as
+`.light`, `.moderate`, `.deep`, `.custom(_:)` — `.moderate` rather than the betas' `.medium`, and
+`.custom(_:)` is a fourth case none of the 2026-09-03 sources carried.
+*(developer.apple.com/documentation/foundationmodels — DocC JSON.)*
+
+**6. Guardrails do not apply to a model you bring.** Apple: "Guardrails are a safety system tied to
+a specific model… For any foundation model you use, consider… Does the model have a guardrail
+system?" There is **no guardrail code in the MLX adapter**. A Hugging Face model therefore runs with
+no content filter at all unless the app adds one — which corrects this project's earlier assumption
+that the framework applies a layer of its own around whatever model is behind the session.
+*(developer.apple.com/documentation/foundationmodels/improving-the-safety-of-generative-model-output.)*
+
+**7. Candidate weights (`mlx-community` 4-bit builds).** Sizes are from secondary sources and are to
+be verified on a real download; the licences are from the model cards.
+
+| Model | Shape | Context | Licence | Size / memory |
+|---|---|---|---|---|
+| Qwen2.5-Coder-7B-Instruct-4bit | 7B dense, tool calling | 32K | Apache-2.0 | ~4.3 GB |
+| Qwen2.5-Coder-32B-Instruct-4bit | 32B dense | 128K | Apache-2.0 | ~18–20 GB **estimated** |
+| Qwen3-Coder-Next-4bit | 80B MoE, 3B active, native tool parser | 256K | Apache-2.0 | ~17.5 GB weights, ~42 GB RAM recommended |
+| DeepSeek-Coder-V2-Lite-Instruct-4bit | 16B MoE, 2.4B active | 128K | DeepSeek Model License — custom, commercial OK, **not OSI** | not verified |
+| Gemma 3 4B / 12B / 27B 4-bit | dense | varies | Gemma Terms of Use — prohibited-use policy with flow-down and unilateral restriction rights; **higher licence risk** | varies |
+
+Note that this corrects §2's Gemma row below, which recorded "Gemma 4" as Apache-2.0: the **Gemma 3**
+builds that have MLX 4-bit conversions today are under the Terms of Use, not Apache-2.0.
+
+**Still unverified after this pass**, and stated as unknown rather than assumed anywhere it is used:
+the exact on-disk sizes of the 32B and DeepSeek builds, the `HubCache` default literal path, and
+whether any entitlement beyond `com.apple.security.network.client` (and, very likely, increased
+memory) is needed to hold a multi-gigabyte model resident.
+
+**Net effect on the architecture:** the second on-device tier is real and buildable, but it is a
+dependency decision with a licence gate, a download host pair and a guardrail caveat rather than an
+SDK switch. That is [ADR 0031](../adr/0031-a-model-you-bring.md), proposed 2026-09-06.
 
 ---
 
@@ -222,6 +314,10 @@ on-device Foundation Models ceiling.
 - [WWDC 2026 - Apple's new server LLM on Private Cloud Compute](https://dev.to/arshtechpro/wwdc-2026-apples-new-server-llm-on-private-cloud-compute-whats-in-it-for-developers-2edd)
 - [WWDC 2026 - Apple Just Opened the Foundation Models Framework to Any LLM Provider](https://dev.to/arshtechpro/wwdc-2026-apple-just-opened-the-foundation-models-framework-to-any-llm-provider-5ejn)
 - [Apple's LanguageModel Protocol Lets iOS Apps Swap Between Claude, Gemini](https://pulse.adyog.com/insights/apple-languagemodel-protocol-claude-gemini-swap)
+- [GitHub - ml-explore/mlx-swift-lm](https://github.com/ml-explore/mlx-swift-lm) (2026-09-06: README, `MLXLanguageModel.swift`, `Package.swift`, `LICENSE`, on `main`)
+- [Apple Developer Documentation — FoundationModels](https://developer.apple.com/documentation/foundationmodels) (2026-09-06: DocC JSON, for the error deprecation and `ContextOptions.ReasoningLevel`)
+- [Improving the safety of generative model output](https://developer.apple.com/documentation/foundationmodels/improving-the-safety-of-generative-model-output) (2026-09-06: guardrails are tied to a specific model)
+- [Downloading models — Hugging Face Hub docs](https://huggingface.co/docs/hub/models-downloading) (2026-09-06: the `huggingface.co` / `hf.co` allowlisting guidance)
 - [GitHub - huggingface/AnyLanguageModel](https://github.com/huggingface/AnyLanguageModel)
 - [Introducing AnyLanguageModel: One API for Local and Remote LLMs](https://huggingface.co/blog/anylanguagemodel)
 - [Choosing an On-Device LLM Runtime on Apple Silicon](https://medium.com/@michael.hannecke/choosing-an-on-device-llm-runtime-on-apple-silicon-a-decision-framework-beyond-benchmarks-2449067b8b67)

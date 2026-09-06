@@ -307,7 +307,10 @@ commit (held until the runner has Xcode 27 or the hosted `xcode-27` image is use
 you bring via `MLXLanguageModel` as the second on-device model with a context far past 8K and
 nothing leaving the Mac (ADR 0031), image input for the attended surfaces, `DynamicProfile` for the
 CI diagnosis, Siri interaction donations, and Anthropic's `LanguageModel` package at 1.0.
-Private Cloud Compute stays parked (ADR 0025).
+Private Cloud Compute stays parked (ADR 0025). On 2026-09-06 the owner set the assumption rather
+than the date — until Xcode 27 is on the runner every decision assumes macOS 27 is the target, and
+the toolchain commit is rebased onto `main` waiting for it — and [ADR 0031](adr/0031-a-model-you-bring.md)
+is **Proposed**, to be accepted the day that commit lands.
 
 ## v1.2 — managing the herd (interview 2026-09-03)
 
