@@ -165,16 +165,22 @@ struct ComposerTextEditor: View {
 
 /// The filled accent button.
 struct PrimaryButtonStyle: ButtonStyle {
+    /// The control height.
+    var height: CGFloat = 32
+
+    @Environment(\.isEnabled) private var isEnabled
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 12.5, weight: .semibold))
             .foregroundStyle(Color.white)
             .padding(.horizontal, 12)
-            .frame(height: 32)
+            .frame(height: height)
             .background(
                 Theme.accent.opacity(configuration.isPressed ? 0.8 : 1),
                 in: RoundedRectangle(cornerRadius: 7, style: .continuous)
             )
+            .opacity(isEnabled ? 1 : 0.45)
     }
 }
 
@@ -182,6 +188,8 @@ struct PrimaryButtonStyle: ButtonStyle {
 struct SuccessButtonStyle: ButtonStyle {
     /// The control height.
     var height: CGFloat = 32
+
+    @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -193,6 +201,7 @@ struct SuccessButtonStyle: ButtonStyle {
                 Theme.success.opacity(configuration.isPressed ? 0.8 : 1),
                 in: RoundedRectangle(cornerRadius: 7, style: .continuous)
             )
+            .opacity(isEnabled ? 1 : 0.45)
     }
 }
 
@@ -202,6 +211,8 @@ struct SecondaryButtonStyle: ButtonStyle {
     var height: CGFloat = 32
     /// An optional label tint (used for the red "Request changes").
     var tint: Color?
+
+    @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -217,6 +228,7 @@ struct SecondaryButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .stroke(Theme.controlBorder, lineWidth: 1)
             )
+            .opacity(isEnabled ? 1 : 0.45)
     }
 }
 

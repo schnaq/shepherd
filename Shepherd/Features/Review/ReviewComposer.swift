@@ -47,7 +47,7 @@ struct ReviewComposerBar: View {
             } label: {
                 HStack(spacing: 6) {
                     Text(String(localized: "Submit review"))
-                    KeyCapView(keys: "⌘⏎")
+                    KeyCapView(keys: "⌘⏎", onFilledBackground: true)
                 }
             }
             .buttonStyle(SuccessButtonStyle(height: 30))

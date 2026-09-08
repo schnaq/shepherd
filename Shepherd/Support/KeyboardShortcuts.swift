@@ -179,16 +179,25 @@ extension KeyPress {
 struct KeyCapView: View {
     /// The key text, e.g. `"⌘K"` or `"r a"`.
     let keys: String
+    /// Whether this cap sits on a filled button (Success / Primary).
+    ///
+    /// The muted stroke and secondary text this view draws everywhere else disappear against an
+    /// accent or green fill, so a cap on one of those buttons needs its own colours instead.
+    var onFilledBackground = false
 
     var body: some View {
         Text(keys)
             .font(.system(size: 11))
-            .foregroundStyle(Theme.textSecondary)
+            .foregroundStyle(onFilledBackground ? Theme.textOnFilled : Theme.textSecondary)
             .padding(.horizontal, 5)
             .padding(.vertical, 1)
+            .background(
+                onFilledBackground ? Color.white.opacity(0.18) : Color.clear,
+                in: RoundedRectangle(cornerRadius: 4, style: .continuous)
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .stroke(Theme.controlBorder, lineWidth: 1)
+                    .stroke(onFilledBackground ? Color.clear : Theme.controlBorder, lineWidth: 1)
             )
     }
 }
