@@ -106,17 +106,16 @@ struct BulkTriageSheet: View {
             Button {
                 queue()
             } label: {
-                BusyLabel(isBusy: isQueueing || isQueueingElsewhere) {
-                    Text(plan.action.confirmButtonTitle)
-                }
+                Text(plan.action.confirmButtonTitle)
             }
             .buttonStyle(SuccessButtonStyle())
             .keyboardShortcut(.defaultAction)
             // ``isQueueing`` is this sheet's own press and stays: it covers the moment between
-            // the click and the funnel's first `await`. The second predicate is the funnel's, and
-            // is what a plan queued from anywhere else — or a run this sheet has already handed
-            // over — dims the button with.
-            .disabled(isQueueing || isQueueingElsewhere || !plan.isActionable)
+            // the click and the funnel's first `await`. The second half is the funnel's, and is
+            // what a plan queued from anywhere else — or a run this sheet has already handed
+            // over — spins on.
+            .busy(isQueueing || isQueueingElsewhere)
+            .disabled(!plan.isActionable)
         }
     }
 

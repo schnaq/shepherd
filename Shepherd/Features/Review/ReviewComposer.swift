@@ -27,47 +27,44 @@ struct ReviewComposerBar: View {
             Button {
                 start(.comment)
             } label: {
-                BusyLabel(isBusy: isSubmittingVerdict) {
-                    Text(String(localized: "Comment"))
-                }
+                Text(String(localized: "Comment"))
             }
             .buttonStyle(SecondaryButtonStyle(height: 30))
-            .disabled(model.hasEndedOnGitHub || isSubmittingVerdict)
+            .busy(isSubmittingVerdict)
+            .disabled(model.hasEndedOnGitHub)
             .help(String(localized: "Comment (r c)"))
 
             Button {
                 start(.requestChanges)
             } label: {
-                BusyLabel(isBusy: isSubmittingVerdict) {
-                    Text(String(localized: "Request changes"))
-                }
+                Text(String(localized: "Request changes"))
             }
             .buttonStyle(SecondaryButtonStyle(height: 30, tint: Theme.failure))
-            .disabled(model.hasEndedOnGitHub || verdictBlocker != nil || isSubmittingVerdict)
+            .busy(isSubmittingVerdict)
+            .disabled(model.hasEndedOnGitHub || verdictBlocker != nil)
             .help(blockedHelp(otherwise: String(localized: "Request changes (r x)")))
 
             Button {
                 start(preselectedVerdict)
             } label: {
-                BusyLabel(isBusy: isSubmittingVerdict) {
-                    HStack(spacing: 6) {
-                        Text(
-                            preselectedVerdict == .approve
-                                ? String(localized: "Approve…")
-                                : String(localized: "Review…")
-                        )
-                        KeyCapView(keys: "⌘⏎", onFilledBackground: true)
-                    }
+                HStack(spacing: 6) {
+                    Text(
+                        preselectedVerdict == .approve
+                            ? String(localized: "Approve…")
+                            : String(localized: "Review…")
+                    )
+                    KeyCapView(keys: "⌘⏎", onFilledBackground: true)
                 }
             }
             .buttonStyle(SuccessButtonStyle(height: 30))
             .keyboardShortcut(.return, modifiers: .command)
             // The three verdict buttons go dark together once GitHub has merged or closed the
             // pull request under them, because none of the three has anywhere to land any more
-            // (``ReviewModel/hasEndedOnGitHub``). `.disabled` takes ⌘⏎ with it — and it does the
-            // same while a verdict is queueing, which is what stops ⌘⏎ held down from opening a
-            // second sheet onto a review that is already going out.
-            .disabled(model.hasEndedOnGitHub || isSubmittingVerdict)
+            // (``ReviewModel/hasEndedOnGitHub``). `.disabled` takes ⌘⏎ with it — and so does
+            // ``busy``, which is what stops ⌘⏎ held down from opening a second sheet onto a
+            // review that is already going out.
+            .busy(isSubmittingVerdict)
+            .disabled(model.hasEndedOnGitHub)
             .help(String(localized: "Submit review (⌘⏎)"))
         }
         .padding(.horizontal, 14)
@@ -273,13 +270,12 @@ struct SubmitReviewSheet: View {
                         }
                     }
                 } label: {
-                    BusyLabel(isBusy: isSubmitting) {
-                        Text(String(localized: "Submit"))
-                    }
+                    Text(String(localized: "Submit"))
                 }
                 .buttonStyle(SuccessButtonStyle())
                 .keyboardShortcut(.defaultAction)
-                .disabled(isSubmitting || needsSummary || model.hasEndedOnGitHub)
+                .busy(isSubmitting)
+                .disabled(needsSummary || model.hasEndedOnGitHub)
                 .help(needsSummary
                     ? String(localized: "Write a summary first — GitHub rejects a “request changes” or “comment” review without one.")
                     : String(localized: "Queue the review"))
@@ -666,15 +662,12 @@ struct InlineCommentComposer: View {
                 Button {
                     Task { await save() }
                 } label: {
-                    BusyLabel(isBusy: isSaving) {
-                        Text(String(localized: "Add comment"))
-                    }
+                    Text(String(localized: "Add comment"))
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
-                .disabled(
-                    commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving
-                )
+                .busy(isSaving)
+                .disabled(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .padding(20)
@@ -1217,22 +1210,16 @@ struct ThreadPopover: View {
                         onClose()
                     }
                 } label: {
-                    BusyLabel(isBusy: isTogglingThread) {
-                        HStack(spacing: 5) {
-                            Image(
-                                systemName: thread.isResolved
-                                    ? "arrow.uturn.backward"
-                                    : "checkmark"
-                            )
+                    HStack(spacing: 5) {
+                        Image(systemName: thread.isResolved ? "arrow.uturn.backward" : "checkmark")
                             .font(.system(size: 10, weight: .bold))
-                            Text(thread.isResolved
-                                ? String(localized: "Unresolve")
-                                : String(localized: "Resolve"))
-                        }
+                        Text(thread.isResolved
+                            ? String(localized: "Unresolve")
+                            : String(localized: "Resolve"))
                     }
                 }
                 .buttonStyle(SecondaryButtonStyle(height: 28))
-                .disabled(isTogglingThread)
+                .busy(isTogglingThread)
 
                 Button {
                     environment.startDelegation(
@@ -1254,14 +1241,12 @@ struct ThreadPopover: View {
                 Button {
                     Task { await sendReply() }
                 } label: {
-                    BusyLabel(isBusy: isReplying) {
-                        Text(String(localized: "Reply"))
-                    }
+                    Text(String(localized: "Reply"))
                 }
                 .buttonStyle(PrimaryButtonStyle())
+                .busy(isReplying)
                 .disabled(replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    || replyTargetID == nil
-                    || isReplying)
+                    || replyTargetID == nil)
                 .help(replyTargetID == nil
                     ? String(localized: "GitHub did not send a database id for this thread, so Shepherd cannot reply to it here.")
                     : String(localized: "Queue a reply"))
@@ -1277,8 +1262,9 @@ struct ThreadPopover: View {
     /// Whether this pull request already has a reply on its way to the outbox.
     private var isReplying: Bool { actions.activity.isRunning(summary.id, .reply) }
 
-    /// Whether a thread on this pull request is already being resolved or reopened.
-    private var isTogglingThread: Bool { actions.activity.isRunning(summary.id, .thread) }
+    /// Whether *this* thread is already being resolved or reopened. Keyed by the thread, so the
+    /// popover for one conversation says nothing about another.
+    private var isTogglingThread: Bool { actions.activity.isRunning(thread.id, .thread) }
 
     /// Spends the embeddings that fill the menu's "Suggested" section, at most once per popover.
     ///

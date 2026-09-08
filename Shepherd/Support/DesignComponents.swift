@@ -163,24 +163,95 @@ struct ComposerTextEditor: View {
 
 // MARK: - Buttons
 
+/// Whether the control this environment reaches is running its own write.
+///
+/// An environment value rather than a parameter on each style, because the thing that knows is
+/// the *call site* — it holds the ``ActionActivity`` key — and the thing that draws is the style.
+/// Set it with ``SwiftUI/View/busy(_:)``.
+private struct ButtonIsBusyKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Whether the control is running its own write, so the style can put a spinner in its label.
+    var buttonIsBusy: Bool {
+        get { self[ButtonIsBusyKey.self] }
+        set { self[ButtonIsBusyKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Marks this control as running its own write: its label becomes a spinner, and it stops
+    /// answering clicks and its keyboard shortcut.
+    ///
+    /// The presentation lives in the three button styles below rather than in a wrapper around
+    /// the label, and that is not a detail: each of them ends with `.opacity(isEnabled ? 1 :
+    /// 0.45)` over the whole label, so a spinner *inside* the label was drawn at 45 % — always,
+    /// because the same flag that raised it had already disabled the button. Read where the dim
+    /// is decided, the two rules compose: a busy button is not a dimmed button.
+    ///
+    /// The disable is part of the modifier on purpose. `.disabled` is what takes a
+    /// `.keyboardShortcut` with it, and ⌘⏎ or ⏎ held down is the fastest way to ask for the same
+    /// write twice — so "shows it is running" and "refuses a second press" cannot come apart.
+    /// - Parameter isBusy: Whether this control's own write is in flight.
+    /// - Returns: The control, spinning and inert while `isBusy`.
+    func busy(_ isBusy: Bool) -> some View {
+        environment(\.buttonIsBusy, isBusy)
+            .disabled(isBusy)
+    }
+}
+
+/// The label a style draws while its control is busy: the content held in place at zero opacity
+/// with a spinner over it, so the button keeps its width and a row of them does not reflow.
+/// - Parameters:
+///   - content: The label.
+///   - isBusy: Whether to show the spinner instead.
+///   - tint: The spinner's colour — the style's own text colour, so it reads on the fill.
+/// - Returns: The label, or the spinner in its place.
+@ViewBuilder
+private func busyLabel(
+    _ content: some View,
+    isBusy: Bool,
+    tint: Color
+) -> some View {
+    content
+        .opacity(isBusy ? 0 : 1)
+        .overlay {
+            if isBusy {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(tint)
+            }
+        }
+}
+
 /// The filled accent button.
 struct PrimaryButtonStyle: ButtonStyle {
     /// The control height.
     var height: CGFloat = 32
 
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.buttonIsBusy) private var isBusy
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12.5, weight: .semibold))
-            .foregroundStyle(Color.white)
-            .padding(.horizontal, 12)
-            .frame(height: height)
-            .background(
-                Theme.accent.opacity(configuration.isPressed ? 0.8 : 1),
-                in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-            )
-            .opacity(isEnabled ? 1 : 0.45)
+        busyLabel(
+            configuration.label
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(Color.white),
+            isBusy: isBusy,
+            // The style's own text colour, not ``Theme/textOnFilled``: this fill is the accent
+            // and its label is white on both appearances.
+            tint: Color.white
+        )
+        .padding(.horizontal, 12)
+        .frame(height: height)
+        .background(
+            Theme.accent.opacity(configuration.isPressed ? 0.8 : 1),
+            in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+        )
+        // A busy button is disabled but not dimmed — the spinner is the message, and a spinner at
+        // 45 % is the bug this arrangement exists to prevent.
+        .opacity(isEnabled || isBusy ? 1 : 0.45)
     }
 }
 
@@ -190,18 +261,23 @@ struct SuccessButtonStyle: ButtonStyle {
     var height: CGFloat = 32
 
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.buttonIsBusy) private var isBusy
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12.5, weight: .semibold))
-            .foregroundStyle(Theme.textOnFilled)
-            .padding(.horizontal, 12)
-            .frame(height: height)
-            .background(
-                Theme.success.opacity(configuration.isPressed ? 0.8 : 1),
-                in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-            )
-            .opacity(isEnabled ? 1 : 0.45)
+        busyLabel(
+            configuration.label
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(Theme.textOnFilled),
+            isBusy: isBusy,
+            tint: Theme.textOnFilled
+        )
+        .padding(.horizontal, 12)
+        .frame(height: height)
+        .background(
+            Theme.success.opacity(configuration.isPressed ? 0.8 : 1),
+            in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+        )
+        .opacity(isEnabled || isBusy ? 1 : 0.45)
     }
 }
 
@@ -213,52 +289,27 @@ struct SecondaryButtonStyle: ButtonStyle {
     var tint: Color?
 
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.buttonIsBusy) private var isBusy
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12.5, weight: .medium))
-            .foregroundStyle(tint ?? Theme.text)
-            .padding(.horizontal, 12)
-            .frame(height: height)
-            .background(
-                Theme.control.opacity(configuration.isPressed ? 0.7 : 1),
-                in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(Theme.controlBorder, lineWidth: 1)
-            )
-            .opacity(isEnabled ? 1 : 0.45)
-    }
-}
-
-/// A button label that goes quiet while its own write runs: the content fades out and a small
-/// spinner takes its place, in the space the content was already occupying.
-///
-/// An overlay rather than a replacement, and that is the whole point: the content keeps laying
-/// itself out at `opacity(0)`, so a row of buttons does not resize the moment one of them is
-/// pressed, and *Request changes* does not jump sideways because *Approve* briefly became a
-/// spinner. It is deliberately the only thing this does — whether the button is *disabled* while
-/// it runs is the caller's `.disabled(…)`, so a blocker predicate and an in-flight predicate
-/// combine there rather than being buried in a label.
-///
-/// The busy flag comes from ``ActionActivity``, which the write funnel marks, so the spinner
-/// answers "is this write in flight" and not "did this view start a task".
-struct BusyLabel<Content: View>: View {
-    /// Whether this button's own write is running.
-    let isBusy: Bool
-    /// The label the button shows the rest of the time.
-    @ViewBuilder let content: () -> Content
-
-    var body: some View {
-        content()
-            .opacity(isBusy ? 0 : 1)
-            .overlay {
-                if isBusy {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-            }
+        busyLabel(
+            configuration.label
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(tint ?? Theme.text),
+            isBusy: isBusy,
+            tint: tint ?? Theme.text
+        )
+        .padding(.horizontal, 12)
+        .frame(height: height)
+        .background(
+            Theme.control.opacity(configuration.isPressed ? 0.7 : 1),
+            in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .stroke(Theme.controlBorder, lineWidth: 1)
+        )
+        .opacity(isEnabled || isBusy ? 1 : 0.45)
     }
 }
 

@@ -81,9 +81,7 @@ struct MergeSheet: View {
                         dismiss()
                     }
                 } label: {
-                    BusyLabel(isBusy: isMerging) {
-                        Text(String(localized: "Merge"))
-                    }
+                    Text(String(localized: "Merge"))
                 }
                 .buttonStyle(SuccessButtonStyle())
                 // ⏎ merges only when there is nothing to read first. A sheet that says "this is
@@ -91,9 +89,11 @@ struct MergeSheet: View {
                 // has to look at; with the shortcut gone the reviewer has to aim at the button.
                 .keyboardShortcut(warning == nil ? .defaultAction : nil)
                 // The one action Shepherd cannot undo is also the one where a second press is
-                // worst, and ⏎ makes that easy to do by accident. `.disabled` takes the key with
-                // it, so the sheet stops answering Return the moment the first merge is queueing.
-                .disabled(summary.mergeBlocker != nil || isMerging)
+                // worst, and ⏎ makes that easy to do by accident. ``busy`` disables as well as
+                // spins, and `.disabled` takes the key with it, so the sheet stops answering
+                // Return the moment the first merge is queueing.
+                .busy(isMerging)
+                .disabled(summary.mergeBlocker != nil)
             }
         }
         .padding(20)

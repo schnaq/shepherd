@@ -212,16 +212,19 @@ struct ReviewFileHeader: View {
                     Button {
                         Task { await model.toggleViewed(path: file.path, actions: actions) }
                     } label: {
-                        BusyLabel(isBusy: isWriting) {
-                            HStack(spacing: 5) {
-                                Image(systemName: model.viewedPaths.contains(file.path)
-                                    ? "eye.fill" : "eye")
-                                Text(model.viewedPaths.contains(file.path)
-                                    ? String(localized: "Viewed")
-                                    : String(localized: "Mark viewed"))
-                            }
-                            .font(.system(size: 11.5))
+                        HStack(spacing: 5) {
+                            Image(systemName: model.viewedPaths.contains(file.path)
+                                ? "eye.fill" : "eye")
+                            Text(model.viewedPaths.contains(file.path)
+                                ? String(localized: "Viewed")
+                                : String(localized: "Mark viewed"))
                         }
+                        .font(.system(size: 11.5))
+                        // Spelled out here rather than left to ``View/busy(_:)``: this is the one
+                        // write button in the app on `.plain` rather than on one of the three
+                        // styles, and the styles are where that modifier's spinner lives.
+                        .opacity(isWriting ? 0 : 1)
+                        .overlay { if isWriting { ProgressView().controlSize(.small) } }
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(
@@ -229,8 +232,8 @@ struct ReviewFileHeader: View {
                     )
                     // `v` does not come through this button — it is a character the screen
                     // handles (``ReviewScreen``) — so the key is refused by the funnel rather
-                    // than by `.disabled`. This is here so the click and `v` show one state.
-                    .disabled(isWriting)
+                    // than by the disable. This is here so the click and `v` show one state.
+                    .busy(isWriting)
                     .help(String(localized: "Toggle viewed (v)"))
                 }
             }

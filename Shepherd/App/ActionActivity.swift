@@ -25,10 +25,11 @@ import Observation
 final class ActionActivity {
     /// Which verb is in flight.
     ///
-    /// Coarser than ``ShepherdCore/OutboxAction``: two writes share a key when pressing one
-    /// while the other runs would be a mistake, so every issue write is one ``Kind/issue`` and
-    /// every verdict is one ``Kind/review``. A reviewer who has just queued an approval has no
-    /// business queueing a *request changes* on the same pull request half a second later either.
+    /// Coarser than ``ShepherdCore/OutboxAction``, but only where two writes really are the same
+    /// press: the three verdicts share ``Kind/review`` because approving and requesting changes
+    /// on one pull request half a second apart is a mistake either way. Where they are *not* the
+    /// same press the kinds stay apart — the four issue verbs are four kinds, because a spinner
+    /// on *Label* while somebody closed the issue is a button reporting a write it did not start.
     enum Kind: Hashable, Sendable {
         /// A review verdict: approve, request changes or comment.
         case review
@@ -36,7 +37,8 @@ final class ActionActivity {
         case merge
         /// A reply to a review comment, and the inline composer that writes one.
         case reply
-        /// A review thread resolved or reopened.
+        /// A review thread resolved or reopened. Keyed by the **thread's** id, not the pull
+        /// request's: two threads on one pull request are two conversations.
         case thread
         /// A file's viewed flag.
         case viewed
@@ -45,13 +47,20 @@ final class ActionActivity {
         /// A whole bulk-triage plan (ADR 0015), which targets no single row and is keyed
         /// `"bulk"`.
         case bulk
-        /// Any issue triage write (ADR 0032): comment, label, assign, close, reopen.
-        case issue
+        /// A comment on an issue (ADR 0032) — including the one an agent handover records.
+        case issueComment
+        /// Assigning an issue to the signed-in user.
+        case issueAssign
+        /// Adding a label to an issue.
+        case issueLabel
+        /// Closing or reopening an issue.
+        case issueState
     }
 
     /// One in-flight write: what it targets and what it is.
     struct Key: Hashable, Sendable {
-        /// The pull request's node id, the issue's node id, or `"bulk"`.
+        /// What the write targets: a pull request's node id, an issue's node id, a review
+        /// thread's node id, or `"bulk"`. Which one is decided by ``kind``.
         let id: String
         /// Which verb.
         let kind: Kind
@@ -70,6 +79,21 @@ final class ActionActivity {
     /// - Returns: `true` while the write runs.
     func isRunning(_ id: String, _ kind: Kind) -> Bool {
         running.contains(Key(id: id, kind: kind))
+    }
+
+    /// Whether *any* of these writes is in flight against the same target.
+    ///
+    /// What a panel of sibling buttons asks. The issue triage row is the case it exists for: each
+    /// of its buttons spins only for its own kind, so the person can see which write they started
+    /// — and all of them stop answering while any of the four runs, because a second issue write
+    /// queued behind the first is re-validated against an `updatedAt` the first one is about to
+    /// move (ADR 0032).
+    /// - Parameters:
+    ///   - id: The target's node id.
+    ///   - kinds: The verbs to ask about.
+    /// - Returns: `true` while at least one of them runs.
+    func isRunningAny(_ id: String, _ kinds: [Kind]) -> Bool {
+        kinds.contains { isRunning(id, $0) }
     }
 
     /// Runs `body` with the key marked running; returns nil and does nothing if already running.

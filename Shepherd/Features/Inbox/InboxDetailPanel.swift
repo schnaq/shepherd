@@ -195,27 +195,26 @@ struct InboxDetailPanel: View {
                 Button {
                     Task { await actions.submitReview(on: row, verdict: .approve) }
                 } label: {
-                    BusyLabel(isBusy: isWriting(row, .review)) {
-                        Label(String(localized: "Approve"), systemImage: "checkmark")
-                            .frame(maxWidth: .infinity)
-                    }
+                    Label(String(localized: "Approve"), systemImage: "checkmark")
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(SuccessButtonStyle())
-                // Both verdict buttons go dark for either reason: GitHub would refuse this one,
-                // or a verdict for this pull request is already on its way to the outbox.
-                .disabled(row.verdictBlocker != nil || isWriting(row, .review))
+                // Both verdict buttons go dark for either reason: GitHub would refuse this one
+                // (``disabled``), or a verdict for this pull request is already on its way to the
+                // outbox (``busy``, which disables as well and spins while it does).
+                .busy(isWriting(row, .review))
+                .disabled(row.verdictBlocker != nil)
                 .help(help(row.verdictBlocker, on: row, otherwise: String(localized: "Approve (r a)")))
 
                 Button {
                     Task { await actions.submitReview(on: row, verdict: .requestChanges) }
                 } label: {
-                    BusyLabel(isBusy: isWriting(row, .review)) {
-                        Text(String(localized: "Request changes"))
-                            .frame(maxWidth: .infinity)
-                    }
+                    Text(String(localized: "Request changes"))
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(SecondaryButtonStyle(tint: Theme.failure))
-                .disabled(row.verdictBlocker != nil || isWriting(row, .review))
+                .busy(isWriting(row, .review))
+                .disabled(row.verdictBlocker != nil)
                 .help(help(
                     row.verdictBlocker,
                     on: row,
@@ -236,15 +235,14 @@ struct InboxDetailPanel: View {
                 .buttonStyle(SecondaryButtonStyle())
 
                 Button(action: onMerge) {
-                    BusyLabel(isBusy: isWriting(row, .merge)) {
-                        Text(String(localized: "Merge…"))
-                            .frame(maxWidth: .infinity)
-                    }
+                    Text(String(localized: "Merge…"))
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(SecondaryButtonStyle())
                 // This one only opens the sheet, but it opens the sheet onto a merge that is
                 // already queueing — so it goes quiet with the write rather than with the click.
-                .disabled(row.mergeBlocker != nil || isWriting(row, .merge))
+                .busy(isWriting(row, .merge))
+                .disabled(row.mergeBlocker != nil)
                 .help(help(row.mergeBlocker, on: row, otherwise: String(localized: "Merge (m)")))
             }
         }

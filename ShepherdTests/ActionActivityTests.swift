@@ -53,6 +53,28 @@ final class ActionActivityTests: XCTestCase {
         XCTAssertFalse(activity.isRunning("PR_1", .review))
     }
 
+    /// A panel of sibling buttons asks about several kinds at once: each spins for its own, and
+    /// all of them go quiet while any of them runs.
+    func testIsRunningAnyAnswersForASetOfKindsOnOneTarget() async {
+        let activity = ActionActivity()
+        let issueKinds: [ActionActivity.Kind] = [
+            .issueComment, .issueAssign, .issueLabel, .issueState,
+        ]
+        XCTAssertFalse(activity.isRunningAny("I_1", issueKinds))
+
+        await activity.run("I_1", .issueLabel) {
+            // Only the button that started it spins…
+            XCTAssertTrue(activity.isRunning("I_1", .issueLabel))
+            XCTAssertFalse(activity.isRunning("I_1", .issueState))
+            // …and every button on the row is nonetheless out of action.
+            XCTAssertTrue(activity.isRunningAny("I_1", issueKinds))
+            // A different issue is untouched by all of it.
+            XCTAssertFalse(activity.isRunningAny("I_2", issueKinds))
+        }
+
+        XCTAssertFalse(activity.isRunningAny("I_1", issueKinds))
+    }
+
     /// Two keys are independent — a different pull request, and a different verb on the same one.
     func testDifferentKeysDoNotBlockEachOther() async {
         let activity = ActionActivity()

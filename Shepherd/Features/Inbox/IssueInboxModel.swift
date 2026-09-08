@@ -520,16 +520,20 @@ final class IssueInboxModel {
     /// - Parameters:
     ///   - action: What to do.
     ///   - row: The issue it targets.
+    ///   - kind: Which verb this is, so the button that started it is the one that spins. The
+    ///     caller names it because only the caller knows: the outbox action and the button are
+    ///     the same fact in two vocabularies.
     /// - Returns: `true` when the row reached the outbox.
-    ///   A second call while the first is still running is `false` as well: nothing was written,
-    ///   which is exactly what that answer means everywhere else here.
+    ///   A second call while the same verb is still running is `false` as well: nothing was
+    ///   written, which is exactly what that answer means everywhere else here.
     @discardableResult
-    func queue(_ action: OutboxAction, on row: IssueRowSummary) async -> Bool {
-        // One key for every issue verb (``ActionActivity/Kind/issue``): a reviewer who has just
-        // queued a close has no business queueing a label on the same issue half a second later,
-        // and the panel's buttons all go quiet together as a result.
+    func queue(
+        _ action: OutboxAction,
+        on row: IssueRowSummary,
+        kind: ActionActivity.Kind
+    ) async -> Bool {
         guard let activity else { return await write(action, on: row) }
-        return await activity.run(row.id, .issue) {
+        return await activity.run(row.id, kind) {
             await write(action, on: row)
         } ?? false
     }
@@ -563,7 +567,8 @@ final class IssueInboxModel {
         guard !trimmed.isEmpty else { return false }
         return await queue(
             .addIssueComment(body: trimmed, basedOnUpdatedAt: row.updatedAt),
-            on: row
+            on: row,
+            kind: .issueComment
         )
     }
 
@@ -574,7 +579,11 @@ final class IssueInboxModel {
     /// - Returns: `true` when the row reached the outbox.
     @discardableResult
     func addLabel(_ name: String, on row: IssueRowSummary) async -> Bool {
-        await queue(.addIssueLabel(name: name, basedOnUpdatedAt: row.updatedAt), on: row)
+        await queue(
+            .addIssueLabel(name: name, basedOnUpdatedAt: row.updatedAt),
+            on: row,
+            kind: .issueLabel
+        )
     }
 
     /// Queues an assignment of the issue to the signed-in user.
@@ -585,7 +594,8 @@ final class IssueInboxModel {
         guard let viewerLogin, !viewerLogin.isEmpty else { return false }
         return await queue(
             .addIssueAssignee(login: viewerLogin, basedOnUpdatedAt: row.updatedAt),
-            on: row
+            on: row,
+            kind: .issueAssign
         )
     }
 
@@ -596,7 +606,11 @@ final class IssueInboxModel {
     /// - Returns: `true` when the row reached the outbox.
     @discardableResult
     func close(_ reason: IssueCloseReason, on row: IssueRowSummary) async -> Bool {
-        await queue(.closeIssue(reason: reason, basedOnUpdatedAt: row.updatedAt), on: row)
+        await queue(
+            .closeIssue(reason: reason, basedOnUpdatedAt: row.updatedAt),
+            on: row,
+            kind: .issueState
+        )
     }
 
     /// Queues a reopen.
@@ -604,6 +618,6 @@ final class IssueInboxModel {
     /// - Returns: `true` when the row reached the outbox.
     @discardableResult
     func reopen(_ row: IssueRowSummary) async -> Bool {
-        await queue(.reopenIssue(basedOnUpdatedAt: row.updatedAt), on: row)
+        await queue(.reopenIssue(basedOnUpdatedAt: row.updatedAt), on: row, kind: .issueState)
     }
 }

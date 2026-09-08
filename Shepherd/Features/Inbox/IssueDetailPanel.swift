@@ -273,12 +273,11 @@ struct IssueDetailPanel: View {
                 commentBody = ""
                 isCommentSheetPresented = true
             } label: {
-                BusyLabel(isBusy: isWriting(row)) {
-                    Text(String(localized: "Comment…"))
-                }
+                Text(String(localized: "Comment…"))
             }
             .buttonStyle(SecondaryButtonStyle())
-            .disabled(isWriting(row))
+            .busy(isWriting(row, .issueComment))
+            .disabled(isWritingAnything(row))
 
             labelMenu(row)
 
@@ -292,12 +291,11 @@ struct IssueDetailPanel: View {
                         )
                     }
                 } label: {
-                    BusyLabel(isBusy: isWriting(row)) {
-                        Text(String(localized: "Assign to me"))
-                    }
+                    Text(String(localized: "Assign to me"))
                 }
                 .buttonStyle(SecondaryButtonStyle())
-                .disabled(row.myRelation.contains(.assigned) || isWriting(row))
+                .busy(isWriting(row, .issueAssign))
+                .disabled(row.myRelation.contains(.assigned) || isWritingAnything(row))
                 .help(
                     row.myRelation.contains(.assigned)
                         ? String(localized: "This issue is already assigned to you")
@@ -348,12 +346,13 @@ struct IssueDetailPanel: View {
                 }
             )
         } label: {
-            BusyLabel(isBusy: isWriting(row)) {
-                Text(String(localized: "Assign to agent…"))
-            }
+            Text(String(localized: "Assign to agent…"))
         }
         .buttonStyle(SecondaryButtonStyle())
-        .disabled(row.state == .closed || isWriting(row))
+        // ``ActionActivity/Kind/issueComment``, because that is what this button eventually
+        // writes: the handover is recorded as a comment when the run starts.
+        .busy(isWriting(row, .issueComment))
+        .disabled(row.state == .closed || isWritingAnything(row))
         .help(
             row.state == .closed
                 ? String(localized: "This issue is closed")
@@ -384,13 +383,18 @@ struct IssueDetailPanel: View {
                 }
             }
         } label: {
-            BusyLabel(isBusy: isWriting(row)) {
-                Text(String(localized: "Label"))
-            }
+            Text(String(localized: "Label"))
+                // Spelled out for ``ReviewFileHeader``'s reason: a `Menu` draws its own label and
+                // never reaches one of the three button styles, where ``View/busy(_:)``'s
+                // spinner lives.
+                .opacity(isWriting(row, .issueLabel) ? 0 : 1)
+                .overlay {
+                    if isWriting(row, .issueLabel) { ProgressView().controlSize(.small) }
+                }
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
-        .disabled(isWriting(row))
+        .disabled(isWritingAnything(row))
         .help(
             String(
                 localized: "The labels Shepherd has already seen in this repository. A label nothing here carries is a click away on GitHub."
@@ -408,12 +412,11 @@ struct IssueDetailPanel: View {
                     report(queued: queued, success: String(localized: "Reopen queued."))
                 }
             } label: {
-                BusyLabel(isBusy: isWriting(row)) {
-                    Text(String(localized: "Reopen"))
-                }
+                Text(String(localized: "Reopen"))
             }
             .buttonStyle(SecondaryButtonStyle())
-            .disabled(isWriting(row))
+            .busy(isWriting(row, .issueState))
+            .disabled(isWritingAnything(row))
         } else {
             Menu {
                 Button(String(localized: "Close as completed")) {
@@ -429,13 +432,16 @@ struct IssueDetailPanel: View {
                     }
                 }
             } label: {
-                BusyLabel(isBusy: isWriting(row)) {
-                    Text(String(localized: "Close"))
-                }
+                Text(String(localized: "Close"))
+                    // A `Menu` again, so the spinner is spelled out — see ``labelMenu(_:)``.
+                    .opacity(isWriting(row, .issueState) ? 0 : 1)
+                    .overlay {
+                        if isWriting(row, .issueState) { ProgressView().controlSize(.small) }
+                    }
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
-            .disabled(isWriting(row))
+            .disabled(isWritingAnything(row))
         }
     }
 
@@ -480,15 +486,30 @@ struct IssueDetailPanel: View {
         )
     }
 
-    /// Whether a triage write for this issue is already on its way to the outbox.
+    /// The four verbs this panel can write, which is what the row's buttons go quiet on
+    /// together.
+    private static let issueWrites: [ActionActivity.Kind] = [
+        .issueComment, .issueAssign, .issueLabel, .issueState,
+    ]
+
+    /// Whether *this verb* is on its way to the outbox for this issue — the spinner's question.
+    /// - Parameters:
+    ///   - row: The issue.
+    ///   - kind: Which verb.
+    /// - Returns: `true` while that write runs.
+    private func isWriting(_ row: IssueRowSummary, _ kind: ActionActivity.Kind) -> Bool {
+        environment.activity.isRunning(row.id, kind)
+    }
+
+    /// Whether *any* of the four is on its way — the disable's question.
     ///
-    /// One answer for all six buttons, because ``ActionActivity/Kind/issue`` is one key: the
-    /// writes here are small and quick, and a panel where *Close* is live while *Label* spins
-    /// would be inviting the pair of writes the single key exists to keep apart.
+    /// Only the button that started the write spins, so the reviewer can see which one they
+    /// pressed; all six stop answering, because an issue write is re-validated against the
+    /// `updatedAt` the write in flight is about to move (ADR 0032).
     /// - Parameter row: The issue.
-    /// - Returns: `true` while a write runs.
-    private func isWriting(_ row: IssueRowSummary) -> Bool {
-        environment.activity.isRunning(row.id, .issue)
+    /// - Returns: `true` while any triage write runs.
+    private func isWritingAnything(_ row: IssueRowSummary) -> Bool {
+        environment.activity.isRunningAny(row.id, Self.issueWrites)
     }
 
     /// The node id of a linked pull request that is in the local inbox, or `nil`.

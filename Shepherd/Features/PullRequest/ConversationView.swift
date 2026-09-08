@@ -381,22 +381,16 @@ struct ConversationView: View {
                                             )
                                         }
                                     } label: {
-                                        BusyLabel(
-                                            isBusy: actions.activity
-                                                .isRunning(summary.id, .thread)
-                                        ) {
-                                            Text(
-                                                thread.isResolved
-                                                    ? String(localized: "Unresolve")
-                                                    : String(localized: "Resolve")
-                                            )
-                                        }
+                                        Text(
+                                            thread.isResolved
+                                                ? String(localized: "Unresolve")
+                                                : String(localized: "Resolve")
+                                        )
                                     }
                                     .buttonStyle(SecondaryButtonStyle(height: 26))
-                                    // Every thread on this card shares the key: the write is
-                                    // keyed by pull request, and two thread toggles racing each
-                                    // other into the same outbox is the thing being refused.
-                                    .disabled(actions.activity.isRunning(summary.id, .thread))
+                                    // Keyed by the thread, so a card showing a dozen
+                                    // conversations spins the one button that was pressed.
+                                    .busy(actions.activity.isRunning(thread.id, .thread))
 
                                     Button(String(localized: "Delegate this finding…")) {
                                         environment.startDelegation(

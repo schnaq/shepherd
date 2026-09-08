@@ -160,7 +160,9 @@ struct PullRequestActions {
         threadID: String,
         resolved: Bool
     ) async {
-        await activity.run(summary.id, .thread) {
+        // Keyed by the *thread*, not the pull request: a card can show a dozen conversations,
+        // and resolving one of them is no reason for the other eleven buttons to report a write.
+        await activity.run(threadID, .thread) {
             do {
                 let outcome = try await enqueue(
                     resolved
