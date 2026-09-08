@@ -709,6 +709,12 @@ struct AgentSettingsTab: View {
     /// The settings model.
     let model: SettingsModel
     @State private var errorMessage: String?
+    /// Why the last *Remove* did not happen, drawn under the list it failed in.
+    ///
+    /// Its own line rather than ``errorMessage``: that one lives at the bottom of the card, under
+    /// the fields *Add entry* reads, and a reviewer who pressed *Remove* at the top of the list
+    /// would be told about it a form's height away from the row that is still there.
+    @State private var removeErrorMessage: String?
 
     var body: some View {
         SettingsPage {
@@ -764,7 +770,7 @@ struct AgentSettingsTab: View {
                             Spacer(minLength: 6)
                             Button(String(localized: "Remove")) {
                                 Task {
-                                    await model.removeOverride(
+                                    removeErrorMessage = await model.removeOverride(
                                         id: entry.id,
                                         session: environment.session
                                     )
@@ -774,6 +780,15 @@ struct AgentSettingsTab: View {
                             .font(.system(size: 11))
                             .foregroundStyle(Theme.failure)
                         }
+                    }
+
+                    // The Settings scene has no toast host, so a refused delete says so here or
+                    // nowhere — which is what it used to do (`try?`).
+                    if let removeErrorMessage {
+                        Text(removeErrorMessage)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.failure)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     Divider().overlay(Theme.hairline)

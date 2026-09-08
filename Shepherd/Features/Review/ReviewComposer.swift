@@ -27,39 +27,47 @@ struct ReviewComposerBar: View {
             Button {
                 start(.comment)
             } label: {
-                Text(String(localized: "Comment"))
+                BusyLabel(isBusy: isSubmittingVerdict) {
+                    Text(String(localized: "Comment"))
+                }
             }
             .buttonStyle(SecondaryButtonStyle(height: 30))
-            .disabled(model.hasEndedOnGitHub)
+            .disabled(model.hasEndedOnGitHub || isSubmittingVerdict)
             .help(String(localized: "Comment (r c)"))
 
             Button {
                 start(.requestChanges)
             } label: {
-                Text(String(localized: "Request changes"))
+                BusyLabel(isBusy: isSubmittingVerdict) {
+                    Text(String(localized: "Request changes"))
+                }
             }
             .buttonStyle(SecondaryButtonStyle(height: 30, tint: Theme.failure))
-            .disabled(model.hasEndedOnGitHub || verdictBlocker != nil)
+            .disabled(model.hasEndedOnGitHub || verdictBlocker != nil || isSubmittingVerdict)
             .help(blockedHelp(otherwise: String(localized: "Request changes (r x)")))
 
             Button {
                 start(preselectedVerdict)
             } label: {
-                HStack(spacing: 6) {
-                    Text(
-                        preselectedVerdict == .approve
-                            ? String(localized: "Approve…")
-                            : String(localized: "Review…")
-                    )
-                    KeyCapView(keys: "⌘⏎", onFilledBackground: true)
+                BusyLabel(isBusy: isSubmittingVerdict) {
+                    HStack(spacing: 6) {
+                        Text(
+                            preselectedVerdict == .approve
+                                ? String(localized: "Approve…")
+                                : String(localized: "Review…")
+                        )
+                        KeyCapView(keys: "⌘⏎", onFilledBackground: true)
+                    }
                 }
             }
             .buttonStyle(SuccessButtonStyle(height: 30))
             .keyboardShortcut(.return, modifiers: .command)
             // The three verdict buttons go dark together once GitHub has merged or closed the
             // pull request under them, because none of the three has anywhere to land any more
-            // (``ReviewModel/hasEndedOnGitHub``). `.disabled` takes ⌘⏎ with it.
-            .disabled(model.hasEndedOnGitHub)
+            // (``ReviewModel/hasEndedOnGitHub``). `.disabled` takes ⌘⏎ with it — and it does the
+            // same while a verdict is queueing, which is what stops ⌘⏎ held down from opening a
+            // second sheet onto a review that is already going out.
+            .disabled(model.hasEndedOnGitHub || isSubmittingVerdict)
             .help(String(localized: "Submit review (⌘⏎)"))
         }
         .padding(.horizontal, 14)
@@ -75,6 +83,14 @@ struct ReviewComposerBar: View {
 
     /// Why an approve or a request changes would be refused here, if it would.
     private var verdictBlocker: ReviewActionBlocker? { model.summary?.verdictBlocker }
+
+    /// Whether a verdict for this pull request is already on its way to the outbox.
+    ///
+    /// These three buttons only *open* the sheet, but they open it onto a review that is already
+    /// being written — so they wait with it rather than with the click.
+    private var isSubmittingVerdict: Bool {
+        actions.activity.isRunning(model.prID, .review)
+    }
 
     /// Which verdict the green button opens the sheet on.
     ///
@@ -257,14 +273,13 @@ struct SubmitReviewSheet: View {
                         }
                     }
                 } label: {
-                    HStack(spacing: 6) {
-                        if model.isSubmitting { ProgressView().controlSize(.small) }
+                    BusyLabel(isBusy: isSubmitting) {
                         Text(String(localized: "Submit"))
                     }
                 }
                 .buttonStyle(SuccessButtonStyle())
                 .keyboardShortcut(.defaultAction)
-                .disabled(model.isSubmitting || needsSummary || model.hasEndedOnGitHub)
+                .disabled(isSubmitting || needsSummary || model.hasEndedOnGitHub)
                 .help(needsSummary
                     ? String(localized: "Write a summary first — GitHub rejects a “request changes” or “comment” review without one.")
                     : String(localized: "Queue the review"))
@@ -496,6 +511,15 @@ struct SubmitReviewSheet: View {
 
     /// Why an approve or a request changes would be refused here, if it would.
     private var verdictBlocker: ReviewActionBlocker? { model.summary?.verdictBlocker }
+
+    /// Whether the review is being written.
+    ///
+    /// Both flags, because they cover different moments: ``ReviewModel/isSubmitting`` is set
+    /// before the funnel is even reached (it wraps the draft read as well), and the funnel's key
+    /// is what a verdict started from the bar behind this sheet — or by `r a` — is visible in.
+    private var isSubmitting: Bool {
+        model.isSubmitting || actions.activity.isRunning(model.prID, .review)
+    }
 }
 
 /// The native composer that opens when the user clicks a gutter “+”.
@@ -611,14 +635,9 @@ struct InlineCommentComposer: View {
             }
 
             HStack {
-                if existingComment != nil {
+                if let existing = existingComment {
                     Button(String(localized: "Delete")) {
-                        Task {
-                            if let existing = existingComment {
-                                try? await model.deleteDraftComment(localID: existing.localID)
-                            }
-                            dismiss()
-                        }
+                        Task { await delete(existing) }
                     }
                     .buttonStyle(SecondaryButtonStyle(tint: Theme.failure))
                 }
@@ -644,12 +663,18 @@ struct InlineCommentComposer: View {
                 if let action = sessionAction {
                     sessionButton(action)
                 }
-                Button(String(localized: "Add comment")) {
+                Button {
                     Task { await save() }
+                } label: {
+                    BusyLabel(isBusy: isSaving) {
+                        Text(String(localized: "Add comment"))
+                    }
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
-                .disabled(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(
+                    commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving
+                )
             }
         }
         .padding(20)
@@ -923,13 +948,44 @@ struct InlineCommentComposer: View {
         return "\(request.path) · \(side)"
     }
 
+    /// Whether this composer's own write is running.
+    ///
+    /// The pending comment is a *local* row rather than an outbox write, so it does not pass
+    /// through ``PullRequestActions``; it is marked on the same tracker anyway, because ⏎ held
+    /// down on this sheet would otherwise write the comment twice, which is the bug the tracker
+    /// exists for (``ActionActivity``).
+    private var isSaving: Bool {
+        environment.activity.isRunning(model.prID, .reply)
+    }
+
     private func save() async {
+        await environment.activity.run(model.prID, .reply) {
+            do {
+                try await model.saveDraftComment(request, body: commentText)
+                dismiss()
+            } catch {
+                errorMessage = (error as? LocalizedError)?.errorDescription
+                    ?? error.localizedDescription
+            }
+        }
+    }
+
+    /// Deletes the pending comment this composer opened on, and says so when it cannot.
+    ///
+    /// It used to be `try?` followed by an unconditional `dismiss()`: a delete the database
+    /// refused closed the composer as though it had worked, and the comment was still in the
+    /// review the reviewer then submitted. The composer now stays open with the reason in it —
+    /// the same ``errorMessage`` line the save path writes to — because the comment is still
+    /// there and *Delete* is still the thing to press.
+    /// - Parameter comment: The pending comment.
+    private func delete(_ comment: DraftComment) async {
         do {
-            try await model.saveDraftComment(request, body: commentText)
+            try await model.deleteDraftComment(localID: comment.localID)
             dismiss()
         } catch {
-            errorMessage = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
+            errorMessage = String(
+                localized: "Could not delete the comment: \(error.localizedDescription)"
+            )
         }
     }
 
@@ -1161,15 +1217,22 @@ struct ThreadPopover: View {
                         onClose()
                     }
                 } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: thread.isResolved ? "arrow.uturn.backward" : "checkmark")
+                    BusyLabel(isBusy: isTogglingThread) {
+                        HStack(spacing: 5) {
+                            Image(
+                                systemName: thread.isResolved
+                                    ? "arrow.uturn.backward"
+                                    : "checkmark"
+                            )
                             .font(.system(size: 10, weight: .bold))
-                        Text(thread.isResolved
-                            ? String(localized: "Unresolve")
-                            : String(localized: "Resolve"))
+                            Text(thread.isResolved
+                                ? String(localized: "Unresolve")
+                                : String(localized: "Resolve"))
+                        }
                     }
                 }
                 .buttonStyle(SecondaryButtonStyle(height: 28))
+                .disabled(isTogglingThread)
 
                 Button {
                     environment.startDelegation(
@@ -1188,12 +1251,17 @@ struct ThreadPopover: View {
 
                 Spacer()
 
-                Button(String(localized: "Reply")) {
+                Button {
                     Task { await sendReply() }
+                } label: {
+                    BusyLabel(isBusy: isReplying) {
+                        Text(String(localized: "Reply"))
+                    }
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    || replyTargetID == nil)
+                    || replyTargetID == nil
+                    || isReplying)
                 .help(replyTargetID == nil
                     ? String(localized: "GitHub did not send a database id for this thread, so Shepherd cannot reply to it here.")
                     : String(localized: "Queue a reply"))
@@ -1205,6 +1273,12 @@ struct ThreadPopover: View {
     private var replyTargetID: Int? {
         thread.comments.compactMap(\.databaseID).last
     }
+
+    /// Whether this pull request already has a reply on its way to the outbox.
+    private var isReplying: Bool { actions.activity.isRunning(summary.id, .reply) }
+
+    /// Whether a thread on this pull request is already being resolved or reopened.
+    private var isTogglingThread: Bool { actions.activity.isRunning(summary.id, .thread) }
 
     /// Spends the embeddings that fill the menu's "Suggested" section, at most once per popover.
     ///

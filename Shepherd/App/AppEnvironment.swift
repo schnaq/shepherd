@@ -89,6 +89,13 @@ final class AppEnvironment {
     let secretStore: KeychainSecretStore
     /// The window's toast queue; errors are surfaced here, never printed.
     let toasts = ToastCenter()
+    /// Which writes are in flight, so every write button can go quiet while its own write runs
+    /// and refuse a second click.
+    ///
+    /// Beside ``toasts`` and for the same reason: both are one user action's feedback, both are
+    /// read by every screen that can start a write, and neither belongs to a session — a write
+    /// started just before a sign-out still has to release its key.
+    let activity = ActionActivity()
     /// Maps sync events to macOS notifications.
     let notifications: NotificationManager
     /// The delegation sheets: one per pull request, at most one on screen (ADR 0011).
@@ -537,6 +544,7 @@ final class AppEnvironment {
             let actions = PullRequestActions(
                 session: session,
                 toasts: self.toasts,
+                activity: self.activity,
                 announcesSuccess: false
             )
             let queued = await self.autoMerge.run(

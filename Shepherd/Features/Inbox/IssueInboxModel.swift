@@ -81,6 +81,13 @@ final class IssueInboxModel {
     /// outbox without a Keychain, a token or a network. `nil` leaves the row for the next drain,
     /// which is what an offline queue does anyway.
     @ObservationIgnored var drain: (@MainActor () async -> Void)?
+    /// Which writes are in flight, so the panel's triage buttons can go quiet while one runs.
+    ///
+    /// Handed over by ``InboxScreen`` beside ``drain`` and optional for ``drain``'s reason: a
+    /// test builds this model without an ``AppEnvironment``, and with no tracker every write
+    /// simply runs — which is what it did before there was one. `@ObservationIgnored` because
+    /// the *tracker* is observed by the views that read it; this reference never changes.
+    @ObservationIgnored var activity: ActionActivity?
 
     /// Every issue row the database holds, most-recently-updated first.
     private(set) var allRows: [IssueRowSummary] = []
@@ -514,8 +521,24 @@ final class IssueInboxModel {
     ///   - action: What to do.
     ///   - row: The issue it targets.
     /// - Returns: `true` when the row reached the outbox.
+    ///   A second call while the first is still running is `false` as well: nothing was written,
+    ///   which is exactly what that answer means everywhere else here.
     @discardableResult
     func queue(_ action: OutboxAction, on row: IssueRowSummary) async -> Bool {
+        // One key for every issue verb (``ActionActivity/Kind/issue``): a reviewer who has just
+        // queued a close has no business queueing a label on the same issue half a second later,
+        // and the panel's buttons all go quiet together as a result.
+        guard let activity else { return await write(action, on: row) }
+        return await activity.run(row.id, .issue) {
+            await write(action, on: row)
+        } ?? false
+    }
+
+    /// The body of ``queue(_:on:)``, without the in-flight bookkeeping.
+    ///
+    /// Split out so the tracker is optional: a model built without an ``ActionActivity`` — every
+    /// test does — writes exactly as it did before there was one.
+    private func write(_ action: OutboxAction, on row: IssueRowSummary) async -> Bool {
         do {
             try await database.enqueue(
                 OutboxItem(prID: row.id, repo: row.repo, number: row.number, action: action)

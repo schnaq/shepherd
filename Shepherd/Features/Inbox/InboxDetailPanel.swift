@@ -195,21 +195,27 @@ struct InboxDetailPanel: View {
                 Button {
                     Task { await actions.submitReview(on: row, verdict: .approve) }
                 } label: {
-                    Label(String(localized: "Approve"), systemImage: "checkmark")
-                        .frame(maxWidth: .infinity)
+                    BusyLabel(isBusy: isWriting(row, .review)) {
+                        Label(String(localized: "Approve"), systemImage: "checkmark")
+                            .frame(maxWidth: .infinity)
+                    }
                 }
                 .buttonStyle(SuccessButtonStyle())
-                .disabled(row.verdictBlocker != nil)
+                // Both verdict buttons go dark for either reason: GitHub would refuse this one,
+                // or a verdict for this pull request is already on its way to the outbox.
+                .disabled(row.verdictBlocker != nil || isWriting(row, .review))
                 .help(help(row.verdictBlocker, on: row, otherwise: String(localized: "Approve (r a)")))
 
                 Button {
                     Task { await actions.submitReview(on: row, verdict: .requestChanges) }
                 } label: {
-                    Text(String(localized: "Request changes"))
-                        .frame(maxWidth: .infinity)
+                    BusyLabel(isBusy: isWriting(row, .review)) {
+                        Text(String(localized: "Request changes"))
+                            .frame(maxWidth: .infinity)
+                    }
                 }
                 .buttonStyle(SecondaryButtonStyle(tint: Theme.failure))
-                .disabled(row.verdictBlocker != nil)
+                .disabled(row.verdictBlocker != nil || isWriting(row, .review))
                 .help(help(
                     row.verdictBlocker,
                     on: row,
@@ -230,16 +236,32 @@ struct InboxDetailPanel: View {
                 .buttonStyle(SecondaryButtonStyle())
 
                 Button(action: onMerge) {
-                    Text(String(localized: "Merge…"))
-                        .frame(maxWidth: .infinity)
+                    BusyLabel(isBusy: isWriting(row, .merge)) {
+                        Text(String(localized: "Merge…"))
+                            .frame(maxWidth: .infinity)
+                    }
                 }
                 .buttonStyle(SecondaryButtonStyle())
-                .disabled(row.mergeBlocker != nil)
+                // This one only opens the sheet, but it opens the sheet onto a merge that is
+                // already queueing — so it goes quiet with the write rather than with the click.
+                .disabled(row.mergeBlocker != nil || isWriting(row, .merge))
                 .help(help(row.mergeBlocker, on: row, otherwise: String(localized: "Merge (m)")))
             }
         }
         .padding(16)
         .background(Theme.panel)
+    }
+
+    /// Whether this pull request already has a write of this kind on its way to the outbox.
+    ///
+    /// Read off ``AppEnvironment/activity``, which the write funnel marks, so a verdict queued by
+    /// `r a`, by ⌘K or by the review screen dims this panel's buttons too.
+    /// - Parameters:
+    ///   - row: The pull request.
+    ///   - kind: Which verb.
+    /// - Returns: `true` while the write runs.
+    private func isWriting(_ row: PullRequestSummary, _ kind: ActionActivity.Kind) -> Bool {
+        environment.activity.isRunning(row.id, kind)
     }
 
     /// A blocked button's tooltip: why GitHub would refuse, or the shortcut it usually names.

@@ -214,11 +214,19 @@ struct InboxListView: View {
         }
         Divider()
         Button(String(localized: "Open on GitHub")) {
-            PullRequestActions(session: model.session, toasts: environment.toasts)
+            PullRequestActions(
+                session: model.session,
+                toasts: environment.toasts,
+                activity: environment.activity
+            )
                 .openOnGitHub(row)
         }
         Button(String(localized: "Copy branch name")) {
-            PullRequestActions(session: model.session, toasts: environment.toasts)
+            PullRequestActions(
+                session: model.session,
+                toasts: environment.toasts,
+                activity: environment.activity
+            )
                 .copyBranch(row)
         }
         if model.hasMarks {

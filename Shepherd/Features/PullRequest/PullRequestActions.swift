@@ -21,6 +21,14 @@ struct PullRequestActions {
     let session: SignedInSession
     /// Where failures are surfaced.
     let toasts: ToastCenter
+    /// Which writes are already in flight.
+    ///
+    /// The funnel is where this belongs rather than in the buttons: a pull request is approved
+    /// from the inbox panel, the composer bar, ⌘K and a keyboard shortcut, and only the funnel
+    /// sees all four. Every write below marks its key for as long as it runs, so the button that
+    /// started it can go quiet — and a second press of any of the four is refused here even if
+    /// the surface that raised it never looked.
+    let activity: ActionActivity
     /// Called with a pull request's node id the moment a *verdict* or a *merge* the user asked
     /// for has been written to the outbox — never for a reply, a thread toggle, or a viewed flag.
     ///
@@ -46,16 +54,20 @@ struct PullRequestActions {
     /// - Parameters:
     ///   - session: The signed-in session.
     ///   - toasts: Where failures are surfaced.
+    ///   - activity: Which writes are already in flight. No default: a helper built without it
+    ///     would be a surface whose buttons stay clickable, which is the bug this closed.
     ///   - onDidQueueVerdict: Called after a verdict or a merge reaches the outbox.
     ///   - announcesSuccess: Whether a successful enqueue toasts. Failures always do.
     init(
         session: SignedInSession,
         toasts: ToastCenter,
+        activity: ActionActivity,
         onDidQueueVerdict: (@MainActor (String) -> Void)? = nil,
         announcesSuccess: Bool = true
     ) {
         self.session = session
         self.toasts = toasts
+        self.activity = activity
         self.onDidQueueVerdict = onDidQueueVerdict
         self.announcesSuccess = announcesSuccess
     }
@@ -74,41 +86,45 @@ struct PullRequestActions {
     ///   `true` in every case where the review reached the local database. Callers that hold the
     ///   text the user typed — ``ReviewModel/submit(verdict:actions:)`` and the sheet above it —
     ///   must keep it on `false`: a refusal happens *before* ``ReviewDraft`` is saved, so this is
-    ///   the only signal that the summary is not on disk anywhere yet.
+    ///   the only signal that the summary is not on disk anywhere yet. A second call while the
+    ///   first is still running is `false` for the same reason and by the same rule — nothing was
+    ///   written, so the summary stays in the field.
     @discardableResult
     func submitReview(
         on summary: PullRequestSummary,
         verdict: ReviewVerdict,
         body: String = ""
     ) async -> Bool {
-        // The one place every verdict passes through, so it is the one place that has to know
-        // what GitHub will refuse.
-        if let blocker = Self.refusal(of: verdict, on: summary) {
-            toasts.show(
-                Toast(message: Self.blockerMessage(blocker, slug: summary.slug), kind: .warning)
-            )
-            return false
-        }
-        do {
-            let existing = try await session.database.fetchDraft(prID: summary.id)
-            let draft = ReviewDraft.verdict(
-                verdict,
-                on: summary,
-                existing: existing,
-                body: body
-            )
-            try await session.database.saveDraft(draft)
-            let outcome = try await enqueue(.submitReview(draft), on: summary)
-            announce(outcome, of: .review(verdict), on: summary)
-            onDidQueueVerdict?(summary.id)
-        } catch {
-            toasts.failure(error, context: String(localized: "Could not queue the review"))
-        }
-        // `true` even after a local write failure, and deliberately: whichever of the two writes
-        // threw, ``ReviewDraft/verdict(_:on:existing:body:at:)`` was built from the text and a
-        // saved draft is restored by ``ReviewModel``'s draft observation. Only the refusal above
-        // returns before anything has been written at all.
-        return true
+        await activity.run(summary.id, .review) {
+            // The one place every verdict passes through, so it is the one place that has to know
+            // what GitHub will refuse.
+            if let blocker = Self.refusal(of: verdict, on: summary) {
+                toasts.show(
+                    Toast(message: Self.blockerMessage(blocker, slug: summary.slug), kind: .warning)
+                )
+                return false
+            }
+            do {
+                let existing = try await session.database.fetchDraft(prID: summary.id)
+                let draft = ReviewDraft.verdict(
+                    verdict,
+                    on: summary,
+                    existing: existing,
+                    body: body
+                )
+                try await session.database.saveDraft(draft)
+                let outcome = try await enqueue(.submitReview(draft), on: summary)
+                announce(outcome, of: .review(verdict), on: summary)
+                onDidQueueVerdict?(summary.id)
+            } catch {
+                toasts.failure(error, context: String(localized: "Could not queue the review"))
+            }
+            // `true` even after a local write failure, and deliberately: whichever of the two
+            // writes threw, ``ReviewDraft/verdict(_:on:existing:body:at:)`` was built from the
+            // text and a saved draft is restored by ``ReviewModel``'s draft observation. Only the
+            // refusal above returns before anything has been written at all.
+            return true
+        } ?? false
     }
 
     /// Replies to an existing review comment.
@@ -121,14 +137,16 @@ struct PullRequestActions {
         commentDatabaseID: Int,
         body: String
     ) async {
-        do {
-            let outcome = try await enqueue(
-                .replyToComment(commentDatabaseID: commentDatabaseID, body: body),
-                on: summary
-            )
-            announce(outcome, of: .reply, on: summary)
-        } catch {
-            toasts.failure(error, context: String(localized: "Could not queue the reply"))
+        await activity.run(summary.id, .reply) {
+            do {
+                let outcome = try await enqueue(
+                    .replyToComment(commentDatabaseID: commentDatabaseID, body: body),
+                    on: summary
+                )
+                announce(outcome, of: .reply, on: summary)
+            } catch {
+                toasts.failure(error, context: String(localized: "Could not queue the reply"))
+            }
         }
     }
 
@@ -142,14 +160,18 @@ struct PullRequestActions {
         threadID: String,
         resolved: Bool
     ) async {
-        do {
-            let outcome = try await enqueue(
-                resolved ? .resolveThread(threadID: threadID) : .unresolveThread(threadID: threadID),
-                on: summary
-            )
-            announce(outcome, of: .thread(resolved: resolved), on: summary)
-        } catch {
-            toasts.failure(error, context: String(localized: "Could not update the thread"))
+        await activity.run(summary.id, .thread) {
+            do {
+                let outcome = try await enqueue(
+                    resolved
+                        ? .resolveThread(threadID: threadID)
+                        : .unresolveThread(threadID: threadID),
+                    on: summary
+                )
+                announce(outcome, of: .thread(resolved: resolved), on: summary)
+            } catch {
+                toasts.failure(error, context: String(localized: "Could not update the thread"))
+            }
         }
     }
 
@@ -168,27 +190,29 @@ struct PullRequestActions {
         method: MergeMethod,
         deletesHeadBranch: Bool = false
     ) async {
-        // Same refusal, before the row is written rather than after the drain has been told
-        // "Pull Request is still a draft" — the outbox was carrying exactly that failure.
-        if let blocker = summary.mergeBlocker {
-            toasts.show(
-                Toast(message: Self.blockerMessage(blocker, slug: summary.slug), kind: .warning)
-            )
-            return
-        }
-        do {
-            let outcome = try await enqueue(
-                .merge(
-                    method: method.rawValue,
-                    expectedHeadOid: summary.headRefOid,
-                    deletesHeadBranch: deletesHeadBranch
-                ),
-                on: summary
-            )
-            announce(outcome, of: .merge, on: summary)
-            onDidQueueVerdict?(summary.id)
-        } catch {
-            toasts.failure(error, context: String(localized: "Could not queue the merge"))
+        await activity.run(summary.id, .merge) {
+            // Same refusal, before the row is written rather than after the drain has been told
+            // "Pull Request is still a draft" — the outbox was carrying exactly that failure.
+            if let blocker = summary.mergeBlocker {
+                toasts.show(
+                    Toast(message: Self.blockerMessage(blocker, slug: summary.slug), kind: .warning)
+                )
+                return
+            }
+            do {
+                let outcome = try await enqueue(
+                    .merge(
+                        method: method.rawValue,
+                        expectedHeadOid: summary.headRefOid,
+                        deletesHeadBranch: deletesHeadBranch
+                    ),
+                    on: summary
+                )
+                announce(outcome, of: .merge, on: summary)
+                onDidQueueVerdict?(summary.id)
+            } catch {
+                toasts.failure(error, context: String(localized: "Could not queue the merge"))
+            }
         }
     }
 
@@ -218,35 +242,42 @@ struct PullRequestActions {
     /// - Parameters:
     ///   - plan: The confirmed plan.
     ///   - method: The merge method for whatever the plan merges.
-    /// - Returns: What was queued, for the summary toast.
+    /// - Returns: What was queued, for the summary toast. An empty outcome when a run was
+    ///   already in flight: nothing was written, so there is nothing to report.
     @discardableResult
     func queue(_ plan: BulkTriagePlan, method: MergeMethod) async -> BulkTriageOutcome {
-        var outcome = BulkTriageOutcome(skipped: plan.skipped.count)
-        guard plan.isActionable else {
-            toasts.info(String(localized: "Nothing to queue — every selected pull request was skipped."))
+        // Keyed `"bulk"` rather than per pull request, because that is what a second click would
+        // duplicate: the plan is one gesture over *n* rows, and two runs of it are 2n rows.
+        await activity.run("bulk", .bulk) {
+            var outcome = BulkTriageOutcome(skipped: plan.skipped.count)
+            guard plan.isActionable else {
+                toasts.info(
+                    String(localized: "Nothing to queue — every selected pull request was skipped.")
+                )
+                return outcome
+            }
+
+            let writes = plan.writes(
+                mergeMethod: method.rawValue,
+                existingDrafts: await existingDrafts(for: plan)
+            )
+            do {
+                // Every draft and every row in one transaction, each draft still written before
+                // the row that carries it. A local write failure is a broken database rather than
+                // one unlucky pull request, so the batch is all or nothing: better a run the user
+                // can retry whole than an approval queued without the merge meant to follow it.
+                try await session.database.saveBulkTriage(writes: writes)
+                outcome.queuedWrites = writes.count
+                outcome.queuedPullRequests = Set(writes.map(\.item.prID)).count
+            } catch {
+                // Reported in the plan's order, not a set's, so the message is reproducible.
+                outcome.failed = plan.eligible.map(\.pullRequest.slug)
+            }
+
+            await session.drainOutbox()
+            report(outcome, action: plan.action)
             return outcome
-        }
-
-        let writes = plan.writes(
-            mergeMethod: method.rawValue,
-            existingDrafts: await existingDrafts(for: plan)
-        )
-        do {
-            // Every draft and every row in one transaction, each draft still written before the
-            // row that carries it. A local write failure is a broken database rather than one
-            // unlucky pull request, so the batch is all or nothing: better a run the user can
-            // retry whole than an approval queued without the merge that was meant to follow it.
-            try await session.database.saveBulkTriage(writes: writes)
-            outcome.queuedWrites = writes.count
-            outcome.queuedPullRequests = Set(writes.map(\.item.prID)).count
-        } catch {
-            // Reported in the plan's order, not a set's, so the message is reproducible.
-            outcome.failed = plan.eligible.map(\.pullRequest.slug)
-        }
-
-        await session.drainOutbox()
-        report(outcome, action: plan.action)
-        return outcome
+        } ?? BulkTriageOutcome()
     }
 
     /// The drafts already on disk for the plan's eligible pull requests.
@@ -291,11 +322,16 @@ struct PullRequestActions {
     /// Takes a pull request out of draft state.
     /// - Parameter summary: The pull request.
     func markReadyForReview(_ summary: PullRequestSummary) async {
-        do {
-            let outcome = try await enqueue(.markReadyForReview, on: summary)
-            announce(outcome, of: .readyForReview, on: summary)
-        } catch {
-            toasts.failure(error, context: String(localized: "Could not update the pull request"))
+        await activity.run(summary.id, .readyForReview) {
+            do {
+                let outcome = try await enqueue(.markReadyForReview, on: summary)
+                announce(outcome, of: .readyForReview, on: summary)
+            } catch {
+                toasts.failure(
+                    error,
+                    context: String(localized: "Could not update the pull request")
+                )
+            }
         }
     }
 
@@ -327,15 +363,19 @@ struct PullRequestActions {
     ///   - summary: The pull request.
     ///   - isViewed: The new state.
     func setFileViewed(path: String, on summary: PullRequestSummary, isViewed: Bool) async {
-        do {
-            try await session.database.setFileViewed(
-                prID: summary.id,
-                path: path,
-                headRefOid: summary.headRefOid,
-                isViewed: isViewed
-            )
-        } catch {
-            toasts.failure(error, context: String(localized: "Could not save the viewed state"))
+        // Keyed on the pull request rather than on the path: one file is selected at a time, so
+        // the toggle and the `v` shortcut are the same button and cannot mean two files at once.
+        await activity.run(summary.id, .viewed) {
+            do {
+                try await session.database.setFileViewed(
+                    prID: summary.id,
+                    path: path,
+                    headRefOid: summary.headRefOid,
+                    isViewed: isViewed
+                )
+            } catch {
+                toasts.failure(error, context: String(localized: "Could not save the viewed state"))
+            }
         }
     }
 

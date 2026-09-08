@@ -106,13 +106,25 @@ struct BulkTriageSheet: View {
             Button {
                 queue()
             } label: {
-                Text(plan.action.confirmButtonTitle)
+                BusyLabel(isBusy: isQueueing || isQueueingElsewhere) {
+                    Text(plan.action.confirmButtonTitle)
+                }
             }
             .buttonStyle(SuccessButtonStyle())
             .keyboardShortcut(.defaultAction)
-            .disabled(isQueueing || !plan.isActionable)
+            // ``isQueueing`` is this sheet's own press and stays: it covers the moment between
+            // the click and the funnel's first `await`. The second predicate is the funnel's, and
+            // is what a plan queued from anywhere else — or a run this sheet has already handed
+            // over — dims the button with.
+            .disabled(isQueueing || isQueueingElsewhere || !plan.isActionable)
         }
     }
+
+    /// Whether a bulk-triage run is already in flight (``ActionActivity/Kind/bulk``).
+    ///
+    /// The key is `"bulk"` rather than a pull request's id, because the run is one gesture over
+    /// the whole plan and a second one would be a second set of *n* rows.
+    private var isQueueingElsewhere: Bool { actions.activity.isRunning("bulk", .bulk) }
 
     private func queue() {
         guard !isQueueing else { return }

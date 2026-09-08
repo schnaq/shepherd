@@ -232,6 +232,36 @@ struct SecondaryButtonStyle: ButtonStyle {
     }
 }
 
+/// A button label that goes quiet while its own write runs: the content fades out and a small
+/// spinner takes its place, in the space the content was already occupying.
+///
+/// An overlay rather than a replacement, and that is the whole point: the content keeps laying
+/// itself out at `opacity(0)`, so a row of buttons does not resize the moment one of them is
+/// pressed, and *Request changes* does not jump sideways because *Approve* briefly became a
+/// spinner. It is deliberately the only thing this does — whether the button is *disabled* while
+/// it runs is the caller's `.disabled(…)`, so a blocker predicate and an in-flight predicate
+/// combine there rather than being buried in a label.
+///
+/// The busy flag comes from ``ActionActivity``, which the write funnel marks, so the spinner
+/// answers "is this write in flight" and not "did this view start a task".
+struct BusyLabel<Content: View>: View {
+    /// Whether this button's own write is running.
+    let isBusy: Bool
+    /// The label the button shows the rest of the time.
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        content()
+            .opacity(isBusy ? 0 : 1)
+            .overlay {
+                if isBusy {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+    }
+}
+
 // MARK: - Chips and dots
 
 /// A rounded pill: agent names, review states, reason tags.

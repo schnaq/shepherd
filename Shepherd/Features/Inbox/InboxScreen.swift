@@ -112,6 +112,10 @@ struct InboxScreen: View {
             // the screen is rebuilt whenever the route changes, and a queued write has to reach
             // the sync engine that outlives it.
             issueModel.drain = { [session] in await session.drainOutbox() }
+            // And the tracker the panel's triage buttons read, handed over here for the same
+            // reason: the screen is rebuilt whenever the route changes, and the button that has
+            // to go quiet is watching an object that outlives it.
+            issueModel.activity = environment.activity
             issueModel.startObserving()
             // A deep link raised while the review screen was showing routes here first; the
             // request is waiting in the container by the time this screen appears.
@@ -373,7 +377,11 @@ struct InboxScreen: View {
     // MARK: - Actions
 
     private var actions: PullRequestActions {
-        PullRequestActions(session: session, toasts: environment.toasts)
+        PullRequestActions(
+            session: session,
+            toasts: environment.toasts,
+            activity: environment.activity
+        )
     }
 
     private func open(_ prID: String) {

@@ -372,11 +372,7 @@ struct ConversationView: View {
                             }
                             if let summary = model.summary {
                                 HStack(spacing: 8) {
-                                    Button(
-                                        thread.isResolved
-                                            ? String(localized: "Unresolve")
-                                            : String(localized: "Resolve")
-                                    ) {
+                                    Button {
                                         Task {
                                             await actions.setThread(
                                                 on: summary,
@@ -384,8 +380,23 @@ struct ConversationView: View {
                                                 resolved: !thread.isResolved
                                             )
                                         }
+                                    } label: {
+                                        BusyLabel(
+                                            isBusy: actions.activity
+                                                .isRunning(summary.id, .thread)
+                                        ) {
+                                            Text(
+                                                thread.isResolved
+                                                    ? String(localized: "Unresolve")
+                                                    : String(localized: "Resolve")
+                                            )
+                                        }
                                     }
                                     .buttonStyle(SecondaryButtonStyle(height: 26))
+                                    // Every thread on this card shares the key: the write is
+                                    // keyed by pull request, and two thread toggles racing each
+                                    // other into the same outbox is the thing being refused.
+                                    .disabled(actions.activity.isRunning(summary.id, .thread))
 
                                     Button(String(localized: "Delegate this finding…")) {
                                         environment.startDelegation(

@@ -4501,6 +4501,16 @@
         }
       }
     },
+    "Could not delete the comment: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentar konnte nicht gelöscht werden: %@"
+          }
+        }
+      }
+    },
     "Could not discard the review": {
       "localizations": {
         "de": {

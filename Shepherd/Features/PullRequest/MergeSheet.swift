@@ -81,20 +81,31 @@ struct MergeSheet: View {
                         dismiss()
                     }
                 } label: {
-                    Text(String(localized: "Merge"))
+                    BusyLabel(isBusy: isMerging) {
+                        Text(String(localized: "Merge"))
+                    }
                 }
                 .buttonStyle(SuccessButtonStyle())
                 // ⏎ merges only when there is nothing to read first. A sheet that says "this is
                 // still a draft" and answers Return with a merge is a sheet whose warning nobody
                 // has to look at; with the shortcut gone the reviewer has to aim at the button.
                 .keyboardShortcut(warning == nil ? .defaultAction : nil)
-                .disabled(summary.mergeBlocker != nil)
+                // The one action Shepherd cannot undo is also the one where a second press is
+                // worst, and ⏎ makes that easy to do by accident. `.disabled` takes the key with
+                // it, so the sheet stops answering Return the moment the first merge is queueing.
+                .disabled(summary.mergeBlocker != nil || isMerging)
             }
         }
         .padding(20)
         .frame(width: 420)
         .background(Theme.panel)
     }
+
+    /// Whether the merge this sheet would queue is already on its way to the outbox.
+    ///
+    /// Read off the write helper's own tracker rather than a `@State` flag, so a merge started
+    /// by `m` from the screen behind the sheet dims this button too.
+    private var isMerging: Bool { actions.activity.isRunning(summary.id, .merge) }
 
     /// The remembered answer, written straight through the way ``MergeMethodPicker`` writes the
     /// method: the box is sticky rather than a per-merge choice, because "delete the branch" is

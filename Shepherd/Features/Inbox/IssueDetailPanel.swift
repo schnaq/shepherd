@@ -273,9 +273,12 @@ struct IssueDetailPanel: View {
                 commentBody = ""
                 isCommentSheetPresented = true
             } label: {
-                Text(String(localized: "Comment…"))
+                BusyLabel(isBusy: isWriting(row)) {
+                    Text(String(localized: "Comment…"))
+                }
             }
             .buttonStyle(SecondaryButtonStyle())
+            .disabled(isWriting(row))
 
             labelMenu(row)
 
@@ -289,10 +292,12 @@ struct IssueDetailPanel: View {
                         )
                     }
                 } label: {
-                    Text(String(localized: "Assign to me"))
+                    BusyLabel(isBusy: isWriting(row)) {
+                        Text(String(localized: "Assign to me"))
+                    }
                 }
                 .buttonStyle(SecondaryButtonStyle())
-                .disabled(row.myRelation.contains(.assigned))
+                .disabled(row.myRelation.contains(.assigned) || isWriting(row))
                 .help(
                     row.myRelation.contains(.assigned)
                         ? String(localized: "This issue is already assigned to you")
@@ -328,20 +333,27 @@ struct IssueDetailPanel: View {
                 body: model.detail?.bodyMarkdown ?? "",
                 onDidStart: { start in
                     Task {
-                        _ = await model.comment(
+                        // The one write in this panel nobody pressed a button for, and the one
+                        // that used to be thrown away: a handover comment the outbox refused left
+                        // the issue looking untouched to every colleague reading it, with nothing
+                        // anywhere saying so. Same sentence as every other refused issue write.
+                        let queued = await model.comment(
                             String(
                                 localized: "Handed to \(start.agent) via Shepherd, on branch `\(GitWorktree.branchName(issueNumber: row.number))`."
                             ),
                             on: row
                         )
+                        if !queued { reportQueueFailure() }
                     }
                 }
             )
         } label: {
-            Text(String(localized: "Assign to agent…"))
+            BusyLabel(isBusy: isWriting(row)) {
+                Text(String(localized: "Assign to agent…"))
+            }
         }
         .buttonStyle(SecondaryButtonStyle())
-        .disabled(row.state == .closed)
+        .disabled(row.state == .closed || isWriting(row))
         .help(
             row.state == .closed
                 ? String(localized: "This issue is closed")
@@ -372,10 +384,13 @@ struct IssueDetailPanel: View {
                 }
             }
         } label: {
-            Text(String(localized: "Label"))
+            BusyLabel(isBusy: isWriting(row)) {
+                Text(String(localized: "Label"))
+            }
         }
         .menuStyle(.borderlessButton)
         .fixedSize()
+        .disabled(isWriting(row))
         .help(
             String(
                 localized: "The labels Shepherd has already seen in this repository. A label nothing here carries is a click away on GitHub."
@@ -393,9 +408,12 @@ struct IssueDetailPanel: View {
                     report(queued: queued, success: String(localized: "Reopen queued."))
                 }
             } label: {
-                Text(String(localized: "Reopen"))
+                BusyLabel(isBusy: isWriting(row)) {
+                    Text(String(localized: "Reopen"))
+                }
             }
             .buttonStyle(SecondaryButtonStyle())
+            .disabled(isWriting(row))
         } else {
             Menu {
                 Button(String(localized: "Close as completed")) {
@@ -411,10 +429,13 @@ struct IssueDetailPanel: View {
                     }
                 }
             } label: {
-                Text(String(localized: "Close"))
+                BusyLabel(isBusy: isWriting(row)) {
+                    Text(String(localized: "Close"))
+                }
             }
             .menuStyle(.borderlessButton)
             .fixedSize()
+            .disabled(isWriting(row))
         }
     }
 
@@ -441,13 +462,33 @@ struct IssueDetailPanel: View {
         if queued {
             environment.toasts.success(success)
         } else {
-            environment.toasts.show(
-                Toast(
-                    message: String(localized: "Could not queue that — nothing was sent."),
-                    kind: .failure
-                )
-            )
+            reportQueueFailure()
         }
+    }
+
+    /// The sentence every refused issue write says.
+    ///
+    /// Its own method because one of them has no success half to pair with: the handover comment
+    /// is queued by the delegation starting rather than by a click, so there is nothing to
+    /// confirm — only something to say when it did not happen.
+    private func reportQueueFailure() {
+        environment.toasts.show(
+            Toast(
+                message: String(localized: "Could not queue that — nothing was sent."),
+                kind: .failure
+            )
+        )
+    }
+
+    /// Whether a triage write for this issue is already on its way to the outbox.
+    ///
+    /// One answer for all six buttons, because ``ActionActivity/Kind/issue`` is one key: the
+    /// writes here are small and quick, and a panel where *Close* is live while *Label* spins
+    /// would be inviting the pair of writes the single key exists to keep apart.
+    /// - Parameter row: The issue.
+    /// - Returns: `true` while a write runs.
+    private func isWriting(_ row: IssueRowSummary) -> Bool {
+        environment.activity.isRunning(row.id, .issue)
     }
 
     /// The node id of a linked pull request that is in the local inbox, or `nil`.

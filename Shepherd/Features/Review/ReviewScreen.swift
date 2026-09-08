@@ -342,6 +342,7 @@ struct ReviewScreen: View {
         PullRequestActions(
             session: session,
             toasts: environment.toasts,
+            activity: environment.activity,
             onDidQueueVerdict: { queuedID in
                 environment.reviewSessionDidQueueVerdict(on: queuedID)
             }

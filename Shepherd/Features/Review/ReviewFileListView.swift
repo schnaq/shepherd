@@ -208,22 +208,29 @@ struct ReviewFileHeader: View {
                 .frame(width: 170)
 
                 if let file = model.selectedFile {
+                    let isWriting = actions.activity.isRunning(model.prID, .viewed)
                     Button {
                         Task { await model.toggleViewed(path: file.path, actions: actions) }
                     } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: model.viewedPaths.contains(file.path)
-                                ? "eye.fill" : "eye")
-                            Text(model.viewedPaths.contains(file.path)
-                                ? String(localized: "Viewed")
-                                : String(localized: "Mark viewed"))
+                        BusyLabel(isBusy: isWriting) {
+                            HStack(spacing: 5) {
+                                Image(systemName: model.viewedPaths.contains(file.path)
+                                    ? "eye.fill" : "eye")
+                                Text(model.viewedPaths.contains(file.path)
+                                    ? String(localized: "Viewed")
+                                    : String(localized: "Mark viewed"))
+                            }
+                            .font(.system(size: 11.5))
                         }
-                        .font(.system(size: 11.5))
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(
                         model.viewedPaths.contains(file.path) ? Theme.success : Theme.textSecondary
                     )
+                    // `v` does not come through this button — it is a character the screen
+                    // handles (``ReviewScreen``) — so the key is refused by the funnel rather
+                    // than by `.disabled`. This is here so the click and `v` show one state.
+                    .disabled(isWriting)
                     .help(String(localized: "Toggle viewed (v)"))
                 }
             }
