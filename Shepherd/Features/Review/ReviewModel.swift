@@ -1415,11 +1415,16 @@ final class ReviewModel {
     /// - Parameters:
     ///   - verdict: The verdict to submit with.
     ///   - actions: The write helper.
-    func submit(verdict: ReviewVerdict, actions: PullRequestActions) async {
-        guard let summary else { return }
+    @discardableResult
+    func submit(verdict: ReviewVerdict, actions: PullRequestActions) async -> Bool {
+        guard let summary else { return false }
         isSubmitting = true
         defer { isSubmitting = false }
-        await actions.submitReview(on: summary, verdict: verdict, body: summaryText)
-        summaryText = ""
+        let written = await actions.submitReview(on: summary, verdict: verdict, body: summaryText)
+        // The field is emptied only by a write that happened. A verdict GitHub would refuse never
+        // reaches ``ReviewDraft``, so this text exists nowhere else — clearing it would throw away
+        // the summary the reviewer just wrote and leave them a toast to read instead of it.
+        if written { summaryText = "" }
+        return written
     }
 }

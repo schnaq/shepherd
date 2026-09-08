@@ -249,8 +249,12 @@ struct SubmitReviewSheet: View {
                 }
                 Button {
                     Task {
-                        await model.submit(verdict: model.pendingVerdict, actions: actions)
-                        dismiss()
+                        // Only a review that was written closes the sheet. A refused verdict
+                        // leaves it open beside the toast that explains why, with the summary
+                        // still in the field and a verdict the picker will accept one click away.
+                        if await model.submit(verdict: model.pendingVerdict, actions: actions) {
+                            dismiss()
+                        }
                     }
                 } label: {
                     HStack(spacing: 6) {

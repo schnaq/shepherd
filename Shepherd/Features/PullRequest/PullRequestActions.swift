@@ -70,19 +70,24 @@ struct PullRequestActions {
     ///   - summary: The pull request.
     ///   - verdict: Approve, request changes, or comment.
     ///   - body: The review summary text.
+    /// - Returns: `false` when GitHub would have refused the verdict and nothing was written,
+    ///   `true` in every case where the review reached the local database. Callers that hold the
+    ///   text the user typed — ``ReviewModel/submit(verdict:actions:)`` and the sheet above it —
+    ///   must keep it on `false`: a refusal happens *before* ``ReviewDraft`` is saved, so this is
+    ///   the only signal that the summary is not on disk anywhere yet.
+    @discardableResult
     func submitReview(
         on summary: PullRequestSummary,
         verdict: ReviewVerdict,
         body: String = ""
-    ) async {
+    ) async -> Bool {
         // The one place every verdict passes through, so it is the one place that has to know
-        // what GitHub will refuse. A plain comment is exempt: `COMMENT` on your own pull request
-        // is accepted, and only `APPROVE` and `REQUEST_CHANGES` come back as a 422.
-        if verdict != .comment, let blocker = summary.verdictBlocker {
+        // what GitHub will refuse.
+        if let blocker = Self.refusal(of: verdict, on: summary) {
             toasts.show(
                 Toast(message: Self.blockerMessage(blocker, slug: summary.slug), kind: .warning)
             )
-            return
+            return false
         }
         do {
             let existing = try await session.database.fetchDraft(prID: summary.id)
@@ -99,6 +104,11 @@ struct PullRequestActions {
         } catch {
             toasts.failure(error, context: String(localized: "Could not queue the review"))
         }
+        // `true` even after a local write failure, and deliberately: whichever of the two writes
+        // threw, ``ReviewDraft/verdict(_:on:existing:body:at:)`` was built from the text and a
+        // saved draft is restored by ``ReviewModel``'s draft observation. Only the refusal above
+        // returns before anything has been written at all.
+        return true
     }
 
     /// Replies to an existing review comment.
@@ -347,6 +357,23 @@ struct PullRequestActions {
         case merge
         /// Taking the pull request out of draft state.
         case readyForReview
+    }
+
+    /// Why this verdict would be refused on this pull request, or `nil` when it would not.
+    ///
+    /// A plain comment is exempt from everything: `COMMENT` on your own pull request is accepted,
+    /// and only `APPROVE` and `REQUEST_CHANGES` come back as a 422. Pure and `static` so the one
+    /// rule the funnel turns on can be asserted without a ``SignedInSession``.
+    /// - Parameters:
+    ///   - verdict: What the user asked for.
+    ///   - summary: The pull request it targets.
+    /// - Returns: The blocker, or `nil` when the verdict may be written.
+    static func refusal(
+        of verdict: ReviewVerdict,
+        on summary: PullRequestSummary
+    ) -> ReviewActionBlocker? {
+        guard verdict != .comment else { return nil }
+        return summary.verdictBlocker
     }
 
     /// What to tell a user whose click GitHub would have refused.
