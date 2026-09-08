@@ -39,14 +39,18 @@ struct ReviewComposerBar: View {
                 Text(String(localized: "Request changes"))
             }
             .buttonStyle(SecondaryButtonStyle(height: 30, tint: Theme.failure))
-            .disabled(model.hasEndedOnGitHub)
-            .help(String(localized: "Request changes (r x)"))
+            .disabled(model.hasEndedOnGitHub || verdictBlocker != nil)
+            .help(blockedHelp(otherwise: String(localized: "Request changes (r x)")))
 
             Button {
-                start(.approve)
+                start(preselectedVerdict)
             } label: {
                 HStack(spacing: 6) {
-                    Text(String(localized: "Submit review"))
+                    Text(
+                        preselectedVerdict == .approve
+                            ? String(localized: "Approve…")
+                            : String(localized: "Review…")
+                    )
                     KeyCapView(keys: "⌘⏎", onFilledBackground: true)
                 }
             }
@@ -67,6 +71,26 @@ struct ReviewComposerBar: View {
         let count = model.pendingCommentCount
         if count == 0 { return String(localized: "No pending comments") }
         return String(localized: "\(count) pending comments in this review")
+    }
+
+    /// Why an approve or a request changes would be refused here, if it would.
+    private var verdictBlocker: ReviewActionBlocker? { model.summary?.verdictBlocker }
+
+    /// Which verdict the green button opens the sheet on.
+    ///
+    /// Approve, unless GitHub would answer 422 to one — on your own pull request the same button
+    /// still opens the sheet, on a plain comment, because a comment is a review GitHub accepts
+    /// from an author. The label follows, so the button never offers what it cannot do.
+    private var preselectedVerdict: ReviewVerdict {
+        verdictBlocker == nil ? .approve : .comment
+    }
+
+    /// A blocked button's tooltip: the sentence the write funnel would have toasted.
+    /// - Parameter otherwise: The tooltip for a button that is live.
+    /// - Returns: The tooltip text.
+    private func blockedHelp(otherwise: String) -> String {
+        guard let blocker = verdictBlocker, let summary = model.summary else { return otherwise }
+        return PullRequestActions.blockerMessage(blocker, slug: summary.slug)
     }
 
     private func start(_ verdict: ReviewVerdict) {
@@ -156,10 +180,23 @@ struct SubmitReviewSheet: View {
 
             Picker(String(localized: "Verdict"), selection: verdictBinding) {
                 Text(String(localized: "Comment")).tag(ReviewVerdict.comment)
-                Text(String(localized: "Approve")).tag(ReviewVerdict.approve)
-                Text(String(localized: "Request changes")).tag(ReviewVerdict.requestChanges)
+                Text(String(localized: "Approve"))
+                    .disabled(verdictBlocker != nil)
+                    .tag(ReviewVerdict.approve)
+                Text(String(localized: "Request changes"))
+                    .disabled(verdictBlocker != nil)
+                    .tag(ReviewVerdict.requestChanges)
             }
             .pickerStyle(.radioGroup)
+
+            // Under the picker rather than in a toast after the click: two of the three options
+            // are dark and the reason is not guessable from a radio button.
+            if let blocker = verdictBlocker, let summary = model.summary {
+                Text(PullRequestActions.blockerMessage(blocker, slug: summary.slug))
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.pending)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             if model.pendingCommentCount > 0 {
                 Text(String(
@@ -452,6 +489,9 @@ struct SubmitReviewSheet: View {
     private var verdictBinding: Binding<ReviewVerdict> {
         Binding(get: { model.pendingVerdict }, set: { model.pendingVerdict = $0 })
     }
+
+    /// Why an approve or a request changes would be refused here, if it would.
+    private var verdictBlocker: ReviewActionBlocker? { model.summary?.verdictBlocker }
 }
 
 /// The native composer that opens when the user clicks a gutter “+”.

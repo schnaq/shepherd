@@ -64,7 +64,10 @@ struct SignedInRootView: View {
             }
 
             if environment.isCommandPaletteVisible {
-                CommandPaletteView(session: session)
+                CommandPaletteView(
+                    session: session,
+                    selectedRow: environment.selectedPullRequest
+                )
                     .transition(.opacity)
                     .zIndex(2)
             }

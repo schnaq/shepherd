@@ -10,6 +10,13 @@ struct MergeSheet: View {
     @Environment(\.dismiss) private var dismiss
     /// The pull request to merge.
     let summary: PullRequestSummary
+    /// The freshest CI state the presenting screen knows.
+    ///
+    /// Handed in rather than read off ``summary``: the review screen has the head commit's actual
+    /// check runs and the inbox row only carries the rollup the search sweep returned, so a sheet
+    /// that read `summary.checkRollup` would warn about a red suite the screen behind it already
+    /// shows as green (ADR 0005 — the rollup is the cheap half, the runs are the detail fetch).
+    let checkState: CheckRollup.State?
     /// The outbox-backed write actions.
     let actions: PullRequestActions
     /// Where the remembered merge method lives, shared with the bulk-triage dialog (ADR 0015).
@@ -54,7 +61,7 @@ struct MergeSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 .font(Theme.type(.callout))
-                .foregroundStyle(Theme.textSecondary)
+                .foregroundStyle(Theme.pending)
             }
 
             HStack {
@@ -77,8 +84,11 @@ struct MergeSheet: View {
                     Text(String(localized: "Merge"))
                 }
                 .buttonStyle(SuccessButtonStyle())
-                .keyboardShortcut(.defaultAction)
-                .disabled(summary.mergeable == .conflicting)
+                // ⏎ merges only when there is nothing to read first. A sheet that says "this is
+                // still a draft" and answers Return with a merge is a sheet whose warning nobody
+                // has to look at; with the shortcut gone the reviewer has to aim at the button.
+                .keyboardShortcut(warning == nil ? .defaultAction : nil)
+                .disabled(summary.mergeBlocker != nil)
             }
         }
         .padding(20)
@@ -105,17 +115,27 @@ struct MergeSheet: View {
         )
     }
 
+    /// The one thing worth reading before merging, worst first.
+    ///
+    /// Draft leads, because it is the only one of the four GitHub refuses outright and the
+    /// sheet used not to mention it at all — a draft merge went through this button, into the
+    /// outbox, and came back as a failed write. Conflicts and unknown mergeability follow;
+    /// failing and running checks are last, because they are the two the reviewer may knowingly
+    /// merge past.
     private var warning: String? {
+        if summary.isDraft {
+            return String(localized: "This pull request is still a draft. GitHub will refuse the merge.")
+        }
         switch summary.mergeable {
         case .conflicting:
             return String(localized: "GitHub reports conflicts with \(summary.baseRefName). Resolve them first.")
         case .unknown, nil:
             return String(localized: "GitHub has not finished computing mergeability. The merge may be refused.")
         case .mergeable:
-            if summary.checkRollup?.state == .failure {
+            if checkState == .failure {
                 return String(localized: "Checks are failing on the head commit.")
             }
-            if summary.checkRollup?.state == .pending {
+            if checkState == .pending {
                 return String(localized: "Checks are still running.")
             }
             return nil

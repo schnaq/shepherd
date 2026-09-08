@@ -341,14 +341,14 @@ public struct BulkTriagePlan: Sendable, Equatable {
         action: BulkTriageAction,
         steps: [BulkTriageStep]
     ) -> BulkTriageSkipReason? {
-        if pullRequest.isDraft { return .draft }
-        if pullRequest.mergeable == .conflicting { return .conflicting }
+        if pullRequest.mergeBlocker == .draft { return .draft }
+        if pullRequest.mergeBlocker == .conflicting { return .conflicting }
         if pullRequest.checkRollup?.state == .failure { return .checksFailing }
         if pullRequest.checkRollup?.state == .pending { return .checksRunning }
         if pullRequest.reviewDecision == .changesRequested { return .changesRequested }
         // GitHub answers 422 to an approval of your own pull request. Merging your own is fine,
         // which is why this is tied to the step rather than to the action.
-        if steps.contains(.approve), pullRequest.myRelation.contains(.author) {
+        if steps.contains(.approve), pullRequest.verdictBlocker == .ownPullRequest {
             return .ownPullRequest
         }
         if action == .merge, pullRequest.reviewDecision != .approved { return .notApproved }

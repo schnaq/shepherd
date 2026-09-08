@@ -147,6 +147,12 @@ struct InboxScreen: View {
             environment.clearPendingAction()
             perform(pending.action)
         }
+        // What ⌘K's review commands act on. `initial: true` because the cursor is already on a
+        // row by the time this screen is built, and a palette opened before the first `j` would
+        // otherwise show none of them.
+        .onChange(of: model.selectedRow, initial: true) { _, row in
+            environment.selectedPullRequest = row
+        }
         .onChange(of: environment.pendingInboxFilter) { _, _ in
             consumeDeepLinkRequests()
         }
@@ -158,7 +164,12 @@ struct InboxScreen: View {
         }
         .sheet(isPresented: $isMergeSheetPresented) {
             if let summary = model.selectedRow {
-                MergeSheet(summary: summary, actions: actions, settings: environment.settings)
+                MergeSheet(
+                    summary: summary,
+                    checkState: summary.checkRollup?.state,
+                    actions: actions,
+                    settings: environment.settings
+                )
             }
         }
         .sheet(isPresented: $isBulkSheetPresented) {

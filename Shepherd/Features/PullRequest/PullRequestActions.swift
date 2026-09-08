@@ -75,6 +75,15 @@ struct PullRequestActions {
         verdict: ReviewVerdict,
         body: String = ""
     ) async {
+        // The one place every verdict passes through, so it is the one place that has to know
+        // what GitHub will refuse. A plain comment is exempt: `COMMENT` on your own pull request
+        // is accepted, and only `APPROVE` and `REQUEST_CHANGES` come back as a 422.
+        if verdict != .comment, let blocker = summary.verdictBlocker {
+            toasts.show(
+                Toast(message: Self.blockerMessage(blocker, slug: summary.slug), kind: .warning)
+            )
+            return
+        }
         do {
             let existing = try await session.database.fetchDraft(prID: summary.id)
             let draft = ReviewDraft.verdict(
@@ -149,6 +158,14 @@ struct PullRequestActions {
         method: MergeMethod,
         deletesHeadBranch: Bool = false
     ) async {
+        // Same refusal, before the row is written rather than after the drain has been told
+        // "Pull Request is still a draft" — the outbox was carrying exactly that failure.
+        if let blocker = summary.mergeBlocker {
+            toasts.show(
+                Toast(message: Self.blockerMessage(blocker, slug: summary.slug), kind: .warning)
+            )
+            return
+        }
         do {
             let outcome = try await enqueue(
                 .merge(
@@ -330,6 +347,31 @@ struct PullRequestActions {
         case merge
         /// Taking the pull request out of draft state.
         case readyForReview
+    }
+
+    /// What to tell a user whose click GitHub would have refused.
+    ///
+    /// `static` and pure for the reason the outcome wording below is: the sentence is the whole
+    /// of what this path produces, and the app's tests cannot build a ``SignedInSession``. Each
+    /// surface that greys a button out uses it as the button's tooltip, so the explanation the
+    /// user hovers and the toast they would have got are the same sentence.
+    /// - Parameters:
+    ///   - blocker: What GitHub would refuse.
+    ///   - slug: The pull request, as `owner/repo#123`.
+    /// - Returns: One sentence naming the pull request and the way out of it.
+    static func blockerMessage(_ blocker: ReviewActionBlocker, slug: String) -> String {
+        switch blocker {
+        case .draft:
+            return String(
+                localized: "\(slug) is still a draft — GitHub refuses the merge until it is marked ready for review."
+            )
+        case .conflicting:
+            return String(localized: "\(slug) has conflicts with its base branch. Resolve them first.")
+        case .ownPullRequest:
+            return String(
+                localized: "GitHub does not accept an approve or request changes on your own pull request (\(slug))."
+            )
+        }
     }
 
     /// The toast an outcome deserves, or `nil` when that outcome is announced elsewhere.

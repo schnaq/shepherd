@@ -69,6 +69,14 @@ struct CommandPaletteView: View {
     @Environment(AppEnvironment.self) private var environment
     /// The active session.
     let session: SignedInSession
+    /// The pull request the visible screen's cursor is on, if any
+    /// (``AppEnvironment/selectedPullRequest``).
+    ///
+    /// Every review command below acts on it, so with nothing selected they are left out rather
+    /// than listed and ignored — and the two GitHub would refuse (an approve on your own pull
+    /// request, a merge of a draft) are left out even when there is one, because the palette is
+    /// the one surface where a command cannot be greyed out with an explanation attached.
+    let selectedRow: PullRequestSummary?
 
     @State private var query = ""
     @State private var selectionIndex = 0
@@ -503,71 +511,79 @@ struct CommandPaletteView: View {
                 }
             )
         }
-        result.append(
-            PaletteCommand(
-                id: "approve",
-                section: review,
-                title: String(localized: "Approve pull request"),
-                systemImage: "checkmark.circle",
-                keyHint: "r a"
-            ) {
-                environment.request(.approve)
+        if let selectedRow {
+            if selectedRow.verdictBlocker == nil {
+                result.append(
+                    PaletteCommand(
+                        id: "approve",
+                        section: review,
+                        title: String(localized: "Approve pull request"),
+                        systemImage: "checkmark.circle",
+                        keyHint: "r a"
+                    ) {
+                        environment.request(.approve)
+                    }
+                )
+                result.append(
+                    PaletteCommand(
+                        id: "request-changes",
+                        section: review,
+                        title: String(localized: "Request changes"),
+                        systemImage: "exclamationmark.circle",
+                        keyHint: "r x"
+                    ) {
+                        environment.request(.requestChanges)
+                    }
+                )
             }
-        )
-        result.append(
-            PaletteCommand(
-                id: "request-changes",
-                section: review,
-                title: String(localized: "Request changes"),
-                systemImage: "exclamationmark.circle",
-                keyHint: "r x"
-            ) {
-                environment.request(.requestChanges)
+            // Not gated by ``ReviewActionBlocker``: a plain `COMMENT` review is the one verdict
+            // GitHub accepts on your own pull request, so this stays where an approve cannot.
+            result.append(
+                PaletteCommand(
+                    id: "comment",
+                    section: review,
+                    title: String(localized: "Comment on pull request"),
+                    systemImage: "bubble.left",
+                    keyHint: "r c"
+                ) {
+                    environment.request(.comment)
+                }
+            )
+            if selectedRow.mergeBlocker == nil {
+                result.append(
+                    PaletteCommand(
+                        id: "merge",
+                        section: review,
+                        title: String(localized: "Merge pull request…"),
+                        systemImage: "arrow.triangle.merge",
+                        keyHint: "m"
+                    ) {
+                        environment.request(.merge)
+                    }
+                )
             }
-        )
-        result.append(
-            PaletteCommand(
-                id: "comment",
-                section: review,
-                title: String(localized: "Comment on pull request"),
-                systemImage: "bubble.left",
-                keyHint: "r c"
-            ) {
-                environment.request(.comment)
-            }
-        )
-        result.append(
-            PaletteCommand(
-                id: "merge",
-                section: review,
-                title: String(localized: "Merge pull request…"),
-                systemImage: "arrow.triangle.merge",
-                keyHint: "m"
-            ) {
-                environment.request(.merge)
-            }
-        )
-        result.append(
-            PaletteCommand(
-                id: "delegate",
-                section: review,
-                title: String(localized: "Delegate to agent"),
-                systemImage: "arrow.uturn.backward.badge.clock"
-            ) {
-                environment.request(.delegate)
-            }
-        )
-        result.append(
-            PaletteCommand(
-                id: "open-selection",
-                section: review,
-                title: String(localized: "Open full review"),
-                systemImage: "arrow.right.circle",
-                keyHint: "⏎"
-            ) {
-                environment.request(.openSelection)
-            }
-        )
+            result.append(
+                PaletteCommand(
+                    id: "delegate",
+                    section: review,
+                    title: String(localized: "Delegate to agent"),
+                    systemImage: "arrow.uturn.backward.badge.clock"
+                ) {
+                    environment.request(.delegate)
+                }
+            )
+            result.append(
+                PaletteCommand(
+                    id: "open-selection",
+                    section: review,
+                    title: String(localized: "Open full review"),
+                    systemImage: "arrow.right.circle",
+                    keyHint: "⏎"
+                ) {
+                    environment.request(.openSelection)
+                }
+            )
+        }
         return result
     }
 

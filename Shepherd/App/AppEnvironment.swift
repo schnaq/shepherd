@@ -1067,6 +1067,20 @@ final class AppEnvironment {
     /// The command waiting to be executed, if any.
     private(set) var pendingAction: PendingAction?
 
+    /// The pull request the visible screen's cursor is on, published for the command palette.
+    ///
+    /// The palette is presented from ``SignedInRootView`` rather than from a screen, so it cannot
+    /// see the inbox's cursor or the review screen's subject — and a palette that offers
+    /// "Approve pull request" with nothing selected raises a ``PendingAction`` the screen quietly
+    /// drops. Both screens write it (``InboxScreen`` from its selected row, ``ReviewScreen`` from
+    /// the pull request it is showing) so the palette can leave a command out instead, and it is
+    /// exactly the row those commands' ``request(_:)`` would act on.
+    ///
+    /// Never cleared on disappear: the route switch tears one screen down and builds the other,
+    /// in an order nothing here guarantees, and a clear that lost that race would blank the
+    /// palette for the screen that just arrived. The screen that arrives overwrites it instead.
+    var selectedPullRequest: PullRequestSummary?
+
     /// Raises a command. The visible screen picks it up and clears it.
     /// - Parameter action: The command.
     func request(_ action: ShortcutAction) {
@@ -1152,6 +1166,9 @@ final class AppEnvironment {
     /// - Parameter agentID: The registry id of the agent to select, or `nil` for the whole fleet.
     func openFleet(agentID: String? = nil) {
         if reviewSession != nil { endReviewSession(announcing: false) }
+        // The fleet screen has no pull-request cursor and handles no review command, so the row
+        // the inbox left behind would only put dead entries in the palette.
+        selectedPullRequest = nil
         route = .fleet(agentID: agentID)
     }
 

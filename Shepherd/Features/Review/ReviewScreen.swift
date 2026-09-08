@@ -36,6 +36,7 @@ struct ReviewScreen: View {
         VStack(spacing: 0) {
             ReviewHeaderView(
                 model: model,
+                checkState: headerCheckState,
                 onBack: leaveReview,
                 onMerge: { model.isMergeSheetPresented = true },
                 onReview: { model.isSubmitSheetPresented = true },
@@ -102,6 +103,10 @@ struct ReviewScreen: View {
             environment.clearPendingAction()
             perform(pending.action)
         }
+        // ⌘K works here too, and here the "selection" is the pull request being reviewed.
+        .onChange(of: model.summary, initial: true) { _, summary in
+            environment.selectedPullRequest = summary
+        }
         .sheet(isPresented: $model.isSubmitSheetPresented) {
             SubmitReviewSheet(model: model, actions: actions)
         }
@@ -112,7 +117,12 @@ struct ReviewScreen: View {
         // what was true when it opened.
         .sheet(isPresented: $model.isMergeSheetPresented) {
             if let summary = model.summary {
-                MergeSheet(summary: summary, actions: actions, settings: environment.settings)
+                MergeSheet(
+                    summary: summary,
+                    checkState: headerCheckState,
+                    actions: actions,
+                    settings: environment.settings
+                )
             }
         }
         .sheet(item: $model.composerRequest) { request in
@@ -135,6 +145,20 @@ struct ReviewScreen: View {
                 localized: "\(running.remaining) of \(running.total) pull requests are still in the queue. Nothing you already queued is affected."
             ))
         }
+    }
+
+    /// The freshest CI state Shepherd knows for this pull request.
+    ///
+    /// The detail's own check runs when there are any, because they are what the header's
+    /// "2/3 checks" is counting and they are re-read on every reload; the inbox row's rollup only
+    /// while the detail is still loading. Derived with ``ShepherdCore/CheckRollup/init(runs:)``
+    /// rather than by a second hand-rolled mapping — one definition of "red", "still running" and
+    /// "green" for the badge, the Merge button's colour and the merge sheet's warning.
+    private var headerCheckState: CheckRollup.State? {
+        if let checks = model.detail?.checks, !checks.isEmpty {
+            return CheckRollup(runs: checks).state
+        }
+        return model.summary?.checkRollup?.state
     }
 
     // MARK: - Diff area
@@ -479,6 +503,8 @@ struct ReviewScreen: View {
 struct ReviewHeaderView: View {
     /// The review model.
     let model: ReviewModel
+    /// The freshest CI state, from the screen (``ReviewScreen/headerCheckState``).
+    let checkState: CheckRollup.State?
     /// Returns to the inbox.
     var onBack: () -> Void
     /// Opens the merge sheet.
@@ -562,19 +588,45 @@ struct ReviewHeaderView: View {
             .buttonStyle(SecondaryButtonStyle(height: 30, tint: Theme.accentText))
             .disabled(model.hasEndedOnGitHub)
 
-            Button(action: onMerge) {
-                HStack(spacing: 6) {
-                    Text(String(localized: "Merge"))
-                    Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
-                }
-            }
-            .buttonStyle(SuccessButtonStyle(height: 30))
-            .disabled(model.summary?.mergeable == .conflicting || model.hasEndedOnGitHub)
-            .help(String(localized: "Merge (m)"))
+            mergeButton
         }
         .padding(.horizontal, 16)
         .frame(height: 52)
         .background(Theme.panel)
+    }
+
+    /// The Merge button, green only when merging is the next thing to do.
+    ///
+    /// Green is a recommendation, and the header used to make it on nothing at all: a draft or a
+    /// red suite got the same success-green button as a pull request waiting to land, and the
+    /// only thing that dimmed it was a conflict. Now it is green when nothing blocks the merge
+    /// *and* CI is green, and neutral otherwise. No chevron on the label either — it opens a
+    /// confirmation sheet, not a menu, and the arrow promised one.
+    ///
+    /// Written as two buttons rather than one with a computed style because a `ButtonStyle` is a
+    /// type: there is no value both styles fit in without erasing them.
+    @ViewBuilder
+    private var mergeButton: some View {
+        let isDisabled = model.summary?.mergeBlocker != nil || model.hasEndedOnGitHub
+        if model.summary?.mergeBlocker == nil, checkState == .success {
+            Button(action: onMerge) { Text(String(localized: "Merge")) }
+                .buttonStyle(SuccessButtonStyle(height: 30))
+                .disabled(isDisabled)
+                .help(mergeHelp)
+        } else {
+            Button(action: onMerge) { Text(String(localized: "Merge")) }
+                .buttonStyle(SecondaryButtonStyle(height: 30))
+                .disabled(isDisabled)
+                .help(mergeHelp)
+        }
+    }
+
+    /// Why the Merge button is dark, or the shortcut that presses it.
+    private var mergeHelp: String {
+        guard let summary = model.summary, let blocker = summary.mergeBlocker else {
+            return String(localized: "Merge (m)")
+        }
+        return PullRequestActions.blockerMessage(blocker, slug: summary.slug)
     }
 }
 
