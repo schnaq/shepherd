@@ -554,11 +554,23 @@ final class InboxModel {
     }
 
     /// The grouped sections, ordered by the user's sort choice.
+    ///
+    /// The title is remapped here, not in ``InboxGrouper``: that lives in ShepherdCore, which
+    /// imports Foundation only and cannot call `String(localized:)`, so its provenance section
+    /// title is deliberately plain, stable English ("People"). This maps that one section onto
+    /// the same "Humans" key the rail already uses, so the list agrees with the rail instead of
+    /// showing GitHub-facing English where everything else on the section is German.
     var sections: [InboxSection] {
         InboxGrouper.group(filteredRows, by: settings.groupBy).map { section in
-            InboxSection(
+            let title: String
+            if section.facet == .provenance, section.title == ActorKind.human.provenanceLabel {
+                title = String(localized: "Humans")
+            } else {
+                title = section.title
+            }
+            return InboxSection(
                 id: section.id,
-                title: section.title,
+                title: title,
                 facet: section.facet,
                 items: order(section.items)
             )

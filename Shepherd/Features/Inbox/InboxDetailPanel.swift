@@ -227,7 +227,7 @@ struct InboxDetailPanel: View {
                     onOpenReview(row.id)
                 } label: {
                     HStack(spacing: 6) {
-                        Text(String(localized: "Open full review"))
+                        Text(String(localized: "Open review"))
                         KeyCapView(keys: "⏎")
                     }
                     .frame(maxWidth: .infinity)
@@ -366,7 +366,7 @@ struct PriorityRowView: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 4)
-            Text(priority.reasons.first ?? priority.category.reasonLabel)
+            Text(priority.category.localizedLabel)
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textMuted)
                 .lineLimit(1)
@@ -388,7 +388,7 @@ struct PriorityRowView: View {
                 SpokenRow.sentence([
                     priority.bucket.localizedTitle,
                     priority.file.fileName,
-                    priority.reasons.first ?? priority.category.reasonLabel,
+                    priority.category.localizedLabel,
                 ])
             )
         )

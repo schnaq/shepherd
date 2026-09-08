@@ -24,7 +24,7 @@ struct ShepherdApp: App {
         WindowGroup(id: ShepherdScene.mainWindow) {
             RootView()
                 .environment(environment)
-                .frame(minWidth: 1_040, minHeight: 640)
+                .frame(minWidth: 1_040, minHeight: 720)
                 .preferredColorScheme(environment.settings.appearance.colorScheme)
                 .task {
                     await environment.bootstrap()

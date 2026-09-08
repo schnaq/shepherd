@@ -4421,6 +4421,16 @@
         }
       }
     },
+    "Configuration": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konfiguration"
+          }
+        }
+      }
+    },
     "Continue with device flow": {
       "localizations": {
         "de": {
@@ -5091,6 +5101,16 @@
         }
       }
     },
+    "Documentation": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dokumentation"
+          }
+        }
+      }
+    },
     "Don't ask": {
       "localizations": {
         "de": {
@@ -5757,6 +5777,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Generiert"
+          }
+        }
+      }
+    },
+    "Generated or vendored file": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generierte oder vendored Datei"
           }
         }
       }
@@ -11161,6 +11191,16 @@
         }
       }
     },
+    "Sort the list": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liste sortieren"
+          }
+        }
+      }
+    },
     "Spotlight has not confirmed the removal yet — Shepherd asks again on the next sync.": {
       "localizations": {
         "de": {
@@ -11177,6 +11217,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Der Index von Spotlight gehört macOS, nicht Shepherd — deshalb werden nur der Titel und diese Metadaten exportiert. Beschreibungen, Diffs, Review-Kommentare und deine Drafts verlassen die lokale Datenbank nie. Ausgeschaltet löscht das jeden Pull Request, den Shepherd dort abgelegt hat."
+          }
+        }
+      }
+    },
+    "Source file": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quelldatei"
           }
         }
       }
@@ -11667,6 +11717,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Testereignis"
+          }
+        }
+      }
+    },
+    "Test file": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Testdatei"
           }
         }
       }

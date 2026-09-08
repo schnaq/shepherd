@@ -122,7 +122,6 @@ struct InboxListView: View {
                 Text(String(localized: "Review state")).tag(InboxFacet.reviewState)
             }
             .pickerStyle(.menu)
-            .labelsHidden()
             .frame(width: 140)
             .help(String(localized: "Group the list (g a / g r / g s)"))
 
@@ -132,8 +131,8 @@ struct InboxListView: View {
                 }
             }
             .pickerStyle(.menu)
-            .labelsHidden()
             .frame(width: 160)
+            .help(String(localized: "Sort the list"))
         }
         .padding(.horizontal, 16)
         .frame(height: 42)
@@ -544,6 +543,9 @@ struct InboxRowView: View {
                 .foregroundStyle(isSelected ? Theme.textStrong : Theme.text)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                // The title is the one thing on the row a reviewer actually reads; every chip
+                // beside it is `1`, so a narrow window takes width from them first.
+                .layoutPriority(2)
 
             // The chip is tinted by the track record when there is one — that is ADR 0027's
             // "colours the provenance chip" — and keeps the agent palette's colour when there is
@@ -611,7 +613,7 @@ struct InboxRowView: View {
             RelativeDateText(date: row.updatedAt)
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textMuted)
-                .frame(width: 38, alignment: .trailing)
+                .frame(width: 52, alignment: .trailing)
                 .layoutPriority(1)
         }
         .padding(.horizontal, 16)
@@ -691,6 +693,24 @@ struct InboxRowView: View {
 /// The footer with the key hints from the mockup.
 struct ShortcutBar: View {
     var body: some View {
+        // The bar has a fixed 34 pt height, so `fullHints` wrapping to a second line would clip
+        // it rather than grow it — below the width `fullHints` needs, `compactHints` takes over
+        // instead of letting it wrap.
+        ViewThatFits(in: .horizontal) {
+            fullHints
+            compactHints
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 34)
+        .frame(maxWidth: .infinity)
+        .background(Theme.panel)
+        .overlay(alignment: .top) {
+            Rectangle().fill(Theme.border).frame(height: 1)
+        }
+    }
+
+    /// Every shortcut the list understands.
+    private var fullHints: some View {
         HStack(spacing: 14) {
             ShortcutHintView(keys: ["j", "k"], label: String(localized: "navigate"))
             ShortcutHintView(keys: ["⏎"], label: String(localized: "open review"))
@@ -702,12 +722,20 @@ struct ShortcutBar: View {
             Spacer(minLength: 0)
             ShortcutHintView(keys: ["⌘K"], label: String(localized: "commands"))
         }
-        .padding(.horizontal, 16)
-        .frame(height: 34)
-        .frame(maxWidth: .infinity)
-        .background(Theme.panel)
-        .overlay(alignment: .top) {
-            Rectangle().fill(Theme.border).frame(height: 1)
+        .lineLimit(1)
+    }
+
+    /// The four hints that survive at any width narrower than `fullHints` needs: the ones a
+    /// reviewer reaches for on nearly every row (navigate, open, select) plus the one escape hatch
+    /// to everything else (⌘K) — not the ones used once per pull request (approve, merge, session).
+    private var compactHints: some View {
+        HStack(spacing: 14) {
+            ShortcutHintView(keys: ["j", "k"], label: String(localized: "navigate"))
+            ShortcutHintView(keys: ["⏎"], label: String(localized: "open review"))
+            ShortcutHintView(keys: ["x"], label: String(localized: "select"))
+            Spacer(minLength: 0)
+            ShortcutHintView(keys: ["⌘K"], label: String(localized: "commands"))
         }
+        .lineLimit(1)
     }
 }

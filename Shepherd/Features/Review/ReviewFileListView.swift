@@ -85,7 +85,7 @@ struct ReviewFileListView: View {
                 }
                 if !priority.reasons.isEmpty, !isViewed {
                     HStack(spacing: 4) {
-                        ForEach(priority.reasons.prefix(2), id: \.self) { reason in
+                        ForEach(displayReasons(for: priority), id: \.self) { reason in
                             ChipView(text: reason, color: priority.bucket.tint, size: 10)
                         }
                     }
@@ -150,6 +150,19 @@ struct ReviewFileListView: View {
     private func rowColor(isSelected: Bool, isViewed: Bool) -> Color {
         if isViewed { return Theme.textMuted }
         return isSelected ? Theme.textStrong : Theme.text
+    }
+
+    /// The reason chips shown on a file row, with the first one translated.
+    ///
+    /// `priority.reasons.first` is always the category's plain-English label
+    /// (`FilePrioritizer.swift`'s `score(_:totalChurn:context:)` seeds `reasons` with it and only
+    /// ever appends after it), so this is the one entry that can be swapped for
+    /// ``FileCategory/localizedLabel`` without touching the rest — the other reasons ("Touches
+    /// security-sensitive path …") stay English.
+    private func displayReasons(for priority: FilePriority) -> [String] {
+        var reasons = priority.reasons
+        if !reasons.isEmpty { reasons[0] = priority.category.localizedLabel }
+        return Array(reasons.prefix(2))
     }
 }
 

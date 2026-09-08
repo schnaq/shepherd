@@ -268,46 +268,58 @@ struct IssueDetailPanel: View {
     /// refuses them (ADR 0032's Sprint 2 amendment); giving the issue writes global keys of their
     /// own would be a second verb vocabulary, which is a decision nobody has made.
     private func triageRow(_ row: IssueRowSummary) -> some View {
-        HStack(spacing: 8) {
-            Button {
-                commentBody = ""
-                isCommentSheetPresented = true
-            } label: {
-                Text(String(localized: "Comment…"))
-            }
-            .buttonStyle(SecondaryButtonStyle())
-            .busy(isWriting(row, .issueComment))
-            .disabled(isWritingAnything(row))
-
-            labelMenu(row)
-
-            if let login = model.viewerLogin, !login.isEmpty {
+        // Two rows rather than one: five controls do not fit on one line at the panel's 320 pt
+        // width without clipping their labels. Split by kind — the writes you make *about* the
+        // issue (comment, assign) on top, the writes that change its *state* (label,
+        // close/reopen) below.
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
                 Button {
-                    Task {
-                        let queued = await model.assignToMe(row)
-                        report(
-                            queued: queued,
-                            success: String(localized: "Assignment queued.")
-                        )
-                    }
+                    commentBody = ""
+                    isCommentSheetPresented = true
                 } label: {
-                    Text(String(localized: "Assign to me"))
+                    Text(String(localized: "Comment…"))
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(SecondaryButtonStyle())
-                .busy(isWriting(row, .issueAssign))
-                .disabled(row.myRelation.contains(.assigned) || isWritingAnything(row))
-                .help(
-                    row.myRelation.contains(.assigned)
-                        ? String(localized: "This issue is already assigned to you")
-                        : String(localized: "Add yourself as an assignee, without removing anyone")
-                )
+                .busy(isWriting(row, .issueComment))
+                .disabled(isWritingAnything(row))
+
+                if let login = model.viewerLogin, !login.isEmpty {
+                    Button {
+                        Task {
+                            let queued = await model.assignToMe(row)
+                            report(
+                                queued: queued,
+                                success: String(localized: "Assignment queued.")
+                            )
+                        }
+                    } label: {
+                        Text(String(localized: "Assign to me"))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .busy(isWriting(row, .issueAssign))
+                    .disabled(row.myRelation.contains(.assigned) || isWritingAnything(row))
+                    .help(
+                        row.myRelation.contains(.assigned)
+                            ? String(localized: "This issue is already assigned to you")
+                            : String(localized: "Add yourself as an assignee, without removing anyone")
+                    )
+                }
+
+                assignToAgentButton(row)
+
+                Spacer(minLength: 0)
             }
 
-            assignToAgentButton(row)
+            HStack(spacing: 8) {
+                labelMenu(row)
 
-            stateMenu(row)
+                stateMenu(row)
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 0)
+            }
         }
     }
 
@@ -347,6 +359,7 @@ struct IssueDetailPanel: View {
             )
         } label: {
             Text(String(localized: "Assign to agent…"))
+                .frame(maxWidth: .infinity)
         }
         .buttonStyle(SecondaryButtonStyle())
         // ``ActionActivity/Kind/issueComment``, because that is what this button eventually
@@ -384,16 +397,14 @@ struct IssueDetailPanel: View {
             }
         } label: {
             Text(String(localized: "Label"))
-                // Spelled out for ``ReviewFileHeader``'s reason: a `Menu` draws its own label and
-                // never reaches one of the three button styles, where ``View/busy(_:)``'s
-                // spinner lives.
-                .opacity(isWriting(row, .issueLabel) ? 0 : 1)
-                .overlay {
-                    if isWriting(row, .issueLabel) { ProgressView().controlSize(.small) }
-                }
+                .frame(maxWidth: .infinity)
         }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
+        // `.button` — styled through ``SecondaryButtonStyle`` like every neighbouring control,
+        // which is also what lets ``View/busy(_:)`` reach this menu. The borderless menu style
+        // this used to have draws its own label and never runs it through a `ButtonStyle` at all.
+        .menuStyle(.button)
+        .buttonStyle(SecondaryButtonStyle())
+        .busy(isWriting(row, .issueLabel))
         .disabled(isWritingAnything(row))
         .help(
             String(
@@ -413,6 +424,7 @@ struct IssueDetailPanel: View {
                 }
             } label: {
                 Text(String(localized: "Reopen"))
+                    .frame(maxWidth: .infinity)
             }
             .buttonStyle(SecondaryButtonStyle())
             .busy(isWriting(row, .issueState))
@@ -433,14 +445,14 @@ struct IssueDetailPanel: View {
                 }
             } label: {
                 Text(String(localized: "Close"))
-                    // A `Menu` again, so the spinner is spelled out — see ``labelMenu(_:)``.
-                    .opacity(isWriting(row, .issueState) ? 0 : 1)
-                    .overlay {
-                        if isWriting(row, .issueState) { ProgressView().controlSize(.small) }
-                    }
+                    .frame(maxWidth: .infinity)
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
+            // Same reason as ``labelMenu(_:)``: `.button` runs the label through
+            // ``SecondaryButtonStyle``, which is what lets ``View/busy(_:)`` show a spinner here
+            // instead of the inline opacity/overlay trick a borderless menu needed.
+            .menuStyle(.button)
+            .buttonStyle(SecondaryButtonStyle())
+            .busy(isWriting(row, .issueState))
             .disabled(isWritingAnything(row))
         }
     }

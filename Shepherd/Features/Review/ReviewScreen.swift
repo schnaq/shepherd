@@ -536,6 +536,8 @@ struct ReviewHeaderView: View {
                         Text(summary.slug)
                             .font(Theme.mono(12))
                             .foregroundStyle(Theme.textMuted)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                         ProvenanceChip(actor: summary.author)
                     }
                     HStack(spacing: 6) {

@@ -547,11 +547,16 @@ struct InboxScreen: View {
 struct SyncStatusView: View {
     /// The active session.
     let session: SignedInSession
+    /// Needed only so the failed-writes text below can act as a button to Settings → Sync.
+    @Environment(AppEnvironment.self) private var environment
 
     var body: some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(session.lastSyncError == nil ? Theme.success : Theme.failure)
+                // Failure outranks the merely-parked state, and a failed write is a failure even
+                // while a *different* sync attempt is still succeeding — the dot has to say the
+                // worst true thing, not just the most recent one.
+                .fill(dotColor)
                 .frame(width: 6, height: 6)
             if session.isSyncing {
                 Text(String(localized: "Syncing…"))
@@ -563,7 +568,9 @@ struct SyncStatusView: View {
                     Text(String(localized: "Synced"))
                     RelativeDateText(date: date)
                 }
-            } else {
+            } else if session.failedOutboxCount == 0 {
+                // "Not synced yet" would be a lie once there are failed writes on record — those
+                // came from a sync that did happen.
                 Text(String(localized: "Not synced yet"))
             }
             // Parked mutations do not drain by themselves (ADR 0006), so the title bar says so
@@ -582,14 +589,35 @@ struct SyncStatusView: View {
             // (ADR 0032); this is the same sentence about the account.
             if session.failedOutboxCount > 0 {
                 Text(verbatim: "·")
-                Text(String(localized: "\(session.failedOutboxCount) failed — see Settings → Sync"))
-                    .foregroundStyle(Theme.failure)
-                    .help(String(
-                        localized: "Queued writes Shepherd gave up on: GitHub refused them, or they could not be made at all. They are never retried by themselves — Settings → Sync lists each one and offers Retry or Discard."
-                    ))
+                // A status line that names the fix but does not let you take it is a dead end —
+                // Settings → Sync is one click away everywhere else this count is mentioned
+                // (the toolbar menu at `.failedWrites` above), so the title bar should not be the
+                // one place you have to go find it yourself.
+                Button {
+                    environment.showSettings(.sync)
+                } label: {
+                    Text(String(localized: "\(session.failedOutboxCount) failed — see Settings → Sync"))
+                        .foregroundStyle(Theme.failure)
+                }
+                .buttonStyle(.plain)
+                .help(String(
+                    localized: "Queued writes Shepherd gave up on: GitHub refused them, or they could not be made at all. They are never retried by themselves — Settings → Sync lists each one and offers Retry or Discard."
+                ))
             }
         }
         .font(.system(size: 11))
         .foregroundStyle(Theme.textMuted)
+    }
+
+    /// The worst true state wins: a failed write outranks "synced fine a moment ago", and a
+    /// merely parked (conflicted) write outranks a clean success but not a failure.
+    private var dotColor: Color {
+        if session.lastSyncError != nil || session.failedOutboxCount > 0 {
+            Theme.failure
+        } else if session.conflictedOutboxCount > 0 {
+            Theme.pending
+        } else {
+            Theme.success
+        }
     }
 }

@@ -20,6 +20,9 @@ struct RootView: View {
         }
         .overlay(alignment: .bottomTrailing) {
             ToastStackView(center: environment.toasts)
+                // Lifted above the 34 pt shortcut bar / composer bar so a toast never sits behind
+                // it.
+                .padding(.bottom, 44)
         }
         .tint(Theme.accent)
         .task {
