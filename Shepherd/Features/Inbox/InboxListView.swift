@@ -122,7 +122,7 @@ struct InboxListView: View {
                 Text(String(localized: "Review state")).tag(InboxFacet.reviewState)
             }
             .pickerStyle(.menu)
-            .frame(width: 140)
+            .frame(width: 200)
             .help(String(localized: "Group the list (g a / g r / g s)"))
 
             Picker(String(localized: "Sort"), selection: sortBinding) {
@@ -131,7 +131,7 @@ struct InboxListView: View {
                 }
             }
             .pickerStyle(.menu)
-            .frame(width: 160)
+            .frame(width: 250)
             .help(String(localized: "Sort the list"))
         }
         .padding(.horizontal, 16)
@@ -692,13 +692,37 @@ struct InboxRowView: View {
 
 /// The footer with the key hints from the mockup.
 struct ShortcutBar: View {
+    /// One key hint, and whether it survives in the compact set.
+    private struct Hint {
+        let keys: [String]
+        let label: String
+        /// The ones a reviewer reaches for on nearly every row (navigate, open, select) plus the
+        /// one escape hatch to everything else (⌘K) — not the ones used once per pull request
+        /// (approve, merge, session).
+        let isCompact: Bool
+    }
+
+    /// Every shortcut the list understands, in display order. `commands` is always last so the
+    /// row's trailing `Spacer` — inserted by ``hintRow(_:)`` — pins it to the far edge in both
+    /// the full and the compact set.
+    private static let hints: [Hint] = [
+        Hint(keys: ["j", "k"], label: String(localized: "navigate"), isCompact: true),
+        Hint(keys: ["⏎"], label: String(localized: "open review"), isCompact: true),
+        Hint(keys: ["r a"], label: String(localized: "approve"), isCompact: false),
+        Hint(keys: ["r x"], label: String(localized: "request changes"), isCompact: false),
+        Hint(keys: ["m"], label: String(localized: "merge"), isCompact: false),
+        Hint(keys: ["x"], label: String(localized: "select"), isCompact: true),
+        Hint(keys: ["r f"], label: String(localized: "session"), isCompact: false),
+        Hint(keys: ["⌘K"], label: String(localized: "commands"), isCompact: true),
+    ]
+
     var body: some View {
-        // The bar has a fixed 34 pt height, so `fullHints` wrapping to a second line would clip
-        // it rather than grow it — below the width `fullHints` needs, `compactHints` takes over
-        // instead of letting it wrap.
+        // The bar has a fixed 34 pt height, so the full row wrapping to a second line would clip
+        // it rather than grow it — below the width the full row needs, the compact one (every
+        // `isCompact` hint) takes over instead of letting it wrap.
         ViewThatFits(in: .horizontal) {
-            fullHints
-            compactHints
+            hintRow(Self.hints)
+            hintRow(Self.hints.filter(\.isCompact))
         }
         .padding(.horizontal, 16)
         .frame(height: 34)
@@ -709,32 +733,17 @@ struct ShortcutBar: View {
         }
     }
 
-    /// Every shortcut the list understands.
-    private var fullHints: some View {
+    /// One row of hints, with a `Spacer` before the last one — the shape both the full and the
+    /// compact set share.
+    private func hintRow(_ hints: [Hint]) -> some View {
         HStack(spacing: 14) {
-            ShortcutHintView(keys: ["j", "k"], label: String(localized: "navigate"))
-            ShortcutHintView(keys: ["⏎"], label: String(localized: "open review"))
-            ShortcutHintView(keys: ["r a"], label: String(localized: "approve"))
-            ShortcutHintView(keys: ["r x"], label: String(localized: "request changes"))
-            ShortcutHintView(keys: ["m"], label: String(localized: "merge"))
-            ShortcutHintView(keys: ["x"], label: String(localized: "select"))
-            ShortcutHintView(keys: ["r f"], label: String(localized: "session"))
+            ForEach(hints.dropLast(), id: \.label) { hint in
+                ShortcutHintView(keys: hint.keys, label: hint.label)
+            }
             Spacer(minLength: 0)
-            ShortcutHintView(keys: ["⌘K"], label: String(localized: "commands"))
-        }
-        .lineLimit(1)
-    }
-
-    /// The four hints that survive at any width narrower than `fullHints` needs: the ones a
-    /// reviewer reaches for on nearly every row (navigate, open, select) plus the one escape hatch
-    /// to everything else (⌘K) — not the ones used once per pull request (approve, merge, session).
-    private var compactHints: some View {
-        HStack(spacing: 14) {
-            ShortcutHintView(keys: ["j", "k"], label: String(localized: "navigate"))
-            ShortcutHintView(keys: ["⏎"], label: String(localized: "open review"))
-            ShortcutHintView(keys: ["x"], label: String(localized: "select"))
-            Spacer(minLength: 0)
-            ShortcutHintView(keys: ["⌘K"], label: String(localized: "commands"))
+            if let last = hints.last {
+                ShortcutHintView(keys: last.keys, label: last.label)
+            }
         }
         .lineLimit(1)
     }

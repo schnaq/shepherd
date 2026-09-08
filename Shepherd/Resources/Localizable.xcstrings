@@ -5786,7 +5786,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Generierte oder vendored Datei"
+            "value": "Generierte oder mitgelieferte Datei"
           }
         }
       }
