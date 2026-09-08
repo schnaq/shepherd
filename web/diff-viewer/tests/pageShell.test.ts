@@ -62,4 +62,18 @@ describe('dist/index.html shell', () => {
     expect(csp.get('worker-src')).toContain('blob:');
     expect(csp.get('script-src')).toContain('blob:');
   });
+
+  it('settles the theme before the stylesheet can paint', () => {
+    // The bug this guards: the shell shipped `class="shepherd-theme-light"` and nothing else, so
+    // a dark app opened every file on a white page until the bridge's `setTheme` arrived.
+    const bootstrap = html.indexOf('__shepherdTheme');
+    const stylesheet = html.indexOf('rel="stylesheet"');
+    expect(bootstrap, 'no theme bootstrap in the shell').toBeGreaterThan(-1);
+    expect(stylesheet).toBeGreaterThan(-1);
+    expect(bootstrap, 'the theme is decided after the stylesheet loads').toBeLessThan(stylesheet);
+    // The app's WKUserScript wins over the system preference; the preference is the fallback.
+    expect(html).toContain('prefers-color-scheme: dark');
+    expect(html).toContain('shepherd-theme-dark');
+    expect(html).toContain('name="color-scheme"');
+  });
 });

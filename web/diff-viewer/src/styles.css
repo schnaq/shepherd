@@ -2,6 +2,13 @@
  * Chrome around Monaco: the page shell plus the review-thread / draft view zones.
  * Colours are driven by `.shepherd-theme-light` / `.shepherd-theme-dark` on <html>, which the
  * viewer toggles from the bridge's `setTheme` message — the same switch that re-themes Monaco.
+ * The *first* class is put there before this file is even requested, by the boot script in
+ * index.html (and, in the app, by DiffViewerView's WKUserScript before that): a stylesheet
+ * cannot help with the frame painted before it loads, so the class has to be right on arrival.
+ *
+ * `color-scheme` per class rather than only in the <meta>, because the meta says "either is
+ * fine" and the class says which one it is — that is what keeps the UA's own canvas, scrollbars
+ * and form controls from flashing white under a dark page.
  */
 
 :root {
@@ -11,6 +18,7 @@
 }
 
 .shepherd-theme-light {
+  color-scheme: light;
   --sh-bg: #ffffff;
   --sh-card-bg: #f6f8fa;
   --sh-card-border: #d0d7de;
@@ -29,6 +37,7 @@
 }
 
 .shepherd-theme-dark {
+  color-scheme: dark;
   --sh-bg: #0d1117;
   --sh-card-bg: #161b22;
   --sh-card-border: #30363d;

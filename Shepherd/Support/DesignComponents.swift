@@ -55,6 +55,13 @@ struct EmptyStateView: View {
     var title: String
     /// An optional second line.
     var message: String?
+    /// An optional way out of the state: one button under the message.
+    ///
+    /// Optional, and last, so every existing call site compiles unchanged. It exists because not
+    /// every empty state is a fact to be read: a detail fetch that failed and a file list GitHub
+    /// has not sent yet are both *recoverable*, and describing a fixable problem without offering
+    /// the fix leaves the reviewer hunting for the refresh key.
+    var action: (title: String, run: () -> Void)?
 
     var body: some View {
         VStack(spacing: 8) {
@@ -70,6 +77,11 @@ struct EmptyStateView: View {
                     .foregroundStyle(Theme.textMuted)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+            if let action {
+                Button(action.title, action: action.run)
+                    .buttonStyle(SecondaryButtonStyle())
+                    .padding(.top, 4)
             }
         }
         .frame(maxWidth: 320)

@@ -36,7 +36,7 @@ struct ReviewScreen: View {
         VStack(spacing: 0) {
             ReviewHeaderView(
                 model: model,
-                checkState: headerCheckState,
+                checkRollup: headerCheckRollup,
                 onBack: leaveReview,
                 onMerge: { model.isMergeSheetPresented = true },
                 onReview: { model.isSubmitSheetPresented = true },
@@ -119,7 +119,7 @@ struct ReviewScreen: View {
             if let summary = model.summary {
                 MergeSheet(
                     summary: summary,
-                    checkState: headerCheckState,
+                    checkState: headerCheckRollup?.state,
                     actions: actions,
                     settings: environment.settings
                 )
@@ -147,18 +147,22 @@ struct ReviewScreen: View {
         }
     }
 
-    /// The freshest CI state Shepherd knows for this pull request.
+    /// The freshest CI rollup Shepherd knows for this pull request.
     ///
     /// The detail's own check runs when there are any, because they are what the header's
     /// "2/3 checks" is counting and they are re-read on every reload; the inbox row's rollup only
     /// while the detail is still loading. Derived with ``ShepherdCore/CheckRollup/init(runs:)``
     /// rather than by a second hand-rolled mapping — one definition of "red", "still running" and
     /// "green" for the badge, the Merge button's colour and the merge sheet's warning.
-    private var headerCheckState: CheckRollup.State? {
+    ///
+    /// The whole rollup rather than only its state, because the badge needs the counts and the
+    /// two callers that only want the verdict can ask for `.state`. One fallback chain, read
+    /// three ways.
+    private var headerCheckRollup: CheckRollup? {
         if let checks = model.detail?.checks, !checks.isEmpty {
-            return CheckRollup(runs: checks).state
+            return CheckRollup(runs: checks)
         }
-        return model.summary?.checkRollup?.state
+        return model.summary?.checkRollup
     }
 
     // MARK: - Diff area
@@ -206,8 +210,31 @@ struct ReviewScreen: View {
     private var diffOrPlaceholder: some View {
         if model.isMissingFromInbox {
             missingFromInbox
+        } else if let error = model.detailLoadError {
+            // Ahead of the cached detail on purpose. A refresh that failed leaves a diff whose
+            // age Shepherd cannot vouch for, and the live test found the silent version of that
+            // — gutters, no text, a header still claiming two files — to be the worse lie.
+            EmptyStateView(
+                systemImage: "exclamationmark.triangle",
+                title: String(localized: "Could not load this pull request"),
+                message: error,
+                action: (title: String(localized: "Try again"), run: { model.load() })
+            )
         } else if model.detail == nil {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if model.detail?.files.isEmpty == true,
+                  let claimed = model.summary?.changedFiles, claimed > 0 {
+            // The header counts `changedFiles` off the same summary, so an empty file list beside
+            // it is a contradiction rather than an empty pull request: GitHub sent the count and
+            // not the files. Say which of the two Shepherd believes, and offer the retry.
+            EmptyStateView(
+                systemImage: "exclamationmark.triangle",
+                title: String(localized: "Files have not arrived yet"),
+                message: String(
+                    localized: "GitHub reports \(claimed) changed files, but sent none of them."
+                ),
+                action: (title: String(localized: "Try again"), run: { model.load() })
+            )
         } else if model.detail?.files.isEmpty == true {
             EmptyStateView(
                 systemImage: "doc.text.magnifyingglass",
@@ -504,8 +531,8 @@ struct ReviewScreen: View {
 struct ReviewHeaderView: View {
     /// The review model.
     let model: ReviewModel
-    /// The freshest CI state, from the screen (``ReviewScreen/headerCheckState``).
-    let checkState: CheckRollup.State?
+    /// The freshest CI rollup, from the screen (``ReviewScreen/headerCheckRollup``).
+    let checkRollup: CheckRollup?
     /// Returns to the inbox.
     var onBack: () -> Void
     /// Opens the merge sheet.
@@ -562,8 +589,13 @@ struct ReviewHeaderView: View {
 
             Spacer(minLength: 8)
 
-            if let checks = model.detail?.checks, !checks.isEmpty {
-                ChecksSummaryView(checks: checks)
+            // The inbox row's rollup stands in while the detail has no check runs of its own
+            // (``ReviewScreen/headerCheckRollup``). The sweep knows a suite is red long before
+            // the detail fetch lands, and hiding the badge until then said "no checks" when the
+            // truth was "not read yet". `total > 0` is the gate rather than the state, because a
+            // rollup that counted nothing has nothing to show.
+            if let checkRollup, checkRollup.total > 0 {
+                ChecksSummaryView(rollup: checkRollup)
             }
 
             Button(action: onDelegate) {
@@ -611,7 +643,7 @@ struct ReviewHeaderView: View {
     @ViewBuilder
     private var mergeButton: some View {
         let isDisabled = model.summary?.mergeBlocker != nil || model.hasEndedOnGitHub
-        if model.summary?.mergeBlocker == nil, checkState == .success {
+        if model.summary?.mergeBlocker == nil, checkRollup?.state == .success {
             Button(action: onMerge) { Text(String(localized: "Merge")) }
                 .buttonStyle(SuccessButtonStyle(height: 30))
                 .disabled(isDisabled)
@@ -635,20 +667,56 @@ struct ReviewHeaderView: View {
 
 /// The "2/3 checks" summary in the review header.
 struct ChecksSummaryView: View {
-    /// The head commit's check runs.
-    let checks: [CheckRun]
+    /// The rolled-up state of the head commit's checks.
+    let rollup: CheckRollup
+
+    /// Shows the summary for a fully fetched list of check runs.
+    /// - Parameter checks: The head commit's check runs.
+    init(checks: [CheckRun]) {
+        self.rollup = CheckRollup(runs: checks)
+    }
+
+    /// Shows the summary for a rollup somebody else already has.
+    ///
+    /// The inbox row carries one from the sweep, and that rollup knows the state and the number
+    /// of contexts but not the split — GraphQL's `statusCheckRollup` reports a verdict and a
+    /// count, so ``ShepherdCore/CheckRollup/successCount`` is zero there (see
+    /// `ResponseMapping.pullRequestSummary(from:relations:detector:)`). So the fraction is drawn
+    /// only when somebody actually counted, and "3 checks" beside the dot otherwise: it is every
+    /// fact there is, and "0/3" would be a wrong one.
+    /// - Parameter rollup: The rolled-up check state.
+    init(rollup: CheckRollup) {
+        self.rollup = rollup
+    }
+
+    /// Whether the rollup carries the per-outcome split, or only a verdict and a total.
+    private var hasCounts: Bool {
+        rollup.successCount + rollup.failureCount + rollup.pendingCount > 0
+    }
 
     var body: some View {
-        let rollup = CheckRollup(runs: checks)
         HStack(spacing: 6) {
             CheckDotView(state: rollup.state, size: 7)
-            Text("\(rollup.successCount)/\(rollup.total)")
-                .monospacedDigit()
+            if hasCounts {
+                Text("\(rollup.successCount)/\(rollup.total)")
+                    .monospacedDigit()
+            } else {
+                // `verbatim` because a bare number is the same in every language, and giving it a
+                // catalog key would ask a translator to translate "3".
+                Text(verbatim: "\(rollup.total)")
+                    .monospacedDigit()
+            }
             Text(String(localized: "checks"))
         }
         .font(.system(size: 12))
         .foregroundStyle(color(for: rollup.state))
-        .help(helpText(for: rollup))
+        .help(
+            hasCounts
+                ? helpText(for: rollup)
+                : String(
+                    localized: "\(rollup.total) checks on the head commit; Shepherd has not read them yet."
+                )
+        )
     }
 
     private func color(for state: CheckRollup.State) -> Color {

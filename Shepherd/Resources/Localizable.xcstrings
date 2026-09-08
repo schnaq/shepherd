@@ -421,6 +421,16 @@
         }
       }
     },
+    "%lld checks on the head commit; Shepherd has not read them yet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Checks auf dem Head-Commit; Shepherd hat sie noch nicht gelesen."
+          }
+        }
+      }
+    },
     "%lld closed pull requests read": {
       "localizations": {
         "de": {
@@ -4551,6 +4561,16 @@
         }
       }
     },
+    "Could not load this pull request": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Pull Request konnte nicht geladen werden"
+          }
+        }
+      }
+    },
     "Could not mark %@ ready for review": {
       "localizations": {
         "de": {
@@ -5591,6 +5611,16 @@
         }
       }
     },
+    "Files have not arrived yet": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Dateien sind noch nicht da"
+          }
+        }
+      }
+    },
     "Fill in the endpoint, bucket and region first.": {
       "localizations": {
         "de": {
@@ -5887,6 +5917,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "GitHub hat für diesen Pull Request keine geänderten Dateien gemeldet."
+          }
+        }
+      }
+    },
+    "GitHub reports %lld changed files, but sent none of them.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub meldet %lld geänderte Dateien, hat aber keine davon geschickt."
           }
         }
       }

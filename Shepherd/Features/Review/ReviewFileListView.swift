@@ -9,12 +9,11 @@ struct ReviewFileListView: View {
     var body: some View {
         VStack(spacing: 0) {
             if model.visiblePriorities.isEmpty {
+                let state = emptyState
                 EmptyStateView(
-                    systemImage: "doc.on.doc",
-                    title: model.roundView == .sinceReview
-                        ? String(localized: "Nothing new")
-                        : String(localized: "No files yet"),
-                    message: emptyMessage
+                    systemImage: state.systemImage,
+                    title: state.title,
+                    message: state.message
                 )
             } else {
                 ScrollView {
@@ -34,13 +33,43 @@ struct ReviewFileListView: View {
         .background(Theme.panel)
     }
 
-    private var emptyMessage: String {
-        if model.roundView == .sinceReview {
-            return String(localized: "No file changed since the head you reviewed.")
+    /// What an empty file list means, in the order ``ReviewScreen/diffOrPlaceholder`` uses.
+    ///
+    /// The same three claims the diff area makes, one line each, because the two are read
+    /// together: a list saying "This pull request has no changed files" beside a diff that failed
+    /// to load is how the live test's empty Monaco went unexplained. Nothing is threaded in — the
+    /// model carries the error and the summary the header is counting from — so the two orders
+    /// cannot drift apart by a call site being missed.
+    private var emptyState: (systemImage: String, title: String, message: String) {
+        if let error = model.detailLoadError {
+            return (
+                "exclamationmark.triangle",
+                String(localized: "Could not load this pull request"),
+                error
+            )
         }
-        return model.isRefreshing
-            ? String(localized: "Fetching the diff…")
-            : String(localized: "This pull request has no changed files.")
+        if model.detail?.files.isEmpty == true,
+           let claimed = model.summary?.changedFiles, claimed > 0 {
+            return (
+                "exclamationmark.triangle",
+                String(localized: "Files have not arrived yet"),
+                String(localized: "GitHub reports \(claimed) changed files, but sent none of them.")
+            )
+        }
+        if model.roundView == .sinceReview {
+            return (
+                "doc.on.doc",
+                String(localized: "Nothing new"),
+                String(localized: "No file changed since the head you reviewed.")
+            )
+        }
+        return (
+            "doc.on.doc",
+            String(localized: "No files yet"),
+            model.isRefreshing
+                ? String(localized: "Fetching the diff…")
+                : String(localized: "This pull request has no changed files.")
+        )
     }
 
     private func bucketHeader(_ bucket: PriorityBucket, count: Int) -> some View {

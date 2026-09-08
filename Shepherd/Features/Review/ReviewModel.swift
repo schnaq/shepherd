@@ -126,6 +126,14 @@ final class ReviewModel {
     private(set) var focusOutcome: IntelligenceOutcome<[FocusHint]> = .disabled
     /// Whether a refresh is in flight.
     private(set) var isRefreshing = false
+    /// Why the last detail load failed, in the error's own words, or `nil` when it did not.
+    ///
+    /// Every failure on the way to a diff used to be dropped on the floor: offline, a 404 for a
+    /// repository the token cannot see, a decode that did not fit. The screen then sat on its
+    /// opening spinner, or — worse — on a cached detail that had quietly stopped matching GitHub,
+    /// and a reviewer read an empty file list as "nothing changed". This is what the screen and
+    /// the file list say instead, beside a Try again that calls ``load()`` again.
+    private(set) var detailLoadError: String?
     /// Whether a submit is in flight.
     private(set) var isSubmitting = false
     /// What the banner above the screen is saying, or `nil` when GitHub has said nothing new.
@@ -325,34 +333,69 @@ final class ReviewModel {
     }
 
     /// Reloads from the cache and from GitHub.
+    ///
+    /// The screen's only reload: ``start()`` calls it, and so does the Try again button on the
+    /// two failure states. There is deliberately no second fetch path for the retry — a button
+    /// that reloaded differently from the opening load would be a second thing to keep true.
+    ///
+    /// ``detailLoadError`` is cleared here rather than inside the task on purpose: pressing Try
+    /// again then swaps the error for the spinner on the same runloop turn, and the flag can
+    /// never be set while ``isRefreshing`` is, which is what lets the file list and the diff area
+    /// order their empty states identically without agreeing on anything else.
     func load() {
         loadTask?.cancel()
+        detailLoadError = nil
         loadTask = Task { [weak self] in
             guard let self else { return }
+            // The one read whose failure is not news: a review opened for the first time has no
+            // cached detail, and "nothing in the cache" arrives here as a `nil` rather than as a
+            // throw anyway. Everything below can mean "GitHub said no", so it is caught.
             if let cached = try? await self.session.database.fetchPullRequestDetail(id: self.prID),
                ReviewModel.shouldApplyCached(shown: self.detail) {
                 self.apply(cached)
             }
             self.isRefreshing = true
             defer { self.isRefreshing = false }
-            // The row is normally in the inbox table even when no detail has been fetched yet.
-            // When it is not, the sweep pruned it: say so instead of spinning forever.
-            guard let row = try? await self.session.database.fetchPullRequestSummary(id: self.prID)
-            else {
-                self.isMissingFromInbox = self.detail == nil
-                return
-            }
-            self.isMissingFromInbox = false
-            if let fresh = try? await self.session.github.pullRequestDetail(
-                repo: row.repo,
-                number: row.number
-            ) {
-                try? await self.session.database.savePullRequestDetail(fresh)
+            do {
+                // The row is normally in the inbox table even when no detail has been fetched
+                // yet. When it is *missing*, the sweep pruned it: say so instead of spinning
+                // forever. A thrown read is the other claim — the database is unwell, not the
+                // pull request gone — and belongs in the failure state below.
+                guard let row = try await self.session.database.fetchPullRequestSummary(
+                    id: self.prID
+                ) else {
+                    self.isMissingFromInbox = self.detail == nil
+                    return
+                }
+                self.isMissingFromInbox = false
+                let fresh = try await self.session.github.pullRequestDetail(
+                    repo: row.repo,
+                    number: row.number
+                )
+                // The save is not an optimisation: ``observeDetail()`` is how every other screen
+                // and every later reload sees this fetch, so a write that failed means the
+                // reviewer is looking at something Shepherd cannot keep. It fails the load.
+                try await self.session.database.savePullRequestDetail(fresh)
                 guard !Task.isCancelled else { return }
                 self.apply(fresh)
                 self.onDidLoadDetail?(self.prID)
+            } catch {
+                // A cancelled load is the *next* load starting — ⌘R pressed twice, or the screen
+                // closing — and painting the failure state over it would be a lie about GitHub.
+                guard !Task.isCancelled else { return }
+                self.detailLoadError = ReviewModel.describe(error)
             }
         }
+    }
+
+    /// The sentence a failed load shows.
+    ///
+    /// The same shape ``ToastCenter/failure(_:context:)`` uses, and for the same reason: the
+    /// error's own words, shown verbatim, never printed anywhere (project rule).
+    /// - Parameter error: What the load threw.
+    /// - Returns: The error's description.
+    private static func describe(_ error: any Error) -> String {
+        (error as? any LocalizedError)?.errorDescription ?? error.localizedDescription
     }
 
     private func observeDraft() {
