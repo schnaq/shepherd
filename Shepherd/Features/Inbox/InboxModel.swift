@@ -61,7 +61,13 @@ enum SmartView: String, CaseIterable, Identifiable, Sendable {
 }
 
 /// Which provenance facet the rail has selected.
-enum ProvenanceFilter: Hashable, Sendable {
+///
+/// `Codable` for one caller: ``InboxModel/RailState`` writes the rail into scene storage so it
+/// survives the screen being rebuilt (ADR 0013). The synthesized shape is nobody's contract — it
+/// is read back only by the build that wrote it, and a string that will not decode simply means
+/// "no rail to restore" — which is why it is synthesized rather than spelled out a second time
+/// beside ``InboxDeepLinkFilter``'s token vocabulary.
+enum ProvenanceFilter: Hashable, Sendable, Codable {
     /// One detected agent.
     case agent(id: String)
     /// Generic bot accounts.
@@ -1032,21 +1038,28 @@ final class InboxModel {
     /// defaults. So the rail is written down somewhere the rebuild cannot reach, and this is the
     /// sentence it is written in.
     ///
-    /// The three link-addressable facets travel as a `shepherd://inbox?filter=…` token rather than
-    /// as three fields, because that vocabulary already exists and is already tested in both
-    /// directions (``InboxRailSelection`` coming back, this going out). The other two facets and
-    /// the cursor travel beside it, because the grammar has no words for them.
+    /// Every facet is its own field, and deliberately **not** a `shepherd://inbox?filter=…` token.
+    /// The rail *composes*: the sidebar sets a smart view, a repository and a provenance
+    /// independently, and the risk and lane facets narrow whatever those three say. The link
+    /// grammar does not compose — it has one token for one smart view *or* one facet, and a facet
+    /// token widens the view to "Involved" (``InboxRailSelection``). So the ordinary rail "Needs
+    /// my review, in this repository" has no token at all, and a token would have restored it as a
+    /// rail the reader never set. A vocabulary for addressing an inbox from outside is not a
+    /// vocabulary for remembering one from inside.
     ///
-    /// A pure value for ``InboxRailSelection``'s reason: the mapping is testable without a
-    /// session, and the model only reads and assigns it.
+    /// A pure value for ``InboxRailSelection``'s reason: it is testable without a session, and the
+    /// model only reads it and assigns it.
     struct RailState: Codable, Equatable {
-        /// The rail's smart view and its provenance or repository facet, as one token — or `nil`
-        /// when they are a combination `shepherd://inbox?filter=…` cannot say.
-        var filterToken: String?
-        /// The risk facet's ``TriageVerdict/Risk`` raw value (ADR 0023 added the facet; ADR 0013's
-        /// link grammar predates it and has no token for it).
+        /// ``SmartView``'s raw value, as a string rather than the enum: a rail written by a build
+        /// whose sidebar has a fifth smart view is still a rail this build can read the rest of.
+        var smartView: String
+        /// The provenance facet, if any.
+        var provenance: ProvenanceFilter?
+        /// The repository facet, if any.
+        var repo: RepoRef?
+        /// The risk facet's ``TriageVerdict/Risk`` raw value (ADR 0023).
         var risk: String?
-        /// The trust lane's ``TrustLane`` raw value (ADR 0027, and the same argument).
+        /// The trust lane's ``TrustLane`` raw value (ADR 0027).
         var lane: String?
         /// The keyboard cursor's pull-request id.
         var selectedID: String?
@@ -1067,73 +1080,25 @@ final class InboxModel {
             laneFilter: TrustLane?,
             selectedID: String?
         ) {
-            filterToken = RailState.token(
-                smartView: smartView,
-                provenanceFilter: provenanceFilter,
-                repoFilter: repoFilter
-            )
+            self.smartView = smartView.rawValue
+            provenance = provenanceFilter
+            repo = repoFilter
             risk = riskFilter?.rawValue
             lane = laneFilter?.rawValue
             self.selectedID = selectedID
         }
 
-        /// The filter the stored token names, if it still parses.
-        var filter: InboxDeepLinkFilter? {
-            filterToken.flatMap(InboxDeepLinkFilter.init(token:))
-        }
-
-        /// The token for a rail, or `nil` when no single token says exactly that rail.
+        /// The smart view the rail was on.
         ///
-        /// The check at the end is the whole of the honesty here: a candidate token is kept only
-        /// when reading it back through ``InboxRailSelection`` — which is what
-        /// ``InboxModel/restore(_:)`` does — reproduces all three facets. Two rails fail it, and
-        /// both would otherwise be restored as a rail the reader never set: a facet beside a smart
-        /// view other than "Involved" (the facet tokens widen it), and both facets at once (no
-        /// token carries two). Losing a rail is a smaller lie than inventing one.
-        /// - Parameters:
-        ///   - smartView: The selected smart view.
-        ///   - provenanceFilter: The provenance facet, if any.
-        ///   - repoFilter: The repository facet, if any.
-        /// - Returns: The token, or `nil`.
-        private static func token(
-            smartView: SmartView,
-            provenanceFilter: ProvenanceFilter?,
-            repoFilter: RepoRef?
-        ) -> String? {
-            let candidate: InboxDeepLinkFilter?
-            switch (provenanceFilter, repoFilter) {
-            case (nil, nil):
-                switch smartView {
-                case .needsMyReview: candidate = .needsMyReview
-                case .myPullRequests: candidate = .myPullRequests
-                case .involved: candidate = .involved
-                case .approvedByMe: candidate = .approvedByMe
-                }
-            case (nil, .some(let repo)):
-                candidate = .repository(repo)
-            case (.some(let provenance), nil):
-                switch provenance {
-                case .humans: candidate = .humans
-                case .bots: candidate = .bots
-                case .agent(let id): candidate = .agent(id: id)
-                }
-            case (.some, .some):
-                candidate = nil
-            }
-            // Parsed back rather than trusted, because that is the trip the token actually makes:
-            // an agent id is lowercased on the way in and a repository name is validated, so a
-            // token that comes back as something else is one this rail cannot be restored from.
-            guard let candidate,
-                let parsed = InboxDeepLinkFilter(token: candidate.token)
-            else { return nil }
-            let selection = InboxRailSelection(parsed)
-            guard selection.smartView == smartView,
-                selection.provenanceFilter == provenanceFilter,
-                selection.repoFilter == repoFilter,
-                selection.contentKind == .pullRequests
-            else { return nil }
-            return candidate.token
-        }
+        /// A raw value this build does not know falls back to the rail's own default rather than
+        /// to nothing, because there is no such thing as an inbox with no smart view selected.
+        var view: SmartView { SmartView(rawValue: smartView) ?? .needsMyReview }
+
+        /// The risk facet the rail had, if the stored raw value is one this build knows.
+        var riskFacet: TriageVerdict.Risk? { risk.flatMap(TriageVerdict.Risk.init(rawValue:)) }
+
+        /// The trust lane the rail had, if the stored raw value is one this build knows.
+        var laneFacet: TrustLane? { lane.flatMap(TrustLane.init(rawValue:)) }
     }
 
     /// The rail as the screen stores it between rebuilds (ADR 0013).
@@ -1150,20 +1115,26 @@ final class InboxModel {
 
     /// Puts a stored rail back, before the observation that fills the list starts (ADR 0013).
     ///
-    /// The order is the point. ``apply(_:)`` clears the risk and lane facets — a link has never
-    /// been allowed to leave them narrowing what it asked for — so the token goes first and the
-    /// two facets after it. The cursor goes last for the same reason: every facet's `didSet`
-    /// clamps the selection, and on a model whose rows have not arrived yet that means dropping
-    /// it. It is set through ``select(_:)`` rather than assigned, so the row the reader left the
-    /// screen on is a *selection* — the one ``clampSelection()`` keeps, and the one the detail
-    /// panel loads for.
+    /// Assigned facet by facet rather than routed through ``apply(_:)``: that method is the deep
+    /// link's, and a link is allowed to replace a rail — it clears the risk and lane facets and
+    /// widens the smart view — which is the opposite of what putting a rail back means.
+    ///
+    /// A raw value that does not parse is read as "not set" rather than as a failure: this is
+    /// scene storage written by some build of this app, and the worst it can be is out of date.
+    /// The smart view falls back to the rail's own default, because there is no such thing as an
+    /// inbox with no smart view selected.
+    ///
+    /// The cursor goes last. Every facet's `didSet` clamps the selection, and on a model whose
+    /// rows have not arrived yet that means dropping it. It goes through ``select(_:)`` rather
+    /// than an assignment, so the row the reader left the screen on is a *selection* — the one
+    /// ``clampSelection()`` keeps, and the one the detail panel loads for.
     /// - Parameter state: The rail written down before the screen was rebuilt.
     func restore(_ state: RailState) {
-        if let filter = state.filter {
-            apply(filter)
-        }
-        riskFilter = state.risk.flatMap(TriageVerdict.Risk.init(rawValue:))
-        laneFilter = state.lane.flatMap(TrustLane.init(rawValue:))
+        smartView = state.view
+        provenanceFilter = state.provenance
+        repoFilter = state.repo
+        riskFilter = state.riskFacet
+        laneFilter = state.laneFacet
         select(state.selectedID)
     }
 

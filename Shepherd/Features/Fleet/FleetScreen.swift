@@ -152,14 +152,9 @@ struct FleetScreen: View {
     }
 
     private func handle(_ press: KeyPress) -> KeyPress.Result {
-        if press.matches(.escape) {
-            // Back to the inbox, and deliberately **not** through ``AppEnvironment/closeReview()``:
-            // that method exists to end a focus session, and there is no session here to end. A
-            // fleet that ended one on Escape would quietly cancel a queue the reader had merely
-            // stepped away from to look something up.
-            environment.route = .inbox
-            return .handled
-        }
+        // No Escape branch: ``backButton`` carries it as a key equivalent, which is offered the
+        // key before this handler is, and is on screen in both states of the screen — which this
+        // list is not. Two answers to one key, one of them unreachable, is how they drift apart.
         if press.matches(.downArrow) {
             model.moveSelection(by: 1)
             return .handled
@@ -251,11 +246,16 @@ struct FleetScreen: View {
     /// — and a toolbar declared outside a `NavigationSplitView` is a placement question this does
     /// not have to ask. Escape does the same thing; the chevron is what makes that discoverable.
     ///
-    /// Escape is *this button's* shortcut rather than only the list's key handler, because this
-    /// button is drawn in both states of the screen and the list is not: with no agents there is
-    /// no list to focus, and the reader who pressed Escape got nothing back. The shortcut steps
-    /// aside while ⌘K is up — a key equivalent is offered the key before the palette's own
-    /// handler sees it, and Escape over an open palette means "close the palette".
+    /// Escape is *this button's* shortcut rather than the list's key handler, because this button
+    /// is drawn in both states of the screen and the list is not: with no agents there is no list
+    /// to focus, and the reader who pressed Escape got nothing back. The shortcut steps aside
+    /// while ⌘K is up — a key equivalent is offered the key before the palette's own handler sees
+    /// it, and Escape over an open palette means "close the palette".
+    ///
+    /// It goes to ``AppEnvironment/route`` directly and deliberately **not** through
+    /// ``AppEnvironment/closeReview()``: that method exists to end a focus session, and there is
+    /// no session here to end. A fleet that ended one on Escape would quietly cancel a queue the
+    /// reader had merely stepped away from to look something up.
     ///
     /// A chevron glyph is about eleven points across, which is a hard thing to hit. The frame is
     /// what the pointer actually aims at, and the shape is what makes the whole of it clickable

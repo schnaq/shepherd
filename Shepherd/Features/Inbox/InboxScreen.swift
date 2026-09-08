@@ -258,7 +258,10 @@ struct InboxScreen: View {
                 isKeyboardOwner: !environment.isCommandPaletteVisible
             )
         case .issues:
-            IssueListView(model: issueModel)
+            IssueListView(
+                model: issueModel,
+                isKeyboardOwner: !environment.isCommandPaletteVisible
+            )
         }
     }
 
