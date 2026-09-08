@@ -8,6 +8,10 @@ struct RootView: View {
     /// has nothing to bring forward (``AppEnvironment/openInboxFromNotification()``). The same
     /// problem the menu-bar quick inbox has, and the same escape hatch.
     @Environment(\.openWindow) private var openWindow
+    /// The `Settings` scene, which is the app's *only* settings presentation
+    /// (``AppEnvironment/showSettings(_:)``). Like `openWindow` above, opening a scene is
+    /// something only a view can do, so the container is handed a closure.
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         ZStack {
@@ -20,6 +24,7 @@ struct RootView: View {
         .tint(Theme.accent)
         .task {
             environment.reopenMainWindow = { openWindow(id: ShepherdScene.mainWindow) }
+            environment.openSettingsWindow = { openSettings() }
         }
     }
 

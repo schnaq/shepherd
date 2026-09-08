@@ -53,6 +53,14 @@ final class AppEnvironment {
     var route: Route = .inbox
     /// Whether the ⌘K palette is up.
     var isCommandPaletteVisible = false
+    /// The tab the Settings window shows.
+    ///
+    /// It lives here rather than inside ``SettingsView`` because every surface that wants a
+    /// *particular* tab is outside that window — the rail's gear, `shepherd://settings/<tab>`
+    /// (ADR 0013), the fleet's empty state — and a window that is already open cannot be
+    /// re-created with a different initial tab. ``SettingsView`` binds to it, so writing it
+    /// switches the tab of an open window and chooses the tab of one about to open.
+    var settingsTab: SettingsDeepLinkTab = .account
     /// The drafts that could not be submitted because the pull request moved on (ADR 0006).
     ///
     /// A queue rather than a single slot: one bulk-triage drain can park several reviews, and
@@ -71,8 +79,6 @@ final class AppEnvironment {
     /// Same mechanism as ``PendingAction``: the container raises it, the screen that owns the
     /// state consumes it, so there is one implementation of "filter the inbox" (ADR 0013).
     var pendingInboxFilter: Pending<InboxDeepLinkFilter>?
-    /// A Settings tab a deep link asked for, waiting for the inbox to present it.
-    var pendingSettingsTab: Pending<SettingsDeepLinkTab>?
     /// An issue a link or a ⌘K row asked for, waiting for the inbox to reveal it (ADR 0032).
     ///
     /// The same mechanism as ``pendingInboxFilter`` above, and it is a *pending request* rather
@@ -182,6 +188,14 @@ final class AppEnvironment {
     /// menu-bar quick inbox's `revealMainWindow()`. Not observed by anything (it is called
     /// imperatively, from a notification click), so it stays out of the observation graph.
     @ObservationIgnored var reopenMainWindow: (@MainActor () -> Void)?
+
+    /// Brings the Settings window up.
+    ///
+    /// Set by ``RootView`` from SwiftUI's `openSettings`, for ``reopenMainWindow``'s reason and
+    /// in the same breath: opening a scene is something only a view can do. Not observed by
+    /// anything — it is called imperatively, from ``showSettings(_:)`` — so it stays out of the
+    /// observation graph.
+    @ObservationIgnored var openSettingsWindow: (@MainActor () -> Void)?
 
     /// The provider router, rebuilt whenever the intelligence settings change.
     private(set) var intelligence: IntelligenceRouter = .disabled
@@ -1178,6 +1192,22 @@ final class AppEnvironment {
         // the inbox left behind would only put dead entries in the palette.
         selectedPullRequest = nil
         route = .fleet(agentID: agentID)
+    }
+
+    /// Shows the Settings window on `tab`.
+    ///
+    /// The one way in, for the rail's gear, `shepherd://settings/<tab>` (ADR 0013), the fleet's
+    /// empty state and the delegation sheet alike. There used to be two presentations — the
+    /// `Settings` scene behind ⌘, and a sheet on the inbox screen — which is how a window with no
+    /// close button came to exist, and how sixteen links came to open sixteen windows.
+    ///
+    /// No `endReviewSession` beside it, unlike ``openReview(prID:composing:)`` and its siblings:
+    /// Settings is a *second window*, not a route, so a running focus session keeps its queue and
+    /// the user comes back to it.
+    /// - Parameter tab: The tab to show.
+    func showSettings(_ tab: SettingsDeepLinkTab) {
+        settingsTab = tab
+        openSettingsWindow?()
     }
 
     /// Returns to the inbox.

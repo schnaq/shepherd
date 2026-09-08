@@ -5,6 +5,9 @@ import SwiftUI
 /// The Settings window: Account, Sync, Replies, Agents, Intelligence, Delegation, Automation,
 /// Appearance.
 ///
+/// The one presentation of settings there is — the `Settings` scene behind ⌘, — and every in-app
+/// way in goes through ``AppEnvironment/showSettings(_:)`` to reach it.
+///
 /// Replies (saved replies + per-repository review templates) sits between Sync and the AI cluster
 /// because it is the one tab about the *review path* itself, and because it is the only tab where
 /// the user authors content rather than configuring a connection.
@@ -18,19 +21,14 @@ struct SettingsView: View {
     /// The encrypted settings-sync model (ADR 0014). Owned here rather than by the section so
     /// the passphrase and key fields survive a tab switch within one Settings window.
     @State private var syncModel = SettingsSyncModel()
-    /// Which tab is showing. Every tab is tagged with its ``SettingsDeepLinkTab``, which is
-    /// what lets `shepherd://settings/<tab>` land on one (ADR 0013).
-    @State private var selection: SettingsDeepLinkTab
-
-    /// Creates the Settings window or sheet.
-    /// - Parameter initialTab: The tab to open on. Defaults to Account, which is what the
-    ///   ⌘, window and the rail button want.
-    init(initialTab: SettingsDeepLinkTab = .account) {
-        _selection = State(initialValue: initialTab)
-    }
 
     var body: some View {
-        TabView(selection: $selection) {
+        // Which tab is showing is ``AppEnvironment/settingsTab``, not state of this view. Every
+        // tab is tagged with its ``SettingsDeepLinkTab``, which is what lets the rail's gear, the
+        // fleet's empty state and `shepherd://settings/<tab>` (ADR 0013) land on one — including
+        // when this window is *already* open, which an initial-value `@State` could not do.
+        @Bindable var environment = environment
+        TabView(selection: $environment.settingsTab) {
             AccountSettingsTab()
                 .tabItem { Label(String(localized: "Account"), systemImage: "person.crop.circle") }
                 .tag(SettingsDeepLinkTab.account)
@@ -50,10 +48,9 @@ struct SettingsView: View {
                 .tag(SettingsDeepLinkTab.intelligence)
             DelegationSettingsTab()
                 .tabItem {
-                    Label(
-                        String(localized: "Delegation"),
-                        systemImage: "arrow.uturn.backward.badge.clock"
-                    )
+                    // `terminal`, because delegation runs a CLI — and because the symbol this
+                    // once used (`arrow.uturn.backward.badge.clock`) draws nothing in a tab item.
+                    Label(String(localized: "Delegation"), systemImage: "terminal")
                 }
                 .tag(SettingsDeepLinkTab.delegation)
             AutomationSettingsTab(model: model)
@@ -65,7 +62,9 @@ struct SettingsView: View {
                 .tabItem { Label(String(localized: "Appearance"), systemImage: "paintbrush") }
                 .tag(SettingsDeepLinkTab.appearance)
         }
-        .frame(width: 620, height: 460)
+        // 640 rather than 460: Intelligence and Sync are the two tallest tabs, and at 460 both
+        // clipped their last control instead of scrolling to it.
+        .frame(width: 620, height: 640)
         .background(Theme.background)
     }
 }

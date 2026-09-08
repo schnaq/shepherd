@@ -5,7 +5,6 @@ import SwiftUI
 /// The delegation sheet: write the task, watch the agent work, decide what happens to the diff.
 struct DelegationSheet: View {
     @Environment(AppEnvironment.self) private var environment
-    @Environment(\.openSettings) private var openSettings
 
     /// The delegation.
     let model: DelegationModel
@@ -198,7 +197,7 @@ struct DelegationSheet: View {
                 .truncationMode(.tail)
             Spacer(minLength: 6)
             Button {
-                openSettings()
+                environment.showSettings(.delegation)
             } label: {
                 Image(systemName: "gearshape")
                     .font(.system(size: 11))
@@ -410,8 +409,10 @@ struct DelegationSheet: View {
                 message: AgentCLILocator.installHint
             )
             HStack(spacing: 8) {
-                Button(String(localized: "Open Settings → Delegation")) { openSettings() }
-                    .buttonStyle(PrimaryButtonStyle())
+                Button(String(localized: "Open Settings → Delegation")) {
+                    environment.showSettings(.delegation)
+                }
+                .buttonStyle(PrimaryButtonStyle())
                 if let url = AgentCLILocator.documentationURL {
                     Link(String(localized: "Read the docs"), destination: url)
                         .font(.system(size: 12))
@@ -439,8 +440,10 @@ struct DelegationSheet: View {
             HStack(spacing: 8) {
                 Button(String(localized: "Choose folder…")) { chooseCheckout(repo: repo) }
                     .buttonStyle(PrimaryButtonStyle())
-                Button(String(localized: "Open Settings → Delegation")) { openSettings() }
-                    .buttonStyle(SecondaryButtonStyle())
+                Button(String(localized: "Open Settings → Delegation")) {
+                    environment.showSettings(.delegation)
+                }
+                .buttonStyle(SecondaryButtonStyle())
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

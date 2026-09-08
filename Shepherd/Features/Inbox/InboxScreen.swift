@@ -32,13 +32,9 @@ struct InboxScreen: View {
     /// (ADR 0014's obligation applies to settings, and this is UI state).
     @SceneStorage("inbox.contentKind") private var contentKind: ContentKind = .pullRequests
     @State private var isMergeSheetPresented = false
-    @State private var isSettingsPresented = false
     /// Whether the bulk-triage confirmation is up, and what it is confirming (ADR 0015).
     @State private var isBulkSheetPresented = false
     @State private var bulkAction: BulkTriageAction = .approve
-    /// Which tab the Settings sheet opens on — the rail opens Account, a
-    /// `shepherd://settings/<tab>` link opens the tab it names (ADR 0013).
-    @State private var settingsTab: SettingsDeepLinkTab = .account
 
     /// Creates the screen for a session.
     /// - Parameters:
@@ -160,9 +156,6 @@ struct InboxScreen: View {
         .onChange(of: environment.pendingInboxFilter) { _, _ in
             consumeDeepLinkRequests()
         }
-        .onChange(of: environment.pendingSettingsTab) { _, _ in
-            consumeDeepLinkRequests()
-        }
         .onChange(of: environment.pendingIssueSelection) { _, _ in
             consumeDeepLinkRequests()
         }
@@ -185,12 +178,6 @@ struct InboxScreen: View {
                 settings: environment.settings,
                 onQueued: { [model] in model.clearMarks() }
             )
-        }
-        .sheet(isPresented: $isSettingsPresented) {
-            SettingsView(initialTab: settingsTab)
-                .environment(environment)
-                .frame(width: 620, height: 460)
-                .id(settingsTab)
         }
         // The end of a focus session, on the screen the session returns to. Here
         // rather than on the review screen because ``AppEnvironment/endReviewSession(announcing:)``
@@ -225,9 +212,12 @@ struct InboxScreen: View {
             ContentKindPicker(selection: $contentKind)
             switch contentKind {
             case .pullRequests:
-                InboxSidebar(model: model, onOpenSettings: { openSettings(.account) })
+                InboxSidebar(model: model, onOpenSettings: { environment.showSettings(.account) })
             case .issues:
-                IssueSidebar(model: issueModel, onOpenSettings: { openSettings(.account) })
+                IssueSidebar(
+                    model: issueModel,
+                    onOpenSettings: { environment.showSettings(.account) }
+                )
             }
         }
         .background(Theme.panel)
@@ -274,15 +264,6 @@ struct InboxScreen: View {
             contentKind = .issues
             issueModel.reveal(issueID: pending.value)
         }
-        if let pending = environment.pendingSettingsTab {
-            environment.clearPendingSettingsTab()
-            openSettings(pending.value)
-        }
-    }
-
-    private func openSettings(_ tab: SettingsDeepLinkTab) {
-        settingsTab = tab
-        isSettingsPresented = true
     }
 
     /// Hands one digest section over to the inbox.
@@ -315,7 +296,7 @@ struct InboxScreen: View {
         case .parkedReviews, .failedWrites:
             // Not an inbox filter at all: both are outbox rows, and Settings → Sync is where they
             // are counted and explained — and, for the failed ones, retried or discarded.
-            openSettings(.sync)
+            environment.showSettings(.sync)
         }
     }
 

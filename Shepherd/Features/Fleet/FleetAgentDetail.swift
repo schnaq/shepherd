@@ -195,13 +195,11 @@ struct FleetAgentDetail: View {
 
     /// Opens Settings on the agent registry.
     ///
-    /// The route the deep-link router takes for `shepherd://settings/agents`, raised from here
-    /// rather than presented here: the Settings sheet belongs to the inbox screen, and a second
-    /// copy of it on the fleet would be a second place a tab can be open. One mechanism, and this
-    /// screen owns no sheet of its own.
+    /// The same call `shepherd://settings/agents`, the rail's gear and the fleet's empty state
+    /// make: there is one Settings window and one way to show it, so this screen presents nothing
+    /// of its own — and, unlike before, no longer drags the user back to the inbox to see it.
     private func openAgentSettings() {
-        environment.route = .inbox
-        environment.pendingSettingsTab = AppEnvironment.Pending(SettingsDeepLinkTab.agents)
+        environment.showSettings(.agents)
     }
 
     // MARK: - Across every repository

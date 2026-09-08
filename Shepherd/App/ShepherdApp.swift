@@ -56,6 +56,11 @@ struct ShepherdApp: App {
                 .onOpenURL { url in
                     environment.open(deepLinkURL: url)
                 }
+                // …and the reason the line above lands in *this* window rather than a new one.
+                // Without it SwiftUI has no open scene that says it handles the event, so it
+                // creates a scene per URL: sixteen `shepherd://` links used to leave sixteen
+                // windows behind. `"*"` is the documented wildcard — any incoming event.
+                .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
                 // And once more for the Spotlight export (ADR 0021), so the toggle in Settings and
                 // an applied settings document both reach the exporter through one route.
                 .onChange(of: environment.settings.spotlightExportEnabled) { _, _ in
@@ -73,6 +78,9 @@ struct ShepherdApp: App {
             ShepherdCommands(environment: environment)
         }
 
+        // The app's only settings presentation: ⌘, opens it, and so does every in-app surface,
+        // through ``AppEnvironment/showSettings(_:)``. It used to have a rival — a sheet on the
+        // inbox screen — which had no close button and blocked the window's.
         Settings {
             SettingsView()
                 .environment(environment)

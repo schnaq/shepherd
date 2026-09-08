@@ -96,11 +96,6 @@ extension AppEnvironment {
         pendingInboxFilter = nil
     }
 
-    /// Clears the Settings tab request after it has been presented.
-    func clearPendingSettingsTab() {
-        pendingSettingsTab = nil
-    }
-
     // MARK: - Routing
 
     private func run(_ link: DeepLink, in session: SignedInSession) {
@@ -128,8 +123,11 @@ extension AppEnvironment {
             toasts.info(String(localized: "Syncing all repositories…"))
             Task { await syncNow() }
         case .settings(let tab):
-            route = .inbox
-            pendingSettingsTab = Pending(tab)
+            // Straight to the method the rail's gear and the fleet's empty state use, and for
+            // `.fleet`'s reason above: one implementation of "show Settings". No `route` change
+            // beside it — Settings is a second window, so the link no longer drags whoever was
+            // on the review screen back to the inbox to see it.
+            showSettings(tab)
         }
     }
 

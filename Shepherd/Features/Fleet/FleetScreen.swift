@@ -210,8 +210,7 @@ struct FleetScreen: View {
             // filling the screen and pushing the button that answers it down to the bottom edge.
             .fixedSize(horizontal: false, vertical: true)
             Button(String(localized: "Open Settings → Agents")) {
-                environment.route = .inbox
-                environment.pendingSettingsTab = AppEnvironment.Pending(SettingsDeepLinkTab.agents)
+                environment.showSettings(.agents)
             }
             .buttonStyle(SecondaryButtonStyle())
         }
