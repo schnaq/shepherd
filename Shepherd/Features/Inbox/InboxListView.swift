@@ -8,6 +8,12 @@ struct InboxListView: View {
     let model: InboxModel
     /// Opens the full review screen for a pull request.
     var onOpen: (String) -> Void
+    /// Whether the keyboard belongs to this list, or to something drawn over it (⌘K's palette).
+    ///
+    /// The palette is an overlay rather than a sheet or a window, so macOS does not take focus
+    /// away from the list for it. Without this the two are both listening: an `x` typed into the
+    /// search field also ticks the row under the cursor, and a `j` moves it.
+    let isKeyboardOwner: Bool
 
     @FocusState private var isListFocused: Bool
 
@@ -21,13 +27,28 @@ struct InboxListView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             ShortcutBar()
         }
-        .focusable()
+        .focusable(isKeyboardOwner)
         .focusEffectDisabled()
         .focused($isListFocused)
         .onKeyPress(phases: .down) { press in
-            handle(press)
+            // Both halves, because they answer different windows of time: not being focusable
+            // stops the *next* key from arriving here, and this stops the one already in flight.
+            guard isKeyboardOwner else { return .ignored }
+            return handle(press)
         }
         .onAppear { isListFocused = true }
+        // And back again when the palette closes. Nothing else would return focus — the list
+        // stopped being focusable while the palette was up, so `j` and `k` would be dead until
+        // the reader clicked a row. The hop is the palette's own trick (`CommandPaletteView`):
+        // the field it is being taken from is torn down in this same update, and focus asked for
+        // during a teardown does not always stick.
+        .onChange(of: isKeyboardOwner) { _, owner in
+            guard owner else { return }
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(60))
+                isListFocused = true
+            }
+        }
     }
 
     // MARK: - Header

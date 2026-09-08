@@ -137,6 +137,10 @@ struct CommandPaletteView: View {
                 .stroke(Theme.controlBorder, lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.55), radius: 32, y: 18)
+        // The palette is an overlay in `RootView`, not a sheet: the inbox list underneath it is
+        // still in the window and was holding focus when ⌘K was pressed. This is what makes the
+        // field the focused thing on arrival rather than the thing the reader has to click.
+        .defaultFocus($isFieldFocused, true)
     }
 
     private var field: some View {
@@ -151,11 +155,28 @@ struct CommandPaletteView: View {
                 .focused($isFieldFocused)
                 .onSubmit { runSelected() }
                 .onChange(of: query) { _, _ in selectionIndex = 0 }
+                // Escape on the field itself, because a focused `TextField` swallows the key
+                // before the container's handler above ever sees it — which is why the palette
+                // used to need a click on the dimmed background to go away.
+                .onKeyPress(.escape) {
+                    close()
+                    return .handled
+                }
             KeyCapView(keys: "esc")
         }
         .padding(.horizontal, 16)
         .frame(height: 46)
-        .onAppear { isFieldFocused = true }
+        .onAppear {
+            isFieldFocused = true
+            // And once more a frame or two later. The list underneath is giving focus up in this
+            // same update, and on the pass where it wins the race the ask above is lost — the
+            // palette then looks focused and is not, and the first word typed goes to the list as
+            // shortcuts. The sleep is cancellable and nothing depends on it finishing.
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(60))
+                isFieldFocused = true
+            }
+        }
         // `task(id:)` is the debounce: a keystroke cancels the previous ranking and starts a new
         // one. Everything it does is local — the corpus and the vectors are already in memory,
         // and the query's own embedding is an on-device call — so there is nothing to throttle

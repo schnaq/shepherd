@@ -215,8 +215,9 @@ struct FleetScreen: View {
             .buttonStyle(SecondaryButtonStyle())
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // The list — and with it the header's chevron — is not drawn in this state, so the way
-        // back is drawn here instead of being left to Escape alone.
+        // The list — and with it the header's chevron and the key handler Escape used to go
+        // through — is not drawn in this state, so the way back is drawn here. It carries the
+        // Escape shortcut itself, which is what makes the key work on this side of the switch.
         .overlay(alignment: .topLeading) {
             backButton
                 .padding(.horizontal, 14)
@@ -249,6 +250,16 @@ struct FleetScreen: View {
     /// arrived at from the inbox, so the control that returns them belongs where they are looking
     /// — and a toolbar declared outside a `NavigationSplitView` is a placement question this does
     /// not have to ask. Escape does the same thing; the chevron is what makes that discoverable.
+    ///
+    /// Escape is *this button's* shortcut rather than only the list's key handler, because this
+    /// button is drawn in both states of the screen and the list is not: with no agents there is
+    /// no list to focus, and the reader who pressed Escape got nothing back. The shortcut steps
+    /// aside while ⌘K is up — a key equivalent is offered the key before the palette's own
+    /// handler sees it, and Escape over an open palette means "close the palette".
+    ///
+    /// A chevron glyph is about eleven points across, which is a hard thing to hit. The frame is
+    /// what the pointer actually aims at, and the shape is what makes the whole of it clickable
+    /// rather than only the strokes.
     private var backButton: some View {
         Button {
             environment.route = .inbox
@@ -256,8 +267,11 @@ struct FleetScreen: View {
             Image(systemName: "chevron.left")
                 .font(Theme.type(.body, weight: .semibold))
                 .foregroundStyle(Theme.textSecondary)
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .keyboardShortcut(environment.isCommandPaletteVisible ? nil : KeyboardShortcut.cancelAction)
         .help(String(localized: "Back to the inbox (esc)"))
         .accessibilityLabel(Text(String(localized: "Back to the inbox")))
     }

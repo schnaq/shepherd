@@ -1022,6 +1022,151 @@ final class InboxModel {
         laneFilter = nil
     }
 
+    // MARK: - Surviving a rebuild (ADR 0013)
+
+    /// The rail as one small value a `@SceneStorage` string can hold.
+    ///
+    /// The screen it belongs to is rebuilt whenever ``AppEnvironment/route`` changes (ADR 0013),
+    /// and this model goes with it: a trip to the review screen and back used to hand the reader a
+    /// rail they had not set — the smart view, the facets and the cursor all back at their
+    /// defaults. So the rail is written down somewhere the rebuild cannot reach, and this is the
+    /// sentence it is written in.
+    ///
+    /// The three link-addressable facets travel as a `shepherd://inbox?filter=…` token rather than
+    /// as three fields, because that vocabulary already exists and is already tested in both
+    /// directions (``InboxRailSelection`` coming back, this going out). The other two facets and
+    /// the cursor travel beside it, because the grammar has no words for them.
+    ///
+    /// A pure value for ``InboxRailSelection``'s reason: the mapping is testable without a
+    /// session, and the model only reads and assigns it.
+    struct RailState: Codable, Equatable {
+        /// The rail's smart view and its provenance or repository facet, as one token — or `nil`
+        /// when they are a combination `shepherd://inbox?filter=…` cannot say.
+        var filterToken: String?
+        /// The risk facet's ``TriageVerdict/Risk`` raw value (ADR 0023 added the facet; ADR 0013's
+        /// link grammar predates it and has no token for it).
+        var risk: String?
+        /// The trust lane's ``TrustLane`` raw value (ADR 0027, and the same argument).
+        var lane: String?
+        /// The keyboard cursor's pull-request id.
+        var selectedID: String?
+
+        /// Writes a rail down.
+        /// - Parameters:
+        ///   - smartView: The selected smart view.
+        ///   - provenanceFilter: The provenance facet, if any.
+        ///   - repoFilter: The repository facet, if any.
+        ///   - riskFilter: The risk facet, if any.
+        ///   - laneFilter: The trust lane, if any.
+        ///   - selectedID: The keyboard cursor.
+        init(
+            smartView: SmartView,
+            provenanceFilter: ProvenanceFilter?,
+            repoFilter: RepoRef?,
+            riskFilter: TriageVerdict.Risk?,
+            laneFilter: TrustLane?,
+            selectedID: String?
+        ) {
+            filterToken = RailState.token(
+                smartView: smartView,
+                provenanceFilter: provenanceFilter,
+                repoFilter: repoFilter
+            )
+            risk = riskFilter?.rawValue
+            lane = laneFilter?.rawValue
+            self.selectedID = selectedID
+        }
+
+        /// The filter the stored token names, if it still parses.
+        var filter: InboxDeepLinkFilter? {
+            filterToken.flatMap(InboxDeepLinkFilter.init(token:))
+        }
+
+        /// The token for a rail, or `nil` when no single token says exactly that rail.
+        ///
+        /// The check at the end is the whole of the honesty here: a candidate token is kept only
+        /// when reading it back through ``InboxRailSelection`` — which is what
+        /// ``InboxModel/restore(_:)`` does — reproduces all three facets. Two rails fail it, and
+        /// both would otherwise be restored as a rail the reader never set: a facet beside a smart
+        /// view other than "Involved" (the facet tokens widen it), and both facets at once (no
+        /// token carries two). Losing a rail is a smaller lie than inventing one.
+        /// - Parameters:
+        ///   - smartView: The selected smart view.
+        ///   - provenanceFilter: The provenance facet, if any.
+        ///   - repoFilter: The repository facet, if any.
+        /// - Returns: The token, or `nil`.
+        private static func token(
+            smartView: SmartView,
+            provenanceFilter: ProvenanceFilter?,
+            repoFilter: RepoRef?
+        ) -> String? {
+            let candidate: InboxDeepLinkFilter?
+            switch (provenanceFilter, repoFilter) {
+            case (nil, nil):
+                switch smartView {
+                case .needsMyReview: candidate = .needsMyReview
+                case .myPullRequests: candidate = .myPullRequests
+                case .involved: candidate = .involved
+                case .approvedByMe: candidate = .approvedByMe
+                }
+            case (nil, .some(let repo)):
+                candidate = .repository(repo)
+            case (.some(let provenance), nil):
+                switch provenance {
+                case .humans: candidate = .humans
+                case .bots: candidate = .bots
+                case .agent(let id): candidate = .agent(id: id)
+                }
+            case (.some, .some):
+                candidate = nil
+            }
+            // Parsed back rather than trusted, because that is the trip the token actually makes:
+            // an agent id is lowercased on the way in and a repository name is validated, so a
+            // token that comes back as something else is one this rail cannot be restored from.
+            guard let candidate,
+                let parsed = InboxDeepLinkFilter(token: candidate.token)
+            else { return nil }
+            let selection = InboxRailSelection(parsed)
+            guard selection.smartView == smartView,
+                selection.provenanceFilter == provenanceFilter,
+                selection.repoFilter == repoFilter,
+                selection.contentKind == .pullRequests
+            else { return nil }
+            return candidate.token
+        }
+    }
+
+    /// The rail as the screen stores it between rebuilds (ADR 0013).
+    var railState: RailState {
+        RailState(
+            smartView: smartView,
+            provenanceFilter: provenanceFilter,
+            repoFilter: repoFilter,
+            riskFilter: riskFilter,
+            laneFilter: laneFilter,
+            selectedID: selectedID
+        )
+    }
+
+    /// Puts a stored rail back, before the observation that fills the list starts (ADR 0013).
+    ///
+    /// The order is the point. ``apply(_:)`` clears the risk and lane facets — a link has never
+    /// been allowed to leave them narrowing what it asked for — so the token goes first and the
+    /// two facets after it. The cursor goes last for the same reason: every facet's `didSet`
+    /// clamps the selection, and on a model whose rows have not arrived yet that means dropping
+    /// it. It is set through ``select(_:)`` rather than assigned, so the row the reader left the
+    /// screen on is a *selection* — the one ``clampSelection()`` keeps, and the one the detail
+    /// panel loads for.
+    /// - Parameter state: The rail written down before the screen was rebuilt.
+    func restore(_ state: RailState) {
+        if let filter = state.filter {
+            apply(filter)
+        }
+        riskFilter = state.risk.flatMap(TriageVerdict.Risk.init(rawValue:))
+        laneFilter = state.lane.flatMap(TrustLane.init(rawValue:))
+        select(state.selectedID)
+    }
+
     // MARK: - Selection
 
     /// Moves the selection by one row, wrapping at neither end.
@@ -1053,7 +1198,21 @@ final class InboxModel {
         // A tick on a row that has left the view — merged, filtered out, or on another smart
         // view — is dropped rather than carried invisibly into the next bulk action.
         marks.prune(to: rows.map(\.id))
-        if let selectedID, rows.contains(where: { $0.id == selectedID }) { return }
+        if let selectedID, rows.contains(where: { $0.id == selectedID }) {
+            // A cursor restored from scene storage (ADR 0013) points at a row whose detail nobody
+            // has asked for yet: ``restore(_:)`` runs before the rows arrive, so `loadDetail()`
+            // returned at its own guard — there was nothing to look the row up in — and this is
+            // the first moment both halves exist. Without it the reader comes back to their row
+            // beside an empty panel.
+            //
+            // `detailTask` is the exact question "has this model ever started a read", which is
+            // what makes this the restore path and only the restore path: the early return above
+            // leaves it nil, and every real ``select(_:)`` sets it for the model's lifetime. A
+            // read that is running, or one that failed and left the panel empty, is not started
+            // again by the next write to the inbox table.
+            if detailTask == nil { loadDetail() }
+            return
+        }
         select(rows.first?.id)
     }
 

@@ -31,6 +31,18 @@ struct InboxScreen: View {
     /// preference, and travelling between a user's Macs it would only ever arrive wrong
     /// (ADR 0014's obligation applies to settings, and this is UI state).
     @SceneStorage("inbox.contentKind") private var contentKind: ContentKind = .pullRequests
+    /// The pull-request rail — smart view, facets, cursor — remembered per window.
+    ///
+    /// ``contentKind``'s reason, one level down (ADR 0013): this screen is rebuilt whenever the
+    /// route changes, and `InboxModel` is `@State` here, so a trip to the review screen and back
+    /// used to hand the reader a rail they had not set. It is a JSON string rather than the value
+    /// because `@SceneStorage` holds what a property list can hold; ``InboxModel/RailState`` is
+    /// the value, and it is `Codable` for exactly this.
+    ///
+    /// Not in ``AppSettings`` either, and for ``contentKind``'s second reason: which pull requests
+    /// a window happens to be showing is not a preference, and it would only ever arrive wrong on
+    /// another Mac (ADR 0014).
+    @SceneStorage("inbox.rail") private var railStateJSON = ""
     @State private var isMergeSheetPresented = false
     /// Whether the bulk-triage confirmation is up, and what it is confirming (ADR 0015).
     @State private var isBulkSheetPresented = false
@@ -103,6 +115,10 @@ struct InboxScreen: View {
             // question only — whether to offer the backfill — and the count it asks is refreshed
             // below (ADR 0027's 2026-09-05 amendment).
             model.trackRecordCoordinator = environment.trackRecord
+            // Before the observation and after the three handovers above: the rows arrive from
+            // `startObserving()`, and the restored cursor has to be in place by then or the first
+            // value would clamp it onto the top row (ADR 0013).
+            restoreRail()
             model.startObserving()
             // Handed over here rather than at construction, for `model.intelligence`'s reason:
             // the screen is rebuilt whenever the route changes, and a queued write has to reach
@@ -152,6 +168,12 @@ struct InboxScreen: View {
         // otherwise show none of them.
         .onChange(of: model.selectedRow, initial: true) { _, row in
             environment.selectedPullRequest = row
+        }
+        // Every move of the rail, written down for the next rebuild (ADR 0013). `RailState` is
+        // `Equatable`, so this is silent while the reader is doing anything else — including the
+        // restore above, which sets the value it just read.
+        .onChange(of: model.railState) { _, state in
+            storeRail(state)
         }
         .onChange(of: environment.pendingInboxFilter) { _, _ in
             consumeDeepLinkRequests()
@@ -227,7 +249,14 @@ struct InboxScreen: View {
     private var centre: some View {
         switch contentKind {
         case .pullRequests:
-            InboxListView(model: model, onOpen: open)
+            // The palette is an overlay in `RootView`, not a sheet, so nothing takes the
+            // keyboard away from this list by itself: while ⌘K is up, every letter the reader
+            // types would otherwise also be a list shortcut.
+            InboxListView(
+                model: model,
+                onOpen: open,
+                isKeyboardOwner: !environment.isCommandPaletteVisible
+            )
         case .issues:
             IssueListView(model: issueModel)
         }
@@ -245,6 +274,32 @@ struct InboxScreen: View {
             )
         case .issues:
             IssueDetailPanel(model: issueModel)
+        }
+    }
+
+    /// Puts back the rail this window was on before the screen was rebuilt (ADR 0013).
+    private func restoreRail() {
+        let data = Data(railStateJSON.utf8)
+        guard !data.isEmpty else { return }
+        do {
+            model.restore(try JSONDecoder().decode(InboxModel.RailState.self, from: data))
+        } catch {
+            // The one failure this screen is allowed to swallow, and it is not a failure of
+            // anything the reader did: a scene-storage string that will not decode is one an
+            // older build wrote, and the only thing it can mean is "no rail to restore". There is
+            // nothing to report and nothing to retry — the defaults are a correct inbox.
+        }
+    }
+
+    /// Writes the rail down for the next rebuild (ADR 0013).
+    /// - Parameter state: The rail as it now stands.
+    private func storeRail(_ state: InboxModel.RailState) {
+        do {
+            railStateJSON = String(decoding: try JSONEncoder().encode(state), as: UTF8.self)
+        } catch {
+            // Four optional strings cannot fail to encode, and if they somehow did there would be
+            // nothing to tell the reader: nothing they did has failed, and the next move of the
+            // rail writes again. ``restoreRail()``'s argument, from the other side.
         }
     }
 
