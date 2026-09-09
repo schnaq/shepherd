@@ -389,14 +389,14 @@ struct InboxScreen: View {
                 Button(String(localized: "Clear the selection")) { model.clearMarks() }
                     .disabled(!model.hasMarks)
             } label: {
-                Label(
-                    model.hasMarks
-                        ? String(localized: "Triage \(model.markedIDs.count) selected")
-                        : String(localized: "Bulk triage"),
-                    systemImage: "checklist"
-                )
+                Label(bulkTriageTitle, systemImage: "checklist")
             }
             .help(String(localized: "Bulk triage: approve or merge the selected pull requests"))
+            // A toolbar menu draws the symbol alone and hands the symbol's *name* to
+            // accessibility with it: VoiceOver read this button out as "checklist"
+            // (2026-09-09 live test). What it should hear is the title the button would show if
+            // it showed one — including the count, once rows are ticked.
+            .accessibilityLabel(Text(bulkTriageTitle))
 
             Button {
                 Task { await environment.syncNow() }
@@ -413,6 +413,14 @@ struct InboxScreen: View {
             )
             .help(Text(session.account.login))
         }
+    }
+
+    /// What the bulk-triage menu is called: on screen if it ever draws its title, and to
+    /// VoiceOver, which is the only place it is ever actually read.
+    private var bulkTriageTitle: String {
+        model.hasMarks
+            ? String(localized: "Triage \(model.markedIDs.count) selected")
+            : String(localized: "Bulk triage")
     }
 
     // MARK: - Actions
@@ -609,6 +617,10 @@ struct SyncStatusView: View {
         }
         .font(.system(size: 11))
         .foregroundStyle(Theme.textMuted)
+        // The toolbar group's edge sits 4 pt after the last word, which reads as a clipped
+        // sentence rather than as the end of one (2026-09-09 live test). Trailing only: the
+        // leading side already has the gap to the toolbar item before it.
+        .padding(.trailing, 8)
     }
 
     /// The worst true state wins: a failed write outranks "synced fine a moment ago", and a

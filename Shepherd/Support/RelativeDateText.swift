@@ -31,6 +31,12 @@ enum RelativeDate {
     ///   - date: The moment to describe.
     ///   - reference: "Now".
     static func long(_ date: Date, relativeTo reference: Date = Date()) -> String {
+        // Everything this form describes has already happened — a sync, a commit, an opened pull
+        // request. Below a second the numeric formatter says "in 0 seconds", the future tense for
+        // the past, which is exactly what the title bar showed beside a label reading "2 m"
+        // (2026-09-09 live test). ``short(_:relativeTo:)`` above has the same kind of floor — a
+        // whole minute of it, because it has one word to say it in.
+        guard reference.timeIntervalSince(date) >= 1 else { return String(localized: "just now") }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
         return formatter.localizedString(for: date, relativeTo: reference)
@@ -66,8 +72,12 @@ struct RelativeDateText: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             Text(text(now: context.date))
+                // Inside the timeline rather than beside it. Outside, the help text was built
+                // once — when the view was first laid out — and never again, so the label went on
+                // ticking to "2 m" next to a tooltip still frozen at the moment of the sync
+                // (2026-09-09 live test). Both now read the same instant.
+                .help(RelativeDate.long(date, relativeTo: context.date))
         }
-        .help(RelativeDate.long(date))
     }
 
     private func text(now: Date) -> String {

@@ -2906,7 +2906,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Eine Erklärung, keine Review. Nichts wird gespeichert, bis du selbst einen Kommentar hinzufügst."
+            "value": "Eine Erklärung, kein Review. Nichts wird gespeichert, bis du selbst einen Kommentar hinzufügst."
           }
         }
       }
@@ -4227,6 +4227,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Schließen"
+          }
+        }
+      }
+    },
+    "Close Window": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fenster schließen"
           }
         }
       }
@@ -5836,7 +5846,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vollständige Review"
+            "value": "Vollständiges Review"
           }
         }
       }
@@ -6296,7 +6306,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Im Klartext: Ein grüner Pull Request mit höchstens %lld Dateien und %lld geänderten Zeilen, in dem nichts Sensibles steckt, ist ein kurzer Blick. Alles andere ist eine vollständige Review."
+            "value": "Im Klartext: Ein grüner Pull Request mit höchstens %lld Dateien und %lld geänderten Zeilen, in dem nichts Sensibles steckt, ist ein kurzer Blick. Alles andere ist ein vollständiges Review."
           }
         }
       }
@@ -6607,6 +6617,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Er wurde gemergt, geschlossen oder ist aus dem Sweep gefallen. Dein offenes Review ist lokal weiterhin gespeichert."
+          }
+        }
+      }
+    },
+    "just now": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gerade eben"
           }
         }
       }
@@ -12136,7 +12156,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Eingang teilt sich in Kurzer Blick und Vollständige Review. Ein Pull Request ist nur dann ein kurzer Blick, wenn die CI grün ist, das Diff innerhalb der beiden Zahlen unten liegt und er keine Workflow-, Auth-, Secret-, Migrations- oder gelöschte Testdatei berührt."
+            "value": "Der Eingang teilt sich in Kurzer Blick und Vollständiges Review. Ein Pull Request ist nur dann ein kurzer Blick, wenn die CI grün ist, das Diff innerhalb der beiden Zahlen unten liegt und er keine Workflow-, Auth-, Secret-, Migrations- oder gelöschte Testdatei berührt."
           }
         }
       }

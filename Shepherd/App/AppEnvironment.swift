@@ -1208,6 +1208,28 @@ final class AppEnvironment {
     func showSettings(_ tab: SettingsDeepLinkTab) {
         settingsTab = tab
         openSettingsWindow?()
+        // …and in front of the main window, which `openSettings()` arranges only when it *creates*
+        // the window. An already-open Settings window stays where it is: the 2026-09-09 live test
+        // watched `shepherd://settings/<tab>` change the tab behind the main window, where nobody
+        // could see it — the link looked like it had done nothing, and the ⌘W after it closed the
+        // wrong window. One runloop hop, because on the very first open the window does not exist
+        // yet when this line runs; that is also the case that needs no help.
+        Task { @MainActor in activateSettingsWindow() }
+    }
+
+    /// Brings the Settings window forward, if there is one.
+    ///
+    /// Deliberately silent when no window carries ``settingsWindowIdentifier``: the alternative —
+    /// raising whichever window is first — would raise the *main* window over the settings the
+    /// caller just asked for, which is the bug this exists to fix.
+    private func activateSettingsWindow() {
+        // `activate()` for ``activateMainWindow()``'s reason: a `shepherd://` link or a click on a
+        // gear is the user's own activation request, which is what macOS 14's cooperative
+        // activation is for.
+        NSApplication.shared.activate()
+        NSApplication.shared.windows
+            .first { $0.identifier?.rawValue == Self.settingsWindowIdentifier }?
+            .makeKeyAndOrderFront(nil)
     }
 
     /// Returns to the inbox.
@@ -1361,8 +1383,9 @@ final class AppEnvironment {
 
     /// SwiftUI's own identifier for the window the `Settings` scene puts on screen.
     ///
-    /// Used only to *exclude* that window in ``activateMainWindow()``, so if Apple ever renames
-    /// it the effect is "Settings may come forward instead", never a crash.
+    /// Used to *exclude* that window in ``activateMainWindow()`` and to *find* it in
+    /// ``activateSettingsWindow()``, so if Apple ever renames it the effect is "the wrong window
+    /// comes forward, or none does", never a crash.
     private static let settingsWindowIdentifier = "com_apple_SwiftUI_Settings_window"
 
     /// Brings the app's own window to the front, from a surface that is not inside it.
@@ -1388,5 +1411,16 @@ final class AppEnvironment {
         guard let window else { return false }
         window.makeKeyAndOrderFront(nil)
         return true
+    }
+
+    /// Closes whichever window has the keyboard — the ⌘W the menu bar otherwise does not have.
+    ///
+    /// AppKit's own `performClose(_:)` rather than a SwiftUI dismissal, because the item behind
+    /// this has to close *whatever* is key: the Settings scene, which no view of ours owns, as
+    /// readily as the main window. It also inherits the behaviour the red button has — a window
+    /// with a sheet up refuses and says so — instead of inventing a second answer to "can this
+    /// close?". Nothing happens when no window is key, which is the menu-bar-only state.
+    func closeKeyWindow() {
+        NSApplication.shared.keyWindow?.performClose(nil)
     }
 }

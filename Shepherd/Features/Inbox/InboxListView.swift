@@ -536,9 +536,18 @@ struct InboxRowView: View {
 
             CheckDotView(state: row.checkRollup?.state)
 
+            // One line, shortened in the middle, exactly as the sidebar shortens the same slug.
+            // Without the limit "swift-matter-examples #50" broke over three lines *inside* a
+            // 46 pt row at 1440 pt and squeezed the diffstat beside it into two (2026-09-09 live
+            // test). With it, the row has one truncation order at every width: the trailing
+            // columns never give way at all (they are fixed to their own size below), the title
+            // gives way last (priority 2), and the slug and the chips (priority 1) shorten before
+            // it — the slug in the middle, the title at the tail.
             Text("\(row.repo.name) #\(row.number)")
                 .font(Theme.mono(12))
                 .foregroundStyle(Theme.textMuted)
+                .lineLimit(1)
+                .truncationMode(.middle)
                 .layoutPriority(1)
 
             Text(row.title)
@@ -610,12 +619,20 @@ struct InboxRowView: View {
                     .layoutPriority(1)
             }
 
+            // The two trailing columns are numbers, and a number that wraps is unreadable:
+            // "+1.896 −117" came out as "+1 .8 96" / "−1 17" while the slug beside it was
+            // wrapping too. `fixedSize` is what keeps them out of the width fight altogether —
+            // the age's 52 pt frame stays outside it, so the column still lines up.
             DiffCountsView(additions: row.additions, deletions: row.deletions)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
                 .layoutPriority(1)
 
             RelativeDateText(date: row.updatedAt)
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textMuted)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
                 .frame(width: 52, alignment: .trailing)
                 .layoutPriority(1)
         }
@@ -632,6 +649,12 @@ struct InboxRowView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(accessibilityText))
+        // Stated rather than inherited. A combined element takes its role from what it contains,
+        // and the only button-shaped child a row has is the triage chip — so a row *without* a
+        // verdict came out as `AXUnknown` between neighbours that were `AXButton`s (2026-09-09
+        // live test), which is a list VoiceOver reads in two different voices. Every row does the
+        // same thing when it is activated, so every row says the same thing about itself.
+        .accessibilityAddTraits(.isButton)
     }
 
     /// The name the badge and its popover use for this row's author.

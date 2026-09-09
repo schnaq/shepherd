@@ -360,12 +360,7 @@ struct PriorityRowView: View {
                 .foregroundStyle(Theme.textMuted)
                 .lineLimit(1)
         }
-        .help(
-            SpokenRow.sentence([
-                priority.bucket.localizedTitle,
-                priority.file.path,
-            ]) + "\n" + priority.reasons.joined(separator: "\n")
-        )
+        .help(helpText)
         // The dot's colour is the *only* thing on this row that says which bucket the file is
         // in — the card has no section headers, unlike the review screen's file list, where the
         // same buckets are printed as "REVIEW FIRST · 3". So the bucket is named here, where a
@@ -381,5 +376,26 @@ struct PriorityRowView: View {
                 ])
             )
         )
+    }
+
+    /// The tooltip: what the row shows, in the reader's language, and then why it was ranked.
+    ///
+    /// The category is named here as well as on the row because the *first* of
+    /// ``ShepherdCore/FilePriority/reasons`` is that same category in ShepherdCore's plain
+    /// English — the invariant ``ReviewFileListView`` relies on for the same swap — and a German
+    /// row whose tooltip read "Standard. …/Node.swift. Source file" was what the 2026-09-09 live
+    /// test found. So the localized label takes its place rather than joining it. The reasons
+    /// that remain ("Touches security-sensitive path …") are still English and come last, behind
+    /// everything that has been translated; those five patterns live in ShepherdCore, which
+    /// imports Foundation only, so localizing them is a follow-up of its own.
+    private var helpText: String {
+        let head = SpokenRow.sentence([
+            priority.bucket.localizedTitle,
+            priority.file.path,
+            priority.category.localizedLabel,
+        ])
+        let rest = priority.reasons.dropFirst()
+        guard !rest.isEmpty else { return head }
+        return head + "\n" + rest.joined(separator: "\n")
     }
 }
