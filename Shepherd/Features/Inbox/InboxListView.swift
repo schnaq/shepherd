@@ -39,28 +39,28 @@ struct InboxListView: View {
         .onAppear { isListFocused = true }
         // And back again when the palette closes. Nothing else would return focus — the list
         // stopped being focusable while the palette was up, so `j` and `k` would be dead until
-        // the reader clicked a row. The hop is the palette's own trick (`CommandPaletteView`):
-        // the field it is being taken from is torn down in this same update, and focus asked for
-        // during a teardown does not always stick.
-        .onChange(of: isKeyboardOwner) { _, owner in
-            guard owner else { return }
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(60))
-                isListFocused = true
-            }
-        }
+        // the reader clicked a row. Why it takes a hop rather than a plain assignment is in
+        // ``View/reassertingFocus(_:when:after:)``.
+        .reassertingFocus($isListFocused, when: isKeyboardOwner)
     }
 
     // MARK: - Header
 
     private var header: some View {
         HStack(spacing: 10) {
+            // The smart view's name is what tells the reader which list they are in, so it wins
+            // the row's width: one line, and first claim on the space. At 1440 pt with both
+            // pickers on fixed frames, "Braucht mein Review" wrapped to two lines inside a 42 pt
+            // bar and the second line was clipped.
             Text(model.smartView.title)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.textStrong)
+                .lineLimit(1)
+                .layoutPriority(1)
             Text(String(localized: "\(model.filteredRows.count) pull requests"))
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.textMuted)
+                .lineLimit(1)
 
             if let filter = activeFilterLabel {
                 ChipView(text: filter, color: Theme.accentText)
@@ -122,7 +122,10 @@ struct InboxListView: View {
                 Text(String(localized: "Review state")).tag(InboxFacet.reviewState)
             }
             .pickerStyle(.menu)
-            .frame(width: 200)
+            // Sized to its own label and selection rather than to a guessed width: a menu picker
+            // on a fixed frame takes that width whether it needs it or not, and the two of them
+            // together took enough of a 1440 pt window to wrap the title beside them.
+            .fixedSize()
             .help(String(localized: "Group the list (g a / g r / g s)"))
 
             Picker(String(localized: "Sort"), selection: sortBinding) {
@@ -131,7 +134,7 @@ struct InboxListView: View {
                 }
             }
             .pickerStyle(.menu)
-            .frame(width: 250)
+            .fixedSize()
             .help(String(localized: "Sort the list"))
         }
         .padding(.horizontal, 16)

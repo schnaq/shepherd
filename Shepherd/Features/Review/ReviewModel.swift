@@ -417,7 +417,7 @@ final class ReviewModel {
                     try await self.session.database.savePullRequestDetail(fresh)
                 } catch {
                     guard !Task.isCancelled else { return }
-                    saveFailure = ReviewModel.describe(error)
+                    saveFailure = error.userFacingDescription
                 }
                 guard !Task.isCancelled else { return }
                 self.apply(fresh)
@@ -429,7 +429,7 @@ final class ReviewModel {
                 // A cancelled load is the *next* load starting — Try again pressed twice, or the
                 // screen closing — and reporting it would be a lie about GitHub.
                 guard !Task.isCancelled else { return }
-                let message = ReviewModel.describe(error)
+                let message = error.userFacingDescription
                 if self.hasNothingReadableOnScreen {
                     self.detailLoadError = message
                 } else {
@@ -466,16 +466,6 @@ final class ReviewModel {
         case .newCommits, .merged, .closed:
             return
         }
-    }
-
-    /// The sentence a failed load shows.
-    ///
-    /// The same shape ``ToastCenter/failure(_:context:)`` uses, and for the same reason: the
-    /// error's own words, shown verbatim, never printed anywhere (project rule).
-    /// - Parameter error: What the load threw.
-    /// - Returns: The error's description.
-    private static func describe(_ error: any Error) -> String {
-        (error as? any LocalizedError)?.errorDescription ?? error.localizedDescription
     }
 
     private func observeDraft() {
@@ -946,6 +936,14 @@ final class ReviewModel {
     /// The pull request's inbox row.
     var summary: PullRequestSummary? { detail?.summary }
 
+    /// Why an approve or a request changes would be refused here, if it would.
+    ///
+    /// The composer bar and the submit sheet both asked the summary this, in the same words, two
+    /// screens' worth of code apart; it belongs to the pull request rather than to either view,
+    /// so it is answered once. `nil` while the detail is still loading, which is the same answer
+    /// "nothing would refuse it" gives — neither view offers a verdict before there is a summary.
+    var verdictBlocker: ReviewActionBlocker? { summary?.verdictBlocker }
+
     /// The sentence the failure *card* shows, or `nil` when the card is not the right surface.
     ///
     /// One property rather than the same two-part condition in the diff area, in the file list
@@ -955,6 +953,53 @@ final class ReviewModel {
     var detailLoadErrorCard: String? {
         guard let detailLoadError, hasNothingReadableOnScreen else { return nil }
         return detailLoadError
+    }
+
+    /// The "Files have not arrived yet" card, or `nil` when there is no contradiction to report.
+    ///
+    /// ``detailLoadErrorCard``'s shape and its reason: the diff area and the file list both draw
+    /// this card, and the predicate behind it — GitHub sent a `changedFiles` count and none of
+    /// the files — is the kind of two-part condition that drifts when it is written twice. The
+    /// two sentences come with it, so the two panes cannot end up disagreeing about a number they
+    /// are both reading off the same summary.
+    ///
+    /// Each caller still draws its own layout: the diff area's card carries a *Try again*, the
+    /// file list's is a line of text in a narrow column.
+    var filesNotArrivedCard: (systemImage: String, title: String, message: String)? {
+        guard detail?.files.isEmpty == true, let claimed = summary?.changedFiles, claimed > 0 else {
+            return nil
+        }
+        return (
+            "exclamationmark.triangle",
+            String(localized: "Files have not arrived yet"),
+            String(localized: "GitHub reports \(claimed) changed files, but sent none of them.")
+        )
+    }
+
+    /// The freshest CI rollup Shepherd knows for this pull request.
+    ///
+    /// The detail's own check runs when there are any, because they are what the header's
+    /// "2/3 checks" is counting and they are re-read on every reload; the inbox row's rollup only
+    /// while the detail is still loading. Derived with ``ShepherdCore/CheckRollup/init(runs:)``
+    /// rather than by a second hand-rolled mapping — one definition of "red", "still running" and
+    /// "green" for the badge, the Merge button's colour and the merge sheet's warning.
+    ///
+    /// The whole rollup rather than only its state, because the badge needs the counts and the
+    /// two callers that only want the verdict can ask for `.state`. One fallback chain, read
+    /// three ways — and it lives here rather than on ``ReviewScreen`` because nothing in it is
+    /// about the screen: it is the detail and the summary, which the model owns, answering a
+    /// question about the pull request.
+    ///
+    /// The fallback cannot show a fraction: the sweep's rollup is built from GraphQL's
+    /// `statusCheckRollup`, which reports a verdict and a context total and no split at all, so
+    /// its ``ShepherdCore/CheckRollup/successCount`` is zero by construction
+    /// (`GitHubKit/Mapping/ResponseMapping.swift`) and "0/3" would be a fact nobody measured.
+    /// ``ChecksSummaryView`` draws "3 checks" for it instead.
+    var checkRollup: CheckRollup? {
+        if let checks = detail?.checks, !checks.isEmpty {
+            return CheckRollup(runs: checks)
+        }
+        return summary?.checkRollup
     }
 
     /// Whether the banner is offering to show a head commit the screen is not showing yet.

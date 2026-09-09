@@ -72,12 +72,15 @@ final class ToastCenter {
     }
 
     /// Surfaces an error. Errors are never printed to the console (project rule).
+    ///
+    /// The words come from ``Swift/Error/userFacingDescription``, the app's one rule for turning
+    /// a failure into a sentence — so a toast, a settings card and an inline composer report the
+    /// same error the same way.
     /// - Parameters:
     ///   - error: The failure.
     ///   - context: A short prefix describing what was being attempted.
     func failure(_ error: any Error, context: String? = nil) {
-        let description = (error as? LocalizedError)?.errorDescription
-            ?? error.localizedDescription
+        let description = error.userFacingDescription
         let message = context.map { "\($0): \(description)" } ?? description
         show(Toast(message: message, kind: .failure, duration: 8))
     }

@@ -43,9 +43,11 @@ struct ReviewFileListView: View {
     /// mirrored: it replaces the whole diff area with its own way out, and the file list beside
     /// it says "No files yet", which is true of a pruned pull request.
     ///
-    /// The error line and the diff area's error card share one predicate
-    /// (``ReviewModel/detailLoadErrorCard``) rather than each spelling out when a failure is
-    /// worth showing, which is the part that would otherwise drift.
+    /// The first two lines and the diff area's two cards share one predicate each
+    /// (``ReviewModel/detailLoadErrorCard``, ``ReviewModel/filesNotArrivedCard``) rather than
+    /// each pane spelling out when a failure is worth showing, which is the part that would
+    /// otherwise drift — and the second carries its wording too, so the two panes cannot end up
+    /// reporting a different number of missing files.
     private var emptyState: (systemImage: String, title: String, message: String) {
         if let error = model.detailLoadErrorCard {
             return (
@@ -54,13 +56,8 @@ struct ReviewFileListView: View {
                 error
             )
         }
-        if model.detail?.files.isEmpty == true,
-           let claimed = model.summary?.changedFiles, claimed > 0 {
-            return (
-                "exclamationmark.triangle",
-                String(localized: "Files have not arrived yet"),
-                String(localized: "GitHub reports \(claimed) changed files, but sent none of them.")
-            )
+        if let card = model.filesNotArrivedCard {
+            return card
         }
         if model.roundView == .sinceReview {
             return (
@@ -268,11 +265,11 @@ struct ReviewFileHeader: View {
                                 : String(localized: "Mark viewed"))
                         }
                         .font(.system(size: 11.5))
-                        // Spelled out here rather than left to ``View/busy(_:)``: this is the one
-                        // write button in the app on `.plain` rather than on one of the three
-                        // styles, and the styles are where that modifier's spinner lives.
-                        .opacity(isWriting ? 0 : 1)
-                        .overlay { if isWriting { ProgressView().controlSize(.small) } }
+                        // Applied to the label rather than left to ``View/busy(_:)``: this is the
+                        // one write button in the app on `.plain` rather than on one of the three
+                        // styles, and the styles are where that modifier's spinner lives. The
+                        // spinner itself is the shared one, so it matches theirs.
+                        .busyLabel(isBusy: isWriting)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(

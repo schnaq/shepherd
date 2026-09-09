@@ -213,28 +213,37 @@ extension View {
     }
 }
 
-/// The label a style draws while its control is busy: the content held in place at zero opacity
-/// with a spinner over it, so the button keeps its width and a row of them does not reflow.
-/// - Parameters:
-///   - content: The label.
-///   - isBusy: Whether to show the spinner instead.
-///   - tint: The spinner's colour — the style's own text colour, so it reads on the fill.
-/// - Returns: The label, or the spinner in its place.
-@ViewBuilder
-private func busyLabel(
-    _ content: some View,
-    isBusy: Bool,
-    tint: Color
-) -> some View {
-    content
-        .opacity(isBusy ? 0 : 1)
-        .overlay {
-            if isBusy {
-                ProgressView()
-                    .controlSize(.small)
-                    .tint(tint)
+extension View {
+    /// This label, while its control is busy: held in place at zero opacity with a spinner over
+    /// it, so the button keeps its width and a row of them does not reflow.
+    ///
+    /// The three styles below draw it, and so does the one write button in the app that is on
+    /// `.plain` rather than on a style — the file list's *Mark viewed*, which ``View/busy(_:)``
+    /// cannot reach because the modifier's presentation lives in the styles. That button used to
+    /// hand-roll this pair of modifiers, which is two chances for the app's spinners to stop
+    /// agreeing about what "running" looks like.
+    /// - Parameters:
+    ///   - isBusy: Whether to show the spinner instead.
+    ///   - tint: The spinner's colour, normally the caller's own text colour so it reads on the
+    ///     fill. `nil` leaves the spinner on whatever tint it inherits, which is what a control
+    ///     outside the three styles wants.
+    /// - Returns: The label, or the spinner in its place.
+    @ViewBuilder
+    func busyLabel(isBusy: Bool, tint: Color? = nil) -> some View {
+        opacity(isBusy ? 0 : 1)
+            .overlay {
+                if isBusy {
+                    if let tint {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(tint)
+                    } else {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                }
             }
-        }
+    }
 }
 
 /// The filled accent button.
@@ -246,24 +255,21 @@ struct PrimaryButtonStyle: ButtonStyle {
     @Environment(\.buttonIsBusy) private var isBusy
 
     func makeBody(configuration: Configuration) -> some View {
-        busyLabel(
-            configuration.label
-                .font(.system(size: 12.5, weight: .semibold))
-                .foregroundStyle(Color.white),
-            isBusy: isBusy,
+        configuration.label
+            .font(.system(size: 12.5, weight: .semibold))
+            .foregroundStyle(Color.white)
             // The style's own text colour, not ``Theme/textOnFilled``: this fill is the accent
             // and its label is white on both appearances.
-            tint: Color.white
-        )
-        .padding(.horizontal, 12)
-        .frame(height: height)
-        .background(
-            Theme.accent.opacity(configuration.isPressed ? 0.8 : 1),
-            in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-        )
-        // A busy button is disabled but not dimmed — the spinner is the message, and a spinner at
-        // 45 % is the bug this arrangement exists to prevent.
-        .opacity(isEnabled || isBusy ? 1 : 0.45)
+            .busyLabel(isBusy: isBusy, tint: Color.white)
+            .padding(.horizontal, 12)
+            .frame(height: height)
+            .background(
+                Theme.accent.opacity(configuration.isPressed ? 0.8 : 1),
+                in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+            )
+            // A busy button is disabled but not dimmed — the spinner is the message, and a
+            // spinner at 45 % is the bug this arrangement exists to prevent.
+            .opacity(isEnabled || isBusy ? 1 : 0.45)
     }
 }
 
@@ -276,20 +282,17 @@ struct SuccessButtonStyle: ButtonStyle {
     @Environment(\.buttonIsBusy) private var isBusy
 
     func makeBody(configuration: Configuration) -> some View {
-        busyLabel(
-            configuration.label
-                .font(.system(size: 12.5, weight: .semibold))
-                .foregroundStyle(Theme.textOnFilled),
-            isBusy: isBusy,
-            tint: Theme.textOnFilled
-        )
-        .padding(.horizontal, 12)
-        .frame(height: height)
-        .background(
-            Theme.success.opacity(configuration.isPressed ? 0.8 : 1),
-            in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-        )
-        .opacity(isEnabled || isBusy ? 1 : 0.45)
+        configuration.label
+            .font(.system(size: 12.5, weight: .semibold))
+            .foregroundStyle(Theme.textOnFilled)
+            .busyLabel(isBusy: isBusy, tint: Theme.textOnFilled)
+            .padding(.horizontal, 12)
+            .frame(height: height)
+            .background(
+                Theme.success.opacity(configuration.isPressed ? 0.8 : 1),
+                in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+            )
+            .opacity(isEnabled || isBusy ? 1 : 0.45)
     }
 }
 
@@ -304,24 +307,21 @@ struct SecondaryButtonStyle: ButtonStyle {
     @Environment(\.buttonIsBusy) private var isBusy
 
     func makeBody(configuration: Configuration) -> some View {
-        busyLabel(
-            configuration.label
-                .font(.system(size: 12.5, weight: .medium))
-                .foregroundStyle(tint ?? Theme.text),
-            isBusy: isBusy,
-            tint: tint ?? Theme.text
-        )
-        .padding(.horizontal, 12)
-        .frame(height: height)
-        .background(
-            Theme.control.opacity(configuration.isPressed ? 0.7 : 1),
-            in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .stroke(Theme.controlBorder, lineWidth: 1)
-        )
-        .opacity(isEnabled || isBusy ? 1 : 0.45)
+        configuration.label
+            .font(.system(size: 12.5, weight: .medium))
+            .foregroundStyle(tint ?? Theme.text)
+            .busyLabel(isBusy: isBusy, tint: tint ?? Theme.text)
+            .padding(.horizontal, 12)
+            .frame(height: height)
+            .background(
+                Theme.control.opacity(configuration.isPressed ? 0.7 : 1),
+                in: RoundedRectangle(cornerRadius: 7, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(Theme.controlBorder, lineWidth: 1)
+            )
+            .opacity(isEnabled || isBusy ? 1 : 0.45)
     }
 }
 

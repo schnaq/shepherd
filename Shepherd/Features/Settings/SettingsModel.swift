@@ -140,7 +140,7 @@ final class SettingsModel {
         do {
             try await session.database.deleteAgentRegistryOverride(id: id)
         } catch {
-            return (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            return error.userFacingDescription
         }
         overrides = (try? await session.database.agentRegistryOverrides()) ?? overrides
         return nil

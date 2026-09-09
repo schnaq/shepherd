@@ -282,8 +282,7 @@ struct IssueDetailPanel: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(SecondaryButtonStyle())
-                .busy(isWriting(row, .issueComment))
-                .disabled(isWritingAnything(row))
+                .modifier(issueWrite(row, .issueComment))
 
                 if let login = model.viewerLogin, !login.isEmpty {
                     Button {
@@ -299,8 +298,11 @@ struct IssueDetailPanel: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(SecondaryButtonStyle())
-                    .busy(isWriting(row, .issueAssign))
-                    .disabled(row.myRelation.contains(.assigned) || isWritingAnything(row))
+                    .modifier(issueWrite(
+                        row,
+                        .issueAssign,
+                        alsoDisabledWhen: row.myRelation.contains(.assigned)
+                    ))
                     .help(
                         row.myRelation.contains(.assigned)
                             ? String(localized: "This issue is already assigned to you")
@@ -364,8 +366,7 @@ struct IssueDetailPanel: View {
         .buttonStyle(SecondaryButtonStyle())
         // ``ActionActivity/Kind/issueComment``, because that is what this button eventually
         // writes: the handover is recorded as a comment when the run starts.
-        .busy(isWriting(row, .issueComment))
-        .disabled(row.state == .closed || isWritingAnything(row))
+        .modifier(issueWrite(row, .issueComment, alsoDisabledWhen: row.state == .closed))
         .help(
             row.state == .closed
                 ? String(localized: "This issue is closed")
@@ -404,8 +405,7 @@ struct IssueDetailPanel: View {
         // this used to have draws its own label and never runs it through a `ButtonStyle` at all.
         .menuStyle(.button)
         .buttonStyle(SecondaryButtonStyle())
-        .busy(isWriting(row, .issueLabel))
-        .disabled(isWritingAnything(row))
+        .modifier(issueWrite(row, .issueLabel))
         .help(
             String(
                 localized: "The labels Shepherd has already seen in this repository. A label nothing here carries is a click away on GitHub."
@@ -427,8 +427,7 @@ struct IssueDetailPanel: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(SecondaryButtonStyle())
-            .busy(isWriting(row, .issueState))
-            .disabled(isWritingAnything(row))
+            .modifier(issueWrite(row, .issueState))
         } else {
             Menu {
                 Button(String(localized: "Close as completed")) {
@@ -452,8 +451,7 @@ struct IssueDetailPanel: View {
             // instead of the inline opacity/overlay trick a borderless menu needed.
             .menuStyle(.button)
             .buttonStyle(SecondaryButtonStyle())
-            .busy(isWriting(row, .issueState))
-            .disabled(isWritingAnything(row))
+            .modifier(issueWrite(row, .issueState))
         }
     }
 
@@ -524,6 +522,30 @@ struct IssueDetailPanel: View {
         environment.activity.isRunningAny(row.id, Self.issueWrites)
     }
 
+    /// What every triage button on this panel wears: its own spinner, and the whole row's writes
+    /// locking each other out.
+    ///
+    /// The pair was written by hand six times, and the pair is the rule — one button spins so the
+    /// reviewer can see which one they pressed, all six go quiet because the write in flight is
+    /// about to move the `updatedAt` the others would be re-validated against. Two lines that
+    /// have to stay together are better as one call than as six chances to keep only the first.
+    /// - Parameters:
+    ///   - row: The issue the button acts on.
+    ///   - kind: Which verb this button writes, so only its own spinner turns.
+    ///   - extra: A further reason this button is dark — already assigned, already closed. It is
+    ///     ORed with the row's writes, never instead of them.
+    /// - Returns: The modifier to apply to the button.
+    private func issueWrite(
+        _ row: IssueRowSummary,
+        _ kind: ActionActivity.Kind,
+        alsoDisabledWhen extra: Bool = false
+    ) -> IssueWriteModifier {
+        IssueWriteModifier(
+            isBusy: isWriting(row, kind),
+            isDisabled: extra || isWritingAnything(row)
+        )
+    }
+
     /// The node id of a linked pull request that is in the local inbox, or `nil`.
     ///
     /// Read off the session's own inbox rows — the same in-memory source the menu-bar quick inbox
@@ -551,6 +573,24 @@ struct IssueDetailPanel: View {
                 number: reference.number
             )
         )
+    }
+}
+
+/// ``IssueDetailPanel/issueWrite(_:_:alsoDisabledWhen:)``'s two modifiers, as one.
+///
+/// A ``ViewModifier`` rather than a `View` extension because the two values it needs come off the
+/// panel — the activity tracker it reads lives in the environment — and a `View` extension cannot
+/// ask the panel anything.
+private struct IssueWriteModifier: ViewModifier {
+    /// Whether *this* button's own write is in flight.
+    let isBusy: Bool
+    /// Whether this button is dark: any of the row's writes, plus the caller's own reason.
+    let isDisabled: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .busy(isBusy)
+            .disabled(isDisabled)
     }
 }
 

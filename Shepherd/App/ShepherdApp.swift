@@ -24,6 +24,8 @@ struct ShepherdApp: App {
         WindowGroup(id: ShepherdScene.mainWindow) {
             RootView()
                 .environment(environment)
+                // 720, not 700: the 2026-09-08 live test found the toolbar collapsing under the
+                // title bar below roughly 700 pt of height, so the floor sits just above it.
                 .frame(minWidth: 1_040, minHeight: 720)
                 .preferredColorScheme(environment.settings.appearance.colorScheme)
                 .task {

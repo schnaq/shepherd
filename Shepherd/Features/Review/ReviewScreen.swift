@@ -36,7 +36,7 @@ struct ReviewScreen: View {
         VStack(spacing: 0) {
             ReviewHeaderView(
                 model: model,
-                checkRollup: headerCheckRollup,
+                checkRollup: model.checkRollup,
                 onBack: leaveReview,
                 onMerge: { model.isMergeSheetPresented = true },
                 onReview: { model.isSubmitSheetPresented = true },
@@ -123,7 +123,7 @@ struct ReviewScreen: View {
             if let summary = model.summary {
                 MergeSheet(
                     summary: summary,
-                    checkState: headerCheckRollup?.state,
+                    checkState: model.checkRollup?.state,
                     actions: actions,
                     settings: environment.settings
                 )
@@ -149,30 +149,6 @@ struct ReviewScreen: View {
                 localized: "\(running.remaining) of \(running.total) pull requests are still in the queue. Nothing you already queued is affected."
             ))
         }
-    }
-
-    /// The freshest CI rollup Shepherd knows for this pull request.
-    ///
-    /// The detail's own check runs when there are any, because they are what the header's
-    /// "2/3 checks" is counting and they are re-read on every reload; the inbox row's rollup only
-    /// while the detail is still loading. Derived with ``ShepherdCore/CheckRollup/init(runs:)``
-    /// rather than by a second hand-rolled mapping — one definition of "red", "still running" and
-    /// "green" for the badge, the Merge button's colour and the merge sheet's warning.
-    ///
-    /// The whole rollup rather than only its state, because the badge needs the counts and the
-    /// two callers that only want the verdict can ask for `.state`. One fallback chain, read
-    /// three ways.
-    ///
-    /// The fallback cannot show a fraction: the sweep's rollup is built from GraphQL's
-    /// `statusCheckRollup`, which reports a verdict and a context total and no split at all, so
-    /// its ``ShepherdCore/CheckRollup/successCount`` is zero by construction
-    /// (`GitHubKit/Mapping/ResponseMapping.swift`) and "0/3" would be a fact nobody measured.
-    /// ``ChecksSummaryView`` draws "3 checks" for it instead.
-    private var headerCheckRollup: CheckRollup? {
-        if let checks = model.detail?.checks, !checks.isEmpty {
-            return CheckRollup(runs: checks)
-        }
-        return model.summary?.checkRollup
     }
 
     // MARK: - Diff area
@@ -236,17 +212,16 @@ struct ReviewScreen: View {
             )
         } else if model.detail == nil {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else if model.detail?.files.isEmpty == true,
-                  let claimed = model.summary?.changedFiles, claimed > 0 {
+        } else if let card = model.filesNotArrivedCard {
             // The header counts `changedFiles` off the same summary, so an empty file list beside
             // it is a contradiction rather than an empty pull request: GitHub sent the count and
-            // not the files. Say which of the two Shepherd believes, and offer the retry.
+            // not the files. Which of the two Shepherd believes is
+            // ``ReviewModel/filesNotArrivedCard``'s sentence, shared with the file list beside
+            // this pane; the retry is this pane's own, because the list has nowhere to put one.
             EmptyStateView(
-                systemImage: "exclamationmark.triangle",
-                title: String(localized: "Files have not arrived yet"),
-                message: String(
-                    localized: "GitHub reports \(claimed) changed files, but sent none of them."
-                ),
+                systemImage: card.systemImage,
+                title: card.title,
+                message: card.message,
                 action: (title: String(localized: "Try again"), run: { model.load() })
             )
         } else if model.detail?.files.isEmpty == true {
@@ -545,7 +520,7 @@ struct ReviewScreen: View {
 struct ReviewHeaderView: View {
     /// The review model.
     let model: ReviewModel
-    /// The freshest CI rollup, from the screen (``ReviewScreen/headerCheckRollup``).
+    /// The freshest CI rollup, from the model (``ReviewModel/checkRollup``).
     let checkRollup: CheckRollup?
     /// Returns to the inbox.
     var onBack: () -> Void
@@ -604,7 +579,7 @@ struct ReviewHeaderView: View {
             Spacer(minLength: 8)
 
             // The inbox row's rollup stands in while the detail has no check runs of its own
-            // (``ReviewScreen/headerCheckRollup``). The sweep knows a suite is red long before
+            // (``ReviewModel/checkRollup``). The sweep knows a suite is red long before
             // the detail fetch lands, and hiding the badge until then said "no checks" when the
             // truth was "not read yet". `total > 0` is the gate rather than the state, because a
             // rollup that counted nothing has nothing to show.
@@ -670,12 +645,16 @@ struct ReviewHeaderView: View {
         }
     }
 
-    /// Why the Merge button is dark, or the shortcut that presses it.
+    /// Why the Merge button is dark, or the shortcut that presses it
+    /// (``PullRequestActions/help(for:on:otherwise:)``).
     private var mergeHelp: String {
-        guard let summary = model.summary, let blocker = summary.mergeBlocker else {
-            return String(localized: "Merge (m)")
-        }
-        return PullRequestActions.blockerMessage(blocker, slug: summary.slug)
+        let shortcut = String(localized: "Merge (m)")
+        guard let summary = model.summary else { return shortcut }
+        return PullRequestActions.help(
+            for: summary.mergeBlocker,
+            on: summary,
+            otherwise: shortcut
+        )
     }
 }
 

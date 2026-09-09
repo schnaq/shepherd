@@ -41,7 +41,7 @@ struct ReviewComposerBar: View {
             }
             .buttonStyle(SecondaryButtonStyle(height: 30, tint: Theme.failure))
             .busy(isSubmittingVerdict)
-            .disabled(model.hasEndedOnGitHub || verdictBlocker != nil)
+            .disabled(model.hasEndedOnGitHub || model.verdictBlocker != nil)
             .help(blockedHelp(otherwise: String(localized: "Request changes (r x)")))
 
             Button {
@@ -78,9 +78,6 @@ struct ReviewComposerBar: View {
         return String(localized: "\(count) pending comments in this review")
     }
 
-    /// Why an approve or a request changes would be refused here, if it would.
-    private var verdictBlocker: ReviewActionBlocker? { model.summary?.verdictBlocker }
-
     /// Whether a verdict for this pull request is already on its way to the outbox.
     ///
     /// These three buttons only *open* the sheet, but they open it onto a review that is already
@@ -95,15 +92,23 @@ struct ReviewComposerBar: View {
     /// still opens the sheet, on a plain comment, because a comment is a review GitHub accepts
     /// from an author. The label follows, so the button never offers what it cannot do.
     private var preselectedVerdict: ReviewVerdict {
-        verdictBlocker == nil ? .approve : .comment
+        model.verdictBlocker == nil ? .approve : .comment
     }
 
-    /// A blocked button's tooltip: the sentence the write funnel would have toasted.
+    /// A blocked button's tooltip: the sentence the write funnel would have toasted
+    /// (``PullRequestActions/help(for:on:otherwise:)``).
+    ///
+    /// The guard is for the summary, not for the blocker: before the detail arrives there is no
+    /// pull request to name, and a bar with nothing to act on shows the shortcut.
     /// - Parameter otherwise: The tooltip for a button that is live.
     /// - Returns: The tooltip text.
     private func blockedHelp(otherwise: String) -> String {
-        guard let blocker = verdictBlocker, let summary = model.summary else { return otherwise }
-        return PullRequestActions.blockerMessage(blocker, slug: summary.slug)
+        guard let summary = model.summary else { return otherwise }
+        return PullRequestActions.help(
+            for: summary.verdictBlocker,
+            on: summary,
+            otherwise: otherwise
+        )
     }
 
     private func start(_ verdict: ReviewVerdict) {
@@ -194,17 +199,17 @@ struct SubmitReviewSheet: View {
             Picker(String(localized: "Verdict"), selection: verdictBinding) {
                 Text(String(localized: "Comment")).tag(ReviewVerdict.comment)
                 Text(String(localized: "Approve"))
-                    .disabled(verdictBlocker != nil)
+                    .disabled(model.verdictBlocker != nil)
                     .tag(ReviewVerdict.approve)
                 Text(String(localized: "Request changes"))
-                    .disabled(verdictBlocker != nil)
+                    .disabled(model.verdictBlocker != nil)
                     .tag(ReviewVerdict.requestChanges)
             }
             .pickerStyle(.radioGroup)
 
             // Under the picker rather than in a toast after the click: two of the three options
             // are dark and the reason is not guessable from a radio button.
-            if let blocker = verdictBlocker, let summary = model.summary {
+            if let blocker = model.verdictBlocker, let summary = model.summary {
                 Text(PullRequestActions.blockerMessage(blocker, slug: summary.slug))
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.pending)
@@ -504,9 +509,6 @@ struct SubmitReviewSheet: View {
     private var verdictBinding: Binding<ReviewVerdict> {
         Binding(get: { model.pendingVerdict }, set: { model.pendingVerdict = $0 })
     }
-
-    /// Why an approve or a request changes would be refused here, if it would.
-    private var verdictBlocker: ReviewActionBlocker? { model.summary?.verdictBlocker }
 
     /// Whether the review is being written.
     ///
@@ -977,7 +979,7 @@ struct InlineCommentComposer: View {
             dismiss()
         } catch {
             errorMessage = String(
-                localized: "Could not delete the comment: \(error.localizedDescription)"
+                localized: "Could not delete the comment: \(error.userFacingDescription)"
             )
         }
     }

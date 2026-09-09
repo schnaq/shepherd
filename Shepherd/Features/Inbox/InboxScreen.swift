@@ -300,9 +300,11 @@ struct InboxScreen: View {
         do {
             railStateJSON = String(decoding: try JSONEncoder().encode(state), as: UTF8.self)
         } catch {
-            // Four optional strings cannot fail to encode, and if they somehow did there would be
-            // nothing to tell the reader: nothing they did has failed, and the next move of the
-            // rail writes again. ``restoreRail()``'s argument, from the other side.
+            // ``InboxModel/RailState`` is plain `Codable` value types all the way down, so
+            // there is nothing in it that can fail to encode — and if something somehow did,
+            // there would be nothing to tell the reader: nothing they did has failed, and the
+            // next move of the rail writes again. ``restoreRail()``'s argument, from the other
+            // side.
         }
     }
 

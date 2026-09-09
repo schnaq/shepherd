@@ -6011,16 +6011,6 @@
         }
       }
     },
-    "GitHub reports conflicts with %@. Resolve them first.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GitHub meldet Konflikte mit %@. Löse sie zuerst auf."
-          }
-        }
-      }
-    },
     "GitHub reports conflicts with the base branch. Resolve them first.": {
       "localizations": {
         "de": {
@@ -12817,16 +12807,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dieser Pull Request ist nicht mehr in deiner Inbox"
-          }
-        }
-      }
-    },
-    "This pull request is still a draft. GitHub will refuse the merge.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dieser Pull Request ist noch ein Draft. GitHub wird den Merge ablehnen."
           }
         }
       }

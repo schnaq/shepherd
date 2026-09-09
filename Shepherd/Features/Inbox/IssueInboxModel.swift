@@ -538,7 +538,7 @@ final class IssueInboxModel {
         } ?? false
     }
 
-    /// The body of ``queue(_:on:)``, without the in-flight bookkeeping.
+    /// The body of ``queue(_:on:kind:)``, without the in-flight bookkeeping.
     ///
     /// Split out so the tracker is optional: a model built without an ``ActionActivity`` — every
     /// test does — writes exactly as it did before there was one.

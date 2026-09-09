@@ -133,13 +133,21 @@ struct MergeSheet: View {
     /// outbox, and came back as a failed write. Conflicts and unknown mergeability follow;
     /// failing and running checks are last, because they are the two the reviewer may knowingly
     /// merge past.
+    ///
+    /// The first two are ``ShepherdCore/PullRequestSummary/mergeBlocker``'s two cases, so the
+    /// sheet reads them off it and says what the write funnel would have toasted
+    /// (``PullRequestActions/blockerMessage(_:slug:)``) rather than writing a second sentence of
+    /// its own. A refusal the app can name before the click is the same refusal here, in the
+    /// same words, in the same fixed order — and there is then one place a reviewer's wording
+    /// for "this is a draft" can be changed.
     private var warning: String? {
-        if summary.isDraft {
-            return String(localized: "This pull request is still a draft. GitHub will refuse the merge.")
+        if let blocker = summary.mergeBlocker {
+            return PullRequestActions.blockerMessage(blocker, slug: summary.slug)
         }
         switch summary.mergeable {
         case .conflicting:
-            return String(localized: "GitHub reports conflicts with \(summary.baseRefName). Resolve them first.")
+            // Unreachable: ``ShepherdCore/PullRequestSummary/mergeBlocker`` answered it above.
+            return nil
         case .unknown, nil:
             return String(localized: "GitHub has not finished computing mergeability. The merge may be refused.")
         case .mergeable:

@@ -443,6 +443,28 @@ struct PullRequestActions {
         }
     }
 
+    /// A button's tooltip: why GitHub would refuse it, or what it usually says.
+    ///
+    /// Four surfaces greyed a button out and each wrote the same two lines — "is there a blocker,
+    /// then ``blockerMessage(_:slug:)``, otherwise the shortcut" — around the inbox panel's
+    /// buttons, the review composer's verdicts, the submit sheet and the review header's Merge.
+    /// One function, because the rule is one rule: a dark button whose reason lives only in a
+    /// toast the user never triggers explains nothing, and a tooltip that falls back to its
+    /// shortcut is what makes hovering worth doing on a button that *is* live.
+    /// - Parameters:
+    ///   - blocker: What GitHub would refuse, or `nil` when it would refuse nothing.
+    ///   - summary: The pull request the button acts on, for the slug the sentence names.
+    ///   - otherwise: The tooltip for a button that is live.
+    /// - Returns: The tooltip text.
+    static func help(
+        for blocker: ReviewActionBlocker?,
+        on summary: PullRequestSummary,
+        otherwise: String
+    ) -> String {
+        guard let blocker else { return otherwise }
+        return blockerMessage(blocker, slug: summary.slug)
+    }
+
     /// The toast an outcome deserves, or `nil` when that outcome is announced elsewhere.
     ///
     /// `static` and pure so the wording can be asserted on its own. The app's tests cannot build

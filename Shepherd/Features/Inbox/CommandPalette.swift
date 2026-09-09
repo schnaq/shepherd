@@ -178,17 +178,11 @@ struct CommandPaletteView: View {
         }
         .padding(.horizontal, 16)
         .frame(height: 46)
-        .onAppear {
-            isFieldFocused = true
-            // And once more a frame or two later. The list underneath is giving focus up in this
-            // same update, and on the pass where it wins the race the ask above is lost — the
-            // palette then looks focused and is not, and the first word typed goes to the list as
-            // shortcuts. The sleep is cancellable and nothing depends on it finishing.
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(60))
-                isFieldFocused = true
-            }
-        }
+        .onAppear { isFieldFocused = true }
+        // And once more a frame or two later: the list underneath is giving focus up in this same
+        // update, and on the pass where it wins the race the ask above is lost
+        // (``View/reassertingFocus(_:when:after:)``).
+        .reassertingFocus($isFieldFocused, when: true)
         // `task(id:)` is the debounce: a keystroke cancels the previous ranking and starts a new
         // one. Everything it does is local — the corpus and the vectors are already in memory,
         // and the query's own embedding is an on-device call — so there is nothing to throttle

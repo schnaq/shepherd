@@ -50,15 +50,9 @@ struct IssueListView: View {
             return handle(press)
         }
         .onAppear { isListFocused = true }
-        // And back again when the palette closes, with ``InboxListView``'s 60 ms hop and the same
+        // And back again when the palette closes, with ``InboxListView``'s hop and the same
         // argument: nothing else would return focus to a list that stopped being focusable.
-        .onChange(of: isKeyboardOwner) { _, owner in
-            guard owner else { return }
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(60))
-                isListFocused = true
-            }
-        }
+        .reassertingFocus($isListFocused, when: isKeyboardOwner)
     }
 
     // MARK: - Header

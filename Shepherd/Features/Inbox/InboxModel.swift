@@ -560,10 +560,16 @@ final class InboxModel {
     /// title is deliberately plain, stable English ("People"). This maps that one section onto
     /// the same "Humans" key the rail already uses, so the list agrees with the rail instead of
     /// showing GitHub-facing English where everything else on the section is German.
+    ///
+    /// The section is found by its `id`, not by its title: the id is the bucket key
+    /// ``InboxGrouper`` groups on — the literal `"human"` — and that is the contract between the
+    /// two. A title is display text, and display text is the one thing a remap has to be free to
+    /// change: matching on it means re-wording ShepherdCore's English quietly un-remaps this
+    /// section and puts "People" back on screen in a German list.
     var sections: [InboxSection] {
         InboxGrouper.group(filteredRows, by: settings.groupBy).map { section in
             let title: String
-            if section.facet == .provenance, section.title == ActorKind.human.provenanceLabel {
+            if section.facet == .provenance, section.id == "human" {
                 title = String(localized: "Humans")
             } else {
                 title = section.title

@@ -204,7 +204,11 @@ struct InboxDetailPanel: View {
                 // outbox (``busy``, which disables as well and spins while it does).
                 .busy(isWriting(row, .review))
                 .disabled(row.verdictBlocker != nil)
-                .help(help(row.verdictBlocker, on: row, otherwise: String(localized: "Approve (r a)")))
+                .help(PullRequestActions.help(
+                    for: row.verdictBlocker,
+                    on: row,
+                    otherwise: String(localized: "Approve (r a)")
+                ))
 
                 Button {
                     Task { await actions.submitReview(on: row, verdict: .requestChanges) }
@@ -215,8 +219,8 @@ struct InboxDetailPanel: View {
                 .buttonStyle(SecondaryButtonStyle(tint: Theme.failure))
                 .busy(isWriting(row, .review))
                 .disabled(row.verdictBlocker != nil)
-                .help(help(
-                    row.verdictBlocker,
+                .help(PullRequestActions.help(
+                    for: row.verdictBlocker,
                     on: row,
                     otherwise: String(localized: "Request changes (r x)")
                 ))
@@ -243,7 +247,11 @@ struct InboxDetailPanel: View {
                 // already queueing — so it goes quiet with the write rather than with the click.
                 .busy(isWriting(row, .merge))
                 .disabled(row.mergeBlocker != nil)
-                .help(help(row.mergeBlocker, on: row, otherwise: String(localized: "Merge (m)")))
+                .help(PullRequestActions.help(
+                    for: row.mergeBlocker,
+                    on: row,
+                    otherwise: String(localized: "Merge (m)")
+                ))
             }
         }
         .padding(16)
@@ -260,25 +268,6 @@ struct InboxDetailPanel: View {
     /// - Returns: `true` while the write runs.
     private func isWriting(_ row: PullRequestSummary, _ kind: ActionActivity.Kind) -> Bool {
         environment.activity.isRunning(row.id, kind)
-    }
-
-    /// A blocked button's tooltip: why GitHub would refuse, or the shortcut it usually names.
-    ///
-    /// The same sentence the write funnel would have toasted
-    /// (``PullRequestActions/blockerMessage(_:slug:)``), because a greyed-out button whose reason
-    /// lives only in a toast the user never triggers explains nothing.
-    /// - Parameters:
-    ///   - blocker: What GitHub would refuse, when it would.
-    ///   - row: The pull request the button acts on.
-    ///   - otherwise: The tooltip for a button that is live.
-    /// - Returns: The tooltip text.
-    private func help(
-        _ blocker: ReviewActionBlocker?,
-        on row: PullRequestSummary,
-        otherwise: String
-    ) -> String {
-        guard let blocker else { return otherwise }
-        return PullRequestActions.blockerMessage(blocker, slug: row.slug)
     }
 
     /// What the outbox is holding for this pull request (ADR 0006).
