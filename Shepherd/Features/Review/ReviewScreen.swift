@@ -220,9 +220,11 @@ struct ReviewScreen: View {
     private var diffOrPlaceholder: some View {
         if model.isMissingFromInbox {
             missingFromInbox
-        } else if let error = model.detailLoadError, model.detail == nil {
-            // Only with nothing behind it. A refresh that fails over a diff the reviewer is
-            // reading keeps the diff and says so in the banner instead
+        } else if let error = model.detailLoadErrorCard {
+            // Only with nothing readable behind it, and ahead of the "Files have not arrived yet"
+            // card below because the two overlap: a Try again pressed there that failed has to
+            // say why rather than redraw the same sentence. A refresh that fails over a diff the
+            // reviewer *is* reading keeps the diff and speaks through the banner instead
             // (``ReviewModel/Notice/refreshFailed(message:)``) — hiding a working diff to report
             // that it could not be re-checked throws away the more useful half. The card is for
             // the case the live test found: an empty Monaco, gutters and no text, saying nothing.
@@ -680,26 +682,15 @@ struct ReviewHeaderView: View {
 /// The "2/3 checks" summary in the review header.
 struct ChecksSummaryView: View {
     /// The rolled-up state of the head commit's checks.
-    let rollup: CheckRollup
-
-    /// Shows the summary for a fully fetched list of check runs.
-    /// - Parameter checks: The head commit's check runs.
-    init(checks: [CheckRun]) {
-        self.rollup = CheckRollup(runs: checks)
-    }
-
-    /// Shows the summary for a rollup somebody else already has.
     ///
-    /// The inbox row carries one from the sweep, and that rollup knows the state and the number
-    /// of contexts but not the split — GraphQL's `statusCheckRollup` reports a verdict and a
-    /// count, so ``ShepherdCore/CheckRollup/successCount`` is zero there (see
-    /// `ResponseMapping.pullRequestSummary(from:relations:detector:)`). So the fraction is drawn
-    /// only when somebody actually counted, and "3 checks" beside the dot otherwise: it is every
-    /// fact there is, and "0/3" would be a wrong one.
-    /// - Parameter rollup: The rolled-up check state.
-    init(rollup: CheckRollup) {
-        self.rollup = rollup
-    }
+    /// A rollup rather than the check runs, because two kinds of caller have one: the detail's
+    /// runs, counted with ``ShepherdCore/CheckRollup/init(runs:)``, and the inbox row's, which
+    /// the sweep built from GraphQL's `statusCheckRollup`. The second knows the state and the
+    /// number of contexts but not the split — ``ShepherdCore/CheckRollup/successCount`` is zero
+    /// there (see `ResponseMapping.pullRequestSummary(from:relations:detector:)`) — so the
+    /// fraction is drawn only when somebody actually counted, and "3 checks" beside the dot
+    /// otherwise: it is every fact there is, and "0/3" would be a wrong one.
+    let rollup: CheckRollup
 
     /// Whether the rollup carries the per-outcome split, or only a verdict and a total.
     private var hasCounts: Bool {

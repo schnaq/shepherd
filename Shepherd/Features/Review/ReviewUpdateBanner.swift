@@ -49,6 +49,7 @@ struct ReviewUpdateBanner: View {
                 if notice.offersRetry {
                     Button(String(localized: "Try again"), action: onRetry)
                         .buttonStyle(SecondaryButtonStyle(height: 26, tint: Theme.accentText))
+                        .help(String(localized: "Ask GitHub for this pull request again"))
                 }
             }
             .padding(.horizontal, 16)
@@ -56,9 +57,10 @@ struct ReviewUpdateBanner: View {
             Divider().overlay(Theme.border)
         }
         .background(Theme.raised)
-        // `.contain` rather than `.combine`: the Reload button has to stay its own element so the
-        // keyboard and VoiceOver can reach it, and the label names the group they are in rather
-        // than replacing what they say (CONTRIBUTING, ADR 0033).
+        // `.contain` rather than `.combine`: whichever button the notice carries — Reload for a
+        // push, Try again for a failed refresh — has to stay its own element so the keyboard and
+        // VoiceOver can reach it, and the label names the group they are in rather than replacing
+        // what they say (CONTRIBUTING, ADR 0033).
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text(message))
         // A heading, so the banner is reachable by VoiceOver's own heading navigation rather than

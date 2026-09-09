@@ -123,7 +123,9 @@ struct DiffViewerView: NSViewRepresentable {
     /// The class is written as well as the flag, so the frame is right even if the shell's own
     /// script never runs. Nothing is fetched to do any of it, so ADR 0003's "no remote loads"
     /// is untouched; the class name is the one `web/diff-viewer/src/styles.css` and the bridge's
-    /// `setTheme` both use, which is `shepherd-theme-` plus the raw value.
+    /// `setTheme` both use, which is `shepherd-theme-` plus the raw value. Add and remove rather
+    /// than an assignment to `className`, so this, the shell's boot script and `setTheme` all
+    /// move the class the same way.
     /// - Parameter theme: The appearance the app has already resolved.
     /// - Returns: The document-start script to register on the configuration.
     private static func themeBootstrap(_ theme: BridgeThemeName) -> WKUserScript {
@@ -131,7 +133,9 @@ struct DiffViewerView: NSViewRepresentable {
             source: """
             window.__shepherdTheme = '\(theme.rawValue)';
             if (document.documentElement) {
-              document.documentElement.className = 'shepherd-theme-\(theme.rawValue)';
+              var root = document.documentElement.classList;
+              root.remove('shepherd-theme-light', 'shepherd-theme-dark');
+              root.add('shepherd-theme-\(theme.rawValue)');
             }
             """,
             injectionTime: .atDocumentStart,

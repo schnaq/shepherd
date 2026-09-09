@@ -35,15 +35,19 @@ struct ReviewFileListView: View {
 
     /// What an empty file list means, in the order ``ReviewScreen/diffOrPlaceholder`` uses.
     ///
-    /// The same three claims the diff area makes, one line each, because the two are read
-    /// together: a list saying "This pull request has no changed files" beside a diff that failed
-    /// to load is how the live test's empty Monaco went unexplained. Nothing is threaded in — the
-    /// model carries the error and the summary the header is counting from — so the two orders
-    /// cannot drift apart by a call site being missed.
+    /// The three claims the diff area makes about *the diff* — it could not be loaded, GitHub
+    /// claims files it did not send, nothing changed since the reviewed head — one line each,
+    /// because the two panes are read together: a list saying "This pull request has no changed
+    /// files" beside a diff that failed to load is how the live test's empty Monaco went
+    /// unexplained. The screen's ``ReviewScreen/missingFromInbox`` state is deliberately *not*
+    /// mirrored: it replaces the whole diff area with its own way out, and the file list beside
+    /// it says "No files yet", which is true of a pruned pull request.
+    ///
+    /// The error line and the diff area's error card share one predicate
+    /// (``ReviewModel/detailLoadErrorCard``) rather than each spelling out when a failure is
+    /// worth showing, which is the part that would otherwise drift.
     private var emptyState: (systemImage: String, title: String, message: String) {
-        // Gated on there being no detail for ``ReviewScreen/diffOrPlaceholder``'s reason: a
-        // failed *refresh* leaves the file list alone and speaks through the banner.
-        if let error = model.detailLoadError, model.detail == nil {
+        if let error = model.detailLoadErrorCard {
             return (
                 "exclamationmark.triangle",
                 String(localized: "Could not load this pull request"),

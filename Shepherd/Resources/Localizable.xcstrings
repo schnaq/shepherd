@@ -424,9 +424,39 @@
     "%lld checks on the head commit; Shepherd has not read them yet.": {
       "localizations": {
         "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld Checks auf dem Head-Commit; Shepherd hat sie noch nicht gelesen."
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Check auf dem Head-Commit; Shepherd hat ihn noch nicht gelesen."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Checks auf dem Head-Commit; Shepherd hat sie noch nicht gelesen."
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld check on the head commit; Shepherd has not read it yet."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld checks on the head commit; Shepherd has not read them yet."
+                }
+              }
+            }
           }
         }
       }
@@ -3211,6 +3241,16 @@
         }
       }
     },
+    "Ask GitHub for this pull request again": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub erneut nach diesem Pull Request fragen"
+          }
+        }
+      }
+    },
     "Asking the model…": {
       "localizations": {
         "de": {
@@ -5934,9 +5974,39 @@
     "GitHub reports %lld changed files, but sent none of them.": {
       "localizations": {
         "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GitHub meldet %lld geänderte Dateien, hat aber keine davon geschickt."
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "GitHub meldet %lld geänderte Datei, hat sie aber nicht geschickt."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "GitHub meldet %lld geänderte Dateien, hat aber keine davon geschickt."
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "GitHub reports %lld changed file, but sent none of it."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "GitHub reports %lld changed files, but sent none of them."
+                }
+              }
+            }
           }
         }
       }

@@ -22,14 +22,19 @@
       `window.__shepherdTheme` is set by the app's own WKUserScript at document start
       (`DiffViewerView.themeBootstrap(_:)`), which runs before this file's <head> is parsed. It
       wins, because Shepherd can be forced dark while macOS is light and only the app knows that.
-      `prefers-color-scheme` is the answer for every other host — the dev server, or dist/ opened
-      in a browser. Inline rather than a file for the obvious reason: a request is a paint later.
+      `prefers-color-scheme` is the answer for every other host — the dev harness, which carries
+      the same boot script (src/dev/index.html), or dist/ opened in a browser. Inline rather than a file for the
+      obvious reason: a request is a paint later. Add/remove rather than assigning `className`,
+      so this and the bridge's `setTheme` (src/viewer/monacoViewer.ts) toggle the class the same
+      way and neither can wipe something the other put there.
     -->
     <script>
       (function () {
         var forced = window.__shepherdTheme;
         var isDark = forced ? forced === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
-        document.documentElement.className = isDark ? 'shepherd-theme-dark' : 'shepherd-theme-light';
+        var root = document.documentElement.classList;
+        root.remove('shepherd-theme-light', 'shepherd-theme-dark');
+        root.add(isDark ? 'shepherd-theme-dark' : 'shepherd-theme-light');
       })();
     </script>
     <link rel="stylesheet" href="./viewer.css" />

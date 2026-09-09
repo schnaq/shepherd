@@ -145,16 +145,20 @@ final class ReviewModel {
     private(set) var focusOutcome: IntelligenceOutcome<[FocusHint]> = .disabled
     /// Whether a refresh is in flight.
     private(set) var isRefreshing = false
-    /// Why the load failed with *nothing* on screen, in the error's own words.
+    /// Why the load failed with nothing readable on screen, in the error's own words.
     ///
     /// Every failure on the way to a first diff used to be dropped on the floor: offline, a 404
     /// for a repository the token cannot see, a decode that did not fit. The screen then sat on
     /// its opening spinner and a reviewer read an empty file list as "nothing changed". This is
     /// what the screen and the file list say instead, beside a Try again that calls ``load()``.
     ///
-    /// Only ever set while ``detail`` is `nil`, and cleared by ``apply(_:)`` the moment one
-    /// arrives: a refresh that fails over a diff the reviewer is already reading belongs in
-    /// ``Notice/refreshFailed(message:)``, not here.
+    /// The rule is "never hide a *working* diff", not "never appear over a detail": it is set
+    /// while there is no detail **or** while the detail on screen has no files — that second
+    /// state is the "Files have not arrived yet" card, and it is exactly as blank as the spinner,
+    /// so a Try again pressed there has to be able to report that it failed. With a diff a
+    /// reviewer can actually read, the failure goes to ``Notice/refreshFailed(message:)`` instead.
+    /// ``apply(_:)`` and ``refresh(_:replacing:)`` both clear it, so any detail that arrives —
+    /// by fetch, by the banner's Reload, or from a sweep — takes the card down.
     private(set) var detailLoadError: String?
     /// Whether a submit is in flight.
     private(set) var isSubmitting = false
@@ -426,13 +430,24 @@ final class ReviewModel {
                 // screen closing — and reporting it would be a lie about GitHub.
                 guard !Task.isCancelled else { return }
                 let message = ReviewModel.describe(error)
-                if self.detail == nil {
+                if self.hasNothingReadableOnScreen {
                     self.detailLoadError = message
                 } else {
                     self.noteRefreshFailure(message)
                 }
             }
         }
+    }
+
+    /// Whether the screen is showing nothing a reviewer could read.
+    ///
+    /// No detail, or a detail with no files: the spinner and the "Files have not arrived yet"
+    /// card are equally blank, and neither is a diff worth protecting from an error card. The
+    /// distinction matters because ``noteRefreshFailure(_:)`` *drops* a failure when the banner
+    /// slot is taken, so a Try again pressed on a blank screen while a "merged" banner is up
+    /// would otherwise have failed in complete silence.
+    private var hasNothingReadableOnScreen: Bool {
+        detail == nil || detail?.files.isEmpty == true
     }
 
     /// Puts a failed refresh in the banner, unless the banner is already saying something better.
@@ -631,6 +646,13 @@ final class ReviewModel {
     ///   - fresh: The detail to fold in.
     ///   - shown: The detail it replaces, for the one comparison this has to make.
     private func refresh(_ fresh: PullRequestDetail, replacing shown: PullRequestDetail) {
+        // A read that succeeded answers a read that failed, and this is the *other* way a fresh
+        // detail reaches the screen — ``apply(_:)`` clears these two as well, and the reason the
+        // paths differ at all is spelled out on ``shouldApplyCached(shown:)``. Without it a sweep
+        // updated the checks badge and the threads while the banner still said the refresh had
+        // failed, and the card still sat over a file list that had since arrived.
+        if case .refreshFailed = notice { notice = nil }
+        detailLoadError = nil
         let threadsMoved = fresh.threads != shown.threads
         detail = fresh
         priorities = FilePrioritizer.prioritize(
@@ -923,6 +945,17 @@ final class ReviewModel {
 
     /// The pull request's inbox row.
     var summary: PullRequestSummary? { detail?.summary }
+
+    /// The sentence the failure *card* shows, or `nil` when the card is not the right surface.
+    ///
+    /// One property rather than the same two-part condition in the diff area, in the file list
+    /// and in ``load()``'s catch: three copies of "is there anything worth hiding behind it"
+    /// would be three chances to answer it differently, and the answer is what decides whether a
+    /// reviewer sees their failed Try again at all.
+    var detailLoadErrorCard: String? {
+        guard let detailLoadError, hasNothingReadableOnScreen else { return nil }
+        return detailLoadError
+    }
 
     /// Whether the banner is offering to show a head commit the screen is not showing yet.
     var canReloadPendingUpdate: Bool {
