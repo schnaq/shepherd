@@ -69,9 +69,16 @@ final class ReviewModel {
 
     /// What the banner above the review screen says, when GitHub has moved on without it.
     ///
-    /// One slot for three facts, because they are the same kind of fact: something happened on
-    /// GitHub that this screen cannot simply absorb. Which one is showing also decides whether
-    /// the screen still takes a verdict — see ``ReviewModel/hasEndedOnGitHub``.
+    /// One slot for four facts, because they are the same kind of fact: something happened
+    /// between this screen and GitHub that it cannot simply absorb. Which one is showing also
+    /// decides whether the screen still takes a verdict — see ``ReviewModel/hasEndedOnGitHub``.
+    ///
+    /// ``refreshFailed(message:)`` is the newest and the odd one out: the other three are facts
+    /// about the *pull request*, and it is a fact about the connection. It lives here anyway
+    /// because the alternative was worse — a failed background refresh used to replace a diff the
+    /// reviewer was reading with an error card, and a diff Shepherd already has is worth more
+    /// than the news that it could not be re-checked. The card is now only for the case where
+    /// there is nothing to hide behind it (``ReviewModel/detailLoadError``).
     enum Notice: Equatable {
         /// The head branch was pushed to, with how many commits are new when that is derivable.
         case newCommits(count: Int?)
@@ -79,19 +86,31 @@ final class ReviewModel {
         case merged
         /// The pull request was closed on GitHub without being merged.
         case closed
+        /// A refresh of a detail already on screen failed, in the error's own words.
+        case refreshFailed(message: String)
 
         /// Whether this is the end of the pull request, so no verdict and no merge can land on
         /// it any more.
         var endsTheReview: Bool {
             switch self {
             case .merged, .closed: return true
-            case .newCommits: return false
+            case .newCommits, .refreshFailed: return false
             }
         }
 
         /// Whether the banner draws a Reload — only a push has anything to reload into.
         var offersReload: Bool {
             if case .newCommits = self { return true }
+            return false
+        }
+
+        /// Whether the banner draws a Try again — only a failed refresh has anything to retry.
+        ///
+        /// Separate from ``offersReload`` rather than folded into it: Reload shows a document
+        /// Shepherd is already holding, and Try again asks GitHub again. Same strip, opposite
+        /// costs, and a reviewer has to be able to tell which button they are pressing.
+        var offersRetry: Bool {
+            if case .refreshFailed = self { return true }
             return false
         }
     }
@@ -126,13 +145,16 @@ final class ReviewModel {
     private(set) var focusOutcome: IntelligenceOutcome<[FocusHint]> = .disabled
     /// Whether a refresh is in flight.
     private(set) var isRefreshing = false
-    /// Why the last detail load failed, in the error's own words, or `nil` when it did not.
+    /// Why the load failed with *nothing* on screen, in the error's own words.
     ///
-    /// Every failure on the way to a diff used to be dropped on the floor: offline, a 404 for a
-    /// repository the token cannot see, a decode that did not fit. The screen then sat on its
-    /// opening spinner, or — worse — on a cached detail that had quietly stopped matching GitHub,
-    /// and a reviewer read an empty file list as "nothing changed". This is what the screen and
-    /// the file list say instead, beside a Try again that calls ``load()`` again.
+    /// Every failure on the way to a first diff used to be dropped on the floor: offline, a 404
+    /// for a repository the token cannot see, a decode that did not fit. The screen then sat on
+    /// its opening spinner and a reviewer read an empty file list as "nothing changed". This is
+    /// what the screen and the file list say instead, beside a Try again that calls ``load()``.
+    ///
+    /// Only ever set while ``detail`` is `nil`, and cleared by ``apply(_:)`` the moment one
+    /// arrives: a refresh that fails over a diff the reviewer is already reading belongs in
+    /// ``Notice/refreshFailed(message:)``, not here.
     private(set) var detailLoadError: String?
     /// Whether a submit is in flight.
     private(set) var isSubmitting = false
@@ -334,17 +356,26 @@ final class ReviewModel {
 
     /// Reloads from the cache and from GitHub.
     ///
-    /// The screen's only reload: ``start()`` calls it, and so does the Try again button on the
-    /// two failure states. There is deliberately no second fetch path for the retry — a button
-    /// that reloaded differently from the opening load would be a second thing to keep true.
+    /// The screen's only reload: ``start()`` calls it, and so does every Try again — the two
+    /// empty states and the banner. There is deliberately no second fetch path for the retry: a
+    /// button that reloaded differently from the opening load would be a second thing to keep
+    /// true.
     ///
-    /// ``detailLoadError`` is cleared here rather than inside the task on purpose: pressing Try
-    /// again then swaps the error for the spinner on the same runloop turn, and the flag can
+    /// Where a failure *lands* depends on whether there is a diff on screen. Nothing on screen,
+    /// and it is ``detailLoadError`` — the card is the only thing there is to look at. Something
+    /// on screen, and it is ``Notice/refreshFailed(message:)`` — the diff stays and the banner
+    /// says the refresh did not land, because a diff Shepherd already has beats the news that it
+    /// could not be re-checked.
+    ///
+    /// Both are cleared here rather than inside the task on purpose: pressing Try again then
+    /// swaps the failure for the spinner on the same runloop turn, and ``detailLoadError`` can
     /// never be set while ``isRefreshing`` is, which is what lets the file list and the diff area
     /// order their empty states identically without agreeing on anything else.
     func load() {
         loadTask?.cancel()
         detailLoadError = nil
+        // Only its own banner: a push or an ending is not this load's to dismiss.
+        if case .refreshFailed = notice { notice = nil }
         loadTask = Task { [weak self] in
             guard let self else { return }
             // The one read whose failure is not news: a review opened for the first time has no
@@ -373,18 +404,52 @@ final class ReviewModel {
                     number: row.number
                 )
                 // The save is not an optimisation: ``observeDetail()`` is how every other screen
-                // and every later reload sees this fetch, so a write that failed means the
-                // reviewer is looking at something Shepherd cannot keep. It fails the load.
-                try await self.session.database.savePullRequestDetail(fresh)
+                // and every later reload sees this fetch. But a fetch that could not be *stored*
+                // is still a fetch, so what GitHub returned goes on screen either way and only
+                // the banner says the copy was not kept — dropping a good diff because SQLite
+                // was unhappy would be the wrong half to throw away.
+                var saveFailure: String?
+                do {
+                    try await self.session.database.savePullRequestDetail(fresh)
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    saveFailure = ReviewModel.describe(error)
+                }
                 guard !Task.isCancelled else { return }
                 self.apply(fresh)
                 self.onDidLoadDetail?(self.prID)
+                // After the apply, which clears the banner: this notice is about the apply that
+                // just happened, so it has to outlive it.
+                if let saveFailure { self.noteRefreshFailure(saveFailure) }
             } catch {
-                // A cancelled load is the *next* load starting — ⌘R pressed twice, or the screen
-                // closing — and painting the failure state over it would be a lie about GitHub.
+                // A cancelled load is the *next* load starting — Try again pressed twice, or the
+                // screen closing — and reporting it would be a lie about GitHub.
                 guard !Task.isCancelled else { return }
-                self.detailLoadError = ReviewModel.describe(error)
+                let message = ReviewModel.describe(error)
+                if self.detail == nil {
+                    self.detailLoadError = message
+                } else {
+                    self.noteRefreshFailure(message)
+                }
             }
+        }
+    }
+
+    /// Puts a failed refresh in the banner, unless the banner is already saying something better.
+    ///
+    /// One slot, and a push or an ending outranks it: those are facts about the pull request that
+    /// change what the screen may do, this is a fact about the connection, and overwriting a
+    /// ``Notice/newCommits(count:)`` would additionally strand the ``pendingDetail`` its Reload
+    /// is the only way into. The failure is dropped in that case rather than queued — the next
+    /// ``load()`` will fail again if it is still true, and there is nothing a reviewer would do
+    /// differently for a stale copy of it.
+    /// - Parameter message: The error's own words.
+    private func noteRefreshFailure(_ message: String) {
+        switch notice {
+        case .none, .refreshFailed:
+            notice = .refreshFailed(message: message)
+        case .newCommits, .merged, .closed:
+            return
         }
     }
 
@@ -641,6 +706,11 @@ final class ReviewModel {
         // because it is not about a document anybody could reload.
         pendingDetail = nil
         if !hasEndedOnGitHub { notice = nil }
+        // A detail becoming visible is the answer to the failure card too, whichever route it
+        // came by: ``load()``'s own fetch, the banner's Reload, or a sweep writing a fresh row
+        // that ``observeDetail()`` delivered. Without this, a card raised by one failed load sat
+        // over a diff that had since arrived on its own until somebody pressed Try again.
+        detailLoadError = nil
         self.detail = detail
         // The one place the tab default is spent, and the flag is what keeps it to the *first*
         // detail: this function runs again for the fresh fetch behind the cached row, for the

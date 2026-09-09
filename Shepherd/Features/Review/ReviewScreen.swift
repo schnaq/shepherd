@@ -47,7 +47,11 @@ struct ReviewScreen: View {
             // list, the diff and the composer are all showing a head commit that GitHub may have
             // moved past.
             if let notice = model.notice {
-                ReviewUpdateBanner(notice: notice) { model.reloadPendingUpdate() }
+                ReviewUpdateBanner(
+                    notice: notice,
+                    onReload: { model.reloadPendingUpdate() },
+                    onRetry: { model.load() }
+                )
             }
             HStack(spacing: 0) {
                 ReviewFileListView(model: model)
@@ -158,6 +162,12 @@ struct ReviewScreen: View {
     /// The whole rollup rather than only its state, because the badge needs the counts and the
     /// two callers that only want the verdict can ask for `.state`. One fallback chain, read
     /// three ways.
+    ///
+    /// The fallback cannot show a fraction: the sweep's rollup is built from GraphQL's
+    /// `statusCheckRollup`, which reports a verdict and a context total and no split at all, so
+    /// its ``ShepherdCore/CheckRollup/successCount`` is zero by construction
+    /// (`GitHubKit/Mapping/ResponseMapping.swift`) and "0/3" would be a fact nobody measured.
+    /// ``ChecksSummaryView`` draws "3 checks" for it instead.
     private var headerCheckRollup: CheckRollup? {
         if let checks = model.detail?.checks, !checks.isEmpty {
             return CheckRollup(runs: checks)
@@ -210,10 +220,12 @@ struct ReviewScreen: View {
     private var diffOrPlaceholder: some View {
         if model.isMissingFromInbox {
             missingFromInbox
-        } else if let error = model.detailLoadError {
-            // Ahead of the cached detail on purpose. A refresh that failed leaves a diff whose
-            // age Shepherd cannot vouch for, and the live test found the silent version of that
-            // — gutters, no text, a header still claiming two files — to be the worse lie.
+        } else if let error = model.detailLoadError, model.detail == nil {
+            // Only with nothing behind it. A refresh that fails over a diff the reviewer is
+            // reading keeps the diff and says so in the banner instead
+            // (``ReviewModel/Notice/refreshFailed(message:)``) — hiding a working diff to report
+            // that it could not be re-checked throws away the more useful half. The card is for
+            // the case the live test found: an empty Monaco, gutters and no text, saying nothing.
             EmptyStateView(
                 systemImage: "exclamationmark.triangle",
                 title: String(localized: "Could not load this pull request"),

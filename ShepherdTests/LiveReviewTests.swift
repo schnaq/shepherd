@@ -224,5 +224,21 @@ final class LiveReviewTests: XCTestCase {
         XCTAssertFalse(ReviewModel.Notice.newCommits(count: nil).endsTheReview)
         XCTAssertFalse(ReviewModel.Notice.merged.offersReload)
         XCTAssertFalse(ReviewModel.Notice.closed.offersReload)
+        XCTAssertFalse(ReviewModel.Notice.refreshFailed(message: "offline").offersReload)
+    }
+
+    /// Reload and Try again are different promises — one shows a document Shepherd is holding,
+    /// the other asks GitHub again — so exactly one notice may offer each of them.
+    func testOnlyAFailedRefreshOffersATryAgain() {
+        XCTAssertTrue(ReviewModel.Notice.refreshFailed(message: "offline").offersRetry)
+        XCTAssertFalse(ReviewModel.Notice.newCommits(count: 2).offersRetry)
+        XCTAssertFalse(ReviewModel.Notice.merged.offersRetry)
+        XCTAssertFalse(ReviewModel.Notice.closed.offersRetry)
+    }
+
+    /// A refresh that failed is not an ending: the verdict buttons and Merge stay live, because
+    /// the pull request itself has not moved — only Shepherd's ability to re-read it has.
+    func testAFailedRefreshDoesNotEndTheReview() {
+        XCTAssertFalse(ReviewModel.Notice.refreshFailed(message: "offline").endsTheReview)
     }
 }

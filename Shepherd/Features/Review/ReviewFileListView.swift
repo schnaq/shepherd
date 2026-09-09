@@ -41,7 +41,9 @@ struct ReviewFileListView: View {
     /// model carries the error and the summary the header is counting from — so the two orders
     /// cannot drift apart by a call site being missed.
     private var emptyState: (systemImage: String, title: String, message: String) {
-        if let error = model.detailLoadError {
+        // Gated on there being no detail for ``ReviewScreen/diffOrPlaceholder``'s reason: a
+        // failed *refresh* leaves the file list alone and speaks through the banner.
+        if let error = model.detailLoadError, model.detail == nil {
             return (
                 "exclamationmark.triangle",
                 String(localized: "Could not load this pull request"),

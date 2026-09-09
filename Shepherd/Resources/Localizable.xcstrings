@@ -4671,6 +4671,16 @@
         }
       }
     },
+    "Could not refresh: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktualisierung fehlgeschlagen: %@"
+          }
+        }
+      }
+    },
     "Could not remove the Keychain item": {
       "localizations": {
         "de": {
