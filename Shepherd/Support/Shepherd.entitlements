@@ -1,29 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<dict>
-	<!--
-	  The App Sandbox is OFF for v1, deliberately.
-
-	  "Delegate to local agent" (ADR 0011) runs two kinds of subprocess on the user's own
-	  machine: `git` against a checkout the user picked, and the locally installed agent CLI
-	  (Claude Code by default) inside a Shepherd-managed worktree. A sandboxed app can spawn a
-	  child, but the child inherits the sandbox — it would lose network access, it could not
-	  read the user's `~/.claude` configuration or credential helper, and every path outside the
-	  container would need a security-scoped bookmark. That is not a usable coding agent.
-
-	  This costs nothing we had: ADR 0010 already rules the Mac App Store out for v1, and
-	  distribution is Developer ID + notarization, which does not require the sandbox. Hardened
-	  runtime stays on (see project.yml).
-
-	  Revisit if an App Store build is ever wanted: it would mean dropping delegation from that
-	  build, or moving the subprocess work into a separate, non-sandboxed helper.
-	-->
-	<key>com.apple.security.app-sandbox</key>
-	<false/>
-	<key>com.apple.security.network.client</key>
-	<true/>
-	<key>com.apple.security.files.user-selected.read-only</key>
-	<true/>
-</dict>
+<dict/>
 </plist>

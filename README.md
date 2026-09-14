@@ -25,7 +25,7 @@ them into one place: a fast, local-first, keyboard-driven inbox where you triage
 every pull request from every repository without opening a browser tab. It is open source, your
 data stays on your Mac, and "who wrote this — an agent or a person?" is a first-class fact rather
 than a guess.
-
+app
 ## What it does
 
 <table>
