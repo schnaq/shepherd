@@ -1106,11 +1106,33 @@ public actor SyncEngine {
                 stateReason: nil
             )
             if let comment, !comment.isEmpty {
-                try await writes.addIssueComment(
-                    repo: item.repo,
-                    number: item.number,
-                    body: comment
-                )
+                do {
+                    try await writes.addIssueComment(
+                        repo: item.repo,
+                        number: item.number,
+                        body: comment
+                    )
+                } catch let error as GitHubError where !error.isRetryable {
+                    // The close has already landed on GitHub. Failing the row here would put
+                    // "Could not close octocat/review#182" in front of a user whose pull request
+                    // *is* closed, and leave it in Settings → Sync as a close to retry — the one
+                    // lie this file exists to avoid. So the row succeeds, as the merge does when
+                    // the branch deletion that follows it cannot be carried out, and the half
+                    // that did not happen is said out loud instead of being buried.
+                    //
+                    // Only for a refusal. A transport failure or a rate limit is rethrown and
+                    // retried, where closing again is a no-op and the comment still goes out.
+                    emit(
+                        .syncFailed(
+                            SyncFailure(
+                                stage: .outbox,
+                                message: "\(item.repo.fullName)#\(item.number) was closed, but "
+                                    + "the comment could not be posted: "
+                                    + (error.errorDescription ?? String(describing: error))
+                            )
+                        )
+                    )
+                }
             }
             return .sent
 

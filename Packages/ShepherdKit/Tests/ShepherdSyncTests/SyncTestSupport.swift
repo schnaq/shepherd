@@ -719,6 +719,7 @@ actor MockIssueWriter: IssueWriting {
 
     private var state: IssueState?
     private var probeError: GitHubError?
+    private var commentError: GitHubError?
 
     /// `owner/name#number` for every probe, in order.
     private(set) var probes: [String] = []
@@ -744,6 +745,12 @@ actor MockIssueWriter: IssueWriting {
         probeError = error
     }
 
+    /// Scripts a comment GitHub refuses, which is the half of "comment and close" that can fail
+    /// after the other half has already landed.
+    func setCommentError(_ error: GitHubError?) {
+        commentError = error
+    }
+
     func issueState(repo: RepoRef, number: Int) async throws -> IssueState {
         probes.append("\(repo.fullName)#\(number)")
         if let probeError { throw probeError }
@@ -754,8 +761,9 @@ actor MockIssueWriter: IssueWriting {
     }
 
     func addIssueComment(repo: RepoRef, number: Int, body: String) async throws {
-        comments.append(Comment(repo: repo, number: number, body: body))
         writeLog.append("comment")
+        if let commentError { throw commentError }
+        comments.append(Comment(repo: repo, number: number, body: body))
     }
 
     func addIssueLabels(repo: RepoRef, number: Int, labels newLabels: [String]) async throws {

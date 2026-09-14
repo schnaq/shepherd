@@ -183,10 +183,21 @@ run = "npm test"
 # ── Everything / nothing ─────────────────────────────────────────────────────────────────────
 
 [tasks.ci]
-# `check` runs first on purpose: after `build`, Xcode's string extraction has rewritten the
-# catalogs and the localisation check fails on its own build's output. See `catalog-reset`.
+# Steps rather than `depends`, because `depends` is a *set*: mise is free to run four of them at
+# once, and three pairs here must not overlap. `check` has to see the string catalogs before an
+# Xcode build rewrites them (see `catalog-reset`), `viewer-test` needs the `npm ci` that `viewer`
+# runs, and `build` and `test-app` share one derived-data directory. Written as commands, they
+# run in the order they are written.
 description = "What CI checks, in the order CI checks it"
-depends = ["check", "viewer-test", "viewer", "test", "build", "cli", "test-app"]
+run = [
+  "mise run check",
+  "mise run viewer",
+  "mise run viewer-test",
+  "mise run test",
+  "mise run build",
+  "mise run cli",
+  "mise run test-app",
+]
 
 [tasks.clean]
 description = "Remove build output, including the stray build/ directories a bare xcodebuild leaves"

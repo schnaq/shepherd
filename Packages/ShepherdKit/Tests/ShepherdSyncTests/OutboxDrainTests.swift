@@ -817,6 +817,65 @@ final class OutboxDrainTests: XCTestCase {
         )
     }
 
+    func testACommentRefusedAfterTheCloseLandedDoesNotReportTheCloseAsFailed() async throws {
+        // The lie this guards against: the pull request *is* closed on GitHub, and the user is
+        // told "Could not close octocat/review#182" and left with a close to retry.
+        let github = MockGitHub()
+        let writer = MockIssueWriter()
+        await writer.setCommentError(.validationFailed(message: "Body is too long"))
+        let store = try DatabaseManager.inMemory()
+        let id = try await enqueue(
+            .closePullRequest(comment: "Superseded by #191."),
+            in: store,
+            number: 182
+        )
+        let engine = makeEngine(github: github, store: store, issueWrites: writer)
+
+        let events = await drainCollectingEvents(engine)
+
+        let row = try await store.outboxItem(id: id)
+        XCTAssertNil(row, "the close happened, so the row is done")
+        XCTAssertTrue(
+            events.contains { event in
+                if case .mutationSent(let sent) = event {
+                    return sent.kind == .pullRequestClosed(withComment: true)
+                }
+                return false
+            },
+            "the close reached GitHub and has to be announced as such"
+        )
+        // And the half that did not happen is said out loud rather than buried.
+        let complaint = events.compactMap { event -> String? in
+            if case .syncFailed(let failure) = event, failure.stage == .outbox {
+                return failure.message
+            }
+            return nil
+        }
+        XCTAssertEqual(complaint.count, 1)
+        XCTAssertTrue(complaint.first?.contains("was closed, but the comment") == true, "\(complaint)")
+    }
+
+    func testACommentThatFailedForARetryableReasonKeepsTheRowQueued() async throws {
+        // The other direction: a tunnel is not a refusal. The row stays, and the retry closes a
+        // closed pull request — a no-op — and posts the comment that never went out.
+        let github = MockGitHub()
+        let writer = MockIssueWriter()
+        await writer.setCommentError(.transport(message: "offline"))
+        let store = try DatabaseManager.inMemory()
+        let id = try await enqueue(
+            .closePullRequest(comment: "Superseded by #191."),
+            in: store,
+            number: 182
+        )
+        let engine = makeEngine(github: github, store: store, issueWrites: writer)
+
+        await engine.drainOutbox()
+
+        let row = try await store.outboxItem(id: id)
+        XCTAssertEqual(row?.state, .pending, "a transport failure is tried again")
+        XCTAssertEqual(row?.attemptCount, 1)
+    }
+
     func testAWordlessCloseSaysNothing() async throws {
         let github = MockGitHub()
         let writer = MockIssueWriter()
