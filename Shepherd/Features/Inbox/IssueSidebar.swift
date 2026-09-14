@@ -137,6 +137,16 @@ struct IssueSidebar: View {
             .padding(.top, 12)
             .padding(.bottom, 8)
         }
+        // A scroll view's *ideal* height is the height of its content, and a split-view column
+        // hands that ideal up as the window's minimum content height. So every facet the rail
+        // grew — LANES, RISK, AGENTS, one row per repository — made the window's minimum taller,
+        // and once it passed the window the split view overflowed and centred itself: the first
+        // rows ended up behind the traffic lights, the list header in the window title. It came
+        // and went with the facets, which is why the rail slid up "often" rather than always.
+        //
+        // `idealHeight: 0` says what was meant all along — this rail has no preferred height, it
+        // takes what the column has and scrolls the rest.
+        .frame(idealHeight: 0, maxHeight: .infinity)
         .scrollContentBackground(.hidden)
         .background(Theme.panel)
         .safeAreaInset(edge: .bottom, spacing: 0) {

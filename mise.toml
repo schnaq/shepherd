@@ -14,9 +14,13 @@
 [env]
 # Where the Xcode builds go. Inside `.build/`, which is git-ignored, and never the repository
 # root — `build/` there is the symptom of the bare-`xcodebuild` trap described above.
-SHEPHERD_DD_APP = ".build/app"
-SHEPHERD_DD_QA = ".build/qa"
-SHEPHERD_DD_CLI = ".build/cli"
+#
+# Absolute, via mise's `config_root`: `open -a` reads a *relative* argument as an application
+# name and answers "Unable to find application named …", and a task run from a subdirectory
+# would otherwise build into the wrong place.
+SHEPHERD_DD_APP = "{{config_root}}/.build/app"
+SHEPHERD_DD_QA = "{{config_root}}/.build/qa"
+SHEPHERD_DD_CLI = "{{config_root}}/.build/cli"
 
 # ── Generate ─────────────────────────────────────────────────────────────────────────────────
 
@@ -118,15 +122,18 @@ run = '''
 set -euo pipefail
 APP="$SHEPHERD_DD_APP/Build/Products/Debug/Shepherd.app"
 
-# A running instance keeps the old binary, and `open` would only bring that one forward. Quit
-# it the polite way — through AppleScript, so the app writes out what it has — then relaunch.
-# Nothing is lost either way: drafts and the inbox live in the local database (ADR 0006).
+# Relaunching matters more than it looks: `open` on a bundle whose process is already running
+# only brings that process forward — the old binary, silently. So the running app is asked to
+# quit, given a moment, and killed if it did not go. Nothing is lost either way: drafts and the
+# inbox live in the local database (ADR 0006).
 if pgrep -x Shepherd >/dev/null 2>&1; then
-  osascript -e 'quit app "Shepherd"' || true
+  osascript -e 'quit app "Shepherd"' >/dev/null 2>&1 || true
   for _ in $(seq 1 20); do
     pgrep -x Shepherd >/dev/null 2>&1 || break
     sleep 0.25
   done
+  pgrep -x Shepherd >/dev/null 2>&1 && pkill -x Shepherd || true
+  sleep 0.5
 fi
 
 open -a "$APP"
@@ -141,12 +148,18 @@ run = '''
 set -euo pipefail
 APP="$SHEPHERD_DD_QA/Build/Products/Debug/Shepherd.app"
 
+# Relaunching matters more than it looks: `open` on a bundle whose process is already running
+# only brings that process forward — the old binary, silently. So the running app is asked to
+# quit, given a moment, and killed if it did not go. Nothing is lost either way: drafts and the
+# inbox live in the local database (ADR 0006).
 if pgrep -x Shepherd >/dev/null 2>&1; then
-  osascript -e 'quit app "Shepherd"' || true
+  osascript -e 'quit app "Shepherd"' >/dev/null 2>&1 || true
   for _ in $(seq 1 20); do
     pgrep -x Shepherd >/dev/null 2>&1 || break
     sleep 0.25
   done
+  pgrep -x Shepherd >/dev/null 2>&1 && pkill -x Shepherd || true
+  sleep 0.5
 fi
 
 open -a "$APP"

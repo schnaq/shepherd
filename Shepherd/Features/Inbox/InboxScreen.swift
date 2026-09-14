@@ -533,5 +533,12 @@ struct SyncStatusView: View {
         }
         .font(.system(size: 11))
         .foregroundStyle(Theme.textMuted)
+        .lineLimit(1)
+        // Without this the line is handed a width by the toolbar and truncates inside its own
+        // glass capsule — "Wird synchronisiert…" lost its last letters against the capsule's
+        // edge. `fixedSize` makes it ask for the width it actually needs; the padding keeps the
+        // text off the capsule's rim, which is drawn tight around the item.
+        .fixedSize(horizontal: true, vertical: false)
+        .padding(.horizontal, 4)
     }
 }

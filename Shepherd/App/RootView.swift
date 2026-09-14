@@ -10,17 +10,22 @@ struct RootView: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        ZStack {
-            Theme.background.ignoresSafeArea()
-            content
-        }
-        .overlay(alignment: .bottomTrailing) {
-            ToastStackView(center: environment.toasts)
-        }
-        .tint(Theme.accent)
-        .task {
-            environment.reopenMainWindow = { openWindow(id: ShepherdScene.mainWindow) }
-        }
+        // `.background`, not a `ZStack` sibling. A `Color.ignoresSafeArea()` *beside* the content
+        // grows the stack into the title bar, and the content — laid out inside that taller
+        // stack — is centred in it: every column slides up under the toolbar, the rail's first
+        // rows end up behind the traffic lights and the list header collides with the window
+        // title. It came back on every resize and on some launches, which is what "the rail
+        // slides up, often" was. As a background the colour paints into the safe area while the
+        // content keeps the frame the safe area gave it.
+        content
+            .background(Theme.background.ignoresSafeArea())
+            .overlay(alignment: .bottomTrailing) {
+                ToastStackView(center: environment.toasts)
+            }
+            .tint(Theme.accent)
+            .task {
+                environment.reopenMainWindow = { openWindow(id: ShepherdScene.mainWindow) }
+            }
     }
 
     @ViewBuilder
