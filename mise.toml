@@ -1,0 +1,216 @@
+# Task runner for the commands in CONTRIBUTING.md and .github/workflows/ci.yml, so they are
+# typed once here rather than every time. `mise tasks` lists them, `mise run <name>` runs one.
+#
+# Every Xcode task passes `-scheme` and `-derivedDataPath` on purpose. A bare `xcodebuild` in
+# this repository falls back to a per-project `SYMROOT` — each SwiftPM dependency is its own
+# project, so GRDB's module lands in `…/checkouts/GRDB.swift/build/Release` while
+# ShepherdPersistence searches `Packages/ShepherdKit/build/Release`, and the build dies with
+# `unable to resolve module dependency: 'GRDB'`. The scheme is what keeps one build directory.
+#
+# No `[tools]` section: Xcode and XcodeGen come from the system (`brew install xcodegen`), and
+# pinning Node here would shadow whatever the machine already has. Add one if you want mise to
+# manage Node 22 as well.
+
+[env]
+# Where the Xcode builds go. Inside `.build/`, which is git-ignored, and never the repository
+# root — `build/` there is the symptom of the bare-`xcodebuild` trap described above.
+SHEPHERD_DD_APP = ".build/app"
+SHEPHERD_DD_QA = ".build/qa"
+SHEPHERD_DD_CLI = ".build/cli"
+
+# ── Generate ─────────────────────────────────────────────────────────────────────────────────
+
+[tasks.gen]
+description = "Regenerate Shepherd.xcodeproj from project.yml"
+run = "xcodegen generate"
+
+[tasks.setup]
+description = "First run after a clone: build the diff viewer, then generate the project"
+depends = ["viewer", "gen"]
+
+# ── Build ────────────────────────────────────────────────────────────────────────────────────
+
+[tasks.build]
+description = "Build the app (Debug, unsigned) — the same command CI runs"
+alias = "b"
+depends = ["gen"]
+run = """
+xcodebuild -project Shepherd.xcodeproj -scheme Shepherd -configuration Debug \
+  -destination 'platform=macOS,arch=arm64' -derivedDataPath "$SHEPHERD_DD_APP" \
+  CODE_SIGNING_ALLOWED=NO build
+"""
+
+[tasks.catalog-reset]
+description = "Undo the string-catalog rewrite an Xcode build leaves behind"
+# Building the app runs Xcode's string extraction, which writes `Shepherd/Resources/*.xcstrings`
+# back out reformatted and with every entry marked `"extractionState": "stale"` — a 20k-line
+# diff that says nothing. `mise run check` then fails on entries it called fine a minute ago.
+# This throws that rewrite away. It also throws away a catalog row you added by hand, so add
+# rows in a separate step from a build, or stage them first.
+run = "git checkout -- Shepherd/Resources/Localizable.xcstrings Shepherd/Resources/AppShortcuts.xcstrings"
+
+[tasks.cli]
+description = "Build the `shepherd` CLI (Debug, unsigned)"
+depends = ["gen"]
+run = """
+xcodebuild -project Shepherd.xcodeproj -scheme ShepherdCLI -configuration Debug \
+  -destination 'platform=macOS,arch=arm64' -derivedDataPath "$SHEPHERD_DD_CLI" \
+  CODE_SIGNING_ALLOWED=NO build
+"""
+
+[tasks.qa]
+description = "Build a dev-signed app for live QA, so the Keychain token survives the rebuild"
+depends = ["gen"]
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+# An ad-hoc signature (the project default) gets a new designated requirement on every build,
+# so macOS re-asks for Keychain access and the signed-in GitHub account is unusable until you
+# answer the prompt again. A signature from your own Apple Development certificate is stable.
+if [ -z "${SHEPHERD_SIGN_IDENTITY:-}" ] || [ -z "${SHEPHERD_TEAM_ID:-}" ]; then
+  cat >&2 <<'MSG'
+SHEPHERD_SIGN_IDENTITY and SHEPHERD_TEAM_ID are not set.
+
+They are per-maintainer values and belong in mise.local.toml, which is git-ignored:
+
+  [env]
+  SHEPHERD_SIGN_IDENTITY = "<40-char SHA-1 of your Apple Development certificate>"
+  SHEPHERD_TEAM_ID       = "<your Apple Developer team id>"
+
+List the certificates you have with:
+
+  security find-identity -v -p codesigning
+
+Use `mise run build` instead if you only need to know that it compiles.
+MSG
+  exit 1
+fi
+
+# CODE_SIGN_IDENTITY must be the certificate's SHA-1, and the style must be Manual: the name
+# "Apple Development" resolves to "Mac Development" and is not found, and the hash under the
+# default Automatic style is rejected as conflicting provisioning settings.
+xcodebuild -project Shepherd.xcodeproj -scheme Shepherd -configuration Debug \
+  -destination 'platform=macOS,arch=arm64' -derivedDataPath "$SHEPHERD_DD_QA" build \
+  CODE_SIGN_STYLE=Manual \
+  CODE_SIGN_IDENTITY="$SHEPHERD_SIGN_IDENTITY" \
+  DEVELOPMENT_TEAM="$SHEPHERD_TEAM_ID" \
+  PROVISIONING_PROFILE_SPECIFIER=""
+
+echo
+echo "Signed build at $SHEPHERD_DD_QA/Build/Products/Debug/Shepherd.app"
+echo "Check the requirement (a cdhash in it means the signature is still ad-hoc):"
+echo "  codesign -dr - $SHEPHERD_DD_QA/Build/Products/Debug/Shepherd.app"
+'''
+
+# ── Run ──────────────────────────────────────────────────────────────────────────────────────
+#
+# Both launchers go through `open -a <path>` rather than a bare `open -b com.schnaq.shepherd`:
+# a machine can hold several Shepherd builds, and Launch Services would otherwise pick one of
+# them for you — including for `shepherd://` deep links (ADR 0013).
+
+[tasks.start]
+description = "Build the app and launch it (unsigned — expect the Keychain prompt on every rebuild)"
+alias = "s"
+depends = ["build"]
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+APP="$SHEPHERD_DD_APP/Build/Products/Debug/Shepherd.app"
+
+# A running instance keeps the old binary, and `open` would only bring that one forward. Quit
+# it the polite way — through AppleScript, so the app writes out what it has — then relaunch.
+# Nothing is lost either way: drafts and the inbox live in the local database (ADR 0006).
+if pgrep -x Shepherd >/dev/null 2>&1; then
+  osascript -e 'quit app "Shepherd"' || true
+  for _ in $(seq 1 20); do
+    pgrep -x Shepherd >/dev/null 2>&1 || break
+    sleep 0.25
+  done
+fi
+
+open -a "$APP"
+echo "Launched $APP"
+'''
+
+[tasks.qa-start]
+description = "Build the dev-signed app and launch it — the one to use for QA with the real account"
+depends = ["qa"]
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+APP="$SHEPHERD_DD_QA/Build/Products/Debug/Shepherd.app"
+
+if pgrep -x Shepherd >/dev/null 2>&1; then
+  osascript -e 'quit app "Shepherd"' || true
+  for _ in $(seq 1 20); do
+    pgrep -x Shepherd >/dev/null 2>&1 || break
+    sleep 0.25
+  done
+fi
+
+open -a "$APP"
+echo "Launched $APP"
+'''
+
+[tasks.link]
+description = "Send a shepherd:// deep link to the QA build, e.g. mise run link shepherd://sync"
+# mise appends whatever follows the task name to the end of this command line, which is exactly
+# where `open` wants the URL — so no `$@` here, it would be empty.
+run = 'open -a "$SHEPHERD_DD_QA/Build/Products/Debug/Shepherd.app"'
+
+# ── Test ─────────────────────────────────────────────────────────────────────────────────────
+
+[tasks.test]
+description = "ShepherdKit tests — plain SwiftPM, no Xcode involved"
+alias = "t"
+dir = "Packages/ShepherdKit"
+run = "swift test"
+
+[tasks.test-app]
+description = "App unit tests through Xcode"
+depends = ["gen"]
+run = """
+xcodebuild -project Shepherd.xcodeproj -scheme Shepherd -configuration Debug \
+  -destination 'platform=macOS,arch=arm64' -derivedDataPath "$SHEPHERD_DD_APP" \
+  CODE_SIGNING_ALLOWED=NO test
+"""
+
+[tasks.check]
+description = "The two invariants a compiler cannot catch: localisation and the type scale"
+run = [
+  "python3 Scripts/check-localization.py",
+  "python3 Scripts/check-type-scale.py",
+]
+
+# ── Diff viewer ──────────────────────────────────────────────────────────────────────────────
+
+[tasks.viewer]
+description = "Build the Monaco diff-viewer bundle into Shepherd/Resources/DiffViewer/dist"
+dir = "web/diff-viewer"
+run = ["npm ci", "npm run build"]
+
+[tasks.viewer-dev]
+description = "Diff viewer in the browser with fixture data"
+dir = "web/diff-viewer"
+run = "npm run dev"
+
+[tasks.viewer-test]
+description = "Diff viewer bridge-protocol and rendering tests"
+dir = "web/diff-viewer"
+run = "npm test"
+
+# ── Everything / nothing ─────────────────────────────────────────────────────────────────────
+
+[tasks.ci]
+# `check` runs first on purpose: after `build`, Xcode's string extraction has rewritten the
+# catalogs and the localisation check fails on its own build's output. See `catalog-reset`.
+description = "What CI checks, in the order CI checks it"
+depends = ["check", "viewer-test", "viewer", "test", "build", "cli", "test-app"]
+
+[tasks.clean]
+description = "Remove build output, including the stray build/ directories a bare xcodebuild leaves"
+run = """
+rm -rf .build build Packages/ShepherdKit/build Packages/ShepherdKit/.build \
+  web/diff-viewer/node_modules/.vite
+"""

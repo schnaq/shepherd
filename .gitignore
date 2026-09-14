@@ -15,6 +15,11 @@ Package.resolved
 # committed — see below.
 /dist/
 
+# Local task-runner overrides: `mise.local.toml` carries the maintainer's signing identity and
+# team id, which are per-machine values rather than project configuration (`mise.toml` is the
+# committed half and reads them from the environment).
+mise.local.toml
+
 # Signing material. A belt-and-braces net, not a place to keep these: the Sparkle private key
 # belongs in the login Keychain and a password manager, the App Store Connect key outside the
 # working tree entirely (docs/RELEASING.md).
