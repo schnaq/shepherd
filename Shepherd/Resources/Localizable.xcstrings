@@ -8931,6 +8931,16 @@
         }
       }
     },
+    "Post comment": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentieren"
+          }
+        }
+      }
+    },
     "Prefix": {
       "localizations": {
         "de": {

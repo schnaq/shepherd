@@ -53,8 +53,9 @@ description = "Undo the string-catalog rewrite an Xcode build leaves behind"
 # Building the app runs Xcode's string extraction, which writes `Shepherd/Resources/*.xcstrings`
 # back out reformatted and with every entry marked `"extractionState": "stale"` — a 20k-line
 # diff that says nothing. `mise run check` then fails on entries it called fine a minute ago.
-# This throws that rewrite away. It also throws away a catalog row you added by hand, so add
-# rows in a separate step from a build, or stage them first.
+# This throws that rewrite away — `git checkout --` restores from the *index*, so a row you added
+# and then staged with `git add` survives it and only the build's noise goes. An unstaged row does
+# not: stage catalog edits before you build, or this task eats them.
 run = "git checkout -- Shepherd/Resources/Localizable.xcstrings Shepherd/Resources/AppShortcuts.xcstrings"
 
 [tasks.cli]

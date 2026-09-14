@@ -91,7 +91,12 @@ struct PullRequestCommentSheet: View {
                 Button {
                     hand { await actions.comment(on: summary, body: $0) }
                 } label: {
-                    Text(String(localized: "Comment"))
+                    // Its own string rather than the review composer's "Comment", which is one
+                    // of GitHub's three verdicts and stays in GitHub's English beside "Approve"
+                    // and "Request changes". This button is the other thing entirely, and a
+                    // sheet that argues the two apart must not label itself with the word for
+                    // the one it is not.
+                    Text(String(localized: "Post comment"))
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
