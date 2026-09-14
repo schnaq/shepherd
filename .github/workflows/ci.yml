@@ -109,9 +109,14 @@ jobs:
           xcodebuild -project Shepherd.xcodeproj -scheme ShepherdCLI -configuration Debug \
             -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO build
       - name: Run app unit tests
+        # `-testLanguage`/`-testRegion` state what this runner already is rather than leaving it
+        # implicit: several tests assert on English sentences, and a contributor running the same
+        # command on a German Mac otherwise watches them fail against their own translations.
+        # `mise run test-app` passes the same two flags, so the two agree.
         run: |
           xcodebuild -project Shepherd.xcodeproj -scheme Shepherd -configuration Debug \
-            -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO test
+            -destination 'platform=macOS,arch=arm64' -testLanguage en -testRegion US \
+            CODE_SIGNING_ALLOWED=NO test
       # The same question as the step near the top of this job, asked again at the very end:
       # the tail of the log then answers "which Xcode built this" on its own, without the
       # whole build having to be downloaded to reach the first few lines.
