@@ -11,7 +11,7 @@ enum AppConfig {
     ///
     /// Leave empty in forks that have not registered their own app — the sign-in screen
     /// degrades to the personal-access-token field automatically.
-    static let githubAppClientID = ""
+    static let githubAppClientID = "Iv23liu9WQQC0cJERKGM"
 
     /// Whether the OAuth device flow can be offered.
     static var isDeviceFlowConfigured: Bool { !githubAppClientID.isEmpty }
