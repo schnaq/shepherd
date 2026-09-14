@@ -4,6 +4,9 @@ Shepherd.xcodeproj/
 xcuserdata/
 DerivedData/
 .build/
+# `xcodebuild` without `-derivedDataPath` writes here, in the repository root and beside every
+# package it builds.
+build/
 .swiftpm/
 Package.resolved
 
