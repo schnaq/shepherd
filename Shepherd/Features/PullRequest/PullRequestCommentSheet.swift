@@ -33,6 +33,19 @@ struct PullRequestCommentSheet: View {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// Hands the composed text to one of the two writes and closes the sheet.
+    ///
+    /// Both buttons do the same four things in the same order — take the text, empty the field,
+    /// dismiss, queue — and differ only in which write receives it. Written once so a change to
+    /// the order cannot be made to one button and forgotten on the other.
+    /// - Parameter queue: The write to hand the text to.
+    private func hand(to queue: @escaping (String) async -> Void) {
+        let composed = text
+        text = ""
+        dismiss()
+        Task { await queue(composed) }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
@@ -58,10 +71,7 @@ struct PullRequestCommentSheet: View {
 
             HStack {
                 Button {
-                    let comment = text
-                    text = ""
-                    dismiss()
-                    Task { await actions.close(summary, comment: comment) }
+                    hand { await actions.close(summary, comment: $0) }
                 } label: {
                     Text(
                         hasText
@@ -79,10 +89,7 @@ struct PullRequestCommentSheet: View {
                     .keyboardShortcut(.cancelAction)
 
                 Button {
-                    let comment = text
-                    text = ""
-                    dismiss()
-                    Task { await actions.comment(on: summary, body: comment) }
+                    hand { await actions.comment(on: summary, body: $0) }
                 } label: {
                     Text(String(localized: "Comment"))
                 }

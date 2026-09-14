@@ -1083,7 +1083,7 @@ public actor SyncEngine {
             // where a pull request's conversation lives. No staleness probe either — a comment
             // says what it says whatever else has happened to the pull request since, which is
             // why ``OutboxAction/basedOnIssueUpdatedAt`` is `nil` for it.
-            try await pullRequestWrites().addIssueComment(
+            try await requireIssueWrites().addIssueComment(
                 repo: item.repo,
                 number: item.number,
                 body: body
@@ -1091,7 +1091,7 @@ public actor SyncEngine {
             return .sent
 
         case .closePullRequest(let comment):
-            let writes = try pullRequestWrites()
+            let writes = try requireIssueWrites()
             // Closed first, commented second, and the order is about what a *retry* does rather
             // than about the timeline. A retryable failure between the two halves is the case
             // that matters: closing again is a no-op GitHub accepts, so the comment goes out
@@ -1243,18 +1243,20 @@ public actor SyncEngine {
     ///   - basedOnUpdatedAt: The `updatedAt` the action was composed against.
     /// - Returns: The writer to proceed with, or the outcome to park with.
     /// - Throws: Whatever the probe or the missing port failed with.
-    /// The writer the two pull-request conversation actions go through.
+    /// The port every comment, label, assignment and state change goes through — issues' and
+    /// pull requests' alike, because GitHub serves both from the same endpoints.
     ///
-    /// Same port as the issue writes — they are the same endpoints — but without
-    /// ``issueTarget(for:basedOnUpdatedAt:)``'s probe: neither action is pinned to an
-    /// `updatedAt`, so there is nothing to compare and nothing to park on.
+    /// The pull-request actions call this and stop here: neither is pinned to an `updatedAt`, so
+    /// there is nothing to compare and nothing to park on. The issue actions go on through
+    /// ``issueTarget(for:basedOnUpdatedAt:)``, which adds the staleness probe on top.
     /// - Returns: The writer.
     /// - Throws: ``GitHubKit/GitHubError/validationFailed(message:)`` when the engine was built
-    ///   without the port, which no retry can change.
-    private func pullRequestWrites() throws -> any IssueWriting {
+    ///   without the port. Not retryable: an engine that has no port will never grow one at
+    ///   runtime, so a backoff would only mean the same sentence every fifteen minutes.
+    private func requireIssueWrites() throws -> any IssueWriting {
         guard let issueWrites else {
             throw GitHubError.validationFailed(
-                message: "This build of the sync engine cannot comment on or close pull requests."
+                message: "This build of the sync engine cannot send issue or conversation writes."
             )
         }
         return issueWrites
@@ -1264,13 +1266,7 @@ public actor SyncEngine {
         for item: OutboxItem,
         basedOnUpdatedAt: Date
     ) async throws -> IssueTarget {
-        guard let issueWrites else {
-            // Not retryable: an engine built without the port will never grow one at runtime, so
-            // a backoff would only mean the same sentence every fifteen minutes.
-            throw GitHubError.validationFailed(
-                message: "This build of the sync engine cannot send issue writes."
-            )
-        }
+        let issueWrites = try requireIssueWrites()
         let state = try await issueWrites.issueState(repo: item.repo, number: item.number)
         guard state.isStale(against: basedOnUpdatedAt) else { return .fresh(issueWrites) }
         return .stale(

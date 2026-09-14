@@ -12,8 +12,14 @@ struct InboxDetailPanel: View {
     var onOpenReview: (String) -> Void
     /// Opens the merge sheet.
     var onMerge: () -> Void
-    /// Opens the comment sheet, which also holds *Comment and close*.
-    var onComment: () -> Void
+
+    /// Whether the conversation composer is up, and what is in it.
+    ///
+    /// Held here rather than on the screen, exactly as ``IssueDetailPanel`` holds its own: the
+    /// text is bound into the composer, so state one level up would re-evaluate the whole
+    /// three-column screen — rail, list and toolbar — on every character typed.
+    @State private var isCommentSheetPresented = false
+    @State private var commentBody = ""
 
     var body: some View {
         Group {
@@ -28,6 +34,11 @@ struct InboxDetailPanel: View {
             }
         }
         .background(Theme.panel)
+        .sheet(isPresented: $isCommentSheetPresented) {
+            if let row = model.selectedRow {
+                PullRequestCommentSheet(summary: row, actions: actions, text: $commentBody)
+            }
+        }
     }
 
     private func content(for row: PullRequestSummary) -> some View {
@@ -238,7 +249,7 @@ struct InboxDetailPanel: View {
             // closing the thing unmerged — is the rarer errand. It is one button rather than
             // two because the sheet behind it holds both of GitHub's, and because "close" with
             // no chance to say why is a button worth not having.
-            Button(action: onComment) {
+            Button { isCommentSheetPresented = true } label: {
                 Text(String(localized: "Comment…"))
                     .frame(maxWidth: .infinity)
             }

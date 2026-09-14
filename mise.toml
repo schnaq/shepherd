@@ -1,5 +1,9 @@
-# Task runner for the commands in CONTRIBUTING.md and .github/workflows/ci.yml, so they are
-# typed once here rather than every time. `mise tasks` lists them, `mise run <name>` runs one.
+# Task runner for the commands in CONTRIBUTING.md and .github/workflows/ci.yml, so a contributor
+# types them once rather than every time. `mise tasks` lists them, `mise run <name>` runs one.
+#
+# It does not *replace* the workflow: CI still spells its steps out, because a workflow that
+# depends on a task runner is a workflow that fails for a reason nobody can read in the log. The
+# two therefore have to be kept in step by hand — when a flag changes here, change it there.
 #
 # Every Xcode task passes `-scheme` and `-derivedDataPath` on purpose. A bare `xcodebuild` in
 # this repository falls back to a per-project `SYMROOT` — each SwiftPM dependency is its own
@@ -109,62 +113,20 @@ echo "  codesign -dr - $SHEPHERD_DD_QA/Build/Products/Debug/Shepherd.app"
 
 # ── Run ──────────────────────────────────────────────────────────────────────────────────────
 #
-# Both launchers go through `open -a <path>` rather than a bare `open -b com.schnaq.shepherd`:
-# a machine can hold several Shepherd builds, and Launch Services would otherwise pick one of
-# them for you — including for `shepherd://` deep links (ADR 0013).
+# Both launchers are the same script with a different build: it quits whatever is running before
+# it opens the new one, because `open` on a live process only brings the old binary forward.
+# See `Scripts/relaunch-app.sh`.
 
 [tasks.start]
 description = "Build the app and launch it (unsigned — expect the Keychain prompt on every rebuild)"
 alias = "s"
 depends = ["build"]
-run = '''
-#!/usr/bin/env bash
-set -euo pipefail
-APP="$SHEPHERD_DD_APP/Build/Products/Debug/Shepherd.app"
-
-# Relaunching matters more than it looks: `open` on a bundle whose process is already running
-# only brings that process forward — the old binary, silently. So the running app is asked to
-# quit, given a moment, and killed if it did not go. Nothing is lost either way: drafts and the
-# inbox live in the local database (ADR 0006).
-if pgrep -x Shepherd >/dev/null 2>&1; then
-  osascript -e 'quit app "Shepherd"' >/dev/null 2>&1 || true
-  for _ in $(seq 1 20); do
-    pgrep -x Shepherd >/dev/null 2>&1 || break
-    sleep 0.25
-  done
-  pgrep -x Shepherd >/dev/null 2>&1 && pkill -x Shepherd || true
-  sleep 0.5
-fi
-
-open -a "$APP"
-echo "Launched $APP"
-'''
+run = 'Scripts/relaunch-app.sh "$SHEPHERD_DD_APP/Build/Products/Debug/Shepherd.app"'
 
 [tasks.qa-start]
 description = "Build the dev-signed app and launch it — the one to use for QA with the real account"
 depends = ["qa"]
-run = '''
-#!/usr/bin/env bash
-set -euo pipefail
-APP="$SHEPHERD_DD_QA/Build/Products/Debug/Shepherd.app"
-
-# Relaunching matters more than it looks: `open` on a bundle whose process is already running
-# only brings that process forward — the old binary, silently. So the running app is asked to
-# quit, given a moment, and killed if it did not go. Nothing is lost either way: drafts and the
-# inbox live in the local database (ADR 0006).
-if pgrep -x Shepherd >/dev/null 2>&1; then
-  osascript -e 'quit app "Shepherd"' >/dev/null 2>&1 || true
-  for _ in $(seq 1 20); do
-    pgrep -x Shepherd >/dev/null 2>&1 || break
-    sleep 0.25
-  done
-  pgrep -x Shepherd >/dev/null 2>&1 && pkill -x Shepherd || true
-  sleep 0.5
-fi
-
-open -a "$APP"
-echo "Launched $APP"
-'''
+run = 'Scripts/relaunch-app.sh "$SHEPHERD_DD_QA/Build/Products/Debug/Shepherd.app"'
 
 [tasks.link]
 description = "Send a shepherd:// deep link to the QA build, e.g. mise run link shepherd://sync"

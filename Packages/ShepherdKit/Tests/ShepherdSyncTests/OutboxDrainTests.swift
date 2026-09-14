@@ -58,6 +58,7 @@ final class OutboxDrainTests: XCTestCase {
     private func enqueue(
         _ action: OutboxAction,
         in store: DatabaseManager,
+        number: Int = 1,
         id: UUID = UUID()
     ) async throws -> UUID {
         try await store.enqueue(
@@ -65,7 +66,7 @@ final class OutboxDrainTests: XCTestCase {
                 id: id,
                 prID: "PR_1",
                 repo: repo,
-                number: 1,
+                number: number,
                 action: action,
                 createdAt: now,
                 attemptCount: 0,
@@ -761,18 +762,7 @@ final class OutboxDrainTests: XCTestCase {
         let github = MockGitHub()
         let writer = MockIssueWriter()
         let store = try DatabaseManager.inMemory()
-        let id = UUID()
-        try await store.enqueue(
-            OutboxItem(
-                id: id,
-                prID: "PR_1",
-                repo: repo,
-                number: 182,
-                action: .addPullRequestComment(body: "Two thoughts, both small."),
-                createdAt: now,
-                nextAttemptAt: Date(timeIntervalSince1970: 0)
-            )
-        )
+        let id = try await enqueue(.addPullRequestComment(body: "Two thoughts, both small."), in: store, number: 182)
         let engine = makeEngine(github: github, store: store, issueWrites: writer)
 
         await engine.drainOutbox()
@@ -795,16 +785,7 @@ final class OutboxDrainTests: XCTestCase {
         let github = MockGitHub()
         let writer = MockIssueWriter()
         let store = try DatabaseManager.inMemory()
-        try await store.enqueue(
-            OutboxItem(
-                prID: "PR_1",
-                repo: repo,
-                number: 182,
-                action: .closePullRequest(comment: "Superseded by #191."),
-                createdAt: now,
-                nextAttemptAt: Date(timeIntervalSince1970: 0)
-            )
-        )
+        _ = try await enqueue(.closePullRequest(comment: "Superseded by #191."), in: store, number: 182)
         let engine = makeEngine(github: github, store: store, issueWrites: writer)
 
         await engine.drainOutbox()
@@ -840,16 +821,7 @@ final class OutboxDrainTests: XCTestCase {
         let github = MockGitHub()
         let writer = MockIssueWriter()
         let store = try DatabaseManager.inMemory()
-        try await store.enqueue(
-            OutboxItem(
-                prID: "PR_1",
-                repo: repo,
-                number: 182,
-                action: .closePullRequest(comment: nil),
-                createdAt: now,
-                nextAttemptAt: Date(timeIntervalSince1970: 0)
-            )
-        )
+        _ = try await enqueue(.closePullRequest(comment: nil), in: store, number: 182)
         let engine = makeEngine(github: github, store: store, issueWrites: writer)
 
         await engine.drainOutbox()
@@ -863,18 +835,7 @@ final class OutboxDrainTests: XCTestCase {
     func testAnEngineWithoutTheWriterRefusesToCloseRatherThanRetryForever() async throws {
         let github = MockGitHub()
         let store = try DatabaseManager.inMemory()
-        let id = UUID()
-        try await store.enqueue(
-            OutboxItem(
-                id: id,
-                prID: "PR_1",
-                repo: repo,
-                number: 182,
-                action: .closePullRequest(comment: "Superseded."),
-                createdAt: now,
-                nextAttemptAt: Date(timeIntervalSince1970: 0)
-            )
-        )
+        let id = try await enqueue(.closePullRequest(comment: "Superseded."), in: store, number: 182)
         // No `issueWrites`, which is how every caller that predates this builds an engine.
         let engine = makeEngine(github: github, store: store)
 

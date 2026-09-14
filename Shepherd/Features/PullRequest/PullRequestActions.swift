@@ -477,11 +477,10 @@ struct PullRequestActions {
             return String(localized: "Ready for review queued.")
         case .comment:
             return String(localized: "Comment queued for \(slug).")
-        case .close(let withComment):
+        case .close:
             // One sentence for both, and it names the close rather than the comment: the close
             // is the part that changes what the pull request *is*, and the comment goes with it
             // in the same row either way.
-            _ = withComment
             return String(localized: "Close queued for \(slug).")
         }
     }

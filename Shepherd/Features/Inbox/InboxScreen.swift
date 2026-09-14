@@ -39,11 +39,6 @@ struct InboxScreen: View {
     /// Which tab the Settings sheet opens on — the rail opens Account, a
     /// `shepherd://settings/<tab>` link opens the tab it names (ADR 0013).
     @State private var settingsTab: SettingsDeepLinkTab = .account
-    /// Whether the conversation composer is up.
-    @State private var isCommentSheetPresented = false
-    /// What has been typed into it, held here so dismissing the sheet does not lose the text —
-    /// the same reason the issue panel holds its own.
-    @State private var commentBody = ""
 
     /// Creates the screen for a session.
     /// - Parameters:
@@ -166,15 +161,6 @@ struct InboxScreen: View {
                 MergeSheet(summary: summary, actions: actions, settings: environment.settings)
             }
         }
-        .sheet(isPresented: $isCommentSheetPresented) {
-            if let summary = model.selectedRow {
-                PullRequestCommentSheet(
-                    summary: summary,
-                    actions: actions,
-                    text: $commentBody
-                )
-            }
-        }
         .sheet(isPresented: $isBulkSheetPresented) {
             // Built here rather than captured when the menu was clicked: a sweep that lands
             // while the dialog is open re-partitions it instead of confirming stale state.
@@ -250,8 +236,7 @@ struct InboxScreen: View {
                 model: model,
                 actions: actions,
                 onOpenReview: open,
-                onMerge: { isMergeSheetPresented = true },
-                onComment: { isCommentSheetPresented = true }
+                onMerge: { isMergeSheetPresented = true }
             )
         case .issues:
             IssueDetailPanel(model: issueModel)
