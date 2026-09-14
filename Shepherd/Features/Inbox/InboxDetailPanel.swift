@@ -12,6 +12,8 @@ struct InboxDetailPanel: View {
     var onOpenReview: (String) -> Void
     /// Opens the merge sheet.
     var onMerge: () -> Void
+    /// Opens the comment sheet, which also holds *Comment and close*.
+    var onComment: () -> Void
 
     var body: some View {
         Group {
@@ -230,6 +232,18 @@ struct InboxDetailPanel: View {
                 .help(String(localized: "Merge (m)"))
                 .disabled(row.mergeable == .conflicting)
             }
+
+            // On its own row under the two above, and last: a verdict is what this panel is for,
+            // a merge is what a verdict leads to, and saying something without a verdict — or
+            // closing the thing unmerged — is the rarer errand. It is one button rather than
+            // two because the sheet behind it holds both of GitHub's, and because "close" with
+            // no chance to say why is a button worth not having.
+            Button(action: onComment) {
+                Text(String(localized: "Comment…"))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(SecondaryButtonStyle())
+            .help(String(localized: "Comment on the conversation, or comment and close"))
         }
         .padding(16)
         .background(Theme.panel)

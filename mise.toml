@@ -181,11 +181,16 @@ dir = "Packages/ShepherdKit"
 run = "swift test"
 
 [tasks.test-app]
-description = "App unit tests through Xcode"
+description = "App unit tests through Xcode, in English as CI runs them"
 depends = ["gen"]
+# `-testLanguage`/`-testRegion`, because several tests assert on English sentences and the test
+# host otherwise takes the Mac's own language: on a German Mac they fail against their own
+# German translations, which is a fact about the machine and not about the code. CI's runners are
+# English, so this is what CI is really doing.
 run = """
 xcodebuild -project Shepherd.xcodeproj -scheme Shepherd -configuration Debug \
   -destination 'platform=macOS,arch=arm64' -derivedDataPath "$SHEPHERD_DD_APP" \
+  -testLanguage en -testRegion US \
   CODE_SIGNING_ALLOWED=NO test
 """
 

@@ -36,6 +36,9 @@ final class WriteOutcomeToastTests: XCTestCase {
             .thread(resolved: false),
             .merge,
             .readyForReview,
+            .comment,
+            .close(withComment: true),
+            .close(withComment: false),
         ]
     }
 
@@ -85,6 +88,44 @@ final class WriteOutcomeToastTests: XCTestCase {
         let toast = PullRequestActions.announcement(for: .failed(reason: nil), of: .merge, slug: slug)
         XCTAssertEqual(toast?.message, String(localized: "Could not merge \(slug)"))
         XCTAssertEqual(toast?.kind, .failure)
+    }
+
+    // MARK: - The conversation writes
+
+    func testACloseSaysWhetherItCarriedAComment() {
+        // The two are different acts and the toast is the only place the user is told which one
+        // went out: "Closed …" after typing three sentences would read as though they were lost.
+        XCTAssertEqual(
+            PullRequestActions.announcement(
+                for: .sent,
+                of: .close(withComment: true),
+                slug: slug
+            )?.message,
+            String(localized: "Commented and closed \(slug).")
+        )
+        XCTAssertEqual(
+            PullRequestActions.announcement(
+                for: .sent,
+                of: .close(withComment: false),
+                slug: slug
+            )?.message,
+            String(localized: "Closed \(slug).")
+        )
+    }
+
+    func testACommentIsNotAnnouncedAsAReview() {
+        // A conversation comment and a `COMMENT` review are different things on GitHub, and a
+        // user who posted the first must not be told the second happened.
+        let comment = PullRequestActions.announcement(for: .sent, of: .comment, slug: slug)
+        XCTAssertEqual(comment?.message, String(localized: "Comment posted on \(slug)."))
+        XCTAssertNotEqual(
+            comment?.message,
+            PullRequestActions.announcement(
+                for: .sent,
+                of: .review(.comment),
+                slug: slug
+            )?.message
+        )
     }
 
     // MARK: - Queued is not done

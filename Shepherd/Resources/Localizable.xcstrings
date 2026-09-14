@@ -4151,6 +4151,16 @@
         }
       }
     },
+    "Close a pull request": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pull Request schließen"
+          }
+        }
+      }
+    },
     "Close an issue": {
       "localizations": {
         "de": {
@@ -4181,6 +4191,16 @@
         }
       }
     },
+    "Close queued for %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schließen für %@ eingereiht."
+          }
+        }
+      }
+    },
     "Close queued.": {
       "localizations": {
         "de": {
@@ -4201,12 +4221,32 @@
         }
       }
     },
+    "Close without a comment": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ohne Kommentar schließen"
+          }
+        }
+      }
+    },
     "Closed": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Geschlossen"
+          }
+        }
+      }
+    },
+    "Closed %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ geschlossen."
           }
         }
       }
@@ -4227,6 +4267,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Schließt #%lld"
+          }
+        }
+      }
+    },
+    "Closes the pull request. Nothing is merged.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schließt den Pull Request. Es wird nichts gemergt."
           }
         }
       }
@@ -4311,12 +4361,32 @@
         }
       }
     },
+    "Comment and close": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentieren & schließen"
+          }
+        }
+      }
+    },
     "Comment on %@": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Kommentar zu %@"
+          }
+        }
+      }
+    },
+    "Comment on a pull request": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pull Request kommentieren"
           }
         }
       }
@@ -4351,12 +4421,52 @@
         }
       }
     },
+    "Comment on the conversation, or comment and close": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In der Konversation kommentieren – oder kommentieren und schließen"
+          }
+        }
+      }
+    },
+    "Comment posted on %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentar auf %@ veröffentlicht."
+          }
+        }
+      }
+    },
+    "Comment queued for %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentar für %@ eingereiht."
+          }
+        }
+      }
+    },
     "Comment queued.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Kommentar eingereiht."
+          }
+        }
+      }
+    },
+    "Commented and closed %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ kommentiert und geschlossen."
           }
         }
       }
@@ -4457,6 +4567,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Referenz kopieren"
+          }
+        }
+      }
+    },
+    "Could not close %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ konnte nicht geschlossen werden"
+          }
+        }
+      }
+    },
+    "Could not comment on %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentar auf %@ war nicht möglich"
           }
         }
       }
@@ -4567,6 +4697,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Konnte das nicht einreihen – es wurde nichts gesendet."
+          }
+        }
+      }
+    },
+    "Could not queue the close": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Schließen konnte nicht eingereiht werden"
+          }
+        }
+      }
+    },
+    "Could not queue the comment": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Kommentar konnte nicht eingereiht werden"
           }
         }
       }
@@ -5877,6 +6027,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "GitHub hat für diese Datei keinen Diff geschickt, es gibt also nichts zu erklären."
+          }
+        }
+      }
+    },
+    "Goes on the conversation, not on the diff — this is not a review verdict. Queued locally and posted in the background.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Landet in der Konversation, nicht am Diff – das ist kein Review-Urteil. Wird lokal eingereiht und im Hintergrund veröffentlicht."
           }
         }
       }

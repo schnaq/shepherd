@@ -563,6 +563,11 @@ struct SyncSettingsTab: View {
         case .addIssueAssignee: return String(localized: "Add an assignee")
         case .closeIssue: return String(localized: "Close an issue")
         case .reopenIssue: return String(localized: "Reopen an issue")
+        case .addPullRequestComment: return String(localized: "Comment on a pull request")
+        case .closePullRequest(let comment):
+            return comment == nil
+                ? String(localized: "Close a pull request")
+                : String(localized: "Comment and close")
         }
     }
 

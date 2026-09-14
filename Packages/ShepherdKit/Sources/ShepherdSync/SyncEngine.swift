@@ -1077,6 +1077,43 @@ public actor SyncEngine {
         // through `issueTarget(for:)` first, so the precondition cannot be forgotten for one of
         // them, and `item.prID`/`repo`/`number` are read here as *the issue's* node id,
         // repository and number — see ``ShepherdCore/OutboxItem``'s own note.
+        case .addPullRequestComment(let body):
+            // The issue endpoints, on purpose: GitHub draws pull requests and issues from one
+            // number sequence and one comment collection, so `POST /issues/{n}/comments` is
+            // where a pull request's conversation lives. No staleness probe either — a comment
+            // says what it says whatever else has happened to the pull request since, which is
+            // why ``OutboxAction/basedOnIssueUpdatedAt`` is `nil` for it.
+            try await pullRequestWrites().addIssueComment(
+                repo: item.repo,
+                number: item.number,
+                body: body
+            )
+            return .sent
+
+        case .closePullRequest(let comment):
+            let writes = try pullRequestWrites()
+            // Closed first, commented second, and the order is about what a *retry* does rather
+            // than about the timeline. A retryable failure between the two halves is the case
+            // that matters: closing again is a no-op GitHub accepts, so the comment goes out
+            // exactly once. The other order would re-post the comment every time the close
+            // failed after it.
+            try await writes.setIssueState(
+                repo: item.repo,
+                number: item.number,
+                state: "closed",
+                // No `state_reason`: GitHub's vocabulary for that is an issue's, and a pull
+                // request is closed or merged, never "not planned".
+                stateReason: nil
+            )
+            if let comment, !comment.isEmpty {
+                try await writes.addIssueComment(
+                    repo: item.repo,
+                    number: item.number,
+                    body: comment
+                )
+            }
+            return .sent
+
         case .addIssueComment(let body, let basedOnUpdatedAt):
             let target = try await issueTarget(for: item, basedOnUpdatedAt: basedOnUpdatedAt)
             switch target {
@@ -1206,6 +1243,23 @@ public actor SyncEngine {
     ///   - basedOnUpdatedAt: The `updatedAt` the action was composed against.
     /// - Returns: The writer to proceed with, or the outcome to park with.
     /// - Throws: Whatever the probe or the missing port failed with.
+    /// The writer the two pull-request conversation actions go through.
+    ///
+    /// Same port as the issue writes — they are the same endpoints — but without
+    /// ``issueTarget(for:basedOnUpdatedAt:)``'s probe: neither action is pinned to an
+    /// `updatedAt`, so there is nothing to compare and nothing to park on.
+    /// - Returns: The writer.
+    /// - Throws: ``GitHubKit/GitHubError/validationFailed(message:)`` when the engine was built
+    ///   without the port, which no retry can change.
+    private func pullRequestWrites() throws -> any IssueWriting {
+        guard let issueWrites else {
+            throw GitHubError.validationFailed(
+                message: "This build of the sync engine cannot comment on or close pull requests."
+            )
+        }
+        return issueWrites
+    }
+
     private func issueTarget(
         for item: OutboxItem,
         basedOnUpdatedAt: Date
@@ -1315,6 +1369,9 @@ public actor SyncEngine {
         case .addIssueAssignee(let login, _): return .issueAssigneeAdded(login: login)
         case .closeIssue(let reason, _): return .issueClosed(reason: reason.rawValue)
         case .reopenIssue: return .issueReopened
+        case .addPullRequestComment: return .pullRequestCommentAdded
+        case .closePullRequest(let comment):
+            return .pullRequestClosed(withComment: !(comment ?? "").isEmpty)
         }
     }
 

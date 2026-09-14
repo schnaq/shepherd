@@ -39,6 +39,9 @@ final class OutboxSurfacesTests: XCTestCase {
             .addIssueAssignee(login: "octocat", basedOnUpdatedAt: moment),
             .closeIssue(reason: .completed, basedOnUpdatedAt: moment),
             .reopenIssue(basedOnUpdatedAt: moment),
+            .addPullRequestComment(body: "one thought"),
+            .closePullRequest(comment: "superseded"),
+            .closePullRequest(comment: nil),
         ]
     }
 
@@ -56,11 +59,22 @@ final class OutboxSurfacesTests: XCTestCase {
         }
     }
 
-    func testTheElevenActionsAreToldApartFromEachOther() {
+    func testEveryActionIsToldApartFromTheOthers() {
         // A row says "octocat/review#182 · <this>", so two actions sharing a phrase would make
-        // two different failures look like the same one.
+        // two different failures look like the same one. That holds for the two closes as well:
+        // a close that carries a comment and one that does not are two different things to
+        // re-send or discard, and the queue is where a user decides which.
         let names = everyAction.map { SyncSettingsTab.actionName($0) }
         XCTAssertEqual(Set(names).count, everyAction.count)
+        XCTAssertEqual(
+            SyncSettingsTab.actionName(.closePullRequest(comment: "superseded")),
+            String(localized: "Comment and close"),
+            "a close that carries a comment says so — it is two things that happened"
+        )
+        XCTAssertEqual(
+            SyncSettingsTab.actionName(.closePullRequest(comment: nil)),
+            String(localized: "Close a pull request")
+        )
     }
 
     // MARK: - What the two buttons do

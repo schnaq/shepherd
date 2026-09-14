@@ -726,6 +726,11 @@ actor MockIssueWriter: IssueWriting {
     private(set) var labels: [[String]] = []
     private(set) var assignees: [[String]] = []
     private(set) var stateChanges: [StateChange] = []
+    /// Comments and state changes in the order they were made.
+    ///
+    /// Two lists cannot answer "which of these came first", and for "comment and close" the
+    /// order *is* the behaviour: it decides what a retry after a half-failure does.
+    private(set) var writeLog: [String] = []
 
     init() {}
 
@@ -750,6 +755,7 @@ actor MockIssueWriter: IssueWriting {
 
     func addIssueComment(repo: RepoRef, number: Int, body: String) async throws {
         comments.append(Comment(repo: repo, number: number, body: body))
+        writeLog.append("comment")
     }
 
     func addIssueLabels(repo: RepoRef, number: Int, labels newLabels: [String]) async throws {
@@ -766,6 +772,7 @@ actor MockIssueWriter: IssueWriting {
         state newState: String,
         stateReason: String?
     ) async throws {
+        writeLog.append("state:\(newState)")
         stateChanges.append(
             StateChange(repo: repo, number: number, state: newState, stateReason: stateReason)
         )
