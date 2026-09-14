@@ -20,6 +20,8 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
     var notificationPages: [NotificationsPage] = []
 
     var searchError: GitHubError?
+    /// What every notifications poll throws, when a test wants the endpoint refused.
+    var notificationsError: GitHubError?
     var detailError: GitHubError?
     var submitError: GitHubError?
     var mergeError: GitHubError?
@@ -111,6 +113,10 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
         searchError = error
     }
 
+    func setNotificationsError(_ error: GitHubError?) {
+        notificationsError = error
+    }
+
     func setSubmitError(_ error: GitHubError?) {
         submitError = error
     }
@@ -183,6 +189,7 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
         participating: Bool
     ) async throws -> NotificationsPage {
         notificationCallCount += 1
+        if let notificationsError { throw notificationsError }
         if notificationPages.isEmpty { return NotificationsPage(items: []) }
         if notificationPages.count > 1 { return notificationPages.removeFirst() }
         return notificationPages[0]

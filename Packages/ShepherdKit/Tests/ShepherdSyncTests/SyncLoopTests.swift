@@ -201,6 +201,74 @@ final class SyncLoopTests: XCTestCase {
         )
     }
 
+    func testAnAccountThatCannotReadNotificationsNeverPollsThem() async throws {
+        let github = MockGitHub()
+        await github.setSearchResults([[SyncFixtures.summary(id: "PR_1", number: 1)]])
+        let store = try DatabaseManager.inMemory()
+        let engine = SyncEngine(
+            github: github,
+            store: store,
+            configuration: SyncConfiguration(sweepInterval: 120, pollsNotifications: false),
+            sleeper: BoundedSleeper(allowedSleeps: 40),
+            now: { Date(timeIntervalSince1970: 1_788_162_000) }
+        )
+
+        await engine.start()
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await engine.stop()
+
+        let polls = await github.notificationCallCount
+        XCTAssertEqual(
+            polls,
+            0,
+            "a device-flow token is refused this endpoint, so the loop must not run at all"
+        )
+        let inbox = try await store.fetchInbox()
+        XCTAssertEqual(inbox.count, 1, "the sweep — the source of truth — still ran")
+    }
+
+    func testARefusedNotificationsPollEndsTheLoopAfterSayingSoOnce() async throws {
+        let github = MockGitHub()
+        await github.setSearchResults([[SyncFixtures.summary(id: "PR_1", number: 1)]])
+        await github.setNotificationsError(.forbidden(message: "Resource not accessible"))
+        let store = try DatabaseManager.inMemory()
+        let engine = SyncEngine(
+            github: github,
+            store: store,
+            configuration: SyncConfiguration(sweepInterval: 120),
+            sleeper: BoundedSleeper(allowedSleeps: 40),
+            now: { Date(timeIntervalSince1970: 1_788_162_000) }
+        )
+
+        let collector = EventCollector()
+        let stream = engine.events
+        let task = Task {
+            for await event in stream {
+                await collector.append(event)
+            }
+        }
+
+        await engine.start()
+        try await Task.sleep(nanoseconds: 300_000_000)
+        await engine.shutdown()
+        _ = await task.value
+
+        let polls = await github.notificationCallCount
+        XCTAssertEqual(
+            polls,
+            1,
+            "a refusal is not retryable; polling again would fail identically forever"
+        )
+        let emitted = await collector.events
+        let complaints = emitted.filter { event in
+            if case .syncFailed(let failure) = event { return failure.stage == .notifications }
+            return false
+        }
+        XCTAssertEqual(complaints.count, 1, "the user hears about it once, not once a minute")
+        let inbox = try await store.fetchInbox()
+        XCTAssertEqual(inbox.count, 1, "and the sweep loop is left running")
+    }
+
     func testSweepFailuresInTheLoopBecomeEventsRatherThanCrashes() async throws {
         let github = MockGitHub()
         await github.setSearchError(.rateLimited(retryAfter: 30, resetAt: nil))

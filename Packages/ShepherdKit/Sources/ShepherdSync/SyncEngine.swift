@@ -29,6 +29,19 @@ public struct SyncConfiguration: Sendable {
     /// every test that does not care about it gets.
     public var viewerLogin: String?
 
+    /// Whether the notifications loop runs at all.
+    ///
+    /// `GET /notifications` is the one endpoint Shepherd asks for that a GitHub App user token
+    /// cannot reach: the notifications REST API is documented as classic-personal-access-token
+    /// only, and no GitHub App permission for it exists (ADR 0004). Left on for an account that
+    /// signed in through the device flow, the loop answers `403` on every poll, and the title
+    /// bar carries a sync error the next sweep clears and the next poll puts straight back.
+    ///
+    /// Off, the inbox is exactly as current as its sweep — which is what it always was. The
+    /// poll is a wake-up signal, never a source of truth; losing it costs latency between a
+    /// notification and the sweep that would have found the same pull request anyway.
+    public var pollsNotifications: Bool
+
     /// Creates a configuration.
     public init(
         queries: [InboxQuery] = InboxQuery.defaultSweep,
@@ -38,7 +51,8 @@ public struct SyncConfiguration: Sendable {
         failureBackoff: TimeInterval = 30,
         maxConcurrentDetailFetches: Int = 5,
         outboxBatchSize: Int = 20,
-        viewerLogin: String? = nil
+        viewerLogin: String? = nil,
+        pollsNotifications: Bool = true
     ) {
         self.queries = queries
         self.sweepInterval = sweepInterval
@@ -48,6 +62,7 @@ public struct SyncConfiguration: Sendable {
         self.maxConcurrentDetailFetches = max(1, maxConcurrentDetailFetches)
         self.outboxBatchSize = max(1, outboxBatchSize)
         self.viewerLogin = viewerLogin
+        self.pollsNotifications = pollsNotifications
     }
 }
 
@@ -57,7 +72,8 @@ public struct SyncConfiguration: Sendable {
 ///
 /// 1. **Notifications** — polls `GET /notifications` at the interval the *server* asks for.
 ///    It is a wake-up signal, not a source of truth: when something interesting arrives it
-///    triggers a sweep.
+///    triggers a sweep. Not started at all when ``SyncConfiguration/pollsNotifications`` is
+///    off, and it ends itself when the token turns out not to be allowed the endpoint.
 /// 2. **Sweep** — one GraphQL search per facet every ``SyncConfiguration/sweepInterval``,
 ///    which *is* the source of truth for the inbox. A pull request is fetched in detail only
 ///    when its `updatedAt` or `headRefOid` changed, and those fetches are chunked so a busy
@@ -190,8 +206,13 @@ public actor SyncEngine {
         sweepTask = Task { [weak self] in
             await self?.runSweepLoop()
         }
-        notificationsTask = Task { [weak self] in
-            await self?.runNotificationsLoop()
+        // A token that cannot read notifications gets no loop rather than a failure a minute
+        // (see ``SyncConfiguration/pollsNotifications``). The sweep loop above is untouched:
+        // it is the one that keeps the inbox current.
+        if configuration.pollsNotifications {
+            notificationsTask = Task { [weak self] in
+                await self?.runNotificationsLoop()
+            }
         }
     }
 
@@ -298,6 +319,17 @@ public actor SyncEngine {
                 }
             } catch is CancellationError {
                 return
+            } catch let error as GitHubError where Self.isRefusal(error) {
+                // Not a failure another attempt could fix: this token is not allowed the
+                // endpoint at all — a GitHub App user token, or a fine-grained personal access
+                // token, both of which the notifications API refuses by design. Backing off and
+                // retrying would put the same sentence in front of the user every minute for as
+                // long as the app runs, so the loop says it once and ends. The sweep, which is
+                // what the inbox is actually built from, keeps running.
+                let message = "This token cannot read GitHub notifications, so Shepherd keeps "
+                    + "the inbox current with its regular sweep instead. (\(describe(error)))"
+                emit(.syncFailed(SyncFailure(stage: .notifications, message: message)))
+                return
             } catch {
                 emit(.syncFailed(SyncFailure(stage: .notifications, message: describe(error))))
                 interval = max(interval, configuration.failureBackoff)
@@ -307,6 +339,20 @@ public actor SyncEngine {
             } catch {
                 return
             }
+        }
+    }
+
+    /// Whether GitHub refused the notifications poll for a reason no retry can change.
+    ///
+    /// Deliberately narrow: ``GitHubKit/GitHubError/rateLimited(retryAfter:resetAt:)`` is the
+    /// opposite case — a poll that would succeed later — and every transport or server error
+    /// stays retryable.
+    static func isRefusal(_ error: GitHubError) -> Bool {
+        switch error {
+        case .forbidden, .notFound:
+            return true
+        default:
+            return false
         }
     }
 

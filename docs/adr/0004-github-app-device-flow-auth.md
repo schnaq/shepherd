@@ -28,3 +28,9 @@ OAuth App pattern is a legacy wart. GitHub Apps beat OAuth Apps on fine-grained 
 - Auth code implements the device-flow poll loop (`interval`, `slow_down`) and transparent
   token refresh; PAT accounts skip refresh.
 - Multiple accounts are possible later (Keychain entries are login-keyed) but v1 targets one.
+- **The App token cannot read `GET /notifications`.** GitHub's notifications REST API takes a
+  classic personal access token and nothing else — there is no GitHub App permission for it, and
+  fine-grained PATs are refused too. So a device-flow account never starts the notifications loop
+  (`SyncConfiguration.pollsNotifications`), and a pasted token starts one that ends itself, after
+  a single message, the first time GitHub refuses. Nothing is lost but latency: the poll was only
+  ever a way to pull the next sweep forward, and the sweep is what the inbox is built from.
