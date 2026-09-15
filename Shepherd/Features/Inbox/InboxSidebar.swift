@@ -22,6 +22,7 @@ struct InboxSidebar: View {
             .padding(.top, 12)
             .padding(.bottom, 8)
         }
+        .columnHeight()
         .scrollContentBackground(.hidden)
         .background(Theme.panel)
         .safeAreaInset(edge: .bottom, spacing: 0) {

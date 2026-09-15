@@ -58,6 +58,7 @@ final class OutboxDrainTests: XCTestCase {
     private func enqueue(
         _ action: OutboxAction,
         in store: DatabaseManager,
+        number: Int = 1,
         id: UUID = UUID()
     ) async throws -> UUID {
         try await store.enqueue(
@@ -65,7 +66,7 @@ final class OutboxDrainTests: XCTestCase {
                 id: id,
                 prID: "PR_1",
                 repo: repo,
-                number: 1,
+                number: number,
                 action: action,
                 createdAt: now,
                 attemptCount: 0,
@@ -752,6 +753,158 @@ final class OutboxDrainTests: XCTestCase {
                 createdAt: now.addingTimeInterval(offset),
                 nextAttemptAt: Date(timeIntervalSince1970: 0)
             )
+        )
+    }
+
+    // MARK: - Commenting on and closing a pull request
+
+    func testAPullRequestCommentIsSentWithoutProbingAnything() async throws {
+        let github = MockGitHub()
+        let writer = MockIssueWriter()
+        let store = try DatabaseManager.inMemory()
+        let id = try await enqueue(.addPullRequestComment(body: "Two thoughts, both small."), in: store, number: 182)
+        let engine = makeEngine(github: github, store: store, issueWrites: writer)
+
+        await engine.drainOutbox()
+
+        let comments = await writer.comments
+        XCTAssertEqual(
+            comments,
+            [MockIssueWriter.Comment(repo: repo, number: 182, body: "Two thoughts, both small.")]
+        )
+        let probes = await writer.probes
+        XCTAssertTrue(
+            probes.isEmpty,
+            "a comment is pinned to nothing, so there is nothing to probe, saw \(probes)"
+        )
+        let row = try await store.outboxItem(id: id)
+        XCTAssertNil(row, "a sent row leaves the queue")
+    }
+
+    func testCloseWithACommentClosesFirstSoARetryCannotPostItTwice() async throws {
+        let github = MockGitHub()
+        let writer = MockIssueWriter()
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(.closePullRequest(comment: "Superseded by #191."), in: store, number: 182)
+        let engine = makeEngine(github: github, store: store, issueWrites: writer)
+
+        await engine.drainOutbox()
+
+        let order = await writer.writeLog
+        XCTAssertEqual(
+            order,
+            ["state:closed", "comment"],
+            "closing first is what makes a retry after a half-failure safe: the close is a no-op "
+                + "the second time, the comment would not be"
+        )
+        let changes = await writer.stateChanges
+        XCTAssertEqual(
+            changes,
+            [
+                MockIssueWriter.StateChange(
+                    repo: repo,
+                    number: 182,
+                    state: "closed",
+                    // A pull request is closed or merged; `state_reason` is an issue's word.
+                    stateReason: nil
+                )
+            ]
+        )
+        let comments = await writer.comments
+        XCTAssertEqual(
+            comments,
+            [MockIssueWriter.Comment(repo: repo, number: 182, body: "Superseded by #191.")]
+        )
+    }
+
+    func testACommentRefusedAfterTheCloseLandedDoesNotReportTheCloseAsFailed() async throws {
+        // The lie this guards against: the pull request *is* closed on GitHub, and the user is
+        // told "Could not close octocat/review#182" and left with a close to retry.
+        let github = MockGitHub()
+        let writer = MockIssueWriter()
+        await writer.setCommentError(.validationFailed(message: "Body is too long"))
+        let store = try DatabaseManager.inMemory()
+        let id = try await enqueue(
+            .closePullRequest(comment: "Superseded by #191."),
+            in: store,
+            number: 182
+        )
+        let engine = makeEngine(github: github, store: store, issueWrites: writer)
+
+        let events = await drainCollectingEvents(engine)
+
+        let row = try await store.outboxItem(id: id)
+        XCTAssertNil(row, "the close happened, so the row is done")
+        XCTAssertTrue(
+            events.contains { event in
+                if case .mutationSent(let sent) = event {
+                    return sent.kind == .pullRequestClosed(withComment: true)
+                }
+                return false
+            },
+            "the close reached GitHub and has to be announced as such"
+        )
+        // And the half that did not happen is said out loud rather than buried.
+        let complaint = events.compactMap { event -> String? in
+            if case .syncFailed(let failure) = event, failure.stage == .outbox {
+                return failure.message
+            }
+            return nil
+        }
+        XCTAssertEqual(complaint.count, 1)
+        XCTAssertTrue(complaint.first?.contains("was closed, but the comment") == true, "\(complaint)")
+    }
+
+    func testACommentThatFailedForARetryableReasonKeepsTheRowQueued() async throws {
+        // The other direction: a tunnel is not a refusal. The row stays, and the retry closes a
+        // closed pull request — a no-op — and posts the comment that never went out.
+        let github = MockGitHub()
+        let writer = MockIssueWriter()
+        await writer.setCommentError(.transport(message: "offline"))
+        let store = try DatabaseManager.inMemory()
+        let id = try await enqueue(
+            .closePullRequest(comment: "Superseded by #191."),
+            in: store,
+            number: 182
+        )
+        let engine = makeEngine(github: github, store: store, issueWrites: writer)
+
+        await engine.drainOutbox()
+
+        let row = try await store.outboxItem(id: id)
+        XCTAssertEqual(row?.state, .pending, "a transport failure is tried again")
+        XCTAssertEqual(row?.attemptCount, 1)
+    }
+
+    func testAWordlessCloseSaysNothing() async throws {
+        let github = MockGitHub()
+        let writer = MockIssueWriter()
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(.closePullRequest(comment: nil), in: store, number: 182)
+        let engine = makeEngine(github: github, store: store, issueWrites: writer)
+
+        await engine.drainOutbox()
+
+        let comments = await writer.comments
+        XCTAssertTrue(comments.isEmpty, "nothing was written, so nothing is posted")
+        let changes = await writer.stateChanges
+        XCTAssertEqual(changes.map(\.state), ["closed"])
+    }
+
+    func testAnEngineWithoutTheWriterRefusesToCloseRatherThanRetryForever() async throws {
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        let id = try await enqueue(.closePullRequest(comment: "Superseded."), in: store, number: 182)
+        // No `issueWrites`, which is how every caller that predates this builds an engine.
+        let engine = makeEngine(github: github, store: store)
+
+        await engine.drainOutbox()
+
+        let row = try await store.outboxItem(id: id)
+        XCTAssertEqual(
+            row?.state,
+            .failed,
+            "a port that does not exist will not appear on a retry, so the row is given up on"
         )
     }
 

@@ -13,6 +13,14 @@ struct InboxDetailPanel: View {
     /// Opens the merge sheet.
     var onMerge: () -> Void
 
+    /// Whether the conversation composer is up, and what is in it.
+    ///
+    /// Held here rather than on the screen, exactly as ``IssueDetailPanel`` holds its own: the
+    /// text is bound into the composer, so state one level up would re-evaluate the whole
+    /// three-column screen — rail, list and toolbar — on every character typed.
+    @State private var isCommentSheetPresented = false
+    @State private var commentBody = ""
+
     var body: some View {
         Group {
             if let row = model.selectedRow {
@@ -26,6 +34,11 @@ struct InboxDetailPanel: View {
             }
         }
         .background(Theme.panel)
+        .sheet(isPresented: $isCommentSheetPresented) {
+            if let row = model.selectedRow {
+                PullRequestCommentSheet(summary: row, actions: actions, text: $commentBody)
+            }
+        }
     }
 
     private func content(for row: PullRequestSummary) -> some View {
@@ -253,6 +266,18 @@ struct InboxDetailPanel: View {
                     otherwise: String(localized: "Merge (m)")
                 ))
             }
+
+            // On its own row under the two above, and last: a verdict is what this panel is for,
+            // a merge is what a verdict leads to, and saying something without a verdict — or
+            // closing the thing unmerged — is the rarer errand. It is one button rather than
+            // two because the sheet behind it holds both of GitHub's, and because "close" with
+            // no chance to say why is a button worth not having.
+            Button { isCommentSheetPresented = true } label: {
+                Text(String(localized: "Comment…"))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(SecondaryButtonStyle())
+            .help(String(localized: "Comment on the conversation, or comment and close"))
         }
         .padding(16)
         .background(Theme.panel)

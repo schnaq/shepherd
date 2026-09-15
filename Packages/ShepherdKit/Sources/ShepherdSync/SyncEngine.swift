@@ -29,6 +29,19 @@ public struct SyncConfiguration: Sendable {
     /// every test that does not care about it gets.
     public var viewerLogin: String?
 
+    /// Whether the notifications loop runs at all.
+    ///
+    /// `GET /notifications` is the one endpoint Shepherd asks for that a GitHub App user token
+    /// cannot reach: the notifications REST API is documented as classic-personal-access-token
+    /// only, and no GitHub App permission for it exists (ADR 0004). Left on for an account that
+    /// signed in through the device flow, the loop answers `403` on every poll, and the title
+    /// bar carries a sync error the next sweep clears and the next poll puts straight back.
+    ///
+    /// Off, the inbox is exactly as current as its sweep — which is what it always was. The
+    /// poll is a wake-up signal, never a source of truth; losing it costs latency between a
+    /// notification and the sweep that would have found the same pull request anyway.
+    public var pollsNotifications: Bool
+
     /// Creates a configuration.
     public init(
         queries: [InboxQuery] = InboxQuery.defaultSweep,
@@ -38,7 +51,8 @@ public struct SyncConfiguration: Sendable {
         failureBackoff: TimeInterval = 30,
         maxConcurrentDetailFetches: Int = 5,
         outboxBatchSize: Int = 20,
-        viewerLogin: String? = nil
+        viewerLogin: String? = nil,
+        pollsNotifications: Bool = true
     ) {
         self.queries = queries
         self.sweepInterval = sweepInterval
@@ -48,6 +62,7 @@ public struct SyncConfiguration: Sendable {
         self.maxConcurrentDetailFetches = max(1, maxConcurrentDetailFetches)
         self.outboxBatchSize = max(1, outboxBatchSize)
         self.viewerLogin = viewerLogin
+        self.pollsNotifications = pollsNotifications
     }
 }
 
@@ -57,7 +72,8 @@ public struct SyncConfiguration: Sendable {
 ///
 /// 1. **Notifications** — polls `GET /notifications` at the interval the *server* asks for.
 ///    It is a wake-up signal, not a source of truth: when something interesting arrives it
-///    triggers a sweep.
+///    triggers a sweep. Not started at all when ``SyncConfiguration/pollsNotifications`` is
+///    off, and it ends itself when the token turns out not to be allowed the endpoint.
 /// 2. **Sweep** — one GraphQL search per facet every ``SyncConfiguration/sweepInterval``,
 ///    which *is* the source of truth for the inbox. A pull request is fetched in detail only
 ///    when its `updatedAt` or `headRefOid` changed, and those fetches are chunked so a busy
@@ -190,8 +206,13 @@ public actor SyncEngine {
         sweepTask = Task { [weak self] in
             await self?.runSweepLoop()
         }
-        notificationsTask = Task { [weak self] in
-            await self?.runNotificationsLoop()
+        // A token that cannot read notifications gets no loop rather than a failure a minute
+        // (see ``SyncConfiguration/pollsNotifications``). The sweep loop above is untouched:
+        // it is the one that keeps the inbox current.
+        if configuration.pollsNotifications {
+            notificationsTask = Task { [weak self] in
+                await self?.runNotificationsLoop()
+            }
         }
     }
 
@@ -298,6 +319,17 @@ public actor SyncEngine {
                 }
             } catch is CancellationError {
                 return
+            } catch let error as GitHubError where Self.isRefusal(error) {
+                // Not a failure another attempt could fix: this token is not allowed the
+                // endpoint at all — a GitHub App user token, or a fine-grained personal access
+                // token, both of which the notifications API refuses by design. Backing off and
+                // retrying would put the same sentence in front of the user every minute for as
+                // long as the app runs, so the loop says it once and ends. The sweep, which is
+                // what the inbox is actually built from, keeps running.
+                let message = "This token cannot read GitHub notifications, so Shepherd keeps "
+                    + "the inbox current with its regular sweep instead. (\(describe(error)))"
+                emit(.syncFailed(SyncFailure(stage: .notifications, message: message)))
+                return
             } catch {
                 emit(.syncFailed(SyncFailure(stage: .notifications, message: describe(error))))
                 interval = max(interval, configuration.failureBackoff)
@@ -307,6 +339,20 @@ public actor SyncEngine {
             } catch {
                 return
             }
+        }
+    }
+
+    /// Whether GitHub refused the notifications poll for a reason no retry can change.
+    ///
+    /// Deliberately narrow: ``GitHubKit/GitHubError/rateLimited(retryAfter:resetAt:)`` is the
+    /// opposite case — a poll that would succeed later — and every transport or server error
+    /// stays retryable.
+    static func isRefusal(_ error: GitHubError) -> Bool {
+        switch error {
+        case .forbidden, .notFound:
+            return true
+        default:
+            return false
         }
     }
 
@@ -1031,6 +1077,65 @@ public actor SyncEngine {
         // through `issueTarget(for:)` first, so the precondition cannot be forgotten for one of
         // them, and `item.prID`/`repo`/`number` are read here as *the issue's* node id,
         // repository and number — see ``ShepherdCore/OutboxItem``'s own note.
+        case .addPullRequestComment(let body):
+            // The issue endpoints, on purpose: GitHub draws pull requests and issues from one
+            // number sequence and one comment collection, so `POST /issues/{n}/comments` is
+            // where a pull request's conversation lives. No staleness probe either — a comment
+            // says what it says whatever else has happened to the pull request since, which is
+            // why ``OutboxAction/basedOnIssueUpdatedAt`` is `nil` for it.
+            try await requireIssueWrites().addIssueComment(
+                repo: item.repo,
+                number: item.number,
+                body: body
+            )
+            return .sent
+
+        case .closePullRequest(let comment):
+            let writes = try requireIssueWrites()
+            // Closed first, commented second, and the order is about what a *retry* does rather
+            // than about the timeline. A retryable failure between the two halves is the case
+            // that matters: closing again is a no-op GitHub accepts, so the comment goes out
+            // exactly once. The other order would re-post the comment every time the close
+            // failed after it.
+            try await writes.setIssueState(
+                repo: item.repo,
+                number: item.number,
+                state: "closed",
+                // No `state_reason`: GitHub's vocabulary for that is an issue's, and a pull
+                // request is closed or merged, never "not planned".
+                stateReason: nil
+            )
+            if let comment, !comment.isEmpty {
+                do {
+                    try await writes.addIssueComment(
+                        repo: item.repo,
+                        number: item.number,
+                        body: comment
+                    )
+                } catch let error as GitHubError where !error.isRetryable {
+                    // The close has already landed on GitHub. Failing the row here would put
+                    // "Could not close octocat/review#182" in front of a user whose pull request
+                    // *is* closed, and leave it in Settings → Sync as a close to retry — the one
+                    // lie this file exists to avoid. So the row succeeds, as the merge does when
+                    // the branch deletion that follows it cannot be carried out, and the half
+                    // that did not happen is said out loud instead of being buried.
+                    //
+                    // Only for a refusal. A transport failure or a rate limit is rethrown and
+                    // retried, where closing again is a no-op and the comment still goes out.
+                    emit(
+                        .syncFailed(
+                            SyncFailure(
+                                stage: .outbox,
+                                message: "\(item.repo.fullName)#\(item.number) was closed, but "
+                                    + "the comment could not be posted: "
+                                    + (error.errorDescription ?? String(describing: error))
+                            )
+                        )
+                    )
+                }
+            }
+            return .sent
+
         case .addIssueComment(let body, let basedOnUpdatedAt):
             let target = try await issueTarget(for: item, basedOnUpdatedAt: basedOnUpdatedAt)
             switch target {
@@ -1160,17 +1265,30 @@ public actor SyncEngine {
     ///   - basedOnUpdatedAt: The `updatedAt` the action was composed against.
     /// - Returns: The writer to proceed with, or the outcome to park with.
     /// - Throws: Whatever the probe or the missing port failed with.
+    /// The port every comment, label, assignment and state change goes through — issues' and
+    /// pull requests' alike, because GitHub serves both from the same endpoints.
+    ///
+    /// The pull-request actions call this and stop here: neither is pinned to an `updatedAt`, so
+    /// there is nothing to compare and nothing to park on. The issue actions go on through
+    /// ``issueTarget(for:basedOnUpdatedAt:)``, which adds the staleness probe on top.
+    /// - Returns: The writer.
+    /// - Throws: ``GitHubKit/GitHubError/validationFailed(message:)`` when the engine was built
+    ///   without the port. Not retryable: an engine that has no port will never grow one at
+    ///   runtime, so a backoff would only mean the same sentence every fifteen minutes.
+    private func requireIssueWrites() throws -> any IssueWriting {
+        guard let issueWrites else {
+            throw GitHubError.validationFailed(
+                message: "This build of the sync engine cannot send issue or conversation writes."
+            )
+        }
+        return issueWrites
+    }
+
     private func issueTarget(
         for item: OutboxItem,
         basedOnUpdatedAt: Date
     ) async throws -> IssueTarget {
-        guard let issueWrites else {
-            // Not retryable: an engine built without the port will never grow one at runtime, so
-            // a backoff would only mean the same sentence every fifteen minutes.
-            throw GitHubError.validationFailed(
-                message: "This build of the sync engine cannot send issue writes."
-            )
-        }
+        let issueWrites = try requireIssueWrites()
         let state = try await issueWrites.issueState(repo: item.repo, number: item.number)
         guard state.isStale(against: basedOnUpdatedAt) else { return .fresh(issueWrites) }
         return .stale(
@@ -1269,6 +1387,9 @@ public actor SyncEngine {
         case .addIssueAssignee(let login, _): return .issueAssigneeAdded(login: login)
         case .closeIssue(let reason, _): return .issueClosed(reason: reason.rawValue)
         case .reopenIssue: return .issueReopened
+        case .addPullRequestComment: return .pullRequestCommentAdded
+        case .closePullRequest(let comment):
+            return .pullRequestClosed(withComment: !(comment ?? "").isEmpty)
         }
     }
 

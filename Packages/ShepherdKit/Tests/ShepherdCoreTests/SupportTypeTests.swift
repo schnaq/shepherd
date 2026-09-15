@@ -185,6 +185,31 @@ final class ModelCodingTests: XCTestCase {
         XCTAssertTrue(actions.allSatisfy(\.targetsIssue))
     }
 
+    func testTheTwoConversationActionsRoundTripThroughJSON() throws {
+        let actions: [OutboxAction] = [
+            .addPullRequestComment(body: "Closing in favour of #4."),
+            .closePullRequest(comment: "Superseded, thanks!"),
+            .closePullRequest(comment: nil),
+        ]
+        for action in actions {
+            let data = try JSONEncoder().encode(action)
+            XCTAssertEqual(try JSONDecoder().decode(OutboxAction.self, from: data), action)
+        }
+        XCTAssertEqual(
+            actions.map(\.kind),
+            ["addPullRequestComment", "closePullRequest", "closePullRequest"]
+        )
+        // A close with nothing to say writes no key rather than a null, and the absence has to
+        // read back as "no comment" — the shape an older row would have had if this case had
+        // shipped without the comment.
+        let wordless = try JSONEncoder().encode(OutboxAction.closePullRequest(comment: nil))
+        XCTAssertEqual(String(decoding: wordless, as: UTF8.self), #"{"closePullRequest":{}}"#)
+        XCTAssertEqual(
+            try JSONDecoder().decode(OutboxAction.self, from: Data(#"{"closePullRequest":{}}"#.utf8)),
+            .closePullRequest(comment: nil)
+        )
+    }
+
     func testAPullRequestActionCarriesNoIssueStalenessKey() {
         let actions: [OutboxAction] = [
             .submitReview(ReviewDraft(prID: "PR_1", basedOnHeadOid: "abc")),
@@ -193,6 +218,11 @@ final class ModelCodingTests: XCTestCase {
             .unresolveThread(threadID: "RT_2"),
             .merge(method: "squash", expectedHeadOid: "abc"),
             .markReadyForReview,
+            // The conversation actions belong on this list and not on the issue one: they go
+            // through the issue *endpoints* but carry no `updatedAt`, because a comment says
+            // what it says however the pull request has moved since.
+            .addPullRequestComment(body: "One thought."),
+            .closePullRequest(comment: "Superseded."),
         ]
         XCTAssertTrue(actions.allSatisfy { $0.basedOnIssueUpdatedAt == nil })
         XCTAssertTrue(actions.allSatisfy { !$0.targetsIssue })

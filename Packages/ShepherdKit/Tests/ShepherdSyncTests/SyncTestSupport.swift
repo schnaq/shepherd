@@ -20,6 +20,8 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
     var notificationPages: [NotificationsPage] = []
 
     var searchError: GitHubError?
+    /// What every notifications poll throws, when a test wants the endpoint refused.
+    var notificationsError: GitHubError?
     var detailError: GitHubError?
     var submitError: GitHubError?
     var mergeError: GitHubError?
@@ -111,6 +113,10 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
         searchError = error
     }
 
+    func setNotificationsError(_ error: GitHubError?) {
+        notificationsError = error
+    }
+
     func setSubmitError(_ error: GitHubError?) {
         submitError = error
     }
@@ -183,6 +189,7 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
         participating: Bool
     ) async throws -> NotificationsPage {
         notificationCallCount += 1
+        if let notificationsError { throw notificationsError }
         if notificationPages.isEmpty { return NotificationsPage(items: []) }
         if notificationPages.count > 1 { return notificationPages.removeFirst() }
         return notificationPages[0]
@@ -712,6 +719,7 @@ actor MockIssueWriter: IssueWriting {
 
     private var state: IssueState?
     private var probeError: GitHubError?
+    private var commentError: GitHubError?
 
     /// `owner/name#number` for every probe, in order.
     private(set) var probes: [String] = []
@@ -719,6 +727,11 @@ actor MockIssueWriter: IssueWriting {
     private(set) var labels: [[String]] = []
     private(set) var assignees: [[String]] = []
     private(set) var stateChanges: [StateChange] = []
+    /// Comments and state changes in the order they were made.
+    ///
+    /// Two lists cannot answer "which of these came first", and for "comment and close" the
+    /// order *is* the behaviour: it decides what a retry after a half-failure does.
+    private(set) var writeLog: [String] = []
 
     init() {}
 
@@ -732,6 +745,12 @@ actor MockIssueWriter: IssueWriting {
         probeError = error
     }
 
+    /// Scripts a comment GitHub refuses, which is the half of "comment and close" that can fail
+    /// after the other half has already landed.
+    func setCommentError(_ error: GitHubError?) {
+        commentError = error
+    }
+
     func issueState(repo: RepoRef, number: Int) async throws -> IssueState {
         probes.append("\(repo.fullName)#\(number)")
         if let probeError { throw probeError }
@@ -742,6 +761,8 @@ actor MockIssueWriter: IssueWriting {
     }
 
     func addIssueComment(repo: RepoRef, number: Int, body: String) async throws {
+        writeLog.append("comment")
+        if let commentError { throw commentError }
         comments.append(Comment(repo: repo, number: number, body: body))
     }
 
@@ -759,6 +780,7 @@ actor MockIssueWriter: IssueWriting {
         state newState: String,
         stateReason: String?
     ) async throws {
+        writeLog.append("state:\(newState)")
         stateChanges.append(
             StateChange(repo: repo, number: number, state: newState, stateReason: stateReason)
         )

@@ -56,6 +56,22 @@ public enum OutboxAction: Sendable, Codable, Hashable {
     case merge(method: String, expectedHeadOid: String?, deletesHeadBranch: Bool = false)
     /// Take the pull request out of draft state.
     case markReadyForReview
+    /// Post a comment on the pull request's conversation.
+    ///
+    /// The conversation, not a review: GitHub's own *Comment* button writes an issue comment,
+    /// which is a different thing from a `COMMENT` review — a review carries a verdict field and
+    /// shows up under Files changed, a comment is what one says about the pull request. Shepherd
+    /// had the first and not the second.
+    /// - Parameter body: The comment as Markdown source.
+    case addPullRequestComment(body: String)
+    /// Close the pull request, and say why in the same breath.
+    ///
+    /// One case rather than two rows, for ``merge(method:expectedHeadOid:deletesHeadBranch:)``'s
+    /// reason: "comment and close" is one intent, and two rows could be drained by two different
+    /// Macs or in two different sweeps — a pull request closed by the machine whose comment row
+    /// was still queued would be a close with the explanation missing.
+    /// - Parameter comment: What to post before closing, or `nil` to close without a word.
+    case closePullRequest(comment: String?)
     /// Post a comment on the issue (ADR 0032).
     /// - Parameters:
     ///   - body: The comment as Markdown source.
@@ -93,6 +109,8 @@ public enum OutboxAction: Sendable, Codable, Hashable {
         case .unresolveThread: return "unresolveThread"
         case .merge: return "merge"
         case .markReadyForReview: return "markReadyForReview"
+        case .addPullRequestComment: return "addPullRequestComment"
+        case .closePullRequest: return "closePullRequest"
         case .addIssueComment: return "addIssueComment"
         case .addIssueLabel: return "addIssueLabel"
         case .addIssueAssignee: return "addIssueAssignee"
@@ -116,7 +134,7 @@ public enum OutboxAction: Sendable, Codable, Hashable {
              .reopenIssue(let updatedAt):
             return updatedAt
         case .submitReview, .replyToComment, .resolveThread, .unresolveThread, .merge,
-             .markReadyForReview:
+             .markReadyForReview, .addPullRequestComment, .closePullRequest:
             return nil
         }
     }
@@ -149,6 +167,7 @@ public enum OutboxAction: Sendable, Codable, Hashable {
         case submitReview, replyToComment, resolveThread, unresolveThread, merge
         case markReadyForReview
         case addIssueComment, addIssueLabel, addIssueAssignee, closeIssue, reopenIssue
+        case addPullRequestComment, closePullRequest
     }
 
     /// The payload keys of ``submitReview(_:)`` — one unlabelled value, so `_0`.
@@ -169,6 +188,16 @@ public enum OutboxAction: Sendable, Codable, Hashable {
     /// The payload keys of ``merge(method:expectedHeadOid:deletesHeadBranch:)``.
     private enum MergeKeys: String, CodingKey {
         case method, expectedHeadOid, deletesHeadBranch
+    }
+
+    /// The payload keys of ``addPullRequestComment(body:)``.
+    private enum PullRequestCommentKeys: String, CodingKey {
+        case body
+    }
+
+    /// The payload keys of ``closePullRequest(comment:)``.
+    private enum ClosePullRequestKeys: String, CodingKey {
+        case comment
     }
 
     /// The payload keys of ``addIssueComment(body:basedOnUpdatedAt:)``.
@@ -234,6 +263,20 @@ public enum OutboxAction: Sendable, Codable, Hashable {
             // The case has no associated values, so its payload is the empty object the
             // compiler's own synthesis writes.
             try container.encode([String: String](), forKey: .markReadyForReview)
+        case .addPullRequestComment(let body):
+            var nested = container.nestedContainer(
+                keyedBy: PullRequestCommentKeys.self,
+                forKey: .addPullRequestComment
+            )
+            try nested.encode(body, forKey: .body)
+        case .closePullRequest(let comment):
+            var nested = container.nestedContainer(
+                keyedBy: ClosePullRequestKeys.self,
+                forKey: .closePullRequest
+            )
+            // `encodeIfPresent`, so a close with nothing to say writes no key at all rather than
+            // a null — and reads back as `nil` through the same door an older row would.
+            try nested.encodeIfPresent(comment, forKey: .comment)
         case .addIssueComment(let body, let basedOnUpdatedAt):
             var nested = container.nestedContainer(
                 keyedBy: IssueCommentKeys.self,
@@ -336,6 +379,20 @@ public enum OutboxAction: Sendable, Codable, Hashable {
             )
         case .markReadyForReview:
             self = .markReadyForReview
+        case .addPullRequestComment:
+            let nested = try container.nestedContainer(
+                keyedBy: PullRequestCommentKeys.self,
+                forKey: .addPullRequestComment
+            )
+            let body = try nested.decode(String.self, forKey: .body)
+            self = .addPullRequestComment(body: body)
+        case .closePullRequest:
+            let nested = try container.nestedContainer(
+                keyedBy: ClosePullRequestKeys.self,
+                forKey: .closePullRequest
+            )
+            let comment = try nested.decodeIfPresent(String.self, forKey: .comment)
+            self = .closePullRequest(comment: comment)
         case .addIssueComment:
             let nested = try container.nestedContainer(
                 keyedBy: IssueCommentKeys.self,

@@ -177,6 +177,51 @@ struct PullRequestActions {
         }
     }
 
+    // MARK: - Conversation
+
+    /// Posts a comment on the pull request's conversation.
+    ///
+    /// The conversation and not a review: this is GitHub's *Comment* button, which writes an
+    /// issue comment. A `COMMENT` review — ``submitReview(on:verdict:body:)`` with
+    /// ``ShepherdCore/ReviewVerdict/comment`` — is the other thing, and says "I looked at the
+    /// diff and have no verdict"; this one says something about the pull request.
+    /// - Parameters:
+    ///   - summary: The pull request.
+    ///   - body: The comment as Markdown source.
+    func comment(on summary: PullRequestSummary, body: String) async {
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        do {
+            let outcome = try await enqueue(.addPullRequestComment(body: trimmed), on: summary)
+            announce(outcome, of: .comment, on: summary)
+        } catch {
+            toasts.failure(error, context: String(localized: "Could not queue the comment"))
+        }
+    }
+
+    /// Closes the pull request, with or without a comment.
+    ///
+    /// One row for both halves rather than a comment row and a close row, because "comment and
+    /// close" is one intent: two rows could be drained by two Macs or in two sweeps, and a pull
+    /// request closed by the machine whose comment was still queued is a close with its reason
+    /// missing. The drain closes first and comments second, which is what makes a retry after a
+    /// half-failure safe.
+    ///
+    /// No verdict callback: closing is not a review, so a focus session does not advance on it.
+    /// - Parameters:
+    ///   - summary: The pull request.
+    ///   - comment: What to say while closing, or `nil` to close without a word.
+    func close(_ summary: PullRequestSummary, comment: String? = nil) async {
+        let trimmed = comment?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let body = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        do {
+            let outcome = try await enqueue(.closePullRequest(comment: body), on: summary)
+            announce(outcome, of: .close(withComment: body != nil), on: summary)
+        } catch {
+            toasts.failure(error, context: String(localized: "Could not queue the close"))
+        }
+    }
+
     // MARK: - Merge
 
     /// Merges a pull request.
@@ -399,6 +444,10 @@ struct PullRequestActions {
         case merge
         /// Taking the pull request out of draft state.
         case readyForReview
+        /// A comment on the pull request's conversation.
+        case comment
+        /// Closing the pull request, with or without a comment.
+        case close(withComment: Bool)
     }
 
     /// Why this verdict would be refused on this pull request, or `nil` when it would not.
@@ -528,6 +577,12 @@ struct PullRequestActions {
             return nil
         case .readyForReview:
             return String(localized: "Marked ready for review.")
+        case .comment:
+            return String(localized: "Comment posted on \(slug).")
+        case .close(let withComment):
+            return withComment
+                ? String(localized: "Commented and closed \(slug).")
+                : String(localized: "Closed \(slug).")
         }
     }
 
@@ -553,6 +608,13 @@ struct PullRequestActions {
             return String(localized: "Merge queued for \(slug).")
         case .readyForReview:
             return String(localized: "Ready for review queued.")
+        case .comment:
+            return String(localized: "Comment queued for \(slug).")
+        case .close:
+            // One sentence for both, and it names the close rather than the comment: the close
+            // is the part that changes what the pull request *is*, and the comment goes with it
+            // in the same row either way.
+            return String(localized: "Close queued for \(slug).")
         }
     }
 
@@ -567,6 +629,10 @@ struct PullRequestActions {
             return String(
                 localized: "Merge held back — \(slug) changed since you started. See the alert."
             )
+        case .comment, .close:
+            // Nothing parks these two either: neither is pinned to the head commit, and a
+            // comment says what it says however the pull request has moved since.
+            return String(localized: "Not sent — \(slug) changed since you started.")
         case .reply, .thread, .readyForReview:
             // Nothing parks these three today — only a review draft and a merge are checked
             // against the head commit — but the outcome is read off the queue rather than
@@ -589,6 +655,10 @@ struct PullRequestActions {
             return String(localized: "Could not merge \(slug)")
         case .readyForReview:
             return String(localized: "Could not mark \(slug) ready for review")
+        case .comment:
+            return String(localized: "Could not comment on \(slug)")
+        case .close:
+            return String(localized: "Could not close \(slug)")
         }
     }
 

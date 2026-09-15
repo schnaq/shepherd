@@ -101,6 +101,10 @@ public struct SentMutation: Sendable, Hashable, Codable {
         case issueClosed(reason: String)
         /// A closed issue was reopened.
         case issueReopened
+        /// A comment was posted on a pull request's conversation.
+        case pullRequestCommentAdded
+        /// A pull request was closed. `true` when a comment went out with it.
+        case pullRequestClosed(withComment: Bool)
     }
 
     /// The pull request's node id.

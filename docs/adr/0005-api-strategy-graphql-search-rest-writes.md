@@ -116,3 +116,38 @@ completed exactly as a merge GitHub accepted would be — same `mutationSent(.me
 follow-up, same removal. A `404` means the pull request genuinely cannot be merged and the row is
 parked as before. It is a read, it is made only on the refusal, and it is on `api.github.com` —
 the host this ADR has always used and no new one.
+
+## Amendment (2026-09-14): the conversation — commenting on and closing a pull request
+
+Shepherd could submit a review with a `COMMENT` verdict and it could merge, and between those two
+there was nothing: no way to say something about a pull request without filing a verdict on it, and
+no way to close one that is not going to land. Both are on GitHub's own pull-request page, one next
+to the other, and their absence sent people to the browser for the errand Shepherd exists to keep
+them out of.
+
+Two new outbox actions, and no new endpoint: `addPullRequestComment(body:)` and
+`closePullRequest(comment:)` go through `POST /repos/{o}/{r}/issues/{n}/comments` and
+`PATCH /repos/{o}/{r}/issues/{n}` — the same two calls the issue writes already make. GitHub draws
+issues and pull requests from one number sequence and one comment collection, so the issue
+endpoints *are* the pull request's conversation; only the review endpoints are its diff.
+
+Three decisions worth keeping:
+
+- **A comment is not a review.** `POST …/comments` writes the thing GitHub's *Comment* button
+  writes. A `COMMENT` review is the other thing — a verdict-free review that belongs to the diff —
+  and the toast says which one went out, because a user who wrote three sentences on the
+  conversation must not be told a review was submitted.
+- **"Comment and close" is one row, not two.** For the same reason the branch deletion is a field
+  of the merge above: two rows could be drained by two Macs, or in two sweeps, and a pull request
+  closed by the machine whose comment row was still queued is a close with its reason missing.
+- **The drain closes first and comments second.** The reverse reads better on the timeline and is
+  worse where it counts: a retryable failure between the two halves would re-post the comment every
+  time. Closing twice is a no-op GitHub accepts, so this order sends the comment exactly once.
+
+Neither action carries an `updatedAt` precondition, which is why `basedOnIssueUpdatedAt` answers
+`nil` for both: the issue writes are pinned to it because a label or an assignment is an edit that
+can collide, while a comment says what it says however the pull request has moved since, and a
+close is not made wrong by one.
+
+`state_reason` is left out of the close. It is GitHub's issue vocabulary — "completed" or "not
+planned" — and a pull request is closed or merged, never not planned.

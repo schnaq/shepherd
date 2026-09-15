@@ -184,7 +184,13 @@ final class SignedInSession {
             branchDeletion: github,
             configuration: SyncConfiguration(
                 sweepInterval: sweepInterval,
-                viewerLogin: account.login
+                viewerLogin: account.login,
+                // `GET /notifications` is classic-personal-access-token territory: a GitHub App
+                // user token is refused by design and there is no App permission that would
+                // change that (ADR 0004). A device-flow account therefore never starts the loop.
+                // A pasted token still does, because nothing here can tell a classic token from
+                // a fine-grained one — and the loop ends itself on the first refusal.
+                pollsNotifications: account.authKind == .pat
             )
         )
 

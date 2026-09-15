@@ -617,10 +617,13 @@ struct SyncStatusView: View {
         }
         .font(.system(size: 11))
         .foregroundStyle(Theme.textMuted)
-        // The toolbar group's edge sits 4 pt after the last word, which reads as a clipped
-        // sentence rather than as the end of one (2026-09-09 live test). Trailing only: the
-        // leading side already has the gap to the toolbar item before it.
-        .padding(.trailing, 8)
+        .lineLimit(1)
+        // Without this the line is handed a width by the toolbar and truncates inside its own
+        // glass capsule — "Wird synchronisiert…" lost its last letters against the capsule's
+        // edge. `fixedSize` makes it ask for the width it actually needs; the padding keeps the
+        // text off the capsule's rim, which is drawn tight around the item.
+        .fixedSize(horizontal: true, vertical: false)
+        .padding(.horizontal, 4)
     }
 
     /// The worst true state wins: a failed write outranks "synced fine a moment ago", and a

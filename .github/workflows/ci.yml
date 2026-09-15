@@ -61,6 +61,15 @@ jobs:
     runs-on: [self-hosted, macOS]
     steps:
       - uses: actions/checkout@v4
+      # A self-hosted runner that runs as a service does not inherit the login shell's PATH, so
+      # whether Homebrew's binaries are visible depends on how the runner happened to be
+      # registered — and a re-registration silently took them away once, leaving `xcodegen` and
+      # `brew` unresolvable. Saying it here makes the job independent of that.
+      - name: Put Homebrew on the PATH
+        run: |
+          for prefix in /opt/homebrew/bin /usr/local/bin; do
+            if [ -d "$prefix" ]; then echo "$prefix" >> "$GITHUB_PATH"; fi
+          done
       # The runner keeps two Xcodes side by side. The newest one whose SDK the app's deployment
       # target needs is selected per job through DEVELOPER_DIR; nothing on the machine is
       # switched globally, so the ShepherdKit job above keeps building with the default Xcode.
@@ -79,6 +88,12 @@ jobs:
           xcodebuild -version
           xcodebuild -showsdks | grep -i macosx || true
           echo "::notice title=Toolchain::$(xcodebuild -version | tr '\n' ' ')- SDKs: $(xcodebuild -showsdks | grep -o 'macosx[0-9.]*' | tr '\n' ' ')"
+      # The same Node the diff-viewer job pins, fetched by the action rather than taken from the
+      # runner's PATH, for the reason the step above gives: `npm` must not depend on how the
+      # runner was registered.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
       - name: Build diff viewer bundle
         run: npm ci && npm run build
         working-directory: web/diff-viewer
@@ -94,9 +109,14 @@ jobs:
           xcodebuild -project Shepherd.xcodeproj -scheme ShepherdCLI -configuration Debug \
             -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO build
       - name: Run app unit tests
+        # `-testLanguage`/`-testRegion` state what this runner already is rather than leaving it
+        # implicit: several tests assert on English sentences, and a contributor running the same
+        # command on a German Mac otherwise watches them fail against their own translations.
+        # `mise run test-app` passes the same two flags, so the two agree.
         run: |
           xcodebuild -project Shepherd.xcodeproj -scheme Shepherd -configuration Debug \
-            -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO test
+            -destination 'platform=macOS,arch=arm64' -testLanguage en -testRegion US \
+            CODE_SIGNING_ALLOWED=NO test
       # The same question as the step near the top of this job, asked again at the very end:
       # the tail of the log then answers "which Xcode built this" on its own, without the
       # whole build having to be downloaded to reach the first few lines.
