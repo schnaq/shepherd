@@ -134,7 +134,7 @@ targets:
         # with a reason, and Sparkle never gets the chance to put a misconfiguration alert in
         # front of anyone. Never commit the *private* key; it lives in the login Keychain and in
         # the `SPARKLE_PRIVATE_KEY` GitHub secret.
-        SUPublicEDKey: REPLACE_WITH_SUPublicEDKey_FROM_generate_keys
+        SUPublicEDKey: Mz8sRldKXn8lJgYA6Zg7SzbWICXoLe1lmNCFk2X4WQw=
         #
         # Automatic checks are on out of the box and switchable off in Settings → Account
         # (ADR 0010: "auto-update is opt-out"). Setting this also suppresses Sparkle's own
