@@ -204,6 +204,10 @@ struct ReviewFileHeader: View {
     let model: ReviewModel
     /// The write actions.
     let actions: PullRequestActions
+    /// Live, and read for the same reason ``ReviewScreen`` reads it: it is half of what
+    /// ``DiffRenderer/automatic`` means, so turning VoiceOver on mid-review has to change this
+    /// bar as well as the renderer under it.
+    @Environment(\.accessibilityVoiceOverEnabled) private var isVoiceOverEnabled
 
     var body: some View {
         HStack(spacing: 10) {
@@ -214,7 +218,7 @@ struct ReviewFileHeader: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(width: 200)
+            .fixedSize()
 
             // Offered only when there is a stored baseline *and* the head has moved past it,
             // so a first review looks exactly as it always has (ADR 0028).
@@ -226,7 +230,7 @@ struct ReviewFileHeader: View {
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
-                .frame(width: 214)
+                .fixedSize()
                 .help(
                     String(localized: "Show only the files and hunks that changed since the head you reviewed")
                 )
@@ -244,13 +248,28 @@ struct ReviewFileHeader: View {
             Spacer(minLength: 8)
 
             if model.tab == .files {
-                Picker(String(localized: "Layout"), selection: layoutBinding) {
-                    Text(String(localized: "Side by side")).tag(false)
-                    Text(String(localized: "Inline")).tag(true)
+                // Side by side is Monaco's. The native list draws one unified column — there is
+                // no second pane to put the original in — so in that renderer this control took
+                // a click, moved its highlight and changed nothing on screen. It is hidden
+                // rather than disabled for the reason the round picker above it is absent when
+                // there is no baseline: a segmented control whose segments do the same thing is
+                // a dead control, and this bar already appears and disappears around the file.
+                if !model.settings.diffRenderer.usesNativeList(
+                    voiceOverEnabled: isVoiceOverEnabled
+                ) {
+                    Picker(String(localized: "Layout"), selection: layoutBinding) {
+                        Text(String(localized: "Side by side")).tag(false)
+                        Text(String(localized: "Inline")).tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    // `fixedSize` rather than a width in points: a segmented control draws at
+                    // its intrinsic width whatever frame it is given, so a frame that is too
+                    // small does not clip it — it lets it overflow *over the next control*.
+                    // 170 fitted "Side by side | Inline" and not "Nebeneinander | Inline", and
+                    // the eye of "Mark viewed" ended up drawn inside the Inline segment.
+                    .fixedSize()
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 170)
 
                 if let file = model.selectedFile {
                     let isWriting = actions.activity.isRunning(model.prID, .viewed)

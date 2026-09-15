@@ -294,11 +294,7 @@ struct ReviewScreen: View {
     /// turning VoiceOver on mid-review swaps the renderer under the reviewer rather than waiting
     /// for the next launch.
     private var usesNativeList: Bool {
-        switch model.settings.diffRenderer {
-        case .native: return true
-        case .web: return false
-        case .automatic: return isVoiceOverEnabled
-        }
+        model.settings.diffRenderer.usesNativeList(voiceOverEnabled: isVoiceOverEnabled)
     }
 
     /// Shown when the sweep pruned this pull request — it was merged, closed, or fell past the

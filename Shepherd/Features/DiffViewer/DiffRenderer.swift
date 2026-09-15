@@ -19,6 +19,23 @@ enum DiffRenderer: String, CaseIterable, Sendable, Codable, Identifiable {
 
     var id: String { rawValue }
 
+    /// Whether this setting means the native, walkable list rather than Monaco.
+    ///
+    /// A method rather than a property because ``automatic`` is not answerable without knowing
+    /// whether a screen reader is listening — that is the whole reason this type has three cases
+    /// and not two. It lives here rather than in the review screen because two views now need
+    /// the answer: the screen, to pick a renderer, and the file header, to decide whether a
+    /// side-by-side/inline choice is worth offering at all.
+    /// - Parameter voiceOverEnabled: Whether VoiceOver is running right now.
+    /// - Returns: `true` when the native list draws the diff.
+    func usesNativeList(voiceOverEnabled: Bool) -> Bool {
+        switch self {
+        case .native: return true
+        case .web: return false
+        case .automatic: return voiceOverEnabled
+        }
+    }
+
     /// The label shown in the picker.
     var title: String {
         switch self {
