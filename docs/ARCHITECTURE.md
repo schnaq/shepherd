@@ -1355,8 +1355,12 @@ lines go to both sides, `-` lines only to the original, `+` lines only to the mo
 gaps between hunks are padded with empty lines on both sides**. The padding is what keeps 1-based
 line numbers identical to GitHub's — review threads and draft comments are anchored by absolute
 line number, so an off-by-N would attach comments to the wrong lines. Because the filler is
-identical on both sides, the diff editor treats it as unchanged and never highlights it. When
-`patch` is `nil` (binary or truncated) the webview is not created at all; a native
+identical on both sides, the diff editor treats it as unchanged and never highlights it — and,
+since it is unchanged, Monaco folds it away behind its `hideUnchangedRegions` bar rather than
+drawing hundreds of blank rows between two hunks. Expanding one of those bars still shows blank
+rows, because the app never received that text; the native renderer (ADR 0034) sidesteps the
+question by walking `Reconstruction.rows`, which carries a hunk header and no padding at all.
+When `patch` is `nil` (binary or truncated) the webview is not created at all; a native
 `DiffUnavailableView` takes its place.
 
 `MarkdownHTML` is the Swift half of the bridge's `bodyHTML` contract: it escapes everything

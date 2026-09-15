@@ -144,7 +144,21 @@ export class MonacoDiffViewer implements ViewerPort {
       // Word-level (inner-line) diffs.
       diffAlgorithm: 'advanced',
       ignoreTrimWhitespace: false,
-      hideUnchangedRegions: { enabled: false },
+      // Fold the regions GitHub never sent. `/pulls/{n}/files` returns three context lines
+      // per hunk and nothing else, so `PatchReconstructor` pads the gaps with empty lines on
+      // both sides to keep Monaco's line numbers equal to GitHub's — comments are anchored by
+      // absolute line number. Those blanks are what a reviewer scrolls through between hunks,
+      // and on a file like `Localizable.xcstrings` there are hundreds of them.
+      //
+      // Monaco's own defaults are left alone, and `contextLineCount` in particular must stay at
+      // 3: the patch only *has* three real context lines at each hunk edge, so a larger value
+      // would reveal padding as though it were content.
+      //
+      // Honest about what it does not fix: the widget says "N hidden lines", and expanding one
+      // shows N blank rows rather than the file's real text, because the app never received it.
+      // Folding them is the improvement; the app cannot fill them without two extra blob
+      // fetches per file, which ADR 0006 rules out for offline review.
+      hideUnchangedRegions: { enabled: true },
       diffWordWrap: 'off',
       folding: false,
       minimap: { enabled: false },

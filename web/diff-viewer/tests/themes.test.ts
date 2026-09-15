@@ -36,6 +36,12 @@ describe('theme data', () => {
       'diffEditor.insertedTextBackground',
       'diffEditor.removedLineBackground',
       'diffEditor.removedTextBackground',
+      // The folded-region bar. Undefined here means VS Code's own colours, which do not sit
+      // next to the app's panel.
+      'diffEditor.unchangedRegionBackground',
+      'diffEditor.unchangedRegionForeground',
+      'diffEditor.unchangedRegionShadow',
+      'diffEditor.unchangedCodeBackground',
       'editorLineNumber.foreground',
     ];
     for (const theme of [THEMES.light, THEMES.dark]) {

@@ -116,6 +116,8 @@ function makeCodeEditor(): FakeCodeEditor {
 const originalEditor = makeCodeEditor();
 const modifiedEditor = makeCodeEditor();
 const updateOptions = vi.fn<(options: Record<string, unknown>) => void>();
+/// What `createDiffEditor` was constructed with, so a test can assert on the base options.
+let constructionOptions: Record<string, unknown> = {};
 
 vi.mock('monaco-editor/editor/editor.api', () => {
   const editor = {
@@ -141,16 +143,19 @@ vi.mock('monaco-editor/editor/editor.api', () => {
       };
       return model;
     },
-    createDiffEditor: () => ({
-      updateOptions,
-      getOriginalEditor: () => originalEditor,
-      getModifiedEditor: () => modifiedEditor,
-      setModel: (models: { original: FakeModel; modified: FakeModel } | null) => {
-        originalEditor.model = models === null ? null : models.original;
-        modifiedEditor.model = models === null ? null : models.modified;
-      },
-      dispose: () => undefined,
-    }),
+    createDiffEditor: (_container: unknown, options: Record<string, unknown>) => {
+      constructionOptions = options;
+      return {
+        updateOptions,
+        getOriginalEditor: () => originalEditor,
+        getModifiedEditor: () => modifiedEditor,
+        setModel: (models: { original: FakeModel; modified: FakeModel } | null) => {
+          originalEditor.model = models === null ? null : models.original;
+          modifiedEditor.model = models === null ? null : models.modified;
+        },
+        dispose: () => undefined,
+      };
+    },
     ScrollType: { Smooth: 0 },
     TrackedRangeStickiness: { NeverGrowsWhenTypingAtEdges: 0 },
   };
@@ -276,6 +281,19 @@ describe('MonacoDiffViewer.loadFile', () => {
       wordWrap: 'on',
       diffWordWrap: 'on',
     });
+  });
+
+  it('folds the regions GitHub never sent, keeping Monaco three lines of context', () => {
+    makeViewer();
+
+    // The padding `PatchReconstructor` writes between hunks is empty on both sides, so Monaco
+    // reads it as unchanged and — with this on — collapses it instead of drawing hundreds of
+    // blank rows. `contextLineCount` must stay unset (Monaco's 3): the patch carries exactly
+    // three real context lines per hunk edge, and a larger value would reveal padding as
+    // though it were the file's text.
+    const hidden = constructionOptions['hideUnchangedRegions'] as Record<string, unknown>;
+    expect(hidden['enabled']).toBe(true);
+    expect(hidden['contextLineCount']).toBeUndefined();
   });
 
   it('labels each pane for a screen reader when the payload says what to call them', () => {

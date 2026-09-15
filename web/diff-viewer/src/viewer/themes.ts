@@ -94,6 +94,12 @@ const lightColors: Readonly<Record<string, string>> = {
   'diffEditorGutter.removedLineBackground': '#ffd7d5',
   'diffEditorOverview.insertedForeground': '#2da44e80',
   'diffEditorOverview.removedForeground': '#cf222e80',
+  // The folded-region bar (`hideUnchangedRegions`), quieter than a diff wash: it is chrome
+  // between hunks, not a change.
+  'diffEditor.unchangedRegionBackground': '#f6f8fa',
+  'diffEditor.unchangedRegionForeground': '#57606a',
+  'diffEditor.unchangedRegionShadow': '#1f232814',
+  'diffEditor.unchangedCodeBackground': '#ffffff',
   'editorOverviewRuler.border': '#00000000',
   'editorOverviewRuler.background': '#ffffff',
 };
@@ -126,6 +132,12 @@ const darkColors: Readonly<Record<string, string>> = {
   'diffEditorGutter.removedLineBackground': '#f8514940',
   'diffEditorOverview.insertedForeground': '#3fb95080',
   'diffEditorOverview.removedForeground': '#f8514980',
+  // The folded-region bar (`hideUnchangedRegions`), quieter than a diff wash: it is chrome
+  // between hunks, not a change.
+  'diffEditor.unchangedRegionBackground': '#161b22',
+  'diffEditor.unchangedRegionForeground': '#8b949e',
+  'diffEditor.unchangedRegionShadow': '#01040933',
+  'diffEditor.unchangedCodeBackground': '#0d1117',
   'editorOverviewRuler.border': '#00000000',
   'editorOverviewRuler.background': '#0d1117',
 };
