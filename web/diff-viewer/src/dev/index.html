@@ -3,7 +3,23 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
     <title>Shepherd diff viewer — dev harness</title>
+    <!--
+      The same theme boot as the shipped shell (../index.html), so the harness shows what the app
+      shows: the class is settled before the stylesheet is requested rather than after the
+      bridge's first `setTheme`. No `window.__shepherdTheme` here — nothing outside the app sets
+      it — but the read is kept so the two files stay one thing with one behaviour.
+    -->
+    <script>
+      (function () {
+        var forced = window.__shepherdTheme;
+        var isDark = forced ? forced === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        var root = document.documentElement.classList;
+        root.remove('shepherd-theme-light', 'shepherd-theme-dark');
+        root.add(isDark ? 'shepherd-theme-dark' : 'shepherd-theme-light');
+      })();
+    </script>
     <link rel="stylesheet" href="./harness.css" />
   </head>
   <body>

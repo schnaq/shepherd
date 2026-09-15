@@ -36,6 +36,7 @@ struct ReviewScreen: View {
         VStack(spacing: 0) {
             ReviewHeaderView(
                 model: model,
+                checkRollup: model.checkRollup,
                 onBack: leaveReview,
                 onMerge: { model.isMergeSheetPresented = true },
                 onReview: { model.isSubmitSheetPresented = true },
@@ -46,7 +47,11 @@ struct ReviewScreen: View {
             // list, the diff and the composer are all showing a head commit that GitHub may have
             // moved past.
             if let notice = model.notice {
-                ReviewUpdateBanner(notice: notice) { model.reloadPendingUpdate() }
+                ReviewUpdateBanner(
+                    notice: notice,
+                    onReload: { model.reloadPendingUpdate() },
+                    onRetry: { model.load() }
+                )
             }
             HStack(spacing: 0) {
                 ReviewFileListView(model: model)
@@ -102,6 +107,10 @@ struct ReviewScreen: View {
             environment.clearPendingAction()
             perform(pending.action)
         }
+        // ⌘K works here too, and here the "selection" is the pull request being reviewed.
+        .onChange(of: model.summary, initial: true) { _, summary in
+            environment.selectedPullRequest = summary
+        }
         .sheet(isPresented: $model.isSubmitSheetPresented) {
             SubmitReviewSheet(model: model, actions: actions)
         }
@@ -112,7 +121,12 @@ struct ReviewScreen: View {
         // what was true when it opened.
         .sheet(isPresented: $model.isMergeSheetPresented) {
             if let summary = model.summary {
-                MergeSheet(summary: summary, actions: actions, settings: environment.settings)
+                MergeSheet(
+                    summary: summary,
+                    checkState: model.checkRollup?.state,
+                    actions: actions,
+                    settings: environment.settings
+                )
             }
         }
         .sheet(item: $model.composerRequest) { request in
@@ -182,8 +196,34 @@ struct ReviewScreen: View {
     private var diffOrPlaceholder: some View {
         if model.isMissingFromInbox {
             missingFromInbox
+        } else if let error = model.detailLoadErrorCard {
+            // Only with nothing readable behind it, and ahead of the "Files have not arrived yet"
+            // card below because the two overlap: a Try again pressed there that failed has to
+            // say why rather than redraw the same sentence. A refresh that fails over a diff the
+            // reviewer *is* reading keeps the diff and speaks through the banner instead
+            // (``ReviewModel/Notice/refreshFailed(message:)``) — hiding a working diff to report
+            // that it could not be re-checked throws away the more useful half. The card is for
+            // the case the live test found: an empty Monaco, gutters and no text, saying nothing.
+            EmptyStateView(
+                systemImage: "exclamationmark.triangle",
+                title: String(localized: "Could not load this pull request"),
+                message: error,
+                action: (title: String(localized: "Try again"), run: { model.load() })
+            )
         } else if model.detail == nil {
             ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let card = model.filesNotArrivedCard {
+            // The header counts `changedFiles` off the same summary, so an empty file list beside
+            // it is a contradiction rather than an empty pull request: GitHub sent the count and
+            // not the files. Which of the two Shepherd believes is
+            // ``ReviewModel/filesNotArrivedCard``'s sentence, shared with the file list beside
+            // this pane; the retry is this pane's own, because the list has nowhere to put one.
+            EmptyStateView(
+                systemImage: card.systemImage,
+                title: card.title,
+                message: card.message,
+                action: (title: String(localized: "Try again"), run: { model.load() })
+            )
         } else if model.detail?.files.isEmpty == true {
             EmptyStateView(
                 systemImage: "doc.text.magnifyingglass",
@@ -318,6 +358,7 @@ struct ReviewScreen: View {
         PullRequestActions(
             session: session,
             toasts: environment.toasts,
+            activity: environment.activity,
             onDidQueueVerdict: { queuedID in
                 environment.reviewSessionDidQueueVerdict(on: queuedID)
             }
@@ -479,6 +520,8 @@ struct ReviewScreen: View {
 struct ReviewHeaderView: View {
     /// The review model.
     let model: ReviewModel
+    /// The freshest CI rollup, from the model (``ReviewModel/checkRollup``).
+    let checkRollup: CheckRollup?
     /// Returns to the inbox.
     var onBack: () -> Void
     /// Opens the merge sheet.
@@ -509,6 +552,8 @@ struct ReviewHeaderView: View {
                         Text(summary.slug)
                             .font(Theme.mono(12))
                             .foregroundStyle(Theme.textMuted)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                         ProvenanceChip(actor: summary.author)
                     }
                     HStack(spacing: 6) {
@@ -533,8 +578,13 @@ struct ReviewHeaderView: View {
 
             Spacer(minLength: 8)
 
-            if let checks = model.detail?.checks, !checks.isEmpty {
-                ChecksSummaryView(checks: checks)
+            // The inbox row's rollup stands in while the detail has no check runs of its own
+            // (``ReviewModel/checkRollup``). The sweep knows a suite is red long before
+            // the detail fetch lands, and hiding the badge until then said "no checks" when the
+            // truth was "not read yet". `total > 0` is the gate rather than the state, because a
+            // rollup that counted nothing has nothing to show.
+            if let checkRollup, checkRollup.total > 0 {
+                ChecksSummaryView(rollup: checkRollup)
             }
 
             Button(action: onDelegate) {
@@ -562,38 +612,93 @@ struct ReviewHeaderView: View {
             .buttonStyle(SecondaryButtonStyle(height: 30, tint: Theme.accentText))
             .disabled(model.hasEndedOnGitHub)
 
-            Button(action: onMerge) {
-                HStack(spacing: 6) {
-                    Text(String(localized: "Merge"))
-                    Image(systemName: "chevron.down").font(.system(size: 9, weight: .bold))
-                }
-            }
-            .buttonStyle(SuccessButtonStyle(height: 30))
-            .disabled(model.summary?.mergeable == .conflicting || model.hasEndedOnGitHub)
-            .help(String(localized: "Merge (m)"))
+            mergeButton
         }
         .padding(.horizontal, 16)
         .frame(height: 52)
         .background(Theme.panel)
     }
+
+    /// The Merge button, green only when merging is the next thing to do.
+    ///
+    /// Green is a recommendation, and the header used to make it on nothing at all: a draft or a
+    /// red suite got the same success-green button as a pull request waiting to land, and the
+    /// only thing that dimmed it was a conflict. Now it is green when nothing blocks the merge
+    /// *and* CI is green, and neutral otherwise. No chevron on the label either — it opens a
+    /// confirmation sheet, not a menu, and the arrow promised one.
+    ///
+    /// Written as two buttons rather than one with a computed style because a `ButtonStyle` is a
+    /// type: there is no value both styles fit in without erasing them.
+    @ViewBuilder
+    private var mergeButton: some View {
+        let isDisabled = model.summary?.mergeBlocker != nil || model.hasEndedOnGitHub
+        if model.summary?.mergeBlocker == nil, checkRollup?.state == .success {
+            Button(action: onMerge) { Text(String(localized: "Merge")) }
+                .buttonStyle(SuccessButtonStyle(height: 30))
+                .disabled(isDisabled)
+                .help(mergeHelp)
+        } else {
+            Button(action: onMerge) { Text(String(localized: "Merge")) }
+                .buttonStyle(SecondaryButtonStyle(height: 30))
+                .disabled(isDisabled)
+                .help(mergeHelp)
+        }
+    }
+
+    /// Why the Merge button is dark, or the shortcut that presses it
+    /// (``PullRequestActions/help(for:on:otherwise:)``).
+    private var mergeHelp: String {
+        let shortcut = String(localized: "Merge (m)")
+        guard let summary = model.summary else { return shortcut }
+        return PullRequestActions.help(
+            for: summary.mergeBlocker,
+            on: summary,
+            otherwise: shortcut
+        )
+    }
 }
 
 /// The "2/3 checks" summary in the review header.
 struct ChecksSummaryView: View {
-    /// The head commit's check runs.
-    let checks: [CheckRun]
+    /// The rolled-up state of the head commit's checks.
+    ///
+    /// A rollup rather than the check runs, because two kinds of caller have one: the detail's
+    /// runs, counted with ``ShepherdCore/CheckRollup/init(runs:)``, and the inbox row's, which
+    /// the sweep built from GraphQL's `statusCheckRollup`. The second knows the state and the
+    /// number of contexts but not the split — ``ShepherdCore/CheckRollup/successCount`` is zero
+    /// there (see `ResponseMapping.pullRequestSummary(from:relations:detector:)`) — so the
+    /// fraction is drawn only when somebody actually counted, and "3 checks" beside the dot
+    /// otherwise: it is every fact there is, and "0/3" would be a wrong one.
+    let rollup: CheckRollup
+
+    /// Whether the rollup carries the per-outcome split, or only a verdict and a total.
+    private var hasCounts: Bool {
+        rollup.successCount + rollup.failureCount + rollup.pendingCount > 0
+    }
 
     var body: some View {
-        let rollup = CheckRollup(runs: checks)
         HStack(spacing: 6) {
             CheckDotView(state: rollup.state, size: 7)
-            Text("\(rollup.successCount)/\(rollup.total)")
-                .monospacedDigit()
+            if hasCounts {
+                Text("\(rollup.successCount)/\(rollup.total)")
+                    .monospacedDigit()
+            } else {
+                // `verbatim` because a bare number is the same in every language, and giving it a
+                // catalog key would ask a translator to translate "3".
+                Text(verbatim: "\(rollup.total)")
+                    .monospacedDigit()
+            }
             Text(String(localized: "checks"))
         }
         .font(.system(size: 12))
         .foregroundStyle(color(for: rollup.state))
-        .help(helpText(for: rollup))
+        .help(
+            hasCounts
+                ? helpText(for: rollup)
+                : String(
+                    localized: "\(rollup.total) checks on the head commit; Shepherd has not read them yet."
+                )
+        )
     }
 
     private func color(for state: CheckRollup.State) -> Color {

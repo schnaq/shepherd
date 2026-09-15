@@ -3,70 +3,138 @@ import ShepherdPersistence
 import SwiftUI
 
 /// The Settings window: Account, Sync, Replies, Agents, Intelligence, Delegation, Automation,
-/// Appearance.
+/// Appearance — a rail on the left, the chosen pane on the right.
+///
+/// The one presentation of settings there is — the `Settings` scene behind ⌘, — and every in-app
+/// way in goes through ``AppEnvironment/showSettings(_:)`` to reach it.
+///
+/// A rail rather than the `TabView` this used to be. Eight panes never fit across the top of a
+/// 620pt window: macOS lays the tab strip out in the width it is given and, when that width is
+/// short, draws the labels on top of one another rather than truncating them — so the navigation
+/// read as a smear of overlapping words. German makes it worse than English ("Automatisierung",
+/// "Darstellung"), which is the shape of bug a fixed-width tab strip has for every translation
+/// longer than the development language. A vertical rail has no such limit: the ninth pane costs
+/// a row, not a redesign.
 ///
 /// Replies (saved replies + per-repository review templates) sits between Sync and the AI cluster
-/// because it is the one tab about the *review path* itself, and because it is the only tab where
-/// the user authors content rather than configuring a connection.
+/// because it is the one pane about the *review path* itself, and because it is the only pane
+/// where the user authors content rather than configuring a connection.
 ///
-/// Webhooks get their own tab rather than a section under Sync: Sync is about keeping the local
+/// Webhooks get their own pane rather than a section under Sync: Sync is about keeping the local
 /// cache in step with GitHub, while Automation is about what Shepherd tells the outside world —
 /// a different direction, a different failure mode, and the place the next integration will go.
 struct SettingsView: View {
     @Environment(AppEnvironment.self) private var environment
     @State private var model = SettingsModel()
     /// The encrypted settings-sync model (ADR 0014). Owned here rather than by the section so
-    /// the passphrase and key fields survive a tab switch within one Settings window.
+    /// the passphrase and key fields survive a pane switch within one Settings window.
     @State private var syncModel = SettingsSyncModel()
-    /// Which tab is showing. Every tab is tagged with its ``SettingsDeepLinkTab``, which is
-    /// what lets `shepherd://settings/<tab>` land on one (ADR 0013).
-    @State private var selection: SettingsDeepLinkTab
-
-    /// Creates the Settings window or sheet.
-    /// - Parameter initialTab: The tab to open on. Defaults to Account, which is what the
-    ///   ⌘, window and the rail button want.
-    init(initialTab: SettingsDeepLinkTab = .account) {
-        _selection = State(initialValue: initialTab)
-    }
 
     var body: some View {
-        TabView(selection: $selection) {
-            AccountSettingsTab()
-                .tabItem { Label(String(localized: "Account"), systemImage: "person.crop.circle") }
-                .tag(SettingsDeepLinkTab.account)
-            SyncSettingsTab(syncModel: syncModel)
-                .tabItem { Label(String(localized: "Sync"), systemImage: "arrow.clockwise") }
-                .tag(SettingsDeepLinkTab.sync)
-            RepliesSettingsTab()
-                .tabItem {
-                    Label(String(localized: "Replies"), systemImage: "text.badge.plus")
-                }
-                .tag(SettingsDeepLinkTab.replies)
-            AgentSettingsTab(model: model)
-                .tabItem { Label(String(localized: "Agents"), systemImage: "cpu") }
-                .tag(SettingsDeepLinkTab.agents)
-            IntelligenceSettingsTab(model: model)
-                .tabItem { Label(String(localized: "Intelligence"), systemImage: "sparkles") }
-                .tag(SettingsDeepLinkTab.intelligence)
-            DelegationSettingsTab()
-                .tabItem {
-                    Label(
-                        String(localized: "Delegation"),
-                        systemImage: "arrow.uturn.backward.badge.clock"
-                    )
-                }
-                .tag(SettingsDeepLinkTab.delegation)
-            AutomationSettingsTab(model: model)
-                .tabItem {
-                    Label(String(localized: "Automation"), systemImage: "bolt.horizontal")
-                }
-                .tag(SettingsDeepLinkTab.automation)
-            AppearanceSettingsTab()
-                .tabItem { Label(String(localized: "Appearance"), systemImage: "paintbrush") }
-                .tag(SettingsDeepLinkTab.appearance)
+        HStack(spacing: 0) {
+            rail
+            Divider().overlay(Theme.border)
+            pane
         }
-        .frame(width: 620, height: 460)
+        // Wider than the 620 the tab strip had, because the rail takes a column of it and the
+        // panes should keep the reading width their copy was written for — 760 less the rail and
+        // the divider leaves them within a few points of what they had. 640 rather than 460
+        // high: Intelligence and Sync are the two tallest panes, and at 460 both clipped their
+        // last control instead of scrolling to it.
+        .frame(width: 760, height: 640)
         .background(Theme.background)
+    }
+
+    /// The pane list.
+    ///
+    /// Driven by ``SettingsDeepLinkTab/allCases`` rather than by eight literal rows: the enum is
+    /// already the list of panes — it is what a deep link names — and a rail written out by hand
+    /// is a second list to keep in step with it.
+    ///
+    /// Which pane is showing is ``AppEnvironment/settingsTab``, not state of this view, which is
+    /// what lets the inbox rail's gear, the fleet's empty state and `shepherd://settings/<tab>`
+    /// (ADR 0013) land on one — including when this window is *already* open, which an
+    /// initial-value `@State` could not do.
+    private var rail: some View {
+        @Bindable var environment = environment
+        return ScrollView {
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(SettingsDeepLinkTab.allCases, id: \.self) { tab in
+                    RailRow(
+                        title: tab.settingsTitle,
+                        systemImage: tab.settingsSymbol,
+                        isSelected: environment.settingsTab == tab
+                    ) {
+                        environment.settingsTab = tab
+                    }
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 12)
+        }
+        .frame(width: 176)
+        .scrollContentBackground(.hidden)
+        .background(Theme.panel)
+    }
+
+    /// The chosen pane.
+    @ViewBuilder
+    private var pane: some View {
+        switch environment.settingsTab {
+        case .account:
+            AccountSettingsTab()
+        case .sync:
+            SyncSettingsTab(syncModel: syncModel)
+        case .replies:
+            RepliesSettingsTab()
+        case .agents:
+            AgentSettingsTab(model: model)
+        case .intelligence:
+            IntelligenceSettingsTab(model: model)
+        case .delegation:
+            DelegationSettingsTab()
+        case .automation:
+            AutomationSettingsTab(model: model)
+        case .appearance:
+            AppearanceSettingsTab()
+        }
+    }
+}
+
+/// How a settings pane names itself in the rail.
+///
+/// An extension in the app target rather than properties on the enum itself:
+/// ``SettingsDeepLinkTab`` lives in `ShepherdCore`, which has to keep building on Linux and has
+/// no business knowing about SF Symbols.
+extension SettingsDeepLinkTab {
+    /// The rail label.
+    var settingsTitle: String {
+        switch self {
+        case .account: return String(localized: "Account")
+        case .sync: return String(localized: "Sync")
+        case .replies: return String(localized: "Replies")
+        case .agents: return String(localized: "Agents")
+        case .intelligence: return String(localized: "Intelligence")
+        case .delegation: return String(localized: "Delegation")
+        case .automation: return String(localized: "Automation")
+        case .appearance: return String(localized: "Appearance")
+        }
+    }
+
+    /// The leading SF Symbol.
+    var settingsSymbol: String {
+        switch self {
+        case .account: return "person.crop.circle"
+        case .sync: return "arrow.clockwise"
+        case .replies: return "text.badge.plus"
+        case .agents: return "cpu"
+        case .intelligence: return "sparkles"
+        // `terminal`, because delegation runs a CLI — and because the symbol this once used,
+        // `arrow.uturn.backward.badge.clock`, draws nothing at all.
+        case .delegation: return "terminal"
+        case .automation: return "bolt.horizontal"
+        case .appearance: return "paintbrush"
+        }
     }
 }
 
@@ -714,6 +782,12 @@ struct AgentSettingsTab: View {
     /// The settings model.
     let model: SettingsModel
     @State private var errorMessage: String?
+    /// Why the last *Remove* did not happen, drawn under the list it failed in.
+    ///
+    /// Its own line rather than ``errorMessage``: that one lives at the bottom of the card, under
+    /// the fields *Add entry* reads, and a reviewer who pressed *Remove* at the top of the list
+    /// would be told about it a form's height away from the row that is still there.
+    @State private var removeErrorMessage: String?
 
     var body: some View {
         SettingsPage {
@@ -769,7 +843,7 @@ struct AgentSettingsTab: View {
                             Spacer(minLength: 6)
                             Button(String(localized: "Remove")) {
                                 Task {
-                                    await model.removeOverride(
+                                    removeErrorMessage = await model.removeOverride(
                                         id: entry.id,
                                         session: environment.session
                                     )
@@ -779,6 +853,15 @@ struct AgentSettingsTab: View {
                             .font(.system(size: 11))
                             .foregroundStyle(Theme.failure)
                         }
+                    }
+
+                    // The Settings scene has no toast host, so a refused delete says so here or
+                    // nowhere — which is what it used to do (`try?`).
+                    if let removeErrorMessage {
+                        Text(removeErrorMessage)
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.failure)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
 
                     Divider().overlay(Theme.hairline)

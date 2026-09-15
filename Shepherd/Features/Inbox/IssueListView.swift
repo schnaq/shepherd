@@ -21,6 +21,12 @@ struct IssueListView: View {
     @Environment(AppEnvironment.self) private var environment
     /// The issues model.
     let model: IssueInboxModel
+    /// Whether the keyboard belongs to this list, or to something drawn over it (⌘K's palette).
+    ///
+    /// ``InboxListView/isKeyboardOwner``'s twin, for its reason: the palette is an overlay rather
+    /// than a sheet or a window, so macOS does not take focus away from the list for it, and this
+    /// list answers `j` and the arrows exactly as the pull-request one does.
+    let isKeyboardOwner: Bool
 
     @FocusState private var isListFocused: Bool
 
@@ -34,13 +40,19 @@ struct IssueListView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             IssueShortcutBar()
         }
-        .focusable()
+        .focusable(isKeyboardOwner)
         .focusEffectDisabled()
         .focused($isListFocused)
         .onKeyPress(phases: .down) { press in
-            handle(press)
+            // ``InboxListView``'s two halves, for its reason: not being focusable stops the next
+            // key from arriving here, and this stops the one already in flight.
+            guard isKeyboardOwner else { return .ignored }
+            return handle(press)
         }
         .onAppear { isListFocused = true }
+        // And back again when the palette closes, with ``InboxListView``'s hop and the same
+        // argument: nothing else would return focus to a list that stopped being focusable.
+        .reassertingFocus($isListFocused, when: isKeyboardOwner)
     }
 
     // MARK: - Header

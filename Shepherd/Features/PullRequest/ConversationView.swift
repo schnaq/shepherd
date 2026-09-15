@@ -240,7 +240,9 @@ struct ConversationView: View {
 
     @ViewBuilder
     private var checks: some View {
-        let list = model.detail?.checks ?? []
+        let list = (model.detail?.checks ?? []).sorted {
+            Self.rank(for: $0) < Self.rank(for: $1)
+        }
         Card {
             VStack(alignment: .leading, spacing: 6) {
                 CardTitle(String(localized: "CHECKS · \(list.count)"))
@@ -274,6 +276,26 @@ struct ConversationView: View {
         }
         if let state = diagnosis.state {
             diagnosisCard(state)
+        }
+    }
+
+    /// Where a check sorts in the CHECKS card: the one thing worth reading first is which ones
+    /// are red, then which ones are still running, then everything that already passed — a long
+    /// list of green checks should not be able to push the one failing check off the bottom.
+    ///
+    /// Built on ``CheckRun/rollupContribution`` rather than a parallel switch over `status` and
+    /// `conclusion`: that is the same red/running/green split the rollup dot and ``canDiagnose(_:)``
+    /// already use, so a check cannot rank as "red" here while reading as green everywhere else in
+    /// the panel. `sorted(by:)` on `Array` has been a stable sort since Swift 5, so checks that
+    /// share a rank keep GitHub's own order.
+    /// - Parameter check: The check to rank.
+    /// - Returns: `0` for a failed, cancelled or timed-out check, `1` for one still queued or
+    ///   running, `2` for everything else.
+    private static func rank(for check: CheckRun) -> Int {
+        switch check.rollupContribution {
+        case .failure: return 0
+        case .pending: return 1
+        case .success: return 2
         }
     }
 
@@ -372,11 +394,7 @@ struct ConversationView: View {
                             }
                             if let summary = model.summary {
                                 HStack(spacing: 8) {
-                                    Button(
-                                        thread.isResolved
-                                            ? String(localized: "Unresolve")
-                                            : String(localized: "Resolve")
-                                    ) {
+                                    Button {
                                         Task {
                                             await actions.setThread(
                                                 on: summary,
@@ -384,8 +402,17 @@ struct ConversationView: View {
                                                 resolved: !thread.isResolved
                                             )
                                         }
+                                    } label: {
+                                        Text(
+                                            thread.isResolved
+                                                ? String(localized: "Unresolve")
+                                                : String(localized: "Resolve")
+                                        )
                                     }
                                     .buttonStyle(SecondaryButtonStyle(height: 26))
+                                    // Keyed by the thread, so a card showing a dozen
+                                    // conversations spins the one button that was pressed.
+                                    .busy(actions.activity.isRunning(thread.id, .thread))
 
                                     Button(String(localized: "Delegate this finding…")) {
                                         environment.startDelegation(

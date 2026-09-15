@@ -150,6 +150,43 @@ final class DeepLinkRoutingTests: XCTestCase {
         XCTAssertNotEqual(AppEnvironment.Route.fleet(agentID: nil), .inbox)
     }
 
+    // MARK: - Settings
+
+    @MainActor
+    func testASettingsLinkChoosesTheTabAndOpensTheWindowWithoutNavigating() throws {
+        // The end-to-end shape, as the two tests above do it: a URL in, what the app does out.
+        // Settings is a *window*, not a route — so the one thing that must not happen is the one
+        // that used to: the link dragging whoever was on another screen back to the inbox to see
+        // a sheet. What it does instead is choose the tab and ask for the window.
+        let url = try XCTUnwrap(URL(string: "shepherd://settings/agents"))
+        guard case .settings(let tab) = try XCTUnwrap(DeepLink.parse(url)) else {
+            return XCTFail("expected a settings link")
+        }
+        XCTAssertEqual(tab, .agents)
+
+        let environment = AppEnvironment()
+        environment.route = .fleet(agentID: "claude-code")
+        var opened = 0
+        environment.openSettingsWindow = { opened += 1 }
+
+        environment.showSettings(tab)
+
+        XCTAssertEqual(environment.settingsTab, .agents)
+        XCTAssertEqual(opened, 1)
+        XCTAssertEqual(environment.route, .fleet(agentID: "claude-code"))
+    }
+
+    @MainActor
+    func testEverySettingsTabIsReachableThroughTheOneWayIn() {
+        // Every tab a link can name is a tab `showSettings` can show: the enum is the contract
+        // between the URL grammar and the window, and nothing else sets `settingsTab`.
+        let environment = AppEnvironment()
+        for tab in SettingsDeepLinkTab.allCases {
+            environment.showSettings(tab)
+            XCTAssertEqual(environment.settingsTab, tab)
+        }
+    }
+
     // MARK: - Fixtures
 
     private func summary(id: String, repo: RepoRef, number: Int) -> PullRequestSummary {

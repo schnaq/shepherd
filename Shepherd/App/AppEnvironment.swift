@@ -53,6 +53,14 @@ final class AppEnvironment {
     var route: Route = .inbox
     /// Whether the ⌘K palette is up.
     var isCommandPaletteVisible = false
+    /// The tab the Settings window shows.
+    ///
+    /// It lives here rather than inside ``SettingsView`` because every surface that wants a
+    /// *particular* tab is outside that window — the rail's gear, `shepherd://settings/<tab>`
+    /// (ADR 0013), the fleet's empty state — and a window that is already open cannot be
+    /// re-created with a different initial tab. ``SettingsView`` binds to it, so writing it
+    /// switches the tab of an open window and chooses the tab of one about to open.
+    var settingsTab: SettingsDeepLinkTab = .account
     /// The drafts that could not be submitted because the pull request moved on (ADR 0006).
     ///
     /// A queue rather than a single slot: one bulk-triage drain can park several reviews, and
@@ -71,8 +79,6 @@ final class AppEnvironment {
     /// Same mechanism as ``PendingAction``: the container raises it, the screen that owns the
     /// state consumes it, so there is one implementation of "filter the inbox" (ADR 0013).
     var pendingInboxFilter: Pending<InboxDeepLinkFilter>?
-    /// A Settings tab a deep link asked for, waiting for the inbox to present it.
-    var pendingSettingsTab: Pending<SettingsDeepLinkTab>?
     /// An issue a link or a ⌘K row asked for, waiting for the inbox to reveal it (ADR 0032).
     ///
     /// The same mechanism as ``pendingInboxFilter`` above, and it is a *pending request* rather
@@ -89,6 +95,13 @@ final class AppEnvironment {
     let secretStore: KeychainSecretStore
     /// The window's toast queue; errors are surfaced here, never printed.
     let toasts = ToastCenter()
+    /// Which writes are in flight, so every write button can go quiet while its own write runs
+    /// and refuse a second click.
+    ///
+    /// Beside ``toasts`` and for the same reason: both are one user action's feedback, both are
+    /// read by every screen that can start a write, and neither belongs to a session — a write
+    /// started just before a sign-out still has to release its key.
+    let activity = ActionActivity()
     /// Maps sync events to macOS notifications.
     let notifications: NotificationManager
     /// The delegation sheets: one per pull request, at most one on screen (ADR 0011).
@@ -175,6 +188,14 @@ final class AppEnvironment {
     /// menu-bar quick inbox's `revealMainWindow()`. Not observed by anything (it is called
     /// imperatively, from a notification click), so it stays out of the observation graph.
     @ObservationIgnored var reopenMainWindow: (@MainActor () -> Void)?
+
+    /// Brings the Settings window up.
+    ///
+    /// Set by ``RootView`` from SwiftUI's `openSettings`, for ``reopenMainWindow``'s reason and
+    /// in the same breath: opening a scene is something only a view can do. Not observed by
+    /// anything — it is called imperatively, from ``showSettings(_:)`` — so it stays out of the
+    /// observation graph.
+    @ObservationIgnored var openSettingsWindow: (@MainActor () -> Void)?
 
     /// The provider router, rebuilt whenever the intelligence settings change.
     private(set) var intelligence: IntelligenceRouter = .disabled
@@ -537,6 +558,7 @@ final class AppEnvironment {
             let actions = PullRequestActions(
                 session: session,
                 toasts: self.toasts,
+                activity: self.activity,
                 announcesSuccess: false
             )
             let queued = await self.autoMerge.run(
@@ -1067,6 +1089,20 @@ final class AppEnvironment {
     /// The command waiting to be executed, if any.
     private(set) var pendingAction: PendingAction?
 
+    /// The pull request the visible screen's cursor is on, published for the command palette.
+    ///
+    /// The palette is presented from ``SignedInRootView`` rather than from a screen, so it cannot
+    /// see the inbox's cursor or the review screen's subject — and a palette that offers
+    /// "Approve pull request" with nothing selected raises a ``PendingAction`` the screen quietly
+    /// drops. Both screens write it (``InboxScreen`` from its selected row, ``ReviewScreen`` from
+    /// the pull request it is showing) so the palette can leave a command out instead, and it is
+    /// exactly the row those commands' ``request(_:)`` would act on.
+    ///
+    /// Never cleared on disappear: the route switch tears one screen down and builds the other,
+    /// in an order nothing here guarantees, and a clear that lost that race would blank the
+    /// palette for the screen that just arrived. The screen that arrives overwrites it instead.
+    var selectedPullRequest: PullRequestSummary?
+
     /// Raises a command. The visible screen picks it up and clears it.
     /// - Parameter action: The command.
     func request(_ action: ShortcutAction) {
@@ -1152,7 +1188,48 @@ final class AppEnvironment {
     /// - Parameter agentID: The registry id of the agent to select, or `nil` for the whole fleet.
     func openFleet(agentID: String? = nil) {
         if reviewSession != nil { endReviewSession(announcing: false) }
+        // The fleet screen has no pull-request cursor and handles no review command, so the row
+        // the inbox left behind would only put dead entries in the palette.
+        selectedPullRequest = nil
         route = .fleet(agentID: agentID)
+    }
+
+    /// Shows the Settings window on `tab`.
+    ///
+    /// The one way in, for the rail's gear, `shepherd://settings/<tab>` (ADR 0013), the fleet's
+    /// empty state and the delegation sheet alike. There used to be two presentations — the
+    /// `Settings` scene behind ⌘, and a sheet on the inbox screen — which is how a window with no
+    /// close button came to exist, and how sixteen links came to open sixteen windows.
+    ///
+    /// No `endReviewSession` beside it, unlike ``openReview(prID:composing:)`` and its siblings:
+    /// Settings is a *second window*, not a route, so a running focus session keeps its queue and
+    /// the user comes back to it.
+    /// - Parameter tab: The tab to show.
+    func showSettings(_ tab: SettingsDeepLinkTab) {
+        settingsTab = tab
+        openSettingsWindow?()
+        // …and in front of the main window, which `openSettings()` arranges only when it *creates*
+        // the window. An already-open Settings window stays where it is: the 2026-09-09 live test
+        // watched `shepherd://settings/<tab>` change the tab behind the main window, where nobody
+        // could see it — the link looked like it had done nothing, and the ⌘W after it closed the
+        // wrong window. One runloop hop, because on the very first open the window does not exist
+        // yet when this line runs; that is also the case that needs no help.
+        Task { @MainActor in activateSettingsWindow() }
+    }
+
+    /// Brings the Settings window forward, if there is one.
+    ///
+    /// Deliberately silent when no window carries ``settingsWindowIdentifier``: the alternative —
+    /// raising whichever window is first — would raise the *main* window over the settings the
+    /// caller just asked for, which is the bug this exists to fix.
+    private func activateSettingsWindow() {
+        // `activate()` for ``activateMainWindow()``'s reason: a `shepherd://` link or a click on a
+        // gear is the user's own activation request, which is what macOS 14's cooperative
+        // activation is for.
+        NSApplication.shared.activate()
+        NSApplication.shared.windows
+            .first { $0.identifier?.rawValue == Self.settingsWindowIdentifier }?
+            .makeKeyAndOrderFront(nil)
     }
 
     /// Returns to the inbox.
@@ -1306,8 +1383,9 @@ final class AppEnvironment {
 
     /// SwiftUI's own identifier for the window the `Settings` scene puts on screen.
     ///
-    /// Used only to *exclude* that window in ``activateMainWindow()``, so if Apple ever renames
-    /// it the effect is "Settings may come forward instead", never a crash.
+    /// Used to *exclude* that window in ``activateMainWindow()`` and to *find* it in
+    /// ``activateSettingsWindow()``, so if Apple ever renames it the effect is "the wrong window
+    /// comes forward, or none does", never a crash.
     private static let settingsWindowIdentifier = "com_apple_SwiftUI_Settings_window"
 
     /// Brings the app's own window to the front, from a surface that is not inside it.
@@ -1333,5 +1411,16 @@ final class AppEnvironment {
         guard let window else { return false }
         window.makeKeyAndOrderFront(nil)
         return true
+    }
+
+    /// Closes whichever window has the keyboard — the ⌘W the menu bar otherwise does not have.
+    ///
+    /// AppKit's own `performClose(_:)` rather than a SwiftUI dismissal, because the item behind
+    /// this has to close *whatever* is key: the Settings scene, which no view of ours owns, as
+    /// readily as the main window. It also inherits the behaviour the red button has — a window
+    /// with a sheet up refuses and says so — instead of inventing a second answer to "can this
+    /// close?". Nothing happens when no window is key, which is the menu-bar-only state.
+    func closeKeyWindow() {
+        NSApplication.shared.keyWindow?.performClose(nil)
     }
 }

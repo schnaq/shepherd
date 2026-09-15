@@ -9,12 +9,11 @@ struct ReviewFileListView: View {
     var body: some View {
         VStack(spacing: 0) {
             if model.visiblePriorities.isEmpty {
+                let state = emptyState
                 EmptyStateView(
-                    systemImage: "doc.on.doc",
-                    title: model.roundView == .sinceReview
-                        ? String(localized: "Nothing new")
-                        : String(localized: "No files yet"),
-                    message: emptyMessage
+                    systemImage: state.systemImage,
+                    title: state.title,
+                    message: state.message
                 )
             } else {
                 ScrollView {
@@ -34,13 +33,46 @@ struct ReviewFileListView: View {
         .background(Theme.panel)
     }
 
-    private var emptyMessage: String {
-        if model.roundView == .sinceReview {
-            return String(localized: "No file changed since the head you reviewed.")
+    /// What an empty file list means, in the order ``ReviewScreen/diffOrPlaceholder`` uses.
+    ///
+    /// The three claims the diff area makes about *the diff* — it could not be loaded, GitHub
+    /// claims files it did not send, nothing changed since the reviewed head — one line each,
+    /// because the two panes are read together: a list saying "This pull request has no changed
+    /// files" beside a diff that failed to load is how the live test's empty Monaco went
+    /// unexplained. The screen's ``ReviewScreen/missingFromInbox`` state is deliberately *not*
+    /// mirrored: it replaces the whole diff area with its own way out, and the file list beside
+    /// it says "No files yet", which is true of a pruned pull request.
+    ///
+    /// The first two lines and the diff area's two cards share one predicate each
+    /// (``ReviewModel/detailLoadErrorCard``, ``ReviewModel/filesNotArrivedCard``) rather than
+    /// each pane spelling out when a failure is worth showing, which is the part that would
+    /// otherwise drift — and the second carries its wording too, so the two panes cannot end up
+    /// reporting a different number of missing files.
+    private var emptyState: (systemImage: String, title: String, message: String) {
+        if let error = model.detailLoadErrorCard {
+            return (
+                "exclamationmark.triangle",
+                String(localized: "Could not load this pull request"),
+                error
+            )
         }
-        return model.isRefreshing
-            ? String(localized: "Fetching the diff…")
-            : String(localized: "This pull request has no changed files.")
+        if let card = model.filesNotArrivedCard {
+            return card
+        }
+        if model.roundView == .sinceReview {
+            return (
+                "doc.on.doc",
+                String(localized: "Nothing new"),
+                String(localized: "No file changed since the head you reviewed.")
+            )
+        }
+        return (
+            "doc.on.doc",
+            String(localized: "No files yet"),
+            model.isRefreshing
+                ? String(localized: "Fetching the diff…")
+                : String(localized: "This pull request has no changed files.")
+        )
     }
 
     private func bucketHeader(_ bucket: PriorityBucket, count: Int) -> some View {
@@ -85,7 +117,7 @@ struct ReviewFileListView: View {
                 }
                 if !priority.reasons.isEmpty, !isViewed {
                     HStack(spacing: 4) {
-                        ForEach(priority.reasons.prefix(2), id: \.self) { reason in
+                        ForEach(displayReasons(for: priority), id: \.self) { reason in
                             ChipView(text: reason, color: priority.bucket.tint, size: 10)
                         }
                     }
@@ -151,6 +183,19 @@ struct ReviewFileListView: View {
         if isViewed { return Theme.textMuted }
         return isSelected ? Theme.textStrong : Theme.text
     }
+
+    /// The reason chips shown on a file row, with the first one translated.
+    ///
+    /// `priority.reasons.first` is always the category's plain-English label
+    /// (`FilePrioritizer.swift`'s `score(_:totalChurn:context:)` seeds `reasons` with it and only
+    /// ever appends after it), so this is the one entry that can be swapped for
+    /// ``FileCategory/localizedLabel`` without touching the rest — the other reasons ("Touches
+    /// security-sensitive path …") stay English.
+    private func displayReasons(for priority: FilePriority) -> [String] {
+        var reasons = priority.reasons
+        if !reasons.isEmpty { reasons[0] = priority.category.localizedLabel }
+        return Array(reasons.prefix(2))
+    }
 }
 
 /// The bar above the diff: path, status chip, layout toggle, "mark viewed".
@@ -208,6 +253,7 @@ struct ReviewFileHeader: View {
                 .frame(width: 170)
 
                 if let file = model.selectedFile {
+                    let isWriting = actions.activity.isRunning(model.prID, .viewed)
                     Button {
                         Task { await model.toggleViewed(path: file.path, actions: actions) }
                     } label: {
@@ -219,11 +265,20 @@ struct ReviewFileHeader: View {
                                 : String(localized: "Mark viewed"))
                         }
                         .font(.system(size: 11.5))
+                        // Applied to the label rather than left to ``View/busy(_:)``: this is the
+                        // one write button in the app on `.plain` rather than on one of the three
+                        // styles, and the styles are where that modifier's spinner lives. The
+                        // spinner itself is the shared one, so it matches theirs.
+                        .busyLabel(isBusy: isWriting)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(
                         model.viewedPaths.contains(file.path) ? Theme.success : Theme.textSecondary
                     )
+                    // `v` does not come through this button — it is a character the screen
+                    // handles (``ReviewScreen``) — so the key is refused by the funnel rather
+                    // than by the disable. This is here so the click and `v` show one state.
+                    .busy(isWriting)
                     .help(String(localized: "Toggle viewed (v)"))
                 }
             }

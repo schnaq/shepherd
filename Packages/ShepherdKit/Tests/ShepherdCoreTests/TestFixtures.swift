@@ -37,7 +37,8 @@ enum Fixtures {
         reviewDecision: ReviewDecision? = nil,
         checkRollup: CheckRollup? = nil,
         relations: Set<Relation> = [],
-        labels: [String] = []
+        labels: [String] = [],
+        mergeable: Mergeable? = .mergeable
     ) -> PullRequestSummary {
         PullRequestSummary(
             id: id,
@@ -58,7 +59,7 @@ enum Fixtures {
             checkRollup: checkRollup,
             myRelation: relations,
             labels: labels,
-            mergeable: .mergeable
+            mergeable: mergeable
         )
     }
 

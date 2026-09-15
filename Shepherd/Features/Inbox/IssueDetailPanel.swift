@@ -268,43 +268,60 @@ struct IssueDetailPanel: View {
     /// refuses them (ADR 0032's Sprint 2 amendment); giving the issue writes global keys of their
     /// own would be a second verb vocabulary, which is a decision nobody has made.
     private func triageRow(_ row: IssueRowSummary) -> some View {
-        HStack(spacing: 8) {
-            Button {
-                commentBody = ""
-                isCommentSheetPresented = true
-            } label: {
-                Text(String(localized: "Comment…"))
-            }
-            .buttonStyle(SecondaryButtonStyle())
-
-            labelMenu(row)
-
-            if let login = model.viewerLogin, !login.isEmpty {
+        // Two rows rather than one: five controls do not fit on one line at the panel's 320 pt
+        // width without clipping their labels. Split by kind — the writes you make *about* the
+        // issue (comment, assign) on top, the writes that change its *state* (label,
+        // close/reopen) below.
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
                 Button {
-                    Task {
-                        let queued = await model.assignToMe(row)
-                        report(
-                            queued: queued,
-                            success: String(localized: "Assignment queued.")
-                        )
-                    }
+                    commentBody = ""
+                    isCommentSheetPresented = true
                 } label: {
-                    Text(String(localized: "Assign to me"))
+                    Text(String(localized: "Comment…"))
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(SecondaryButtonStyle())
-                .disabled(row.myRelation.contains(.assigned))
-                .help(
-                    row.myRelation.contains(.assigned)
-                        ? String(localized: "This issue is already assigned to you")
-                        : String(localized: "Add yourself as an assignee, without removing anyone")
-                )
+                .modifier(issueWrite(row, .issueComment))
+
+                if let login = model.viewerLogin, !login.isEmpty {
+                    Button {
+                        Task {
+                            let queued = await model.assignToMe(row)
+                            report(
+                                queued: queued,
+                                success: String(localized: "Assignment queued.")
+                            )
+                        }
+                    } label: {
+                        Text(String(localized: "Assign to me"))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .modifier(issueWrite(
+                        row,
+                        .issueAssign,
+                        alsoDisabledWhen: row.myRelation.contains(.assigned)
+                    ))
+                    .help(
+                        row.myRelation.contains(.assigned)
+                            ? String(localized: "This issue is already assigned to you")
+                            : String(localized: "Add yourself as an assignee, without removing anyone")
+                    )
+                }
+
+                assignToAgentButton(row)
+
+                Spacer(minLength: 0)
             }
 
-            assignToAgentButton(row)
+            HStack(spacing: 8) {
+                labelMenu(row)
 
-            stateMenu(row)
+                stateMenu(row)
 
-            Spacer(minLength: 0)
+                Spacer(minLength: 0)
+            }
         }
     }
 
@@ -328,20 +345,28 @@ struct IssueDetailPanel: View {
                 body: model.detail?.bodyMarkdown ?? "",
                 onDidStart: { start in
                     Task {
-                        _ = await model.comment(
+                        // The one write in this panel nobody pressed a button for, and the one
+                        // that used to be thrown away: a handover comment the outbox refused left
+                        // the issue looking untouched to every colleague reading it, with nothing
+                        // anywhere saying so. Same sentence as every other refused issue write.
+                        let queued = await model.comment(
                             String(
                                 localized: "Handed to \(start.agent) via Shepherd, on branch `\(GitWorktree.branchName(issueNumber: row.number))`."
                             ),
                             on: row
                         )
+                        if !queued { reportQueueFailure() }
                     }
                 }
             )
         } label: {
             Text(String(localized: "Assign to agent…"))
+                .frame(maxWidth: .infinity)
         }
         .buttonStyle(SecondaryButtonStyle())
-        .disabled(row.state == .closed)
+        // ``ActionActivity/Kind/issueComment``, because that is what this button eventually
+        // writes: the handover is recorded as a comment when the run starts.
+        .modifier(issueWrite(row, .issueComment, alsoDisabledWhen: row.state == .closed))
         .help(
             row.state == .closed
                 ? String(localized: "This issue is closed")
@@ -373,9 +398,14 @@ struct IssueDetailPanel: View {
             }
         } label: {
             Text(String(localized: "Label"))
+                .frame(maxWidth: .infinity)
         }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
+        // `.button` — styled through ``SecondaryButtonStyle`` like every neighbouring control,
+        // which is also what lets ``View/busy(_:)`` reach this menu. The borderless menu style
+        // this used to have draws its own label and never runs it through a `ButtonStyle` at all.
+        .menuStyle(.button)
+        .buttonStyle(SecondaryButtonStyle())
+        .modifier(issueWrite(row, .issueLabel))
         .help(
             String(
                 localized: "The labels Shepherd has already seen in this repository. A label nothing here carries is a click away on GitHub."
@@ -394,8 +424,10 @@ struct IssueDetailPanel: View {
                 }
             } label: {
                 Text(String(localized: "Reopen"))
+                    .frame(maxWidth: .infinity)
             }
             .buttonStyle(SecondaryButtonStyle())
+            .modifier(issueWrite(row, .issueState))
         } else {
             Menu {
                 Button(String(localized: "Close as completed")) {
@@ -412,9 +444,14 @@ struct IssueDetailPanel: View {
                 }
             } label: {
                 Text(String(localized: "Close"))
+                    .frame(maxWidth: .infinity)
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
+            // Same reason as ``labelMenu(_:)``: `.button` runs the label through
+            // ``SecondaryButtonStyle``, which is what lets ``View/busy(_:)`` show a spinner here
+            // instead of the inline opacity/overlay trick a borderless menu needed.
+            .menuStyle(.button)
+            .buttonStyle(SecondaryButtonStyle())
+            .modifier(issueWrite(row, .issueState))
         }
     }
 
@@ -441,13 +478,72 @@ struct IssueDetailPanel: View {
         if queued {
             environment.toasts.success(success)
         } else {
-            environment.toasts.show(
-                Toast(
-                    message: String(localized: "Could not queue that — nothing was sent."),
-                    kind: .failure
-                )
-            )
+            reportQueueFailure()
         }
+    }
+
+    /// The sentence every refused issue write says.
+    ///
+    /// Its own method because one of them has no success half to pair with: the handover comment
+    /// is queued by the delegation starting rather than by a click, so there is nothing to
+    /// confirm — only something to say when it did not happen.
+    private func reportQueueFailure() {
+        environment.toasts.show(
+            Toast(
+                message: String(localized: "Could not queue that — nothing was sent."),
+                kind: .failure
+            )
+        )
+    }
+
+    /// The four verbs this panel can write, which is what the row's buttons go quiet on
+    /// together.
+    private static let issueWrites: [ActionActivity.Kind] = [
+        .issueComment, .issueAssign, .issueLabel, .issueState,
+    ]
+
+    /// Whether *this verb* is on its way to the outbox for this issue — the spinner's question.
+    /// - Parameters:
+    ///   - row: The issue.
+    ///   - kind: Which verb.
+    /// - Returns: `true` while that write runs.
+    private func isWriting(_ row: IssueRowSummary, _ kind: ActionActivity.Kind) -> Bool {
+        environment.activity.isRunning(row.id, kind)
+    }
+
+    /// Whether *any* of the four is on its way — the disable's question.
+    ///
+    /// Only the button that started the write spins, so the reviewer can see which one they
+    /// pressed; all six stop answering, because an issue write is re-validated against the
+    /// `updatedAt` the write in flight is about to move (ADR 0032).
+    /// - Parameter row: The issue.
+    /// - Returns: `true` while any triage write runs.
+    private func isWritingAnything(_ row: IssueRowSummary) -> Bool {
+        environment.activity.isRunningAny(row.id, Self.issueWrites)
+    }
+
+    /// What every triage button on this panel wears: its own spinner, and the whole row's writes
+    /// locking each other out.
+    ///
+    /// The pair was written by hand six times, and the pair is the rule — one button spins so the
+    /// reviewer can see which one they pressed, all six go quiet because the write in flight is
+    /// about to move the `updatedAt` the others would be re-validated against. Two lines that
+    /// have to stay together are better as one call than as six chances to keep only the first.
+    /// - Parameters:
+    ///   - row: The issue the button acts on.
+    ///   - kind: Which verb this button writes, so only its own spinner turns.
+    ///   - extra: A further reason this button is dark — already assigned, already closed. It is
+    ///     ORed with the row's writes, never instead of them.
+    /// - Returns: The modifier to apply to the button.
+    private func issueWrite(
+        _ row: IssueRowSummary,
+        _ kind: ActionActivity.Kind,
+        alsoDisabledWhen extra: Bool = false
+    ) -> IssueWriteModifier {
+        IssueWriteModifier(
+            isBusy: isWriting(row, kind),
+            isDisabled: extra || isWritingAnything(row)
+        )
     }
 
     /// The node id of a linked pull request that is in the local inbox, or `nil`.
@@ -477,6 +573,24 @@ struct IssueDetailPanel: View {
                 number: reference.number
             )
         )
+    }
+}
+
+/// ``IssueDetailPanel/issueWrite(_:_:alsoDisabledWhen:)``'s two modifiers, as one.
+///
+/// A ``ViewModifier`` rather than a `View` extension because the two values it needs come off the
+/// panel — the activity tracker it reads lives in the environment — and a `View` extension cannot
+/// ask the panel anything.
+private struct IssueWriteModifier: ViewModifier {
+    /// Whether *this* button's own write is in flight.
+    let isBusy: Bool
+    /// Whether this button is dark: any of the row's writes, plus the caller's own reason.
+    let isDisabled: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .busy(isBusy)
+            .disabled(isDisabled)
     }
 }
 

@@ -31,14 +31,22 @@ struct InboxScreen: View {
     /// preference, and travelling between a user's Macs it would only ever arrive wrong
     /// (ADR 0014's obligation applies to settings, and this is UI state).
     @SceneStorage("inbox.contentKind") private var contentKind: ContentKind = .pullRequests
+    /// The pull-request rail — smart view, facets, cursor — remembered per window.
+    ///
+    /// ``contentKind``'s reason, one level down (ADR 0013): this screen is rebuilt whenever the
+    /// route changes, and `InboxModel` is `@State` here, so a trip to the review screen and back
+    /// used to hand the reader a rail they had not set. It is a JSON string rather than the value
+    /// because `@SceneStorage` holds what a property list can hold; ``InboxModel/RailState`` is
+    /// the value, and it is `Codable` for exactly this.
+    ///
+    /// Not in ``AppSettings`` either, and for ``contentKind``'s second reason: which pull requests
+    /// a window happens to be showing is not a preference, and it would only ever arrive wrong on
+    /// another Mac (ADR 0014).
+    @SceneStorage("inbox.rail") private var railStateJSON = ""
     @State private var isMergeSheetPresented = false
-    @State private var isSettingsPresented = false
     /// Whether the bulk-triage confirmation is up, and what it is confirming (ADR 0015).
     @State private var isBulkSheetPresented = false
     @State private var bulkAction: BulkTriageAction = .approve
-    /// Which tab the Settings sheet opens on — the rail opens Account, a
-    /// `shepherd://settings/<tab>` link opens the tab it names (ADR 0013).
-    @State private var settingsTab: SettingsDeepLinkTab = .account
 
     /// Creates the screen for a session.
     /// - Parameters:
@@ -107,11 +115,19 @@ struct InboxScreen: View {
             // question only — whether to offer the backfill — and the count it asks is refreshed
             // below (ADR 0027's 2026-09-05 amendment).
             model.trackRecordCoordinator = environment.trackRecord
+            // Before the observation and after the three handovers above: the rows arrive from
+            // `startObserving()`, and the restored cursor has to be in place by then or the first
+            // value would clamp it onto the top row (ADR 0013).
+            restoreRail()
             model.startObserving()
             // Handed over here rather than at construction, for `model.intelligence`'s reason:
             // the screen is rebuilt whenever the route changes, and a queued write has to reach
             // the sync engine that outlives it.
             issueModel.drain = { [session] in await session.drainOutbox() }
+            // And the tracker the panel's triage buttons read, handed over here for the same
+            // reason: the screen is rebuilt whenever the route changes, and the button that has
+            // to go quiet is watching an object that outlives it.
+            issueModel.activity = environment.activity
             issueModel.startObserving()
             // A deep link raised while the review screen was showing routes here first; the
             // request is waiting in the container by the time this screen appears.
@@ -147,10 +163,19 @@ struct InboxScreen: View {
             environment.clearPendingAction()
             perform(pending.action)
         }
-        .onChange(of: environment.pendingInboxFilter) { _, _ in
-            consumeDeepLinkRequests()
+        // What ⌘K's review commands act on. `initial: true` because the cursor is already on a
+        // row by the time this screen is built, and a palette opened before the first `j` would
+        // otherwise show none of them.
+        .onChange(of: model.selectedRow, initial: true) { _, row in
+            environment.selectedPullRequest = row
         }
-        .onChange(of: environment.pendingSettingsTab) { _, _ in
+        // Every move of the rail, written down for the next rebuild (ADR 0013). `RailState` is
+        // `Equatable`, so this is silent while the reader is doing anything else — including the
+        // restore above, which sets the value it just read.
+        .onChange(of: model.railState) { _, state in
+            storeRail(state)
+        }
+        .onChange(of: environment.pendingInboxFilter) { _, _ in
             consumeDeepLinkRequests()
         }
         .onChange(of: environment.pendingIssueSelection) { _, _ in
@@ -158,7 +183,12 @@ struct InboxScreen: View {
         }
         .sheet(isPresented: $isMergeSheetPresented) {
             if let summary = model.selectedRow {
-                MergeSheet(summary: summary, actions: actions, settings: environment.settings)
+                MergeSheet(
+                    summary: summary,
+                    checkState: summary.checkRollup?.state,
+                    actions: actions,
+                    settings: environment.settings
+                )
             }
         }
         .sheet(isPresented: $isBulkSheetPresented) {
@@ -170,12 +200,6 @@ struct InboxScreen: View {
                 settings: environment.settings,
                 onQueued: { [model] in model.clearMarks() }
             )
-        }
-        .sheet(isPresented: $isSettingsPresented) {
-            SettingsView(initialTab: settingsTab)
-                .environment(environment)
-                .frame(width: 620, height: 460)
-                .id(settingsTab)
         }
         // The end of a focus session, on the screen the session returns to. Here
         // rather than on the review screen because ``AppEnvironment/endReviewSession(announcing:)``
@@ -210,9 +234,12 @@ struct InboxScreen: View {
             ContentKindPicker(selection: $contentKind)
             switch contentKind {
             case .pullRequests:
-                InboxSidebar(model: model, onOpenSettings: { openSettings(.account) })
+                InboxSidebar(model: model, onOpenSettings: { environment.showSettings(.account) })
             case .issues:
-                IssueSidebar(model: issueModel, onOpenSettings: { openSettings(.account) })
+                IssueSidebar(
+                    model: issueModel,
+                    onOpenSettings: { environment.showSettings(.account) }
+                )
             }
         }
         .background(Theme.panel)
@@ -222,9 +249,19 @@ struct InboxScreen: View {
     private var centre: some View {
         switch contentKind {
         case .pullRequests:
-            InboxListView(model: model, onOpen: open)
+            // The palette is an overlay in `RootView`, not a sheet, so nothing takes the
+            // keyboard away from this list by itself: while ⌘K is up, every letter the reader
+            // types would otherwise also be a list shortcut.
+            InboxListView(
+                model: model,
+                onOpen: open,
+                isKeyboardOwner: !environment.isCommandPaletteVisible
+            )
         case .issues:
-            IssueListView(model: issueModel)
+            IssueListView(
+                model: issueModel,
+                isKeyboardOwner: !environment.isCommandPaletteVisible
+            )
         }
     }
 
@@ -240,6 +277,34 @@ struct InboxScreen: View {
             )
         case .issues:
             IssueDetailPanel(model: issueModel)
+        }
+    }
+
+    /// Puts back the rail this window was on before the screen was rebuilt (ADR 0013).
+    private func restoreRail() {
+        let data = Data(railStateJSON.utf8)
+        guard !data.isEmpty else { return }
+        do {
+            model.restore(try JSONDecoder().decode(InboxModel.RailState.self, from: data))
+        } catch {
+            // The one failure this screen is allowed to swallow, and it is not a failure of
+            // anything the reader did: a scene-storage string that will not decode is one an
+            // older build wrote, and the only thing it can mean is "no rail to restore". There is
+            // nothing to report and nothing to retry — the defaults are a correct inbox.
+        }
+    }
+
+    /// Writes the rail down for the next rebuild (ADR 0013).
+    /// - Parameter state: The rail as it now stands.
+    private func storeRail(_ state: InboxModel.RailState) {
+        do {
+            railStateJSON = String(decoding: try JSONEncoder().encode(state), as: UTF8.self)
+        } catch {
+            // ``InboxModel/RailState`` is plain `Codable` value types all the way down, so
+            // there is nothing in it that can fail to encode — and if something somehow did,
+            // there would be nothing to tell the reader: nothing they did has failed, and the
+            // next move of the rail writes again. ``restoreRail()``'s argument, from the other
+            // side.
         }
     }
 
@@ -259,15 +324,6 @@ struct InboxScreen: View {
             contentKind = .issues
             issueModel.reveal(issueID: pending.value)
         }
-        if let pending = environment.pendingSettingsTab {
-            environment.clearPendingSettingsTab()
-            openSettings(pending.value)
-        }
-    }
-
-    private func openSettings(_ tab: SettingsDeepLinkTab) {
-        settingsTab = tab
-        isSettingsPresented = true
     }
 
     /// Hands one digest section over to the inbox.
@@ -300,7 +356,7 @@ struct InboxScreen: View {
         case .parkedReviews, .failedWrites:
             // Not an inbox filter at all: both are outbox rows, and Settings → Sync is where they
             // are counted and explained — and, for the failed ones, retried or discarded.
-            openSettings(.sync)
+            environment.showSettings(.sync)
         }
     }
 
@@ -333,14 +389,14 @@ struct InboxScreen: View {
                 Button(String(localized: "Clear the selection")) { model.clearMarks() }
                     .disabled(!model.hasMarks)
             } label: {
-                Label(
-                    model.hasMarks
-                        ? String(localized: "Triage \(model.markedIDs.count) selected")
-                        : String(localized: "Bulk triage"),
-                    systemImage: "checklist"
-                )
+                Label(bulkTriageTitle, systemImage: "checklist")
             }
             .help(String(localized: "Bulk triage: approve or merge the selected pull requests"))
+            // A toolbar menu draws the symbol alone and hands the symbol's *name* to
+            // accessibility with it: VoiceOver read this button out as "checklist"
+            // (2026-09-09 live test). What it should hear is the title the button would show if
+            // it showed one — including the count, once rows are ticked.
+            .accessibilityLabel(Text(bulkTriageTitle))
 
             Button {
                 Task { await environment.syncNow() }
@@ -359,10 +415,22 @@ struct InboxScreen: View {
         }
     }
 
+    /// What the bulk-triage menu is called: on screen if it ever draws its title, and to
+    /// VoiceOver, which is the only place it is ever actually read.
+    private var bulkTriageTitle: String {
+        model.hasMarks
+            ? String(localized: "Triage \(model.markedIDs.count) selected")
+            : String(localized: "Bulk triage")
+    }
+
     // MARK: - Actions
 
     private var actions: PullRequestActions {
-        PullRequestActions(session: session, toasts: environment.toasts)
+        PullRequestActions(
+            session: session,
+            toasts: environment.toasts,
+            activity: environment.activity
+        )
     }
 
     private func open(_ prID: String) {
@@ -489,11 +557,16 @@ struct InboxScreen: View {
 struct SyncStatusView: View {
     /// The active session.
     let session: SignedInSession
+    /// Needed only so the failed-writes text below can act as a button to Settings → Sync.
+    @Environment(AppEnvironment.self) private var environment
 
     var body: some View {
         HStack(spacing: 6) {
             Circle()
-                .fill(session.lastSyncError == nil ? Theme.success : Theme.failure)
+                // Failure outranks the merely-parked state, and a failed write is a failure even
+                // while a *different* sync attempt is still succeeding — the dot has to say the
+                // worst true thing, not just the most recent one.
+                .fill(dotColor)
                 .frame(width: 6, height: 6)
             if session.isSyncing {
                 Text(String(localized: "Syncing…"))
@@ -505,7 +578,9 @@ struct SyncStatusView: View {
                     Text(String(localized: "Synced"))
                     RelativeDateText(date: date)
                 }
-            } else {
+            } else if session.failedOutboxCount == 0 {
+                // "Not synced yet" would be a lie once there are failed writes on record — those
+                // came from a sync that did happen.
                 Text(String(localized: "Not synced yet"))
             }
             // Parked mutations do not drain by themselves (ADR 0006), so the title bar says so
@@ -524,11 +599,20 @@ struct SyncStatusView: View {
             // (ADR 0032); this is the same sentence about the account.
             if session.failedOutboxCount > 0 {
                 Text(verbatim: "·")
-                Text(String(localized: "\(session.failedOutboxCount) failed — see Settings → Sync"))
-                    .foregroundStyle(Theme.failure)
-                    .help(String(
-                        localized: "Queued writes Shepherd gave up on: GitHub refused them, or they could not be made at all. They are never retried by themselves — Settings → Sync lists each one and offers Retry or Discard."
-                    ))
+                // A status line that names the fix but does not let you take it is a dead end —
+                // Settings → Sync is one click away everywhere else this count is mentioned
+                // (the toolbar menu at `.failedWrites` above), so the title bar should not be the
+                // one place you have to go find it yourself.
+                Button {
+                    environment.showSettings(.sync)
+                } label: {
+                    Text(String(localized: "\(session.failedOutboxCount) failed — see Settings → Sync"))
+                        .foregroundStyle(Theme.failure)
+                }
+                .buttonStyle(.plain)
+                .help(String(
+                    localized: "Queued writes Shepherd gave up on: GitHub refused them, or they could not be made at all. They are never retried by themselves — Settings → Sync lists each one and offers Retry or Discard."
+                ))
             }
         }
         .font(.system(size: 11))
@@ -540,5 +624,17 @@ struct SyncStatusView: View {
         // text off the capsule's rim, which is drawn tight around the item.
         .fixedSize(horizontal: true, vertical: false)
         .padding(.horizontal, 4)
+    }
+
+    /// The worst true state wins: a failed write outranks "synced fine a moment ago", and a
+    /// merely parked (conflicted) write outranks a clean success but not a failure.
+    private var dotColor: Color {
+        if session.lastSyncError != nil || session.failedOutboxCount > 0 {
+            Theme.failure
+        } else if session.conflictedOutboxCount > 0 {
+            Theme.pending
+        } else {
+            Theme.success
+        }
     }
 }

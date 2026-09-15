@@ -55,6 +55,13 @@ struct EmptyStateView: View {
     var title: String
     /// An optional second line.
     var message: String?
+    /// An optional way out of the state: one button under the message.
+    ///
+    /// Optional, and last, so every existing call site compiles unchanged. It exists because not
+    /// every empty state is a fact to be read: a detail fetch that failed and a file list GitHub
+    /// has not sent yet are both *recoverable*, and describing a fixable problem without offering
+    /// the fix leaves the reviewer hunting for the refresh key.
+    var action: (title: String, run: () -> Void)?
 
     var body: some View {
         VStack(spacing: 8) {
@@ -70,6 +77,11 @@ struct EmptyStateView: View {
                     .foregroundStyle(Theme.textMuted)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+            if let action {
+                Button(action.title, action: action.run)
+                    .buttonStyle(SecondaryButtonStyle())
+                    .padding(.top, 4)
             }
         }
         .frame(maxWidth: 320)
@@ -163,18 +175,101 @@ struct ComposerTextEditor: View {
 
 // MARK: - Buttons
 
+/// Whether the control this environment reaches is running its own write.
+///
+/// An environment value rather than a parameter on each style, because the thing that knows is
+/// the *call site* — it holds the ``ActionActivity`` key — and the thing that draws is the style.
+/// Set it with ``SwiftUI/View/busy(_:)``.
+private struct ButtonIsBusyKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Whether the control is running its own write, so the style can put a spinner in its label.
+    var buttonIsBusy: Bool {
+        get { self[ButtonIsBusyKey.self] }
+        set { self[ButtonIsBusyKey.self] = newValue }
+    }
+}
+
+extension View {
+    /// Marks this control as running its own write: its label becomes a spinner, and it stops
+    /// answering clicks and its keyboard shortcut.
+    ///
+    /// The presentation lives in the three button styles below rather than in a wrapper around
+    /// the label, and that is not a detail: each of them ends with `.opacity(isEnabled ? 1 :
+    /// 0.45)` over the whole label, so a spinner *inside* the label was drawn at 45 % — always,
+    /// because the same flag that raised it had already disabled the button. Read where the dim
+    /// is decided, the two rules compose: a busy button is not a dimmed button.
+    ///
+    /// The disable is part of the modifier on purpose. `.disabled` is what takes a
+    /// `.keyboardShortcut` with it, and ⌘⏎ or ⏎ held down is the fastest way to ask for the same
+    /// write twice — so "shows it is running" and "refuses a second press" cannot come apart.
+    /// - Parameter isBusy: Whether this control's own write is in flight.
+    /// - Returns: The control, spinning and inert while `isBusy`.
+    func busy(_ isBusy: Bool) -> some View {
+        environment(\.buttonIsBusy, isBusy)
+            .disabled(isBusy)
+    }
+}
+
+extension View {
+    /// This label, while its control is busy: held in place at zero opacity with a spinner over
+    /// it, so the button keeps its width and a row of them does not reflow.
+    ///
+    /// The three styles below draw it, and so does the one write button in the app that is on
+    /// `.plain` rather than on a style — the file list's *Mark viewed*, which ``View/busy(_:)``
+    /// cannot reach because the modifier's presentation lives in the styles. That button used to
+    /// hand-roll this pair of modifiers, which is two chances for the app's spinners to stop
+    /// agreeing about what "running" looks like.
+    /// - Parameters:
+    ///   - isBusy: Whether to show the spinner instead.
+    ///   - tint: The spinner's colour, normally the caller's own text colour so it reads on the
+    ///     fill. `nil` leaves the spinner on whatever tint it inherits, which is what a control
+    ///     outside the three styles wants.
+    /// - Returns: The label, or the spinner in its place.
+    @ViewBuilder
+    func busyLabel(isBusy: Bool, tint: Color? = nil) -> some View {
+        opacity(isBusy ? 0 : 1)
+            .overlay {
+                if isBusy {
+                    if let tint {
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(tint)
+                    } else {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                }
+            }
+    }
+}
+
 /// The filled accent button.
 struct PrimaryButtonStyle: ButtonStyle {
+    /// The control height.
+    var height: CGFloat = 32
+
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.buttonIsBusy) private var isBusy
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 12.5, weight: .semibold))
             .foregroundStyle(Color.white)
+            // The style's own text colour, not ``Theme/textOnFilled``: this fill is the accent
+            // and its label is white on both appearances.
+            .busyLabel(isBusy: isBusy, tint: Color.white)
             .padding(.horizontal, 12)
-            .frame(height: 32)
+            .frame(height: height)
             .background(
                 Theme.accent.opacity(configuration.isPressed ? 0.8 : 1),
                 in: RoundedRectangle(cornerRadius: 7, style: .continuous)
             )
+            // A busy button is disabled but not dimmed — the spinner is the message, and a
+            // spinner at 45 % is the bug this arrangement exists to prevent.
+            .opacity(isEnabled || isBusy ? 1 : 0.45)
     }
 }
 
@@ -183,16 +278,21 @@ struct SuccessButtonStyle: ButtonStyle {
     /// The control height.
     var height: CGFloat = 32
 
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.buttonIsBusy) private var isBusy
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 12.5, weight: .semibold))
             .foregroundStyle(Theme.textOnFilled)
+            .busyLabel(isBusy: isBusy, tint: Theme.textOnFilled)
             .padding(.horizontal, 12)
             .frame(height: height)
             .background(
                 Theme.success.opacity(configuration.isPressed ? 0.8 : 1),
                 in: RoundedRectangle(cornerRadius: 7, style: .continuous)
             )
+            .opacity(isEnabled || isBusy ? 1 : 0.45)
     }
 }
 
@@ -203,10 +303,14 @@ struct SecondaryButtonStyle: ButtonStyle {
     /// An optional label tint (used for the red "Request changes").
     var tint: Color?
 
+    @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.buttonIsBusy) private var isBusy
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 12.5, weight: .medium))
             .foregroundStyle(tint ?? Theme.text)
+            .busyLabel(isBusy: isBusy, tint: tint ?? Theme.text)
             .padding(.horizontal, 12)
             .frame(height: height)
             .background(
@@ -217,6 +321,7 @@ struct SecondaryButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .stroke(Theme.controlBorder, lineWidth: 1)
             )
+            .opacity(isEnabled || isBusy ? 1 : 0.45)
     }
 }
 

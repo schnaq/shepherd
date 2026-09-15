@@ -123,13 +123,27 @@ final class SettingsModel {
     }
 
     /// Removes one override.
+    ///
+    /// It used to be `try?`: a delete the database refused left the entry on screen and said
+    /// nothing at all, so the only way to find out was to press *Remove* again and watch it not
+    /// work. The answer is shaped like ``addOverride(session:)``'s — the tab owns the line the
+    /// message is drawn on, and the same line serves both halves of the card.
+    ///
+    /// The re-read below keeps its `?? overrides`, and that is not the same thing: it is a
+    /// *read* falling back to what is already on screen, after the write has been reported.
     /// - Parameters:
     ///   - id: The entry's id.
     ///   - session: The signed-in session.
-    func removeOverride(id: String, session: SignedInSession?) async {
-        guard let session else { return }
-        try? await session.database.deleteAgentRegistryOverride(id: id)
+    /// - Returns: An error message when the entry could not be removed, `nil` when it was.
+    func removeOverride(id: String, session: SignedInSession?) async -> String? {
+        guard let session else { return String(localized: "Sign in first.") }
+        do {
+            try await session.database.deleteAgentRegistryOverride(id: id)
+        } catch {
+            return error.userFacingDescription
+        }
         overrides = (try? await session.database.agentRegistryOverrides()) ?? overrides
+        return nil
     }
 
     private static func split(_ text: String) -> [String] {

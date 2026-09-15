@@ -69,6 +69,14 @@ struct CommandPaletteView: View {
     @Environment(AppEnvironment.self) private var environment
     /// The active session.
     let session: SignedInSession
+    /// The pull request the visible screen's cursor is on, if any
+    /// (``AppEnvironment/selectedPullRequest``).
+    ///
+    /// Every review command below acts on it, so with nothing selected they are left out rather
+    /// than listed and ignored — and the two GitHub would refuse (an approve on your own pull
+    /// request, a merge of a draft) are left out even when there is one, because the palette is
+    /// the one surface where a command cannot be greyed out with an explanation attached.
+    let selectedRow: PullRequestSummary?
 
     @State private var query = ""
     @State private var selectionIndex = 0
@@ -129,6 +137,10 @@ struct CommandPaletteView: View {
                 .stroke(Theme.controlBorder, lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.55), radius: 32, y: 18)
+        // The palette is an overlay in `RootView`, not a sheet: the inbox list underneath it is
+        // still in the window and was holding focus when ⌘K was pressed. This is what makes the
+        // field the focused thing on arrival rather than the thing the reader has to click.
+        .defaultFocus($isFieldFocused, true)
     }
 
     private var field: some View {
@@ -143,11 +155,34 @@ struct CommandPaletteView: View {
                 .focused($isFieldFocused)
                 .onSubmit { runSelected() }
                 .onChange(of: query) { _, _ in selectionIndex = 0 }
+                // Escape and the arrows on the field itself, because a focused single-line
+                // `TextField` swallows all three before the container's handler above ever sees
+                // them — which is why the palette used to need a click on the dimmed background
+                // to go away, and why ↓ moved the caret instead of the selection. The container
+                // keeps its own copies: they are what answers the keys before anything is
+                // focused. Field and container call the same two methods, so there is one
+                // behaviour with two doors into it.
+                .onKeyPress(.escape) {
+                    close()
+                    return .handled
+                }
+                .onKeyPress(.downArrow) {
+                    move(by: 1)
+                    return .handled
+                }
+                .onKeyPress(.upArrow) {
+                    move(by: -1)
+                    return .handled
+                }
             KeyCapView(keys: "esc")
         }
         .padding(.horizontal, 16)
         .frame(height: 46)
         .onAppear { isFieldFocused = true }
+        // And once more a frame or two later: the list underneath is giving focus up in this same
+        // update, and on the pass where it wins the race the ask above is lost
+        // (``View/reassertingFocus(_:when:after:)``).
+        .reassertingFocus($isFieldFocused, when: true)
         // `task(id:)` is the debounce: a keystroke cancels the previous ranking and starts a new
         // one. Everything it does is local — the corpus and the vectors are already in memory,
         // and the query's own embedding is an on-device call — so there is nothing to throttle
@@ -503,71 +538,79 @@ struct CommandPaletteView: View {
                 }
             )
         }
-        result.append(
-            PaletteCommand(
-                id: "approve",
-                section: review,
-                title: String(localized: "Approve pull request"),
-                systemImage: "checkmark.circle",
-                keyHint: "r a"
-            ) {
-                environment.request(.approve)
+        if let selectedRow {
+            if selectedRow.verdictBlocker == nil {
+                result.append(
+                    PaletteCommand(
+                        id: "approve",
+                        section: review,
+                        title: String(localized: "Approve pull request"),
+                        systemImage: "checkmark.circle",
+                        keyHint: "r a"
+                    ) {
+                        environment.request(.approve)
+                    }
+                )
+                result.append(
+                    PaletteCommand(
+                        id: "request-changes",
+                        section: review,
+                        title: String(localized: "Request changes"),
+                        systemImage: "exclamationmark.circle",
+                        keyHint: "r x"
+                    ) {
+                        environment.request(.requestChanges)
+                    }
+                )
             }
-        )
-        result.append(
-            PaletteCommand(
-                id: "request-changes",
-                section: review,
-                title: String(localized: "Request changes"),
-                systemImage: "exclamationmark.circle",
-                keyHint: "r x"
-            ) {
-                environment.request(.requestChanges)
+            // Not gated by ``ReviewActionBlocker``: a plain `COMMENT` review is the one verdict
+            // GitHub accepts on your own pull request, so this stays where an approve cannot.
+            result.append(
+                PaletteCommand(
+                    id: "comment",
+                    section: review,
+                    title: String(localized: "Comment on pull request"),
+                    systemImage: "bubble.left",
+                    keyHint: "r c"
+                ) {
+                    environment.request(.comment)
+                }
+            )
+            if selectedRow.mergeBlocker == nil {
+                result.append(
+                    PaletteCommand(
+                        id: "merge",
+                        section: review,
+                        title: String(localized: "Merge pull request…"),
+                        systemImage: "arrow.triangle.merge",
+                        keyHint: "m"
+                    ) {
+                        environment.request(.merge)
+                    }
+                )
             }
-        )
-        result.append(
-            PaletteCommand(
-                id: "comment",
-                section: review,
-                title: String(localized: "Comment on pull request"),
-                systemImage: "bubble.left",
-                keyHint: "r c"
-            ) {
-                environment.request(.comment)
-            }
-        )
-        result.append(
-            PaletteCommand(
-                id: "merge",
-                section: review,
-                title: String(localized: "Merge pull request…"),
-                systemImage: "arrow.triangle.merge",
-                keyHint: "m"
-            ) {
-                environment.request(.merge)
-            }
-        )
-        result.append(
-            PaletteCommand(
-                id: "delegate",
-                section: review,
-                title: String(localized: "Delegate to agent"),
-                systemImage: "arrow.uturn.backward.badge.clock"
-            ) {
-                environment.request(.delegate)
-            }
-        )
-        result.append(
-            PaletteCommand(
-                id: "open-selection",
-                section: review,
-                title: String(localized: "Open full review"),
-                systemImage: "arrow.right.circle",
-                keyHint: "⏎"
-            ) {
-                environment.request(.openSelection)
-            }
-        )
+            result.append(
+                PaletteCommand(
+                    id: "delegate",
+                    section: review,
+                    title: String(localized: "Delegate to agent"),
+                    systemImage: "arrow.uturn.backward.badge.clock"
+                ) {
+                    environment.request(.delegate)
+                }
+            )
+            result.append(
+                PaletteCommand(
+                    id: "open-selection",
+                    section: review,
+                    title: String(localized: "Open full review"),
+                    systemImage: "arrow.right.circle",
+                    keyHint: "⏎"
+                ) {
+                    environment.request(.openSelection)
+                }
+            )
+        }
         return result
     }
 

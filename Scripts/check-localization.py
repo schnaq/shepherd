@@ -113,6 +113,7 @@ INTEGER_EXPRESSIONS = frozenset(
         "agent.openAwaitingReviewCount",
         "agent.openCount",
         "checks.count - 6",
+        "claimed",
         "configuration.maxChangedLines",
         "configuration.maxFiles",
         "configuration.maxTurns",

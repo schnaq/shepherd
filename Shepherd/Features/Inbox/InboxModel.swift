@@ -61,7 +61,13 @@ enum SmartView: String, CaseIterable, Identifiable, Sendable {
 }
 
 /// Which provenance facet the rail has selected.
-enum ProvenanceFilter: Hashable, Sendable {
+///
+/// `Codable` for one caller: ``InboxModel/RailState`` writes the rail into scene storage so it
+/// survives the screen being rebuilt (ADR 0013). The synthesized shape is nobody's contract — it
+/// is read back only by the build that wrote it, and a string that will not decode simply means
+/// "no rail to restore" — which is why it is synthesized rather than spelled out a second time
+/// beside ``InboxDeepLinkFilter``'s token vocabulary.
+enum ProvenanceFilter: Hashable, Sendable, Codable {
     /// One detected agent.
     case agent(id: String)
     /// Generic bot accounts.
@@ -548,11 +554,29 @@ final class InboxModel {
     }
 
     /// The grouped sections, ordered by the user's sort choice.
+    ///
+    /// The title is remapped here, not in ``InboxGrouper``: that lives in ShepherdCore, which
+    /// imports Foundation only and cannot call `String(localized:)`, so its provenance section
+    /// title is deliberately plain, stable English ("People"). This maps that one section onto
+    /// the same "Humans" key the rail already uses, so the list agrees with the rail instead of
+    /// showing GitHub-facing English where everything else on the section is German.
+    ///
+    /// The section is found by its `id`, not by its title: the id is the bucket key
+    /// ``InboxGrouper`` groups on — the literal `"human"` — and that is the contract between the
+    /// two. A title is display text, and display text is the one thing a remap has to be free to
+    /// change: matching on it means re-wording ShepherdCore's English quietly un-remaps this
+    /// section and puts "People" back on screen in a German list.
     var sections: [InboxSection] {
         InboxGrouper.group(filteredRows, by: settings.groupBy).map { section in
-            InboxSection(
+            let title: String
+            if section.facet == .provenance, section.id == "human" {
+                title = String(localized: "Humans")
+            } else {
+                title = section.title
+            }
+            return InboxSection(
                 id: section.id,
-                title: section.title,
+                title: title,
                 facet: section.facet,
                 items: order(section.items)
             )
@@ -1022,6 +1046,116 @@ final class InboxModel {
         laneFilter = nil
     }
 
+    // MARK: - Surviving a rebuild (ADR 0013)
+
+    /// The rail as one small value a `@SceneStorage` string can hold.
+    ///
+    /// The screen it belongs to is rebuilt whenever ``AppEnvironment/route`` changes (ADR 0013),
+    /// and this model goes with it: a trip to the review screen and back used to hand the reader a
+    /// rail they had not set — the smart view, the facets and the cursor all back at their
+    /// defaults. So the rail is written down somewhere the rebuild cannot reach, and this is the
+    /// sentence it is written in.
+    ///
+    /// Every facet is its own field, and deliberately **not** a `shepherd://inbox?filter=…` token.
+    /// The rail *composes*: the sidebar sets a smart view, a repository and a provenance
+    /// independently, and the risk and lane facets narrow whatever those three say. The link
+    /// grammar does not compose — it has one token for one smart view *or* one facet, and a facet
+    /// token widens the view to "Involved" (``InboxRailSelection``). So the ordinary rail "Needs
+    /// my review, in this repository" has no token at all, and a token would have restored it as a
+    /// rail the reader never set. A vocabulary for addressing an inbox from outside is not a
+    /// vocabulary for remembering one from inside.
+    ///
+    /// A pure value for ``InboxRailSelection``'s reason: it is testable without a session, and the
+    /// model only reads it and assigns it.
+    struct RailState: Codable, Equatable {
+        /// ``SmartView``'s raw value, as a string rather than the enum: a rail written by a build
+        /// whose sidebar has a fifth smart view is still a rail this build can read the rest of.
+        var smartView: String
+        /// The provenance facet, if any.
+        var provenance: ProvenanceFilter?
+        /// The repository facet, if any.
+        var repo: RepoRef?
+        /// The risk facet's ``TriageVerdict/Risk`` raw value (ADR 0023).
+        var risk: String?
+        /// The trust lane's ``TrustLane`` raw value (ADR 0027).
+        var lane: String?
+        /// The keyboard cursor's pull-request id.
+        var selectedID: String?
+
+        /// Writes a rail down.
+        /// - Parameters:
+        ///   - smartView: The selected smart view.
+        ///   - provenanceFilter: The provenance facet, if any.
+        ///   - repoFilter: The repository facet, if any.
+        ///   - riskFilter: The risk facet, if any.
+        ///   - laneFilter: The trust lane, if any.
+        ///   - selectedID: The keyboard cursor.
+        init(
+            smartView: SmartView,
+            provenanceFilter: ProvenanceFilter?,
+            repoFilter: RepoRef?,
+            riskFilter: TriageVerdict.Risk?,
+            laneFilter: TrustLane?,
+            selectedID: String?
+        ) {
+            self.smartView = smartView.rawValue
+            provenance = provenanceFilter
+            repo = repoFilter
+            risk = riskFilter?.rawValue
+            lane = laneFilter?.rawValue
+            self.selectedID = selectedID
+        }
+
+        /// The smart view the rail was on.
+        ///
+        /// A raw value this build does not know falls back to the rail's own default rather than
+        /// to nothing, because there is no such thing as an inbox with no smart view selected.
+        var view: SmartView { SmartView(rawValue: smartView) ?? .needsMyReview }
+
+        /// The risk facet the rail had, if the stored raw value is one this build knows.
+        var riskFacet: TriageVerdict.Risk? { risk.flatMap(TriageVerdict.Risk.init(rawValue:)) }
+
+        /// The trust lane the rail had, if the stored raw value is one this build knows.
+        var laneFacet: TrustLane? { lane.flatMap(TrustLane.init(rawValue:)) }
+    }
+
+    /// The rail as the screen stores it between rebuilds (ADR 0013).
+    var railState: RailState {
+        RailState(
+            smartView: smartView,
+            provenanceFilter: provenanceFilter,
+            repoFilter: repoFilter,
+            riskFilter: riskFilter,
+            laneFilter: laneFilter,
+            selectedID: selectedID
+        )
+    }
+
+    /// Puts a stored rail back, before the observation that fills the list starts (ADR 0013).
+    ///
+    /// Assigned facet by facet rather than routed through ``apply(_:)``: that method is the deep
+    /// link's, and a link is allowed to replace a rail — it clears the risk and lane facets and
+    /// widens the smart view — which is the opposite of what putting a rail back means.
+    ///
+    /// A raw value that does not parse is read as "not set" rather than as a failure: this is
+    /// scene storage written by some build of this app, and the worst it can be is out of date.
+    /// The smart view falls back to the rail's own default, because there is no such thing as an
+    /// inbox with no smart view selected.
+    ///
+    /// The cursor goes last. Every facet's `didSet` clamps the selection, and on a model whose
+    /// rows have not arrived yet that means dropping it. It goes through ``select(_:)`` rather
+    /// than an assignment, so the row the reader left the screen on is a *selection* — the one
+    /// ``clampSelection()`` keeps, and the one the detail panel loads for.
+    /// - Parameter state: The rail written down before the screen was rebuilt.
+    func restore(_ state: RailState) {
+        smartView = state.view
+        provenanceFilter = state.provenance
+        repoFilter = state.repo
+        riskFilter = state.riskFacet
+        laneFilter = state.laneFacet
+        select(state.selectedID)
+    }
+
     // MARK: - Selection
 
     /// Moves the selection by one row, wrapping at neither end.
@@ -1053,7 +1187,21 @@ final class InboxModel {
         // A tick on a row that has left the view — merged, filtered out, or on another smart
         // view — is dropped rather than carried invisibly into the next bulk action.
         marks.prune(to: rows.map(\.id))
-        if let selectedID, rows.contains(where: { $0.id == selectedID }) { return }
+        if let selectedID, rows.contains(where: { $0.id == selectedID }) {
+            // A cursor restored from scene storage (ADR 0013) points at a row whose detail nobody
+            // has asked for yet: ``restore(_:)`` runs before the rows arrive, so `loadDetail()`
+            // returned at its own guard — there was nothing to look the row up in — and this is
+            // the first moment both halves exist. Without it the reader comes back to their row
+            // beside an empty panel.
+            //
+            // `detailTask` is the exact question "has this model ever started a read", which is
+            // what makes this the restore path and only the restore path: the early return above
+            // leaves it nil, and every real ``select(_:)`` sets it for the model's lifetime. A
+            // read that is running, or one that failed and left the panel empty, is not started
+            // again by the next write to the inbox table.
+            if detailTask == nil { loadDetail() }
+            return
+        }
         select(rows.first?.id)
     }
 

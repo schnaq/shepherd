@@ -8,6 +8,12 @@ struct InboxListView: View {
     let model: InboxModel
     /// Opens the full review screen for a pull request.
     var onOpen: (String) -> Void
+    /// Whether the keyboard belongs to this list, or to something drawn over it (⌘K's palette).
+    ///
+    /// The palette is an overlay rather than a sheet or a window, so macOS does not take focus
+    /// away from the list for it. Without this the two are both listening: an `x` typed into the
+    /// search field also ticks the row under the cursor, and a `j` moves it.
+    let isKeyboardOwner: Bool
 
     @FocusState private var isListFocused: Bool
 
@@ -21,25 +27,40 @@ struct InboxListView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             ShortcutBar()
         }
-        .focusable()
+        .focusable(isKeyboardOwner)
         .focusEffectDisabled()
         .focused($isListFocused)
         .onKeyPress(phases: .down) { press in
-            handle(press)
+            // Both halves, because they answer different windows of time: not being focusable
+            // stops the *next* key from arriving here, and this stops the one already in flight.
+            guard isKeyboardOwner else { return .ignored }
+            return handle(press)
         }
         .onAppear { isListFocused = true }
+        // And back again when the palette closes. Nothing else would return focus — the list
+        // stopped being focusable while the palette was up, so `j` and `k` would be dead until
+        // the reader clicked a row. Why it takes a hop rather than a plain assignment is in
+        // ``View/reassertingFocus(_:when:after:)``.
+        .reassertingFocus($isListFocused, when: isKeyboardOwner)
     }
 
     // MARK: - Header
 
     private var header: some View {
         HStack(spacing: 10) {
+            // The smart view's name is what tells the reader which list they are in, so it wins
+            // the row's width: one line, and first claim on the space. At 1440 pt with both
+            // pickers on fixed frames, "Braucht mein Review" wrapped to two lines inside a 42 pt
+            // bar and the second line was clipped.
             Text(model.smartView.title)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.textStrong)
+                .lineLimit(1)
+                .layoutPriority(1)
             Text(String(localized: "\(model.filteredRows.count) pull requests"))
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.textMuted)
+                .lineLimit(1)
 
             if let filter = activeFilterLabel {
                 ChipView(text: filter, color: Theme.accentText)
@@ -101,8 +122,10 @@ struct InboxListView: View {
                 Text(String(localized: "Review state")).tag(InboxFacet.reviewState)
             }
             .pickerStyle(.menu)
-            .labelsHidden()
-            .frame(width: 140)
+            // Sized to its own label and selection rather than to a guessed width: a menu picker
+            // on a fixed frame takes that width whether it needs it or not, and the two of them
+            // together took enough of a 1440 pt window to wrap the title beside them.
+            .fixedSize()
             .help(String(localized: "Group the list (g a / g r / g s)"))
 
             Picker(String(localized: "Sort"), selection: sortBinding) {
@@ -111,8 +134,8 @@ struct InboxListView: View {
                 }
             }
             .pickerStyle(.menu)
-            .labelsHidden()
-            .frame(width: 160)
+            .fixedSize()
+            .help(String(localized: "Sort the list"))
         }
         .padding(.horizontal, 16)
         .frame(height: 42)
@@ -214,11 +237,19 @@ struct InboxListView: View {
         }
         Divider()
         Button(String(localized: "Open on GitHub")) {
-            PullRequestActions(session: model.session, toasts: environment.toasts)
+            PullRequestActions(
+                session: model.session,
+                toasts: environment.toasts,
+                activity: environment.activity
+            )
                 .openOnGitHub(row)
         }
         Button(String(localized: "Copy branch name")) {
-            PullRequestActions(session: model.session, toasts: environment.toasts)
+            PullRequestActions(
+                session: model.session,
+                toasts: environment.toasts,
+                activity: environment.activity
+            )
                 .copyBranch(row)
         }
         if model.hasMarks {
@@ -505,9 +536,18 @@ struct InboxRowView: View {
 
             CheckDotView(state: row.checkRollup?.state)
 
+            // One line, shortened in the middle, exactly as the sidebar shortens the same slug.
+            // Without the limit "swift-matter-examples #50" broke over three lines *inside* a
+            // 46 pt row at 1440 pt and squeezed the diffstat beside it into two (2026-09-09 live
+            // test). With it, the row has one truncation order at every width: the trailing
+            // columns never give way at all (they are fixed to their own size below), the title
+            // gives way last (priority 2), and the slug and the chips (priority 1) shorten before
+            // it — the slug in the middle, the title at the tail.
             Text("\(row.repo.name) #\(row.number)")
                 .font(Theme.mono(12))
                 .foregroundStyle(Theme.textMuted)
+                .lineLimit(1)
+                .truncationMode(.middle)
                 .layoutPriority(1)
 
             Text(row.title)
@@ -515,6 +555,9 @@ struct InboxRowView: View {
                 .foregroundStyle(isSelected ? Theme.textStrong : Theme.text)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                // The title is the one thing on the row a reviewer actually reads; every chip
+                // beside it is `1`, so a narrow window takes width from them first.
+                .layoutPriority(2)
 
             // The chip is tinted by the track record when there is one — that is ADR 0027's
             // "colours the provenance chip" — and keeps the agent palette's colour when there is
@@ -576,13 +619,21 @@ struct InboxRowView: View {
                     .layoutPriority(1)
             }
 
+            // The two trailing columns are numbers, and a number that wraps is unreadable:
+            // "+1.896 −117" came out as "+1 .8 96" / "−1 17" while the slug beside it was
+            // wrapping too. `fixedSize` is what keeps them out of the width fight altogether —
+            // the age's 52 pt frame stays outside it, so the column still lines up.
             DiffCountsView(additions: row.additions, deletions: row.deletions)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
                 .layoutPriority(1)
 
             RelativeDateText(date: row.updatedAt)
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textMuted)
-                .frame(width: 38, alignment: .trailing)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .frame(width: 52, alignment: .trailing)
                 .layoutPriority(1)
         }
         .padding(.horizontal, 16)
@@ -598,6 +649,12 @@ struct InboxRowView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(Text(accessibilityText))
+        // Stated rather than inherited. A combined element takes its role from what it contains,
+        // and the only button-shaped child a row has is the triage chip — so a row *without* a
+        // verdict came out as `AXUnknown` between neighbours that were `AXButton`s (2026-09-09
+        // live test), which is a list VoiceOver reads in two different voices. Every row does the
+        // same thing when it is activated, so every row says the same thing about itself.
+        .accessibilityAddTraits(.isButton)
     }
 
     /// The name the badge and its popover use for this row's author.
@@ -661,17 +718,37 @@ struct InboxRowView: View {
 
 /// The footer with the key hints from the mockup.
 struct ShortcutBar: View {
+    /// One key hint, and whether it survives in the compact set.
+    private struct Hint {
+        let keys: [String]
+        let label: String
+        /// The ones a reviewer reaches for on nearly every row (navigate, open, select) plus the
+        /// one escape hatch to everything else (⌘K) — not the ones used once per pull request
+        /// (approve, merge, session).
+        let isCompact: Bool
+    }
+
+    /// Every shortcut the list understands, in display order. `commands` is always last so the
+    /// row's trailing `Spacer` — inserted by ``hintRow(_:)`` — pins it to the far edge in both
+    /// the full and the compact set.
+    private static let hints: [Hint] = [
+        Hint(keys: ["j", "k"], label: String(localized: "navigate"), isCompact: true),
+        Hint(keys: ["⏎"], label: String(localized: "open review"), isCompact: true),
+        Hint(keys: ["r a"], label: String(localized: "approve"), isCompact: false),
+        Hint(keys: ["r x"], label: String(localized: "request changes"), isCompact: false),
+        Hint(keys: ["m"], label: String(localized: "merge"), isCompact: false),
+        Hint(keys: ["x"], label: String(localized: "select"), isCompact: true),
+        Hint(keys: ["r f"], label: String(localized: "session"), isCompact: false),
+        Hint(keys: ["⌘K"], label: String(localized: "commands"), isCompact: true),
+    ]
+
     var body: some View {
-        HStack(spacing: 14) {
-            ShortcutHintView(keys: ["j", "k"], label: String(localized: "navigate"))
-            ShortcutHintView(keys: ["⏎"], label: String(localized: "open review"))
-            ShortcutHintView(keys: ["r a"], label: String(localized: "approve"))
-            ShortcutHintView(keys: ["r x"], label: String(localized: "request changes"))
-            ShortcutHintView(keys: ["m"], label: String(localized: "merge"))
-            ShortcutHintView(keys: ["x"], label: String(localized: "select"))
-            ShortcutHintView(keys: ["r f"], label: String(localized: "session"))
-            Spacer(minLength: 0)
-            ShortcutHintView(keys: ["⌘K"], label: String(localized: "commands"))
+        // The bar has a fixed 34 pt height, so the full row wrapping to a second line would clip
+        // it rather than grow it — below the width the full row needs, the compact one (every
+        // `isCompact` hint) takes over instead of letting it wrap.
+        ViewThatFits(in: .horizontal) {
+            hintRow(Self.hints)
+            hintRow(Self.hints.filter(\.isCompact))
         }
         .padding(.horizontal, 16)
         .frame(height: 34)
@@ -680,5 +757,20 @@ struct ShortcutBar: View {
         .overlay(alignment: .top) {
             Rectangle().fill(Theme.border).frame(height: 1)
         }
+    }
+
+    /// One row of hints, with a `Spacer` before the last one — the shape both the full and the
+    /// compact set share.
+    private func hintRow(_ hints: [Hint]) -> some View {
+        HStack(spacing: 14) {
+            ForEach(hints.dropLast(), id: \.label) { hint in
+                ShortcutHintView(keys: hint.keys, label: hint.label)
+            }
+            Spacer(minLength: 0)
+            if let last = hints.last {
+                ShortcutHintView(keys: last.keys, label: last.label)
+            }
+        }
+        .lineLimit(1)
     }
 }

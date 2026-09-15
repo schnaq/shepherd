@@ -8,6 +8,23 @@ struct RootView: View {
     /// has nothing to bring forward (``AppEnvironment/openInboxFromNotification()``). The same
     /// problem the menu-bar quick inbox has, and the same escape hatch.
     @Environment(\.openWindow) private var openWindow
+    /// The `Settings` scene, which is the app's *only* settings presentation
+    /// (``AppEnvironment/showSettings(_:)``). Like `openWindow` above, opening a scene is
+    /// something only a view can do, so the container is handed a closure.
+    @Environment(\.openSettings) private var openSettings
+
+    /// How far above the window's bottom edge a toast sits.
+    ///
+    /// One number for every route, because the overlay is applied *outside* the route switch and
+    /// cannot see which footer is under it: the inbox and the issues list end in a 34 pt shortcut
+    /// bar, and the review screen ends in a 50 pt ``ReviewComposerBar``. It clears the taller of
+    /// the two with a little air, so a toast never sits over the verdict buttons — which is what
+    /// 44 pt did, having been derived from the shortcut bar alone.
+    ///
+    /// Teaching each screen to publish its own footer height through a `PreferenceKey` would let
+    /// this shrink per route; it is a follow-up, and a toast a few points high over empty panel
+    /// is not worth the mechanism.
+    private static let footerClearance: CGFloat = 56
 
     var body: some View {
         // `.background`, not a `ZStack` sibling. A `Color.ignoresSafeArea()` *beside* the content
@@ -21,10 +38,12 @@ struct RootView: View {
             .background(Theme.background.ignoresSafeArea())
             .overlay(alignment: .bottomTrailing) {
                 ToastStackView(center: environment.toasts)
+                    .padding(.bottom, Self.footerClearance)
             }
             .tint(Theme.accent)
             .task {
                 environment.reopenMainWindow = { openWindow(id: ShepherdScene.mainWindow) }
+                environment.openSettingsWindow = { openSettings() }
             }
     }
 
@@ -69,7 +88,10 @@ struct SignedInRootView: View {
             }
 
             if environment.isCommandPaletteVisible {
-                CommandPaletteView(session: session)
+                CommandPaletteView(
+                    session: session,
+                    selectedRow: environment.selectedPullRequest
+                )
                     .transition(.opacity)
                     .zIndex(2)
             }

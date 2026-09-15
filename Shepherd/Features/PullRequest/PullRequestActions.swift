@@ -21,6 +21,14 @@ struct PullRequestActions {
     let session: SignedInSession
     /// Where failures are surfaced.
     let toasts: ToastCenter
+    /// Which writes are already in flight.
+    ///
+    /// The funnel is where this belongs rather than in the buttons: a pull request is approved
+    /// from the inbox panel, the composer bar, ⌘K and a keyboard shortcut, and only the funnel
+    /// sees all four. Every write below marks its key for as long as it runs, so the button that
+    /// started it can go quiet — and a second press of any of the four is refused here even if
+    /// the surface that raised it never looked.
+    let activity: ActionActivity
     /// Called with a pull request's node id the moment a *verdict* or a *merge* the user asked
     /// for has been written to the outbox — never for a reply, a thread toggle, or a viewed flag.
     ///
@@ -46,16 +54,20 @@ struct PullRequestActions {
     /// - Parameters:
     ///   - session: The signed-in session.
     ///   - toasts: Where failures are surfaced.
+    ///   - activity: Which writes are already in flight. No default: a helper built without it
+    ///     would be a surface whose buttons stay clickable, which is the bug this closed.
     ///   - onDidQueueVerdict: Called after a verdict or a merge reaches the outbox.
     ///   - announcesSuccess: Whether a successful enqueue toasts. Failures always do.
     init(
         session: SignedInSession,
         toasts: ToastCenter,
+        activity: ActionActivity,
         onDidQueueVerdict: (@MainActor (String) -> Void)? = nil,
         announcesSuccess: Bool = true
     ) {
         self.session = session
         self.toasts = toasts
+        self.activity = activity
         self.onDidQueueVerdict = onDidQueueVerdict
         self.announcesSuccess = announcesSuccess
     }
@@ -70,26 +82,49 @@ struct PullRequestActions {
     ///   - summary: The pull request.
     ///   - verdict: Approve, request changes, or comment.
     ///   - body: The review summary text.
+    /// - Returns: `false` when GitHub would have refused the verdict and nothing was written,
+    ///   `true` in every case where the review reached the local database. Callers that hold the
+    ///   text the user typed — ``ReviewModel/submit(verdict:actions:)`` and the sheet above it —
+    ///   must keep it on `false`: a refusal happens *before* ``ReviewDraft`` is saved, so this is
+    ///   the only signal that the summary is not on disk anywhere yet. A second call while the
+    ///   first is still running is `false` for the same reason and by the same rule — nothing was
+    ///   written, so the summary stays in the field.
+    @discardableResult
     func submitReview(
         on summary: PullRequestSummary,
         verdict: ReviewVerdict,
         body: String = ""
-    ) async {
-        do {
-            let existing = try await session.database.fetchDraft(prID: summary.id)
-            let draft = ReviewDraft.verdict(
-                verdict,
-                on: summary,
-                existing: existing,
-                body: body
-            )
-            try await session.database.saveDraft(draft)
-            let outcome = try await enqueue(.submitReview(draft), on: summary)
-            announce(outcome, of: .review(verdict), on: summary)
-            onDidQueueVerdict?(summary.id)
-        } catch {
-            toasts.failure(error, context: String(localized: "Could not queue the review"))
-        }
+    ) async -> Bool {
+        await activity.run(summary.id, .review) {
+            // The one place every verdict passes through, so it is the one place that has to know
+            // what GitHub will refuse.
+            if let blocker = Self.refusal(of: verdict, on: summary) {
+                toasts.show(
+                    Toast(message: Self.blockerMessage(blocker, slug: summary.slug), kind: .warning)
+                )
+                return false
+            }
+            do {
+                let existing = try await session.database.fetchDraft(prID: summary.id)
+                let draft = ReviewDraft.verdict(
+                    verdict,
+                    on: summary,
+                    existing: existing,
+                    body: body
+                )
+                try await session.database.saveDraft(draft)
+                let outcome = try await enqueue(.submitReview(draft), on: summary)
+                announce(outcome, of: .review(verdict), on: summary)
+                onDidQueueVerdict?(summary.id)
+            } catch {
+                toasts.failure(error, context: String(localized: "Could not queue the review"))
+            }
+            // `true` even after a local write failure, and deliberately: whichever of the two
+            // writes threw, ``ReviewDraft/verdict(_:on:existing:body:at:)`` was built from the
+            // text and a saved draft is restored by ``ReviewModel``'s draft observation. Only the
+            // refusal above returns before anything has been written at all.
+            return true
+        } ?? false
     }
 
     /// Replies to an existing review comment.
@@ -102,14 +137,16 @@ struct PullRequestActions {
         commentDatabaseID: Int,
         body: String
     ) async {
-        do {
-            let outcome = try await enqueue(
-                .replyToComment(commentDatabaseID: commentDatabaseID, body: body),
-                on: summary
-            )
-            announce(outcome, of: .reply, on: summary)
-        } catch {
-            toasts.failure(error, context: String(localized: "Could not queue the reply"))
+        await activity.run(summary.id, .reply) {
+            do {
+                let outcome = try await enqueue(
+                    .replyToComment(commentDatabaseID: commentDatabaseID, body: body),
+                    on: summary
+                )
+                announce(outcome, of: .reply, on: summary)
+            } catch {
+                toasts.failure(error, context: String(localized: "Could not queue the reply"))
+            }
         }
     }
 
@@ -123,14 +160,20 @@ struct PullRequestActions {
         threadID: String,
         resolved: Bool
     ) async {
-        do {
-            let outcome = try await enqueue(
-                resolved ? .resolveThread(threadID: threadID) : .unresolveThread(threadID: threadID),
-                on: summary
-            )
-            announce(outcome, of: .thread(resolved: resolved), on: summary)
-        } catch {
-            toasts.failure(error, context: String(localized: "Could not update the thread"))
+        // Keyed by the *thread*, not the pull request: a card can show a dozen conversations,
+        // and resolving one of them is no reason for the other eleven buttons to report a write.
+        await activity.run(threadID, .thread) {
+            do {
+                let outcome = try await enqueue(
+                    resolved
+                        ? .resolveThread(threadID: threadID)
+                        : .unresolveThread(threadID: threadID),
+                    on: summary
+                )
+                announce(outcome, of: .thread(resolved: resolved), on: summary)
+            } catch {
+                toasts.failure(error, context: String(localized: "Could not update the thread"))
+            }
         }
     }
 
@@ -194,19 +237,29 @@ struct PullRequestActions {
         method: MergeMethod,
         deletesHeadBranch: Bool = false
     ) async {
-        do {
-            let outcome = try await enqueue(
-                .merge(
-                    method: method.rawValue,
-                    expectedHeadOid: summary.headRefOid,
-                    deletesHeadBranch: deletesHeadBranch
-                ),
-                on: summary
-            )
-            announce(outcome, of: .merge, on: summary)
-            onDidQueueVerdict?(summary.id)
-        } catch {
-            toasts.failure(error, context: String(localized: "Could not queue the merge"))
+        await activity.run(summary.id, .merge) {
+            // Same refusal, before the row is written rather than after the drain has been told
+            // "Pull Request is still a draft" — the outbox was carrying exactly that failure.
+            if let blocker = summary.mergeBlocker {
+                toasts.show(
+                    Toast(message: Self.blockerMessage(blocker, slug: summary.slug), kind: .warning)
+                )
+                return
+            }
+            do {
+                let outcome = try await enqueue(
+                    .merge(
+                        method: method.rawValue,
+                        expectedHeadOid: summary.headRefOid,
+                        deletesHeadBranch: deletesHeadBranch
+                    ),
+                    on: summary
+                )
+                announce(outcome, of: .merge, on: summary)
+                onDidQueueVerdict?(summary.id)
+            } catch {
+                toasts.failure(error, context: String(localized: "Could not queue the merge"))
+            }
         }
     }
 
@@ -236,35 +289,42 @@ struct PullRequestActions {
     /// - Parameters:
     ///   - plan: The confirmed plan.
     ///   - method: The merge method for whatever the plan merges.
-    /// - Returns: What was queued, for the summary toast.
+    /// - Returns: What was queued, for the summary toast. An empty outcome when a run was
+    ///   already in flight: nothing was written, so there is nothing to report.
     @discardableResult
     func queue(_ plan: BulkTriagePlan, method: MergeMethod) async -> BulkTriageOutcome {
-        var outcome = BulkTriageOutcome(skipped: plan.skipped.count)
-        guard plan.isActionable else {
-            toasts.info(String(localized: "Nothing to queue — every selected pull request was skipped."))
+        // Keyed `"bulk"` rather than per pull request, because that is what a second click would
+        // duplicate: the plan is one gesture over *n* rows, and two runs of it are 2n rows.
+        await activity.run("bulk", .bulk) {
+            var outcome = BulkTriageOutcome(skipped: plan.skipped.count)
+            guard plan.isActionable else {
+                toasts.info(
+                    String(localized: "Nothing to queue — every selected pull request was skipped.")
+                )
+                return outcome
+            }
+
+            let writes = plan.writes(
+                mergeMethod: method.rawValue,
+                existingDrafts: await existingDrafts(for: plan)
+            )
+            do {
+                // Every draft and every row in one transaction, each draft still written before
+                // the row that carries it. A local write failure is a broken database rather than
+                // one unlucky pull request, so the batch is all or nothing: better a run the user
+                // can retry whole than an approval queued without the merge meant to follow it.
+                try await session.database.saveBulkTriage(writes: writes)
+                outcome.queuedWrites = writes.count
+                outcome.queuedPullRequests = Set(writes.map(\.item.prID)).count
+            } catch {
+                // Reported in the plan's order, not a set's, so the message is reproducible.
+                outcome.failed = plan.eligible.map(\.pullRequest.slug)
+            }
+
+            await session.drainOutbox()
+            report(outcome, action: plan.action)
             return outcome
-        }
-
-        let writes = plan.writes(
-            mergeMethod: method.rawValue,
-            existingDrafts: await existingDrafts(for: plan)
-        )
-        do {
-            // Every draft and every row in one transaction, each draft still written before the
-            // row that carries it. A local write failure is a broken database rather than one
-            // unlucky pull request, so the batch is all or nothing: better a run the user can
-            // retry whole than an approval queued without the merge that was meant to follow it.
-            try await session.database.saveBulkTriage(writes: writes)
-            outcome.queuedWrites = writes.count
-            outcome.queuedPullRequests = Set(writes.map(\.item.prID)).count
-        } catch {
-            // Reported in the plan's order, not a set's, so the message is reproducible.
-            outcome.failed = plan.eligible.map(\.pullRequest.slug)
-        }
-
-        await session.drainOutbox()
-        report(outcome, action: plan.action)
-        return outcome
+        } ?? BulkTriageOutcome()
     }
 
     /// The drafts already on disk for the plan's eligible pull requests.
@@ -309,11 +369,16 @@ struct PullRequestActions {
     /// Takes a pull request out of draft state.
     /// - Parameter summary: The pull request.
     func markReadyForReview(_ summary: PullRequestSummary) async {
-        do {
-            let outcome = try await enqueue(.markReadyForReview, on: summary)
-            announce(outcome, of: .readyForReview, on: summary)
-        } catch {
-            toasts.failure(error, context: String(localized: "Could not update the pull request"))
+        await activity.run(summary.id, .readyForReview) {
+            do {
+                let outcome = try await enqueue(.markReadyForReview, on: summary)
+                announce(outcome, of: .readyForReview, on: summary)
+            } catch {
+                toasts.failure(
+                    error,
+                    context: String(localized: "Could not update the pull request")
+                )
+            }
         }
     }
 
@@ -345,15 +410,19 @@ struct PullRequestActions {
     ///   - summary: The pull request.
     ///   - isViewed: The new state.
     func setFileViewed(path: String, on summary: PullRequestSummary, isViewed: Bool) async {
-        do {
-            try await session.database.setFileViewed(
-                prID: summary.id,
-                path: path,
-                headRefOid: summary.headRefOid,
-                isViewed: isViewed
-            )
-        } catch {
-            toasts.failure(error, context: String(localized: "Could not save the viewed state"))
+        // Keyed on the pull request rather than on the path: one file is selected at a time, so
+        // the toggle and the `v` shortcut are the same button and cannot mean two files at once.
+        await activity.run(summary.id, .viewed) {
+            do {
+                try await session.database.setFileViewed(
+                    prID: summary.id,
+                    path: path,
+                    headRefOid: summary.headRefOid,
+                    isViewed: isViewed
+                )
+            } catch {
+                toasts.failure(error, context: String(localized: "Could not save the viewed state"))
+            }
         }
     }
 
@@ -379,6 +448,70 @@ struct PullRequestActions {
         case comment
         /// Closing the pull request, with or without a comment.
         case close(withComment: Bool)
+    }
+
+    /// Why this verdict would be refused on this pull request, or `nil` when it would not.
+    ///
+    /// A plain comment is exempt from everything: `COMMENT` on your own pull request is accepted,
+    /// and only `APPROVE` and `REQUEST_CHANGES` come back as a 422. Pure and `static` so the one
+    /// rule the funnel turns on can be asserted without a ``SignedInSession``.
+    /// - Parameters:
+    ///   - verdict: What the user asked for.
+    ///   - summary: The pull request it targets.
+    /// - Returns: The blocker, or `nil` when the verdict may be written.
+    static func refusal(
+        of verdict: ReviewVerdict,
+        on summary: PullRequestSummary
+    ) -> ReviewActionBlocker? {
+        guard verdict != .comment else { return nil }
+        return summary.verdictBlocker
+    }
+
+    /// What to tell a user whose click GitHub would have refused.
+    ///
+    /// `static` and pure for the reason the outcome wording below is: the sentence is the whole
+    /// of what this path produces, and the app's tests cannot build a ``SignedInSession``. Each
+    /// surface that greys a button out uses it as the button's tooltip, so the explanation the
+    /// user hovers and the toast they would have got are the same sentence.
+    /// - Parameters:
+    ///   - blocker: What GitHub would refuse.
+    ///   - slug: The pull request, as `owner/repo#123`.
+    /// - Returns: One sentence naming the pull request and the way out of it.
+    static func blockerMessage(_ blocker: ReviewActionBlocker, slug: String) -> String {
+        switch blocker {
+        case .draft:
+            return String(
+                localized: "\(slug) is still a draft — GitHub refuses the merge until it is marked ready for review."
+            )
+        case .conflicting:
+            return String(localized: "\(slug) has conflicts with its base branch. Resolve them first.")
+        case .ownPullRequest:
+            return String(
+                localized: "GitHub does not accept an approve or request changes on your own pull request (\(slug))."
+            )
+        }
+    }
+
+    /// A button's tooltip: why GitHub would refuse it, or what it usually says.
+    ///
+    /// Four surfaces greyed a button out and each wrote the same two lines — "is there a blocker,
+    /// then ``blockerMessage(_:slug:)``, otherwise the shortcut" — around the inbox panel's
+    /// buttons, the review composer's verdicts, the submit sheet and the review header's Merge.
+    /// One function, because the rule is one rule: a dark button whose reason lives only in a
+    /// toast the user never triggers explains nothing, and a tooltip that falls back to its
+    /// shortcut is what makes hovering worth doing on a button that *is* live.
+    /// - Parameters:
+    ///   - blocker: What GitHub would refuse, or `nil` when it would refuse nothing.
+    ///   - summary: The pull request the button acts on, for the slug the sentence names.
+    ///   - otherwise: The tooltip for a button that is live.
+    /// - Returns: The tooltip text.
+    static func help(
+        for blocker: ReviewActionBlocker?,
+        on summary: PullRequestSummary,
+        otherwise: String
+    ) -> String {
+        guard let blocker else { return otherwise }
+        return blockerMessage(blocker, slug: summary.slug)
     }
 
     /// The toast an outcome deserves, or `nil` when that outcome is announced elsewhere.

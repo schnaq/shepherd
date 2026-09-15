@@ -175,20 +175,63 @@ extension KeyPress {
     }
 }
 
+extension View {
+    /// Asks for a focus again, a frame or two after `condition` becomes true.
+    ///
+    /// The hop the command palette and the two keyboard-driven lists all need, for one reason:
+    /// the view that is *giving* focus up is being torn down in the same update as the ask, and a
+    /// focus requested during a teardown does not always stick. The palette then looks focused
+    /// and is not — the first word typed goes to the list behind it as shortcuts — and the list,
+    /// coming back after the palette closes, stays dead to `j` and `k` until a row is clicked.
+    ///
+    /// `.task(id:)` rather than a `Task {}`: it is cancelled and restarted when `condition`
+    /// changes and torn down with the view, which is the behaviour the manual version had to be
+    /// trusted to get right three times. The `try?` on the sleep is deliberate and the one place
+    /// this is written down: a cancelled hop is not a failure anybody asked for, and there is
+    /// nothing to report — the `Task.isCancelled` check after it is what stops a focus that has
+    /// *just* been handed elsewhere from being snatched back.
+    /// - Parameters:
+    ///   - focus: The focus state to reassert.
+    ///   - condition: Reassert while this is true; do nothing while it is false.
+    ///   - delay: How long to wait. Long enough for the teardown, short enough to be invisible.
+    /// - Returns: The view, reasserting the focus once per trigger.
+    func reassertingFocus(
+        _ focus: FocusState<Bool>.Binding,
+        when condition: Bool,
+        after delay: Duration = .milliseconds(60)
+    ) -> some View {
+        task(id: condition) {
+            guard condition else { return }
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            focus.wrappedValue = true
+        }
+    }
+}
+
 /// A key cap, as drawn in the shortcut bar and the command palette footer.
 struct KeyCapView: View {
     /// The key text, e.g. `"⌘K"` or `"r a"`.
     let keys: String
+    /// Whether this cap sits on a filled button (Success / Primary).
+    ///
+    /// The muted stroke and secondary text this view draws everywhere else disappear against an
+    /// accent or green fill, so a cap on one of those buttons needs its own colours instead.
+    var onFilledBackground = false
 
     var body: some View {
         Text(keys)
             .font(.system(size: 11))
-            .foregroundStyle(Theme.textSecondary)
+            .foregroundStyle(onFilledBackground ? Theme.textOnFilled : Theme.textSecondary)
             .padding(.horizontal, 5)
             .padding(.vertical, 1)
+            .background(
+                onFilledBackground ? Color.white.opacity(0.18) : Color.clear,
+                in: RoundedRectangle(cornerRadius: 4, style: .continuous)
+            )
             .overlay(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .stroke(Theme.controlBorder, lineWidth: 1)
+                    .stroke(onFilledBackground ? Color.clear : Theme.controlBorder, lineWidth: 1)
             )
     }
 }

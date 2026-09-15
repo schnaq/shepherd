@@ -24,7 +24,9 @@ struct ShepherdApp: App {
         WindowGroup(id: ShepherdScene.mainWindow) {
             RootView()
                 .environment(environment)
-                .frame(minWidth: 1_040, minHeight: 640)
+                // 720, not 700: the 2026-09-08 live test found the toolbar collapsing under the
+                // title bar below roughly 700 pt of height, so the floor sits just above it.
+                .frame(minWidth: 1_040, minHeight: 720)
                 .preferredColorScheme(environment.settings.appearance.colorScheme)
                 .task {
                     await environment.bootstrap()
@@ -56,6 +58,11 @@ struct ShepherdApp: App {
                 .onOpenURL { url in
                     environment.open(deepLinkURL: url)
                 }
+                // …and the reason the line above lands in *this* window rather than a new one.
+                // Without it SwiftUI has no open scene that says it handles the event, so it
+                // creates a scene per URL: sixteen `shepherd://` links used to leave sixteen
+                // windows behind. `"*"` is the documented wildcard — any incoming event.
+                .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
                 // And once more for the Spotlight export (ADR 0021), so the toggle in Settings and
                 // an applied settings document both reach the exporter through one route.
                 .onChange(of: environment.settings.spotlightExportEnabled) { _, _ in
@@ -73,6 +80,9 @@ struct ShepherdApp: App {
             ShepherdCommands(environment: environment)
         }
 
+        // The app's only settings presentation: ⌘, opens it, and so does every in-app surface,
+        // through ``AppEnvironment/showSettings(_:)``. It used to have a rival — a sheet on the
+        // inbox screen — which had no close button and blocked the window's.
         Settings {
             SettingsView()
                 .environment(environment)
@@ -112,7 +122,18 @@ struct ShepherdCommands: Commands {
     let environment: AppEnvironment
 
     var body: some Commands {
-        CommandGroup(replacing: .newItem) {}
+        // The File menu, entire. This group is the menu's anchor, so the *empty* replacement that
+        // stood here did more than drop "New Window" — which is the point of replacing it, the app
+        // has one window and a second one has always been a bug — it took the menu away, and Close
+        // ⌘W with it. The 2026-09-09 live test found what that costs: the Settings window could not
+        // be closed from the keyboard at all, because the app's menus carried no ⌘W anywhere. So
+        // the group keeps exactly one item, the one a Mac user looks for in this menu.
+        CommandGroup(replacing: .newItem) {
+            Button(String(localized: "Close Window")) {
+                environment.closeKeyWindow()
+            }
+            .keyboardShortcut("w")
+        }
 
         // Directly under "About Shepherd" in the app menu, where every Mac user looks for it
         // (ADR 0010). A build without an update feed and signing key shows the item disabled

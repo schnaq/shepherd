@@ -61,6 +61,16 @@
         }
       }
     },
+    "%@ has conflicts with its base branch. Resolve them first.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat Konflikte mit dem Basis-Branch. Löse sie zuerst."
+          }
+        }
+      }
+    },
     "%@ is a recognised agent": {
       "localizations": {
         "de": {
@@ -97,6 +107,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ ist keine der von diesem Pull Request geänderten Dateien"
+          }
+        }
+      }
+    },
+    "%@ is still a draft — GitHub refuses the merge until it is marked ready for review.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ist noch ein Draft — GitHub lehnt den Merge ab, bis er als bereit zum Review markiert ist."
           }
         }
       }
@@ -394,6 +414,46 @@
                 "stringUnit": {
                   "state": "translated",
                   "value": "%lld checks green"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld checks on the head commit; Shepherd has not read them yet.": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Check auf dem Head-Commit; Shepherd hat ihn noch nicht gelesen."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Checks auf dem Head-Commit; Shepherd hat sie noch nicht gelesen."
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld check on the head commit; Shepherd has not read it yet."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld checks on the head commit; Shepherd has not read them yet."
                 }
               }
             }
@@ -2846,7 +2906,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Eine Erklärung, keine Review. Nichts wird gespeichert, bis du selbst einen Kommentar hinzufügst."
+            "value": "Eine Erklärung, kein Review. Nichts wird gespeichert, bis du selbst einen Kommentar hinzufügst."
           }
         }
       }
@@ -3151,6 +3211,16 @@
         }
       }
     },
+    "Approve…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Approve…"
+          }
+        }
+      }
+    },
     "Approximation: pull requests you were asked to review that now carry an approval.": {
       "localizations": {
         "de": {
@@ -3167,6 +3237,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ mit dem vollen Log fragen?"
+          }
+        }
+      }
+    },
+    "Ask GitHub for this pull request again": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub erneut nach diesem Pull Request fragen"
           }
         }
       }
@@ -4151,6 +4231,16 @@
         }
       }
     },
+    "Close Window": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fenster schließen"
+          }
+        }
+      }
+    },
     "Close a pull request": {
       "localizations": {
         "de": {
@@ -4501,6 +4591,16 @@
         }
       }
     },
+    "Configuration": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konfiguration"
+          }
+        }
+      }
+    },
     "Continue with device flow": {
       "localizations": {
         "de": {
@@ -4601,6 +4701,16 @@
         }
       }
     },
+    "Could not delete the comment: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentar konnte nicht gelöscht werden: %@"
+          }
+        }
+      }
+    },
     "Could not discard the review": {
       "localizations": {
         "de": {
@@ -4627,6 +4737,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Die Modelle konnten nicht geladen werden: %@"
+          }
+        }
+      }
+    },
+    "Could not load this pull request": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Pull Request konnte nicht geladen werden"
           }
         }
       }
@@ -4747,6 +4867,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Das Review konnte nicht eingereiht werden"
+          }
+        }
+      }
+    },
+    "Could not refresh: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktualisierung fehlgeschlagen: %@"
           }
         }
       }
@@ -5197,6 +5327,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Digest bis morgen ausblenden"
+          }
+        }
+      }
+    },
+    "Documentation": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dokumentation"
           }
         }
       }
@@ -5681,6 +5821,16 @@
         }
       }
     },
+    "Files have not arrived yet": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Dateien sind noch nicht da"
+          }
+        }
+      }
+    },
     "Fill in the endpoint, bucket and region first.": {
       "localizations": {
         "de": {
@@ -5846,7 +5996,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Vollständige Review"
+            "value": "Vollständiges Review"
           }
         }
       }
@@ -5867,6 +6017,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Generiert"
+          }
+        }
+      }
+    },
+    "Generated or vendored file": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generierte oder mitgelieferte Datei"
           }
         }
       }
@@ -5907,6 +6067,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "GitHub hat für diese Datei keinen Diff mitgeschickt — sie ist binär, oder der Patch war zu groß."
+          }
+        }
+      }
+    },
+    "GitHub does not accept an approve or request changes on your own pull request (%@).": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub akzeptiert kein Approve oder Request changes auf deinem eigenen Pull Request (%@)."
           }
         }
       }
@@ -5961,12 +6131,42 @@
         }
       }
     },
-    "GitHub reports conflicts with %@. Resolve them first.": {
+    "GitHub reports %lld changed files, but sent none of them.": {
       "localizations": {
         "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GitHub meldet Konflikte mit %@. Löse sie zuerst auf."
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "GitHub meldet %lld geänderte Datei, hat sie aber nicht geschickt."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "GitHub meldet %lld geänderte Dateien, hat aber keine davon geschickt."
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "GitHub reports %lld changed file, but sent none of it."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "GitHub reports %lld changed files, but sent none of them."
+                }
+              }
+            }
           }
         }
       }
@@ -6266,7 +6466,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Im Klartext: Ein grüner Pull Request mit höchstens %lld Dateien und %lld geänderten Zeilen, in dem nichts Sensibles steckt, ist ein kurzer Blick. Alles andere ist eine vollständige Review."
+            "value": "Im Klartext: Ein grüner Pull Request mit höchstens %lld Dateien und %lld geänderten Zeilen, in dem nichts Sensibles steckt, ist ein kurzer Blick. Alles andere ist ein vollständiges Review."
           }
         }
       }
@@ -6577,6 +6777,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Er wurde gemergt, geschlossen oder ist aus dem Sweep gefallen. Dein offenes Review ist lokal weiterhin gespeichert."
+          }
+        }
+      }
+    },
+    "just now": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "gerade eben"
           }
         }
       }
@@ -10051,6 +10261,16 @@
         }
       }
     },
+    "Review…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review…"
+          }
+        }
+      }
+    },
     "Rich viewer": {
       "localizations": {
         "de": {
@@ -11271,6 +11491,16 @@
         }
       }
     },
+    "Sort the list": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liste sortieren"
+          }
+        }
+      }
+    },
     "Spotlight has not confirmed the removal yet — Shepherd asks again on the next sync.": {
       "localizations": {
         "de": {
@@ -11287,6 +11517,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Der Index von Spotlight gehört macOS, nicht Shepherd — deshalb werden nur der Titel und diese Metadaten exportiert. Beschreibungen, Diffs, Review-Kommentare und deine Drafts verlassen die lokale Datenbank nie. Ausgeschaltet löscht das jeden Pull Request, den Shepherd dort abgelegt hat."
+          }
+        }
+      }
+    },
+    "Source file": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quelldatei"
           }
         }
       }
@@ -11781,6 +12021,16 @@
         }
       }
     },
+    "Test file": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Testdatei"
+          }
+        }
+      }
+    },
     "Tests added or run": {
       "localizations": {
         "de": {
@@ -12076,7 +12326,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Der Eingang teilt sich in Kurzer Blick und Vollständige Review. Ein Pull Request ist nur dann ein kurzer Blick, wenn die CI grün ist, das Diff innerhalb der beiden Zahlen unten liegt und er keine Workflow-, Auth-, Secret-, Migrations- oder gelöschte Testdatei berührt."
+            "value": "Der Eingang teilt sich in Kurzer Blick und Vollständiges Review. Ein Pull Request ist nur dann ein kurzer Blick, wenn die CI grün ist, das Diff innerhalb der beiden Zahlen unten liegt und er keine Workflow-, Auth-, Secret-, Migrations- oder gelöschte Testdatei berührt."
           }
         }
       }

@@ -81,6 +81,13 @@ final class IssueInboxModel {
     /// outbox without a Keychain, a token or a network. `nil` leaves the row for the next drain,
     /// which is what an offline queue does anyway.
     @ObservationIgnored var drain: (@MainActor () async -> Void)?
+    /// Which writes are in flight, so the panel's triage buttons can go quiet while one runs.
+    ///
+    /// Handed over by ``InboxScreen`` beside ``drain`` and optional for ``drain``'s reason: a
+    /// test builds this model without an ``AppEnvironment``, and with no tracker every write
+    /// simply runs — which is what it did before there was one. `@ObservationIgnored` because
+    /// the *tracker* is observed by the views that read it; this reference never changes.
+    @ObservationIgnored var activity: ActionActivity?
 
     /// Every issue row the database holds, most-recently-updated first.
     private(set) var allRows: [IssueRowSummary] = []
@@ -513,9 +520,29 @@ final class IssueInboxModel {
     /// - Parameters:
     ///   - action: What to do.
     ///   - row: The issue it targets.
+    ///   - kind: Which verb this is, so the button that started it is the one that spins. The
+    ///     caller names it because only the caller knows: the outbox action and the button are
+    ///     the same fact in two vocabularies.
     /// - Returns: `true` when the row reached the outbox.
+    ///   A second call while the same verb is still running is `false` as well: nothing was
+    ///   written, which is exactly what that answer means everywhere else here.
     @discardableResult
-    func queue(_ action: OutboxAction, on row: IssueRowSummary) async -> Bool {
+    func queue(
+        _ action: OutboxAction,
+        on row: IssueRowSummary,
+        kind: ActionActivity.Kind
+    ) async -> Bool {
+        guard let activity else { return await write(action, on: row) }
+        return await activity.run(row.id, kind) {
+            await write(action, on: row)
+        } ?? false
+    }
+
+    /// The body of ``queue(_:on:kind:)``, without the in-flight bookkeeping.
+    ///
+    /// Split out so the tracker is optional: a model built without an ``ActionActivity`` — every
+    /// test does — writes exactly as it did before there was one.
+    private func write(_ action: OutboxAction, on row: IssueRowSummary) async -> Bool {
         do {
             try await database.enqueue(
                 OutboxItem(prID: row.id, repo: row.repo, number: row.number, action: action)
@@ -540,7 +567,8 @@ final class IssueInboxModel {
         guard !trimmed.isEmpty else { return false }
         return await queue(
             .addIssueComment(body: trimmed, basedOnUpdatedAt: row.updatedAt),
-            on: row
+            on: row,
+            kind: .issueComment
         )
     }
 
@@ -551,7 +579,11 @@ final class IssueInboxModel {
     /// - Returns: `true` when the row reached the outbox.
     @discardableResult
     func addLabel(_ name: String, on row: IssueRowSummary) async -> Bool {
-        await queue(.addIssueLabel(name: name, basedOnUpdatedAt: row.updatedAt), on: row)
+        await queue(
+            .addIssueLabel(name: name, basedOnUpdatedAt: row.updatedAt),
+            on: row,
+            kind: .issueLabel
+        )
     }
 
     /// Queues an assignment of the issue to the signed-in user.
@@ -562,7 +594,8 @@ final class IssueInboxModel {
         guard let viewerLogin, !viewerLogin.isEmpty else { return false }
         return await queue(
             .addIssueAssignee(login: viewerLogin, basedOnUpdatedAt: row.updatedAt),
-            on: row
+            on: row,
+            kind: .issueAssign
         )
     }
 
@@ -573,7 +606,11 @@ final class IssueInboxModel {
     /// - Returns: `true` when the row reached the outbox.
     @discardableResult
     func close(_ reason: IssueCloseReason, on row: IssueRowSummary) async -> Bool {
-        await queue(.closeIssue(reason: reason, basedOnUpdatedAt: row.updatedAt), on: row)
+        await queue(
+            .closeIssue(reason: reason, basedOnUpdatedAt: row.updatedAt),
+            on: row,
+            kind: .issueState
+        )
     }
 
     /// Queues a reopen.
@@ -581,6 +618,6 @@ final class IssueInboxModel {
     /// - Returns: `true` when the row reached the outbox.
     @discardableResult
     func reopen(_ row: IssueRowSummary) async -> Bool {
-        await queue(.reopenIssue(basedOnUpdatedAt: row.updatedAt), on: row)
+        await queue(.reopenIssue(basedOnUpdatedAt: row.updatedAt), on: row, kind: .issueState)
     }
 }

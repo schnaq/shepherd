@@ -69,6 +69,9 @@ struct DiffViewerView: NSViewRepresentable {
         configuration.websiteDataStore = .nonPersistent()
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
         configuration.userContentController.add(context.coordinator, name: DiffViewerView.handlerName)
+        // Before the web view exists, because the script has to be registered before the first
+        // navigation starts for `.atDocumentStart` to mean anything.
+        configuration.userContentController.addUserScript(DiffViewerView.themeBootstrap(theme))
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.underPageBackgroundColor = NSColor(rgbHex: theme == .dark ? 0x101116 : 0xF7F8FA)
@@ -107,6 +110,38 @@ struct DiffViewerView: NSViewRepresentable {
 
     /// The message-handler name the web bundle looks up. It must be exactly `"shepherd"`.
     static let handlerName = "shepherd"
+
+    /// Hands the page shell its theme before the shell has parsed a single tag.
+    ///
+    /// Runs at `.atDocumentStart`, so it is ahead of `index.html`'s own boot script and far ahead
+    /// of the stylesheet. The shell reads `window.__shepherdTheme` first and only asks
+    /// `prefers-color-scheme` when nothing set it, which is the order that matters here: the app
+    /// can be forced dark while macOS is light, and a viewer guessing from the system painted a
+    /// white page for a frame every time a file was opened. ``theme`` is already the resolved
+    /// answer — the screen hands over `colorScheme`, not the preference.
+    ///
+    /// The class is written as well as the flag, so the frame is right even if the shell's own
+    /// script never runs. Nothing is fetched to do any of it, so ADR 0003's "no remote loads"
+    /// is untouched; the class name is the one `web/diff-viewer/src/styles.css` and the bridge's
+    /// `setTheme` both use, which is `shepherd-theme-` plus the raw value. Add and remove rather
+    /// than an assignment to `className`, so this, the shell's boot script and `setTheme` all
+    /// move the class the same way.
+    /// - Parameter theme: The appearance the app has already resolved.
+    /// - Returns: The document-start script to register on the configuration.
+    private static func themeBootstrap(_ theme: BridgeThemeName) -> WKUserScript {
+        WKUserScript(
+            source: """
+            window.__shepherdTheme = '\(theme.rawValue)';
+            if (document.documentElement) {
+              var root = document.documentElement.classList;
+              root.remove('shepherd-theme-light', 'shepherd-theme-dark');
+              root.add('shepherd-theme-\(theme.rawValue)');
+            }
+            """,
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        )
+    }
 
     /// What a screen reader calls each pane of the diff.
     ///

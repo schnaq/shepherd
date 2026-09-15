@@ -212,7 +212,16 @@ struct InboxDetailPanel: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(SuccessButtonStyle())
-                .help(String(localized: "Approve (r a)"))
+                // Both verdict buttons go dark for either reason: GitHub would refuse this one
+                // (``disabled``), or a verdict for this pull request is already on its way to the
+                // outbox (``busy``, which disables as well and spins while it does).
+                .busy(isWriting(row, .review))
+                .disabled(row.verdictBlocker != nil)
+                .help(PullRequestActions.help(
+                    for: row.verdictBlocker,
+                    on: row,
+                    otherwise: String(localized: "Approve (r a)")
+                ))
 
                 Button {
                     Task { await actions.submitReview(on: row, verdict: .requestChanges) }
@@ -220,8 +229,14 @@ struct InboxDetailPanel: View {
                     Text(String(localized: "Request changes"))
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(SecondaryButtonStyle())
-                .help(String(localized: "Request changes (r x)"))
+                .buttonStyle(SecondaryButtonStyle(tint: Theme.failure))
+                .busy(isWriting(row, .review))
+                .disabled(row.verdictBlocker != nil)
+                .help(PullRequestActions.help(
+                    for: row.verdictBlocker,
+                    on: row,
+                    otherwise: String(localized: "Request changes (r x)")
+                ))
             }
 
             HStack(spacing: 8) {
@@ -229,7 +244,7 @@ struct InboxDetailPanel: View {
                     onOpenReview(row.id)
                 } label: {
                     HStack(spacing: 6) {
-                        Text(String(localized: "Open full review"))
+                        Text(String(localized: "Open review"))
                         KeyCapView(keys: "⏎")
                     }
                     .frame(maxWidth: .infinity)
@@ -238,10 +253,18 @@ struct InboxDetailPanel: View {
 
                 Button(action: onMerge) {
                     Text(String(localized: "Merge…"))
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(SecondaryButtonStyle())
-                .help(String(localized: "Merge (m)"))
-                .disabled(row.mergeable == .conflicting)
+                // This one only opens the sheet, but it opens the sheet onto a merge that is
+                // already queueing — so it goes quiet with the write rather than with the click.
+                .busy(isWriting(row, .merge))
+                .disabled(row.mergeBlocker != nil)
+                .help(PullRequestActions.help(
+                    for: row.mergeBlocker,
+                    on: row,
+                    otherwise: String(localized: "Merge (m)")
+                ))
             }
 
             // On its own row under the two above, and last: a verdict is what this panel is for,
@@ -258,6 +281,18 @@ struct InboxDetailPanel: View {
         }
         .padding(16)
         .background(Theme.panel)
+    }
+
+    /// Whether this pull request already has a write of this kind on its way to the outbox.
+    ///
+    /// Read off ``AppEnvironment/activity``, which the write funnel marks, so a verdict queued by
+    /// `r a`, by ⌘K or by the review screen dims this panel's buttons too.
+    /// - Parameters:
+    ///   - row: The pull request.
+    ///   - kind: Which verb.
+    /// - Returns: `true` while the write runs.
+    private func isWriting(_ row: PullRequestSummary, _ kind: ActionActivity.Kind) -> Bool {
+        environment.activity.isRunning(row.id, kind)
     }
 
     /// What the outbox is holding for this pull request (ADR 0006).
@@ -345,17 +380,12 @@ struct PriorityRowView: View {
                 .lineLimit(1)
                 .truncationMode(.middle)
             Spacer(minLength: 4)
-            Text(priority.reasons.first ?? priority.category.reasonLabel)
+            Text(priority.category.localizedLabel)
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textMuted)
                 .lineLimit(1)
         }
-        .help(
-            SpokenRow.sentence([
-                priority.bucket.localizedTitle,
-                priority.file.path,
-            ]) + "\n" + priority.reasons.joined(separator: "\n")
-        )
+        .help(helpText)
         // The dot's colour is the *only* thing on this row that says which bucket the file is
         // in — the card has no section headers, unlike the review screen's file list, where the
         // same buckets are printed as "REVIEW FIRST · 3". So the bucket is named here, where a
@@ -367,9 +397,30 @@ struct PriorityRowView: View {
                 SpokenRow.sentence([
                     priority.bucket.localizedTitle,
                     priority.file.fileName,
-                    priority.reasons.first ?? priority.category.reasonLabel,
+                    priority.category.localizedLabel,
                 ])
             )
         )
+    }
+
+    /// The tooltip: what the row shows, in the reader's language, and then why it was ranked.
+    ///
+    /// The category is named here as well as on the row because the *first* of
+    /// ``ShepherdCore/FilePriority/reasons`` is that same category in ShepherdCore's plain
+    /// English — the invariant ``ReviewFileListView`` relies on for the same swap — and a German
+    /// row whose tooltip read "Standard. …/Node.swift. Source file" was what the 2026-09-09 live
+    /// test found. So the localized label takes its place rather than joining it. The reasons
+    /// that remain ("Touches security-sensitive path …") are still English and come last, behind
+    /// everything that has been translated; those five patterns live in ShepherdCore, which
+    /// imports Foundation only, so localizing them is a follow-up of its own.
+    private var helpText: String {
+        let head = SpokenRow.sentence([
+            priority.bucket.localizedTitle,
+            priority.file.path,
+            priority.category.localizedLabel,
+        ])
+        let rest = priority.reasons.dropFirst()
+        guard !rest.isEmpty else { return head }
+        return head + "\n" + rest.joined(separator: "\n")
     }
 }
