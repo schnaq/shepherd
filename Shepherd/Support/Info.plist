@@ -48,7 +48,7 @@
 	<key>SUFeedURL</key>
 	<string>https://github.com/schnaq/review/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
-	<string>REPLACE_WITH_SUPublicEDKey_FROM_generate_keys</string>
+	<string>Mz8sRldKXn8lJgYA6Zg7SzbWICXoLe1lmNCFk2X4WQw=</string>
 	<key>SUScheduledCheckInterval</key>
 	<integer>86400</integer>
 	<key>SUSendProfileInfo</key>
