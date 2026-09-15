@@ -107,7 +107,12 @@ targets:
         CFBundleVersion: "1"
         LSMinimumSystemVersion: "26.0"
         LSApplicationCategoryType: public.app-category.developer-tools
-        NSHumanReadableCopyright: "MIT licensed — The Shepherd contributors"
+        # schnaq GmbH is named beside the contributors because it is who publishes Shepherd:
+        # the Developer ID on the signature says schnaq GmbH, and an About box that does not is
+        # an About box that disagrees with Gatekeeper. The licence is unchanged — MIT, and
+        # `LICENSE` still holds the copyright for everyone who has written a line of it
+        # (ADR 0009).
+        NSHumanReadableCopyright: "MIT licensed — schnaq GmbH and the Shepherd contributors"
         CFBundleIconName: AppIcon
         # The `shepherd://` deep-link scheme (ADR 0013). This is what makes `open
         # shepherd://sync`, Raycast, and the companion `shepherd` CLI work; the app parses

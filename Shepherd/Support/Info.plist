@@ -40,7 +40,7 @@
 	<key>LSMinimumSystemVersion</key>
 	<string>26.0</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>MIT licensed — The Shepherd contributors</string>
+	<string>MIT licensed — schnaq GmbH and the Shepherd contributors</string>
 	<key>SUAllowsAutomaticUpdates</key>
 	<false/>
 	<key>SUEnableAutomaticChecks</key>
