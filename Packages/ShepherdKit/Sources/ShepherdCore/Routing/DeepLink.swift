@@ -241,6 +241,9 @@ public enum InboxDeepLinkFilter: Hashable, Sendable {
     case agent(id: String)
     /// Pull requests from one repository.
     case repository(RepoRef)
+    /// Pull requests from a watched repository that nobody has involved the user in
+    /// (ADR 0005's 2026-09-16 amendment).
+    case watched
     /// The issues section of the inbox, unnarrowed (ADR 0032).
     case issues
 
@@ -255,6 +258,7 @@ public enum InboxDeepLinkFilter: Hashable, Sendable {
         case .bots: return "bots"
         case .agent(let id): return "agent:\(id)"
         case .repository(let repo): return "repo:\(repo.fullName)"
+        case .watched: return "watched"
         case .issues: return "issues"
         }
     }
@@ -290,6 +294,7 @@ public enum InboxDeepLinkFilter: Hashable, Sendable {
         case "approved-by-me": self = .approvedByMe
         case "humans": self = .humans
         case "bots": self = .bots
+        case "watched": self = .watched
         case "issues": self = .issues
         default: return nil
         }
@@ -297,7 +302,8 @@ public enum InboxDeepLinkFilter: Hashable, Sendable {
 
     /// The tokens without an argument, in the order the documentation lists them.
     public static let keywordTokens = [
-        "needs-my-review", "mine", "involved", "approved-by-me", "humans", "bots", "issues",
+        "needs-my-review", "mine", "involved", "approved-by-me", "watched", "humans", "bots",
+        "issues",
     ]
 }
 

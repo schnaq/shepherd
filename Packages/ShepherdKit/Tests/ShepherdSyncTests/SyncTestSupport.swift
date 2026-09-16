@@ -152,10 +152,14 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
         detailError = error
     }
 
+    /// The raw search expressions of every sweep, in order.
+    private(set) var requestedPullRequestQueries: [[String]] = []
+
     // MARK: - PullRequestFetching
 
     func searchOpenPullRequests(queries: [InboxQuery]) async throws -> [PullRequestSummary] {
         searchCallCount += 1
+        requestedPullRequestQueries.append(queries.map(\.rawQuery))
         await passGate()
         if let searchError { throw searchError }
         if searchResults.isEmpty { return lastSummaries }

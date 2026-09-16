@@ -110,6 +110,21 @@ public enum Relation: String, Sendable, Codable, Hashable, CaseIterable {
     case mentioned
     /// The user is assigned.
     case assigned
+    /// The user is involved in some way the four facets above do not name — most often they
+    /// commented on it once.
+    ///
+    /// The `involves:@me` catch-all used to imply nothing at all, which was fine while it was the
+    /// only facet that could leave a row unmarked. ``watched`` is a second one, and "no relation"
+    /// would then mean two different things at once.
+    case involved
+    /// Nobody involved the user; the pull request is in one of the repositories they watch
+    /// (ADR 0005's 2026-09-16 amendment).
+    ///
+    /// The one relation that is not *about* the user. It says where the row came from, so the
+    /// rail can keep watched repositories out of "Involved" — and so that nothing which reads a
+    /// relation as a mandate mistakes it for one: ``AutoDelegationPolicy/isOwn(_:)`` asks for
+    /// ``author`` or ``assigned``, and a watched row carries neither.
+    case watched
 }
 
 /// One row of the review inbox.

@@ -209,17 +209,44 @@ final class InboxQueryTests: XCTestCase {
         XCTAssertEqual(queries.count, 5)
         XCTAssertTrue(queries.allSatisfy { $0.rawQuery.hasPrefix("is:pr is:open archived:false") })
 
-        let byRelation = queries.filter { !$0.impliedRelations.isEmpty }
         XCTAssertEqual(
-            Set(byRelation.flatMap(\.impliedRelations)),
-            [.reviewRequested, .author, .assigned, .mentioned]
+            Set(queries.flatMap(\.impliedRelations)),
+            [.reviewRequested, .author, .assigned, .mentioned, .involved]
         )
+    }
+
+    func testTheCatchAllFacetSaysSoRatherThanSayingNothing() {
+        // Every facet marks its hits, the catch-all included. Without this an `involves:@me` row
+        // and a watched-repository row are both "no relation at all", and the rail cannot tell a
+        // pull request the user once commented on from one they have never touched.
+        XCTAssertEqual(InboxQuery.involves.impliedRelations, [.involved])
+    }
+
+    func testAWatchedRepositoryIsSweptWholeAndMarkedAsWatched() {
+        let query = InboxQuery.watching(RepoRef(owner: "schnaq", name: "unlock"))
+        XCTAssertEqual(query.rawQuery, "is:pr is:open archived:false repo:schnaq/unlock")
+        XCTAssertEqual(query.impliedRelations, [.watched])
     }
 
     func testScopingToAnOrganisationKeepsRelations() {
         let scoped = InboxQuery.reviewRequested.scoped(toOrganization: "schnaq")
         XCTAssertTrue(scoped.rawQuery.hasSuffix("org:schnaq"))
         XCTAssertEqual(scoped.impliedRelations, [.reviewRequested])
+    }
+
+    func testWatchingManyRepositoriesIsOneQueryEach() {
+        let repos = [
+            RepoRef(owner: "schnaq", name: "unlock"),
+            RepoRef(owner: "schnaq", name: "review"),
+        ]
+        let queries = InboxQuery.watching(repos)
+        XCTAssertEqual(
+            queries.map(\.rawQuery),
+            [
+                "is:pr is:open archived:false repo:schnaq/unlock",
+                "is:pr is:open archived:false repo:schnaq/review",
+            ]
+        )
     }
 }
 

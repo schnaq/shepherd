@@ -444,6 +444,10 @@ struct SyncSettingsTab: View {
     /// re-read it themselves as well, so the list is right immediately rather than one
     /// observation hop later.
     @State private var failedRows: [OutboxItem] = []
+    /// What is typed into the watched-repositories field.
+    @State private var watchedRepositoryDraft = ""
+    /// Why the last attempt to watch a repository did nothing.
+    @State private var watchedRepositoryError: String?
 
     var body: some View {
         SettingsPage {
@@ -517,10 +521,103 @@ struct SyncSettingsTab: View {
                 .task(id: session.failedOutboxCount) { await reloadFailedRows(session) }
             }
 
+            watchedRepositoriesCard
+
             hiddenPullRequestsCard
 
             SettingsSyncSection(model: syncModel)
         }
+    }
+
+    // MARK: - Repositories swept whole
+
+    /// The repositories the sweep reads in full, regardless of the user's relation to what is
+    /// in them (ADR 0005's 2026-09-16 amendment).
+    ///
+    /// The five default facets are all `@me` searches, which is right for an inbox and leaves no
+    /// way to follow a repository you are responsible for but never named on — the normal shape
+    /// of a small team's own repositories. Each entry costs one search per sweep, so the list is
+    /// capped rather than left to grow into the rate limit.
+    @ViewBuilder
+    private var watchedRepositoriesCard: some View {
+        let watched = environment.settings.watchedRepositories
+        Card {
+            VStack(alignment: .leading, spacing: 8) {
+                CardTitle(String(localized: "WATCHED REPOSITORIES"))
+                Text(String(
+                    localized: "Every open pull request in these repositories reaches the inbox, even the ones nobody asked you about. They appear under Watched until you are involved in one."
+                ))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                ForEach(watched, id: \.fullName) { repo in
+                    HStack(spacing: 8) {
+                        Text(verbatim: repo.fullName)
+                            .font(Theme.mono(12))
+                            .foregroundStyle(Theme.textSecondary)
+                        Spacer(minLength: 8)
+                        Button(String(localized: "Stop watching")) {
+                            environment.settings.watchedRepositories
+                                .removeAll { $0.isSameRepository(as: repo) }
+                        }
+                        .buttonStyle(SecondaryButtonStyle(height: 24))
+                    }
+                }
+                HStack(spacing: 8) {
+                    TextField(
+                        String(localized: "owner/repository"),
+                        text: $watchedRepositoryDraft
+                    )
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { addWatchedRepository() }
+                    Button(String(localized: "Watch")) { addWatchedRepository() }
+                        .buttonStyle(SecondaryButtonStyle(height: 28))
+                        .disabled(watchedRepositoryDraft.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                .disabled(watched.count >= AppSettings.maximumWatchedRepositories)
+                if let watchedRepositoryError {
+                    Text(watchedRepositoryError)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Theme.failure)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if watched.count >= AppSettings.maximumWatchedRepositories {
+                    Text(String(
+                        localized: "\(AppSettings.maximumWatchedRepositories) is the maximum — each repository is one more search on every sweep."
+                    ))
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+    }
+
+    /// Validates the typed repository and adds it.
+    ///
+    /// The validation is ``ShepherdCore/InboxDeepLinkFilter``'s, reached through its own
+    /// `repo:` token rather than repeated here: that is the rule the `shepherd://` grammar
+    /// already enforces on exactly this shape, ASCII-only and homoglyph-proof, and a second
+    /// spelling of it in a settings field is a second thing to get wrong. It also matters more
+    /// than it looks — the text goes straight into a GitHub search expression, where a space
+    /// would silently turn one qualifier into two.
+    private func addWatchedRepository() {
+        let typed = watchedRepositoryDraft.trimmingCharacters(in: .whitespaces)
+        guard case .repository(let repo)? = InboxDeepLinkFilter(token: "repo:\(typed)") else {
+            watchedRepositoryError = String(
+                localized: "That is not a repository. Write it as owner/repository, for example schnaq/unlock."
+            )
+            return
+        }
+        guard !environment.settings.watchedRepositories
+            .contains(where: { $0.isSameRepository(as: repo) })
+        else {
+            watchedRepositoryError = String(localized: "\(repo.fullName) is already watched.")
+            return
+        }
+        environment.settings.watchedRepositories.append(repo)
+        watchedRepositoryDraft = ""
+        watchedRepositoryError = nil
     }
 
     // MARK: - Pull requests put away

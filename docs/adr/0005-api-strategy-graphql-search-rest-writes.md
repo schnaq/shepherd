@@ -151,3 +151,37 @@ close is not made wrong by one.
 
 `state_reason` is left out of the close. It is GitHub's issue vocabulary — "completed" or "not
 planned" — and a pull request is closed or merged, never not planned.
+
+## Amendment (2026-09-16): a sixth facet for repositories, and the catch-all starts saying so
+
+The five facets are all `@me` searches, which is the right default — an inbox is what is waiting
+for *you* — and it leaves no way to follow a repository you are responsible for but are never
+named on. That is the normal shape of a small team's own repositories: work happens, nobody asks
+you, and you find out when it is merged. The workaround was to open github.com, which is the
+errand Shepherd exists to remove.
+
+`InboxQuery.watching(_ repo:)` is one more search in the same sweep: `is:pr is:open
+archived:false repo:<owner>/<name>`, one per repository the user names in Settings, capped at ten.
+Per repository rather than `org:<login>` for the whole organisation, because the cost is then
+proportional to what was asked for — a handful of repositories is a handful of searches on top of
+five, where an org-wide sweep on a busy organisation is five pages of pull requests nobody wanted.
+
+Three things this decided:
+
+- **The catch-all now marks its hits.** `involves:@me` implied no relation at all, which was
+  unambiguous only while it was the one facet that could leave a row unmarked. A watched
+  repository's pull request is unmarked for the opposite reason — nobody involved the user — so
+  `Relation.involved` exists to keep "I commented on this in 2023" apart from "I have never
+  touched this", and `Relation.watched` says which facet a row without a relation came from.
+- **The rail rule is about the relation, not the repository.** A row is *Watched* when `.watched`
+  is the only relation it carries. One the user is also involved in keeps its place in *Involved*:
+  watching a repository says where a row may come from, never that it stops being theirs. The
+  `AutoDelegationPolicy.isOwn` gate is untouched and still asks for `author` or `assigned`, so
+  being able to see a pull request never starts an agent on it.
+- **The list reaches the running engine.** `SyncEngine.setAdditionalQueries(_:)` is separate from
+  `SyncConfiguration`, which is fixed for the life of the engine: a repository added in Settings
+  has to reach the sweep that is already running, and signing out to follow a repository would be
+  absurd. Removing one needs nothing extra — the sweep stops returning those rows and the ordinary
+  prune takes them out of the inbox.
+
+`shepherd://inbox?filter=watched` and `shepherd inbox watched` name the new rail (ADR 0013).

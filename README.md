@@ -124,7 +124,7 @@ next key.
 
 ```sh
 shepherd open schnaq/review#128        # …/review/128 and a github.com PR URL work too
-shepherd inbox needs-my-review         # mine · involved · approved-by-me
+shepherd inbox needs-my-review         # mine · involved · approved-by-me · watched
 shepherd inbox --filter agent:claude-code   # humans · bots · agent:<id> · repo:<owner>/<name>
 shepherd fleet                         # every agent; add an id for one agent's page
 shepherd sync                          # sweep every repository now

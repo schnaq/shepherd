@@ -62,6 +62,48 @@ final class SyncEngineTests: XCTestCase {
         XCTAssertEqual(Set(detailRequests), ["schnaq/review#1", "schnaq/review#2"])
     }
 
+    func testWatchedRepositoriesAreSweptAlongsideTheConfiguredFacets() async throws {
+        let github = MockGitHub()
+        await github.setSearchResults([[SyncFixtures.summary(id: "PR_1", number: 1)]])
+        let store = try DatabaseManager.inMemory()
+        let engine = makeEngine(
+            github: github,
+            store: store,
+            configuration: SyncConfiguration(queries: [.reviewRequested])
+        )
+
+        await engine.setAdditionalQueries(
+            InboxQuery.watching([RepoRef(owner: "schnaq", name: "unlock")])
+        )
+        try await engine.syncNow()
+
+        let swept = await github.requestedPullRequestQueries
+        XCTAssertEqual(swept.count, 1)
+        XCTAssertEqual(swept.first?.last, "is:pr is:open archived:false repo:schnaq/unlock")
+    }
+
+    func testUnwatchingARepositoryStopsSweepingIt() async throws {
+        let github = MockGitHub()
+        await github.setSearchResults([[SyncFixtures.summary(id: "PR_1", number: 1)]])
+        let store = try DatabaseManager.inMemory()
+        let engine = makeEngine(
+            github: github,
+            store: store,
+            configuration: SyncConfiguration(queries: [.reviewRequested])
+        )
+
+        await engine.setAdditionalQueries(
+            InboxQuery.watching([RepoRef(owner: "schnaq", name: "unlock")])
+        )
+        try await engine.syncNow()
+        // No sign-out, no rebuilt session: the running engine simply stops asking.
+        await engine.setAdditionalQueries([])
+        try await engine.syncNow()
+
+        let swept = await github.requestedPullRequestQueries
+        XCTAssertEqual(swept.last, ["is:pr is:open archived:false review-requested:@me"])
+    }
+
     func testUnchangedPullRequestsAreNotRefetched() async throws {
         let github = MockGitHub()
         let summaries = [SyncFixtures.summary(id: "PR_1", number: 1)]

@@ -426,6 +426,10 @@ final class AppEnvironment {
             sweepInterval: settings.sweepIntervalMinutes * 60
         )
         phase = .signedIn(session)
+        // The watched repositories are the engine's, not the configuration's: they change while
+        // the app runs, and signing out to follow a repository would be absurd. Set before
+        // `start`, so the very first sweep already carries them.
+        applyWatchedRepositoriesSetting(sweepNow: false)
         // `start` spawns the sweep loop, whose first iteration sweeps immediately — an extra
         // `syncNow()` here only bought a second concurrent sweep on every launch.
         session.start(
@@ -925,6 +929,28 @@ final class AppEnvironment {
     /// Switching it off empties the table rather than keeping the verdicts warm, for the search
     /// index's reason: a switch that left a verdict per pull request on disk would be lying about
     /// what it is named after. Re-enabling costs one local pass.
+    /// Tells the running sweep which repositories to watch (ADR 0005's 2026-09-16 amendment).
+    ///
+    /// Called at sign-in and whenever ``AppSettings/watchedRepositories`` changes — one route for
+    /// both, exactly as ``applySemanticSearchSetting()`` is. The engine takes the new facets for
+    /// its next cycle, and a sweep is asked for straight away so that adding a repository fills
+    /// the list now rather than in up to ten minutes.
+    ///
+    /// Removing one needs nothing extra: the sweep stops returning those rows, and the ordinary
+    /// prune takes them out of the inbox.
+    /// - Parameter sweepNow: Whether to ask for a sweep immediately. False at sign-in, where the
+    ///   loop's own first iteration is about to sweep anyway.
+    func applyWatchedRepositoriesSetting(sweepNow: Bool = true) {
+        guard let session else { return }
+        let queries = InboxQuery.watching(settings.watchedRepositories)
+        let engine = session.syncEngine
+        Task {
+            await engine.setAdditionalQueries(queries)
+            guard sweepNow else { return }
+            try? await engine.syncNow()
+        }
+    }
+
     func applyStructuredTriageSetting() {
         guard let session else {
             triage.reset()

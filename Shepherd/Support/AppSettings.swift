@@ -159,6 +159,11 @@ final class AppSettings {
             Keys.ignoredPullRequests,
             default: InboxIgnoreList()
         )
+        self.watchedRepositories = Self.readJSON(
+            defaults,
+            Keys.watchedRepositories,
+            default: [RepoRef]()
+        )
         self.savedReplies = Self.readJSON(defaults, Keys.savedReplies, default: [SavedReply]())
         self.reviewTemplates = Self.readJSON(
             defaults,
@@ -389,6 +394,22 @@ final class AppSettings {
     var ignoredPullRequests: InboxIgnoreList {
         didSet { Self.writeJSON(defaults, ignoredPullRequests, Keys.ignoredPullRequests) }
     }
+
+    /// The repositories swept whole, whether or not the user is involved in what is in them
+    /// (ADR 0005's 2026-09-16 amendment).
+    ///
+    /// Each one costs a search per sweep, which is why ``maximumWatchedRepositories`` caps the
+    /// list rather than letting it grow until the rate limit does the capping.
+    var watchedRepositories: [RepoRef] {
+        didSet { Self.writeJSON(defaults, watchedRepositories, Keys.watchedRepositories) }
+    }
+
+    /// How many repositories may be watched at once.
+    ///
+    /// Ten, against a search budget of thirty calls a minute: five default facets plus ten
+    /// watched repositories at a two-minute cadence is well under half of it, and the number is
+    /// small enough that the list stays something a person maintains rather than accumulates.
+    static let maximumWatchedRepositories = 10
 
     /// The merge method the merge sheet and the bulk-triage dialog open on.
     ///
@@ -897,6 +918,7 @@ final class AppSettings {
         static let groupBy = "inbox.groupBy"
         static let sortOrder = "inbox.sortOrder"
         static let ignoredPullRequests = "inbox.ignoredPullRequests"
+        static let watchedRepositories = "inbox.watchedRepositories"
         static let defaultMergeMethod = "review.defaultMergeMethod"
         static let opensAgentOnConversation = "review.opensAgentPullRequestsOnConversation"
         static let deletesBranchAfterMerge = "merge.deletesBranchAfterMerge"

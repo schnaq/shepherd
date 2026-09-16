@@ -51,8 +51,8 @@ client.
   | `shepherd://sync` | Run one sweep now (the ⌘R path) |
   | `shepherd://settings` / `shepherd://settings/<tab>` | Open Settings, optionally on a tab |
 
-  Filter tokens: `needs-my-review`, `mine`, `involved`, `approved-by-me`, `humans`, `bots`,
-  `agent:<id>`, `repo:<owner>/<name>`. Settings tabs: `account`, `sync`, `agents`,
+  Filter tokens: `needs-my-review`, `mine`, `involved`, `approved-by-me`, `watched`, `humans`,
+  `bots`, `agent:<id>`, `repo:<owner>/<name>`. Settings tabs: `account`, `sync`, `agents`,
   `intelligence`, `delegation`, `automation`, `appearance`.
 
 - **Parsing is a pure value type in ShepherdCore.** `DeepLink.parse(URL) -> DeepLink?` imports

@@ -28,6 +28,8 @@ enum InboxFilterOption: String, AppEnum, CaseIterable {
     case involved
     /// Pull requests that already carry the user's approval.
     case approvedByMe = "approved-by-me"
+    /// Pull requests in a watched repository the user has no relation to.
+    case watched
     /// Human-authored pull requests.
     case humans
     /// Pull requests from bot accounts.
@@ -45,6 +47,7 @@ enum InboxFilterOption: String, AppEnum, CaseIterable {
             .mine: DisplayRepresentation(title: "My pull requests"),
             .involved: DisplayRepresentation(title: "Involved"),
             .approvedByMe: DisplayRepresentation(title: "Approved by me"),
+            .watched: DisplayRepresentation(title: "Watched"),
             .humans: DisplayRepresentation(title: "People"),
             .bots: DisplayRepresentation(title: "Bots"),
             .issues: DisplayRepresentation(title: "Issues"),

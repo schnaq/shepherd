@@ -12,6 +12,9 @@ enum SmartView: String, CaseIterable, Identifiable, Sendable {
     case myPullRequests
     /// Everything the user is involved in.
     case involved
+    /// Open pull requests in the repositories the user watches, that nobody has involved them in
+    /// (ADR 0005's 2026-09-16 amendment).
+    case watched
     /// Pull requests that already carry an approval.
     case approvedByMe
 
@@ -23,6 +26,7 @@ enum SmartView: String, CaseIterable, Identifiable, Sendable {
         case .needsMyReview: return String(localized: "Needs my review")
         case .myPullRequests: return String(localized: "My pull requests")
         case .involved: return String(localized: "Involved")
+        case .watched: return String(localized: "Watched")
         case .approvedByMe: return String(localized: "Approved by me")
         }
     }
@@ -33,6 +37,7 @@ enum SmartView: String, CaseIterable, Identifiable, Sendable {
         case .needsMyReview: return "tray.and.arrow.down"
         case .myPullRequests: return "point.3.connected.trianglepath.dotted"
         case .involved: return "clock"
+        case .watched: return "binoculars"
         case .approvedByMe: return "checkmark"
         }
     }
@@ -53,7 +58,16 @@ enum SmartView: String, CaseIterable, Identifiable, Sendable {
         case .myPullRequests:
             return row.myRelation.contains(.author)
         case .involved:
-            return true
+            // Still the catch-all, minus the one kind of row nobody involved the user in. The
+            // test is on the whole set rather than on `.involved` alone so that a row from a
+            // build that predates the relation — swept before the upgrade, not yet re-swept —
+            // stays where it has always been instead of vanishing for two minutes.
+            return row.myRelation != [.watched]
+        case .watched:
+            // A pull request in a watched repository that carries no other relation. One the
+            // user is *also* involved in keeps its place in "Involved": watching a repository
+            // says where a row may come from, never that it stops being theirs.
+            return row.myRelation == [.watched]
         case .approvedByMe:
             return row.reviewDecision == .approved && !row.myRelation.contains(.author)
         }
@@ -122,6 +136,8 @@ struct InboxRailSelection: Equatable {
             self.init(smartView: .involved)
         case .approvedByMe:
             self.init(smartView: .approvedByMe)
+        case .watched:
+            self.init(smartView: .watched)
         case .humans:
             self.init(smartView: .involved, provenanceFilter: .humans)
         case .bots:

@@ -128,6 +128,13 @@ public actor SyncEngine {
     /// Whether a sweep is in flight. The engine is an actor but ``performSweep()`` awaits, so
     /// it is fully re-entrant without this.
     private var isSweeping = false
+
+    /// The facets the user added at runtime, swept alongside ``SyncConfiguration/queries``.
+    ///
+    /// Separate from the configuration, which is fixed for the life of the engine, because these
+    /// are not a tunable: a repository added in Settings has to reach the *running* sweep. The
+    /// alternative — rebuilding the session — would sign the user out to follow a repository.
+    private var additionalQueries: [InboxQuery] = []
     /// Set when a sweep was asked for while one was already running; the running sweep picks
     /// it up when it finishes, so a burst of requests costs at most one extra pass.
     private var sweepRequested = false
@@ -246,6 +253,17 @@ public actor SyncEngine {
     public func syncNow() async throws {
         try await performSweep()
         await drainOutbox()
+    }
+
+    /// Replaces the facets swept in addition to the configured ones.
+    ///
+    /// Takes effect on the next sweep; the caller triggers one itself when it wants the result
+    /// now. Passing an empty array removes them, and the rows they were the only source of are
+    /// pruned by that sweep in the ordinary way — a watched repository that is unwatched empties
+    /// itself out of the inbox with no special case anywhere.
+    /// - Parameter queries: The extra facets, or none.
+    public func setAdditionalQueries(_ queries: [InboxQuery]) {
+        additionalQueries = queries
     }
 
     // MARK: - Loops
@@ -409,7 +427,9 @@ public actor SyncEngine {
             previousByID[summary.id] = summary
         }
 
-        let current = try await github.searchOpenPullRequests(queries: configuration.queries)
+        let current = try await github.searchOpenPullRequests(
+            queries: configuration.queries + additionalQueries
+        )
 
         var currentIDs = Set<String>()
         currentIDs.reserveCapacity(current.count)

@@ -68,6 +68,12 @@ struct ShepherdApp: App {
                 .onChange(of: environment.settings.spotlightExportEnabled) { _, _ in
                     environment.applySpotlightSetting()
                 }
+                // And once more for the watched repositories (ADR 0005's 2026-09-16 amendment),
+                // so the Settings card and an applied settings document reach the running sweep
+                // through one route.
+                .onChange(of: environment.settings.watchedRepositories) { _, _ in
+                    environment.applyWatchedRepositoriesSetting()
+                }
                 // A clicked Spotlight result, beside `onOpenURL` because it is the same kind of
                 // arrival — something outside the app naming a pull request — and it ends in the
                 // same `DeepLink.pullRequest` routing (ADR 0021).

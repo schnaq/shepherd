@@ -76,10 +76,10 @@ final class SearchParsingTests: XCTestCase {
         let summaries = try await client.searchOpenPullRequests(
             queries: [.reviewRequested, .authored, .involves]
         )
-        // The same fixture answers all three facets, so every row carries both relations.
+        // The same fixture answers all three facets, so every row carries all three relations.
         XCTAssertEqual(summaries.count, 2, "duplicates across facets must be merged")
         for summary in summaries {
-            XCTAssertEqual(summary.myRelation, [.reviewRequested, .author])
+            XCTAssertEqual(summary.myRelation, [.reviewRequested, .author, .involved])
         }
     }
 

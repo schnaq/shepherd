@@ -188,6 +188,10 @@ struct InboxSidebar: View {
             return String(localized: "Pull requests you opened.")
         case .involved:
             return String(localized: "Everything Shepherd syncs for you.")
+        case .watched:
+            return String(
+                localized: "Open pull requests in the repositories you watch that nobody has involved you in. Set them up in Settings → Sync."
+            )
         case .approvedByMe:
             return String(localized: "Approximation: pull requests you were asked to review that now carry an approval.")
         }

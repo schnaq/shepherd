@@ -54,10 +54,45 @@ public struct InboxQuery: Sendable, Hashable {
         impliedRelations: [.mentioned]
     )
     /// The catch-all facet: anything the user is involved in.
+    ///
+    /// It marks its hits like every other facet does. That looks redundant — "involved" is what
+    /// the whole inbox used to mean — and it stopped being redundant the moment a row could
+    /// arrive without the user being involved at all: a watched repository's pull request
+    /// (``watching(_:)``) has no relation to them, and an empty relation set would be the only
+    /// thing distinguishing it from a pull request they commented on three years ago.
     public static let involves = InboxQuery(
         rawQuery: "\(openPullRequestPrefix) involves:@me",
-        impliedRelations: []
+        impliedRelations: [.involved]
     )
+
+    /// Every open pull request in one repository, whether or not the user has anything to do
+    /// with it (ADR 0005's 2026-09-16 amendment).
+    ///
+    /// The five default facets are all `@me` searches, which is the right default — an inbox is
+    /// what is waiting for *you*. It leaves no way to follow a repository you are responsible for
+    /// but not named on, which is the normal shape of a small team's own repositories: work
+    /// happens, nobody asks you, and you find out when it is merged.
+    ///
+    /// One search per repository rather than `org:` for the whole organisation, because the cost
+    /// is then proportional to what the user asked for: a handful of repositories is a handful of
+    /// searches on top of five, where an organisation-wide sweep on a busy org is five pages of
+    /// pull requests nobody wanted in their inbox. The Settings card caps the list for the same
+    /// reason.
+    /// - Parameter repo: The repository to watch.
+    /// - Returns: The facet query.
+    public static func watching(_ repo: RepoRef) -> InboxQuery {
+        InboxQuery(
+            rawQuery: "\(openPullRequestPrefix) repo:\(repo.fullName)",
+            impliedRelations: [.watched]
+        )
+    }
+
+    /// The watched-repository facets for a whole list, in order.
+    /// - Parameter repos: The repositories to watch.
+    /// - Returns: One query per repository.
+    public static func watching(_ repos: [RepoRef]) -> [InboxQuery] {
+        repos.map { watching($0) }
+    }
 
     /// The default sweep: four relation-bearing facets plus the catch-all.
     ///

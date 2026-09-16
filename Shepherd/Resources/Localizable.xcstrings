@@ -15550,6 +15550,116 @@
           }
         }
       }
+    },
+    "%@ is already watched.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ wird bereits beobachtet."
+          }
+        }
+      }
+    },
+    "%@ is the maximum — each repository is one more search on every sweep.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ist das Maximum — jedes Repository ist eine weitere Suche pro Durchlauf."
+          }
+        }
+      }
+    },
+    "Every open pull request in these repositories reaches the inbox, even the ones nobody asked you about. They appear under Watched until you are involved in one.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder offene Pull Request in diesen Repositories landet im Posteingang, auch die, zu denen dich niemand gefragt hat. Sie stehen unter „Beobachtet“, bis du an einem beteiligt bist."
+          }
+        }
+      }
+    },
+    "Nothing here yet. Add a repository in Settings → Sync to follow the pull requests nobody asked you about.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch nichts da. Füge unter Einstellungen → Sync ein Repository hinzu, um die Pull Requests zu verfolgen, zu denen dich niemand gefragt hat."
+          }
+        }
+      }
+    },
+    "Open pull requests in the repositories you watch that nobody has involved you in. Set them up in Settings → Sync.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offene Pull Requests in den Repositories, die du beobachtest, an denen dich niemand beteiligt hat. Einrichten unter Einstellungen → Sync."
+          }
+        }
+      }
+    },
+    "Stop watching": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht mehr beobachten"
+          }
+        }
+      }
+    },
+    "That is not a repository. Write it as owner/repository, for example schnaq/unlock.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das ist kein Repository. Schreibe es als owner/repository, zum Beispiel schnaq/unlock."
+          }
+        }
+      }
+    },
+    "WATCHED REPOSITORIES": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BEOBACHTETE REPOSITORIES"
+          }
+        }
+      }
+    },
+    "Watch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beobachten"
+          }
+        }
+      }
+    },
+    "Watched": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beobachtet"
+          }
+        }
+      }
+    },
+    "owner/repository": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "owner/repository"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
