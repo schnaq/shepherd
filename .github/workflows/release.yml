@@ -30,13 +30,6 @@ concurrency:
   group: release
   cancel-in-progress: false
 
-# Where the signing material comes from. The values are Infisical coordinates, not secrets —
-# the machine identity that can read them is (`INFISICAL_CLIENT_ID` / `_SECRET`).
-env:
-  INFISICAL_PROJECT_SLUG: shepherd
-  INFISICAL_ENV: prod
-  INFISICAL_PATH_MACOS: /macos
-
 permissions:
   contents: write
 
@@ -58,9 +51,8 @@ jobs:
       # and it names nothing else: the values never reach the log.
       - name: Check the release secrets are present
         env:
-          INFISICAL_CLIENT_ID: ${{ secrets.INFISICAL_CLIENT_ID }}
-          INFISICAL_CLIENT_SECRET: ${{ secrets.INFISICAL_CLIENT_SECRET }}
-          INFISICAL_API_URL: ${{ secrets.INFISICAL_API_URL }}
+          MACOS_DEVID_CERT_P12_BASE64: ${{ secrets.MACOS_DEVID_CERT_P12_BASE64 }}
+          MACOS_DEVID_CERT_PASSWORD: ${{ secrets.MACOS_DEVID_CERT_PASSWORD }}
           NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
           NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
           NOTARY_API_KEY_P8: ${{ secrets.NOTARY_API_KEY_P8 }}
@@ -70,11 +62,11 @@ jobs:
           # A string rather than an array: the runner's /bin/bash is 3.2, where an empty array
           # under `set -u` is its own small adventure.
           missing=""
-          for name in INFISICAL_CLIENT_ID INFISICAL_CLIENT_SECRET INFISICAL_API_URL NOTARY_API_KEY_ID NOTARY_API_ISSUER_ID NOTARY_API_KEY_P8 SPARKLE_PRIVATE_KEY; do
+          for name in MACOS_DEVID_CERT_P12_BASE64 MACOS_DEVID_CERT_PASSWORD NOTARY_API_KEY_ID NOTARY_API_ISSUER_ID NOTARY_API_KEY_P8 SPARKLE_PRIVATE_KEY; do
             if [ -z "${!name}" ]; then missing="$missing $name"; fi
           done
           if [ -n "$missing" ]; then
-            echo "::error::Missing repository secrets:$missing. Set them under Settings → Secrets and variables → Actions; docs/RELEASING.md lists where each value comes from. Nothing was built."
+            echo "::error::Missing repository secrets:$missing. They are edited in Infisical and reach this repository through its GitHub sync; docs/RELEASING.md lists where each value comes from. Nothing was built."
             exit 1
           fi
           echo "All release secrets are set."
@@ -129,25 +121,17 @@ jobs:
           xcodebuild -project Shepherd.xcodeproj -scheme Shepherd -configuration Debug \
             -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO test
 
-      # The Developer ID certificate, from Infisical rather than from the runner's keychain.
-      # `export-type: env` puts every secret at this path into the job environment, which is
-      # what the setup script below reads. Pinned by commit, like every third-party action here.
-      - name: Load the signing secrets
-        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
-        with:
-          method: universal
-          client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
-          client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
-          domain: ${{ secrets.INFISICAL_API_URL }}
-          project-slug: ${{ env.INFISICAL_PROJECT_SLUG }}
-          env-slug: ${{ env.INFISICAL_ENV }}
-          secret-path: ${{ env.INFISICAL_PATH_MACOS }}
-          export-type: env
-
-      # Creates the keychain, imports the identity, and writes its SHA-1 to
+      # Creates the keychain, imports the Developer ID identity, and writes its SHA-1 to
       # $RUNNER_TEMP/signing_identity. The "Remove the signing material" step below undoes all
       # of it, on success and on failure alike.
+      #
+      # The two secrets are Infisical's, reaching this repository through its GitHub sync rather
+      # than through a fetch inside the job: Infisical stays the one place the certificate is
+      # edited, and the workflow stays a workflow that reads secrets like any other.
       - name: Set up signing
+        env:
+          MACOS_DEVID_CERT_P12_BASE64: ${{ secrets.MACOS_DEVID_CERT_P12_BASE64 }}
+          MACOS_DEVID_CERT_PASSWORD: ${{ secrets.MACOS_DEVID_CERT_PASSWORD }}
         run: bash "$GITHUB_WORKSPACE/Scripts/ci-signing-setup.sh"
 
       # notarytool wants the App Store Connect key as a file. It is written outside the

@@ -148,24 +148,19 @@ Settings → Secrets and variables → Actions → New repository secret.
 
 | Secret | Value | Required |
 | --- | --- | --- |
-| `INFISICAL_CLIENT_ID` | machine-identity client id, for the certificate below | yes |
-| `INFISICAL_CLIENT_SECRET` | its client secret | yes |
-| `INFISICAL_API_URL` | the Infisical base URL, e.g. `https://secrets.schnaq.com` | yes |
+| `MACOS_DEVID_CERT_P12_BASE64` | the base64 from step 1 | yes |
+| `MACOS_DEVID_CERT_PASSWORD` | the password that `.p12` was exported with | yes |
 | `SPARKLE_PRIVATE_KEY` | the contents of `sparkle-private-key.txt` (step 3) | yes |
 | `NOTARY_API_KEY_ID` | the Key ID, e.g. `X1Y2Z3W4V5` (step 2) | yes |
 | `NOTARY_API_ISSUER_ID` | the Issuer UUID (step 2) | yes |
 | `NOTARY_API_KEY_P8` | the **entire** contents of `AuthKey_XXXXXXXXXX.p8`, including the `-----BEGIN PRIVATE KEY-----` and `-----END PRIVATE KEY-----` lines (step 2) | yes |
 
-The workflow's first step checks all seven and aborts with the names of the missing ones before
+The workflow's first step checks all six and aborts with the names of the missing ones before
 anything is built.
 
-And in Infisical, under the project, environment and path named by `release.yml`'s `env:` block
-(`shepherd` / `prod` / `/macos` as committed):
-
-| Infisical secret | Value |
-| --- | --- |
-| `MACOS_DEVID_CERT_P12_BASE64` | the base64 from step 1 |
-| `MACOS_DEVID_CERT_PASSWORD` | the password that `.p12` was exported with |
+These are edited in Infisical, not here: its GitHub sync writes them into this repository's
+Actions secrets, so the workflow reads them like any other secret and there is no fetch inside
+the job to fail.
 
 There is deliberately no `CODESIGN_IDENTITY` and no `DEVELOPMENT_TEAM`. The signing identity is
 resolved on the runner, as the certificate's SHA-1, from the keychain the job just built — a

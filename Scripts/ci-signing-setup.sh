@@ -20,7 +20,8 @@
 #
 # ── What it reads ─────────────────────────────────────────────────────────────────────────────
 #
-# From the environment, which `Infisical/secrets-action` fills in before this runs:
+# From the environment, which the workflow fills in from repository secrets (Infisical is the
+# source of truth and syncs them there):
 #
 #   MACOS_DEVID_CERT_P12_BASE64   base64 of the Developer ID Application .p12 (certificate *and*
 #                                 private key — export both together, see docs/RELEASING.md)
