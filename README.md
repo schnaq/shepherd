@@ -87,6 +87,27 @@ than a guess.
 The long form — every feature, with the decisions behind it — is in
 [docs/FEATURES.md](docs/FEATURES.md).
 
+## What it looks like
+
+<img src="docs/assets/screenshots/inbox.png" width="100%" alt="Shepherd's inbox: three pull requests grouped under a Humans heading, each row with its CI state, labels, risk lane and diff size; a left rail counts Needs my review, My pull requests, Involved, Watched and Approved by me; the right pane shows the selected pull request's checks, the files worth reading first, and an on-device summary">
+
+The inbox. One row per pull request across every repository, grouped by who wrote it — a person,
+a bot, or a named coding agent — with the checks, the review state and the size of the diff on
+the row itself. The right pane is the pull request without leaving the list: its CI, the files
+worth opening first, and a summary written by the on-device model.
+
+<img src="docs/assets/screenshots/diff.png" width="100%" alt="A side-by-side diff of an Objective-C file: three collapsed bars reading 18 hidden lines, 10 hidden lines and 39 hidden lines stand in for the unchanged parts, changed lines are highlighted down to the individual word, and the file list on the left orders the two changed files by what deserves attention first">
+
+The review screen. A real Monaco diff — the VS Code engine — side by side or inline, with the
+unchanged stretches folded away and changes highlighted down to the word. Comment, approve,
+request changes and merge without opening a browser tab.
+
+<img src="docs/assets/screenshots/watched-repositories.png" width="100%" alt="The Watched rail showing four open pull requests from sparkle-project/Sparkle, one of them grouped under a Claude Code heading because an agent opened it">
+
+Watched repositories. The inbox is built from `@me` searches, which is right until a repository
+matters to you without anyone naming you on it. Add it in Settings and its open pull requests
+arrive too — under *Watched* until you are involved in one.
+
 ## How it stays yours
 
 - **Local SQLite is the source of truth.** GitHub is a sync target, not a backend
