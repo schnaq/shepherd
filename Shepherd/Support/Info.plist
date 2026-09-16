@@ -19,7 +19,7 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.0</string>
+	<string>1.0.0</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -34,7 +34,7 @@
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
-	<string>1</string>
+	<string>2</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.developer-tools</string>
 	<key>LSMinimumSystemVersion</key>
@@ -46,7 +46,7 @@
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUFeedURL</key>
-	<string>https://github.com/schnaq/review/releases/latest/download/appcast.xml</string>
+	<string>https://github.com/schnaq/shepherd/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>Mz8sRldKXn8lJgYA6Zg7SzbWICXoLe1lmNCFk2X4WQw=</string>
 	<key>SUScheduledCheckInterval</key>

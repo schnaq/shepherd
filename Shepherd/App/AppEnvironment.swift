@@ -428,7 +428,9 @@ final class AppEnvironment {
         phase = .signedIn(session)
         // The watched repositories are the engine's, not the configuration's: they change while
         // the app runs, and signing out to follow a repository would be absurd. Set before
-        // `start`, so the very first sweep already carries them.
+        // `start` so the first sweep usually carries them already; the assignment is a hop
+        // through the actor and the loop does not wait for it, so losing that race costs one
+        // cycle and nothing else.
         applyWatchedRepositoriesSetting(sweepNow: false)
         // `start` spawns the sweep loop, whose first iteration sweeps immediately — an extra
         // `syncNow()` here only bought a second concurrent sweep on every launch.

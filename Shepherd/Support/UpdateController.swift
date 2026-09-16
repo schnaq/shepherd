@@ -22,9 +22,9 @@ enum UpdateProblem: Equatable, Sendable {
     var explanation: String {
         switch self {
         case .noFeedURL:
-            return String(localized: "This build has no update feed, so it will never offer an update. Releases from github.com/schnaq/review do.")
+            return String(localized: "This build has no update feed, so it will never offer an update. Releases from github.com/schnaq/shepherd do.")
         case .unusablePublicKey:
-            return String(localized: "This build has no update-signing key yet, so updates are switched off rather than unverified. Releases from github.com/schnaq/review are signed.")
+            return String(localized: "This build has no update-signing key yet, so updates are switched off rather than unverified. Releases from github.com/schnaq/shepherd are signed.")
         case .couldNotStart(let reason):
             return String(localized: "The updater could not start: \(reason)")
         }

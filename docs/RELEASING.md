@@ -247,7 +247,7 @@ visibility; the own tap is the right first step and stays valid afterwards.
    gh release download v0.2.0 -p 'Shepherd-*.dmg'
    xcrun stapler validate Shepherd-0.2.0.dmg
    spctl --assess -vv --type open --context context:primary-signature Shepherd-0.2.0.dmg
-   curl -fsSL https://github.com/schnaq/review/releases/latest/download/appcast.xml | head -20
+   curl -fsSL https://github.com/schnaq/shepherd/releases/latest/download/appcast.xml | head -20
    ```
 
    The last command is the app's actual feed URL. If it does not return this release's item, the
@@ -272,7 +272,7 @@ visibility; the own tap is the right first step and stays valid afterwards.
 The app's `SUFeedURL` is:
 
 ```
-https://github.com/schnaq/review/releases/latest/download/appcast.xml
+https://github.com/schnaq/shepherd/releases/latest/download/appcast.xml
 ```
 
 `releases/latest/download/<asset>` is a permanent GitHub URL that redirects to the newest

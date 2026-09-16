@@ -6,7 +6,7 @@
 
 **A native macOS review inbox for the age of AI coding agents.**
 
-[![CI](https://img.shields.io/github/actions/workflow/status/schnaq/review/ci.yml?style=flat-square&label=CI)](.github/workflows/ci.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/schnaq/shepherd/ci.yml?style=flat-square&label=CI)](.github/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![Platform: macOS 26+](https://img.shields.io/badge/macOS-26%20Tahoe-101116?style=flat-square)](docs/adr/0002-macos-26-apple-silicon.md)
 [![Swift 6](https://img.shields.io/badge/Swift-6-f05138?style=flat-square)](Packages/ShepherdKit/Package.swift)
@@ -168,7 +168,7 @@ it yourself:
 
 ```sh
 brew install xcodegen
-git clone https://github.com/schnaq/review.git shepherd && cd shepherd
+git clone https://github.com/schnaq/shepherd.git && cd shepherd
 cd web/diff-viewer && npm ci && npm run build && cd ../..   # bundle the Monaco diff viewer
 xcodegen generate
 open Shepherd.xcodeproj

@@ -12881,26 +12881,6 @@
         }
       }
     },
-    "This build has no update feed, so it will never offer an update. Releases from github.com/schnaq/review do.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dieser Build hat keinen Update-Feed und wird deshalb nie ein Update anbieten. Releases von github.com/schnaq/review tun das."
-          }
-        }
-      }
-    },
-    "This build has no update-signing key yet, so updates are switched off rather than unverified. Releases from github.com/schnaq/review are signed.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dieser Build hat noch keinen Update-Signierschlüssel, deshalb sind Updates aus statt unverifiziert. Releases von github.com/schnaq/review sind signiert."
-          }
-        }
-      }
-    },
     "This bullet has no distinctive word Shepherd could look for.": {
       "localizations": {
         "de": {
@@ -15657,6 +15637,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "owner/repository"
+          }
+        }
+      }
+    },
+    "This build has no update feed, so it will never offer an update. Releases from github.com/schnaq/shepherd do.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Build hat keinen Update-Feed und wird deshalb nie ein Update anbieten. Releases von github.com/schnaq/shepherd tun das."
+          }
+        }
+      }
+    },
+    "This build has no update-signing key yet, so updates are switched off rather than unverified. Releases from github.com/schnaq/shepherd are signed.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Build hat noch keinen Update-Signierschlüssel, deshalb sind Updates aus statt unverifiziert. Releases von github.com/schnaq/shepherd sind signiert."
           }
         }
       }

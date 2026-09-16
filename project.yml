@@ -103,8 +103,8 @@ targets:
       path: Shepherd/Support/Info.plist
       properties:
         CFBundleDisplayName: Shepherd
-        CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "1"
+        CFBundleShortVersionString: "1.0.0"
+        CFBundleVersion: "2"
         LSMinimumSystemVersion: "26.0"
         LSApplicationCategoryType: public.app-category.developer-tools
         # schnaq GmbH is named beside the contributors because it is who publishes Shepherd:
@@ -130,7 +130,7 @@ targets:
         # land after the tag, and nothing to keep in step by hand. The alternative — a
         # GitHub-Pages URL — needs a second workflow and a second place a release can be half
         # done. See docs/RELEASING.md.
-        SUFeedURL: https://github.com/schnaq/review/releases/latest/download/appcast.xml
+        SUFeedURL: https://github.com/schnaq/shepherd/releases/latest/download/appcast.xml
         #
         # PLACEHOLDER. The real value is the base64 public key that `generate_keys` prints once,
         # on the maintainer's Mac (docs/RELEASING.md § Sparkle keys). Until it is replaced,

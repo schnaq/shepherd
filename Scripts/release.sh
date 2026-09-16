@@ -45,7 +45,7 @@
 #                              SUFeedURL baked into the built app.
 #   RELEASE_URL_BASE           Prefix for the enclosure URL. Default:
 #                              https://github.com/<repo>/releases/download/v<version>
-#   GITHUB_REPOSITORY          owner/name, used for the default URLs. Default: schnaq/review.
+#   GITHUB_REPOSITORY          owner/name, used for the default URLs. Default: schnaq/shepherd.
 #   RELEASE_NOTES_FILE         An HTML or plain-text file whose contents become the appcast
 #                              item's <description>, i.e. what Sparkle shows in its update
 #                              window. Optional.
@@ -87,7 +87,7 @@ require_tool() {
 
 ALLOW_UNSIGNED=${ALLOW_UNSIGNED:-}
 SKIP_NOTARIZATION=${SKIP_NOTARIZATION:-}
-GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-schnaq/review}
+GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-schnaq/shepherd}
 RELEASE_DIR=${RELEASE_DIR:-$REPO_ROOT/dist}
 BUILD_DIR=${BUILD_DIR:-$REPO_ROOT/.build/release}
 

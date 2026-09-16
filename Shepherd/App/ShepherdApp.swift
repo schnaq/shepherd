@@ -68,9 +68,11 @@ struct ShepherdApp: App {
                 .onChange(of: environment.settings.spotlightExportEnabled) { _, _ in
                     environment.applySpotlightSetting()
                 }
-                // And once more for the watched repositories (ADR 0005's 2026-09-16 amendment),
-                // so the Settings card and an applied settings document reach the running sweep
-                // through one route.
+                // And once more for the watched repositories (ADR 0005's 2026-09-16 amendment).
+                // Only the Settings card writes this one — it is device-local, like the ignore
+                // list, and not in `SyncedSettingsDocument` — but it still goes through an
+                // `onChange` rather than the card, so that the card cannot forget to tell the
+                // sweep and a future second writer inherits the wiring.
                 .onChange(of: environment.settings.watchedRepositories) { _, _ in
                     environment.applyWatchedRepositoriesSetting()
                 }

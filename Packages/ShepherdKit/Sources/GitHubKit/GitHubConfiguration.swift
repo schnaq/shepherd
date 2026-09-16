@@ -18,7 +18,7 @@ public enum GitHubDefaultURL {
     /// `https://github.com` — where the device flow and token endpoints live.
     public static var web: URL { url("https://github.com") }
     /// The `User-Agent` Shepherd sends. GitHub requires a non-empty one.
-    public static var userAgent: String { "Shepherd (+https://github.com/schnaq/review)" }
+    public static var userAgent: String { "Shepherd (+https://github.com/schnaq/shepherd)" }
 }
 
 /// Tunables for ``GitHubClient``.
