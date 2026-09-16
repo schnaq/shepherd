@@ -158,6 +158,11 @@ else
         CODE_SIGN_STYLE=Manual
         CODE_SIGN_IDENTITY="$CODESIGN_IDENTITY"
         "OTHER_CODE_SIGN_FLAGS=--timestamp"
+        # Xcode adds `com.apple.security.get-task-allow` — the entitlement that lets a debugger
+        # attach — whenever it takes the signing to be a development one, and with an identity
+        # given as a SHA-1 it cannot see that the certificate is a Developer ID and assumes the
+        # worst. The notary service rejects a build that asks for it, in as many words.
+        CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO
     )
     if [[ -n "${DEVELOPMENT_TEAM:-}" ]]; then
         BUILD_ARGS+=(DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM")
@@ -202,25 +207,68 @@ except (ValueError, binascii.Error):
 ' "$PUBLIC_KEY" || die "SUPublicEDKey in project.yml is still the placeholder (or not a 32-byte ed25519 key). Paste the public key \`generate_keys\` printed. See docs/RELEASING.md."
 fi
 
-# ── 3. Verify the signature xcodebuild produced ──────────────────────────────────────────────
+# ── 3. Re-sign Sparkle's helpers, then verify every signature ────────────────────────────────
 #
-# Nothing is re-signed here on purpose. Xcode signs the embedded Sparkle XCFramework and its
-# nested helpers (Autoupdate, Updater.app, the XPC services) inside-out as part of the build; a
-# `codesign --force` pass over the app afterwards would invalidate that nested code and strip the
-# app's entitlements. So this step only checks — and, when a nested helper is unsigned, says
-# exactly which one, because that is the failure that otherwise shows up as "the update
-# installer quit unexpectedly" months later.
+# This step used to only check, on the assumption that Xcode signs the embedded Sparkle
+# XCFramework and its nested helpers inside-out as part of the build. It signs the framework
+# bundle; it does not touch the executables *inside* it. `Autoupdate`, `Updater.app` and the two
+# XPC services therefore keep the signature the Sparkle project shipped them with — valid, which
+# is why `codesign --verify` was happy, but not ours and without a secure timestamp. Apple's
+# notary service is the thing that notices, and it notices after the build, the DMG and an
+# upload: "The binary is not signed with a valid Developer ID certificate."
+#
+# So they are re-signed here, innermost first — a bundle's seal covers what is nested inside it,
+# so signing an outer one before an inner one immediately invalidates the outer. The app itself
+# is last, with the entitlements it is meant to ship with, read from the committed file rather
+# than back out of the binary: those are the ones that belong in a release, and a re-signing that
+# copied whatever the build happened to produce would preserve any mistake in it.
 
 if [[ -z "$ALLOW_UNSIGNED" ]]; then
+    SPARKLE_FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
+    if [[ -d "$SPARKLE_FRAMEWORK" ]]; then
+        log "Re-signing Sparkle's nested helpers"
+        for nested in \
+            Versions/B/XPCServices/Downloader.xpc \
+            Versions/B/XPCServices/Installer.xpc \
+            Versions/B/Updater.app \
+            Versions/B/Autoupdate
+        do
+            [[ -e "$SPARKLE_FRAMEWORK/$nested" ]] || continue
+            codesign --force --options runtime --timestamp \
+                --sign "$CODESIGN_IDENTITY" "$SPARKLE_FRAMEWORK/$nested" ||
+                die "Could not re-sign Sparkle's $nested."
+            info "re-signed: $nested"
+        done
+        codesign --force --options runtime --timestamp \
+            --sign "$CODESIGN_IDENTITY" "$SPARKLE_FRAMEWORK" ||
+            die "Could not re-sign Sparkle.framework."
+
+        # Re-sealing the app, because its own signature covers the framework that just changed.
+        codesign --force --options runtime --timestamp \
+            --entitlements "$REPO_ROOT/Shepherd/Support/Shepherd.entitlements" \
+            --sign "$CODESIGN_IDENTITY" "$APP" ||
+            die "Could not re-sign $APP after replacing Sparkle's signatures."
+    fi
+
     log "Verifying code signatures"
     codesign --verify --deep --strict --verbose=2 "$APP"
     SPARKLE_FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
     if [[ -d "$SPARKLE_FRAMEWORK" ]]; then
+        # `--verify` alone passes on code signed by anyone at all, which is exactly how the
+        # vendor's own signature on these four survived every check here and was caught only by
+        # Apple. So the authority is read as well: a nested helper signed by someone other than
+        # us fails the release rather than the notarization.
         while IFS= read -r nested; do
             [[ -n "$nested" ]] || continue
             codesign --verify --strict "$nested" ||
                 die "Sparkle's nested helper is not correctly signed: $nested"
-            info "signed: ${nested#"$APP/"}"
+            authority=$(codesign --display --verbose=2 "$nested" 2>&1 |
+                sed -n 's/^Authority=//p' | head -1)
+            case "$authority" in
+                "Developer ID Application:"*) ;;
+                *) die "Sparkle's ${nested#"$APP/"} is signed by '$authority', not by a Developer ID certificate. It would be refused by the notary service." ;;
+            esac
+            info "signed by $authority: ${nested#"$APP/"}"
         done < <(find "$SPARKLE_FRAMEWORK/Versions" -maxdepth 3 \
             \( -name 'Updater.app' -o -name 'Autoupdate' -o -name '*.xpc' \) 2>/dev/null || true)
     else
