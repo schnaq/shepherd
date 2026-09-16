@@ -29,10 +29,10 @@ cask "shepherd" do
   # Sparkle keeps the installed copy current, so Homebrew should not fight it: `brew upgrade`
   # leaves an app with `auto_updates true` alone unless the cask's version moved.
   auto_updates true
-
-  # ADR 0002: macOS 26 (Tahoe) and Apple Silicon only. `brew audit --cask` is the arbiter of the
-  # symbol name if a future Homebrew renames it.
-  depends_on macos: ">= :tahoe"
+  # ADR 0002: macOS 26 (Tahoe) and Apple Silicon only. A bare symbol already means "this version
+  # or newer" in a cask, and `brew style` rewrites `">= :tahoe"` to this; the blank line above it
+  # goes for the same reason — the three stanzas are one group.
+  depends_on macos: :tahoe
   depends_on arch: :arm64
 
   app "Shepherd.app"
