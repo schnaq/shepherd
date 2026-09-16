@@ -30,14 +30,23 @@ concurrency:
   group: release
   cancel-in-progress: false
 
+# Where the signing material comes from. The values are Infisical coordinates, not secrets —
+# the machine identity that can read them is (`INFISICAL_CLIENT_ID` / `_SECRET`).
+env:
+  INFISICAL_PROJECT_SLUG: shepherd
+  INFISICAL_ENV: prod
+  INFISICAL_PATH_MACOS: /macos
+
 permissions:
   contents: write
 
 jobs:
   release:
     name: Notarized release (macOS)
-    # The same labels the app build in ci.yml uses: a release needs Xcode, an Apple Silicon
-    # host, and the signing identity in that runner's login keychain.
+    # The same labels the app build in ci.yml uses: a release needs Xcode and an Apple Silicon
+    # host. It does *not* need anything installed in that runner's keychain — the signing
+    # identity arrives as a secret and lives in a keychain this job creates and deletes
+    # (`Scripts/ci-signing-setup.sh`), so a new runner needs no preparation beyond Xcode.
     runs-on: [self-hosted, macOS]
     steps:
       - uses: actions/checkout@v4
@@ -49,7 +58,9 @@ jobs:
       # and it names nothing else: the values never reach the log.
       - name: Check the release secrets are present
         env:
-          CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
+          INFISICAL_CLIENT_ID: ${{ secrets.INFISICAL_CLIENT_ID }}
+          INFISICAL_CLIENT_SECRET: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+          INFISICAL_API_URL: ${{ secrets.INFISICAL_API_URL }}
           NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
           NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
           NOTARY_API_KEY_P8: ${{ secrets.NOTARY_API_KEY_P8 }}
@@ -59,7 +70,7 @@ jobs:
           # A string rather than an array: the runner's /bin/bash is 3.2, where an empty array
           # under `set -u` is its own small adventure.
           missing=""
-          for name in CODESIGN_IDENTITY NOTARY_API_KEY_ID NOTARY_API_ISSUER_ID NOTARY_API_KEY_P8 SPARKLE_PRIVATE_KEY; do
+          for name in INFISICAL_CLIENT_ID INFISICAL_CLIENT_SECRET INFISICAL_API_URL NOTARY_API_KEY_ID NOTARY_API_ISSUER_ID NOTARY_API_KEY_P8 SPARKLE_PRIVATE_KEY; do
             if [ -z "${!name}" ]; then missing="$missing $name"; fi
           done
           if [ -n "$missing" ]; then
@@ -118,6 +129,27 @@ jobs:
           xcodebuild -project Shepherd.xcodeproj -scheme Shepherd -configuration Debug \
             -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO test
 
+      # The Developer ID certificate, from Infisical rather than from the runner's keychain.
+      # `export-type: env` puts every secret at this path into the job environment, which is
+      # what the setup script below reads. Pinned by commit, like every third-party action here.
+      - name: Load the signing secrets
+        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
+        with:
+          method: universal
+          client-id: ${{ secrets.INFISICAL_CLIENT_ID }}
+          client-secret: ${{ secrets.INFISICAL_CLIENT_SECRET }}
+          domain: ${{ secrets.INFISICAL_API_URL }}
+          project-slug: ${{ env.INFISICAL_PROJECT_SLUG }}
+          env-slug: ${{ env.INFISICAL_ENV }}
+          secret-path: ${{ env.INFISICAL_PATH_MACOS }}
+          export-type: env
+
+      # Creates the keychain, imports the identity, and writes its SHA-1 to
+      # $RUNNER_TEMP/signing_identity. The "Remove the signing material" step below undoes all
+      # of it, on success and on failure alike.
+      - name: Set up signing
+        run: bash "$GITHUB_WORKSPACE/Scripts/ci-signing-setup.sh"
+
       # notarytool wants the App Store Connect key as a file. It is written outside the
       # workspace and removed in a step that always runs, so it cannot end up in an artefact.
       - name: Write the notarization key
@@ -132,8 +164,6 @@ jobs:
       - name: Build, sign, notarize, staple, appcast
         env:
           SHEPHERD_VERSION: ${{ steps.version.outputs.version }}
-          CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
-          DEVELOPMENT_TEAM: ${{ secrets.DEVELOPMENT_TEAM }}
           NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
           NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
@@ -141,6 +171,11 @@ jobs:
         run: |
           set -euo pipefail
           export NOTARY_API_KEY_PATH="$HOME/.shepherd-release/notary.p8"
+          # The identity the setup step resolved, as a SHA-1. No `DEVELOPMENT_TEAM`: with a
+          # manual style and a hash, there is no team for Xcode to match a certificate against,
+          # and that match is what used to fail — the team of a Developer ID certificate is
+          # already in the certificate.
+          export CODESIGN_IDENTITY="$(cat "$RUNNER_TEMP/signing_identity")"
           ./Scripts/release.sh
 
       - name: Publish the GitHub release
@@ -164,6 +199,18 @@ jobs:
       - name: Remind about drafts
         if: ${{ inputs.draft == true }}
         run: echo "::warning::This release is a draft. The Sparkle feed keeps serving the previous release's appcast until it is published."
+
+      # The runner is persistent, so everything this job installed has to come back off it —
+      # on a cancelled or failed run too, which is when leaving a signing key behind would
+      # matter most.
+      - name: Remove the signing material
+        if: always()
+        run: |
+          original="$(cat "$RUNNER_TEMP/orig-default-keychain" 2>/dev/null || true)"
+          security default-keychain -s "${original:-$HOME/Library/Keychains/login.keychain-db}" 2>/dev/null || true
+          security delete-keychain "$RUNNER_TEMP/release-signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/signing_identity" "$RUNNER_TEMP/signing_keychain" \
+                "$RUNNER_TEMP/orig-default-keychain" "$RUNNER_TEMP/devid.p12"
 
       - name: Remove the notarization key
         if: always()

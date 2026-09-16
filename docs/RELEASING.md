@@ -46,10 +46,27 @@ security find-identity -v -p codesigning
 `Developer ID Application: Jane Doe (AB12CD34EF)` — the whole string, quotes excluded — is the
 value of `CODESIGN_IDENTITY`. `AB12CD34EF` is the team id.
 
-> The certificate must exist in the **login keychain of the machine that builds the release**. For
-> the self-hosted runner that means: log in as the runner's user once, install the certificate
-> there, and make sure its login keychain is unlocked when the runner runs. A locked keychain
-> shows up as `errSecInternalComponent` during `codesign`.
+Then export it, certificate **and** private key together, for the release workflow to use:
+
+```sh
+# Keychain Access → login → My Certificates → select the certificate AND the key under it
+#   (⌘-click both) → right-click → Export 2 items… → Personal Information Exchange (.p12)
+base64 -i devid.p12 | pbcopy   # → MACOS_DEVID_CERT_P12_BASE64 in Infisical
+rm -P devid.p12
+```
+
+> Export **both rows**. A `.p12` holding only the certificate, or only the key, imports without
+> complaint and then yields no usable identity — `Scripts/ci-signing-setup.sh` catches that in
+> two seconds and says so, rather than letting it surface as `errSecInternalComponent` after a
+> twenty-minute build.
+
+> **The runner keeps no signing material.** An earlier version of this document asked you to
+> install the certificate in the runner's login keychain; that does not work. A runner installed
+> with `svc.sh` is a LaunchAgent, so it runs in its user's Aqua session, while an
+> `unlock-keychain` typed over SSH unlocks the keychain for the SSH session only — the runner's
+> session still sees it locked and every `codesign` dies with `errSecInternalComponent`. The
+> release job therefore builds its own keychain from the `.p12` above and deletes it afterwards
+> (`Scripts/ci-signing-setup.sh`). A new runner needs Xcode and nothing else.
 
 ### 2. Notarization credentials
 
@@ -131,15 +148,29 @@ Settings → Secrets and variables → Actions → New repository secret.
 
 | Secret | Value | Required |
 | --- | --- | --- |
-| `CODESIGN_IDENTITY` | `Developer ID Application: Jane Doe (AB12CD34EF)` (step 1) | yes |
+| `INFISICAL_CLIENT_ID` | machine-identity client id, for the certificate below | yes |
+| `INFISICAL_CLIENT_SECRET` | its client secret | yes |
+| `INFISICAL_API_URL` | the Infisical base URL, e.g. `https://secrets.schnaq.com` | yes |
 | `SPARKLE_PRIVATE_KEY` | the contents of `sparkle-private-key.txt` (step 3) | yes |
 | `NOTARY_API_KEY_ID` | the Key ID, e.g. `X1Y2Z3W4V5` (step 2) | yes |
 | `NOTARY_API_ISSUER_ID` | the Issuer UUID (step 2) | yes |
 | `NOTARY_API_KEY_P8` | the **entire** contents of `AuthKey_XXXXXXXXXX.p8`, including the `-----BEGIN PRIVATE KEY-----` and `-----END PRIVATE KEY-----` lines (step 2) | yes |
-| `DEVELOPMENT_TEAM` | the team id, e.g. `AB12CD34EF` | only if signing complains it cannot pick a team |
 
-The workflow's first step checks all five and aborts with the names of the missing ones before
+The workflow's first step checks all seven and aborts with the names of the missing ones before
 anything is built.
+
+And in Infisical, under the project, environment and path named by `release.yml`'s `env:` block
+(`shepherd` / `prod` / `/macos` as committed):
+
+| Infisical secret | Value |
+| --- | --- |
+| `MACOS_DEVID_CERT_P12_BASE64` | the base64 from step 1 |
+| `MACOS_DEVID_CERT_PASSWORD` | the password that `.p12` was exported with |
+
+There is deliberately no `CODESIGN_IDENTITY` and no `DEVELOPMENT_TEAM`. The signing identity is
+resolved on the runner, as the certificate's SHA-1, from the keychain the job just built — a
+name has to be matched against a search list, and a team has to be matched against a
+certificate, and both of those matches have their own ways to fail. A hash has none.
 
 ### 5. Commit the public key
 
