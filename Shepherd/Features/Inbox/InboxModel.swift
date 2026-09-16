@@ -241,8 +241,19 @@ final class InboxModel {
     /// User preferences (grouping, sorting).
     let settings: AppSettings
 
-    /// Every row the database holds.
-    private(set) var allRows: [PullRequestSummary] = []
+    /// Every row the database holds, before anything is hidden.
+    private(set) var storedRows: [PullRequestSummary] = []
+
+    /// Every row the inbox works with: ``storedRows`` minus the pull requests the user has put
+    /// away.
+    ///
+    /// The subtraction happens here, above the rail, rather than inside ``filteredRows`` — so the
+    /// rail counts, the grouping, the keyboard walk and the bulk selection all agree that an
+    /// ignored row is not there. The one thing it cannot hide is a review someone is waiting on:
+    /// ``ShepherdCore/InboxIgnoreList/hides(_:)`` gives up on a row whose
+    /// ``PullRequestSummary/needsMyReview`` is true, which is what keeps the menu-bar badge and
+    /// the morning digest honest without either of them having to know this list exists.
+    var allRows: [PullRequestSummary] { settings.ignoredPullRequests.filter(storedRows) }
     /// Whether the first observation value has arrived.
     private(set) var hasLoaded = false
 
@@ -386,7 +397,7 @@ final class InboxModel {
         observationTask = Task { [weak self] in
             for await rows in stream {
                 guard let self else { return }
-                self.allRows = rows
+                self.storedRows = rows
                 self.hasLoaded = true
                 self.clampSelection()
                 self.refreshReviewRounds()
@@ -608,6 +619,26 @@ final class InboxModel {
     /// list.
     var hasActiveFilter: Bool {
         provenanceFilter != nil || repoFilter != nil || riskFilter != nil || laneFilter != nil
+    }
+
+    // MARK: - Putting a pull request away
+
+    /// Hides one pull request from the inbox.
+    ///
+    /// Nothing is written to GitHub and nothing is deleted locally: the row stays in the database
+    /// and keeps being swept, so a review request on it still arrives and still un-hides it. This
+    /// only stops it being listed.
+    /// - Parameter row: The row to put away.
+    func ignore(_ row: PullRequestSummary) {
+        settings.ignoredPullRequests.ignore(row, at: Date())
+        // The selection is the one piece of state that can now point at nothing on screen.
+        clampSelection()
+    }
+
+    /// Shows a pull request the user put away earlier.
+    /// - Parameter id: The node id to forget.
+    func stopIgnoring(id: String) {
+        settings.ignoredPullRequests.show(id: id)
     }
 
     // MARK: - The track-record notice (ADR 0027's 2026-09-05 amendment)

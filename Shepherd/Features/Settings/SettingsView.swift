@@ -517,7 +517,59 @@ struct SyncSettingsTab: View {
                 .task(id: session.failedOutboxCount) { await reloadFailedRows(session) }
             }
 
+            hiddenPullRequestsCard
+
             SettingsSyncSection(model: syncModel)
+        }
+    }
+
+    // MARK: - Pull requests put away
+
+    /// What the inbox has been told to stop showing, and the way back.
+    ///
+    /// Hiding happens in the list, one right-click at a time, and the undo for it is the toast
+    /// that follows. This is where it goes once that toast is gone: without it the list would be
+    /// the only irreversible thing in an app whose architecture asks for an undo instead of a
+    /// confirmation. The card is omitted entirely when nothing is hidden — an empty list here
+    /// would be a permanent reminder of a feature nobody used.
+    @ViewBuilder
+    private var hiddenPullRequestsCard: some View {
+        let hidden = environment.settings.ignoredPullRequests
+        if !hidden.entries.isEmpty {
+            Card {
+                VStack(alignment: .leading, spacing: 8) {
+                    CardTitle(String(localized: "HIDDEN PULL REQUESTS"))
+                    Text(String(
+                        localized: "These are left out of the inbox. A pull request comes back by itself as soon as a review is requested from you on it."
+                    ))
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                    ForEach(hidden.entries) { entry in
+                        HStack(alignment: .top, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(verbatim: "\(entry.repo.fullName)#\(entry.number)")
+                                    .font(Theme.mono(11))
+                                    .foregroundStyle(Theme.textMuted)
+                                Text(entry.title)
+                                    .font(.system(size: 12))
+                                    .foregroundStyle(Theme.textSecondary)
+                                    .lineLimit(2)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            Spacer(minLength: 8)
+                            Button(String(localized: "Show again")) {
+                                environment.settings.ignoredPullRequests.show(id: entry.id)
+                            }
+                            .buttonStyle(SecondaryButtonStyle(height: 24))
+                        }
+                    }
+                    Button(String(localized: "Show all again")) {
+                        environment.settings.ignoredPullRequests.showAll()
+                    }
+                    .buttonStyle(SecondaryButtonStyle(height: 28))
+                }
+            }
         }
     }
 

@@ -15490,6 +15490,66 @@
           }
         }
       }
+    },
+    "%@ hidden. A review request brings it back.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ausgeblendet. Bei einer Review-Anfrage taucht der Pull Request wieder auf."
+          }
+        }
+      }
+    },
+    "HIDDEN PULL REQUESTS": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AUSGEBLENDETE PULL REQUESTS"
+          }
+        }
+      }
+    },
+    "Hide this pull request": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diesen Pull Request ausblenden"
+          }
+        }
+      }
+    },
+    "Show all again": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle wieder anzeigen"
+          }
+        }
+      }
+    },
+    "These are left out of the inbox. A pull request comes back by itself as soon as a review is requested from you on it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese lässt der Posteingang aus. Ein Pull Request kommt von selbst zurück, sobald eine Review von dir angefragt wird."
+          }
+        }
+      }
+    },
+    "Undo": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rückgängig"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

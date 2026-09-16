@@ -154,6 +154,11 @@ final class AppSettings {
             .object(forKey: Keys.semanticSearch) as? Bool ?? true
         self.spotlightExportEnabled = defaults
             .object(forKey: Keys.spotlightExport) as? Bool ?? true
+        self.ignoredPullRequests = Self.readJSON(
+            defaults,
+            Keys.ignoredPullRequests,
+            default: InboxIgnoreList()
+        )
         self.savedReplies = Self.readJSON(defaults, Keys.savedReplies, default: [SavedReply]())
         self.reviewTemplates = Self.readJSON(
             defaults,
@@ -373,6 +378,16 @@ final class AppSettings {
     /// How rows are ordered inside a section.
     var sortOrder: InboxSortOrder {
         didSet { Self.write(defaults, sortOrder, Keys.sortOrder) }
+    }
+
+    /// The pull requests the inbox has been told to stop showing.
+    ///
+    /// Device-local on purpose: it is not in ``SyncedSettingsDocument``, which enumerates its
+    /// fields one at a time (ADR 0014), because dismissing somebody else's year-old pull request
+    /// is a decision about this inbox rather than a preference — the same reasoning that keeps
+    /// the auto-delegation ledger off the settings document.
+    var ignoredPullRequests: InboxIgnoreList {
+        didSet { Self.writeJSON(defaults, ignoredPullRequests, Keys.ignoredPullRequests) }
     }
 
     /// The merge method the merge sheet and the bulk-triage dialog open on.
@@ -881,6 +896,7 @@ final class AppSettings {
         static let structuredTriage = "intelligence.structuredTriageEnabled"
         static let groupBy = "inbox.groupBy"
         static let sortOrder = "inbox.sortOrder"
+        static let ignoredPullRequests = "inbox.ignoredPullRequests"
         static let defaultMergeMethod = "review.defaultMergeMethod"
         static let opensAgentOnConversation = "review.opensAgentPullRequestsOnConversation"
         static let deletesBranchAfterMerge = "merge.deletesBranchAfterMerge"

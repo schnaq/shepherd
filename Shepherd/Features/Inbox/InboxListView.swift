@@ -252,6 +252,8 @@ struct InboxListView: View {
             )
                 .copyBranch(row)
         }
+        Divider()
+        Button(String(localized: "Hide this pull request")) { hide(row) }
         if model.hasMarks {
             Divider()
             // Bulk actions act on the ticked rows, not on the row that was right-clicked —
@@ -263,6 +265,23 @@ struct InboxListView: View {
                 }
             }
         }
+    }
+
+    /// Puts one pull request away, and offers the undo the architecture asks for instead of a
+    /// confirmation dialog.
+    ///
+    /// The toast is the only place the reversal is offered at the moment it matters; afterwards
+    /// the list lives in Settings → Sync, which is what the toast's wording points at.
+    private func hide(_ row: PullRequestSummary) {
+        let id = row.id
+        model.ignore(row)
+        environment.toasts.show(
+            Toast(
+                message: String(localized: "\(row.slug) hidden. A review request brings it back."),
+                actionTitle: String(localized: "Undo"),
+                action: { model.stopIgnoring(id: id) }
+            )
+        )
     }
 
     // MARK: - Bindings and helpers
