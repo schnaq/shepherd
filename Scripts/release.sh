@@ -283,8 +283,29 @@ else
         )
     fi
 
-    xcrun notarytool submit "$DMG" "${NOTARY_AUTH[@]}" --wait ||
-        die "Notarization failed. Run \`xcrun notarytool log <submission-id> ${NOTARY_AUTH[*]}\` for the reason."
+    # `notarytool submit --wait` exits 0 whenever it *reached* Apple and got an answer — an
+    # answer of "Invalid" included. Taken at its exit code alone, a rejected build walks on to
+    # the stapler, which then fails with "Record not found" and an error about stapling, for a
+    # problem that has nothing to do with stapling. So the verdict is read out of the JSON, and
+    # anything but "Accepted" ends the release here, with Apple's own log printed: that log is
+    # the only place the actual reason exists, and fetching it afterwards means finding the
+    # submission id in a CI log first.
+    SUBMISSION="$WORK_DIR/notarization.json"
+    xcrun notarytool submit "$DMG" "${NOTARY_AUTH[@]}" --wait --output-format json \
+        > "$SUBMISSION" ||
+        die "Could not submit to the notary service. Check the credentials and the network."
+
+    # `plutil` reads JSON and ships with macOS, so this needs no `jq` on the runner.
+    NOTARY_STATUS=$(/usr/bin/plutil -extract status raw -o - "$SUBMISSION" 2>/dev/null || true)
+    NOTARY_ID=$(/usr/bin/plutil -extract id raw -o - "$SUBMISSION" 2>/dev/null || true)
+
+    if [[ "$NOTARY_STATUS" != "Accepted" ]]; then
+        warn "Apple did not accept this build: ${NOTARY_STATUS:-unknown}. Its log follows."
+        if [[ -n "$NOTARY_ID" ]]; then
+            xcrun notarytool log "$NOTARY_ID" "${NOTARY_AUTH[@]}" || true
+        fi
+        die "Notarization returned ${NOTARY_STATUS:-no status}. Nothing was stapled or published."
+    fi
 
     log "Stapling"
     xcrun stapler staple "$DMG"
