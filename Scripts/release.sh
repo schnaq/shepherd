@@ -506,6 +506,17 @@ def load_channel():
             root = ET.fromstring(data)
             channel = root.find("channel")
             if channel is not None:
+                # The feed's own address, refreshed rather than inherited. Everything else in an
+                # extended channel is history and must survive untouched, but this one element
+                # describes where the feed lives *now* — and 1.0.0 shipped with a `<link>` naming
+                # a repository that had been renamed, because the merge had simply carried the
+                # 0.1.0 channel over. Sparkle reads the enclosure rather than this, so nothing
+                # broke; a feed that quietly points at an old address for ever is still wrong.
+                if feed_url:
+                    link = channel.find("link")
+                    if link is None:
+                        link = ET.SubElement(channel, "link")
+                    link.text = feed_url
                 return root, channel
     except ET.ParseError as error:
         raise SystemExit(f"error: the previous appcast is not valid XML: {error}")
