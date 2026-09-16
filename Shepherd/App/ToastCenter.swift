@@ -2,7 +2,7 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// A transient message shown in the bottom-trailing corner of the window.
+/// A transient message shown along the bottom edge of the window.
 ///
 /// `docs/ARCHITECTURE.md` asks for "undo toast instead of confirm dialogs wherever the action
 /// is reversible" — and, just as importantly, errors are surfaced here rather than printed.
@@ -92,13 +92,18 @@ final class ToastCenter {
     }
 }
 
-/// The stack of toasts, overlaid on the window's bottom-trailing corner.
+/// The stack of toasts, overlaid on the window's bottom edge.
+///
+/// Bottom *centre* rather than the corner, and ``RootView/toastAlignment`` says why.
 struct ToastStackView: View {
     /// The centre to render.
     let center: ToastCenter
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 8) {
+        // Centred with the stack's own alignment, to match where ``RootView`` places it: two
+        // toasts of different widths right-aligned against each other under a centred anchor
+        // read as one of them being indented.
+        VStack(alignment: .center, spacing: 8) {
             ForEach(center.toasts) { toast in
                 toastRow(toast)
             }

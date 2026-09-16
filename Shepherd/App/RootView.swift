@@ -26,6 +26,22 @@ struct RootView: View {
     /// is not worth the mechanism.
     private static let footerClearance: CGFloat = 56
 
+    /// Which corner a toast appears in.
+    ///
+    /// The bottom *centre*, which looks like a stylistic choice and is not: the trailing edge is
+    /// where macOS puts primary actions, so on the inbox that corner is
+    /// ``InboxDetailPanel``'s stack of Approve / Request changes / Open review / Merge — about
+    /// 150 pt of buttons, and not a footer inset, so ``footerClearance`` cannot clear it. Hiding
+    /// a pull request put the toast squarely over Open review and Merge, which is the worst place
+    /// for it: the toast carries an Undo the reader is meant to reach for, and it was covering
+    /// two buttons they might hit instead.
+    ///
+    /// Raising the clearance to ~170 pt would fix that one screen by floating every other
+    /// screen's toast a third of the way up the window. Centred, it sits over the *content*
+    /// column on every route — whose only bottom furniture is the shortcut bar the clearance
+    /// already handles.
+    private static let toastAlignment: Alignment = .bottom
+
     var body: some View {
         // `.background`, not a `ZStack` sibling. A `Color.ignoresSafeArea()` *beside* the content
         // grows the stack into the title bar, and the content — laid out inside that taller
@@ -36,7 +52,7 @@ struct RootView: View {
         // content keeps the frame the safe area gave it.
         content
             .background(Theme.background.ignoresSafeArea())
-            .overlay(alignment: .bottomTrailing) {
+            .overlay(alignment: Self.toastAlignment) {
                 ToastStackView(center: environment.toasts)
                     .padding(.bottom, Self.footerClearance)
             }
