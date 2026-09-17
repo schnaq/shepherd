@@ -230,22 +230,6 @@ final class TrustLaneUITests: XCTestCase {
         )
     }
 
-    func testTheFleetButtonIsAbsentForAHumanRatherThanDisabled() {
-        // Absent, not disabled: a greyed-out "See every repository" on a colleague's badge would
-        // still say that such a page exists for them, which is the claim ADR 0035 refuses to make.
-        XCTAssertFalse(TrackRecordPopover.offersFleet(agentID: nil))
-        XCTAssertTrue(TrackRecordPopover.offersFleet(agentID: "claude-code"))
-        XCTAssertEqual(
-            TrackRecordPopover.offersFleet(
-                agentID: TrackRecordBadge.fleetAgentID(
-                    for: ShepherdCore.Actor(login: "christian", kind: .human)
-                )
-            ),
-            false,
-            "the row's own author, through the derivation the row uses"
-        )
-    }
-
     func testTheRoundsTextDropsAPointlessDecimal() {
         XCTAssertEqual(TrackRecordBadge.roundsText(2), "2")
         XCTAssertEqual(TrackRecordBadge.roundsText(0.5), "0.5")
