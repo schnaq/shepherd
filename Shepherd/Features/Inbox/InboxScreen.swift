@@ -104,6 +104,23 @@ struct InboxScreen: View {
                 .navigationSplitViewColumnWidth(min: 320, ideal: 380, max: 480)
         }
         .navigationSplitViewStyle(.balanced)
+        // "This view has no preferred height; take the one the window gives you."
+        //
+        // Without it, the first layout pass after sign-in proposed the split view its *ideal*
+        // height rather than the window's: measured on 2026-09-17, the split group came out
+        // 1158 pt inside a 949 pt window and centred itself at y = −46, so every column was
+        // drawn 79 pt too high — the rail's first rows over the traffic lights, the list header
+        // level with the window title. AppKit's own divider was 897 pt throughout, the correct
+        // content height, which is what says the window was right and the SwiftUI content inside
+        // it was not.
+        //
+        // It looked intermittent because nothing forced a second pass: the layout stood, wrong,
+        // until some state changed. On a cold start that was the first sweep returning, about
+        // ten seconds in — long enough to be the first thing anyone sees, and short enough that
+        // it was gone by the time it was investigated. Clicking any rail row fixed it instantly,
+        // which is the measurement that told us it was a stale pass and not content that was too
+        // tall for the window.
+        .frame(maxHeight: .infinity)
         .toolbar { toolbarContent }
         .task {
             model.intelligence = environment.intelligence
@@ -574,8 +591,14 @@ struct SyncStatusView: View {
                 Text(String(localized: "Sync failed"))
                     .help(error)
             } else if let date = session.lastSyncedAt {
+                // The separator is not decoration. Without it the two words run together as
+                // "Synchronisiert jetzt", which German reads as a verb in the present tense —
+                // "synchronises now", a claim about what the app is doing rather than about when
+                // it last finished. English survives it ("Synced now") and German does not, and
+                // the mockup this came from had the middot anyway.
                 HStack(spacing: 4) {
                     Text(String(localized: "Synced"))
+                    Text(verbatim: "·").foregroundStyle(Theme.textMuted)
                     RelativeDateText(date: date)
                 }
             } else if session.failedOutboxCount == 0 {
@@ -633,10 +656,16 @@ struct SyncStatusView: View {
 
     /// The worst true state wins: a failed write outranks "synced fine a moment ago", and a
     /// merely parked (conflicted) write outranks a clean success but not a failure.
+    /// "Not synced yet" is amber rather than green, and it used to be green: the dot is the
+    /// one-glance version of the sentence beside it, and green says *this worked*. Before the
+    /// first sweep lands nothing has worked — the inbox on screen is empty because it is
+    /// unfilled, not because it is clear — and a green dot over an empty list is the app claiming
+    /// to be up to date when it has never spoken to GitHub. Amber, not red, because it is not a
+    /// failure either; it usually resolves itself within a sweep.
     private var dotColor: Color {
         if session.lastSyncError != nil || session.failedOutboxCount > 0 {
             Theme.failure
-        } else if session.conflictedOutboxCount > 0 {
+        } else if session.conflictedOutboxCount > 0 || session.lastSyncedAt == nil {
             Theme.pending
         } else {
             Theme.success
