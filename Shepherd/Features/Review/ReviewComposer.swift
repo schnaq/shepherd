@@ -1373,28 +1373,3 @@ struct ThreadCommentView: View {
         }
     }
 }
-
-/// Renders Markdown natively with `AttributedString`, for text that never leaves the app.
-struct MarkdownText: View {
-    /// The Markdown source.
-    let markdown: String
-    /// The font size.
-    var size: CGFloat = 12.5
-
-    var body: some View {
-        Text(attributed)
-            .font(.system(size: size))
-            .foregroundStyle(Theme.textSecondary)
-            .textSelection(.enabled)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private var attributed: AttributedString {
-        (try? AttributedString(
-            markdown: markdown,
-            options: AttributedString.MarkdownParsingOptions(
-                interpretedSyntax: .inlineOnlyPreservingWhitespace
-            )
-        )) ?? AttributedString(markdown)
-    }
-}
