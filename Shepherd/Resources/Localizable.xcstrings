@@ -15660,6 +15660,16 @@
           }
         }
       }
+    },
+    "If macOS asks for your Keychain password, it is because a different build of Shepherd than the one that saved the token is asking for it — a copy you built yourself beside the installed one, for example. Always Allow answers it once for that build.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wenn macOS nach deinem Schlüsselbund-Passwort fragt, dann weil ein anderer Build von Shepherd danach fragt als der, der den Token gespeichert hat — etwa eine selbst gebaute Kopie neben der installierten. „Immer erlauben“ beantwortet das für diesen Build ein für alle Mal."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

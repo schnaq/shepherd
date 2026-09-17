@@ -143,6 +143,25 @@ public actor RefreshingTokenProvider: AccessTokenProviding {
     private let refresher: TokenRefresher?
     private let now: @Sendable () -> Date
 
+    /// The last credential read out of the store, and when it was read.
+    ///
+    /// The store is the macOS Keychain, and `accessToken()` is called once per HTTP request:
+    /// five facet searches a sweep, up to five concurrent detail fetches, every outbox drain.
+    /// That was a `SecItemCopyMatching` every time — hundreds an hour for a credential that
+    /// changes about twice a year. While the item's ACL has not been answered with *Always
+    /// Allow* yet, every one of those reads is a chance for macOS to put up the Keychain
+    /// password dialog, which is what "Shepherd keeps asking for my Keychain password" is.
+    ///
+    /// A time-to-live rather than "cache until it changes", because nothing tells this actor
+    /// when the item is written from outside it — a settings document arriving from another Mac
+    /// carries a token (ADR 0014), and so does signing in again. A minute keeps the reads down
+    /// by three orders of magnitude and keeps the window in which this actor can be holding a
+    /// credential someone else replaced down to a minute.
+    private var cached: (token: TokenSet, readAt: Date)?
+
+    /// How long a credential read from the store is reused before it is read again.
+    private static let cacheTTL: TimeInterval = 60
+
     /// The renewal currently in flight, if any.
     ///
     /// GitHub App refresh tokens are **single-use and rotate**: the first refresh invalidates
@@ -175,13 +194,29 @@ public actor RefreshingTokenProvider: AccessTokenProviding {
     /// - Throws: ``GitHubError/missingToken(login:)`` when the store is empty for this login,
     ///   or ``GitHubError/tokenRefreshFailed(message:)`` when renewal fails.
     public func accessToken() async throws -> String {
-        guard let stored = try await store.token(for: login) else {
+        guard let stored = try await currentToken() else {
             throw GitHubError.missingToken(login: login)
         }
         guard stored.isExpired(at: now()), stored.refreshToken != nil, let refresher else {
             return stored.accessToken
         }
         return try await refreshedToken(using: refresher).accessToken
+    }
+
+    /// The stored credential, from ``cached`` while it is fresh enough and from the store
+    /// otherwise.
+    ///
+    /// An *expired* credential is never served from the cache: the expiry is the one thing the
+    /// caller above acts on, and answering it from memory would keep a refresh from happening.
+    private func currentToken() async throws -> TokenSet? {
+        let moment = now()
+        if let cached, moment.timeIntervalSince(cached.readAt) < Self.cacheTTL,
+           !cached.token.isExpired(at: moment) {
+            return cached.token
+        }
+        let stored = try await store.token(for: login)
+        cached = stored.map { ($0, moment) }
+        return stored
     }
 
     /// Renews the credential, at most once no matter how many callers ask at the same time.
@@ -191,9 +226,11 @@ public actor RefreshingTokenProvider: AccessTokenProviding {
                 return try await inFlight.value
             }
 
-            // Re-read: this call may have been suspended on its *first* store read while
-            // another one refreshed and stored a perfectly good token.
-            guard let current = try await store.token(for: login) else {
+            // Re-read, past the cache: this call may have been suspended on its *first* store
+            // read while another one refreshed and stored a perfectly good token, and the whole
+            // point of arriving here is that what we last read is no longer good.
+            cached = nil
+            guard let current = try await currentToken() else {
                 throw GitHubError.missingToken(login: login)
             }
 
@@ -212,7 +249,11 @@ public actor RefreshingTokenProvider: AccessTokenProviding {
             }
             refreshTask = task
             defer { refreshTask = nil }
-            return try await task.value
+            let refreshed = try await task.value
+            // What was just written *is* the current credential, so remember it rather than
+            // going back to the Keychain for a value this actor produced.
+            cached = (refreshed, now())
+            return refreshed
         }
     }
 }

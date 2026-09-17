@@ -97,7 +97,11 @@ final class AppSettings {
         self.notifyOnDraftConflict = defaults.object(forKey: Keys.notifyDraftConflict) as? Bool ?? true
         self.digest = Self.readJSON(defaults, Keys.digest, default: DigestSchedule())
         self.digestLastDeliveredAt = defaults.object(forKey: Keys.digestLastDeliveredAt) as? Date
-        self.intelligenceMode = Self.read(defaults, Keys.intelligenceMode, default: IntelligenceMode.off)
+        self.intelligenceMode = Self.read(
+            defaults,
+            Keys.intelligenceMode,
+            default: IntelligenceMode.onDevice
+        )
         self.cloudProviderKind = Self.read(defaults, Keys.cloudProviderKind, default: CloudProviderKind.anthropic)
         self.anthropicModel = defaults.string(forKey: Keys.anthropicModel) ?? "claude-haiku-4-5"
         self.openAICompatibleBaseURL = defaults.string(forKey: Keys.openAIBaseURL) ?? ""
@@ -269,6 +273,18 @@ final class AppSettings {
     // MARK: - Intelligence
 
     /// Which tiers are enabled.
+    ///
+    /// On-device by default, where it used to be off. The caution `off` expressed was about a
+    /// tier that sends something somewhere, and the on-device tier is the one that does not: it
+    /// is Apple's Foundation Model, running on this Mac, on pull requests that are already on
+    /// this Mac. Defaulting it off meant the summaries and the claims-vs-evidence card — the
+    /// things that make an agent's pull request read differently here than on github.com — were
+    /// absent until someone went and found a switch, and "why does this look like a worse
+    /// GitHub" is the wrong first impression to ship.
+    ///
+    /// A Mac without the model is not a problem to guard against here: the router asks
+    /// ``IntelligenceRouter`` for availability and falls back to the heuristics, which is what
+    /// `off` would have given anyway. The cloud tier is still opt-in, and still needs a key.
     var intelligenceMode: IntelligenceMode {
         didSet { Self.write(defaults, intelligenceMode, Keys.intelligenceMode) }
     }

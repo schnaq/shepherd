@@ -210,6 +210,18 @@ struct AccountSettingsTab: View {
                         .foregroundStyle(Theme.textMuted)
                         .textSelection(.enabled)
                         .lineLimit(2)
+                    // The one sentence that turns a frightening system dialog into a boring one.
+                    // macOS asks for the Keychain password when a build *other than the one that
+                    // stored the token* reaches for it, and says only that "Shepherd" wants
+                    // access — which reads like something is wrong. Nothing here can change that
+                    // dialog's words, so the explanation lives beside the sentence that says
+                    // where the token is.
+                    Text(String(
+                        localized: "If macOS asks for your Keychain password, it is because a different build of Shepherd than the one that saved the token is asking for it — a copy you built yourself beside the installed one, for example. Always Allow answers it once for that build."
+                    ))
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
             }
 

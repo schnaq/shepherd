@@ -239,6 +239,95 @@ final class DeviceFlowTests: XCTestCase {
         )
     }
 
+    func testTheStoreIsNotReadOncePerRequest() async throws {
+        // `accessToken()` is called once per HTTP request — five facet searches a sweep, up to
+        // five concurrent detail fetches, every drain — and the store is the macOS Keychain.
+        // Reading it every time is what makes macOS put the Keychain password dialog up again
+        // and again before its ACL has been answered with "Always Allow".
+        let store = CountingTokenStore(
+            token: TokenSet(accessToken: "ghp_pat", refreshToken: nil, expiresAt: nil)
+        )
+        let clock = MutableClock(Date(timeIntervalSince1970: 1_000))
+        let provider = RefreshingTokenProvider(
+            login: "octocat",
+            store: store,
+            refresher: nil,
+            now: { clock.now }
+        )
+
+        for _ in 0..<20 {
+            _ = try await provider.accessToken()
+        }
+        let reads = await store.reads
+        XCTAssertEqual(reads, 1, "twenty requests must not be twenty Keychain reads")
+    }
+
+    func testTheCachedCredentialIsRereadOnceItIsOldEnough() async throws {
+        // Nothing tells this actor when the item is written from outside it — a settings document
+        // from another Mac carries a token, and so does signing in again — so the cache ages out
+        // rather than living for ever.
+        let store = CountingTokenStore(
+            token: TokenSet(accessToken: "ghp_first", refreshToken: nil, expiresAt: nil)
+        )
+        let clock = MutableClock(Date(timeIntervalSince1970: 1_000))
+        let provider = RefreshingTokenProvider(
+            login: "octocat",
+            store: store,
+            refresher: nil,
+            now: { clock.now }
+        )
+
+        var token = try await provider.accessToken()
+        XCTAssertEqual(token, "ghp_first")
+        await store.replace(
+            TokenSet(accessToken: "ghp_second", refreshToken: nil, expiresAt: nil)
+        )
+        token = try await provider.accessToken()
+        XCTAssertEqual(token, "ghp_first", "still inside the window")
+
+        clock.now = Date(timeIntervalSince1970: 1_000 + 61)
+        token = try await provider.accessToken()
+        XCTAssertEqual(token, "ghp_second")
+        let reads = await store.reads
+        XCTAssertEqual(reads, 2)
+    }
+
+    func testAnExpiredCredentialIsNeverServedFromTheCache() async throws {
+        // The expiry is the one thing `accessToken()` acts on. Answering it from memory would
+        // hand out a dead token for as long as the cache lived.
+        let transport = MockTransport()
+        await transport.route(
+            "/login/oauth/access_token",
+            try Fixture.response("device-token-success")
+        )
+        let store = CountingTokenStore(
+            token: TokenSet(
+                accessToken: "stale",
+                refreshToken: "ghr_old",
+                expiresAt: Date(timeIntervalSince1970: 10)
+            )
+        )
+        let provider = RefreshingTokenProvider(
+            login: "octocat",
+            store: store,
+            refresher: TokenRefresher(
+                clientID: clientID,
+                transport: transport,
+                now: { Date(timeIntervalSince1970: 100) }
+            ),
+            now: { Date(timeIntervalSince1970: 100) }
+        )
+
+        let token = try await provider.accessToken()
+        XCTAssertEqual(token, "ghu_16C7e42F292c6912E7710c838347Ae178B4a")
+        // And the refreshed one is remembered, so the next request does not go back to the store
+        // for a value this actor just wrote itself.
+        let before = await store.reads
+        _ = try await provider.accessToken()
+        let after = await store.reads
+        XCTAssertEqual(before, after)
+    }
+
     func testRefreshingProviderRenewsAnExpiredToken() async throws {
         let transport = MockTransport()
         let success = try Fixture.response("device-token-success")
@@ -389,5 +478,44 @@ private final class PresentationRecorder: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return stored
+    }
+}
+
+
+/// A token store that counts its reads, so a test can assert how often the Keychain would be hit.
+actor CountingTokenStore: TokenStore {
+    private var stored: TokenSet?
+    /// How many times ``token(for:)`` has been called.
+    private(set) var reads = 0
+
+    init(token: TokenSet?) {
+        self.stored = token
+    }
+
+    func token(for login: String) async throws -> TokenSet? {
+        reads += 1
+        return stored
+    }
+
+    func setToken(_ token: TokenSet, for login: String) async throws {
+        stored = token
+    }
+
+    func deleteToken(for login: String) async throws {
+        stored = nil
+    }
+
+    /// Replaces the credential the way something outside the provider would.
+    func replace(_ token: TokenSet) {
+        stored = token
+    }
+}
+
+/// A clock a test can move forward.
+final class MutableClock: @unchecked Sendable {
+    var now: Date
+
+    init(_ now: Date) {
+        self.now = now
     }
 }
