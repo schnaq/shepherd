@@ -277,10 +277,90 @@ if [[ -z "$ALLOW_UNSIGNED" ]]; then
     codesign --display --verbose=2 "$APP" 2>&1 | sed 's/^/    /'
 fi
 
-# ── 4. DMG ───────────────────────────────────────────────────────────────────────────────────
+# ── 4. Notarize and staple the app ───────────────────────────────────────────────────────────
+#
+# The app is notarized *before* the DMG is built, so the copy inside the DMG carries a ticket of
+# its own. That is the whole point: a DMG's ticket travels with the DMG, and the first thing
+# anyone does with a DMG is drag the app out of it. Sparkle's installer does exactly that, and
+# 1.0.0 shipped an app that had to ask Apple over the network before it would launch — fine on a
+# desk with wifi, a failure on a train.
+#
+# It costs a second round trip, because a ticket cannot be moved: the DMG's is issued against the
+# DMG's own hash, so building the DMG after stapling the app and then stapling the DMG needs its
+# own submission. Both are `--wait`, and the app's is the smaller of the two.
+
+NOTARY_AUTH=()
+
+# Fills `NOTARY_AUTH` once, from whichever credentials this machine has.
+setup_notary_auth() {
+    if [[ -n "${NOTARY_KEYCHAIN_PROFILE:-}" ]]; then
+        NOTARY_AUTH=(--keychain-profile "$NOTARY_KEYCHAIN_PROFILE")
+    else
+        NOTARY_AUTH=(
+            --key "$NOTARY_API_KEY_PATH"
+            --key-id "$NOTARY_API_KEY_ID"
+            --issuer "$NOTARY_API_ISSUER_ID"
+        )
+    fi
+}
+
+# Submits one artefact and ends the release unless Apple accepts it.
+#
+# `notarytool submit --wait` exits 0 whenever it *reached* Apple and got an answer — an answer of
+# "Invalid" included. Taken at its exit code alone, a rejected build walks on to the stapler,
+# which then fails with "Record not found" and an error about stapling, for a problem that has
+# nothing to do with stapling. So the verdict is read out of the JSON, and anything but
+# "Accepted" ends the release here with Apple's own log printed: that log is the only place the
+# actual reason exists, and fetching it afterwards means finding the submission id in a CI log
+# first.
+# - $1: the file to submit.
+# - $2: a word for the log line, e.g. "app" or "DMG".
+notarize() {
+    local artefact=$1 label=$2
+    local submission="$WORK_DIR/notarization-$label.json"
+
+    log "Notarizing the $label (this waits for Apple; a few minutes is normal)"
+    xcrun notarytool submit "$artefact" "${NOTARY_AUTH[@]}" --wait --output-format json \
+        > "$submission" ||
+        die "Could not submit the $label to the notary service. Check the credentials and the network."
+
+    # `plutil` reads JSON and ships with macOS, so this needs no `jq` on the runner.
+    local status id
+    status=$(/usr/bin/plutil -extract status raw -o - "$submission" 2>/dev/null || true)
+    id=$(/usr/bin/plutil -extract id raw -o - "$submission" 2>/dev/null || true)
+
+    if [[ "$status" != "Accepted" ]]; then
+        warn "Apple did not accept this $label: ${status:-unknown}. Its log follows."
+        if [[ -n "$id" ]]; then
+            xcrun notarytool log "$id" "${NOTARY_AUTH[@]}" || true
+        fi
+        die "Notarization of the $label returned ${status:-no status}. Nothing was stapled or published."
+    fi
+}
+
+if [[ -n "$ALLOW_UNSIGNED" || -n "$SKIP_NOTARIZATION" ]]; then
+    warn "Skipping notarization. The DMG will be blocked by Gatekeeper on other Macs."
+else
+    setup_notary_auth
+
+    # A ZIP only because the notary service does not take a bare bundle. `ditto -c -k
+    # --keepParent` is the archive format Apple documents for this, and it is thrown away
+    # afterwards — the ZIP that ships is built in step 7, from the stapled app.
+    APP_NOTARY_ZIP="$WORK_DIR/notarize-app.zip"
+    ditto -c -k --sequesterRsrc --keepParent "$APP" "$APP_NOTARY_ZIP"
+    notarize "$APP_NOTARY_ZIP" "app"
+
+    xcrun stapler staple "$APP" ||
+        die "The notarization ticket is not attached to the app. Do not publish it."
+    xcrun stapler validate "$APP" ||
+        die "The app's notarization ticket does not validate. Do not publish it."
+    info "the app carries its own ticket, so a copy dragged out of the DMG needs no network"
+fi
+
+# ── 5. DMG ───────────────────────────────────────────────────────────────────────────────────
 #
 # `hdiutil` rather than create-dmg: a plain UDZO image needs no extra dependency and no Finder,
-# which matters on a headless self-hosted runner (ADR 0010).
+# which matters on a headless self-hosted runner (ADR 0010). Built from the stapled app above.
 
 log "Building the DMG"
 
@@ -304,65 +384,23 @@ if [[ -z "$ALLOW_UNSIGNED" ]]; then
     codesign --force --timestamp --sign "$CODESIGN_IDENTITY" "$DMG"
 fi
 
-# ── 5. Notarize & staple ─────────────────────────────────────────────────────────────────────
+# ── 6. Notarize & staple the DMG ─────────────────────────────────────────────────────────────
 #
-# One submission, of the DMG. It covers the app inside it, so the ticket can then be stapled to
-# both — and the DMG is what a user actually downloads and what Gatekeeper checks on first open.
+# The second submission: the DMG is its own artefact with its own hash, so the app's ticket says
+# nothing about it. This is the one a user downloads and the one Gatekeeper checks on first open.
 #
-# The app *inside* the DMG is therefore not itself stapled (it was copied in before the ticket
-# existed); the copy in the ZIP is. That costs nothing in practice — Gatekeeper resolves the
-# ticket online, and mounting the stapled DMG caches it locally — and saves a second
-# notarization round-trip. Note the order below: stapling rewrites the DMG, so its length and
-# its Sparkle signature must be taken afterwards, which is what steps 7 and 8 do.
+# Note the order: stapling rewrites the DMG, so its length and its Sparkle signature must be
+# taken afterwards, which is what steps 8 and 9 do — the Sparkle signature and the appcast.
 
 if [[ -n "$ALLOW_UNSIGNED" || -n "$SKIP_NOTARIZATION" ]]; then
-    warn "Skipping notarization. The DMG will be blocked by Gatekeeper on other Macs."
+    warn "Skipping the DMG's notarization too."
 else
-    log "Notarizing (this waits for Apple; a few minutes is normal)"
+    notarize "$DMG" "DMG"
 
-    NOTARY_AUTH=()
-    if [[ -n "${NOTARY_KEYCHAIN_PROFILE:-}" ]]; then
-        NOTARY_AUTH=(--keychain-profile "$NOTARY_KEYCHAIN_PROFILE")
-    else
-        NOTARY_AUTH=(
-            --key "$NOTARY_API_KEY_PATH"
-            --key-id "$NOTARY_API_KEY_ID"
-            --issuer "$NOTARY_API_ISSUER_ID"
-        )
-    fi
-
-    # `notarytool submit --wait` exits 0 whenever it *reached* Apple and got an answer — an
-    # answer of "Invalid" included. Taken at its exit code alone, a rejected build walks on to
-    # the stapler, which then fails with "Record not found" and an error about stapling, for a
-    # problem that has nothing to do with stapling. So the verdict is read out of the JSON, and
-    # anything but "Accepted" ends the release here, with Apple's own log printed: that log is
-    # the only place the actual reason exists, and fetching it afterwards means finding the
-    # submission id in a CI log first.
-    SUBMISSION="$WORK_DIR/notarization.json"
-    xcrun notarytool submit "$DMG" "${NOTARY_AUTH[@]}" --wait --output-format json \
-        > "$SUBMISSION" ||
-        die "Could not submit to the notary service. Check the credentials and the network."
-
-    # `plutil` reads JSON and ships with macOS, so this needs no `jq` on the runner.
-    NOTARY_STATUS=$(/usr/bin/plutil -extract status raw -o - "$SUBMISSION" 2>/dev/null || true)
-    NOTARY_ID=$(/usr/bin/plutil -extract id raw -o - "$SUBMISSION" 2>/dev/null || true)
-
-    if [[ "$NOTARY_STATUS" != "Accepted" ]]; then
-        warn "Apple did not accept this build: ${NOTARY_STATUS:-unknown}. Its log follows."
-        if [[ -n "$NOTARY_ID" ]]; then
-            xcrun notarytool log "$NOTARY_ID" "${NOTARY_AUTH[@]}" || true
-        fi
-        die "Notarization returned ${NOTARY_STATUS:-no status}. Nothing was stapled or published."
-    fi
-
-    log "Stapling"
+    log "Stapling the DMG"
     xcrun stapler staple "$DMG"
     xcrun stapler validate "$DMG" ||
         die "The notarization ticket is not attached to the DMG. Do not publish it."
-    # The ticket was issued for the app's code directory too, so it can be stapled into the app
-    # bundle that goes into the ZIP. Best-effort: the DMG is the artefact that must be stapled.
-    xcrun stapler staple "$APP" ||
-        warn "Could not staple the .app; the ZIP will need an online Gatekeeper check on first launch."
 
     # Advisory: `spctl` is what a user's Mac effectively runs, but it is also the step most
     # likely to complain for reasons that have nothing to do with this build (no network, a
@@ -373,7 +411,7 @@ else
         warn "spctl did not accept the DMG. Verify by hand before publishing."
 fi
 
-# ── 6. ZIP ───────────────────────────────────────────────────────────────────────────────────
+# ── 7. ZIP ───────────────────────────────────────────────────────────────────────────────────
 #
 # ADR 0010 promises a ZIP alongside the DMG. It is built from the stapled app, after
 # notarization, so it carries the ticket too.
@@ -384,7 +422,7 @@ ZIP="$RELEASE_DIR/$ZIP_NAME"
 ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
 info "$ZIP_NAME ($(du -h "$ZIP" | cut -f1))"
 
-# ── 7. Sparkle signature ─────────────────────────────────────────────────────────────────────
+# ── 8. Sparkle signature ─────────────────────────────────────────────────────────────────────
 
 log "Signing the update for Sparkle"
 
@@ -424,7 +462,7 @@ else
     info "signature verified"
 fi
 
-# ── 8. Appcast ───────────────────────────────────────────────────────────────────────────────
+# ── 9. Appcast ───────────────────────────────────────────────────────────────────────────────
 #
 # The published appcast is fetched and *extended*, never rewritten from scratch: the feed lives
 # as an asset of the newest release, so the only copy of the release history is the one that is
@@ -600,7 +638,7 @@ with open(output_path, "a", encoding="utf-8") as handle:
 print(f"    appcast.xml now lists {len(channel.findall('item'))} release(s)")
 PYTHON
 
-# ── 9. Done ──────────────────────────────────────────────────────────────────────────────────
+# ── 10. Done ──────────────────────────────────────────────────────────────────────────────────
 
 log "Release artefacts in ${RELEASE_DIR#"$REPO_ROOT/"}"
 # shellcheck disable=SC2012 # these are file names this script chose itself

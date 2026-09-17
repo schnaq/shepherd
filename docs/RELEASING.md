@@ -234,7 +234,7 @@ visibility; the own tap is the right first step and stays valid afterwards.
 
    | Asset | What it is |
    | --- | --- |
-   | `Shepherd-0.2.0.dmg` | notarized, stapled, what humans download and what the cask installs |
+   | `Shepherd-0.2.0.dmg` | notarized and stapled, and so is the `.app` inside it; what humans download and what the cask installs |
    | `Shepherd-0.2.0.zip` | the same stapled `.app`, zipped |
    | `appcast.xml` | the Sparkle feed, with this release prepended |
 
@@ -248,7 +248,19 @@ visibility; the own tap is the right first step and stays valid afterwards.
    xcrun stapler validate Shepherd-0.2.0.dmg
    spctl --assess -vv --type open --context context:primary-signature Shepherd-0.2.0.dmg
    curl -fsSL https://github.com/schnaq/shepherd/releases/latest/download/appcast.xml | head -20
+
+   # And the app *inside* the DMG, which is the copy Sparkle installs and the copy
+   # anyone who drags it to /Applications ends up with. 1.0.0 shipped without a ticket
+   # here — it passed Gatekeeper only because the Mac could reach Apple.
+   hdiutil attach -nobrowse -readonly -mountpoint /tmp/shepherd-check Shepherd-0.2.0.dmg
+   xcrun stapler validate /tmp/shepherd-check/Shepherd.app
+   hdiutil detach /tmp/shepherd-check
    ```
+
+   The release takes **two** notarization round trips, not one: the app is submitted and stapled
+   before the DMG is built, then the DMG is submitted and stapled. A ticket is issued against one
+   artefact's hash and cannot be moved to another, so there is no arrangement that gets both with
+   a single submission. It roughly doubles the waiting, which is the slowest part of the run.
 
    The last command is the app's actual feed URL. If it does not return this release's item, the
    release is a draft or a prerelease — GitHub's `latest` only follows published, non-prerelease
