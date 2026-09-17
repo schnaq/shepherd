@@ -73,11 +73,29 @@ struct RootView: View {
     private var content: some View {
         switch environment.phase {
         case .launching:
+            // Two lines, and the second one is the point: this screen is what stands behind the
+            // macOS Keychain prompt. Shepherd reads its GitHub token out of the Keychain on every
+            // launch (ADR 0004), and macOS asks for the login password when the item's access
+            // list does not yet name this copy of the app — after an update, or after a build
+            // signed differently. A system dialog asking for a password with no explanation
+            // anywhere is alarming in exactly the way a password prompt should be, so the
+            // explanation is on screen before the prompt can appear rather than in Settings where
+            // nobody would go looking mid-launch.
             VStack(spacing: 12) {
                 ProgressView()
-                Text(String(localized: "Opening your review inbox…"))
-                    .font(.system(size: 12))
+                VStack(spacing: 6) {
+                    Text(String(localized: "Opening your review inbox…"))
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.textMuted)
+                    Text(String(
+                        localized: "If macOS asks for your login password, it is the Keychain handing Shepherd its own GitHub token. Nothing else is read."
+                    ))
+                    .font(.system(size: 11))
                     .foregroundStyle(Theme.textMuted)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 360)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
             }
         case .signedOut:
             SignInView()

@@ -10,6 +10,9 @@ struct InboxSidebar: View {
     var onOpenSettings: () -> Void
     /// Raises the "watch a repository" dialog.
     var onWatchRepository: () -> Void
+    /// The repositories being watched, which are listed whether or not the current view holds a
+    /// row from them.
+    var watchedRepositories: [RepoRef] = []
 
     var body: some View {
         ScrollView {
@@ -169,11 +172,28 @@ struct InboxSidebar: View {
             ForEach(facets.prefix(6), id: \.repo) { facet in
                 RailRow(
                     title: facet.repo.fullName,
+                    systemImage: isWatched(facet.repo) ? "binoculars" : nil,
                     count: facet.count,
                     isSelected: model.repoFilter == facet.repo
                 ) {
                     model.repoFilter = model.repoFilter == facet.repo ? nil : facet.repo
                 }
+            }
+            // A watched repository the current view holds no row from is still listed, at zero.
+            // Without this, pressing the `+` *under this heading* added a repository that then
+            // appeared nowhere near it: the facets are built from what is in the list, so a
+            // repository whose only pull request is one you opened yourself sits under "My pull
+            // requests" and leaves this section looking as though the `+` did nothing.
+            ForEach(unlistedWatched, id: \.fullName) { repo in
+                RailRow(
+                    title: repo.fullName,
+                    systemImage: "binoculars",
+                    count: 0,
+                    isSelected: false
+                ) {}
+                .help(String(
+                    localized: "Watched. No pull request from this repository is in the current view."
+                ))
             }
             if facets.count > 6 {
                 Text(String(localized: "\(facets.count - 6) more…"))
@@ -182,6 +202,19 @@ struct InboxSidebar: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
             }
+        }
+    }
+
+    /// Whether this repository is on the watch list.
+    private func isWatched(_ repo: RepoRef) -> Bool {
+        watchedRepositories.contains { $0.isSameRepository(as: repo) }
+    }
+
+    /// Watched repositories the facets above do not already name.
+    private var unlistedWatched: [RepoRef] {
+        let listed = model.repositoryFacets.prefix(6).map(\.repo)
+        return watchedRepositories.filter { watched in
+            !listed.contains { $0.isSameRepository(as: watched) }
         }
     }
 

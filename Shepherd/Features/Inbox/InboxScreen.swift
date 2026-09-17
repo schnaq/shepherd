@@ -254,7 +254,8 @@ struct InboxScreen: View {
                 InboxSidebar(
                     model: model,
                     onOpenSettings: { environment.showSettings(.account) },
-                    onWatchRepository: { environment.isAddingWatchedRepository = true }
+                    onWatchRepository: { environment.isAddingWatchedRepository = true },
+                    watchedRepositories: environment.settings.watchedRepositories
                 )
             case .issues:
                 IssueSidebar(
@@ -394,9 +395,19 @@ struct InboxScreen: View {
             .help(String(localized: "Command palette (⌘K)"))
         }
 
-        ToolbarItemGroup(placement: .primaryAction) {
+        // Three groups rather than one, with `ToolbarSpacer` between them (macOS 26). A single
+        // `ToolbarItemGroup` draws everything in it as one capsule, which put the sync status,
+        // the triage menu, the refresh button and the account avatar shoulder to shoulder in a
+        // row that reads as one control. They are three unrelated things: where the data stands,
+        // what to do with the selection, and whose account this is. The spacers give each its own
+        // capsule and the system's own spacing between them.
+        ToolbarItem(placement: .primaryAction) {
             SyncStatusView(session: session)
+        }
 
+        ToolbarSpacer(.fixed, placement: .primaryAction)
+
+        ToolbarItemGroup(placement: .primaryAction) {
             Menu {
                 Button(String(localized: "Select all green agent pull requests")) {
                     markGreenAgentRows()
@@ -426,7 +437,11 @@ struct InboxScreen: View {
             }
             .help(String(localized: "Sync now (⌘R)"))
             .disabled(session.isSyncing)
+        }
 
+        ToolbarSpacer(.fixed, placement: .primaryAction)
+
+        ToolbarItem(placement: .primaryAction) {
             AvatarView(
                 login: session.account.login,
                 url: session.account.avatarURL,

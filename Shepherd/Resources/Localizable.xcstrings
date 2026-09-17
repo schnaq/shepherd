@@ -15710,6 +15710,26 @@
           }
         }
       }
+    },
+    "If macOS asks for your login password, it is the Keychain handing Shepherd its own GitHub token. Nothing else is read.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wenn macOS nach deinem Anmeldepasswort fragt, gibt der Schlüsselbund Shepherd sein eigenes GitHub-Token heraus. Mehr wird nicht gelesen."
+          }
+        }
+      }
+    },
+    "Watched. No pull request from this repository is in the current view.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beobachtet. In der aktuellen Ansicht ist kein Pull Request aus diesem Repository."
+          }
+        }
+      }
     }
   },
   "version": "1.0"
