@@ -21,6 +21,9 @@ struct MergeSheet: View {
     let actions: PullRequestActions
     /// Where the remembered merge method lives, shared with the bulk-triage dialog (ADR 0015).
     let settings: AppSettings
+    /// Called once the merge is queued, so a caller that was *showing* this pull request can go
+    /// somewhere else. `nil` for the inbox, which is already where you would end up.
+    var onMerged: (@MainActor () -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -79,15 +82,20 @@ struct MergeSheet: View {
                             deletesHeadBranch: deletesBranch
                         )
                         dismiss()
+                        onMerged?()
                     }
                 } label: {
                     Text(String(localized: "Merge"))
                 }
                 .buttonStyle(SuccessButtonStyle())
-                // ⏎ merges only when there is nothing to read first. A sheet that says "this is
-                // still a draft" and answers Return with a merge is a sheet whose warning nobody
-                // has to look at; with the shortcut gone the reviewer has to aim at the button.
-                .keyboardShortcut(warning == nil ? .defaultAction : nil)
+                // ⌘⏎ rather than ⏎, and always rather than only when the sheet has no warning.
+                // Plain Return was refused while a warning stood, on the argument that a sheet
+                // saying "this is still a draft" must not answer Return with a merge — which was
+                // right about Return and wrong about the reviewer, who was then left aiming at a
+                // button with the mouse. ⌘⏎ is the deliberate version of the same keystroke: it
+                // is not what a stray Return does, so the warning keeps its job while the
+                // keyboard keeps working.
+                .keyboardShortcut(.return, modifiers: .command)
                 // The one action Shepherd cannot undo is also the one where a second press is
                 // worst, and ⏎ makes that easy to do by accident. ``busy`` disables as well as
                 // spins, and `.disabled` takes the key with it, so the sheet stops answering

@@ -1446,6 +1446,47 @@ final class ReviewModel {
         }
     }
 
+    /// Marks a file as seen and moves to the next one still waiting.
+    ///
+    /// The `a` key, and the reason it is not `v`: `v` *toggles*, which is what you want when you
+    /// are correcting yourself, and it leaves the selection where it is. Accepting is the other
+    /// motion — the one a reviewer repeats down a diff — so it only ever marks seen, and then
+    /// takes you to the next file that is not. A reviewer working through twenty files should be
+    /// pressing one key twenty times, not alternating between a key and a click.
+    ///
+    /// When everything else is already seen the selection stays put, because moving to a file
+    /// that needs nothing would be a worse answer than not moving at all.
+    /// - Parameters:
+    ///   - path: The file to accept.
+    ///   - actions: The write helper (for error toasts).
+    func acceptFile(path: String, actions: PullRequestActions) async {
+        guard let summary else { return }
+        if !viewedPaths.contains(path) {
+            await actions.setFileViewed(path: path, on: summary, isViewed: true)
+            viewedPaths.insert(path)
+        }
+        selectNextUnviewedFile()
+    }
+
+    /// Selects the next file that has not been marked seen, searching forward and then wrapping.
+    ///
+    /// Wrapping rather than stopping at the end: the files are a set of work, not a sequence, and
+    /// a reviewer who accepted the last one has the ones they skipped left to do.
+    func selectNextUnviewedFile() {
+        let paths = buckets.flatMap { $0.files.map(\.file.path) }
+        guard !paths.isEmpty else { return }
+        guard let selectedPath, let index = paths.firstIndex(of: selectedPath) else {
+            self.selectedPath = paths.first { !viewedPaths.contains($0) } ?? paths.first
+            return
+        }
+        let ahead = paths[(index + 1)...]
+        let behind = paths[..<index]
+        if let next = ahead.first(where: { !viewedPaths.contains($0) })
+            ?? behind.first(where: { !viewedPaths.contains($0) }) {
+            self.selectedPath = next
+        }
+    }
+
     /// Moves the file selection within the flattened bucket order.
     /// - Parameter offset: `+1` or `-1`.
     func moveFileSelection(by offset: Int) {

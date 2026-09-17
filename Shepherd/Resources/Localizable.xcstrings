@@ -13111,16 +13111,6 @@
         }
       }
     },
-    "Toggle viewed (v)": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Gesehen umschalten (v)"
-          }
-        }
-      }
-    },
     "Tools": {
       "localizations": {
         "de": {
@@ -15727,6 +15717,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Beobachtet. In der aktuellen Ansicht ist kein Pull Request aus diesem Repository."
+          }
+        }
+      }
+    },
+    "Toggle viewed (v) — or accept and go to the next file (a)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gesehen umschalten (v) — oder akzeptieren und zur nächsten Datei (a)"
           }
         }
       }

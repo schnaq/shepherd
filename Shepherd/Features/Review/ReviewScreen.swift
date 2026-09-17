@@ -125,7 +125,12 @@ struct ReviewScreen: View {
                     summary: summary,
                     checkState: model.checkRollup?.state,
                     actions: actions,
-                    settings: environment.settings
+                    settings: environment.settings,
+                    // A merged pull request is not one you are still reviewing, so the screen
+                    // that was reviewing it goes away. Queued rather than done — the write is in
+                    // the outbox (ADR 0006) — but the decision is made, and standing in a diff
+                    // you have just decided about is the wrong place to be left.
+                    onMerged: { leaveReview() }
                 )
             }
         }
@@ -437,6 +442,13 @@ struct ReviewScreen: View {
         }
         if character == "v", let path = model.selectedPath {
             Task { await model.toggleViewed(path: path, actions: actions) }
+            return .handled
+        }
+        // `a` for *accept*, the motion a reviewer repeats down a diff: mark this file seen and go
+        // to the next one that is not. `v` stays as the correction — it toggles and holds its
+        // place — so the two keys are the two different things a reviewer means.
+        if character == "a", let path = model.selectedPath {
+            Task { await model.acceptFile(path: path, actions: actions) }
             return .handled
         }
         // `u` for *update*: the banner's Reload as a key. Free both as a bare key and as the

@@ -298,7 +298,7 @@ struct ReviewFileHeader: View {
                     // handles (``ReviewScreen``) — so the key is refused by the funnel rather
                     // than by the disable. This is here so the click and `v` show one state.
                     .busy(isWriting)
-                    .help(String(localized: "Toggle viewed (v)"))
+                    .help(String(localized: "Toggle viewed (v) — or accept and go to the next file (a)"))
                 }
             }
         }
