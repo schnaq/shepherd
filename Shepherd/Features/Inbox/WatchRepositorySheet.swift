@@ -56,7 +56,7 @@ struct WatchRepositorySheet: View {
     private var field: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                TextField(String(localized: "owner/repository"), text: $draft)
+                TextField(String(localized: "owner/repository or a GitHub URL"), text: $draft)
                     .textFieldStyle(.roundedBorder)
                     .font(Theme.mono(12))
                     .focused($isFieldFocused)

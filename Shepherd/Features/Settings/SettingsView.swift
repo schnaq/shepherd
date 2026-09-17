@@ -589,7 +589,7 @@ struct SyncSettingsTab: View {
                 }
                 HStack(spacing: 8) {
                     TextField(
-                        String(localized: "owner/repository"),
+                        String(localized: "owner/repository or a GitHub URL"),
                         text: $watchedRepositoryDraft
                     )
                     .textFieldStyle(.roundedBorder)

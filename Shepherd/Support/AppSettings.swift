@@ -434,10 +434,12 @@ final class AppSettings {
     /// wrong, and the text goes straight into a GitHub search expression where a stray space
     /// would silently turn one qualifier into two.
     ///
-    /// The validation is ``ShepherdCore/InboxDeepLinkFilter``'s, reached through its own `repo:`
-    /// token: that is the rule the `shepherd://` grammar already enforces on exactly this shape,
-    /// ASCII-only and homoglyph-proof.
-    /// - Parameter typed: What the user wrote. Surrounding whitespace is ignored.
+    /// The reading is ``ShepherdCore/RepoRef/parse(userInput:)``'s, which takes the repository's
+    /// page URL, a pull request's URL inside it, a clone URL, an SSH remote or a bare
+    /// `owner/name` — people have the page in the clipboard far more often than the two words —
+    /// and still ends in the `shepherd://` grammar's own content rules: ASCII-only,
+    /// homoglyph-proof, GitHub's length limits.
+    /// - Parameter typed: What the user wrote or pasted.
     /// - Returns: `nil` when the repository is now watched, or the sentence to show otherwise.
     func watchRepository(named typed: String) -> String? {
         guard watchedRepositories.count < Self.maximumWatchedRepositories else {
@@ -445,10 +447,9 @@ final class AppSettings {
                 localized: "\(Self.maximumWatchedRepositories) is the maximum — each repository is one more search on every sweep."
             )
         }
-        let trimmed = typed.trimmingCharacters(in: .whitespaces)
-        guard case .repository(let repo)? = InboxDeepLinkFilter(token: "repo:\(trimmed)") else {
+        guard let repo = RepoRef.parse(userInput: typed) else {
             return String(
-                localized: "That is not a repository. Write it as owner/repository, for example schnaq/unlock."
+                localized: "That is not a repository. Write it as owner/repository, or paste the repository's GitHub URL."
             )
         }
         guard !watchedRepositories.contains(where: { $0.isSameRepository(as: repo) }) else {

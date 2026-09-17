@@ -15581,16 +15581,6 @@
         }
       }
     },
-    "That is not a repository. Write it as owner/repository, for example schnaq/unlock.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Das ist kein Repository. Schreibe es als owner/repository, zum Beispiel schnaq/unlock."
-          }
-        }
-      }
-    },
     "WATCHED REPOSITORIES": {
       "localizations": {
         "de": {
@@ -15617,16 +15607,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Beobachtet"
-          }
-        }
-      }
-    },
-    "owner/repository": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "owner/repository"
           }
         }
       }
@@ -15707,6 +15687,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Noch nichts hier. Mit ⇧⌘A ein Repository beobachten und die Pull Requests sehen, zu denen dich niemand gefragt hat."
+          }
+        }
+      }
+    },
+    "That is not a repository. Write it as owner/repository, or paste the repository's GitHub URL.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das ist kein Repository. Schreib es als owner/repository oder füge die GitHub-URL des Repositorys ein."
+          }
+        }
+      }
+    },
+    "owner/repository or a GitHub URL": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "owner/repository oder eine GitHub-URL"
           }
         }
       }
