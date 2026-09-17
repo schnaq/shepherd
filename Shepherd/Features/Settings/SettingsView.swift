@@ -32,8 +32,17 @@ struct SettingsView: View {
 
     var body: some View {
         HStack(spacing: 0) {
+            // The rail and its divider run *through* the title bar, which is what every macOS
+            // window with a sidebar does — System Settings, Mail, Xcode. Left inside the safe
+            // area they started below it instead, so the title bar was one unbroken grey band
+            // across both columns with the divider stopping short of it: a T-shape no other
+            // window on the system draws. The pane keeps the safe area, so only the sidebar
+            // material moves up.
             rail
-            Divider().overlay(Theme.border)
+                .ignoresSafeArea(.container, edges: .top)
+            Divider()
+                .overlay(Theme.border)
+                .ignoresSafeArea(.container, edges: .top)
             pane
         }
         // Wider than the 620 the tab strip had, because the rail takes a column of it and the
@@ -70,7 +79,10 @@ struct SettingsView: View {
                 }
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 12)
+            // Clears the title bar the rail now runs under, so the first row starts below the
+            // traffic lights rather than behind them.
+            .padding(.top, 40)
+            .padding(.bottom, 12)
         }
         .frame(width: 176)
         .scrollContentBackground(.hidden)
