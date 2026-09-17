@@ -590,7 +590,11 @@ struct InboxRowView: View {
 
                     // The chip is tinted by the track record when there is one — that is ADR
                     // 0027's "colours the provenance chip" — and keeps the agent palette's colour
-                    // when there is not.
+                    // when there is not. Since 2026-09-17 this tint is *all* a row says about a
+                    // track record: the "2 merged" chip and the popover behind it were the
+                    // loudest thing on a line whose job is to say what the pull request is, and
+                    // the same numbers are still in the fleet, where someone looking for them
+                    // would go.
                     ProvenanceChip(actor: row.author, tint: trackRecord?.chipColor)
                         .layoutPriority(1)
 
@@ -604,17 +608,6 @@ struct InboxRowView: View {
                             .layoutPriority(1)
                             .help(String(localized: "Has a session to answer to"))
                             .accessibilityLabel(Text(String(localized: "Has a session to answer to")))
-                    }
-
-                    // Beside the chip it describes, so the line reads "which pull request · who ·
-                    // how they have done · what this is".
-                    if let trackRecord {
-                        TrackRecordBadge(
-                            authorName: badgeAuthorName,
-                            agentID: TrackRecordBadge.fleetAgentID(for: row.author),
-                            record: trackRecord
-                        )
-                            .layoutPriority(1)
                     }
 
                     if let triage {
@@ -689,16 +682,6 @@ struct InboxRowView: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    /// The name the badge and its popover use for this row's author.
-    ///
-    /// The agent's display name where there is one, so the badge reads "Claude Code" rather than
-    /// "claude[bot]" — it is the name the track record is *counted* under
-    /// (``ShepherdCore/TrackRecordSubject``), and the two must agree or the popover would explain
-    /// somebody else's numbers.
-    private var badgeAuthorName: String {
-        row.author.kind.agentIdentity?.displayName ?? row.author.login
-    }
-
     /// The row's spoken label: everything the row shows, in the order it shows it.
     ///
     /// `.accessibilityElement(children: .combine)` would concatenate the siblings' own labels,
@@ -720,7 +703,6 @@ struct InboxRowView: View {
             "\(row.slug): \(row.title)",
             ProvenanceChip.spokenProvenance(of: row.author),
             hasSession ? String(localized: "Has a session to answer to") : nil,
-            trackRecord.map { TrackRecordBadge.sentence(authorName: badgeAuthorName, record: $0) },
             triage.flatMap { TriageChip.spokenTitle(for: $0) },
             row.isDraft ? String(localized: "Draft") : nil,
             rounds?.chipText,

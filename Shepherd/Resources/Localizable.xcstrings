@@ -10581,16 +10581,6 @@
         }
       }
     },
-    "See every repository": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Alle Repositorys ansehen"
-          }
-        }
-      }
-    },
     "See how each agent's pull requests have fared in your repositories — rounds, merges, reverts.": {
       "localizations": {
         "de": {
@@ -15137,16 +15127,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "dieses Repo"
-          }
-        }
-      }
-    },
-    "this repo · last 90 days · on this Mac": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "dieses Repo · letzte 90 Tage · auf diesem Mac"
           }
         }
       }

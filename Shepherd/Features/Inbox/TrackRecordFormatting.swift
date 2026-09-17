@@ -52,49 +52,14 @@ extension TrustLane {
 /// The badge is never a control that does anything: clicking it opens the popover, exactly as the
 /// triage chip beside it does. And it never moves a row between lanes — that is ADR 0027's rule,
 /// and there is no code path from this view to ``ShepherdCore/TrustLane``.
-struct TrackRecordBadge: View {
-    @Environment(AppEnvironment.self) private var environment
-    /// The author the record belongs to, as the row shows them.
-    let authorName: String
-    /// The agent-registry id behind that name, or `nil` when the author is not an agent.
-    ///
-    /// The fourth structural gate between the fleet and a page about a person (ADR 0035). The
-    /// first three are in ShepherdCore — membership is `agentName != nil`, ``FleetAgent`` has no
-    /// login field, and `shepherd://fleet/<id>` resolves registry ids — and this is the one on the
-    /// surface a reviewer actually clicks: **`nil` means the popover's way into the fleet is not
-    /// drawn at all**, so there is no button to press on a human's badge rather than a button that
-    /// leads somewhere apologetic.
-    ///
-    /// Defaulted, and the default is the closed direction on purpose. A call site that forgets to
-    /// pass it loses a button; one that could accidentally pass a login would open a page about
-    /// somebody. Derive it with ``fleetAgentID(for:)`` rather than by hand.
-    var agentID: String?
-    /// The record. Rows with none do not render this view at all.
-    let record: TrackRecord
-
-    @State private var isShowingDetail = false
-
-    var body: some View {
-        Button {
-            isShowingDetail.toggle()
-        } label: {
-            ChipView(text: TrackRecordBadge.chipText(for: record), color: record.chipColor)
-        }
-        .buttonStyle(.plain)
-        .help(TrackRecordBadge.sentence(authorName: authorName, record: record))
-        .accessibilityLabel(
-            Text(TrackRecordBadge.sentence(authorName: authorName, record: record))
-        )
-        .popover(isPresented: $isShowingDetail, arrowEdge: .bottom) {
-            TrackRecordPopover(authorName: authorName, agentID: agentID, record: record) {
-                // Closed before the window changes underneath it. A popover is anchored to a row
-                // in a list the fleet is about to replace, and one left standing would be a panel
-                // floating over a screen that no longer contains the thing it points at.
-                isShowingDetail = false
-                environment.openFleet(agentID: agentID)
-            }
-        }
-    }
+/// How a track record is written down and coloured, shared by every surface that shows one.
+///
+/// It was a `View` until 2026-09-17 — the badge on an inbox row, with a popover behind it. The
+/// badge is gone: on a row whose job is to say what a pull request *is*, "2 merged" was the
+/// loudest thing on the line, and the same numbers live in the fleet where somebody looking for
+/// them would go. What the badge had that nothing else did were these formatters, so they stayed
+/// and the view around them did not.
+enum TrackRecordBadge {
 
     /// The id to hand this badge for one row's author.
     ///
@@ -205,95 +170,4 @@ extension TrackRecord {
     static var settledMergeCount: Int { 5 }
     /// How green the first pushes have to be alongside that.
     static var settledFirstPushRate: Double { 0.7 }
-}
-
-/// The popover behind the badge: the numbers, where they come from, and — for an agent — the way
-/// out of "this repo" into every repository (ADR 0035).
-///
-/// The way out matters more than it looks. The fleet's numbers are the same numbers this popover
-/// already shows, counted over `repo: nil` instead of over one repository, so the reviewer who
-/// wants them is exactly the reviewer who has just opened this popover and thought "and
-/// elsewhere?". A screen nobody can get to from the moment they want it is a screen with a rail
-/// row and no readers.
-struct TrackRecordPopover: View {
-    /// The author the record belongs to.
-    let authorName: String
-    /// The agent-registry id behind that name, or `nil` when the author is not an agent.
-    ///
-    /// See ``TrackRecordBadge/agentID``: `nil` removes the footer button rather than disabling it.
-    let agentID: String?
-    /// The record.
-    let record: TrackRecord
-    /// Opens this agent's fleet page. Never called while ``agentID`` is `nil`.
-    let onOpenFleet: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            CardTitle(String(localized: "TRACK RECORD"))
-            Text(authorName)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Theme.textStrong)
-            line(String(localized: "\(record.merged) merged"))
-            line(String(localized: "\(record.closedUnmerged) closed without merging"))
-            line(String(localized: "\(record.reverted) reverted"))
-            if let percent = record.firstPushGreenPercent {
-                line(
-                    String(
-                        localized: "CI green on the first push: \(TrackRecordBadge.percentText(percent))"
-                    )
-                )
-            }
-            if let rounds = record.medianReviewRounds {
-                line(
-                    String(
-                        localized: "Median rounds of changes requested: \(TrackRecordBadge.roundsText(rounds))"
-                    )
-                )
-            }
-            Divider().overlay(Theme.hairline)
-            // The provenance line, and it is the point of the popover as much as the numbers are:
-            // the three questions a count like this raises are "counted where", "counted when"
-            // and "counted by whom", and the answers are this repository, ninety days, and this
-            // Mac — the history is not synced (ADR 0014, ADR 0027).
-            Text(String(localized: "this repo · last 90 days · on this Mac"))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(String(
-                localized: "Counted from closed pull requests, and read by nothing but this badge and the order of the list. It never decides a lane."
-            ))
-            .font(.system(size: 11))
-            .foregroundStyle(Theme.textMuted)
-            .fixedSize(horizontal: false, vertical: true)
-            if TrackRecordPopover.offersFleet(agentID: agentID) {
-                // Under the provenance line rather than above it, because it answers the question
-                // that line raises: it says "this repo", and this is where the reader goes when
-                // that is not the scope they wanted.
-                Button(String(localized: "See every repository")) { onOpenFleet() }
-                    .buttonStyle(SecondaryButtonStyle(height: 26))
-                    .padding(.top, 2)
-            }
-        }
-        .padding(12)
-        .frame(width: 300, alignment: .leading)
-    }
-
-    /// Whether the popover offers its way into the fleet.
-    ///
-    /// A named decision rather than an `if let` buried in the body, so the gate that keeps a
-    /// person's badge from having a route to a track-record page is a line a test can assert
-    /// (ADR 0035) — the same reason ``TrackRecord/chipTone`` exists beside ``TrackRecord/chipColor``.
-    /// - Parameter agentID: The badge's agent id, or `nil` for a person or a generic bot.
-    /// - Returns: `true` only for an agent.
-    static func offersFleet(agentID: String?) -> Bool { agentID != nil }
-
-    private func line(_ text: String) -> some View {
-        HStack(alignment: .top, spacing: 6) {
-            Text("•").foregroundStyle(Theme.textMuted)
-            Text(text)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .font(.system(size: 12))
-        .foregroundStyle(Theme.textSecondary)
-    }
 }
