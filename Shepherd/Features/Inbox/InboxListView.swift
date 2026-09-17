@@ -559,88 +559,89 @@ struct InboxRowView: View {
 
             CheckDotView(state: row.checkRollup?.state)
 
-            // One line, shortened in the middle, exactly as the sidebar shortens the same slug.
-            // Without the limit "swift-matter-examples #50" broke over three lines *inside* a
-            // 46 pt row at 1440 pt and squeezed the diffstat beside it into two (2026-09-09 live
-            // test).
-            //
-            // It outranks the title, which is the reverse of what this row did until 2026-09-17.
-            // The old order gave the title priority on the argument that it is the one thing a
-            // reviewer actually reads — true of the title alone, and false of the row: an inbox
-            // spanning four owners rendered "rhe…#238" and "swift-…es #50", and a pull request
-            // you cannot place is one you cannot judge, however well you can read its title. The
-            // cap keeps a long repository name from taking the row: past it the name shortens in
-            // the middle, which leaves the owner-ish head and the number, and the full
-            // `owner/name#number` is on the tooltip either way.
-            Text("\(row.repo.name) #\(row.number)")
-                .font(Theme.mono(12))
-                .foregroundStyle(Theme.textSecondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .frame(maxWidth: 210, alignment: .leading)
-                .layoutPriority(2)
-                .help(Text(verbatim: row.slug))
+            // Two lines, not one. On one line the title shared the row with the slug and four
+            // chips, and every one of them had a claim on the width: at 1045 pt the inbox read
+            // "fix(mobile):…" four times over, which is a list of pull requests that does not
+            // say what any of them changes. The title is the row's sentence and the rest is
+            // metadata *about* that sentence, so the title gets a line of its own and the
+            // metadata gets the line under it.
+            VStack(alignment: .leading, spacing: 3) {
+                Text(row.title)
+                    .font(.system(size: 13, weight: isSelected ? .medium : .regular))
+                    .foregroundStyle(isSelected ? Theme.textStrong : Theme.text)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-            Text(row.title)
-                .font(.system(size: 13, weight: isSelected ? .medium : .regular))
-                .foregroundStyle(isSelected ? Theme.textStrong : Theme.text)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                // Below the slug, above the chips: a shortened title still says what the change
-                // is about, and a shortened slug says nothing at all.
-                .layoutPriority(1)
+                HStack(spacing: 8) {
+                    // Shortened in the middle, exactly as the sidebar shortens the same slug, and
+                    // first on the metadata line because a pull request you cannot place is one
+                    // you cannot judge — an inbox spanning four owners used to render "rhe…#238"
+                    // beside "swift-…es #50" (2026-09-09 live test). It outranks the chips beside
+                    // it so it is the last thing on this line to give up width; the full
+                    // `owner/name#number` is on the tooltip either way.
+                    Text("\(row.repo.name) #\(row.number)")
+                        .font(Theme.mono(11))
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .layoutPriority(2)
+                        .help(Text(verbatim: row.slug))
 
-            // The chip is tinted by the track record when there is one — that is ADR 0027's
-            // "colours the provenance chip" — and keeps the agent palette's colour when there is
-            // not.
-            ProvenanceChip(actor: row.author, tint: trackRecord?.chipColor)
-                .layoutPriority(1)
+                    // The chip is tinted by the track record when there is one — that is ADR
+                    // 0027's "colours the provenance chip" — and keeps the agent palette's colour
+                    // when there is not.
+                    ProvenanceChip(actor: row.author, tint: trackRecord?.chipColor)
+                        .layoutPriority(1)
 
-            // Beside the provenance chip, because it says the same kind of thing: this pull
-            // request came from a session, and that session can still be answered (ADR 0030).
-            if hasSession {
-                Image(systemName: "bubble.left.and.text.bubble.right")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.agent)
-                    .layoutPriority(1)
-                    .help(String(localized: "Has a session to answer to"))
-                    .accessibilityLabel(Text(String(localized: "Has a session to answer to")))
-            }
-            // Beside the chip it describes, and before the triage chip, so the row reads
-            // "who · how they have done · what this is".
-            if let trackRecord {
-                TrackRecordBadge(
-                    authorName: badgeAuthorName,
-                    agentID: TrackRecordBadge.fleetAgentID(for: row.author),
-                    record: trackRecord
-                )
-                    .layoutPriority(1)
-            }
+                    // Beside the provenance chip, because it says the same kind of thing: this
+                    // pull request came from a session, and that session can still be answered
+                    // (ADR 0030).
+                    if hasSession {
+                        Image(systemName: "bubble.left.and.text.bubble.right")
+                            .font(.system(size: 11))
+                            .foregroundStyle(Theme.agent)
+                            .layoutPriority(1)
+                            .help(String(localized: "Has a session to answer to"))
+                            .accessibilityLabel(Text(String(localized: "Has a session to answer to")))
+                    }
 
-            // Beside the provenance chip, because the two say the same kind of thing about the
-            // row — where it came from, and what it is — and both are read before the title's
-            // truncation matters.
-            if let triage {
-                TriageChip(summary: triage)
-                    .layoutPriority(1)
-            }
+                    // Beside the chip it describes, so the line reads "which pull request · who ·
+                    // how they have done · what this is".
+                    if let trackRecord {
+                        TrackRecordBadge(
+                            authorName: badgeAuthorName,
+                            agentID: TrackRecordBadge.fleetAgentID(for: row.author),
+                            record: trackRecord
+                        )
+                            .layoutPriority(1)
+                    }
 
-            if row.isDraft {
-                ChipView(text: String(localized: "Draft"), color: Theme.textMuted)
-                    .layoutPriority(1)
-            }
+                    if let triage {
+                        TriageChip(summary: triage)
+                            .layoutPriority(1)
+                    }
 
-            // "3 rounds · 2 findings unchanged": the one thing a reviewer wants to know before
-            // opening a pull request they have already reviewed once (ADR 0028).
-            if let text = rounds?.chipText {
-                ChipView(
-                    text: text,
-                    color: (rounds?.unchangedFindingCount ?? 0) > 0
-                        ? Theme.pending
-                        : Theme.textSecondary
-                )
-                .layoutPriority(1)
-                .help(String(localized: "Rounds you have reviewed on this Mac"))
+                    if row.isDraft {
+                        ChipView(text: String(localized: "Draft"), color: Theme.textMuted)
+                            .layoutPriority(1)
+                    }
+
+                    // "3 rounds · 2 findings unchanged": the one thing a reviewer wants to know
+                    // before opening a pull request they have already reviewed once (ADR 0028).
+                    if let text = rounds?.chipText {
+                        ChipView(
+                            text: text,
+                            color: (rounds?.unchangedFindingCount ?? 0) > 0
+                                ? Theme.pending
+                                : Theme.textSecondary
+                        )
+                        .layoutPriority(1)
+                        .help(String(localized: "Rounds you have reviewed on this Mac"))
+                    }
+
+                    Spacer(minLength: 0)
+                }
             }
 
             Spacer(minLength: 8)
@@ -668,7 +669,7 @@ struct InboxRowView: View {
                 .layoutPriority(1)
         }
         .padding(.horizontal, 16)
-        .frame(height: 46)
+        .frame(height: 58)
         .background(isSelected ? Theme.selection : Color.clear)
         .overlay(alignment: .leading) {
             if isSelected {
