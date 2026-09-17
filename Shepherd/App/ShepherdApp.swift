@@ -219,6 +219,12 @@ struct ShepherdCommands: Commands {
             .keyboardShortcut("k", modifiers: .command)
             .disabled(environment.session == nil)
 
+            Button(String(localized: "Watch Repository…")) {
+                environment.isAddingWatchedRepository = true
+            }
+            .keyboardShortcut("a", modifiers: [.command, .shift])
+            .disabled(environment.session == nil)
+
             Button(String(localized: "Sync Now")) {
                 Task { await environment.syncNow() }
             }

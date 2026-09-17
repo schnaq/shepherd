@@ -15561,16 +15561,6 @@
         }
       }
     },
-    "Nothing here yet. Add a repository in Settings → Sync to follow the pull requests nobody asked you about.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Noch nichts da. Füge unter Einstellungen → Sync ein Repository hinzu, um die Pull Requests zu verfolgen, zu denen dich niemand gefragt hat."
-          }
-        }
-      }
-    },
     "Open pull requests in the repositories you watch that nobody has involved you in. Set them up in Settings → Sync.": {
       "localizations": {
         "de": {
@@ -15667,6 +15657,56 @@
           "stringUnit": {
             "state": "translated",
             "value": "Wenn macOS nach deinem Schlüsselbund-Passwort fragt, dann weil ein anderer Build von Shepherd danach fragt als der, der den Token gespeichert hat — etwa eine selbst gebaute Kopie neben der installierten. „Immer erlauben“ beantwortet das für diesen Build ein für alle Mal."
+          }
+        }
+      }
+    },
+    "%lld of %@ — each repository is one more search on every sweep.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %@ — jedes Repository ist eine zusätzliche Suche pro Sync."
+          }
+        }
+      }
+    },
+    "Watch Repository…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository beobachten…"
+          }
+        }
+      }
+    },
+    "Watch a repository": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository beobachten"
+          }
+        }
+      }
+    },
+    "Watch a repository, so every open pull request in it reaches the inbox (⇧⌘A)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Repository beobachten, damit jeder offene Pull Request daraus in der Inbox landet (⇧⌘A)"
+          }
+        }
+      }
+    },
+    "Nothing here yet. Press ⇧⌘A to watch a repository and see the pull requests nobody asked you about.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch nichts hier. Mit ⇧⌘A ein Repository beobachten und die Pull Requests sehen, zu denen dich niemand gefragt hat."
           }
         }
       }

@@ -251,7 +251,11 @@ struct InboxScreen: View {
             ContentKindPicker(selection: $contentKind)
             switch contentKind {
             case .pullRequests:
-                InboxSidebar(model: model, onOpenSettings: { environment.showSettings(.account) })
+                InboxSidebar(
+                    model: model,
+                    onOpenSettings: { environment.showSettings(.account) },
+                    onWatchRepository: { environment.isAddingWatchedRepository = true }
+                )
             case .issues:
                 IssueSidebar(
                     model: issueModel,

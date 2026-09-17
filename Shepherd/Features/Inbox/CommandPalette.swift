@@ -399,6 +399,17 @@ struct CommandPaletteView: View {
         )
         result.append(
             PaletteCommand(
+                id: "watch-repo",
+                section: inbox,
+                title: String(localized: "Watch a repository"),
+                systemImage: "binoculars",
+                keyHint: "⇧⌘A"
+            ) {
+                environment.isAddingWatchedRepository = true
+            }
+        )
+        result.append(
+            PaletteCommand(
                 id: "group-agent",
                 section: inbox,
                 title: String(localized: "Group inbox by agent"),

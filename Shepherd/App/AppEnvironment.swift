@@ -53,6 +53,11 @@ final class AppEnvironment {
     var route: Route = .inbox
     /// Whether the ⌘K palette is up.
     var isCommandPaletteVisible = false
+    /// Whether the "watch a repository" dialog is up.
+    ///
+    /// Here rather than in the inbox's own state because three things raise it: the `+` beside
+    /// the sidebar's REPOSITORIES heading, ⇧⌘A from the menu, and the ⌘K palette.
+    var isAddingWatchedRepository = false
     /// The tab the Settings window shows.
     ///
     /// It lives here rather than inside ``SettingsView`` because every surface that wants a

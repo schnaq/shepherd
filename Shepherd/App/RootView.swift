@@ -57,6 +57,12 @@ struct RootView: View {
                     .padding(.bottom, Self.footerClearance)
             }
             .tint(Theme.accent)
+            // On the root rather than beside the delegation sheet in `SignedInRootView`: two
+            // `.sheet` modifiers on one view are one presentation, and the second one silently
+            // never opens.
+            .sheet(isPresented: Bindable(environment).isAddingWatchedRepository) {
+                WatchRepositorySheet(settings: environment.settings)
+            }
             .task {
                 environment.reopenMainWindow = { openWindow(id: ShepherdScene.mainWindow) }
                 environment.openSettingsWindow = { openSettings() }

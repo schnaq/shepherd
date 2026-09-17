@@ -354,7 +354,7 @@ struct InboxListView: View {
             return String(localized: "Nothing synced yet. Press ⌘R to run a sync now.")
         case .watched:
             return String(
-                localized: "Nothing here yet. Add a repository in Settings → Sync to follow the pull requests nobody asked you about."
+                localized: "Nothing here yet. Press ⇧⌘A to watch a repository and see the pull requests nobody asked you about."
             )
         case .approvedByMe:
             return String(localized: "Nothing you reviewed is still open.")

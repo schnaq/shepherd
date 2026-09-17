@@ -619,27 +619,13 @@ struct SyncSettingsTab: View {
 
     /// Validates the typed repository and adds it.
     ///
-    /// The validation is ``ShepherdCore/InboxDeepLinkFilter``'s, reached through its own
-    /// `repo:` token rather than repeated here: that is the rule the `shepherd://` grammar
-    /// already enforces on exactly this shape, ASCII-only and homoglyph-proof, and a second
-    /// spelling of it in a settings field is a second thing to get wrong. It also matters more
-    /// than it looks — the text goes straight into a GitHub search expression, where a space
-    /// would silently turn one qualifier into two.
+    /// The rule itself is ``AppSettings/watchRepository(named:)``, shared with the inbox's add
+    /// dialog so the two cannot drift apart.
     private func addWatchedRepository() {
-        let typed = watchedRepositoryDraft.trimmingCharacters(in: .whitespaces)
-        guard case .repository(let repo)? = InboxDeepLinkFilter(token: "repo:\(typed)") else {
-            watchedRepositoryError = String(
-                localized: "That is not a repository. Write it as owner/repository, for example schnaq/unlock."
-            )
+        if let failure = environment.settings.watchRepository(named: watchedRepositoryDraft) {
+            watchedRepositoryError = failure
             return
         }
-        guard !environment.settings.watchedRepositories
-            .contains(where: { $0.isSameRepository(as: repo) })
-        else {
-            watchedRepositoryError = String(localized: "\(repo.fullName) is already watched.")
-            return
-        }
-        environment.settings.watchedRepositories.append(repo)
         watchedRepositoryDraft = ""
         watchedRepositoryError = nil
     }

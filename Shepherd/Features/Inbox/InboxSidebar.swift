@@ -8,6 +8,8 @@ struct InboxSidebar: View {
     let model: InboxModel
     /// Opens the Settings window.
     var onOpenSettings: () -> Void
+    /// Raises the "watch a repository" dialog.
+    var onWatchRepository: () -> Void
 
     var body: some View {
         ScrollView {
@@ -139,28 +141,46 @@ struct InboxSidebar: View {
         }
     }
 
-    @ViewBuilder
+    /// The repositories the inbox is currently showing, and the way to add one it is not.
+    ///
+    /// Unlike the facets above it this section is drawn even when it is empty, because it is no
+    /// longer only a filter: watching a repository is how a pull request nobody named you on
+    /// reaches the inbox at all, and an inbox with nothing in it is exactly when a reader needs
+    /// that. The rows still come from what is *in* the inbox, so a watched repository with no
+    /// open pull requests shows up here only once it has one.
     private var repositoriesFacet: some View {
         let facets = model.repositoryFacets
-        if !facets.isEmpty {
-            VStack(alignment: .leading, spacing: 2) {
+        return VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 4) {
                 RailSectionHeader(title: String(localized: "REPOSITORIES"))
-                ForEach(facets.prefix(6), id: \.repo) { facet in
-                    RailRow(
-                        title: facet.repo.fullName,
-                        count: facet.count,
-                        isSelected: model.repoFilter == facet.repo
-                    ) {
-                        model.repoFilter = model.repoFilter == facet.repo ? nil : facet.repo
-                    }
-                }
-                if facets.count > 6 {
-                    Text(String(localized: "\(facets.count - 6) more…"))
-                        .font(.system(size: 12))
+                Button(action: onWatchRepository) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(Theme.textMuted)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
+                        .frame(width: 16, height: 16)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .help(String(localized: "Watch a repository, so every open pull request in it reaches the inbox (⇧⌘A)"))
+                .accessibilityLabel(Text(String(localized: "Watch a repository")))
+                .padding(.trailing, 10)
+                .padding(.bottom, 6)
+            }
+            ForEach(facets.prefix(6), id: \.repo) { facet in
+                RailRow(
+                    title: facet.repo.fullName,
+                    count: facet.count,
+                    isSelected: model.repoFilter == facet.repo
+                ) {
+                    model.repoFilter = model.repoFilter == facet.repo ? nil : facet.repo
+                }
+            }
+            if facets.count > 6 {
+                Text(String(localized: "\(facets.count - 6) more…"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textMuted)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
             }
         }
     }

@@ -427,6 +427,37 @@ final class AppSettings {
     /// small enough that the list stays something a person maintains rather than accumulates.
     static let maximumWatchedRepositories = 10
 
+    /// Validates a typed `owner/repository` and starts watching it.
+    ///
+    /// Lives here rather than in either of the two places that call it — the Settings card and
+    /// the inbox's add dialog — because a second spelling of this rule is a second thing to get
+    /// wrong, and the text goes straight into a GitHub search expression where a stray space
+    /// would silently turn one qualifier into two.
+    ///
+    /// The validation is ``ShepherdCore/InboxDeepLinkFilter``'s, reached through its own `repo:`
+    /// token: that is the rule the `shepherd://` grammar already enforces on exactly this shape,
+    /// ASCII-only and homoglyph-proof.
+    /// - Parameter typed: What the user wrote. Surrounding whitespace is ignored.
+    /// - Returns: `nil` when the repository is now watched, or the sentence to show otherwise.
+    func watchRepository(named typed: String) -> String? {
+        guard watchedRepositories.count < Self.maximumWatchedRepositories else {
+            return String(
+                localized: "\(Self.maximumWatchedRepositories) is the maximum — each repository is one more search on every sweep."
+            )
+        }
+        let trimmed = typed.trimmingCharacters(in: .whitespaces)
+        guard case .repository(let repo)? = InboxDeepLinkFilter(token: "repo:\(trimmed)") else {
+            return String(
+                localized: "That is not a repository. Write it as owner/repository, for example schnaq/unlock."
+            )
+        }
+        guard !watchedRepositories.contains(where: { $0.isSameRepository(as: repo) }) else {
+            return String(localized: "\(repo.fullName) is already watched.")
+        }
+        watchedRepositories.append(repo)
+        return nil
+    }
+
     /// The merge method the merge sheet and the bulk-triage dialog open on.
     ///
     /// Written by both of them, so it is "the last method you chose" rather than a preference
