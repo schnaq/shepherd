@@ -622,8 +622,13 @@ struct SyncStatusView: View {
         // glass capsule — "Wird synchronisiert…" lost its last letters against the capsule's
         // edge. `fixedSize` makes it ask for the width it actually needs; the padding keeps the
         // text off the capsule's rim, which is drawn tight around the item.
+        //
+        // 10 pt rather than the 4 it started with: 4 cleared the rim and nothing more, so the
+        // capsule read as a label someone had forgotten to pad rather than as a control. The dot
+        // and the text inside it are 6 pt apart, and a gutter narrower than that gap makes the
+        // whole group look pushed against the glass.
         .fixedSize(horizontal: true, vertical: false)
-        .padding(.horizontal, 4)
+        .padding(.horizontal, 10)
     }
 
     /// The worst true state wins: a failed write outranks "synced fine a moment ago", and a

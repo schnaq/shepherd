@@ -562,25 +562,33 @@ struct InboxRowView: View {
             // One line, shortened in the middle, exactly as the sidebar shortens the same slug.
             // Without the limit "swift-matter-examples #50" broke over three lines *inside* a
             // 46 pt row at 1440 pt and squeezed the diffstat beside it into two (2026-09-09 live
-            // test). With it, the row has one truncation order at every width: the trailing
-            // columns never give way at all (they are fixed to their own size below), the title
-            // gives way last (priority 2), and the slug and the chips (priority 1) shorten before
-            // it — the slug in the middle, the title at the tail.
+            // test).
+            //
+            // It outranks the title, which is the reverse of what this row did until 2026-09-17.
+            // The old order gave the title priority on the argument that it is the one thing a
+            // reviewer actually reads — true of the title alone, and false of the row: an inbox
+            // spanning four owners rendered "rhe…#238" and "swift-…es #50", and a pull request
+            // you cannot place is one you cannot judge, however well you can read its title. The
+            // cap keeps a long repository name from taking the row: past it the name shortens in
+            // the middle, which leaves the owner-ish head and the number, and the full
+            // `owner/name#number` is on the tooltip either way.
             Text("\(row.repo.name) #\(row.number)")
                 .font(Theme.mono(12))
-                .foregroundStyle(Theme.textMuted)
+                .foregroundStyle(Theme.textSecondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
-                .layoutPriority(1)
+                .frame(maxWidth: 210, alignment: .leading)
+                .layoutPriority(2)
+                .help(Text(verbatim: row.slug))
 
             Text(row.title)
                 .font(.system(size: 13, weight: isSelected ? .medium : .regular))
                 .foregroundStyle(isSelected ? Theme.textStrong : Theme.text)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                // The title is the one thing on the row a reviewer actually reads; every chip
-                // beside it is `1`, so a narrow window takes width from them first.
-                .layoutPriority(2)
+                // Below the slug, above the chips: a shortened title still says what the change
+                // is about, and a shortened slug says nothing at all.
+                .layoutPriority(1)
 
             // The chip is tinted by the track record when there is one — that is ADR 0027's
             // "colours the provenance chip" — and keeps the agent palette's colour when there is
