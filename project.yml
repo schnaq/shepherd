@@ -152,6 +152,18 @@ targets:
         # request. Off is Sparkle's default, but "no telemetry, ever" is a hard line in
         # CONTRIBUTING.md and a hard line should be stated, not inherited.
         SUSendProfileInfo: false
+        #
+        # ── Usage telemetry (ADR 0036) ──────────────────────────────────────────────────────
+        # PLACEHOLDER, and it stays a placeholder in the repository. The real value is the
+        # PostHog EU project's *public* write key, written into the built bundle's Info.plist by
+        # Scripts/release.sh from the POSTHOG_TOKEN secret, before code signing — after signing
+        # it could not be written, because the signature covers this file. Empty here means
+        # `AppConfig.postHogProjectKey` answers nil, `UsageTelemetry` is never constructed, and a
+        # development build, a test run and a fork therefore have no queue, no timer and no
+        # request at all. The key is public by design: it ships in every binary and `strings`
+        # will find it, which is why it is not a secret in the app and why the numbers it
+        # produces are indicators rather than bookkeeping.
+        SHPostHogProjectKey: ""
         # Sparkle may *find* an update in the background but never download-and-install one
         # silently: unsent review drafts live in the local database (ADR 0006) and an app that
         # replaces itself mid-review is hostile. Every update is presented and confirmed.

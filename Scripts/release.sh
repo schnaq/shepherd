@@ -207,6 +207,27 @@ except (ValueError, binascii.Error):
 ' "$PUBLIC_KEY" || die "SUPublicEDKey in project.yml is still the placeholder (or not a 32-byte ed25519 key). Paste the public key \`generate_keys\` printed. See docs/RELEASING.md."
 fi
 
+# ── 2b. The PostHog project key (ADR 0036) ───────────────────────────────────────────────────
+#
+# Written here rather than in the workflow, because the bundle does not exist until the build
+# above — and written *before* section 3, because the signature covers Info.plist and a file
+# edited afterwards would break it.
+#
+# A release built without the secret ships the empty placeholder, and an empty value means the app
+# has no telemetry mechanism at all rather than a broken one: `AppConfig.postHogProjectKey` answers
+# nil and `UsageTelemetry` is never constructed. So this warns and continues instead of dying.
+#
+# The value is a *public* write key that ships in every binary; the secret store buys build hygiene
+# here, not confidentiality (docs/RELEASING.md says so, and so does docs/PRIVACY.md).
+if [[ -n "${POSTHOG_TOKEN:-}" ]]; then
+    plutil -replace SHPostHogProjectKey -string "$POSTHOG_TOKEN" "$APP_PLIST"
+    plutil -extract SHPostHogProjectKey raw -o - "$APP_PLIST" >/dev/null \
+        || die "Writing SHPostHogProjectKey into $APP_PLIST did not take."
+    info "usage telemetry: project key written into the bundle"
+else
+    warn "POSTHOG_TOKEN is not set; this build ships without usage telemetry."
+fi
+
 # ── 3. Re-sign Sparkle's helpers, then verify every signature ────────────────────────────────
 #
 # This step used to only check, on the assumption that Xcode signs the embedded Sparkle

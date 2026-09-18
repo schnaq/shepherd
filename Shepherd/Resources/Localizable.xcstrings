@@ -15760,6 +15760,146 @@
           }
         }
       }
+    },
+    "Shepherd counts a little": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd zählt ein wenig mit"
+          }
+        }
+      }
+    },
+    "So we know which half of Shepherd is worth building on, the app sends anonymous counts: the version, the language, and which features you use. No identifier, nothing that could recognise this Mac again, and never a repository, a branch or any of your code.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Damit wir wissen, welche Hälfte von Shepherd es wert ist, weitergebaut zu werden, sendet die App anonyme Zählungen: die Version, die Sprache und welche Funktionen Sie nutzen. Keine Kennung, nichts, woran dieser Mac wiedererkannt werden könnte, und niemals ein Repository, ein Branch oder irgendein Stück Ihres Codes."
+          }
+        }
+      }
+    },
+    "schnaq GmbH is responsible for this data. You can switch it off at any time in Settings → Account.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verantwortlich für diese Daten ist die schnaq GmbH. Sie können das jederzeit unter Einstellungen → Konto abschalten."
+          }
+        }
+      }
+    },
+    "Also count reach": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auch Reichweite messen"
+          }
+        }
+      }
+    },
+    "Turn usage statistics off": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nutzungsstatistik ausschalten"
+          }
+        }
+      }
+    },
+    "Understood": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verstanden"
+          }
+        }
+      }
+    },
+    "USAGE STATISTICS": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NUTZUNGSSTATISTIK"
+          }
+        }
+      }
+    },
+    "Usage statistics": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nutzungsstatistik"
+          }
+        }
+      }
+    },
+    "Counts leave this Mac about once a day, to eu.i.posthog.com. Your IP address is discarded and no profile is kept. schnaq GmbH is responsible for the data.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Zählungen verlassen diesen Mac etwa einmal täglich, an eu.i.posthog.com. Ihre IP-Adresse wird verworfen, und es wird kein Profil angelegt. Verantwortlich für die Daten ist die schnaq GmbH."
+          }
+        }
+      }
+    },
+    "Show what would be sent": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeigen, was gesendet würde"
+          }
+        }
+      }
+    },
+    "Clear queue": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warteschlange löschen"
+          }
+        }
+      }
+    },
+    "Waiting to be sent": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wartet auf den Versand"
+          }
+        }
+      }
+    },
+    "Nothing is waiting to be sent.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es wartet nichts auf den Versand."
+          }
+        }
+      }
+    },
+    "The queue could not be read.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Warteschlange konnte nicht gelesen werden."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

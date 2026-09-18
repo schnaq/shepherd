@@ -181,6 +181,9 @@ struct AccountSettingsTab: View {
         SettingsPage {
             accountSection
             diagnosticsCard
+            // Directly under diagnostics: the two answer the same question from opposite ends —
+            // what this Mac keeps about itself, and what it says about itself (ADR 0036).
+            TelemetrySettingsCard()
             updatesCard
         }
         .task { refreshDiagnosticsCount() }

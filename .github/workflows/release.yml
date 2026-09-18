@@ -151,6 +151,9 @@ jobs:
           NOTARY_API_KEY_ID: ${{ secrets.NOTARY_API_KEY_ID }}
           NOTARY_API_ISSUER_ID: ${{ secrets.NOTARY_API_ISSUER_ID }}
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          # The PostHog project key (ADR 0036). Unset in a fork, which is exactly right: the
+          # release script warns and ships a build with no telemetry mechanism at all.
+          POSTHOG_TOKEN: ${{ secrets.POSTHOG_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail

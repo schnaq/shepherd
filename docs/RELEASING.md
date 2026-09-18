@@ -301,6 +301,28 @@ land after the tag for updates to start flowing. Two consequences worth knowing:
 
 ---
 
+## The PostHog project key
+
+`POSTHOG_TOKEN` is a GitHub Actions secret (synced from Infisical) holding the *public* write key
+of the PostHog EU project behind [ADR 0036](adr/0036-usage-telemetry.md). `Scripts/release.sh`
+writes it into the built bundle's `Info.plist` as `SHPostHogProjectKey` immediately after the build
+and immediately **before** signing — the signature covers `Info.plist`, so a value written
+afterwards would break it.
+
+`project.yml` keeps an empty placeholder, so every build that is not a release — yours, CI's, a
+fork's — has no key. An empty key is not a misconfiguration but a state the app is written for:
+`AppConfig.postHogProjectKey` answers `nil`, `UsageTelemetry` is never constructed, and there is no
+queue, no timer and no request. That is also why the first-run notice never appears while
+developing; to exercise it, set `SHPostHogProjectKey` in `project.yml` temporarily and revert
+before committing.
+
+A run without the secret therefore **warns and continues** rather than failing. It is not a
+confidential value: it ships inside every binary and `strings` will find it, which is why the
+numbers it produces are indicators rather than bookkeeping. Rotating it is a PostHog project
+setting plus a new secret; old builds simply stop reporting.
+
+---
+
 ## Running the pipeline locally
 
 The whole script runs on a maintainer's Mac, which is how it is debugged:

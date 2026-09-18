@@ -51,6 +51,26 @@ struct RootView: View {
         // slides up, often" was. As a background the colour paints into the safe area while the
         // content keeps the frame the safe area gave it.
         content
+            // The first-run notice (ADR 0036), attached at the top of the chain rather than beside
+            // the repository sheet below: two `.sheet` modifiers applied to the *same* view are
+            // one presentation and the second silently never opens, which is the trap the comment
+            // further down records. Six modifiers apart, these are two different views.
+            //
+            // On the root rather than inside `SignedInRootView`, because a fresh install is signed
+            // out and is still an installation that must be told before anything is counted. The
+            // binding is derived rather than stored: answering sets the flag, the condition goes
+            // false, and the sheet closes itself.
+            .sheet(isPresented: .constant(isShowingTelemetryNotice)) {
+                TelemetryNoticeSheet { level in
+                    environment.settings.telemetryLevel = level
+                    environment.settings.telemetryNoticeAcknowledged = true
+                    environment.applyTelemetryLevel()
+                    environment.recordLaunchHeartbeat()
+                }
+                // There is no fourth answer. Escape would be one, and it would leave the level at
+                // its default without the reader having been asked.
+                .interactiveDismissDisabled()
+            }
             .background(Theme.background.ignoresSafeArea())
             .overlay(alignment: Self.toastAlignment) {
                 ToastStackView(center: environment.toasts)
@@ -67,6 +87,16 @@ struct RootView: View {
                 environment.reopenMainWindow = { openWindow(id: ShepherdScene.mainWindow) }
                 environment.openSettingsWindow = { openSettings() }
             }
+    }
+
+    /// Whether the first-run notice is due.
+    ///
+    /// A build with no PostHog key has no telemetry mechanism at all, so there is nothing to give
+    /// notice *of* — which is why this never appears while developing Shepherd. Testing it means
+    /// setting `SHPostHogProjectKey` in `project.yml` temporarily, never weakening this condition
+    /// (ADR 0036).
+    private var isShowingTelemetryNotice: Bool {
+        AppConfig.postHogProjectKey != nil && !environment.settings.telemetryNoticeAcknowledged
     }
 
     @ViewBuilder

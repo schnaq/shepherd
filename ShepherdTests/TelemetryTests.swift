@@ -600,3 +600,31 @@ extension TelemetryTests {
         XCTAssertEqual(Set(TelemetryQueue(directory: directory).load().map(\.name)).count, 13)
     }
 }
+
+extension TelemetryTests {
+    // MARK: - The build-time key
+
+    /// The test host is built without a key, and that is the assertion: development builds, test
+    /// runs and forks have no mechanism at all, because `UsageTelemetry.make` refuses to build one.
+    func testATestBuildHasNoPostHogKeyAndThereforeNoTelemetry() {
+        XCTAssertNil(AppConfig.postHogProjectKey)
+
+        let settings = AppSettings(defaults: makeDefaults())
+        settings.telemetryLevel = .anonymous
+        settings.telemetryNoticeAcknowledged = true
+
+        XCTAssertNil(UsageTelemetry.make(settings: settings))
+    }
+
+    /// An empty or absent key must read the same way — as "no mechanism" — so that a build whose
+    /// injection step failed is inert rather than half-configured.
+    func testAnEmptyKeyReadsAsNoKey() {
+        let settings = AppSettings(defaults: makeDefaults())
+        settings.telemetryLevel = .anonymous
+        settings.telemetryNoticeAcknowledged = true
+
+        XCTAssertNil(UsageTelemetry.make(settings: settings, key: nil))
+        XCTAssertNil(UsageTelemetry.make(settings: settings, key: ""))
+        XCTAssertNil(UsageTelemetry.make(settings: settings, key: "   "))
+    }
+}

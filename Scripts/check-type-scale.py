@@ -60,6 +60,10 @@ MIGRATED = (
     "Shepherd/Features/Fleet/FleetAgentDetail.swift",
     "Shepherd/Features/Fleet/FleetNoticeText.swift",
     "Shepherd/Features/Fleet/FleetModel.swift",
+    # Usage telemetry (ADR 0036), on the scale from birth for the reason the fleet is: every size
+    # in them came out of `Theme.type(_:weight:)` in the first place.
+    "Shepherd/Features/Settings/TelemetryNoticeSheet.swift",
+    "Shepherd/Features/Settings/TelemetrySettingsCard.swift",
 )
 
 # A fixed point size, either spelling: SwiftUI's own or `Theme.mono`'s numeric overload. `\s*`
