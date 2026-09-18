@@ -388,3 +388,150 @@ extension TelemetryTests {
         XCTAssertEqual(PostHogSender.language(for: Locale(identifier: "fr_FR")), "en")
     }
 }
+
+/// A sender that records what it was handed and can be told to fail.
+private final class RecordingSender: TelemetrySender, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _batches: [[QueuedEvent]] = []
+    var shouldFail = false
+
+    var batches: [[QueuedEvent]] {
+        lock.withLock { _batches }
+    }
+
+    // `withLock` rather than a bare `lock()`/`unlock()` pair: this method is `async`, and calling
+    // those directly is unavailable there — an await between them could hand the lock to another
+    // task.
+    func send(_ events: [QueuedEvent]) async throws {
+        let fail = lock.withLock {
+            _batches.append(events)
+            return shouldFail
+        }
+        if fail { throw URLError(.notConnectedToInternet) }
+    }
+}
+
+extension TelemetryTests {
+    // MARK: - The façade
+
+    private func makeTelemetry(
+        level: TelemetryLevel,
+        defaults: UserDefaults,
+        sender: RecordingSender,
+        now: Date = Date(timeIntervalSince1970: 1_789_732_800)
+    ) -> UsageTelemetry {
+        UsageTelemetry(
+            level: level,
+            identity: TelemetryIdentity(defaults: defaults),
+            heartbeat: TelemetryHeartbeat(defaults: defaults),
+            queue: TelemetryQueue(directory: directory),
+            sender: sender,
+            now: { now }
+        )
+    }
+
+    /// The gate, in the only two forms it takes: no key, or a level of `off`. Both mean the
+    /// mechanism is absent rather than quiet.
+    func testNoInstanceExistsWithoutAKeyOrWithTelemetryOff() {
+        let defaults = makeDefaults()
+        let settings = AppSettings(defaults: defaults)
+        settings.telemetryNoticeAcknowledged = true
+
+        settings.telemetryLevel = .off
+        XCTAssertNil(UsageTelemetry.make(settings: settings, key: "phc_test", queue: TelemetryQueue(directory: directory), sender: RecordingSender()))
+
+        settings.telemetryLevel = .anonymous
+        XCTAssertNil(UsageTelemetry.make(settings: settings, key: nil, queue: TelemetryQueue(directory: directory), sender: RecordingSender()))
+
+        XCTAssertNotNil(UsageTelemetry.make(settings: settings, key: "phc_test", queue: TelemetryQueue(directory: directory), sender: RecordingSender()))
+    }
+
+    /// Nothing is recorded before the notice is answered — the difference between "on by default"
+    /// and "on by default, after you were told".
+    func testNothingExistsBeforeTheNoticeIsAcknowledged() {
+        let defaults = makeDefaults()
+        let settings = AppSettings(defaults: defaults)
+        settings.telemetryLevel = .anonymous
+        settings.telemetryNoticeAcknowledged = false
+
+        XCTAssertNil(UsageTelemetry.make(settings: settings, key: "phc_test", queue: TelemetryQueue(directory: directory), sender: RecordingSender()))
+    }
+
+    func testRecordingQueuesTheEventWithTodaysDayAndTheCurrentIdentity() {
+        let defaults = makeDefaults()
+        let telemetry = makeTelemetry(level: .anonymous, defaults: defaults, sender: RecordingSender())
+
+        telemetry.record(.fleetViewed(scope: .all))
+
+        let stored = TelemetryQueue(directory: directory).load()
+        XCTAssertEqual(stored.count, 1)
+        XCTAssertEqual(stored.first?.name, "fleet_viewed")
+        XCTAssertEqual(stored.first?.day, "2026-09-18")
+        XCTAssertFalse(stored.first?.distinctID.isEmpty ?? true)
+    }
+
+    func testFlushSendsTheQueueAndEmptiesItOnSuccess() async {
+        let sender = RecordingSender()
+        let telemetry = makeTelemetry(level: .anonymous, defaults: makeDefaults(), sender: sender)
+        telemetry.record(.fleetViewed(scope: .all))
+        telemetry.record(.digestOpened(source: .app))
+
+        await telemetry.flush()
+
+        XCTAssertEqual(sender.batches.count, 1)
+        XCTAssertEqual(sender.batches.first?.count, 2)
+        XCTAssertTrue(TelemetryQueue(directory: directory).load().isEmpty)
+    }
+
+    /// A failed flush keeps the events: the next flush tries again, and nothing is lost because
+    /// the network was down.
+    func testAFailedFlushKeepsTheQueue() async {
+        let sender = RecordingSender()
+        sender.shouldFail = true
+        let telemetry = makeTelemetry(level: .anonymous, defaults: makeDefaults(), sender: sender)
+        telemetry.record(.fleetViewed(scope: .all))
+
+        await telemetry.flush()
+
+        XCTAssertEqual(TelemetryQueue(directory: directory).load().count, 1)
+    }
+
+    /// Switching off erases rather than merely stopping — the queue, the heartbeat day and the
+    /// monthly identity all go.
+    func testSwitchingOffDeletesTheQueueTheDayAndTheIdentity() {
+        let defaults = makeDefaults()
+        let telemetry = makeTelemetry(level: .reach, defaults: defaults, sender: RecordingSender())
+        telemetry.record(.fleetViewed(scope: .all))
+        telemetry.recordHeartbeatIfDue { .digestOpened(source: .app) }
+        XCTAssertNotNil(defaults.string(forKey: TelemetryIdentity.identityKey))
+
+        telemetry.apply(level: .off)
+
+        XCTAssertTrue(TelemetryQueue(directory: directory).load().isEmpty)
+        XCTAssertNil(defaults.string(forKey: TelemetryIdentity.identityKey))
+        XCTAssertNil(defaults.string(forKey: TelemetryHeartbeat.lastDayKey))
+    }
+
+    /// Dropping from reach to anonymous deletes only the stored identity: the counts stay, the
+    /// recognisability goes.
+    func testDroppingFromReachToAnonymousDeletesOnlyTheIdentity() {
+        let defaults = makeDefaults()
+        let telemetry = makeTelemetry(level: .reach, defaults: defaults, sender: RecordingSender())
+        telemetry.record(.fleetViewed(scope: .all))
+
+        telemetry.apply(level: .anonymous)
+
+        XCTAssertNil(defaults.string(forKey: TelemetryIdentity.identityKey))
+        XCTAssertEqual(TelemetryQueue(directory: directory).load().count, 1)
+    }
+
+    func testTheHeartbeatIsRecordedOncePerDayThroughTheFacade() {
+        let defaults = makeDefaults()
+        let telemetry = makeTelemetry(level: .anonymous, defaults: defaults, sender: RecordingSender())
+
+        telemetry.recordHeartbeatIfDue { .digestOpened(source: .app) }
+        telemetry.recordHeartbeatIfDue { .digestOpened(source: .app) }
+
+        XCTAssertEqual(TelemetryQueue(directory: directory).load().count, 1)
+    }
+}
