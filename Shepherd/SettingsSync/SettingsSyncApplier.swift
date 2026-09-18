@@ -135,6 +135,10 @@ enum SettingsSyncApplier {
         document.diagnostics = SyncedSettingsDocument.DiagnosticsGroup(
             isEnabled: settings.diagnosticsEnabled
         )
+        document.telemetry = SyncedSettingsDocument.TelemetryGroup(
+            level: settings.telemetryLevel,
+            noticeAcknowledged: settings.telemetryNoticeAcknowledged
+        )
         document.account = SyncedSettingsDocument.AccountGroup(
             login: settings.accountLogin,
             authKind: settings.accountLogin == nil ? nil : settings.accountAuthKind
@@ -282,6 +286,19 @@ enum SettingsSyncApplier {
         // the same route the appearance change takes, so an applied document and a flipped toggle
         // reach the subscriber through one path rather than two (ADR 0017).
         settings.diagnosticsEnabled = document.diagnostics.isEnabled
+
+        // Absent means "leave it alone", not "apply the default": a document written before
+        // ADR 0036 has no telemetry group, and defaulting to `anonymous` would switch telemetry
+        // back on for somebody who had switched it off. Only the flags are applied here — building
+        // or tearing down the mechanism is the window's job, driven by
+        // `onChange(of: settings.telemetryLevel)` in `ShepherdApp`, exactly like the MetricKit
+        // subscriber.
+        if let telemetry = document.telemetry {
+            settings.telemetryLevel = telemetry.level
+            // An applied `off` also answers the notice: the question has been settled for this
+            // account, and asking again on the second Mac would be asking twice.
+            settings.telemetryNoticeAcknowledged = telemetry.noticeAcknowledged || telemetry.level == .off
+        }
 
         // The registry lives in the database, not here, so it is applied only when there is one.
         let overrides = document.agents.registryOverrides

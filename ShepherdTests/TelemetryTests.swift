@@ -535,3 +535,28 @@ extension TelemetryTests {
         XCTAssertEqual(TelemetryQueue(directory: directory).load().count, 1)
     }
 }
+
+extension TelemetryTests {
+    // MARK: - Settings sync
+
+    /// The one that matters: a document from a Mac that predates telemetry has no group, and an
+    /// absent group must leave the local choice alone. A default of `anonymous` here would switch
+    /// telemetry back on for somebody who had turned it off.
+    func testADocumentWithoutATelemetryGroupLeavesTheLevelAlone() throws {
+        let json = Data(#"{"v":1,"telemetry":null}"#.utf8)
+        let document = try JSONDecoder().decode(SyncedSettingsDocument.self, from: json)
+
+        XCTAssertNil(document.telemetry)
+    }
+
+    func testTheGroupRoundTripsThroughJSON() throws {
+        var document = SyncedSettingsDocument()
+        document.telemetry = SyncedSettingsDocument.TelemetryGroup(level: .reach, noticeAcknowledged: true)
+
+        let data = try JSONEncoder().encode(document)
+        let decoded = try JSONDecoder().decode(SyncedSettingsDocument.self, from: data)
+
+        XCTAssertEqual(decoded.telemetry?.level, .reach)
+        XCTAssertEqual(decoded.telemetry?.noticeAcknowledged, true)
+    }
+}

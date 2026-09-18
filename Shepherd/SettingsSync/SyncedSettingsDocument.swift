@@ -633,6 +633,31 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         }
     }
 
+    /// Usage telemetry (ADR 0036): the level, and whether the first-run notice has been answered.
+    ///
+    /// The queue, the heartbeat day and the monthly identity are deliberately **not** here. They
+    /// are machine-local state — one Mac, one month, one set of unsent events — and belong with the
+    /// outbox and the auto-delegation ledger among the things this document leaves out.
+    struct TelemetryGroup: Codable, Sendable, Equatable {
+        /// How much this account's Macs may count.
+        var level: TelemetryLevel
+        /// Whether the notice has been answered, so a second Mac does not ask again.
+        var noticeAcknowledged: Bool
+
+        /// Creates the group.
+        /// - Parameters:
+        ///   - level: The level to carry.
+        ///   - noticeAcknowledged: Whether the notice has been answered.
+        init(level: TelemetryLevel = .anonymous, noticeAcknowledged: Bool = false) {
+            self.level = level
+            self.noticeAcknowledged = noticeAcknowledged
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case level, noticeAcknowledged
+        }
+    }
+
     /// Who the token in ``Secrets`` belongs to.
     ///
     /// The identity is *not* a secret and lives here rather than under `secrets` on purpose: a
@@ -748,6 +773,12 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
     var composer: ComposerGroup
     /// Whether local crash and hang reports are kept.
     var diagnostics: DiagnosticsGroup
+    /// Usage telemetry, or `nil` when the document was written by a build that had none.
+    ///
+    /// Optional, unlike every other group, and that is the point: `nil` means *do not touch the
+    /// local setting*. Applying a default here would turn telemetry back on for somebody who had
+    /// switched it off on this Mac and then synced from an older one.
+    var telemetry: TelemetryGroup?
     /// Who the GitHub token belongs to.
     var account: AccountGroup
     /// The Keychain half.
@@ -770,6 +801,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         triage: TriageGroup = TriageGroup(),
         composer: ComposerGroup = ComposerGroup(),
         diagnostics: DiagnosticsGroup = DiagnosticsGroup(),
+        telemetry: TelemetryGroup? = nil,
         account: AccountGroup = AccountGroup(),
         secrets: Secrets = Secrets()
     ) {
@@ -788,6 +820,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         self.triage = triage
         self.composer = composer
         self.diagnostics = diagnostics
+        self.telemetry = telemetry
         self.account = account
         self.secrets = secrets
     }
@@ -798,6 +831,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         case trust
         case search
         case appearance, triage, composer, diagnostics, account, secrets
+        case telemetry
     }
 
     init(from decoder: any Decoder) throws {
@@ -825,6 +859,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         triage = container.syncedValue(.triage, default: TriageGroup())
         composer = container.syncedValue(.composer, default: ComposerGroup())
         diagnostics = container.syncedValue(.diagnostics, default: DiagnosticsGroup())
+        telemetry = container.syncedOptional(.telemetry, as: TelemetryGroup.self)
         account = container.syncedValue(.account, default: AccountGroup())
         secrets = container.syncedValue(.secrets, default: Secrets())
     }
