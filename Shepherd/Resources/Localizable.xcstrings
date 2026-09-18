@@ -15710,6 +15710,56 @@
           }
         }
       }
+    },
+    "Anonymous": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anonym"
+          }
+        }
+      }
+    },
+    "Anonymous + reach": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anonym + Reichweite"
+          }
+        }
+      }
+    },
+    "Nothing is collected and nothing is sent.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es wird nichts erhoben und nichts gesendet."
+          }
+        }
+      }
+    },
+    "Version, language and which features you use. No identifier, and nothing that could recognise this Mac again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version, Sprache und welche Funktionen Sie nutzen. Keine Kennung, und nichts, woran dieser Mac wiedererkannt werden könnte."
+          }
+        }
+      }
+    },
+    "Adds a random identifier that is thrown away every month, so we can count how many people use Shepherd. Switching this off deletes it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fügt eine zufällige Kennung hinzu, die jeden Monat verworfen wird, damit wir zählen können, wie viele Menschen Shepherd nutzen. Wer dies abschaltet, löscht sie."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

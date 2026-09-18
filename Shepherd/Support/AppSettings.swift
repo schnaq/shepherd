@@ -201,6 +201,9 @@ final class AppSettings {
         self.settingsSyncLastUploadAt = defaults.object(forKey: Keys.syncLastUpload) as? Date
         self.settingsSyncLastDownloadAt = defaults.object(forKey: Keys.syncLastDownload) as? Date
         self.diagnosticsEnabled = defaults.object(forKey: Keys.diagnosticsEnabled) as? Bool ?? false
+        self.telemetryLevel = Self.read(defaults, Keys.telemetryLevel, default: TelemetryLevel.anonymous)
+        self.telemetryNoticeAcknowledged = defaults
+            .object(forKey: Keys.telemetryNoticeAcknowledged) as? Bool ?? false
     }
 
     // MARK: - Appearance
@@ -907,6 +910,27 @@ final class AppSettings {
         didSet { defaults.set(diagnosticsEnabled, forKey: Keys.diagnosticsEnabled) }
     }
 
+    // MARK: - Usage telemetry (ADR 0036)
+
+    /// How much Shepherd may count.
+    ///
+    /// `anonymous` out of the box, but see ``telemetryNoticeAcknowledged``: the level alone does
+    /// not start anything. This is the flag that decides whether ``UsageTelemetry`` is constructed
+    /// at all — with `off` there is no queue, no timer and no request, the same shape as
+    /// ``diagnosticsEnabled`` and the MetricKit subscriber.
+    var telemetryLevel: TelemetryLevel {
+        didSet { Self.write(defaults, telemetryLevel, Keys.telemetryLevel) }
+    }
+
+    /// Whether the first-run notice has been answered.
+    ///
+    /// False on a fresh install, and nothing is recorded while it is false. This is the difference
+    /// between "on by default with a notice somewhere" and "on by default, after you were told" —
+    /// the second is the one ADR 0036 decided on.
+    var telemetryNoticeAcknowledged: Bool {
+        didSet { defaults.set(telemetryNoticeAcknowledged, forKey: Keys.telemetryNoticeAcknowledged) }
+    }
+
     // MARK: - Account (never the token — ADR 0004)
 
     /// The login of the signed-in account, if any.
@@ -1001,6 +1025,8 @@ final class AppSettings {
         static let syncLastUpload = "settingsSync.lastUploadAt"
         static let syncLastDownload = "settingsSync.lastDownloadAt"
         static let diagnosticsEnabled = "diagnostics.enabled"
+        static let telemetryLevel = "telemetry.level"
+        static let telemetryNoticeAcknowledged = "telemetry.noticeAcknowledged"
     }
 
     /// Reads a `Codable` value stored as one JSON blob, falling back when the key is absent or
