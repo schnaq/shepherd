@@ -560,3 +560,31 @@ extension TelemetryTests {
         XCTAssertEqual(decoded.telemetry?.noticeAcknowledged, true)
     }
 }
+
+extension TelemetryTests {
+    // MARK: - The launch heartbeat
+
+    /// The day-event carries the feature flags, which is how "which functions are used at all" is
+    /// answered without an event per feature.
+    func testTheLaunchHeartbeatCarriesTheFeatureFlags() {
+        let event = TelemetryEvent.appActiveDay(
+            repoCount: CountBucket(count: 7),
+            inboxSize: CountBucket(count: 2),
+            diffRenderer: .native,
+            intelligence: .onDevice,
+            webhooks: true,
+            settingsSync: false,
+            autoMerge: true,
+            autoDelegation: false,
+            digest: true,
+            menuBar: true,
+            diagnostics: false
+        )
+
+        XCTAssertEqual(event.name, "app_active_day")
+        XCTAssertEqual(event.properties["repo_count"], TelemetryValue(CountBucket.fourToTen))
+        XCTAssertEqual(event.properties["inbox_size"], TelemetryValue(CountBucket.oneToThree))
+        XCTAssertEqual(event.properties["webhooks"], .flag(true))
+        XCTAssertEqual(event.properties["settings_sync"], .flag(false))
+    }
+}

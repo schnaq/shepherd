@@ -40,6 +40,12 @@ struct ShepherdApp: App {
                 .onChange(of: environment.settings.diagnosticsEnabled) { _, _ in
                     environment.applyDiagnosticsSetting()
                 }
+                // And once more for usage telemetry (ADR 0036): the picker in Settings and an
+                // applied settings document both land here, so there is one route from "the level
+                // changed" to "the mechanism exists or does not".
+                .onChange(of: environment.settings.telemetryLevel) { _, _ in
+                    environment.applyTelemetryLevel()
+                }
                 // And once more for the search index (ADR 0019): the toggle in Settings and an
                 // applied settings document both land here, so there is one route from "the flag
                 // changed" to "the index exists or does not".

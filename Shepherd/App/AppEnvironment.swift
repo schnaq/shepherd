@@ -121,6 +121,10 @@ final class AppEnvironment {
     /// (ADR 0017). Created inert: it subscribes to nothing until ``applyDiagnosticsSetting()``
     /// sees the opt-in.
     let diagnostics = DiagnosticsReporter()
+
+    /// Usage telemetry (ADR 0036), or `nil` when this build has no key, the level is `off`, or the
+    /// first-run notice has not been answered. `nil` is the normal state of a development build.
+    private(set) var telemetry: UsageTelemetry?
     /// Remembers what automatic delegation already did, across launches (ADR 0016).
     let autoDelegationStore: AutoDelegationStore
     /// Decides whether a sweep event starts a delegation on its own (ADR 0016).
@@ -323,6 +327,11 @@ final class AppEnvironment {
         // diagnostics shortly after launch, and a subscriber registered after that moment would
         // miss the batch that describes the crash the user is here about (ADR 0017).
         applyDiagnosticsSetting()
+        // Beside the MetricKit line and for the same reason: one route from the stored level to
+        // whether the mechanism exists at all (ADR 0036). The heartbeat follows it, and defers
+        // itself when a session's inbox has not spoken yet.
+        applyTelemetryLevel()
+        recordLaunchHeartbeat()
         // Cheap and self-healing: with the export switched off this deletes the `pullRequests`
         // domain, which repairs the one state nothing else can — the app was killed between the
         // toggle going off and the deletion landing (ADR 0021). With it on there is no session
@@ -458,6 +467,10 @@ final class AppEnvironment {
                 // itself. A sweep that changed nothing a result shows costs one dictionary
                 // comparison and no framework call.
                 self.spotlight.considerExporting(rows: rows)
+                // The day-event, which needs the rows only for their count: this is the first
+                // moment `inbox_size` is knowable, and `recordHeartbeatIfDue` drops every call
+                // after the first one of the UTC day (ADR 0036, § 1.1).
+                self.recordLaunchHeartbeat()
                 guard let database = self.session?.database else { return }
                 self.search.considerIndexing(rows: rows, database: database)
                 // The fourth consumer of the same rows (ADR 0023), and deliberately a *peer* of
@@ -1007,6 +1020,69 @@ final class AppEnvironment {
     /// Idempotent, so it does not matter how many of those happen.
     func applyDiagnosticsSetting() {
         diagnostics.setSubscribed(settings.diagnosticsEnabled)
+    }
+
+    /// Builds or tears down usage telemetry to match the level (ADR 0036).
+    ///
+    /// Called at launch, from the picker in Settings, and when an applied settings document
+    /// carried a level from another Mac — the same three callers ``applyDiagnosticsSetting()`` has,
+    /// and idempotent for the same reason.
+    func applyTelemetryLevel() {
+        if let telemetry {
+            telemetry.apply(level: settings.telemetryLevel)
+            if !settings.telemetryLevel.sendsEvents {
+                self.telemetry = nil
+            }
+            return
+        }
+        telemetry = UsageTelemetry.make(settings: settings)
+        telemetry?.startFlushing()
+    }
+
+    /// Records `app_active_day` when this UTC day has not been counted yet (ADR 0036, § 1.1).
+    ///
+    /// Every value it sends is a bucket or a flag read from settings — never a repository name, a
+    /// count, or anything the allow-list does not already contain.
+    ///
+    /// Called at launch *and* from the inbox observation, because of the guard below: a session
+    /// whose first `SELECT` has not come back yet would report `inbox_size: 0` and then mark the
+    /// day as sent, so the number would be wrong for every installation on every day. This is the
+    /// same hazard ``startDigestChecks()`` avoids with the same flag. With no session at all there
+    /// is nothing to wait for — a signed-out Mac is still an active installation and must be
+    /// counted — so only a *loading* session defers. ``UsageTelemetry/recordHeartbeatIfDue(_:)``
+    /// is idempotent per UTC day, which is what makes calling it on every inbox update free.
+    func recordLaunchHeartbeat() {
+        if let session, !session.hasLoadedInbox { return }
+        telemetry?.recordHeartbeatIfDue { [settings, session] in
+            .appActiveDay(
+                repoCount: CountBucket(count: settings.watchedRepositories.count),
+                inboxSize: CountBucket(count: session?.inboxRows.count ?? 0),
+                diffRenderer: settings.diffRenderer == .native ? .native : .monaco,
+                intelligence: Self.intelligenceChoice(for: settings),
+                webhooks: settings.webhooksEnabled,
+                settingsSync: settings.settingsSyncEnabled,
+                autoMerge: settings.autoMerge.isEnabled,
+                autoDelegation: settings.autoDelegation.isEnabled,
+                digest: settings.digest.isEnabled,
+                menuBar: settings.showsMenuBarExtra,
+                diagnostics: settings.diagnosticsEnabled
+            )
+        }
+    }
+
+    /// Reduces the intelligence settings to the values the allow-list knows.
+    ///
+    /// `.cloud` has no source here: Shepherd's cloud rung is never on *without* the on-device one,
+    /// so the mode maps to three of the four cases and the fourth stays unused rather than being
+    /// faked.
+    /// - Parameter settings: The settings to read.
+    /// - Returns: The reported choice.
+    private static func intelligenceChoice(for settings: AppSettings) -> IntelligenceChoice {
+        switch settings.intelligenceMode {
+        case .off: return .none
+        case .onDevice: return .onDevice
+        case .onDeviceAndCloud: return .both
+        }
     }
 
     // MARK: - Morning digest
