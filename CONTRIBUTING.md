@@ -146,7 +146,13 @@ bumping a dependency that ships inside the app also means a line in
   `AppSettings` and therefore into the synced document.
 - Secrets go in the Keychain, never in `UserDefaults` and never in the database. That includes
   anything new: the sync document is encrypted, but `UserDefaults` is not.
-- No telemetry, ever. The complete list of hosts Shepherd may contact:
+- Telemetry is anonymous, switchable off in one click, and named here. Shepherd counts allow-listed
+  events — thirteen of them, every property an enum or a bucket — and never a repository, a branch,
+  a title, a path or a line of code (ADR 0036). Level `anonymous` stores no identifier at all;
+  level `reach` is opt-in and stores a random UUID that is thrown away every month. `String` does
+  not appear as a payload input anywhere, so sending a repository name is a compile error rather
+  than a review miss. A build without the release key — yours, CI's, a fork's — has no telemetry
+  mechanism at all. The complete list of hosts Shepherd may contact:
   - api.github.com / github.com. The track record's read of **closed** pull requests (ADR 0027)
     is the same `api.github.com` GraphQL endpoint as the inbox sweep, with `is:closed` in place of
     `is:open` — one more search on the host already on this list, and no new one; the claims card's
@@ -227,6 +233,16 @@ bumping a dependency that ships inside the app also means a line in
     upgraded from. Automatic checks are on by default and switchable off in Settings → Account;
     with the toggle off, nothing is requested until the user presses "Check for Updates…", and a
     build without a signing key never requests anything at all.
+
+  - only while usage telemetry is on: **eu.i.posthog.com** (ADR 0036). One `POST` to `/batch/`,
+    roughly once a day, carrying allow-listed event names, the app version, the macOS major
+    version, the UI language and — at the `reach` level only — a UUID that is re-minted every
+    month. `$ip` is sent as `null` rather than omitted, because PostHog's GeoIP step falls back to
+    the sender's address when the property is *absent*, and `$process_person_profile` is `false`,
+    so no person object is created. With the level `off` nothing is queued, no timer runs and this
+    host is never contacted; a build without the release key has no telemetry mechanism at all, so
+    for a fork this host does not exist. What is queued is a readable JSON file the user can open,
+    and Settings → Account shows it.
 
   Nothing else. This is a hard privacy line: adding a host means a new ADR, a settings control the
   user has to switch on, and a line here.

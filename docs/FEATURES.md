@@ -856,7 +856,7 @@ moved on and the review was parked instead of sent. A merge says *"Merged …"* 
 whenever the drain got to it. Settings → Sync is where the queue is accounted for: how many
 writes are waiting, how many were parked because the pull request moved on, and — named one by one,
 with the reason and a Retry or Discard button — the ones GitHub refused outright, which are the
-only ones that will never leave the queue on their own. No server, no telemetry, no account other than your GitHub login;
+only ones that will never leave the queue on their own. No server, no account other than your GitHub login, and telemetry that is anonymous and off in one click;
 where Shepherd does sync between your own machines, it does it through storage you own, encrypted
 before it leaves the Mac. The complete list of hosts Shepherd may ever contact — and the rule that
 adding one needs a new ADR — is in [CONTRIBUTING.md](../CONTRIBUTING.md).

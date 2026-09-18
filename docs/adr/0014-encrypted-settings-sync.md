@@ -27,7 +27,10 @@ Apple a party to the user's tokens, which is exactly what "local-first" was supp
 
 **A Shepherd account server.** Solves everything and destroys the premise. ADR 0006's local-first
 decision says GitHub is a sync target, not a backend; there is no server, no telemetry, and no
-account other than the user's GitHub login. Introducing a hosted component to sync *preferences*
+account other than the user's GitHub login. *(Amendment, 2026-09-18 — ADR 0036: the telemetry
+clause has narrowed. Shepherd now sends allow-listed anonymous counts to a sink schnaq operates,
+switchable off in one click. The argument here is untouched: that sink is not a backend, it holds
+no setting and no secret, and there is still no Shepherd account.)* Introducing a hosted component to sync *preferences*
 would be the single largest architectural regression available.
 
 **The user's own S3-compatible bucket.** The user already has one, or can have one in five

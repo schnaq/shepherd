@@ -10,7 +10,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![Platform: macOS 26+](https://img.shields.io/badge/macOS-26%20Tahoe-101116?style=flat-square)](docs/adr/0002-macos-26-apple-silicon.md)
 [![Swift 6](https://img.shields.io/badge/Swift-6-f05138?style=flat-square)](Packages/ShepherdKit/Package.swift)
-[![Telemetry: none](https://img.shields.io/badge/telemetry-none-4cc38a?style=flat-square)](CONTRIBUTING.md#rules-of-the-road)
+[![Telemetry: anonymous, opt-out](https://img.shields.io/badge/telemetry-anonymous%20%C2%B7%20opt--out-4cc38a?style=flat-square)](docs/PRIVACY.md)
 
 <img src="docs/assets/hero.svg" width="100%" alt="Shepherd's inbox: pull requests from Claude Code, GitHub Copilot and people across every repository, each row with its CI state, review state and diff size">
 
@@ -77,7 +77,7 @@ than a guess.
 <tr><th colspan="2" align="left">Sync &amp; privacy</th></tr>
 <tr>
 <td>🔐 <b>Sync you host</b><br>Every setting <i>and</i> every secret in one AES-256-GCM object in an S3 bucket you own. A new Mac plus the passphrase is a set-up Mac. No account, no server.</td>
-<td>🗄️ <b>Local-first by construction</b><br>SQLite is the source of truth, writes go through a persisted outbox, secrets live in the Keychain, and there is no telemetry anywhere.</td>
+<td>🗄️ <b>Local-first by construction</b><br>SQLite is the source of truth, writes go through a persisted outbox, secrets live in the Keychain, and usage telemetry is anonymous, allow-listed and off in one click.</td>
 </tr>
 <tr>
 <td colspan="2">🇩🇪 <b>Auf Deutsch</b><br>Set your Mac to German and the whole app is German — no language setting, it follows the system. GitHub's own review vocabulary stays English inside the German sentences (pull request, review, approve, request changes, merge, draft, CI), so what you read matches what the next window says.</td>
@@ -115,7 +115,10 @@ arrive too — under *Watched* until you are involved in one.
 - **Writes go through an outbox.** Approve offline; it lands when the network does, with retries and
   a staleness check.
 - **Secrets live in the Keychain** — never in `UserDefaults`, never in the database.
-- **No telemetry, ever.** The complete list of hosts Shepherd may contact is in
+- **Anonymous telemetry, off in one click.** Thirteen allow-listed events, every property an enum
+  or a bucket, and never a repository, a branch or a line of code — [docs/PRIVACY.md](docs/PRIVACY.md)
+  says exactly what is sent and [ADR 0036](docs/adr/0036-usage-telemetry.md) says why. The complete
+  list of hosts Shepherd may contact is in
   [CONTRIBUTING.md](CONTRIBUTING.md#rules-of-the-road); adding one requires a new ADR.
 - **Sync is end-to-end encrypted and self-hosted.** Your bucket, your passphrase, ciphertext on the
   wire ([ADR 0014](docs/adr/0014-encrypted-settings-sync.md)).
@@ -241,9 +244,10 @@ Details in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md); every significant decis
 
 ## Contributing
 
-[CONTRIBUTING.md](CONTRIBUTING.md) has the setup, the module rules and the hard privacy lines (no
-telemetry, Keychain-only secrets, local-first). Third-party licences that ship inside the app are
-in [NOTICES.md](NOTICES.md).
+[CONTRIBUTING.md](CONTRIBUTING.md) has the setup, the module rules and the hard privacy lines
+(allow-listed anonymous telemetry, Keychain-only secrets, local-first), and
+[docs/PRIVACY.md](docs/PRIVACY.md) is the plain-language version for people who are not reading the
+source. Third-party licences that ship inside the app are in [NOTICES.md](NOTICES.md).
 
 ## License
 
