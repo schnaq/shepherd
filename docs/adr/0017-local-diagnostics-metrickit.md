@@ -79,3 +79,10 @@ adds one.
   database already sits behind (ADR 0006). They contain Apple's diagnostic data — stack frames,
   binary images, the app's own paths — and no Shepherd content, no bucket credentials and no token,
   because none of those are what MetricKit collects.
+
+**Amendment, 2026-09-18 (ADR 0036).** The second opt-in this section asked for now exists — for
+*usage* data, not for crash data. ADR 0036 adds allow-listed usage telemetry with its own host in
+CONTRIBUTING.md and its own setting, and CONTRIBUTING.md's "No telemetry, ever" bullet has been
+replaced accordingly. Nothing in *this* ADR moves: MetricKit payloads are still written to a folder
+on the Mac, there is still no uploader for them, and aggregate crash reporting would still need an
+ADR of its own.

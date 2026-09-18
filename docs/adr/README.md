@@ -41,6 +41,7 @@ founder interview (2026-08-31) combined with three research reports (see
 | 0033 | [A list row says what it shows, and the gaps are written down rather than implied](0033-accessibility.md) | Accepted |
 | 0034 | [A native diff renderer beside Monaco, held to a three-point contract](0034-native-diff-renderer.md) | Accepted |
 | 0035 | [The fleet: an agent gets a screen, and the screen counts rather than ranks](0035-the-fleet.md) | Accepted |
+| 0036 | [Usage telemetry: anonymous by default, reach by consent, absent without a key](0036-usage-telemetry.md) | Accepted (v1.2) |
 
 Format: lightweight [MADR](https://adr.github.io/madr/)-style — Context, Decision, Consequences.
 New decisions get the next number; superseded ADRs are marked, never deleted.

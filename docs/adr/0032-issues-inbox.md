@@ -185,7 +185,10 @@ in answer would be an opinion nobody asked for.
 - **Three more searches per cycle, and no new host.** The issues sweep is three
   `search(type: ISSUE)` calls on `api.github.com` beside the inbox sweep's five, at the same
   cadence, through the same client and the same conditional-request and rate-limit machinery. No
-  outbox action, no webhook, no telemetry, and nothing in this ADR is a write.
+  outbox action, no webhook, no telemetry, and nothing in this ADR is a write. *(Amendment,
+  2026-09-18 — ADR 0036: the sentence still describes the sweep, which reports nothing. What the
+  user does in the issues inbox is now counted by the allow-listed `issues_inbox_used` event, when
+  and only when usage telemetry is on.)*
 - **Nothing about `pull_requests` changed shape.** The pull-request row, its records, its store and
   its search document are untouched; the only edit outside new files is the repository prune's
   second clause, which exists because `repos` now has two cascading children.
