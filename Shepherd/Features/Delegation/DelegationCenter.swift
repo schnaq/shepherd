@@ -59,6 +59,7 @@ final class DelegationCenter {
         toasts: ToastCenter,
         onDidPush: (@MainActor () async -> Void)? = nil,
         onDidFinish: (@MainActor (DelegationOutcome) -> Void)? = nil,
+        onDidBegin: (@MainActor () -> Void)? = nil,
         onDidStart: (@MainActor (DelegationStart) -> Void)? = nil,
         brief: AgentBriefDrafter? = nil
     ) -> DelegationModel {
@@ -74,6 +75,7 @@ final class DelegationCenter {
             isAutomatic: false,
             onDidPush: onDidPush,
             onDidFinish: onDidFinish,
+            onDidBegin: onDidBegin,
             onDidStart: onDidStart,
             brief: brief
         )
@@ -108,7 +110,8 @@ final class DelegationCenter {
         settings: AppSettings,
         toasts: ToastCenter,
         onDidPush: (@MainActor () async -> Void)? = nil,
-        onDidFinish: (@MainActor (DelegationOutcome) -> Void)? = nil
+        onDidFinish: (@MainActor (DelegationOutcome) -> Void)? = nil,
+        onDidBegin: (@MainActor () -> Void)? = nil
     ) -> DelegationModel? {
         // The one-per-pull-request rule, again from the one place that owns it.
         if let existing = models[context.prID], existing.isBusy { return nil }
@@ -120,6 +123,7 @@ final class DelegationCenter {
             isAutomatic: true,
             onDidPush: onDidPush,
             onDidFinish: onDidFinish,
+            onDidBegin: onDidBegin,
             // No handover event either: a rule only ever starts from a pull request (ADR 0016),
             // and ``DelegationStart`` is an issue's news.
             onDidStart: nil,
@@ -148,6 +152,7 @@ final class DelegationCenter {
         isAutomatic: Bool,
         onDidPush: (@MainActor () async -> Void)?,
         onDidFinish: (@MainActor (DelegationOutcome) -> Void)?,
+        onDidBegin: (@MainActor () -> Void)?,
         onDidStart: (@MainActor (DelegationStart) -> Void)?,
         brief: AgentBriefDrafter?
     ) -> DelegationModel {
@@ -192,6 +197,7 @@ final class DelegationCenter {
             toasts: toasts,
             onDidPush: onDidPush,
             onDidFinish: onDidFinish,
+            onDidBegin: onDidBegin,
             onDidStart: onDidStart,
             brief: brief
         )

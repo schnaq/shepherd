@@ -176,6 +176,13 @@ final class DelegationModel: Identifiable {
     private let toasts: ToastCenter?
     private let onDidPush: (@MainActor () async -> Void)?
     private let onDidFinish: (@MainActor (DelegationOutcome) -> Void)?
+    /// Called once each time a run actually begins (ADR 0036).
+    ///
+    /// Beside ``onDidFinish`` and deliberately *not* ``onDidStart``: that one is issue-only and
+    /// carries a ``DelegationStart`` for the handover webhook (ADR 0032). This one fires for every
+    /// origin and carries nothing, because its only caller counts runs — and counting them where
+    /// the sheet is *opened* would count the sheets nobody pressed Start in.
+    private let onDidBegin: (@MainActor () -> Void)?
     private let onDidStart: (@MainActor (DelegationStart) -> Void)?
     /// Guards ``onDidStart`` against firing twice: a handover is announced once per run, and a
     /// run that is restarted from the same sheet is a second handover of the same issue.
@@ -209,6 +216,7 @@ final class DelegationModel: Identifiable {
     ///   - toasts: Where failures are surfaced.
     ///   - onDidPush: Called after a successful push, so the app can re-sync the pull request.
     ///   - onDidFinish: Called once when the run reaches a terminal state (ADR 0012).
+    ///   - onDidBegin: Called once each time a run begins (ADR 0036).
     ///   - onDidStart: Called once when an issue-origin run is actually running (ADR 0032).
     ///   - brief: How the ✨ button drafts the task text (plan §3.E). Left out — and therefore
     ///     `nil` — for every run a rule started.
@@ -222,6 +230,7 @@ final class DelegationModel: Identifiable {
         toasts: ToastCenter? = nil,
         onDidPush: (@MainActor () async -> Void)? = nil,
         onDidFinish: (@MainActor (DelegationOutcome) -> Void)? = nil,
+        onDidBegin: (@MainActor () -> Void)? = nil,
         onDidStart: (@MainActor (DelegationStart) -> Void)? = nil,
         brief: AgentBriefDrafter? = nil
     ) {
@@ -235,6 +244,7 @@ final class DelegationModel: Identifiable {
         self.toasts = toasts
         self.onDidPush = onDidPush
         self.onDidFinish = onDidFinish
+        self.onDidBegin = onDidBegin
         self.onDidStart = onDidStart
         self.brief = brief
         self.task = DelegationPrompt.defaultTask(for: context)
@@ -318,6 +328,10 @@ final class DelegationModel: Identifiable {
         startedAt = Date()
         elapsed = 0
         startTimer()
+
+        // After the guard above, so a press that could not start anything is not counted, and
+        // before the work, so it does not depend on how the run ends (ADR 0036).
+        onDidBegin?()
 
         let prompt = DelegationPrompt.full(for: context, task: task)
         runTask = Task { [weak self] in

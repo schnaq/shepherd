@@ -682,6 +682,16 @@ final class AppEnvironment {
         let onDidFinish: @MainActor (DelegationOutcome) -> Void = { [weak self] outcome in
             guard let self else { return }
             self.webhookCoordinator.handle(outcome, database: self.session?.database)
+            // Beside the webhook and for the same reason: this closure is where a run ends,
+            // whichever surface started it (ADR 0036).
+            self.telemetry?.record(.delegationFinished(outcome: Self.telemetryOutcome(outcome.status)))
+        }
+        // The run, not the sheet: every surface below *opens* a sheet, and a sheet nobody presses
+        // Start in has delegated nothing. ADR 0016 arms exactly one rule that may start a run
+        // unattended — red CI — and ADR 0029 is explicit that a recurring finding stays a
+        // suggestion to a person, so every other origin is `.manual` (ADR 0036).
+        let onDidBegin: @MainActor () -> Void = { [weak self] in
+            self?.telemetry?.record(.delegationStarted(trigger: .manual))
         }
 
         if automatic {
@@ -702,6 +712,7 @@ final class AppEnvironment {
             toasts: toasts,
             onDidPush: onDidPush,
             onDidFinish: onDidFinish,
+            onDidBegin: onDidBegin,
             // Only the attended path gets one (plan §3.E): the sheet's ✨ button drafts the task
             // text, and the reviewer still presses Run.
             brief: agentBriefDrafter()
@@ -742,6 +753,16 @@ final class AppEnvironment {
         let onDidFinish: @MainActor (DelegationOutcome) -> Void = { [weak self] outcome in
             guard let self else { return }
             self.webhookCoordinator.handle(outcome, database: self.session?.database)
+            // Beside the webhook and for the same reason: this closure is where a run ends,
+            // whichever surface started it (ADR 0036).
+            self.telemetry?.record(.delegationFinished(outcome: Self.telemetryOutcome(outcome.status)))
+        }
+        // The run, not the sheet: every surface below *opens* a sheet, and a sheet nobody presses
+        // Start in has delegated nothing. ADR 0016 arms exactly one rule that may start a run
+        // unattended — red CI — and ADR 0029 is explicit that a recurring finding stays a
+        // suggestion to a person, so every other origin is `.manual` (ADR 0036).
+        let onDidBegin: @MainActor () -> Void = { [weak self] in
+            self?.telemetry?.record(.delegationStarted(trigger: .manual))
         }
         let announce: @MainActor (DelegationStart) -> Void = { [weak self] start in
             guard let self else { return }
@@ -754,6 +775,7 @@ final class AppEnvironment {
             toasts: toasts,
             onDidPush: onDidPush,
             onDidFinish: onDidFinish,
+            onDidBegin: onDidBegin,
             onDidStart: announce,
             // No drafter, and this is a missing argument rather than a check. The ✨ button's
             // brief is built from a *pull request* — `AgentBriefDrafter.live` reads a
@@ -796,6 +818,16 @@ final class AppEnvironment {
         let onDidFinish: @MainActor (DelegationOutcome) -> Void = { [weak self] outcome in
             guard let self else { return }
             self.webhookCoordinator.handle(outcome, database: self.session?.database)
+            // Beside the webhook and for the same reason: this closure is where a run ends,
+            // whichever surface started it (ADR 0036).
+            self.telemetry?.record(.delegationFinished(outcome: Self.telemetryOutcome(outcome.status)))
+        }
+        // The run, not the sheet: every surface below *opens* a sheet, and a sheet nobody presses
+        // Start in has delegated nothing. ADR 0016 arms exactly one rule that may start a run
+        // unattended — red CI — and ADR 0029 is explicit that a recurring finding stays a
+        // suggestion to a person, so every other origin is `.manual` (ADR 0036).
+        let onDidBegin: @MainActor () -> Void = { [weak self] in
+            self?.telemetry?.record(.delegationStarted(trigger: .manual))
         }
         let model = delegation.open(
             context: context,
@@ -803,6 +835,7 @@ final class AppEnvironment {
             toasts: toasts,
             onDidPush: onDidPush,
             onDidFinish: onDidFinish,
+            onDidBegin: onDidBegin,
             // See above: a confirmed message is not a field to draft into.
             brief: nil
         )
@@ -844,6 +877,16 @@ final class AppEnvironment {
         let onDidFinish: @MainActor (DelegationOutcome) -> Void = { [weak self] outcome in
             guard let self else { return }
             self.webhookCoordinator.handle(outcome, database: self.session?.database)
+            // Beside the webhook and for the same reason: this closure is where a run ends,
+            // whichever surface started it (ADR 0036).
+            self.telemetry?.record(.delegationFinished(outcome: Self.telemetryOutcome(outcome.status)))
+        }
+        // The run, not the sheet: every surface below *opens* a sheet, and a sheet nobody presses
+        // Start in has delegated nothing. ADR 0016 arms exactly one rule that may start a run
+        // unattended — red CI — and ADR 0029 is explicit that a recurring finding stays a
+        // suggestion to a person, so every other origin is `.manual` (ADR 0036).
+        let onDidBegin: @MainActor () -> Void = { [weak self] in
+            self?.telemetry?.record(.delegationStarted(trigger: .manual))
         }
         let model = delegation.open(
             context: context,
@@ -851,6 +894,7 @@ final class AppEnvironment {
             toasts: toasts,
             onDidPush: onDidPush,
             onDidFinish: onDidFinish,
+            onDidBegin: onDidBegin,
             brief: ruleBriefDrafter()
         )
         // Never over a run in flight: that sheet's task belongs to the prompt the agent is
@@ -1077,6 +1121,17 @@ final class AppEnvironment {
     /// faked.
     /// - Parameter settings: The settings to read.
     /// - Returns: The reported choice.
+    /// Reduces a finished run to the value the allow-list knows.
+    /// - Parameter status: How the run ended.
+    /// - Returns: The reported outcome.
+    private static func telemetryOutcome(_ status: DelegationOutcome.Status) -> DelegationOutcomeChoice {
+        switch status {
+        case .finished: return .finished
+        case .failed: return .failed
+        case .cancelled: return .cancelled
+        }
+    }
+
     private static func intelligenceChoice(for settings: AppSettings) -> IntelligenceChoice {
         switch settings.intelligenceMode {
         case .off: return .none

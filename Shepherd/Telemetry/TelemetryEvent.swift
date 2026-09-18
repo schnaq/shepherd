@@ -126,7 +126,7 @@ enum TelemetryEvent: Sendable {
             .bulkTriagePerformed(action: .approve, size: .fourToTen),
             .searchUsed(kind: .semantic, openedResult: true),
             .delegationStarted(trigger: .manual),
-            .delegationFinished(outcome: .applied),
+            .delegationFinished(outcome: .finished),
             .intelligenceUsed(feature: .brief, tier: .onDevice, outcome: .ok),
             .autoMergeRuleFired(outcome: .merged),
             .issuesInboxUsed(action: .viewed),
@@ -193,12 +193,17 @@ enum DelegationTrigger: String, TelemetryChoice {
     case manual, ciRedRule = "ci_red_rule"
 }
 
-/// How a delegation ended, coarsened for the payload.
+/// How a delegation ended.
 ///
 /// `Choice` because `DelegationOutcome` is already the real thing — the struct a finished run
-/// hands back. This is the four-way summary of it that may leave the Mac.
+/// hands back. These are its three statuses, one for one.
+///
+/// The spec proposed `applied / discarded`, which describes a step Shepherd does not have: a run
+/// ends with its work in a worktree, and there is no moment where the user accepts or rejects a
+/// diff for this to observe. `cancelled` against `finished` answers the question the spec asked —
+/// whether delegation is abandoned in practice — without claiming to have watched something else.
 enum DelegationOutcomeChoice: String, TelemetryChoice {
-    case applied, discarded, budgetExceeded = "budget_exceeded", failed
+    case finished, cancelled, failed
 }
 
 enum IntelligenceFeature: String, TelemetryChoice {
@@ -217,6 +222,12 @@ enum IntelligenceOutcomeChoice: String, TelemetryChoice {
     case ok, tooLarge = "too_large", unavailable, error
 }
 
+/// What an auto-merge rule did.
+///
+/// Only `merged` is ever recorded, and the event fires once per queued merge. `skipped` stays in
+/// the vocabulary because a decision has two sides, but recording it is deliberately not done: the
+/// policy reaches a decision for *every inbox row on every sweep*, so a skip event would be tens
+/// of thousands a month per installation and would swamp the very number it sits beside.
 enum AutoMergeOutcome: String, TelemetryChoice {
     case merged, skipped
 }
