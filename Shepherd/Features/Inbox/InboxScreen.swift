@@ -469,7 +469,8 @@ struct InboxScreen: View {
         PullRequestActions(
             session: session,
             toasts: environment.toasts,
-            activity: environment.activity
+            activity: environment.activity,
+            telemetry: environment.telemetry
         )
     }
 

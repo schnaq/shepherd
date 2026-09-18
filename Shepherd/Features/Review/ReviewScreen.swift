@@ -362,7 +362,8 @@ struct ReviewScreen: View {
             activity: environment.activity,
             onDidQueueVerdict: { queuedID in
                 environment.reviewSessionDidQueueVerdict(on: queuedID)
-            }
+            },
+            telemetry: environment.telemetry
         )
     }
 

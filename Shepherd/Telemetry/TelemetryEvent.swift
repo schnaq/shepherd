@@ -22,13 +22,28 @@ enum TelemetryEvent: Sendable {
         menuBar: Bool,
         diagnostics: Bool
     )
-    case reviewSubmitted(kind: ReviewKind, inlineComments: CountBucket, usedTemplate: Bool, usedSavedReply: Bool)
+    /// A verdict that reached the outbox.
+    ///
+    /// The spec also listed `used_template` and `used_saved_reply`. Neither is recorded: nothing
+    /// in the composer remembers that a template or a saved reply was inserted, and sending
+    /// `false` for both would publish "nobody uses templates" as a finding. Adding them needs
+    /// that state first, which is a change to the composer rather than to telemetry.
+    case reviewSubmitted(kind: ReviewKind, inlineComments: CountBucket)
     case pullRequestMerged(method: MergeMethodChoice, source: MergeSource)
     case focusSessionCompleted(queueSize: CountBucket, completed: Bool)
     case bulkTriagePerformed(action: TriageAction, size: CountBucket)
     case searchUsed(kind: SearchKind, openedResult: Bool)
     case delegationStarted(trigger: DelegationTrigger)
     case delegationFinished(outcome: DelegationOutcomeChoice)
+    /// Which intelligence feature ran, on which tier, and how it ended.
+    ///
+    /// **Not recorded yet, deliberately.** The plan assumed `IntelligenceRouter` was "the single
+    /// place all six features pass through"; it is not. `thread_digest` and `claims` are served by
+    /// `OnDeviceThreadDigester` and `OnDeviceClaimExtractor` and never reach the router at all, and
+    /// the router's own callers are scattered across models that hold no `AppEnvironment`. Wiring
+    /// only the four that do pass through would publish "nobody uses claims" as a finding about
+    /// users when it is a fact about the wiring — so this stays unrecorded until all six can be,
+    /// which needs a hook on the router plus one on each of the two on-device types.
     case intelligenceUsed(feature: IntelligenceFeature, tier: IntelligenceTier, outcome: IntelligenceOutcomeChoice)
     case autoMergeRuleFired(outcome: AutoMergeOutcome)
     case issuesInboxUsed(action: IssuesAction)
@@ -76,12 +91,10 @@ enum TelemetryEvent: Sendable {
                 "menu_bar": .flag(menuBar),
                 "diagnostics": .flag(diagnostics),
             ]
-        case .reviewSubmitted(let kind, let inlineComments, let usedTemplate, let usedSavedReply):
+        case .reviewSubmitted(let kind, let inlineComments):
             return [
                 "kind": TelemetryValue(kind),
                 "inline_comments": TelemetryValue(inlineComments),
-                "used_template": .flag(usedTemplate),
-                "used_saved_reply": .flag(usedSavedReply),
             ]
         case .pullRequestMerged(let method, let source):
             return ["method": TelemetryValue(method), "source": TelemetryValue(source)]
@@ -120,7 +133,7 @@ enum TelemetryEvent: Sendable {
                 intelligence: .onDevice, webhooks: false, settingsSync: true, autoMerge: false,
                 autoDelegation: false, digest: true, menuBar: true, diagnostics: false
             ),
-            .reviewSubmitted(kind: .approve, inlineComments: .oneToThree, usedTemplate: true, usedSavedReply: false),
+            .reviewSubmitted(kind: .approve, inlineComments: .oneToThree),
             .pullRequestMerged(method: .squash, source: .detail),
             .focusSessionCompleted(queueSize: .elevenPlus, completed: true),
             .bulkTriagePerformed(action: .approve, size: .fourToTen),
@@ -173,8 +186,13 @@ enum MergeSource: String, TelemetryChoice {
     case detail, bulk, autoRule = "auto_rule"
 }
 
+/// What a bulk-triage run did, mirroring `BulkTriageAction` one for one.
+///
+/// The spec listed two cases and the domain has three: "approve" and "approve and merge" are
+/// different gestures with different risk, and folding them together would hide the one worth
+/// watching.
 enum TriageAction: String, TelemetryChoice {
-    case approve, merge
+    case approve, approveAndMerge = "approve_and_merge", merge
 }
 
 enum DiffRendererChoice: String, TelemetryChoice {

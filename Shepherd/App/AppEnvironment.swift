@@ -583,7 +583,11 @@ final class AppEnvironment {
                 session: session,
                 toasts: self.toasts,
                 activity: self.activity,
-                announcesSuccess: false
+                announcesSuccess: false,
+                telemetry: self.telemetry,
+                // The one helper in the app whose merges nobody pressed: they are counted as the
+                // rule's, not the detail screen's (ADR 0036).
+                mergeSource: .autoRule
             )
             let queued = await self.autoMerge.run(
                 rows: rows,
@@ -597,6 +601,10 @@ final class AppEnvironment {
             )
             for write in queued {
                 self.webhookCoordinator.handle(write, database: session.database)
+                // One per merge the rule actually queued (ADR 0036). Skips are not recorded: the
+                // policy reaches a decision for every inbox row on every sweep, so counting them
+                // would be tens of thousands of events a month and would drown this one.
+                self.telemetry?.record(.autoMergeRuleFired(outcome: .merged))
             }
         }
     }
@@ -1512,12 +1520,21 @@ final class AppEnvironment {
         // Cleared first: `route = .inbox` below goes through nothing that could re-enter, but
         // `closeReview()` calls this method, and a session still set would recurse.
         reviewSession = nil
+        // Before the `announcing` guard, because every exit is a finished sitting — including the
+        // two that navigate away without raising the completion view (ADR 0036).
+        let summary = running.summary()
+        telemetry?.record(
+            .focusSessionCompleted(
+                queueSize: CountBucket(count: summary.total),
+                completed: summary.remaining == 0
+            )
+        )
         route = .inbox
         guard announcing else { return }
         // Set after the route rather than before it, so the inbox is what the completion view
         // comes up over. There is no toast beside it: one completion surface, or the two would
         // say the same thing twice and the quieter one would win by staying.
-        reviewSessionSummary = running.summary()
+        reviewSessionSummary = summary
     }
 
     /// Closes the completion view.

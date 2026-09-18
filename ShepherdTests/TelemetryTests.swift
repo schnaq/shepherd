@@ -588,3 +588,15 @@ extension TelemetryTests {
         XCTAssertEqual(event.properties["settings_sync"], .flag(false))
     }
 }
+
+extension TelemetryTests {
+    func testEveryEventInTheVocabularyCanBeRecordedAndQueued() {
+        let telemetry = makeTelemetry(level: .anonymous, defaults: makeDefaults(), sender: RecordingSender())
+
+        for event in TelemetryEvent.allExamples {
+            telemetry.record(event)
+        }
+
+        XCTAssertEqual(Set(TelemetryQueue(directory: directory).load().map(\.name)).count, 13)
+    }
+}

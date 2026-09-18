@@ -41,6 +41,19 @@ struct PullRequestActions {
     /// `nil` for every caller that is not inside a session-capable screen, which is why adding
     /// it changed no existing call site.
     var onDidQueueVerdict: (@MainActor (String) -> Void)?
+    /// Usage telemetry, or `nil` whenever it may not collect (ADR 0036).
+    ///
+    /// Here rather than in the buttons for the reason ``activity`` is here: this is the funnel
+    /// every verdict and every merge passes through, and counting at the four surfaces above it
+    /// would be four places to forget. A snapshot is safe because this struct is rebuilt with the
+    /// view that owns it.
+    var telemetry: UsageTelemetry?
+    /// Where a merge recorded here came from (ADR 0036).
+    ///
+    /// `.detail` for every surface a person presses; the automatic pass sets `.autoRule` on the
+    /// helper it builds, the same way it sets ``announcesSuccess``. The bulk path does not use
+    /// this — it records its own source directly, because it is one gesture over *n* rows.
+    var mergeSource: MergeSource = .detail
     /// Whether a *successful* enqueue puts a toast on screen. Failures always do.
     ///
     /// True for everything a human asked for — the toast is the confirmation of their keystroke.
@@ -58,18 +71,24 @@ struct PullRequestActions {
     ///     would be a surface whose buttons stay clickable, which is the bug this closed.
     ///   - onDidQueueVerdict: Called after a verdict or a merge reaches the outbox.
     ///   - announcesSuccess: Whether a successful enqueue toasts. Failures always do.
+    ///   - telemetry: Where allow-listed counts go, or `nil` (ADR 0036).
+    ///   - mergeSource: Which surface a merge recorded here came from.
     init(
         session: SignedInSession,
         toasts: ToastCenter,
         activity: ActionActivity,
         onDidQueueVerdict: (@MainActor (String) -> Void)? = nil,
-        announcesSuccess: Bool = true
+        announcesSuccess: Bool = true,
+        telemetry: UsageTelemetry? = nil,
+        mergeSource: MergeSource = .detail
     ) {
         self.session = session
         self.toasts = toasts
         self.activity = activity
         self.onDidQueueVerdict = onDidQueueVerdict
         self.announcesSuccess = announcesSuccess
+        self.telemetry = telemetry
+        self.mergeSource = mergeSource
     }
 
     // MARK: - Reviews
@@ -116,6 +135,15 @@ struct PullRequestActions {
                 let outcome = try await enqueue(.submitReview(draft), on: summary)
                 announce(outcome, of: .review(verdict), on: summary)
                 onDidQueueVerdict?(summary.id)
+                // Beside that seam and for its reason: the review has reached the outbox, which
+                // is what "submitted" means here — waiting for GitHub would count retries
+                // (ADR 0036).
+                telemetry?.record(
+                    .reviewSubmitted(
+                        kind: Self.telemetryKind(verdict),
+                        inlineComments: CountBucket(count: draft.comments.count)
+                    )
+                )
             } catch {
                 toasts.failure(error, context: String(localized: "Could not queue the review"))
             }
@@ -257,6 +285,9 @@ struct PullRequestActions {
                 )
                 announce(outcome, of: .merge, on: summary)
                 onDidQueueVerdict?(summary.id)
+                telemetry?.record(
+                    .pullRequestMerged(method: Self.telemetryMethod(method), source: mergeSource)
+                )
             } catch {
                 toasts.failure(error, context: String(localized: "Could not queue the merge"))
             }
@@ -323,6 +354,21 @@ struct PullRequestActions {
 
             await session.drainOutbox()
             report(outcome, action: plan.action)
+            // One event for the gesture, and one merge event per row it merged — the same two
+            // questions the single-row path answers, asked of a batch (ADR 0036).
+            telemetry?.record(
+                .bulkTriagePerformed(
+                    action: Self.telemetryTriageAction(plan.action),
+                    size: CountBucket(count: outcome.queuedPullRequests)
+                )
+            )
+            if plan.action.includesMerge {
+                for _ in 0..<outcome.queuedPullRequests {
+                    telemetry?.record(
+                        .pullRequestMerged(method: Self.telemetryMethod(method), source: .bulk)
+                    )
+                }
+            }
             return outcome
         } ?? BulkTriageOutcome()
     }
@@ -334,6 +380,37 @@ struct PullRequestActions {
     ///
     /// A read failure yields no drafts rather than an error: the plan is still queueable, it
     /// simply cannot reuse anything, which is what would have happened for an absent draft too.
+    /// Reduces a verdict to the value the allow-list knows.
+    static func telemetryKind(_ verdict: ReviewVerdict) -> ReviewKind {
+        switch verdict {
+        case .approve: return .approve
+        case .requestChanges: return .requestChanges
+        case .comment: return .comment
+        }
+    }
+
+    /// Reduces a merge method to the value the allow-list knows.
+    ///
+    /// A `switch` rather than `MergeMethodChoice(rawValue:)`: the raw values match today, and this
+    /// is the line that would stop compiling rather than silently widening the payload if GitHubKit
+    /// ever gained a fourth method (ADR 0036).
+    static func telemetryMethod(_ method: MergeMethod) -> MergeMethodChoice {
+        switch method {
+        case .merge: return .merge
+        case .squash: return .squash
+        case .rebase: return .rebase
+        }
+    }
+
+    /// Reduces a bulk-triage action to the value the allow-list knows.
+    static func telemetryTriageAction(_ action: BulkTriageAction) -> TriageAction {
+        switch action {
+        case .approve: return .approve
+        case .approveAndMerge: return .approveAndMerge
+        case .merge: return .merge
+        }
+    }
+
     private func existingDrafts(for plan: BulkTriagePlan) async -> [String: ReviewDraft] {
         let ids = plan.eligible.map(\.id)
         return (try? await session.database.fetchDrafts(prIDs: ids)) ?? [:]
