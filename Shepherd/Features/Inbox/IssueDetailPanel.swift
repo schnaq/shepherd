@@ -48,6 +48,13 @@ struct IssueDetailPanel: View {
             }
         }
         .background(Theme.panel)
+        // One per issue actually looked at (ADR 0036), keyed on the row so that re-rendering the
+        // same issue does not count again. This is the event that says whether the second inbox
+        // citizen is read at all, which is the open question ADR 0032 left.
+        .task(id: model.selectedRow?.id) {
+            guard model.selectedRow != nil else { return }
+            environment.telemetry?.record(.issuesInboxUsed(action: .viewed))
+        }
     }
 
     private func content(for row: IssueRowSummary) -> some View {
@@ -68,7 +75,7 @@ struct IssueDetailPanel: View {
             IssueCommentSheet(row: row, text: $commentBody) { text in
                 Task {
                     let queued = await model.comment(text, on: row)
-                    report(queued: queued, success: String(localized: "Comment queued."))
+                    report(queued: queued, success: String(localized: "Comment queued."), action: .commented)
                 }
             }
         }
@@ -290,7 +297,8 @@ struct IssueDetailPanel: View {
                             let queued = await model.assignToMe(row)
                             report(
                                 queued: queued,
-                                success: String(localized: "Assignment queued.")
+                                success: String(localized: "Assignment queued."),
+                                action: .assigned
                             )
                         }
                     } label: {
@@ -390,7 +398,8 @@ struct IssueDetailPanel: View {
                             let queued = await model.addLabel(label, on: row)
                             report(
                                 queued: queued,
-                                success: String(localized: "Label queued.")
+                                success: String(localized: "Label queued."),
+                                action: .labeled
                             )
                         }
                     }
@@ -433,13 +442,13 @@ struct IssueDetailPanel: View {
                 Button(String(localized: "Close as completed")) {
                     Task {
                         let queued = await model.close(.completed, on: row)
-                        report(queued: queued, success: String(localized: "Close queued."))
+                        report(queued: queued, success: String(localized: "Close queued."), action: .closed)
                     }
                 }
                 Button(String(localized: "Close as not planned")) {
                     Task {
                         let queued = await model.close(.notPlanned, on: row)
-                        report(queued: queued, success: String(localized: "Close queued."))
+                        report(queued: queued, success: String(localized: "Close queued."), action: .closed)
                     }
                 }
             } label: {
@@ -474,9 +483,16 @@ struct IssueDetailPanel: View {
     }
 
     /// One toast per queued write, which is the confirmation of the click.
-    private func report(queued: Bool, success: String) {
+    private func report(queued: Bool, success: String, action: IssuesAction? = nil) {
         if queued {
             environment.toasts.success(success)
+            // Counted here rather than at the button, because here is where the write is known to
+            // have reached the outbox — an event recorded on the click would measure clicking
+            // (ADR 0036). `nil` for reopening: the allow-list has no case for it, and inventing
+            // one to avoid a gap would widen the payload past what ADR 0036 decided.
+            if let action {
+                environment.telemetry?.record(.issuesInboxUsed(action: action))
+            }
         } else {
             reportQueueFailure()
         }

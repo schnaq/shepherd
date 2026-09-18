@@ -45,6 +45,10 @@ struct FleetScreen: View {
                 // detection line needs and which nothing else waits for.
                 model.request(agentID: agentID)
                 model.refresh(openRows: session.inboxRows)
+                // One per opening of the screen (ADR 0036). `.task` runs on appearance, and the
+                // `onChange` below covers a second link arriving while the screen is already up —
+                // which is a second page viewed, not the same one again.
+                environment.telemetry?.record(.fleetViewed(scope: agentID == nil ? .all : .agent))
                 await model.loadRegistry()
             }
             // A second link naming another agent while this screen is up. There is no `.id()` on
@@ -52,6 +56,7 @@ struct FleetScreen: View {
             // been counted, to answer a question that is one property assignment.
             .onChange(of: agentID) { _, id in
                 model.request(agentID: id)
+                environment.telemetry?.record(.fleetViewed(scope: id == nil ? .all : .agent))
             }
             // The stored history, replaced wholesale by a backfill or by *Clear history*. The
             // inbox watches the same counter for the same reason (ADR 0027).

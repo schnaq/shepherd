@@ -1117,6 +1117,9 @@ final class AppEnvironment {
     /// ``AppEnvironment/pendingInboxFilter`` slot a `shepherd://inbox?filter=needs-my-review` link
     /// uses, so there is one implementation of "filter the inbox" (ADR 0013).
     func openInboxFromNotification() {
+        // The digest is the only notification that routes here, so a click on one is a digest
+        // that was opened (ADR 0036).
+        telemetry?.record(.digestOpened(source: .notification))
         route = .inbox
         pendingInboxFilter = Pending(.needsMyReview)
         guard !activateMainWindow() else { return }

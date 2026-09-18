@@ -93,6 +93,14 @@ struct CommandPaletteView: View {
     /// coordinator's (``SearchIndexCoordinator/paletteResults(for:limit:verdicts:)`` merges by
     /// score and slices once), and by the time they arrive here the slice has happened.
     @State private var issueResults: [IssueSearchMatch] = []
+    /// Whether this palette session has already counted its search (ADR 0036).
+    ///
+    /// One event per *search*, not per keystroke: the ranking below re-runs on every character,
+    /// and counting there would measure typing speed. The event is recorded when the palette is
+    /// done instead — on the way out through a result, or on the way out without one — and this
+    /// flag is what keeps those two paths from counting the same search twice. It resets with the
+    /// rest of this view's state when the palette is reopened.
+    @State private var didRecordSearch = false
     @FocusState private var isFieldFocused: Bool
 
     var body: some View {
@@ -717,6 +725,7 @@ struct CommandPaletteView: View {
     /// menu-bar quick inbox makes: a fifth way to open a review would be a fifth place for the
     /// focus session's "did the user leave the queue" rule to be forgotten.
     private func open(_ result: PullRequestSearchResult) {
+        recordSearch(openedResult: true)
         environment.openReview(prID: result.summary.id)
         close()
     }
@@ -728,6 +737,7 @@ struct CommandPaletteView: View {
     /// rail's facets are hiding it, and a second implementation of that would be a second place
     /// for one of the two halves to be forgotten.
     private func open(_ result: IssueSearchMatch) {
+        recordSearch(openedResult: true)
         environment.openIssue(issueID: result.summary.id)
         close()
     }
@@ -739,6 +749,26 @@ struct CommandPaletteView: View {
     }
 
     private func close() {
+        // A palette dismissed without opening anything is still a search that happened, and
+        // "people search and then find nothing" is exactly what this event is for. The guard in
+        // `recordSearch` means the call above has already won when we arrive here through `open`.
+        recordSearch(openedResult: false)
         environment.isCommandPaletteVisible = false
+    }
+
+    /// Counts one search (ADR 0036).
+    ///
+    /// Nothing is recorded for a palette that was opened and closed without a query: running a
+    /// *command* is not a search, and counting it would inflate the number this event exists to
+    /// answer.
+    /// - Parameter openedResult: Whether the palette is closing because a result was opened.
+    private func recordSearch(openedResult: Bool) {
+        guard !didRecordSearch else { return }
+        let parsed = SearchQuery(text: query)
+        guard parsed.hasSearchTerms else { return }
+        didRecordSearch = true
+        environment.telemetry?.record(
+            .searchUsed(kind: parsed.reference != nil ? .reference : .semantic, openedResult: openedResult)
+        )
     }
 }

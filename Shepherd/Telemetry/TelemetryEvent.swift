@@ -225,8 +225,14 @@ enum IssuesAction: String, TelemetryChoice {
     case viewed, commented, labeled, assigned, closed
 }
 
+/// Which fleet page was opened.
+///
+/// The spec said `all / repo`, but ADR 0035 built no repository-scoped fleet view: the screen is
+/// either the whole roster or one agent's page, and that page groups *by* repository rather than
+/// being scoped to one. These are the two things a user can actually open, and the question worth
+/// answering is whether anybody goes past the roster.
 enum FleetScope: String, TelemetryChoice {
-    case all, repo
+    case all, agent
 }
 
 enum DigestSource: String, TelemetryChoice {

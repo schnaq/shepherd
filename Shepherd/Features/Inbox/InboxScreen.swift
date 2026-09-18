@@ -356,6 +356,10 @@ struct InboxScreen: View {
     /// parked reviews are actually dealt with on.
     /// - Parameter kind: The section whose *Show* was pressed.
     private func show(_ kind: DigestSectionKind) {
+        // The digest card in the inbox, as opposed to the notification that routes into it
+        // (ADR 0036). Counted where the section is actually followed, not where the card appears:
+        // a card nobody clicked is not an opened digest.
+        environment.telemetry?.record(.digestOpened(source: .app))
         switch kind {
         case .newReviewRequests:
             model.apply(.needsMyReview)
