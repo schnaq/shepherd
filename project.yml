@@ -149,8 +149,10 @@ targets:
         # Once a day.
         SUScheduledCheckInterval: 86400
         # Never append the anonymous system profile (CPU, macOS version, language, …) to the feed
-        # request. Off is Sparkle's default, but "no telemetry, ever" is a hard line in
-        # CONTRIBUTING.md and a hard line should be stated, not inherited.
+        # request. Off is Sparkle's default, but it should be stated rather than inherited — and
+        # it stays off now that ADR 0036 has narrowed the promise around it: what Shepherd counts
+        # is thirteen allow-listed events it sends itself, from one place, switchable off in one
+        # click. An updater appending an unasked-for profile to a feed request is none of that.
         SUSendProfileInfo: false
         #
         # ── Usage telemetry (ADR 0036) ──────────────────────────────────────────────────────

@@ -116,7 +116,8 @@ Three details are decisions rather than defaults:
 
 - **`$ip` is sent as `null`,** not omitted. PostHog's GeoIP step falls back to the sender's address
   when the property is *absent*, so `null` is the property and its absence would be the leak. GeoIP
-  enrichment is also switched off in the project itself.
+  enrichment is switched off in the project as well, as a belt-and-braces measure — see § 3 for why
+  that half is a release gate rather than something the app can enforce.
 - **`$process_person_profile` is `false`,** so no person object is created and nothing accumulates a
   history.
 - **The timestamp is truncated to the UTC day.** Omitting it would let the server stamp ingestion
@@ -166,8 +167,11 @@ Contact: **info@schnaq.com**.
 
 - **Controller:** schnaq GmbH.
 - **Processor:** PostHog, in its **EU** region, under Art. 28 GDPR.
-- **Project:** PostHog EU project 277838, configured with GeoIP off, client IP discarded, session
-  recording, autocapture and surveys off, and an explicit retention setting.
+- **Project:** PostHog EU project 277838. Before any release build carries the project key, that
+  project is configured with GeoIP off, client IP discarded, session recording, autocapture and
+  surveys off, and an explicit retention setting. None of this is enforceable from the app, so it is
+  a release gate rather than a line of code — [docs/RELEASING.md](RELEASING.md#the-posthog-project-key)
+  is where it is checked off, and [ADR 0036](adr/0036-usage-telemetry.md) is where it is argued.
 
 No advertising, no profiling, no automated decision-making, and no sale or sharing of this data with
 anyone.

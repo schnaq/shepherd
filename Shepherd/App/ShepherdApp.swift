@@ -46,6 +46,16 @@ struct ShepherdApp: App {
                 .onChange(of: environment.settings.telemetryLevel) { _, _ in
                     environment.applyTelemetryLevel()
                 }
+                // And once more for the acknowledgement, which is a *second* way the mechanism
+                // comes into existence. A settings document from another Mac can carry an already
+                // answered notice without changing the level — both Macs on `anonymous`, this one
+                // simply never asked — and then the route above never fires: the sheet disappears
+                // because the flag is now true, and telemetry stays `nil` until the next launch.
+                // The heartbeat follows, because that launch would otherwise go uncounted.
+                .onChange(of: environment.settings.telemetryNoticeAcknowledged) { _, _ in
+                    environment.applyTelemetryLevel()
+                    environment.recordLaunchHeartbeat()
+                }
                 // And once more for the search index (ADR 0019): the toggle in Settings and an
                 // applied settings document both land here, so there is one route from "the flag
                 // changed" to "the index exists or does not".

@@ -14,7 +14,9 @@ import MetricKit
 /// 2. **No network, ever.** There is no uploader, no endpoint, no queue and no "send" button in
 ///    this file or anywhere near it. The reports are files; the user reads them, attaches them to
 ///    an issue if they want to, or deletes them. This is what keeps CONTRIBUTING.md's "no
-///    telemetry, ever" line literally true rather than nearly true.
+///    telemetry, ever" line literally true rather than nearly true. *(ADR 0036 has since replaced
+///    that line with an allow-listed, anonymous, one-click-off usage count — but nothing here
+///    moved: there is still no uploader for a diagnostic report, and crash data is still not sent.)*
 /// 3. **Metric payloads are dropped on the floor.** MetricKit's *other* delivery — daily
 ///    performance metrics, `MXMetricPayload` — is exactly the shape of thing Shepherd has no
 ///    business keeping, so the subscriber implements the method and does nothing in it. Not
