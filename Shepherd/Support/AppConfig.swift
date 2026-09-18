@@ -54,6 +54,20 @@ enum AppConfig {
         applicationSupportDirectory.appendingPathComponent("Diagnostics", isDirectory: true)
     }
 
+    /// `~/Library/Application Support/Shepherd/Telemetry` — the queue of usage events not yet sent
+    /// (ADR 0036).
+    ///
+    /// Beside the diagnostics folder and for the same reason: what leaves the Mac should be
+    /// readable on it first. Deleted whole when telemetry is switched off.
+    static var telemetryDirectory: URL {
+        applicationSupportDirectory.appendingPathComponent("Telemetry", isDirectory: true)
+    }
+
+    /// PostHog's EU ingest endpoint for batched events (ADR 0036).
+    static var postHogBatchURL: URL {
+        URL(string: "https://eu.i.posthog.com/batch/") ?? URL(fileURLWithPath: "/")
+    }
+
     /// `https://github.com`, used for "open on GitHub" links.
     static var webBaseURL: URL {
         URL(string: "https://github.com") ?? URL(fileURLWithPath: "/")

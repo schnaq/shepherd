@@ -220,3 +220,79 @@ extension TelemetryTests {
         XCTAssertNil(defaults.string(forKey: "telemetry.lastHeartbeatDay"))
     }
 }
+
+extension TelemetryTests {
+    // MARK: - The queue
+
+    private func makeQueue() -> TelemetryQueue { TelemetryQueue(directory: directory) }
+
+    private func sampleEvent(_ marker: String) -> QueuedEvent {
+        QueuedEvent(
+            name: "fleet_viewed",
+            day: "2026-09-18",
+            distinctID: marker,
+            properties: ["scope": TelemetryValue(FleetScope.all)]
+        )
+    }
+
+    func testAppendedEventsSurviveANewQueueInstance() {
+        let queue = makeQueue()
+        queue.append(sampleEvent("a"))
+        queue.append(sampleEvent("b"))
+
+        let reloaded = makeQueue().load()
+
+        XCTAssertEqual(reloaded.map(\.distinctID), ["a", "b"])
+        XCTAssertEqual(reloaded.first?.properties["scope"], TelemetryValue(FleetScope.all))
+    }
+
+    /// A Mac that is offline for a month must not grow a queue without bound, and the events worth
+    /// keeping are the recent ones.
+    func testTheQueueIsCappedAndDropsTheOldest() {
+        let queue = makeQueue()
+        for index in 0..<(TelemetryQueue.capacity + 10) {
+            queue.append(sampleEvent("event-\(index)"))
+        }
+
+        let stored = queue.load()
+
+        XCTAssertEqual(stored.count, TelemetryQueue.capacity)
+        XCTAssertEqual(stored.first?.distinctID, "event-10")
+        XCTAssertEqual(stored.last?.distinctID, "event-\(TelemetryQueue.capacity + 9)")
+    }
+
+    /// A successful flush removes exactly what was sent, and leaves anything recorded meanwhile.
+    func testRemovingTheSentPrefixLeavesTheRest() {
+        let queue = makeQueue()
+        queue.append(sampleEvent("a"))
+        queue.append(sampleEvent("b"))
+        queue.append(sampleEvent("c"))
+
+        queue.remove(2)
+
+        XCTAssertEqual(queue.load().map(\.distinctID), ["c"])
+    }
+
+    func testDeletingAllRemovesTheFileItself() {
+        let queue = makeQueue()
+        queue.append(sampleEvent("a"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: queue.fileURL.path))
+
+        queue.deleteAll()
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: queue.fileURL.path))
+        XCTAssertTrue(queue.load().isEmpty)
+    }
+
+    /// The file is meant to be opened and read by the person whose Mac it is — that is what
+    /// "Zeigen, was gesendet würde" shows — so it must be pretty-printed JSON, not a blob.
+    func testTheQueueFileIsReadableJSON() throws {
+        let queue = makeQueue()
+        queue.append(sampleEvent("a"))
+
+        let text = try String(contentsOf: queue.fileURL, encoding: .utf8)
+
+        XCTAssertTrue(text.contains("\n"))
+        XCTAssertTrue(text.contains("fleet_viewed"))
+    }
+}
