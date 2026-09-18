@@ -296,3 +296,95 @@ extension TelemetryTests {
         XCTAssertTrue(text.contains("fleet_viewed"))
     }
 }
+
+extension TelemetryTests {
+    // MARK: - The batch body
+
+    private func decodedBody(_ data: Data) throws -> [String: Any] {
+        let object = try JSONSerialization.jsonObject(with: data)
+        return try XCTUnwrap(object as? [String: Any])
+    }
+
+    func testTheBatchBodyCarriesTheKeyAndOneEntryPerEvent() throws {
+        let data = try PostHogBatchBody.make(
+            apiKey: "phc_test",
+            events: [
+                QueuedEvent(name: "fleet_viewed", day: "2026-09-18", distinctID: "abc",
+                            properties: ["scope": TelemetryValue(FleetScope.all)]),
+                QueuedEvent(name: "digest_opened", day: "2026-09-18", distinctID: "abc",
+                            properties: ["source": TelemetryValue(DigestSource.app)]),
+            ],
+            appVersion: "1.2.0",
+            osMajor: 26,
+            language: "de"
+        )
+
+        let body = try decodedBody(data)
+        XCTAssertEqual(body["api_key"] as? String, "phc_test")
+        let batch = try XCTUnwrap(body["batch"] as? [[String: Any]])
+        XCTAssertEqual(batch.count, 2)
+        XCTAssertEqual(batch.first?["event"] as? String, "fleet_viewed")
+        XCTAssertEqual(batch.first?["timestamp"] as? String, "2026-09-18T00:00:00Z")
+    }
+
+    /// The four privacy-carrying properties, checked as a unit: they are the reason this is
+    /// defensible at all, and any one of them missing changes what PostHog stores.
+    func testEveryEventSuppressesProfilesAndIP() throws {
+        let data = try PostHogBatchBody.make(
+            apiKey: "phc_test",
+            events: [QueuedEvent(name: "fleet_viewed", day: "2026-09-18", distinctID: "abc",
+                                 properties: ["scope": TelemetryValue(FleetScope.all)])],
+            appVersion: "1.2.0",
+            osMajor: 26,
+            language: "de"
+        )
+
+        let body = try decodedBody(data)
+        let batch = try XCTUnwrap(body["batch"] as? [[String: Any]])
+        let properties = try XCTUnwrap(batch.first?["properties"] as? [String: Any])
+
+        XCTAssertEqual(properties["distinct_id"] as? String, "abc")
+        XCTAssertEqual(properties["$process_person_profile"] as? Bool, false)
+        XCTAssertTrue(properties["$ip"] is NSNull)
+        XCTAssertEqual(properties["$lib"] as? String, "shepherd")
+        XCTAssertEqual(properties["app_version"] as? String, "1.2.0")
+        XCTAssertEqual(properties["os_major"] as? Int, 26)
+        XCTAssertEqual(properties["locale"] as? String, "de")
+        XCTAssertEqual(properties["scope"] as? String, "all")
+    }
+
+    /// Nothing outside the allow-list may appear, ever — this is the test that would fail if
+    /// somebody added a "helpful" hostname or device model later.
+    func testNoPropertyOutsideTheAllowListAppears() throws {
+        let allowed: Set<String> = [
+            "distinct_id", "$process_person_profile", "$ip", "$lib",
+            "app_version", "os_major", "locale", "scope",
+        ]
+
+        let data = try PostHogBatchBody.make(
+            apiKey: "phc_test",
+            events: [QueuedEvent(name: "fleet_viewed", day: "2026-09-18", distinctID: "abc",
+                                 properties: ["scope": TelemetryValue(FleetScope.all)])],
+            appVersion: "1.2.0",
+            osMajor: 26,
+            language: "de"
+        )
+
+        let body = try decodedBody(data)
+        let batch = try XCTUnwrap(body["batch"] as? [[String: Any]])
+        let properties = try XCTUnwrap(batch.first?["properties"] as? [String: Any])
+
+        XCTAssertTrue(Set(properties.keys).isSubset(of: allowed), "unexpected keys: \(Set(properties.keys).subtracting(allowed))")
+
+        let entry = try XCTUnwrap(batch.first)
+        XCTAssertEqual(Set(entry.keys), ["event", "properties", "timestamp"])
+    }
+
+    func testTheLanguageIsOnlyEverGermanOrEnglish() {
+        XCTAssertEqual(PostHogSender.language(for: Locale(identifier: "de_DE")), "de")
+        XCTAssertEqual(PostHogSender.language(for: Locale(identifier: "de_AT")), "de")
+        XCTAssertEqual(PostHogSender.language(for: Locale(identifier: "en_GB")), "en")
+        // A Mac in French runs Shepherd's English UI (ADR 0022), so that is what is reported.
+        XCTAssertEqual(PostHogSender.language(for: Locale(identifier: "fr_FR")), "en")
+    }
+}

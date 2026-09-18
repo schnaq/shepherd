@@ -68,6 +68,21 @@ enum AppConfig {
         URL(string: "https://eu.i.posthog.com/batch/") ?? URL(fileURLWithPath: "/")
     }
 
+    /// The PostHog project key, or `nil` when this build has none (ADR 0036).
+    ///
+    /// Written into the app bundle's `Info.plist` by the release workflow, exactly the way the
+    /// Sparkle public key is handled: a development build, a test run and a fork all have an empty
+    /// value here, and an empty value means ``UsageTelemetry`` is never constructed — no queue, no
+    /// timer, no request. The key itself is a *public* write key: it ships inside every binary and
+    /// `strings` will find it, which is why it protects nothing and is not treated as a secret in
+    /// the app.
+    static var postHogProjectKey: String? {
+        guard let raw = Bundle.main.object(forInfoDictionaryKey: "SHPostHogProjectKey") as? String,
+              !raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return nil }
+        return raw
+    }
+
     /// `https://github.com`, used for "open on GitHub" links.
     static var webBaseURL: URL {
         URL(string: "https://github.com") ?? URL(fileURLWithPath: "/")
