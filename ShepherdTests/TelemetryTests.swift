@@ -136,3 +136,87 @@ extension TelemetryTests {
         )
     }
 }
+
+extension TelemetryTests {
+    // MARK: - Identity
+
+    /// Level 1 mints in memory: two identities from two `TelemetryIdentity` instances differ, and
+    /// nothing is written, so a relaunch can never produce the same value twice.
+    func testAnonymousIdentityIsNeverStored() {
+        let defaults = makeDefaults()
+        let now = Date(timeIntervalSince1970: 1_789_774_200)
+
+        let first = TelemetryIdentity(defaults: defaults).distinctID(for: .anonymous, now: now)
+        let second = TelemetryIdentity(defaults: defaults).distinctID(for: .anonymous, now: now)
+
+        XCTAssertNotEqual(first, second)
+        XCTAssertNil(defaults.string(forKey: "telemetry.monthlyIdentity"))
+    }
+
+    /// The same instance answers consistently within a launch, so one launch is one session.
+    func testAnonymousIdentityIsStableWithinOneLaunch() {
+        let identity = TelemetryIdentity(defaults: makeDefaults())
+        let now = Date(timeIntervalSince1970: 1_789_774_200)
+
+        XCTAssertEqual(identity.distinctID(for: .anonymous, now: now), identity.distinctID(for: .anonymous, now: now))
+    }
+
+    /// Level 2 stores, survives a relaunch, and rotates when the UTC month turns — with no secret
+    /// anywhere that could link September's value to October's.
+    func testReachIdentityIsStoredAndRotatesWithTheMonth() {
+        let defaults = makeDefaults()
+        let september = Date(timeIntervalSince1970: 1_789_774_200)  // 2026-09-18
+        let october = Date(timeIntervalSince1970: 1_792_000_000)    // 2026-10-14
+
+        let first = TelemetryIdentity(defaults: defaults).distinctID(for: .reach, now: september)
+        let afterRelaunch = TelemetryIdentity(defaults: defaults).distinctID(for: .reach, now: september)
+        XCTAssertEqual(first, afterRelaunch)
+
+        let next = TelemetryIdentity(defaults: defaults).distinctID(for: .reach, now: october)
+        XCTAssertNotEqual(first, next)
+    }
+
+    func testClearingTheIdentityRemovesItFromDisk() {
+        let defaults = makeDefaults()
+        let identity = TelemetryIdentity(defaults: defaults)
+        _ = identity.distinctID(for: .reach, now: Date(timeIntervalSince1970: 1_789_774_200))
+        XCTAssertNotNil(defaults.string(forKey: "telemetry.monthlyIdentity"))
+
+        identity.clearStoredIdentity()
+
+        XCTAssertNil(defaults.string(forKey: "telemetry.monthlyIdentity"))
+        XCTAssertNil(defaults.string(forKey: "telemetry.monthlyIdentityMonth"))
+    }
+
+    // MARK: - Heartbeat
+
+    /// Two launches on one day are one heartbeat; the next UTC day is due again. This is what makes
+    /// the event count equal the number of active installations rather than the number of launches.
+    func testTheHeartbeatIsDueOncePerUTCDay() {
+        let defaults = makeDefaults()
+        let morning = Date(timeIntervalSince1970: 1_789_732_800)  // 2026-09-18T12:00:00Z
+        let evening = Date(timeIntervalSince1970: 1_789_774_200)  // 2026-09-18T23:30:00Z
+        let nextDay = Date(timeIntervalSince1970: 1_789_819_200)  // 2026-09-19T12:00:00Z
+
+        let heartbeat = TelemetryHeartbeat(defaults: defaults)
+        XCTAssertTrue(heartbeat.isDue(now: morning))
+        heartbeat.markSent(now: morning)
+
+        XCTAssertFalse(heartbeat.isDue(now: evening))
+        XCTAssertFalse(TelemetryHeartbeat(defaults: defaults).isDue(now: evening))
+
+        XCTAssertTrue(TelemetryHeartbeat(defaults: defaults).isDue(now: nextDay))
+    }
+
+    func testClearingTheHeartbeatForgetsTheDay() {
+        let defaults = makeDefaults()
+        let heartbeat = TelemetryHeartbeat(defaults: defaults)
+        let now = Date(timeIntervalSince1970: 1_789_732_800)
+        heartbeat.markSent(now: now)
+
+        heartbeat.clear()
+
+        XCTAssertTrue(heartbeat.isDue(now: now))
+        XCTAssertNil(defaults.string(forKey: "telemetry.lastHeartbeatDay"))
+    }
+}
