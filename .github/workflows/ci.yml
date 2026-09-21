@@ -101,13 +101,22 @@ jobs:
         run: command -v xcodegen >/dev/null 2>&1 || brew install xcodegen
       - run: xcodegen generate
       - name: Build app
+        # `-derivedDataPath` is not optional here, and its absence is what wedged four release
+        # runs: a bare `xcodebuild` falls back to Xcode's *global* DerivedData, and this project
+        # is built by two self-hosted runners on one machine that a single push starts at the same
+        # time. Two builds of the same project in one DerivedData block on each other's locks and
+        # then sit there silently until somebody cancels them. A path inside the workspace is
+        # per-runner by construction, because each runner has its own `_work` directory.
+        # mise.toml's header has said this all along; the workflows had not.
         run: |
           xcodebuild -project Shepherd.xcodeproj -scheme Shepherd -configuration Debug \
-            -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO build
+            -destination 'platform=macOS,arch=arm64' -derivedDataPath .build/app \
+            CODE_SIGNING_ALLOWED=NO build
       - name: Build the shepherd CLI
         run: |
           xcodebuild -project Shepherd.xcodeproj -scheme ShepherdCLI -configuration Debug \
-            -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO build
+            -destination 'platform=macOS,arch=arm64' -derivedDataPath .build/cli \
+            CODE_SIGNING_ALLOWED=NO build
       - name: Run app unit tests
         # `-testLanguage`/`-testRegion` state what this runner already is rather than leaving it
         # implicit: several tests assert on English sentences, and a contributor running the same
@@ -115,7 +124,8 @@ jobs:
         # `mise run test-app` passes the same two flags, so the two agree.
         run: |
           xcodebuild -project Shepherd.xcodeproj -scheme Shepherd -configuration Debug \
-            -destination 'platform=macOS,arch=arm64' -testLanguage en -testRegion US \
+            -destination 'platform=macOS,arch=arm64' -derivedDataPath .build/app \
+            -testLanguage en -testRegion US \
             CODE_SIGNING_ALLOWED=NO test
       # The same question as the step near the top of this job, asked again at the very end:
       # the tail of the log then answers "which Xcode built this" on its own, without the

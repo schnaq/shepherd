@@ -124,9 +124,17 @@ jobs:
         # On a German machine fifty-two tests fail against their own translations, which is a fact
         # about the runner and not about the code. mise.toml's header says these two files have to
         # be kept in step by hand; this is that.
+        # `-derivedDataPath` is not optional here, and its absence is what wedged four release
+        # runs: a bare `xcodebuild` falls back to Xcode's *global* DerivedData, and this project
+        # is built by two self-hosted runners on one machine that a single push starts at the same
+        # time. Two builds of the same project in one DerivedData block on each other's locks and
+        # then sit there silently until somebody cancels them. A path inside the workspace is
+        # per-runner by construction, because each runner has its own `_work` directory.
+        # mise.toml's header has said this all along; the workflows had not.
         run: |
           xcodebuild -project Shepherd.xcodeproj -scheme Shepherd -configuration Debug \
-            -destination 'platform=macOS,arch=arm64' -testLanguage en -testRegion US \
+            -destination 'platform=macOS,arch=arm64' -derivedDataPath .build/app \
+            -testLanguage en -testRegion US \
             CODE_SIGNING_ALLOWED=NO test
 
       # Creates the keychain, imports the Developer ID identity, and writes its SHA-1 to
