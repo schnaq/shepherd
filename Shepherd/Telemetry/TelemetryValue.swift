@@ -23,6 +23,18 @@ enum TelemetryValue: Equatable, Sendable {
 /// An enum whose cases may appear in a payload: a closed vocabulary with a stable raw value.
 protocol TelemetryChoice: RawRepresentable<String>, CaseIterable, Sendable {}
 
+extension TelemetryChoice {
+    /// This case as a payload value.
+    ///
+    /// A property rather than only ``TelemetryValue/init(_:)``, and the difference is not style:
+    /// the initialiser is generic, so every entry of a dictionary literal that uses it adds an
+    /// overload-resolution problem to one constraint system. An eleven-entry literal mixing it
+    /// with `.flag(_:)` is exactly the shape that makes the Swift type checker take exponential
+    /// time — and how exponential depends on the compiler version, so it can pass on one Xcode
+    /// and hang on another. Reading a property of a concrete type costs the solver nothing.
+    var telemetryValue: TelemetryValue { .choice(rawValue) }
+}
+
 extension TelemetryValue: Codable {
     private enum Kind: String, Codable {
         case flag, number, choice

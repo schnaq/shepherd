@@ -79,10 +79,10 @@ enum TelemetryEvent: Sendable {
             let digest, let menuBar, let diagnostics
         ):
             return [
-                "repo_count": TelemetryValue(repoCount),
-                "inbox_size": TelemetryValue(inboxSize),
-                "diff_renderer": TelemetryValue(diffRenderer),
-                "intelligence": TelemetryValue(intelligence),
+                "repo_count": repoCount.telemetryValue,
+                "inbox_size": inboxSize.telemetryValue,
+                "diff_renderer": diffRenderer.telemetryValue,
+                "intelligence": intelligence.telemetryValue,
                 "webhooks": .flag(webhooks),
                 "settings_sync": .flag(settingsSync),
                 "auto_merge": .flag(autoMerge),
@@ -93,35 +93,35 @@ enum TelemetryEvent: Sendable {
             ]
         case .reviewSubmitted(let kind, let inlineComments):
             return [
-                "kind": TelemetryValue(kind),
-                "inline_comments": TelemetryValue(inlineComments),
+                "kind": kind.telemetryValue,
+                "inline_comments": inlineComments.telemetryValue,
             ]
         case .pullRequestMerged(let method, let source):
-            return ["method": TelemetryValue(method), "source": TelemetryValue(source)]
+            return ["method": method.telemetryValue, "source": source.telemetryValue]
         case .focusSessionCompleted(let queueSize, let completed):
-            return ["queue_size": TelemetryValue(queueSize), "completed": .flag(completed)]
+            return ["queue_size": queueSize.telemetryValue, "completed": .flag(completed)]
         case .bulkTriagePerformed(let action, let size):
-            return ["action": TelemetryValue(action), "size": TelemetryValue(size)]
+            return ["action": action.telemetryValue, "size": size.telemetryValue]
         case .searchUsed(let kind, let openedResult):
-            return ["kind": TelemetryValue(kind), "opened_result": .flag(openedResult)]
+            return ["kind": kind.telemetryValue, "opened_result": .flag(openedResult)]
         case .delegationStarted(let trigger):
-            return ["trigger": TelemetryValue(trigger)]
+            return ["trigger": trigger.telemetryValue]
         case .delegationFinished(let outcome):
-            return ["outcome": TelemetryValue(outcome)]
+            return ["outcome": outcome.telemetryValue]
         case .intelligenceUsed(let feature, let tier, let outcome):
             return [
-                "feature": TelemetryValue(feature),
-                "tier": TelemetryValue(tier),
-                "outcome": TelemetryValue(outcome),
+                "feature": feature.telemetryValue,
+                "tier": tier.telemetryValue,
+                "outcome": outcome.telemetryValue,
             ]
         case .autoMergeRuleFired(let outcome):
-            return ["outcome": TelemetryValue(outcome)]
+            return ["outcome": outcome.telemetryValue]
         case .issuesInboxUsed(let action):
-            return ["action": TelemetryValue(action)]
+            return ["action": action.telemetryValue]
         case .fleetViewed(let scope):
-            return ["scope": TelemetryValue(scope)]
+            return ["scope": scope.telemetryValue]
         case .digestOpened(let source):
-            return ["source": TelemetryValue(source)]
+            return ["source": source.telemetryValue]
         }
     }
 

@@ -94,25 +94,30 @@ extension TelemetryTests {
     /// The allow-list, enforced rather than described: every event's name and every choice it can
     /// carry has to come from an enum, so a repository name cannot reach the payload by accident.
     func testEveryChoiceInEveryEventComesFromItsEnum() {
-        let allowed = Set(
-            CountBucket.allCases.map(\.rawValue)
-                + ReviewKind.allCases.map(\.rawValue)
-                + MergeMethodChoice.allCases.map(\.rawValue)
-                + MergeSource.allCases.map(\.rawValue)
-                + DiffRendererChoice.allCases.map(\.rawValue)
-                + IntelligenceChoice.allCases.map(\.rawValue)
-                + SearchKind.allCases.map(\.rawValue)
-                + DelegationTrigger.allCases.map(\.rawValue)
-                + DelegationOutcomeChoice.allCases.map(\.rawValue)
-                + IntelligenceFeature.allCases.map(\.rawValue)
-                + IntelligenceTier.allCases.map(\.rawValue)
-                + IntelligenceOutcomeChoice.allCases.map(\.rawValue)
-                + AutoMergeOutcome.allCases.map(\.rawValue)
-                + IssuesAction.allCases.map(\.rawValue)
-                + FleetScope.allCases.map(\.rawValue)
-                + DigestSource.allCases.map(\.rawValue)
-                + TriageAction.allCases.map(\.rawValue)
-        )
+        // An array of arrays, flattened, rather than seventeen `+` operators in one expression:
+        // each `+` is an overload the type checker has to resolve against every other, which is
+        // the shape that takes exponential time and can hang one compiler version while passing
+        // on another.
+        let vocabularies: [[String]] = [
+            CountBucket.allCases.map(\.rawValue),
+            ReviewKind.allCases.map(\.rawValue),
+            MergeMethodChoice.allCases.map(\.rawValue),
+            MergeSource.allCases.map(\.rawValue),
+            DiffRendererChoice.allCases.map(\.rawValue),
+            IntelligenceChoice.allCases.map(\.rawValue),
+            SearchKind.allCases.map(\.rawValue),
+            DelegationTrigger.allCases.map(\.rawValue),
+            DelegationOutcomeChoice.allCases.map(\.rawValue),
+            IntelligenceFeature.allCases.map(\.rawValue),
+            IntelligenceTier.allCases.map(\.rawValue),
+            IntelligenceOutcomeChoice.allCases.map(\.rawValue),
+            AutoMergeOutcome.allCases.map(\.rawValue),
+            IssuesAction.allCases.map(\.rawValue),
+            FleetScope.allCases.map(\.rawValue),
+            DigestSource.allCases.map(\.rawValue),
+            TriageAction.allCases.map(\.rawValue),
+        ]
+        let allowed = Set(vocabularies.joined())
 
         for event in TelemetryEvent.allExamples {
             XCTAssertFalse(event.name.isEmpty)
