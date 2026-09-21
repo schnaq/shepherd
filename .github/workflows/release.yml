@@ -117,9 +117,17 @@ jobs:
         run: swift test
         working-directory: Packages/ShepherdKit
       - name: App unit tests
+        # `-testLanguage`/`-testRegion`, the same two flags `ci.yml` and `mise run test-app` pass,
+        # and they had drifted out of this file. Several tests assert on English sentences, and the
+        # test host otherwise takes the *runner's* own language — which is not a safe assumption
+        # here, because this job runs on a self-hosted Mac rather than on an English GitHub image.
+        # On a German machine fifty-two tests fail against their own translations, which is a fact
+        # about the runner and not about the code. mise.toml's header says these two files have to
+        # be kept in step by hand; this is that.
         run: |
           xcodebuild -project Shepherd.xcodeproj -scheme Shepherd -configuration Debug \
-            -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO test
+            -destination 'platform=macOS,arch=arm64' -testLanguage en -testRegion US \
+            CODE_SIGNING_ALLOWED=NO test
 
       # Creates the keychain, imports the Developer ID identity, and writes its SHA-1 to
       # $RUNNER_TEMP/signing_identity. The "Remove the signing material" step below undoes all
