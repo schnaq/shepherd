@@ -56,7 +56,13 @@ security create-keychain -p "$keychain_password" "$keychain"
 security set-keychain-settings -lut 21600 "$keychain"
 security unlock-keychain -p "$keychain_password" "$keychain"
 
-security default-keychain -d user | tr -d ' "' > "$RUNNER_TEMP/orig-default-keychain"
+# Tolerated rather than required, and the `|| true` is load-bearing under `set -euo pipefail`:
+# a runner registered as a *daemon* has no Aqua session, therefore no login keychain, therefore
+# no default one, and `security` exits non-zero saying so. That is a fact about how the runner
+# was installed and not a reason to refuse to sign — this value exists only so the cleanup step
+# can put back what was there, and "there was nothing" restores just as faithfully as a path.
+# The cleanup already reads it with a fallback and swallows its own failure.
+security default-keychain -d user 2>/dev/null | tr -d ' "' > "$RUNNER_TEMP/orig-default-keychain" || true
 
 # Rebuild the search list with this keychain first and everything that was there after it.
 #
