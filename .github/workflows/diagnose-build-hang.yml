@@ -1,0 +1,101 @@
+name: Diagnose build hang
+
+# Temporary. Four release runs stopped dead in the app build step on the self-hosted runner with
+# no output at all, while the same command finishes in under a minute on a maintainer's Mac that
+# happens to run a newer Xcode. Guessing at the cause has cost four thirty-five-minute cycles, so
+# this measures instead: start the build, give it a deadline, and if it is still alive take a
+# `sample` of it. The stack says which it is — the Swift constraint solver grinding, a lock being
+# waited on, or a network read that never returns.
+#
+# Delete this file once the answer is known.
+
+on:
+  workflow_dispatch:
+    inputs:
+      deadline_seconds:
+        description: "How long to let the build run before sampling it"
+        required: false
+        default: "420"
+        type: string
+
+concurrency:
+  group: diagnose-build-hang
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    name: Sample a stuck build (macOS)
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show the toolchain and what else is running
+        run: |
+          xcodebuild -version
+          echo "--- processes that could be holding a lock ---"
+          pgrep -fl "xcodebuild|swift-frontend|Xcode|Shepherd" || echo "(none)"
+          echo "--- derived data ---"
+          ls -la ~/Library/Developer/Xcode/DerivedData 2>/dev/null | head || echo "(none)"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build the diff viewer bundle
+        working-directory: web/diff-viewer
+        run: npm ci && npm run build
+
+      - name: Generate the project
+        run: xcodegen generate
+
+      # The app target only — this is the step `ci.yml` hangs in, and it runs no tests, which is
+      # how we already know the hang is in compilation rather than at runtime.
+      - name: Build with a deadline, then sample if it is stuck
+        run: |
+          set -uo pipefail
+          deadline="${{ inputs.deadline_seconds }}"
+
+          xcodebuild -project Shepherd.xcodeproj -scheme Shepherd -configuration Debug \
+            -destination 'platform=macOS,arch=arm64' -derivedDataPath .build/diagnose \
+            CODE_SIGNING_ALLOWED=NO \
+            OTHER_SWIFT_FLAGS='-Xfrontend -warn-long-expression-type-checking=500 -Xfrontend -warn-long-function-bodies=500' \
+            build > /tmp/diagnose-build.log 2>&1 &
+          build_pid=$!
+
+          elapsed=0
+          while kill -0 "$build_pid" 2>/dev/null && [ "$elapsed" -lt "$deadline" ]; do
+            sleep 15
+            elapsed=$((elapsed + 15))
+            echo "t=${elapsed}s log=$(wc -c < /tmp/diagnose-build.log) bytes"
+          done
+
+          if ! kill -0 "$build_pid" 2>/dev/null; then
+            wait "$build_pid"; status=$?
+            echo "=== build finished on its own, exit ${status} ==="
+            echo "--- slow type-checking, if any ---"
+            grep -E "warning: .*took [0-9]+ms" /tmp/diagnose-build.log | sort -t' ' -k3 -rn | head -25 || echo "(none)"
+            tail -40 /tmp/diagnose-build.log
+            exit "$status"
+          fi
+
+          echo "=== STILL RUNNING AFTER ${deadline}s — this is the hang, sampling it ==="
+          echo "--- what the log got to ---"
+          tail -60 /tmp/diagnose-build.log
+          echo "--- processes ---"
+          pgrep -fl "xcodebuild|swift-frontend|swift-driver|clang" || true
+          for p in $(pgrep -x swift-frontend | head -3) $(pgrep -x xcodebuild | head -2); do
+            echo "=================== sample $p ==================="
+            /usr/bin/sample "$p" 5 -mayDie 2>&1 | head -80 || true
+          done
+          kill -9 "$build_pid" 2>/dev/null || true
+          pkill -9 -f "xcodebuild|swift-frontend" 2>/dev/null || true
+          exit 1
+
+      - name: Upload the full build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnose-build-log
+          path: /tmp/diagnose-build.log
+          if-no-files-found: warn
