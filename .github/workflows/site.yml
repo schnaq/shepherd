@@ -74,6 +74,17 @@ jobs:
       - run: bun install --frozen-lockfile
         working-directory: site
       - run: npm install --global vercel@latest
+      # Says what the CLI is about to work with, without saying the values: the shape of the two
+      # ids and what the token can see. "Could not retrieve Project Settings" from the step below
+      # is the CLI's one message for a wrong id, a swapped pair and a token without team scope,
+      # and this is what tells them apart in the log.
+      - name: Show what the deploy is linked against
+        run: |
+          echo "VERCEL_ORG_ID starts with: ${VERCEL_ORG_ID:0:5}… (${#VERCEL_ORG_ID} chars)"
+          echo "VERCEL_PROJECT_ID starts with: ${VERCEL_PROJECT_ID:0:4}… (${#VERCEL_PROJECT_ID} chars)"
+          vercel whoami --token="${{ secrets.VERCEL_TOKEN }}" || true
+          vercel teams ls --token="${{ secrets.VERCEL_TOKEN }}" || true
+          vercel project ls --token="${{ secrets.VERCEL_TOKEN }}" --scope="$VERCEL_ORG_ID" 2>&1 | head -20 || true
       - name: Link the project and pull its production settings
         run: vercel pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
       - name: Build the production output
