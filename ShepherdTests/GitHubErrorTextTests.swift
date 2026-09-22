@@ -111,11 +111,28 @@ final class GitHubErrorTextTests: XCTestCase {
         )
         XCTAssertEqual(item.localizedLastError, "English text from an older build")
 
-        item.lastErrorCode = GitHubError.forbidden(message: "nope").storageCode
-        XCTAssertEqual(item.localizedLastError, "GitHub refused the request: nope")
+        // Written together by the drain: the code's English is the stored text.
+        let forbidden = GitHubError.forbidden(message: "nope")
+        item.lastError = forbidden.errorDescription
+        item.lastErrorCode = forbidden.storageCode
+        XCTAssertEqual(item.localizedLastError, forbidden.localizedMessage())
 
         item.lastErrorCode = "not a code"
-        XCTAssertEqual(item.localizedLastError, "English text from an older build")
+        XCTAssertEqual(item.localizedLastError, forbidden.errorDescription)
+    }
+
+    func testACodeLeftBehindByAnOlderBuildDoesNotSpeakForANewerError() {
+        // After a downgrade, a pre-v8 build rewrites `lastError` and leaves the previous code:
+        // the code no longer describes the text, so the text wins.
+        let item = OutboxItem(
+            prID: "PR_1",
+            repo: RepoRef(owner: "schnaq", name: "review"),
+            number: 1,
+            action: .markReadyForReview,
+            lastError: "GitHub returned 502: bad gateway",
+            lastErrorCode: GitHubError.forbidden(message: "nope").storageCode
+        )
+        XCTAssertEqual(item.localizedLastError, "GitHub returned 502: bad gateway")
     }
 
     // MARK: - Inbox sections
