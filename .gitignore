@@ -41,3 +41,9 @@ web/diff-viewer/.cache/
 *.swp
 .idea/
 .vscode/
+
+# The product page (site/): Next.js build output. node_modules/ is covered above.
+site/.next/
+site/out/
+site/next-env.d.ts
+site/*.tsbuildinfo

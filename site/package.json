@@ -1,0 +1,24 @@
+{
+  "name": "shepherd-site",
+  "private": true,
+  "version": "0.1.0",
+  "description": "The product page for Shepherd at shepherd.schnaq.com",
+  "packageManager": "bun@1.3.11",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "^16",
+    "react": "^19",
+    "react-dom": "^19"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5"
+  }
+}
