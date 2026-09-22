@@ -353,8 +353,9 @@ final class ClaimsEvidenceModel {
         let previous = builtFrom
         builtFrom = detail
         // What the model pointed at belongs to the diff it read: a new head, or another pull
-        // request, makes every note a pointer into lines that may no longer be there.
-        cancelChecks()
+        // request, makes every note a pointer into lines that may no longer be there. A routine
+        // refresh of the same head — a check finishing, a new thread — changes no line of it.
+        if !ClaimsEvidenceModel.sameDiff(previous, detail) { cancelChecks() }
         // A pass for a pull request that is gone: nobody will ever see its answer, so it is
         // stopped rather than left to finish on the battery, and the pull request that arrived
         // gets its own pass when the reviewer opens the card.
@@ -749,6 +750,9 @@ extension ClaimsEvidenceModel {
     func canCheck(_ line: ClaimsEvidenceReport.Line) -> Bool {
         guard checkAvailability == .available, builtFrom != nil else { return false }
         guard line.verdict.status != .ok else { return false }
+        // The button captured this line when it was drawn; a refresh since then may have put
+        // another pull request's claim of the same kind under the same id.
+        guard state.lines.contains(line) else { return false }
         switch checks[line.id] {
         case nil, .failed: return true
         case .checking, .done: return false
@@ -767,12 +771,19 @@ extension ClaimsEvidenceModel {
             } catch {
                 state = .failed(error.localizedDescription)
             }
-            guard !Task.isCancelled, let self, self.builtFrom == detail else { return }
+            guard !Task.isCancelled, let self,
+                  ClaimsEvidenceModel.sameDiff(self.builtFrom, detail)
+            else { return }
             self.checks[id] = state
             self.checkTasks[id] = nil
         }
         checkTasks[id] = task
         await task.value
+    }
+
+    /// Whether two details show the same diff: the same pull request at the same head.
+    static func sameDiff(_ lhs: PullRequestDetail?, _ rhs: PullRequestDetail?) -> Bool {
+        lhs?.id == rhs?.id && lhs?.summary.headRefOid == rhs?.summary.headRefOid
     }
 
     /// Stops every check in flight and forgets every answer.

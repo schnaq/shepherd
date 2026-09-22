@@ -49,11 +49,12 @@ final class ClaimCheckingTests: XCTestCase {
     private func detail(
         body: String = "Tests added.",
         head: String = "abc123",
+        id: String = "PR_1",
         files: [ChangedFile]? = nil
     ) -> PullRequestDetail {
         PullRequestDetail(
             summary: PullRequestSummary(
-                id: "PR_1",
+                id: id,
                 repo: RepoRef(owner: "schnaq", name: "review"),
                 number: 42,
                 title: "Retry the flaky upload",
@@ -182,6 +183,30 @@ final class ClaimCheckingTests: XCTestCase {
         model.refresh(detail: detail(head: "def456"), extractor: nil, checker: FakeChecker())
 
         XCTAssertTrue(model.checks.isEmpty)
+    }
+
+    func testARoutineRefreshOfTheSameHeadKeepsTheAnswer() async throws {
+        let model = await loaded(FakeChecker(result: ClaimCheck(notes: [note])))
+        let line = try firstLine(model)
+        await model.check(line)
+
+        model.refresh(detail: detail(body: "Tests added. Also retries."), extractor: nil, checker: FakeChecker())
+
+        XCTAssertEqual(model.checks[line.id], .done(ClaimCheck(notes: [note])))
+    }
+
+    func testALineFromAnotherPullRequestIsNotChecked() async throws {
+        let checker = FakeChecker()
+        let model = await loaded(checker)
+        let stale = try firstLine(model)
+        model.refresh(detail: detail(head: "def456", id: "PR_2"), extractor: nil, checker: checker)
+        var changed = stale
+        changed.claim.quote = "Tests added, see the other PR."
+
+        await model.check(changed)
+
+        let calls = await checker.callCount
+        XCTAssertEqual(calls, 0)
     }
 
     func testTurningTheTiersOffWithdrawsTheOffer() async throws {

@@ -103,7 +103,7 @@ public struct ClaimCheck: Sendable, Hashable {
 /// whitespace count as one space, and **case counts** — code that differs in case is different
 /// code. Every non-empty excerpt line has to match, in order, on consecutive rows of the patch
 /// as ``PatchWalker`` reads it, because two lines that are each somewhere in the diff are not an
-/// excerpt of it.
+/// excerpt of it; blank lines are skipped on both sides, and a match never spans two hunks.
 public enum DiffExcerpt {
     /// Where an excerpt starts.
     public struct Location: Sendable, Hashable {
@@ -131,21 +131,48 @@ public enum DiffExcerpt {
         let wanted = lines(of: excerpt).map(folded)
         guard !wanted.isEmpty else { return nil }
         let rows = PatchWalker.rows(in: patch)
-        guard rows.count >= wanted.count else { return nil }
-        let contents = rows.map { folded($0.text) }
-        for start in 0...(rows.count - wanted.count) {
-            let matches = wanted.indices.allSatisfy { offset in
-                matchesLine(wanted[offset], contents[start + offset])
-            }
-            if matches {
-                let first = rows[start]
-                return Location(
-                    line: first.kind == .removed ? nil : first.headLine,
-                    baseLine: first.baseLine
-                )
+        let hunk = hunkIndices(of: rows)
+        // Blank rows are skipped on both sides: the excerpt's blank lines are dropped by
+        // `lines(of:)`, so a blank row in the patch would otherwise break an excerpt that spans it.
+        let candidates = rows.indices.filter { !folded(rows[$0].text).isEmpty }
+        guard candidates.count >= wanted.count else { return nil }
+        let contents = candidates.map { folded(rows[$0].text) }
+        // Exact first, over the whole patch, and only then with a marker stripped — otherwise
+        // `-1` quoted as code would match an earlier row reading `1`.
+        for stripsMarker in [false, true] {
+            for start in 0...(candidates.count - wanted.count) {
+                let first = candidates[start]
+                guard hunk[first] == hunk[candidates[start + wanted.count - 1]] else { continue }
+                let matches = wanted.indices.allSatisfy { offset in
+                    matchesLine(wanted[offset], contents[start + offset], strippingMarker: stripsMarker)
+                }
+                if matches {
+                    let row = rows[first]
+                    return Location(
+                        line: row.kind == .removed ? nil : row.headLine,
+                        baseLine: row.baseLine
+                    )
+                }
             }
         }
         return nil
+    }
+
+    /// Which hunk each row belongs to, from the line numbers alone: a row that does not continue
+    /// the one before it starts a new hunk, because git never emits two hunks back to back.
+    private static func hunkIndices(of rows: [PatchRow]) -> [Int] {
+        var indices: [Int] = []
+        var current = 0
+        for (offset, row) in rows.enumerated() {
+            if offset > 0 {
+                let previous = rows[offset - 1]
+                let base = previous.baseLine + (previous.kind == .added ? 0 : 1)
+                let head = previous.headLine + (previous.kind == .removed ? 0 : 1)
+                if row.baseLine != base || row.headLine != head { current += 1 }
+            }
+            indices.append(current)
+        }
+        return indices
     }
 
     /// The excerpt's non-empty lines, trimmed.
@@ -157,12 +184,14 @@ public enum DiffExcerpt {
             .filter { !$0.isEmpty }
     }
 
-    /// Whether one folded excerpt line is one folded diff line. The excerpt line is tried as
-    /// written first and then without a leading marker, so `- item` in a Markdown diff still
-    /// matches itself.
-    private static func matchesLine(_ wanted: String, _ target: String) -> Bool {
-        guard !target.isEmpty else { return false }
-        if wanted == target { return true }
+    /// Whether one folded excerpt line is one folded diff line — as written, or with a leading
+    /// `+` / `-` the model copied from the diff stripped off.
+    private static func matchesLine(
+        _ wanted: String,
+        _ target: String,
+        strippingMarker: Bool
+    ) -> Bool {
+        guard strippingMarker else { return wanted == target }
         guard let marker = wanted.first, marker == "+" || marker == "-" else { return false }
         return folded(String(wanted.dropFirst())) == target
     }
