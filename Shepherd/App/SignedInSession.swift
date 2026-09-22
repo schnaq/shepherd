@@ -311,6 +311,17 @@ final class SignedInSession {
         await syncEngine.drainOutbox()
     }
 
+    /// Sends the failed writes of one pull request or issue again, from wherever the reviewer is
+    /// looking at it — the same reset-and-drain Settings → Sync's *Retry* does per row.
+    /// - Parameter targetID: The pull request's or issue's node id.
+    func retryFailedWrites(for targetID: String) async {
+        let failed = (try? await database.failedOutboxItems()) ?? []
+        for item in failed where item.prID == targetID {
+            try? await database.retryOutboxItem(id: item.id)
+        }
+        await drainOutbox()
+    }
+
     /// The pull requests the outbox still holds a write for — pending, in flight or parked.
     ///
     /// Read as a set of node ids rather than as rows because that is all the one caller needs:

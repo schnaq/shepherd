@@ -186,6 +186,12 @@ struct InboxListView: View {
                                         rounds: model.reviewRounds(for: row.id),
                                         hasSession: model.sessionReference(for: row.id) != nil,
                                         trackRecord: model.trackRecord(for: row.id),
+                                        write: RowWriteState.make(
+                                            items: model.outboxItems,
+                                            for: row.id,
+                                            isMerging: environment.activity.isRunning(row.id, .merge),
+                                            wasMerged: environment.mergedPullRequestIDs.contains(row.id)
+                                        ),
                                         onToggleMark: { model.toggleMark(row.id) }
                                     )
                                     .id(row.id)
@@ -531,8 +537,15 @@ struct InboxRowView: View {
     /// Passed in for ``triage``'s reason once more. A row with none renders exactly as it did
     /// before this feature: no badge, and the provenance chip in the agent palette's own colour.
     var trackRecord: TrackRecord?
+    /// What the outbox is doing for this pull request, or `nil` when nothing is on its way.
+    ///
+    /// Passed in for ``triage``'s reason. It takes the status chip's place while it lasts,
+    /// because "your merge is on its way" is what the reviewer who just pressed it is looking for.
+    var write: RowWriteState?
     /// Ticks or unticks this row.
     var onToggleMark: (() -> Void)?
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 12) {
@@ -642,6 +655,9 @@ struct InboxRowView: View {
             if let status = statusChip {
                 ChipView(text: status.text, color: status.color)
                     .layoutPriority(1)
+                    .help(write?.help ?? "")
+                    .contentTransition(.opacity)
+                    .animation(reduceMotion ? nil : .snappy, value: status.text)
             }
 
             // The two trailing columns are numbers, and a number that wraps is unreadable:
@@ -713,6 +729,9 @@ struct InboxRowView: View {
     }
 
     private var statusChip: (text: String, color: Color)? {
+        if let write {
+            return (write.text, write.color)
+        }
         if let rollup = row.checkRollup, rollup.state == .failure {
             let count = max(1, rollup.failureCount)
             return (String(localized: "\(count) checks failing"), Theme.failure)
