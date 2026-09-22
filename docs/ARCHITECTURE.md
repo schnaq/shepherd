@@ -691,8 +691,10 @@ protocol IntelligenceProvider: Sendable {
 }
 ```
 
-Three provider implementations: `OnDeviceProvider` (Foundation Models),
-`AnthropicProvider` (BYOK, `claude-haiku-4-5` default), and `OpenAICompatibleProvider`
+Three providers, two of them one type: `SessionProvider<Backend>` drives a Foundation Models
+`LanguageModelSession` on whichever `LanguageModelBackend` it is given — `OnDeviceProvider` is it on
+`OnDeviceBackend` (Apple's system model), `ClaudeProvider` is it on `ClaudeBackend` (Anthropic's
+`ClaudeForFoundationModels` package, BYOK, `claude-haiku-4-5` default) — and `OpenAICompatibleProvider`
 (user-configured base URL + key + model — chat-completions shape; covers EU-hosted
 providers such as konduit.eu and local servers like Ollama). API keys live in the Keychain
 alongside GitHub tokens; the non-secret half of the configuration (mode, provider kind,
@@ -854,11 +856,11 @@ localised.
 Each tier drives the loop in its own shape and they agree on everything that matters:
 `OnDeviceToolBridge` (`FoundationModels` is imported only by the `OnDevice*.swift` files in
 `Intelligence/` — the provider, this bridge, the triage classifier, the thread digester and the
-claim extractor) wraps
+claim extractor — plus `LanguageModelBackend.swift` and `ClaudeProvider.swift`) wraps
 the three tools in `FoundationModels.Tool` conformances with `@Generable` argument structs, and the framework
 drives the calls — so the hop cap lives in the wrappers and the trace is collected by a shared
-`ToolTraceRecorder` actor; `AnthropicProvider` keeps a `tool_use`/`tool_result` transcript, echoing
-the assistant's content verbatim; `OpenAICompatibleProvider` keeps `tool_calls` plus one
+`ToolTraceRecorder` actor. That is the shape for both session backends, on-device and Claude;
+`OpenAICompatibleProvider` keeps `tool_calls` plus one
 `role: "tool"` message per call, non-streaming, and parses the `arguments` JSON *string*. All three
 stop at `IntelligenceToolLoop.maximumHops` (6) with `IntelligenceError.toolLoopExceeded` rather
 than answering from a turn that was cut off, and both cloud tiers map a `400` mentioning
@@ -1399,9 +1401,9 @@ UI can say *why* a card is missing instead of silently hiding it. `IntelligenceT
 the ladder is tested through — a stub cloud tier that fails, a stub on-device tier that answers, an
 on-device tier that reports itself unavailable — so the degradation is verified without a key, a
 network or Apple Intelligence. All FoundationModels usage is
-confined to the `OnDevice*.swift` files in `Intelligence/`, guarded by
-`SystemLanguageModel.default.availability`, and file paths a model invents are dropped before
-they reach the UI.
+confined to the `OnDevice*.swift` files, `LanguageModelBackend.swift` and `ClaudeProvider.swift` in
+`Intelligence/`, guarded by each backend's availability check, and file paths a model invents are
+dropped before they reach the UI.
 
 ### Outbound webhooks (app target, ADR 0012)
 

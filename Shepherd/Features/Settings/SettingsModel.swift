@@ -280,9 +280,9 @@ final class SettingsModel {
         do {
             switch settings.cloudProviderKind {
             case .anthropic:
-                let provider = AnthropicProvider(
+                let provider = ClaudeProvider(
                     apiKey: apiKeyField,
-                    model: settings.anthropicModel
+                    modelID: settings.anthropicModel
                 )
                 let answer = try await provider.complete(system: probeSystem, user: probeUser)
                 testState = .success(String(localized: "Answered: \(String(answer.prefix(60)))"))

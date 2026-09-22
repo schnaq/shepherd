@@ -16150,6 +16150,46 @@
           }
         }
       }
+    },
+    "Anthropic API key": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anthropic-API-Key"
+          }
+        }
+      }
+    },
+    "Claude could not verify this app. Check the Anthropic settings.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claude konnte diese App nicht verifizieren. Prüfen Sie die Anthropic-Einstellungen."
+          }
+        }
+      }
+    },
+    "Rate limited until %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anfragelimit erreicht bis %@."
+          }
+        }
+      }
+    },
+    "Rate limited. Try again in a moment.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anfragelimit erreicht. Versuchen Sie es gleich noch einmal."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

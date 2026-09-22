@@ -123,7 +123,7 @@ struct IntelligenceURLSessionTransport: IntelligenceTransport {
         let (data, response) = try await CredentialSafeSession.shared.data(for: request)
         let http = response as? HTTPURLResponse
         // Zero rather than a throw for a response that is not HTTP, matching what the
-        // non-streaming calls in both cloud providers already do with the same expression: the
+        // non-streaming call in the OpenAI-compatible provider does with the same expression: the
         // caller's status check then fails with the endpoint's own body as the message.
         return IntelligenceHTTPResponse(
             data: data,

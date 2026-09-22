@@ -1,6 +1,7 @@
 # ADR 0031: A model you bring — `MLXLanguageModel` as the second on-device tier
 
-Status: Proposed · Date: 2026-09-06
+Status: Proposed · Date: 2026-09-06 · Amended 2026-09-22: **§One is built**, with Claude as its
+first second backend rather than MLX — see the amendment at the end.
 
 **Proposed, not Accepted, and the reason is mechanical rather than a hesitation about the
 decision.** Nothing here can be compiled: `FoundationModels.LanguageModel` is macOS 27.0+, the
@@ -288,3 +289,39 @@ the client entitlement Shepherd already has; a resident multi-gigabyte model ver
 increased-memory entitlement as well, and neither that nor the JIT question is verifiable from the
 package sources. It is a first-build question, and it is written down here so it is asked rather
 than discovered by a crash on a reviewer's Mac.
+
+## Amendment (2026-09-22): the seam is built, and Claude went through it first
+
+The macOS 27 SDK arrived ([ADR 0038](0038-macos-27-floor.md)), and §One is now code:
+`OnDeviceProvider` became `SessionProvider<Backend: LanguageModelBackend>`, a struct that drives one
+`LanguageModelSession` per request on whichever model its backend hands it. Everything above the
+seam is written once — the `@Generable` shapes, the three read-only tools, the streamed cumulative
+drafts, the pre-flight — and the backend answers the five questions that differ: which tier, which
+digest budget, which model for a use case, why it is unavailable, and how the prompt is measured.
+`OnDeviceBackend` is Apple's system model, measured against the real tokenizer;
+`OnDeviceProvider` is a typealias and its call sites did not move.
+
+**The first second backend is not MLX.** It is `ClaudeBackend`, on Anthropic's
+`ClaudeForFoundationModels` package, and it replaces the hand-written HTTP `AnthropicProvider`
+entirely: the tool loop, the SSE decoder and the JSON envelope for drafts are gone, and tier 3 on
+Claude now uses guided generation and framework-driven tool calling exactly as tier 2 does. The
+reason for the order is ADR 0038's programme, and the reason it fits this ADR is that it is the same
+seam — a `LanguageModel` conformer that is not Apple's — with the opposite privacy story: **Claude
+is tier 3, not tier 2.** ADR 0007's rules for the cloud rung apply unchanged: the reviewer's own key,
+opt-in click by click, the router never *offers* the request to this rung when a colleague's comment
+would travel, and the badge says "Anthropic". The seam does not know or care about that; the router
+does, keyed off `IntelligenceKind`, which is why the two backends can share every line above it.
+
+What this changes about §Two's dependency rules: they apply now, to a package one generation
+earlier than planned. `ClaudeForFoundationModels` 0.2.1 is pinned exactly in `project.yml`, listed
+in `NOTICES.md` with its Apache-2.0 notice, linked by the app target only, and a bump is a reviewed
+change. The MLX rung (§§Two–Seven) is unchanged as a plan and becomes a third backend when it is
+built; the curated-list and download rules there are its own.
+
+Three things measured, not assumed: the package builds against the GA SDK (Xcode 27.0, 5 s);
+`AuthMode.apiKey` is the documented mode for a key that is not bundled with the app, and App
+Attest, the mode the package recommends for shipped apps, would bill every request to the
+developer's workspace, which ADR 0011 and this ADR rule out; and the package refuses redirects that
+leave `api.anthropic.com`, so the reviewer's key is sent nowhere else — the promise
+`CredentialSafeSession` makes for the requests Shepherd builds itself.
+

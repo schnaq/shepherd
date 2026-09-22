@@ -69,9 +69,9 @@ actor ToolTraceRecorder {
 
 /// Wraps the read-only tool contract in `FoundationModels.Tool` conformances.
 ///
-/// **This file may import `FoundationModels`, and it is the second and last one that does.** The
-/// containment rule the app is built on now reads: only files named `OnDevice*.swift` under
-/// `Shepherd/Intelligence/` may import that framework. Everything below deals in
+/// **This file may import `FoundationModels`.** The containment rule the app is built on reads:
+/// only the files named `OnDevice*.swift` under `Shepherd/Intelligence/`, plus
+/// `LanguageModelBackend.swift` and `ClaudeProvider.swift`, may import that framework. Everything below deals in
 /// ``IntelligenceToolExecuting`` and ``ShepherdCore/IntelligenceToolCall``, so the wrappers hold
 /// no logic of their own — no data source, no budgeting, no validation. They translate an
 /// `@Generable` argument struct into a call, hand it to the executor that the cloud providers use

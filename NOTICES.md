@@ -18,6 +18,7 @@ Keep this file in step with a dependency change in the same pull request; a rele
 | [Monaco Editor](https://github.com/microsoft/monaco-editor) | 0.56.0 | MIT | `Contents/Resources/DiffViewer/dist/` (bundled into `viewer.js` / `viewer.css`) |
 | [GRDB.swift](https://github.com/groue/GRDB.swift) | 7.11.x | MIT | linked into the app binary |
 | [Sparkle](https://github.com/sparkle-project/Sparkle) | 2.10.0 | MIT-style (Sparkle license, see below) | `Contents/Frameworks/Sparkle.framework` |
+| [ClaudeForFoundationModels](https://github.com/anthropics/ClaudeForFoundationModels) | 0.2.1 | Apache-2.0 | linked into the app binary |
 
 Shepherd links Apple's own frameworks (SwiftUI, WebKit, Security, FoundationModels, …) under the
 Apple SDK license; they are part of macOS and are not redistributed.
@@ -133,3 +134,28 @@ Components Sparkle vendors, from its `EXTERNAL LICENSES` section:
   as-is, free for any purpose including commercial use, provided the origin is not
   misrepresented, altered versions are marked as such, and the notice is not removed.
 - **`SUSignatureVerifier.m`** — Copyright (c) 2011 Mark Hamlin, 2-clause BSD.
+
+## ClaudeForFoundationModels
+
+Anthropic's bridge from Apple's Foundation Models `LanguageModel` protocol to the Claude Messages
+API, behind tier 3 when the reviewer brings an Anthropic key ([ADR 0038](docs/adr/0038-macos-27-floor.md),
+item 1). Linked into the app binary; the reviewer's key is the only credential it ever carries.
+
+```
+Copyright 2026 Anthropic PBC
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file
+except in compliance with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed under the
+License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND,
+either express or implied. See the License for the specific language governing permissions
+and limitations under the License.
+```
+
+The full licence text is [`LICENSE`](https://github.com/anthropics/ClaudeForFoundationModels/blob/0.2.1/LICENSE)
+in that repository at the pinned tag. Apache-2.0 §4(d) asks for a `NOTICE` file's contents to be
+reproduced where one exists; the package ships none.
+
