@@ -357,20 +357,36 @@ final class ClaimsEvidenceReadingTests: XCTestCase {
         XCTAssertEqual(model.state.lines.filter { $0.claim.origin == .model }.count, 1)
     }
 
-    func testNewDataForTheSamePullRequestEarnsANewPass() async {
+    func testANewHeadWithTheSameDescriptionKeepsItsPassAndItsClaims() async {
         let extractor = FakeExtractor(
             list: list(ExtractedClaim(kind: .fixesIssue(number: 7), quote: "Closes #7."))
         )
         let model = loaded(extractor: extractor)
         await model.readWithModel(detail: detail())
 
+        // A push, a check finishing, a new thread: the detail changed, the description did not.
         let moved = detail(head: "def456")
         model.refresh(detail: moved, extractor: extractor)
         await model.readWithModel(detail: moved)
 
         let calls = await extractor.callCount
+        XCTAssertEqual(calls, 1, "the model read this text already")
+        XCTAssertTrue(model.state.hasModelClaims, "and what it read is folded into the new report")
+    }
+
+    func testAnEditedDescriptionEarnsANewPass() async {
+        let extractor = FakeExtractor(
+            list: list(ExtractedClaim(kind: .fixesIssue(number: 7), quote: "Closes #7."))
+        )
+        let model = loaded(extractor: extractor)
+        await model.readWithModel(detail: detail())
+
+        let edited = detail(body: "Tests added. Closes #7.")
+        model.refresh(detail: edited, extractor: extractor)
+        await model.readWithModel(detail: edited)
+
+        let calls = await extractor.callCount
         XCTAssertEqual(calls, 2)
-        XCTAssertTrue(model.state.hasModelClaims)
     }
 
     func testAPullRequestThatGoesAwayTakesItsPassWithIt() async {
@@ -385,8 +401,8 @@ final class ClaimsEvidenceReadingTests: XCTestCase {
         await extractor.waitUntilStarted()
         XCTAssertTrue(model.state.isReading)
 
-        // The reviewer moved on, or a sweep replaced the row. The spinner goes with it.
-        let second = detail(head: "def456")
+        // The description was edited while the model read the old one. The spinner goes with it.
+        let second = detail(body: "Refactor only.", head: "def456")
         model.refresh(detail: second, extractor: extractor)
         XCTAssertFalse(model.state.isReading)
 
@@ -395,6 +411,25 @@ final class ClaimsEvidenceReadingTests: XCTestCase {
 
         // The answer belonged to a card nobody is looking at any more.
         XCTAssertFalse(model.state.hasModelClaims)
+        XCTAssertFalse(model.state.isReading)
+    }
+
+    func testARoutineRefreshDuringThePassKeepsTheSpinnerAndTheAnswer() async {
+        let extractor = FakeExtractor(
+            list: list(ExtractedClaim(kind: .fixesIssue(number: 7), quote: "Closes #7.")),
+            isHeld: true
+        )
+        let model = loaded(extractor: extractor)
+        let pass = Task { await model.readWithModel(detail: detail()) }
+        await extractor.waitUntilStarted()
+
+        model.refresh(detail: detail(head: "def456"), extractor: extractor)
+        XCTAssertTrue(model.state.isReading, "the same text is still being read")
+
+        await extractor.releaseHold()
+        await pass.value
+
+        XCTAssertTrue(model.state.hasModelClaims)
         XCTAssertFalse(model.state.isReading)
     }
 

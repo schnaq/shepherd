@@ -273,8 +273,16 @@ final class ClaimsEvidenceModel {
     /// switched off ten minutes ago. Not observed — no view reads it.
     @ObservationIgnored private var extractor: (any ClaimExtracting)?
 
-    /// The detail the tier-2 pass has already been spent on.
-    @ObservationIgnored private var readFrom: PullRequestDetail?
+    /// The text the tier-2 pass has already been spent on (``readKey(for:)``).
+    ///
+    /// The description and the pull request, not the whole detail: a check finishing or a new
+    /// thread changes the detail and not one word the model read, and a pass per sweep would be
+    /// the unattended model feature ADR 0026 refuses.
+    @ObservationIgnored private var readKey: String?
+
+    /// What that pass read, so a routine refresh — which rebuilds the report from the patterns —
+    /// folds it in again rather than asking the model a second time.
+    @ObservationIgnored private var readList: ClaimList?
 
     /// The pass in flight, so a new pull request can stop one nobody will see the answer to.
     @ObservationIgnored private var readTask: Task<Void, Never>?
@@ -356,11 +364,18 @@ final class ClaimsEvidenceModel {
         // request, makes every note a pointer into lines that may no longer be there. A routine
         // refresh of the same head — a check finishing, a new thread — changes no line of it.
         if !ClaimsEvidenceModel.sameDiff(previous, detail) { cancelChecks() }
-        // A pass for a pull request that is gone: nobody will ever see its answer, so it is
-        // stopped rather than left to finish on the battery, and the pull request that arrived
-        // gets its own pass when the reviewer opens the card.
-        cancelReading()
-        readFrom = nil
+        // A pass for a pull request that is gone, or for a description that was edited: nobody
+        // will see its answer, so it is stopped rather than left to finish on the battery, and
+        // the new text gets its own pass when the reviewer opens the card. The same text keeps
+        // its pass — in flight or done.
+        let sameText = previous.map(ClaimsEvidenceModel.readKey(for:))
+            == detail.map(ClaimsEvidenceModel.readKey(for:))
+        let wasReading = state.isReading
+        if !sameText {
+            cancelReading()
+            readKey = nil
+            readList = nil
+        }
 
         // A different pull request: the issue this screen read belongs to the old one, and the
         // read in flight for it has nowhere to land.
@@ -391,8 +406,19 @@ final class ClaimsEvidenceModel {
         }
         // Whether this Mac has the model is a property of the Mac and not of the pull request.
         next.modelUnavailableReason = state.modelUnavailableReason
+        if sameText, let detail {
+            next.isReading = wasReading
+            if let readList {
+                next.report = ClaimsEvidenceModel.merging(readList, into: next.report, of: detail)
+            }
+        }
         state = next
         applyIssueEvidence()
+    }
+
+    /// What identifies the text a tier-2 pass reads: the pull request and its description.
+    static func readKey(for detail: PullRequestDetail) -> String {
+        "\(detail.id)|\(detail.bodyMarkdown.hashValue)"
     }
 
     // MARK: - The acceptance criteria
@@ -614,10 +640,11 @@ final class ClaimsEvidenceModel {
             return
         }
         guard builtFrom == detail, state.isExpanded, !state.isHidden else { return }
-        guard readFrom != detail else { return }
+        let key = ClaimsEvidenceModel.readKey(for: detail)
+        guard readKey != key else { return }
         // Marked spent before the pass starts, which is what makes "once" true rather than
         // likely: a second expansion arriving while this one is generating finds it spent.
-        readFrom = detail
+        readKey = key
         state.isReading = true
         let body = detail.bodyMarkdown
         let task = Task { [weak self] in
@@ -639,7 +666,7 @@ final class ClaimsEvidenceModel {
             // Cancelled from outside, so nothing was folded in and nothing was really spent: the
             // spinner comes down, and the next expansion earns a new pass.
             cancelReading()
-            readFrom = nil
+            readKey = nil
         }
     }
 
@@ -677,11 +704,16 @@ final class ClaimsEvidenceModel {
     private func finishReading(_ list: ClaimList?, for detail: PullRequestDetail) {
         // The screen moved on while the model was reading; `refresh(detail:extractor:)` has
         // already cleared the spinner for the pull request that is showing now.
-        guard builtFrom == detail else { return }
+        guard let current = builtFrom,
+              ClaimsEvidenceModel.readKey(for: current) == ClaimsEvidenceModel.readKey(for: detail)
+        else { return }
         readTask = nil
         state.isReading = false
         guard let list, !list.isEmpty else { return }
-        state.report = ClaimsEvidenceModel.merging(list, into: state.report, of: detail)
+        readList = list
+        // Folded into the report of the detail on screen now, which may be a routine refresh
+        // newer than the one the pass started from: the text is the same, the evidence is newer.
+        state.report = ClaimsEvidenceModel.merging(list, into: state.report, of: current)
         // A model claim about an issue this screen has already read gets that issue's answer too.
         applyIssueEvidence()
     }
