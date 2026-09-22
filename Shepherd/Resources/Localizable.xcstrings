@@ -17290,6 +17290,166 @@
           }
         }
       }
+    },
+    "The on-device model on this Mac cannot read images.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das On-Device-Modell auf diesem Mac kann keine Bilder lesen."
+          }
+        }
+      }
+    },
+    "None of the screenshots could be opened.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keiner der Screenshots ließ sich öffnen."
+          }
+        }
+      }
+    },
+    "Sign in to GitHub to read the screenshots.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Melde dich bei GitHub an, um die Screenshots zu lesen."
+          }
+        }
+      }
+    },
+    "GitHub did not return the description's screenshots.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub hat die Screenshots der Beschreibung nicht geliefert."
+          }
+        }
+      }
+    },
+    "The screenshots could not be downloaded.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Screenshots konnten nicht geladen werden."
+          }
+        }
+      }
+    },
+    "The screenshots could not be read on this Mac.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Screenshots konnten auf diesem Mac nicht gelesen werden."
+          }
+        }
+      }
+    },
+    "The screenshots do not fit the on-device model's window.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Screenshots passen nicht in das Kontextfenster des On-Device-Modells."
+          }
+        }
+      }
+    },
+    "Downloads up to two of the description's screenshots from GitHub and reads them with the model on this Mac. They are sent nowhere else.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lädt bis zu zwei Screenshots der Beschreibung von GitHub und liest sie mit dem Modell auf diesem Mac. Sie werden nirgendwohin sonst gesendet."
+          }
+        }
+      }
+    },
+    "Reading the screenshots on this Mac…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshots werden auf diesem Mac gelesen…"
+          }
+        }
+      }
+    },
+    "What the on-device model sees in the screenshots. It was not shown the description, and it does not judge the change.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was das On-Device-Modell auf den Screenshots sieht. Die Beschreibung hat es nicht gesehen, und es bewertet die Änderung nicht."
+          }
+        }
+      }
+    },
+    "Read the screenshot": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshot lesen"
+          }
+        }
+      }
+    },
+    "Read the %lld screenshots": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die %lld Screenshots lesen"
+          }
+        }
+      }
+    },
+    "Read %lld of %lld screenshots": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %lld Screenshots lesen"
+          }
+        }
+      }
+    },
+    "%lld of %lld screenshots, read on this Mac": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %lld Screenshots, auf diesem Mac gelesen"
+          }
+        }
+      }
+    },
+    "Screenshot read on this Mac": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshot auf diesem Mac gelesen"
+          }
+        }
+      }
+    },
+    "%lld screenshots, read on this Mac": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld Screenshots, auf diesem Mac gelesen"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
