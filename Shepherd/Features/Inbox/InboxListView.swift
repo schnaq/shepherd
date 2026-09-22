@@ -478,7 +478,7 @@ struct InboxSectionHeader: View {
                     .fill(color)
                     .frame(width: 8, height: 8)
             }
-            Text(section.title.uppercased())
+            Text(section.localizedTitle.uppercased())
                 .font(.system(size: 11, weight: .semibold))
                 .kerning(0.5)
                 .foregroundStyle(Theme.textSecondary)

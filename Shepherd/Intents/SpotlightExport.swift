@@ -8,9 +8,9 @@ import ShepherdCore
 /// two independent spellings of "checks failing" would be a bug nobody notices. The wording is the
 /// inbox CI dot's tooltip, deliberately, so a user who has hovered a row recognises the phrase.
 ///
-/// ``ShepherdCore/ActorKind/provenanceLabel`` is *not* re-implemented here: it already is the one
-/// definition of what a row's provenance is called (ADR 0008), and the section headers, the chips
-/// and these two surfaces all read it.
+/// A row's provenance is *not* re-implemented here: `ActorKind.localizedProvenanceLabel`
+/// (`InboxSectionText.swift`) already is the one definition of what it is called on screen
+/// (ADR 0008, ADR 0022), and the section headers and the Shortcuts entity both read it.
 enum PullRequestMetadataText {
     /// How a rolled-up CI state is spelled out.
     ///

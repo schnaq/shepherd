@@ -1078,7 +1078,7 @@ struct IntelligenceRouter: Sendable {
     }
 
     private static func describe(_ error: any Error) -> String {
-        (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        error.userFacingDescription
     }
 
     /// The one phrase a caption appends when the endpoint named who served the request.

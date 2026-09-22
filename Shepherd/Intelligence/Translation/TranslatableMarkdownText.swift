@@ -91,8 +91,7 @@ struct TranslatableMarkdownText: View {
                 // language-pack download — arrives here and is surfaced in the framework's own
                 // words, the same way `ToastCenter.failure(_:context:)` surfaces every other
                 // error. Errors are never printed (project rule).
-                let message = (error as? LocalizedError)?.errorDescription
-                    ?? error.localizedDescription
+                let message = error.userFacingDescription
                 await MainActor.run { store.fail(message, for: requested) }
             }
         }

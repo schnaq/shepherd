@@ -1,4 +1,5 @@
 import Foundation
+import GitHubKit
 import ShepherdCore
 
 /// Which part of the sync produced a failure.
@@ -14,19 +15,61 @@ public enum SyncStage: String, Sendable, Hashable, Codable, CaseIterable {
 }
 
 /// A sync failure, flattened to values so events stay `Equatable` and easy to assert on.
+///
+/// **Two readings of one failure.** ``message`` is the English sentence, for tests and logs, and
+/// it is the only description a failure that is not a ``GitHubKit/GitHubError`` has. ``error``
+/// and ``context`` are the same failure as typed values, so the app can say it in the user's
+/// language: this package is Foundation-only and cannot call `String(localized:)` (ADR 0022, the
+/// 2026-09-22 amendment), and an English sentence cannot be translated after it was composed. The
+/// typed error travels rather than a code because nothing here outlives the process — a
+/// ``SyncEvent`` goes from the engine to the session and no further — so the value itself is the
+/// least that carries a German sentence, payload included.
 public struct SyncFailure: Sendable, Hashable, Codable {
+    /// What the failure was about beyond its stage, where the English ``message`` says more than
+    /// the error alone.
+    ///
+    /// Closed, so the app renders each one with its own catalog key rather than parsing
+    /// ``message``.
+    public enum Context: Sendable, Hashable, Codable {
+        /// Nothing beyond the error itself.
+        case none
+        /// A pull request's detail fetch, for the pull request `slug` (`owner/repo#12`).
+        case pullRequestDetail(slug: String)
+        /// The issue sweep (ADR 0032), as opposed to the pull-request sweep of the same stage.
+        case issueSweep
+        /// The token is not allowed the notifications API at all, so the poll has stopped for
+        /// good and the sweep keeps the inbox current on its own.
+        case notificationsUnavailable
+        /// A close landed, but the comment meant to go with it did not; `slug` names the target.
+        case closedButCommentNotPosted(slug: String)
+    }
+
     /// Where it happened.
     public var stage: SyncStage
-    /// A human-readable description.
+    /// A human-readable description, in English.
     public var message: String
+    /// The GitHub error behind the failure, when it was one.
+    public var error: GitHubError?
+    /// What the failure was about, for a display that re-composes ``message`` in another
+    /// language.
+    public var context: Context
 
     /// Creates a failure.
     /// - Parameters:
     ///   - stage: Where it happened.
-    ///   - message: A human-readable description.
-    public init(stage: SyncStage, message: String) {
+    ///   - message: A human-readable description, in English.
+    ///   - error: The GitHub error behind it, when it was one.
+    ///   - context: What it was about, beyond the stage.
+    public init(
+        stage: SyncStage,
+        message: String,
+        error: GitHubError? = nil,
+        context: Context = .none
+    ) {
         self.stage = stage
         self.message = message
+        self.error = error
+        self.context = context
     }
 }
 

@@ -475,6 +475,6 @@ enum AIDraftFailure {
     /// - Parameter error: What the stream threw.
     /// - Returns: The error's own description.
     static func describe(_ error: any Error) -> String {
-        (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        error.userFacingDescription
     }
 }

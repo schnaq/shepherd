@@ -49,7 +49,10 @@ final class SignedInSession {
     private(set) var hasCompletedFirstSweep = false
     /// Whether a manual sync is in flight.
     var isSyncing = false
-    /// The most recent sync failure, shown as a dot in the title bar.
+    /// The most recent sync failure, shown as a dot in the title bar, in the user's language.
+    ///
+    /// Rendered from the failure's typed error when it arrives (`SyncFailure.localizedMessage`),
+    /// not copied from its English `message` (ADR 0022, 2026-09-22 amendment).
     var lastSyncError: String?
     /// How many mutations are waiting in the outbox.
     var pendingOutboxCount = 0
@@ -378,7 +381,7 @@ final class SignedInSession {
     private func note(_ event: SyncEvent) {
         switch event {
         case .syncFailed(let failure):
-            lastSyncError = failure.message
+            lastSyncError = failure.localizedMessage()
         case .sweepCompleted(let completion):
             // The event that fixes the quiet account. Every case below reports something the
             // sweep *found*, so an account with nothing open reached none of them, `lastSyncedAt`

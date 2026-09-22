@@ -4,7 +4,7 @@ import Foundation
 ///
 /// The cases carry only `Sendable`, `Equatable` payloads so that callers (and tests) can
 /// switch on them and compare them without reaching for `NSError` bridging.
-public enum GitHubError: Error, Sendable, Equatable, Hashable {
+public enum GitHubError: Error, Sendable, Equatable, Hashable, Codable {
     /// A URL could not be built from the given components.
     case invalidURL(String)
     /// A connection-level failure: DNS, TLS, timeout, offline.
@@ -67,8 +67,47 @@ public enum GitHubError: Error, Sendable, Equatable, Hashable {
     }
 }
 
+extension GitHubError {
+    /// The error as a stable, machine-readable string, for a column that outlives the process.
+    ///
+    /// The JSON of the synthesised `Codable` conformance: the case name plus its payload. It
+    /// exists for one reader — the outbox's `lastErrorCode` column (ADR 0022's 2026-09-22
+    /// amendment) — so the app can decode the typed value back and say it in the user's
+    /// language, where the English ``errorDescription`` baked into `lastError` cannot be
+    /// translated after the fact. The payload travels because it *is* the sentence: a status, a
+    /// retry delay, GitHub's own message.
+    ///
+    /// **Stable as long as the case names and labels are.** Renaming a case orphans the rows
+    /// written under the old name; ``init(storageCode:)`` then answers `nil` and the display falls
+    /// back to the English text stored beside it, so the cost of a rename is a language, never a
+    /// crash or a lost row.
+    public var storageCode: String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard let data = try? encoder.encode(self) else { return "" }
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    /// Decodes a value written by ``storageCode``.
+    /// - Parameter storageCode: The stored string.
+    /// - Returns: `nil` when the string is not one this version of the enum can read.
+    public init?(storageCode: String) {
+        guard let data = storageCode.data(using: .utf8),
+              let decoded = try? JSONDecoder().decode(GitHubError.self, from: data) else {
+            return nil
+        }
+        self = decoded
+    }
+}
+
 extension GitHubError: LocalizedError {
-    /// A human-readable description, suitable for surfacing in the UI.
+    /// A human-readable description in English, for logs, tests and anything written to GitHub.
+    ///
+    /// **Not what the app shows.** `GitHubKit` is Foundation-only and cannot call
+    /// `String(localized:)`, so the app renders every case itself, in the user's language
+    /// (`GitHubError.localizedMessage(bundle:)` in `Shepherd/Support/GitHubErrorText.swift`, and
+    /// `Error.userFacingDescription`, which prefers it). This sentence is the English reading of
+    /// the same case and the fallback for a stored error no newer build can decode.
     public var errorDescription: String? {
         switch self {
         case .invalidURL(let string):

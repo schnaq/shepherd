@@ -124,13 +124,18 @@ extension DatabaseManager {
     /// Records a failed attempt and schedules the next one.
     /// - Parameters:
     ///   - id: The row's identity.
-    ///   - error: A human-readable description of what went wrong.
+    ///   - error: A human-readable description of what went wrong, in English — for logs, and
+    ///     the display's fallback.
+    ///   - errorCode: A machine-readable encoding of the same error, when there is one (the
+    ///     sync engine writes `GitHubError.storageCode`). Opaque here; the app decodes it to say
+    ///     the error in the user's language (ADR 0022, 2026-09-22 amendment).
     ///   - now: The current time.
     ///   - retriable: When `false` the row moves to ``OutboxState/failed`` and is never
     ///     retried automatically.
     public func markOutboxItemFailed(
         id: UUID,
         error: String,
+        errorCode: String? = nil,
         now: Date = Date(),
         retriable: Bool = true
     ) async throws {
@@ -154,12 +159,14 @@ extension DatabaseManager {
             try db.execute(
                 sql: """
                     UPDATE outbox
-                    SET attemptCount = ?, lastError = ?, nextAttemptAt = ?, state = ?
+                    SET attemptCount = ?, lastError = ?, lastErrorCode = ?, nextAttemptAt = ?,
+                        state = ?
                     WHERE id = ?
                     """,
                 arguments: [
                     nextAttempt,
                     error,
+                    errorCode,
                     now.addingTimeInterval(delay).timeIntervalSince1970,
                     retriable ? OutboxState.pending.rawValue : OutboxState.failed.rawValue,
                     id.uuidString,
@@ -178,7 +185,7 @@ extension DatabaseManager {
     public func markOutboxItemConflicted(id: UUID, reason: String) async throws {
         try await writer.write { db in
             try db.execute(
-                sql: "UPDATE outbox SET state = ?, lastError = ? WHERE id = ?",
+                sql: "UPDATE outbox SET state = ?, lastError = ?, lastErrorCode = NULL WHERE id = ?",
                 arguments: [OutboxState.conflicted.rawValue, reason, id.uuidString]
             )
         }
@@ -315,7 +322,8 @@ extension DatabaseManager {
             try db.execute(
                 sql: """
                     UPDATE outbox
-                    SET state = ?, attemptCount = 0, nextAttemptAt = 0, lastError = NULL
+                    SET state = ?, attemptCount = 0, nextAttemptAt = 0, lastError = NULL,
+                        lastErrorCode = NULL
                     WHERE id = ? AND state = ?
                     """,
                 arguments: [

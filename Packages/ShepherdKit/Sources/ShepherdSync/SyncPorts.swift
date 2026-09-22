@@ -77,7 +77,17 @@ public protocol SyncStoring: Sendable {
     /// Removes a sent outbox row.
     func markOutboxItemSucceeded(id: UUID) async throws
     /// Records a failed attempt and schedules a retry.
-    func markOutboxItemFailed(id: UUID, error: String, now: Date, retriable: Bool) async throws
+    ///
+    /// `error` is the English sentence for logs; `errorCode` is the typed error's
+    /// ``GitHubKit/GitHubError/storageCode``, when it was one, so the app can render it in the
+    /// user's language (ADR 0022, 2026-09-22 amendment).
+    func markOutboxItemFailed(
+        id: UUID,
+        error: String,
+        errorCode: String?,
+        now: Date,
+        retriable: Bool
+    ) async throws
     /// Parks an outbox row that conflicts with the server state.
     func markOutboxItemConflicted(id: UUID, reason: String) async throws
     /// Reads a scalar sync-state value.

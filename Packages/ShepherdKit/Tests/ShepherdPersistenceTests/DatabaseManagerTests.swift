@@ -34,7 +34,7 @@ final class MigrationTests: XCTestCase {
         // edit to `createV1` — which would silently skip on existing installs — fails CI.
         XCTAssertEqual(
             DatabaseManager.migrator.migrations,
-            ["v1", "v2", "v3", "v4", "v5", "v6", "v7"]
+            ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"]
         )
     }
 
@@ -1101,5 +1101,78 @@ final class IssueSearchIndexStoreTests: XCTestCase {
 
         let stamps = try await database.issueDetailFetchTimestamps()
         XCTAssertEqual(Set(stamps.keys), ["I_2"])
+    }
+}
+
+/// Migration v8: `outbox.lastErrorCode` (ADR 0022, 2026-09-22 amendment).
+final class OutboxErrorCodeMigrationTests: XCTestCase {
+    func testV8AddsOneNullableColumnAndLeavesARowWrittenBeforeItReadable() async throws {
+        // A database migrated only as far as v7, holding a failed row the way an older build left
+        // it: English text, no code.
+        let queue = try DatabaseQueue()
+        var upToV7 = DatabaseMigrator()
+        upToV7.registerMigration("v1", migrate: DatabaseSchema.createV1)
+        upToV7.registerMigration("v2", migrate: DatabaseSchema.addV2)
+        upToV7.registerMigration("v3", migrate: DatabaseSchema.addV3)
+        upToV7.registerMigration("v4", migrate: DatabaseSchema.addV4)
+        upToV7.registerMigration("v5", migrate: DatabaseSchema.addV5)
+        upToV7.registerMigration("v6", migrate: DatabaseSchema.addV6)
+        upToV7.registerMigration("v7", migrate: DatabaseSchema.addV7)
+        try upToV7.migrate(queue)
+        let before = try await queue.read { db in try db.columns(in: "outbox").map(\.name) }
+        XCTAssertFalse(before.contains("lastErrorCode"))
+
+        let id = UUID()
+        let payload = try JSONEncoder().encode(OutboxAction.markReadyForReview)
+        try await queue.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO outbox (id, kind, prID, repoFullName, number, payload, createdAt,
+                                        attemptCount, nextAttemptAt, lastError, state)
+                    VALUES (?, 'markReadyForReview', 'PR_1', 'schnaq/review', 1, ?, 0, 3, 0, ?, 'failed')
+                    """,
+                arguments: [id.uuidString, payload, "GitHub returned 502: bad gateway"]
+            )
+        }
+
+        let database = try DatabaseManager(writer: queue)
+        let columns = try await database.writer.read { db in try db.columns(in: "outbox") }
+        let code = try XCTUnwrap(columns.first { $0.name == "lastErrorCode" })
+        XCTAssertEqual(code.type, "TEXT")
+        XCTAssertFalse(code.isNotNull, "additive: every existing row has no code")
+
+        let row = try await database.outboxItem(id: id)
+        XCTAssertEqual(row?.lastError, "GitHub returned 502: bad gateway")
+        XCTAssertNil(row?.lastErrorCode)
+    }
+
+    func testTheCodeIsWrittenWithAFailureAndClearedByARetryOrAConflict() async throws {
+        let database = try DatabaseManager.inMemory()
+        let item = OutboxItem(
+            prID: "PR_1",
+            repo: RepoRef(owner: "schnaq", name: "review"),
+            number: 1,
+            action: .markReadyForReview
+        )
+        try await database.enqueue(item)
+        try await database.markOutboxItemFailed(
+            id: item.id,
+            error: "GitHub rejected the data: nope",
+            errorCode: "code-1",
+            retriable: false
+        )
+        let failed = try await database.outboxItem(id: item.id)
+        XCTAssertEqual(failed?.lastError, "GitHub rejected the data: nope")
+        XCTAssertEqual(failed?.lastErrorCode, "code-1")
+
+        try await database.retryOutboxItem(id: item.id)
+        let retried = try await database.outboxItem(id: item.id)
+        XCTAssertNil(retried?.lastErrorCode, "a retried row no longer describes a failure")
+
+        try await database.markOutboxItemFailed(id: item.id, error: "x", errorCode: "code-2")
+        try await database.markOutboxItemConflicted(id: item.id, reason: "head moved")
+        let parked = try await database.outboxItem(id: item.id)
+        XCTAssertEqual(parked?.lastError, "head moved")
+        XCTAssertNil(parked?.lastErrorCode, "the code never outlives the text it belongs to")
     }
 }

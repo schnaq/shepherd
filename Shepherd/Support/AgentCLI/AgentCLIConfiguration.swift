@@ -305,7 +305,7 @@ struct AgentCLIConfiguration: Codable, Sendable, Equatable {
                 words = try ShellWords.split(template)
             } catch {
                 throw Failure.template(
-                    (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    error.userFacingDescription
                 )
             }
             guard let first = words.first, !first.isEmpty else { throw Failure.emptyTemplate }
@@ -384,7 +384,7 @@ struct AgentCLIConfiguration: Codable, Sendable, Equatable {
             words = try ShellWords.split(template)
         } catch {
             throw Failure.template(
-                (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                error.userFacingDescription
             )
         }
         guard let first = words.first, !first.isEmpty else { throw Failure.emptySessionTemplate }

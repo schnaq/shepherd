@@ -634,8 +634,9 @@ struct PullRequestActions {
         case .failed(let reason):
             let sentence = failedMessage(write, slug: slug)
             // The shape ``ToastCenter/failure(_:context:)`` builds, for its reason: what GitHub
-            // or the drain said is one untranslated sentence from somewhere else, so it is
-            // appended after the translated one rather than interpolated into it.
+            // or the drain said is one sentence from somewhere else — localised by `enqueue`
+            // when the row kept its typed error, GitHub's own words inside it either way — so it
+            // is appended after this one rather than interpolated into it.
             return Toast(
                 message: reason.map { "\(sentence): \($0)" } ?? sentence,
                 kind: .failure,
@@ -810,7 +811,15 @@ struct PullRequestActions {
         await session.drainOutbox()
         do {
             let row = try await session.database.outboxItem(id: item.id)
-            return OutboxWriteOutcome(row: row)
+            let outcome = OutboxWriteOutcome(row: row)
+            // The row's reason is English by construction — the drain lives in a Foundation-only
+            // package — so a refusal is re-read in the user's language from the typed error the
+            // row keeps beside it (`OutboxItem.localizedLastError`, ADR 0022's 2026-09-22
+            // amendment) before it reaches the toast.
+            if case .failed = outcome {
+                return .failed(reason: row?.localizedLastError)
+            }
+            return outcome
         } catch {
             // The row was written and only the read back failed, so "still queued" is both the
             // honest answer and the one that promises least.

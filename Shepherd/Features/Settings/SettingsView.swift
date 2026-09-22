@@ -367,7 +367,7 @@ struct AccountSettingsTab: View {
             diagnosticsError = nil
         } catch {
             diagnosticsError = String(
-                localized: "Could not delete every report: \(error.localizedDescription)"
+                localized: "Could not delete every report: \(error.userFacingDescription)"
             )
         }
         refreshDiagnosticsCount()
@@ -727,7 +727,7 @@ struct SyncSettingsTab: View {
                 Text(verbatim: "\(item.repo.fullName)#\(item.number) · \(Self.actionName(item.action))")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Theme.textSecondary)
-                Text(item.lastError ?? String(localized: "No reason was recorded."))
+                Text(item.localizedLastError ?? String(localized: "No reason was recorded."))
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.textMuted)
                     .textSelection(.enabled)

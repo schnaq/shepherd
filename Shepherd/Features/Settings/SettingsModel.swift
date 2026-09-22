@@ -85,8 +85,7 @@ final class SettingsModel {
         do {
             bundledAgents = try AgentRegistry.bundled().agents
         } catch {
-            registryError = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
+            registryError = error.userFacingDescription
         }
         guard let session else { return }
         overrides = (try? await session.database.agentRegistryOverrides()) ?? []
@@ -118,7 +117,7 @@ final class SettingsModel {
             newAgentTrailers = ""
             return nil
         } catch {
-            return (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            return error.userFacingDescription
         }
     }
 
@@ -180,7 +179,7 @@ final class SettingsModel {
             hasStoredKey = !apiKeyField.isEmpty
             return nil
         } catch {
-            return (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            return error.userFacingDescription
         }
     }
 
@@ -248,7 +247,7 @@ final class SettingsModel {
             hasStoredWebhookSecret = !webhookSecretField.isEmpty
             return nil
         } catch {
-            return (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            return error.userFacingDescription
         }
     }
 
@@ -264,7 +263,7 @@ final class SettingsModel {
             webhookTestState = .success(String(localized: "The webhook accepted the test event."))
         } catch {
             webhookTestState = .failure(
-                (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                error.userFacingDescription
             )
         }
     }
@@ -297,7 +296,7 @@ final class SettingsModel {
             }
         } catch {
             testState = .failure(
-                (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                error.userFacingDescription
             )
         }
     }
@@ -359,7 +358,7 @@ final class SettingsModel {
         } catch {
             modelSovereigntyBadges = [:]
             modelListState = .failed(
-                (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                error.userFacingDescription
             )
         }
     }

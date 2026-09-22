@@ -528,6 +528,8 @@ struct OutboxRecord: Codable, FetchableRecord, PersistableRecord {
     var attemptCount: Int
     var nextAttemptAt: Double
     var lastError: String?
+    /// Added in v8 (ADR 0022, 2026-09-22 amendment); `nil` on every row written before it.
+    var lastErrorCode: String?
     var state: String
 
     init(item: OutboxItem) throws {
@@ -541,6 +543,7 @@ struct OutboxRecord: Codable, FetchableRecord, PersistableRecord {
         self.attemptCount = item.attemptCount
         self.nextAttemptAt = item.nextAttemptAt.timeIntervalSince1970
         self.lastError = item.lastError
+        self.lastErrorCode = item.lastErrorCode
         self.state = item.state.rawValue
     }
 
@@ -559,6 +562,7 @@ struct OutboxRecord: Codable, FetchableRecord, PersistableRecord {
             attemptCount: attemptCount,
             nextAttemptAt: Date(timeIntervalSince1970: nextAttemptAt),
             lastError: lastError,
+            lastErrorCode: lastErrorCode,
             state: OutboxState(rawValue: state) ?? .pending
         )
     }
