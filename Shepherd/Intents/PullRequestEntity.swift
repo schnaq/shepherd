@@ -89,16 +89,6 @@ struct PullRequestEntity: AppEntity {
         return ids.compactMap { byID[$0] }.map(PullRequestEntity.init(pullRequest:))
     }
 
-    /// The pull requests waiting for the user's review, most urgent first.
-    ///
-    /// The suggestion list *and* the answer ``GetReviewQueueIntent`` returns, which is deliberate:
-    /// "the pull requests Siri offers me" and "the pull requests Shepherd says need me" must be
-    /// the same list. Both halves are borrowed rather than restated —
-    /// ``MenuBarQuickInbox/needsMyReview(in:)`` (which is `SmartView.needsMyReview`, the rail's own
-    /// predicate) and ``InboxModel/prioritySorted(_:)`` — so the badge, the focus session, the
-    /// morning digest and Shortcuts cannot disagree about what is waiting or in what order.
-    /// - Parameter limit: How many to return at most.
-    /// - Returns: The queue, or an empty list when nobody is signed in.
     /// Hands a re-index request to the exporter, which writes only rows that are still in the
     /// inbox and only while the Spotlight export is switched on.
     @MainActor
@@ -109,6 +99,16 @@ struct PullRequestEntity: AppEntity {
         environment.spotlight.reindex(identifiers, rows: session.inboxRows)
     }
 
+    /// The pull requests waiting for the user's review, most urgent first.
+    ///
+    /// The suggestion list *and* the answer ``GetReviewQueueIntent`` returns, which is deliberate:
+    /// "the pull requests Siri offers me" and "the pull requests Shepherd says need me" must be
+    /// the same list. Both halves are borrowed rather than restated —
+    /// ``MenuBarQuickInbox/needsMyReview(in:)`` (which is `SmartView.needsMyReview`, the rail's own
+    /// predicate) and ``InboxModel/prioritySorted(_:)`` — so the badge, the focus session, the
+    /// morning digest and Shortcuts cannot disagree about what is waiting or in what order.
+    /// - Parameter limit: How many to return at most.
+    /// - Returns: The queue, or an empty list when nobody is signed in.
     @MainActor
     static func reviewQueue(limit: Int = 25) -> [PullRequestEntity] {
         let rows = IntentBridge.environment?.session?.inboxRows ?? []
@@ -139,6 +139,13 @@ struct PullRequestEntity: AppEntity {
     }
 }
 
+extension PullRequestEntity: IndexedEntity {
+    /// `true`, because the Spotlight result is already there: the exporter writes one item per
+    /// inbox row and associates it with this entity. The conformance is
+    /// for ``PullRequestEntityQuery``'s re-index hooks, not a second way into the index.
+    var hideInSpotlight: Bool { true }
+}
+
 /// How the system finds ``PullRequestEntity`` values (ADR 0021).
 ///
 /// `EntityStringQuery` rather than the plain `EntityQuery`, because the extra requirement —
@@ -146,13 +153,6 @@ struct PullRequestEntity: AppEntity {
 /// into a search field. Every method reads the **local database only**: there is no GitHub call
 /// anywhere in this file, which is the same promise ADR 0019 makes about the palette and for the
 /// same reason (a query field is typed into, repeatedly, by something that is not a review).
-extension PullRequestEntity: IndexedEntity {
-    /// `true`, because the Spotlight result is already there: the exporter writes one item per
-    /// inbox row and names this entity as its `relatedAppEntityIdentifier`. The conformance is
-    /// for ``PullRequestEntityQuery``'s re-index hooks, not a second way into the index.
-    var hideInSpotlight: Bool { true }
-}
-
 struct PullRequestEntityQuery: EntityStringQuery, IndexedEntityQuery {
     /// Resolves ids a shortcut stored earlier.
     func entities(for identifiers: [String]) async throws -> [PullRequestEntity] {
