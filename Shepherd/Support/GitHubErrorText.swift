@@ -153,8 +153,16 @@ extension OutboxItem {
     /// from. The code is preferred whenever it decodes; a row written before v8, a failure that was
     /// not a GitHub error, or a code a newer build wrote falls back to the English text rather than
     /// to nothing.
+    ///
+    /// **The code is trusted only while it still describes the text beside it.** A build older
+    /// than v8 knows nothing of the column: after a downgrade it rewrites `lastError` and leaves
+    /// the previous failure's code in place, and a later upgrade would then say the *previous*
+    /// error in German. The drain writes the code's own English `errorDescription` as
+    /// `lastError`, so the two agreeing is exactly "written together"; when they disagree the
+    /// English text is the newer truth and is shown.
     var localizedLastError: String? {
-        if let code = lastErrorCode, let error = GitHubError(storageCode: code) {
+        if let code = lastErrorCode, let error = GitHubError(storageCode: code),
+           error.errorDescription == lastError {
             return error.localizedMessage()
         }
         return lastError

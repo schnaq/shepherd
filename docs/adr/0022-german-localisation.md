@@ -417,7 +417,10 @@ produces a closed value, and the app says it.**
   The column is additive: a row written before v8 has `NULL` there and reads exactly as before, from
   `lastError`. The code is stable for as long as the case names and labels are; a renamed case makes
   `GitHubError(storageCode:)` answer `nil` and the display falls back to the English text — the cost
-  of a rename is a language, never a crash or a lost row. Conflicted rows' reasons ("Head moved from
+  of a rename is a language, never a crash or a lost row. The code is also trusted only while its
+  own English `errorDescription` equals the stored `lastError`: a pre-v8 build run after a
+  downgrade rewrites `lastError` and leaves the old code behind, and the mismatch makes the display
+  fall back to the newer English text rather than say the previous error in German. Conflicted rows' reasons ("Head moved from
   …") keep their English text and get no code: nothing shows them (the parked toast deliberately
   omits the reason, and the draft-conflict alert has its own sentence).
 - **`InboxSection` gains a closed `kind`** (`agent(displayName:)`, `bots`, `humans`,
