@@ -16620,6 +16620,16 @@
           }
         }
       }
+    },
+    "A merge of %@ is already on its way.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Merge von %@ ist bereits unterwegs."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

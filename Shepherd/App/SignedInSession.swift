@@ -311,6 +311,30 @@ final class SignedInSession {
         await syncEngine.drainOutbox()
     }
 
+    /// Pull requests whose merge GitHub confirmed during this session.
+    ///
+    /// What the *Merged* chip reads (``RowWriteState/merged``) and what stops a second merge from
+    /// being queued behind a landed one. Set only by ``noteMerged(_:)``, i.e. after the drain heard
+    /// back, never on the click; it belongs to the account, so it ends with the session.
+    private(set) var mergedPullRequestIDs: Set<String> = []
+
+    /// Records that the drain reported a merge as sent.
+    func noteMerged(_ id: String) {
+        mergedPullRequestIDs.insert(id)
+    }
+
+    /// Whether a merge for this pull request is queued, being sent, or already confirmed — in
+    /// which case another one would only fail on GitHub and sit in the outbox as *Not sent*.
+    func hasMergeOnItsWay(for id: String) async -> Bool {
+        if mergedPullRequestIDs.contains(id) { return true }
+        let items = (try? await database.allOutboxItems()) ?? []
+        return items.contains { item in
+            guard item.prID == id, item.state == .pending || item.state == .sending else { return false }
+            if case .merge = item.action { return true }
+            return false
+        }
+    }
+
     /// Sends the failed writes of one pull request or issue again, from wherever the reviewer is
     /// looking at it — the same reset-and-drain Settings → Sync's *Retry* does per row.
     /// - Parameter targetID: The pull request's or issue's node id.

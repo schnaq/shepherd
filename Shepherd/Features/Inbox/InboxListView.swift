@@ -190,7 +190,7 @@ struct InboxListView: View {
                                             items: model.outboxItems,
                                             for: row.id,
                                             isMerging: environment.activity.isRunning(row.id, .merge),
-                                            wasMerged: environment.mergedPullRequestIDs.contains(row.id)
+                                            wasMerged: environment.session?.mergedPullRequestIDs.contains(row.id) ?? false
                                         ),
                                         onToggleMark: { model.toggleMark(row.id) }
                                     )

@@ -66,4 +66,13 @@ final class RowWriteStateTests: XCTestCase {
         XCTAssertEqual(RowWriteState.failed(3).text, "3 not sent")
         XCTAssertEqual(RowWriteState.queued(2).text, "2 sending")
     }
+
+    func testOnlyAMergeInFlightQueuedOrLandedBlocksAnotherMerge() {
+        XCTAssertTrue(RowWriteState.merging.isMergeOnItsWay)
+        XCTAssertTrue(RowWriteState.mergeQueued.isMergeOnItsWay)
+        XCTAssertTrue(RowWriteState.merged.isMergeOnItsWay)
+        XCTAssertFalse(RowWriteState.failed(1).isMergeOnItsWay, "a failed merge may be merged again")
+        XCTAssertFalse(RowWriteState.parked(1).isMergeOnItsWay)
+        XCTAssertFalse(RowWriteState.queued(2).isMergeOnItsWay)
+    }
 }

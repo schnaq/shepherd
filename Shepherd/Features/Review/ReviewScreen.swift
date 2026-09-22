@@ -372,7 +372,7 @@ struct ReviewScreen: View {
             items: outboxItems,
             for: prID,
             isMerging: environment.activity.isRunning(prID, .merge),
-            wasMerged: environment.mergedPullRequestIDs.contains(prID)
+            wasMerged: session.mergedPullRequestIDs.contains(prID)
         )
     }
 
@@ -413,6 +413,9 @@ struct ReviewScreen: View {
             submit(.comment)
         case .merge:
             guard !model.hasEndedOnGitHub else { return }
+            // The same rule the Merge button follows, so the key cannot open a sheet the button
+            // would not.
+            if let writeState, writeState.isMergeOnItsWay { return }
             model.isMergeSheetPresented = true
         case .startReviewSession:
             // Re-freezing the queue while a session is running would restart the count the user
@@ -682,7 +685,7 @@ struct ReviewHeaderView: View {
     @ViewBuilder
     private var mergeButton: some View {
         // A merge that is on its way, queued or confirmed is not a merge to press again.
-        let isOnItsWay = write == .merging || write == .mergeQueued || write == .merged
+        let isOnItsWay = write?.isMergeOnItsWay ?? false
         let isDisabled = model.summary?.mergeBlocker != nil || model.hasEndedOnGitHub || isOnItsWay
         if model.summary?.mergeBlocker == nil, checkRollup?.state == .success {
             Button(action: onMerge) { Text(String(localized: "Merge")) }
@@ -702,6 +705,7 @@ struct ReviewHeaderView: View {
     /// Why the Merge button is dark, or the shortcut that presses it
     /// (``PullRequestActions/help(for:on:otherwise:)``).
     private var mergeHelp: String {
+        if let write, write.isMergeOnItsWay { return write.help }
         let shortcut = String(localized: "Merge (m)")
         guard let summary = model.summary else { return shortcut }
         return PullRequestActions.help(

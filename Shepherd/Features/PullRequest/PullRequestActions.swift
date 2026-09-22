@@ -274,6 +274,19 @@ struct PullRequestActions {
                 )
                 return
             }
+            // One merge per pull request. The sheet, the `m` key, the inbox's bulk action and the
+            // automatic rules all end here, so this is the one place a second merge behind a
+            // queued or a landed one can be refused — before it is written, rather than after
+            // GitHub has turned it into a failed row with a Retry button that can never succeed.
+            if await session.hasMergeOnItsWay(for: summary.id) {
+                toasts.show(
+                    Toast(
+                        message: String(localized: "A merge of \(summary.slug) is already on its way."),
+                        kind: .info
+                    )
+                )
+                return
+            }
             do {
                 let outcome = try await enqueue(
                     .merge(
