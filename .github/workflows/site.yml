@@ -1,15 +1,13 @@
-# The product page at shepherd.schnaq.com: built on every change under site/, deployed from main.
+# The product page at shepherd.schnaq.com: built and typechecked on every change under site/.
 #
 # A workflow of its own rather than a job in ci.yml, because it has nothing to do with the app —
-# a different runner, a different toolchain, and a deploy step whose secrets the app jobs must not
-# see. The `paths` filter keeps a Swift commit from rebuilding a page it did not touch.
+# a different runner and a different toolchain. The `paths` filter keeps a Swift commit from
+# rebuilding a page it did not touch.
 #
-# Deploying goes through the Vercel CLI with a prebuilt output (`vercel build` here, `vercel deploy
-# --prebuilt` there), so what lands is exactly what this job built and typechecked. The three
-# secrets are the ones the CLI documents: VERCEL_TOKEN authenticates, VERCEL_ORG_ID and
-# VERCEL_PROJECT_ID name the project that `vercel pull` links against. If the Vercel project is
-# *also* connected to this repository through Vercel's Git integration, disconnect it, or every push
-# deploys twice.
+# It does not deploy. Vercel's Git integration is connected to this repository and deploys main
+# to production and every pull request to a preview on its own; a second deploy from here would
+# ship the same commit twice. This workflow is the gate in front of that: a page that does not
+# build or typecheck fails the check on the pull request before Vercel ever sees it on main.
 name: Site
 
 on:
@@ -45,49 +43,3 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bun run build
-
-  deploy:
-    name: Deploy to Vercel
-    needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: https://shepherd.schnaq.com
-    env:
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-    defaults:
-      run:
-        # The repository root, not site/: the Vercel project's Root Directory is `site`
-        # (site/README.md), and the CLI resolves that setting against the directory it runs in.
-        # Run from site/ and it would look for site/site.
-        working-directory: .
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-      - run: bun install --frozen-lockfile
-        working-directory: site
-      - run: npm install --global vercel@latest
-      # Says what the CLI is about to work with, without saying the values: the shape of the two
-      # ids and what the token can see. "Could not retrieve Project Settings" from the step below
-      # is the CLI's one message for a wrong id, a swapped pair and a token without team scope,
-      # and this is what tells them apart in the log.
-      - name: Show what the deploy is linked against
-        run: |
-          echo "VERCEL_ORG_ID starts with: ${VERCEL_ORG_ID:0:5}… (${#VERCEL_ORG_ID} chars)"
-          echo "VERCEL_PROJECT_ID starts with: ${VERCEL_PROJECT_ID:0:4}… (${#VERCEL_PROJECT_ID} chars)"
-          vercel whoami --token="${{ secrets.VERCEL_TOKEN }}" || true
-          vercel teams ls --token="${{ secrets.VERCEL_TOKEN }}" || true
-          vercel project ls --token="${{ secrets.VERCEL_TOKEN }}" --scope="$VERCEL_ORG_ID" 2>&1 | head -20 || true
-      - name: Link the project and pull its production settings
-        run: vercel pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
-      - name: Build the production output
-        run: vercel build --prod --token="${{ secrets.VERCEL_TOKEN }}"
-      - name: Deploy the prebuilt output
-        run: vercel deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}"

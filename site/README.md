@@ -26,7 +26,8 @@ list when the API cannot be reached.
 
 ## Deploy on Vercel
 
-One Vercel project pointing at this repository with:
+Vercel's Git integration is connected to this repository: every push to `main` deploys to
+production, every pull request gets a preview. The project settings that make that work:
 
 - **Root Directory:** `site`
 - **Framework preset:** Next.js (detected)
@@ -34,7 +35,8 @@ One Vercel project pointing at this repository with:
 - **Domain:** `shepherd.schnaq.com`, with a `CNAME` record at the DNS provider pointing to
   `cname.vercel-dns.com`
 
-Nothing else to configure: no environment variables, no build command override.
+`.github/workflows/site.yml` builds and typechecks the page on every change under `site/` as the
+gate in front of that deploy; it deploys nothing itself.
 
 ## Where things live
 
