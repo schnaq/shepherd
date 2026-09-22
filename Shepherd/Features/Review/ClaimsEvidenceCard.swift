@@ -132,6 +132,7 @@ struct ClaimsEvidenceCard: View {
     @ViewBuilder
     private func row(_ line: ClaimsEvidenceReport.Line) -> some View {
         let isOpen = openFacts.contains(line.id)
+        let canCheck = model.canCheck(line)
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .top, spacing: 6) {
                 Image(systemName: ClaimsEvidenceCard.glyph(line.verdict.status))
@@ -192,7 +193,7 @@ struct ClaimsEvidenceCard: View {
                 .padding(.leading, 19)
             }
 
-            if line.verdict.status == .contradicted || model.canCheck(line) {
+            if line.verdict.status == .contradicted || canCheck {
                 HStack(spacing: 6) {
                     if line.verdict.status == .contradicted {
                         Button(String(localized: "Turn into a comment")) {
@@ -203,7 +204,7 @@ struct ClaimsEvidenceCard: View {
                             localized: "Puts this claim and the facts under it into your review summary. Nothing is sent."
                         ))
                     }
-                    if model.canCheck(line) {
+                    if canCheck {
                         Button {
                             Task { await model.check(line) }
                         } label: {

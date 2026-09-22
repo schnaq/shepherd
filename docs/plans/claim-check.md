@@ -91,7 +91,7 @@ duplicates (same path and line) are dropped; at most `ClaimCheck.maximumNotes` (
 ### Task 2: The seam and the on-device checker
 
 **Interfaces — Consumes:** Task 1. **Produces:**
-`protocol ClaimChecking: Sendable { func availability() async -> ClaimExtractorAvailability; func check(_ line: ClaimsEvidenceReport.Line, in detail: PullRequestDetail) async throws -> ClaimCheck }`,
+`protocol ClaimChecking: Sendable { func availability() async -> OnDeviceAvailability; func check(_ line: ClaimsEvidenceReport.Line, in detail: PullRequestDetail) async throws -> ClaimCheck }`,
 `struct OnDeviceClaimChecker: ClaimChecking`.
 
 - Profile: `ClaimCheckProfile: LanguageModelSession.DynamicProfile` with a `HopGate`

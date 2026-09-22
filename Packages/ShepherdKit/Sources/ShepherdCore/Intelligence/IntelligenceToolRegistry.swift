@@ -66,6 +66,36 @@ public struct IntelligenceToolRegistry: Sendable, Hashable {
         self.init(changedFilePaths: paths)
     }
 
+    /// At most this many changed-file paths are listed in a prompt.
+    ///
+    /// The registry keeps every path, so a model that names one further down the list is still
+    /// allowed to read it. This cap is only about not spending a pull request's whole context on
+    /// a file tree.
+    public static let maximumListedPaths = 60
+
+    /// The paths a `fileDiff` call may name, in the order a prompt lists them.
+    ///
+    /// **Derived from the registry, not from the file list, and that is the whole point.** A
+    /// renamed file's *previous* path is in the registry as well — both are in the diff — so a
+    /// prompt listing only `path` would promise one list and be refused against another. The
+    /// order is `files`' own, with a rename's previous path directly behind its new one, because
+    /// the registry is a `Set` and a prompt whose file list is shuffled between runs is a prompt
+    /// nobody can compare two answers from.
+    /// - Parameter files: The changed files, as the detail fetch stored them.
+    /// - Returns: Every readable path, each once, in a stable order.
+    public static func orderedPaths(in files: [ChangedFile]) -> [String] {
+        let readable = IntelligenceToolRegistry(changedFiles: files).changedFilePaths
+        var ordered: [String] = []
+        var seen = Set<String>()
+        for file in files {
+            for path in [file.path, file.previousPath].compactMap({ $0 }) {
+                guard readable.contains(path), seen.insert(path).inserted else { continue }
+                ordered.append(path)
+            }
+        }
+        return ordered
+    }
+
     // MARK: - Descriptors
 
     /// The descriptor of one tool.

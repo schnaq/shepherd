@@ -80,7 +80,7 @@ struct ClaimCheckProfile: LanguageModelSession.DynamicProfile {
 struct OnDeviceClaimChecker: ClaimChecking {
     init() {}
 
-    func availability() async -> ClaimExtractorAvailability {
+    func availability() async -> OnDeviceAvailability {
         guard let reason = OnDeviceProvider.unavailabilityReason(for: .prose) else {
             return .available
         }
@@ -91,37 +91,13 @@ struct OnDeviceClaimChecker: ClaimChecking {
         _ line: ClaimsEvidenceReport.Line,
         in detail: PullRequestDetail
     ) async throws -> ClaimCheck {
-        let useCase = OnDeviceUseCase.prose
-        if let reason = OnDeviceProvider.unavailabilityReason(for: useCase) {
-            throw IntelligenceError.unavailable(reason)
-        }
-        let model = useCase.model()
         let prompt = OnDeviceClaimChecker.prompt(for: line, in: detail)
-
-        // Measured, never estimated: the instructions share the window with the prompt, and the
-        // tool results are budgeted by `LocalToolExecutor` from the same limited budget.
-        let text = OnDeviceClaimChecker.instructions + "\n" + prompt
-        let count = try? await model.tokenCount(for: text)
-        let budget = OnDeviceProvider.budget.limited(
-            toContextSize: model.contextSize,
-            reservedForResponse: OnDeviceGeneration.reservedResponseTokens
-        )
-        let tokens = budget.measured(text, using: { $0 == text ? count : nil })
-        guard tokens <= budget.maxTokens else {
-            throw IntelligenceError.digestTooLarge(tokens: tokens, limit: budget.maxTokens)
-        }
-
         let recorder = ToolTraceRecorder()
-        let tools = OnDeviceToolBridge.tools(
-            executor: LocalToolExecutor(detail: detail, budget: budget),
+        let session = try await OnDeviceClaimChecker.preflight(
+            prompt: prompt,
+            detail: detail,
             recorder: recorder
         )
-        let session = LanguageModelSession(profile: ClaimCheckProfile(
-            model: model,
-            tools: tools,
-            gate: ClaimCheckHopGate(),
-            responseTokens: OnDeviceClaimChecker.responseTokens
-        ))
         let generated: OnDeviceClaimCheck
         do {
             generated = try await session.respond(
@@ -138,6 +114,52 @@ struct OnDeviceClaimChecker: ClaimChecking {
             notes: ClaimCheck.verified(notes, in: detail.files),
             trace: await recorder.current
         )
+    }
+
+    // MARK: - Pre-flight
+
+    /// Availability, budget and session in one decision, as ``OnDeviceClaimExtractor`` makes it.
+    ///
+    /// Measured, never estimated: the instructions share the window with the prompt, and the tool
+    /// results are budgeted by `LocalToolExecutor` from the same limited budget.
+    private static func preflight(
+        prompt: String,
+        detail: PullRequestDetail,
+        recorder: ToolTraceRecorder
+    ) async throws -> LanguageModelSession {
+        let useCase = OnDeviceUseCase.prose
+        if let reason = OnDeviceProvider.unavailabilityReason(for: useCase) {
+            throw IntelligenceError.unavailable(reason)
+        }
+        let model = useCase.model()
+        let text = instructions + "\n" + prompt
+        let context = await measuredContext(of: model, measuring: text)
+        let budget = OnDeviceProvider.budget.limited(
+            toContextSize: context.contextSize,
+            reservedForResponse: OnDeviceGeneration.reservedResponseTokens
+        )
+        let tokens = budget.measured(text, using: context.measure)
+        guard tokens <= budget.maxTokens else {
+            throw IntelligenceError.digestTooLarge(tokens: tokens, limit: budget.maxTokens)
+        }
+        let tools = OnDeviceToolBridge.tools(
+            executor: LocalToolExecutor(detail: detail, budget: budget),
+            recorder: recorder
+        )
+        return LanguageModelSession(profile: ClaimCheckProfile(
+            model: model,
+            tools: tools,
+            gate: ClaimCheckHopGate(),
+            responseTokens: responseTokens
+        ))
+    }
+
+    private static func measuredContext(
+        of model: SystemLanguageModel,
+        measuring text: String
+    ) async -> (measure: (String) -> Int?, contextSize: Int) {
+        let count = try? await model.tokenCount(for: text)
+        return ({ candidate in candidate == text ? count : nil }, model.contextSize)
     }
 
     // MARK: - Prompt
@@ -157,12 +179,12 @@ struct OnDeviceClaimChecker: ClaimChecking {
     /// The claim, Shepherd's own facts about it and the files the model may read.
     static func prompt(for line: ClaimsEvidenceReport.Line, in detail: PullRequestDetail) -> String {
         let facts = line.verdict.facts.map { "- " + $0.englishSentence }.joined(separator: "\n")
-        let paths = CIDiagnosisRequest.changedPaths(in: detail)
-            .prefix(CIDiagnosisRequest.maximumListedPaths)
+        let paths = IntelligenceToolRegistry.orderedPaths(in: detail.files)
+            .prefix(IntelligenceToolRegistry.maximumListedPaths)
             .map { "- " + $0 }
             .joined(separator: "\n")
         return """
-            Claim (\(kindDescription(line.claim.kind))):
+            Claim (\(line.claim.kind.englishLabel)):
             "\(line.claim.quote)"
 
             What Shepherd already found without a model:
@@ -171,15 +193,5 @@ struct OnDeviceClaimChecker: ClaimChecking {
             Changed files you can read with fileDiff:
             \(paths.isEmpty ? "- none" : paths)
             """
-    }
-
-    static func kindDescription(_ kind: Claim.Kind) -> String {
-        switch kind {
-        case .testsAdded: return "tests were added or run"
-        case .scopeLimited(let module) where module.isEmpty: return "nothing else changed"
-        case .scopeLimited(let module): return "only \(module) changed"
-        case .noBreakingChanges: return "nothing breaking changed"
-        case .fixesIssue(let number): return "fixes issue #\(number)"
-        }
     }
 }

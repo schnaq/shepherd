@@ -90,20 +90,21 @@ public struct ClaimCheck: Sendable, Hashable {
 ///
 /// The comparison is deliberately narrow: diff markers are ignored on both sides, runs of
 /// whitespace count as one space, and **case counts** — code that differs in case is different
-/// code. Every non-empty excerpt line has to match, in order, on consecutive lines of one hunk,
-/// because two lines that are each somewhere in the diff are not an excerpt of it.
+/// code. Every non-empty excerpt line has to match, in order, on consecutive rows of the patch
+/// as ``PatchWalker`` reads it, because two lines that are each somewhere in the diff are not an
+/// excerpt of it.
 public enum DiffExcerpt {
     /// Where an excerpt starts.
     public struct Location: Sendable, Hashable {
         /// The head-side line of the first excerpt line, `nil` when it was removed.
         public var line: Int?
-        /// Whether the first excerpt line is a removed line.
-        public var isRemoval: Bool
 
-        public init(line: Int?, isRemoval: Bool) {
+        public init(line: Int?) {
             self.line = line
-            self.isRemoval = isRemoval
         }
+
+        /// Whether the first excerpt line is a removed line.
+        public var isRemoval: Bool { line == nil }
     }
 
     /// Where `excerpt` occurs in `patch`, or `nil` when it does not.
@@ -112,19 +113,18 @@ public enum DiffExcerpt {
     ///   - patch: A GitHub `files[].patch`.
     /// - Returns: The location of the first occurrence.
     public static func locate(_ excerpt: String, inPatch patch: String) -> Location? {
-        let wanted = lines(of: excerpt)
+        let wanted = lines(of: excerpt).map(folded)
         guard !wanted.isEmpty else { return nil }
-        for hunk in UnifiedPatch.hunks(in: patch) {
-            let rows = rows(of: hunk)
-            guard rows.count >= wanted.count else { continue }
-            for start in 0...(rows.count - wanted.count) {
-                let matches = wanted.indices.allSatisfy { offset in
-                    matchesLine(wanted[offset], rows[start + offset].content)
-                }
-                if matches {
-                    let first = rows[start]
-                    return Location(line: first.headLine, isRemoval: first.headLine == nil)
-                }
+        let rows = PatchWalker.rows(in: patch)
+        guard rows.count >= wanted.count else { return nil }
+        let contents = rows.map { folded($0.text) }
+        for start in 0...(rows.count - wanted.count) {
+            let matches = wanted.indices.allSatisfy { offset in
+                matchesLine(wanted[offset], contents[start + offset])
+            }
+            if matches {
+                let first = rows[start]
+                return Location(line: first.kind == .removed ? nil : first.headLine)
             }
         }
         return nil
@@ -139,40 +139,12 @@ public enum DiffExcerpt {
             .filter { !$0.isEmpty }
     }
 
-    private struct Row {
-        var content: String
-        var headLine: Int?
-    }
-
-    private static func rows(of hunk: UnifiedPatch.Hunk) -> [Row] {
-        var head = hunk.modifiedStart
-        var rows: [Row] = []
-        for line in hunk.lines {
-            switch line.first {
-            case "+":
-                rows.append(Row(content: String(line.dropFirst()), headLine: head))
-                head += 1
-            case "-":
-                rows.append(Row(content: String(line.dropFirst()), headLine: nil))
-            case "\\":
-                continue
-            case nil:
-                rows.append(Row(content: "", headLine: head))
-                head += 1
-            default:
-                rows.append(Row(content: String(line.dropFirst()), headLine: head))
-                head += 1
-            }
-        }
-        return rows
-    }
-
-    /// Whether one excerpt line is one diff line. The excerpt line is tried as written first and
-    /// then without a leading marker, so `- item` in a Markdown diff still matches itself.
-    private static func matchesLine(_ wanted: String, _ content: String) -> Bool {
-        let target = folded(content)
+    /// Whether one folded excerpt line is one folded diff line. The excerpt line is tried as
+    /// written first and then without a leading marker, so `- item` in a Markdown diff still
+    /// matches itself.
+    private static func matchesLine(_ wanted: String, _ target: String) -> Bool {
         guard !target.isEmpty else { return false }
-        if folded(wanted) == target { return true }
+        if wanted == target { return true }
         guard let marker = wanted.first, marker == "+" || marker == "-" else { return false }
         return folded(String(wanted.dropFirst())) == target
     }

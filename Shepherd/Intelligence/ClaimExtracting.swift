@@ -8,7 +8,7 @@ import ShepherdCore
 /// sentence available for anyone who asks why. The card itself simply shows nothing extra — a
 /// "the model could not read this" line on a card that is already complete without one would be
 /// an apology for a feature the reviewer never asked for (ADR 0026: tier 1 is complete at tier 1).
-enum ClaimExtractorAvailability: Sendable, Equatable {
+enum OnDeviceAvailability: Sendable, Equatable {
     /// The model is there and Apple Intelligence is on.
     case available
     /// It is not, with the model's own words for why.
@@ -51,7 +51,7 @@ protocol ClaimExtracting: Sendable {
     ///
     /// Asked once per app run by the caller: whether this Mac has the model is a property of the
     /// Mac, not of the pull request.
-    func availability() async -> ClaimExtractorAvailability
+    func availability() async -> OnDeviceAvailability
 
     /// Reads the claims the patterns may have missed out of one description.
     /// - Parameter body: The pull request's description, as Markdown source.

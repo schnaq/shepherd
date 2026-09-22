@@ -27,6 +27,18 @@ public struct Claim: Sendable, Codable, Hashable, Identifiable {
         /// "Fixes #142", "closes #7", or a bare `#142` in the first paragraph.
         case fixesIssue(number: Int)
 
+        /// The kind in plain English, for a prompt and a log line — the app's card draws its own
+        /// localised label instead, like ``EvidenceFact/englishSentence`` and its localised twin.
+        public var englishLabel: String {
+            switch self {
+            case .testsAdded: return "tests were added or run"
+            case .scopeLimited(let module) where module.isEmpty: return "nothing else changed"
+            case .scopeLimited(let module): return "only \(module) changed"
+            case .noBreakingChanges: return "nothing breaking changed"
+            case .fixesIssue(let number): return "fixes issue #\(number)"
+            }
+        }
+
         /// The key two claims of the same shape are considered the same claim by.
         ///
         /// Not `Hashable` on the whole case, because ``scopeLimited(module:)`` carries a token:
