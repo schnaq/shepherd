@@ -53,6 +53,16 @@ struct ConversationView: View {
                 checker: environment.claimChecker
             )
         }
+        // The tiers switched on or off while this pull request is open: the card's seams have to
+        // follow at once, or a *Look closer* button would outlive the setting that allowed it.
+        .onChange(of: environment.claimChecker == nil) {
+            claims.refresh(
+                detail: model.detail,
+                extractor: environment.claimExtractor,
+                checker: environment.claimChecker
+            )
+            Task { await claims.prepareCheckAvailability() }
+        }
     }
 
     /// What the pull request says beside what Shepherd found (ADR 0026).

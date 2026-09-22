@@ -29,17 +29,17 @@ final class ClaimCheckTests: XCTestCase {
 
     func testAnAddedLineIsFoundAtItsHeadSideLine() {
         let location = DiffExcerpt.locate("func parse(_ text: String) -> AST {", inPatch: patch)
-        XCTAssertEqual(location, DiffExcerpt.Location(line: 11))
+        XCTAssertEqual(location, DiffExcerpt.Location(line: 11, baseLine: 12))
     }
 
     func testAContextLineIsFoundAtItsHeadSideLine() {
         let location = DiffExcerpt.locate("return AST(text)", inPatch: patch)
-        XCTAssertEqual(location, DiffExcerpt.Location(line: 13))
+        XCTAssertEqual(location, DiffExcerpt.Location(line: 13, baseLine: 12))
     }
 
     func testARemovedLineIsFoundWithoutAHeadLine() {
         let location = DiffExcerpt.locate("func parse(text: String) -> AST {", inPatch: patch)
-        XCTAssertEqual(location, DiffExcerpt.Location(line: nil))
+        XCTAssertEqual(location, DiffExcerpt.Location(line: nil, baseLine: 11))
     }
 
     func testConsecutiveLinesAreFoundTogether() {
@@ -63,7 +63,7 @@ final class ClaimCheckTests: XCTestCase {
             -    func parse(text: String) -> AST {
             +    func parse(_ text: String) -> AST {
             """
-        XCTAssertEqual(DiffExcerpt.locate(excerpt, inPatch: patch), DiffExcerpt.Location(line: nil))
+        XCTAssertEqual(DiffExcerpt.locate(excerpt, inPatch: patch), DiffExcerpt.Location(line: nil, baseLine: 11))
     }
 
     func testWhitespaceIsFoldedButCaseIsKept() {
@@ -113,6 +113,27 @@ final class ClaimCheckTests: XCTestCase {
         XCTAssertEqual(kept.count, ClaimCheck.maximumNotes)
         XCTAssertEqual(kept.map(\.excerpt).first, "return AST(text)")
         XCTAssertEqual(Set(kept.map(\.id)).count, kept.count)
+    }
+
+    func testTheSameRemovedLineQuotedTwoWaysIsOneNote() {
+        let notes = [
+            note("func parse(text: String) -> AST {"),
+            note("-    func parse(text: String) -> AST {"),
+        ]
+        XCTAssertEqual(ClaimCheck.verified(notes, in: [file()]).count, 1)
+    }
+
+    func testTwoIdenticalRemovedLinesInDifferentPlacesAreTwoNotes() {
+        let twice = """
+            @@ -1,3 +1,1 @@
+            -guard ready else { return }
+             work()
+            -guard ready else { return }
+            """
+        let excerpt = "guard ready else { return }"
+        let first = DiffExcerpt.locate(excerpt, inPatch: twice)
+        XCTAssertEqual(first, DiffExcerpt.Location(line: nil, baseLine: 1))
+        XCTAssertEqual(ClaimCheck.verified([note(excerpt)], in: [file(patch: twice)]).first?.id, "Sources/Parser.swift:-1")
     }
 
     func testAnEmptySentenceIsDropped() {

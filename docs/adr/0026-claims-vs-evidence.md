@@ -370,8 +370,9 @@ landed, is narrower and inside the decision above:
   sentence on the card, not a cloud rung.
 - **What macOS 27 adds.** The session is built from a `LanguageModelSession.DynamicProfile` whose
   tool-calling mode is a function of the reads so far: `.required` before the first, `.allowed`
-  below three, `.disallowed` after. The first turn therefore always reads the diff — a guarantee,
-  not a request in the instructions. `.required` for the whole session never ends; the spike on
+  below three, `.disallowed` after. The first turn therefore always makes a read — a guarantee,
+  not a request in the instructions — and the instructions ask for that read to be a file's diff;
+  `failingChecks` stays in the set because "tests were run" is a claim CI answers. `.required` for the whole session never ends; the spike on
   2026-09-22 showed the model calling the tool on every turn.
 - **Nothing is stored and nothing acts.** Results live as long as the review screen and the
   detail they were read from; a new head forgets them. The block has one link per note, into the
