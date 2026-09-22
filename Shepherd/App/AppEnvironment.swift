@@ -236,7 +236,8 @@ final class AppEnvironment {
 
     /// How a description's screenshots are read, or `nil` with the tiers off.
     ///
-    /// On-device only for ``claimExtractor``'s reason, and inert until a reviewer clicks
+    /// On-device only for ``claimExtractor``'s reason, `nil` unless
+    /// ``AppSettings/screenshotReadingEnabled`` is on as well, and inert until a reviewer clicks
     /// *Read screenshots* on the summary card (ADR 0038 item 4).
     private(set) var screenshotReader: (any DescriptionScreenshotReading)?
 
@@ -1314,7 +1315,10 @@ final class AppEnvironment {
         // no session exists until a reviewer expands a claims card (ADR 0026's amendment).
         claimExtractor = settings.intelligenceMode == .off ? nil : OnDeviceClaimExtractor()
         claimChecker = settings.intelligenceMode == .off ? nil : OnDeviceClaimChecker()
-        screenshotReader = settings.intelligenceMode == .off ? nil : OnDeviceScreenshotReader()
+        // Two switches: the tiers, and the screenshot switch that stands for its download host
+        // (off by default, ADR 0038 item 4). With either off there is no reader, so no button.
+        screenshotReader = settings.intelligenceMode == .off || !settings.screenshotReadingEnabled
+            ? nil : OnDeviceScreenshotReader()
     }
 
     /// Assembles the surfaces encrypted settings sync needs (ADR 0014).

@@ -84,7 +84,8 @@ enum SettingsSyncApplier {
             // The switch, never the verdicts: a classification is derived from local rows and is
             // re-derived when the pull request changes, so it is device state like the search
             // vectors (plan §3.A, ADR 0019's argument).
-            structuredTriageEnabled: settings.structuredTriageEnabled
+            structuredTriageEnabled: settings.structuredTriageEnabled,
+            screenshotReadingEnabled: settings.screenshotReadingEnabled
         )
         document.delegation = SyncedSettingsDocument.DelegationGroup(
             agentCLI: settings.agentCLI,
@@ -222,6 +223,9 @@ enum SettingsSyncApplier {
         // when the classifier exists it will re-consider the inbox on the next indexing pass —
         // the same one route the search index takes (ADR 0019).
         settings.structuredTriageEnabled = document.intelligence.structuredTriageEnabled
+        // The router, and with it the screenshot reader, is rebuilt from the settings after a
+        // document is applied, so the button follows the switch without anything further here.
+        settings.screenshotReadingEnabled = document.intelligence.screenshotReadingEnabled
 
         settings.agentCLI = document.delegation.agentCLI
         settings.localCheckouts = document.delegation.localCheckouts

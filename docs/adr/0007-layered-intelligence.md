@@ -316,21 +316,32 @@ ADR.
 **Why a click, and not the summary.** The inbox's summary runs whenever a row is selected — `j`/`k`
 through thirty rows asks thirty times — so "the summary is already a click" is not true of this
 app, and folding images into it would download every colleague's screenshots as the reviewer
-scrolls. The summary card instead offers *Read the 2 screenshots* when the description attaches
-GitHub-hosted uploads **and** `SystemLanguageModel.default.capabilities.contains(.vision)`; with
-either missing, there is no button. Selecting a row costs a Markdown scan
+scrolls. The summary card instead offers *Read the 2 screenshots* when **Settings → Intelligence → Read
+screenshots in descriptions on this Mac** is on (off by default — it is the switch
+CONTRIBUTING.md asks of a new host, synced like the other intelligence switches), the description
+attaches GitHub-hosted uploads, **and** `SystemLanguageModel.default.capabilities.contains(.vision)`;
+with any of them missing, there is no button and no request. The block is drawn under a failed text
+summary as well as a finished one, because it asks its own model. Selecting a row costs a Markdown scan
 (`ShepherdCore/Markdown/DescriptionImages.swift`) of a description already in the database, and
 nothing else.
 
 **What the click fetches.** GitHub's HTML rendering of the description (`Accept:
 application/vnd.github.html+json` on the `/pulls/{n}` read the detail already makes), which carries
 a short-lived signed `private-user-images.githubusercontent.com` link for each upload; then at most
-two of those links, with no token, at most 8 MB each, refused for any other host. Not the
+two of those links, with no token, at most 8 MB each (checked once the body has arrived, as the job
+log's cap is), refused for any other host — before the request, and again for the URL that
+answered it. A redirect from the upload hosts is not followed at all: `RedirectStrippingDelegate`
+answers `nil` for a request that started there, so the `3xx` itself comes back and is reported as a
+failure, and `HTTPResponse.url` carries the answering URL so that a transport which followed one
+anyway is caught by the client. Not the
 `github.com/user-attachments` URL the Markdown spells — it redirects to an S3 bucket that is not on
 CONTRIBUTING.md's host list — and never an image hosted anywhere else. Checked on 2026-09-22 against
 a public and a private repository: in both, the signed link answered `200 image/png` directly, with
 no redirect and no token, and its file name carried the upload's UUID, which is how each Markdown
-attachment is matched to its link. Nothing is cached or stored: the bytes and the answer live as
+attachment is matched to its link — only a UUID-shaped key counts, so a short one cannot match
+somebody else's file name. Images are refused undecoded when their header declares more than
+50 megapixels, since a PNG of one colour can be kilobytes on the wire and gigabytes as a bitmap.
+Nothing is cached or stored: the bytes and the answer live as
 long as the selection.
 
 **What the model is asked, and what it may say.** The title and each image's label — position, and
