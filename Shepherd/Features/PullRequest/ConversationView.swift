@@ -47,7 +47,11 @@ struct ConversationView: View {
         }
         .background(Theme.background)
         .onChange(of: model.detail, initial: true) { _, detail in
-            claims.refresh(detail: detail, extractor: environment.claimExtractor)
+            claims.refresh(
+                detail: detail,
+                extractor: environment.claimExtractor,
+                checker: environment.claimChecker
+            )
         }
     }
 

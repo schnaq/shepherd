@@ -303,6 +303,19 @@ final class ClaimsEvidenceModel {
     /// The read in flight, so a detail change can cancel it.
     private var loadTask: Task<Void, Never>?
 
+    /// What *Look closer* found, per line id (ADR 0026's 2026-09-22 amendment).
+    ///
+    /// Lives exactly as long as the review screen and the detail it was read from, like the rest
+    /// of the card: nothing here is stored.
+    private(set) var checks: [String: ClaimCheckState] = [:]
+
+    /// Whether this Mac can run *Look closer* — `false` until the checker said so.
+    private(set) var canCheckClaims = false
+
+    @ObservationIgnored private var checker: (any ClaimChecking)?
+    @ObservationIgnored private var checkTasks: [String: Task<Void, Never>] = [:]
+    @ObservationIgnored private var askedCheckAvailability = false
+
     /// Creates a model.
     /// - Parameters:
     ///   - issues: The issue read. `nil` — the default — is a card that never fetches, which is
@@ -325,13 +338,25 @@ final class ClaimsEvidenceModel {
     ///   - detail: The pull request, or `nil` while it is still loading.
     ///   - extractor: The tier-2 seam as it stands, or `nil` when the intelligence tiers are off
     ///     — in which case this model is exactly the tier-1 model it has always been.
-    func refresh(detail: PullRequestDetail?, extractor: (any ClaimExtracting)? = nil) {
+    func refresh(
+        detail: PullRequestDetail?,
+        extractor: (any ClaimExtracting)? = nil,
+        checker: (any ClaimChecking)? = nil
+    ) {
         // Assigned before the guard: the reviewer can switch the tiers off while the same pull
         // request is on screen, and that has to reach the next expansion.
         self.extractor = extractor
+        if checker == nil {
+            canCheckClaims = false
+            askedCheckAvailability = false
+        }
+        self.checker = checker
         guard builtFrom != detail else { return }
         let previous = builtFrom
         builtFrom = detail
+        // What the model pointed at belongs to the diff it read: a new head, or another pull
+        // request, makes every note a pointer into lines that may no longer be there.
+        cancelChecks()
         // A pass for a pull request that is gone: nobody will ever see its answer, so it is
         // stopped rather than left to finish on the battery, and the pull request that arrived
         // gets its own pass when the reviewer opens the card.
@@ -698,5 +723,69 @@ final class ClaimsEvidenceModel {
                 )
             }
         )
+    }
+}
+
+// MARK: - Look closer (ADR 0026's 2026-09-22 amendment, ADR 0038 item 2)
+
+/// Where one line's *Look closer* stands.
+enum ClaimCheckState: Equatable, Sendable {
+    /// The on-device session is reading the diff.
+    case checking
+    /// What it pointed at, already located in the diff by Shepherd.
+    case done(ClaimCheck)
+    /// Why there is no answer, in the tier's own words. The reviewer asked, so this is said.
+    case failed(String)
+}
+
+extension ClaimsEvidenceModel {
+    /// Asks the checker once per screen whether this Mac can look closer.
+    func prepareCheckAvailability() async {
+        guard let checker else {
+            canCheckClaims = false
+            return
+        }
+        guard !askedCheckAvailability else { return }
+        askedCheckAvailability = true
+        canCheckClaims = await checker.availability() == .available
+    }
+
+    /// Whether *Look closer* is offered on this line: only where Shepherd's own evidence
+    /// contradicts the claim or is not enough, because a ✓ line already carries the facts that
+    /// support it, and only once per line and detail.
+    func canCheck(_ line: ClaimsEvidenceReport.Line) -> Bool {
+        guard canCheckClaims, checker != nil, builtFrom != nil else { return false }
+        guard line.verdict.status != .ok else { return false }
+        switch checks[line.id] {
+        case nil, .failed: return true
+        case .checking, .done: return false
+        }
+    }
+
+    /// Reads the diff for one line, on the reviewer's click.
+    func check(_ line: ClaimsEvidenceReport.Line) async {
+        guard canCheck(line), let checker, let detail = builtFrom else { return }
+        let id = line.id
+        checks[id] = .checking
+        let task = Task { [weak self] in
+            let state: ClaimCheckState
+            do {
+                state = .done(try await checker.check(line, in: detail))
+            } catch {
+                state = .failed(error.localizedDescription)
+            }
+            guard !Task.isCancelled, let self, self.builtFrom == detail else { return }
+            self.checks[id] = state
+            self.checkTasks[id] = nil
+        }
+        checkTasks[id] = task
+        await task.value
+    }
+
+    /// Stops every check in flight and forgets every answer.
+    func cancelChecks() {
+        for task in checkTasks.values { task.cancel() }
+        checkTasks.removeAll()
+        checks.removeAll()
     }
 }

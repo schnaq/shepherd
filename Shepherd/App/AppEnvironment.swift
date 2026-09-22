@@ -228,6 +228,12 @@ final class AppEnvironment {
     /// the same thing here as `.onDevice`.
     private(set) var claimExtractor: (any ClaimExtracting)?
 
+    /// How a claims line is looked at more closely, or `nil` with the tiers off.
+    ///
+    /// On-device only for ``claimExtractor``'s reason, and inert until a reviewer clicks
+    /// *Look closer* (ADR 0026's 2026-09-22 amendment).
+    private(set) var claimChecker: (any ClaimChecking)?
+
     /// The signed-in session, when there is one.
     var session: SignedInSession? {
         if case .signedIn(let session) = phase { return session }
@@ -1273,6 +1279,7 @@ final class AppEnvironment {
         // Created here rather than held from launch, and created *inert*: nothing is loaded and
         // no session exists until a reviewer expands a claims card (ADR 0026's amendment).
         claimExtractor = settings.intelligenceMode == .off ? nil : OnDeviceClaimExtractor()
+        claimChecker = settings.intelligenceMode == .off ? nil : OnDeviceClaimChecker()
     }
 
     /// Assembles the surfaces encrypted settings sync needs (ADR 0014).

@@ -69,6 +69,9 @@ struct ClaimsEvidenceCard: View {
                     }
                 }
             }
+            .task(id: model.state.isExpanded) {
+                if model.state.isExpanded { await model.prepareCheckAvailability() }
+            }
         }
     }
 
@@ -189,15 +192,35 @@ struct ClaimsEvidenceCard: View {
                 .padding(.leading, 19)
             }
 
-            if line.verdict.status == .contradicted {
-                Button(String(localized: "Turn into a comment")) {
-                    turnIntoComment(line)
+            if line.verdict.status == .contradicted || model.canCheck(line) {
+                HStack(spacing: 6) {
+                    if line.verdict.status == .contradicted {
+                        Button(String(localized: "Turn into a comment")) {
+                            turnIntoComment(line)
+                        }
+                        .buttonStyle(SecondaryButtonStyle(height: 24, tint: Theme.accentText))
+                        .help(String(
+                            localized: "Puts this claim and the facts under it into your review summary. Nothing is sent."
+                        ))
+                    }
+                    if model.canCheck(line) {
+                        Button {
+                            Task { await model.check(line) }
+                        } label: {
+                            Label(String(localized: "Look closer"), systemImage: "sparkle.magnifyingglass")
+                        }
+                        .buttonStyle(SecondaryButtonStyle(height: 24))
+                        .help(String(
+                            localized: "The model on this Mac reads the diff for this claim and points at the lines that bear on it. Nothing leaves the Mac."
+                        ))
+                    }
                 }
-                .buttonStyle(SecondaryButtonStyle(height: 24, tint: Theme.accentText))
                 .padding(.leading, 19)
-                .help(String(
-                    localized: "Puts this claim and the facts under it into your review summary. Nothing is sent."
-                ))
+            }
+
+            if let check = model.checks[line.id] {
+                ClaimCheckBlock(state: check, onOpenFile: onOpenFile)
+                    .padding(.leading, 19)
             }
 
             Divider().overlay(Theme.hairline)
