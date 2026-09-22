@@ -287,7 +287,11 @@ final class DelegationModel: Identifiable {
     var guardrailSummary: String {
         var parts = [
             configuration.permissionMode.title,
-            String(localized: "\(configuration.maxTurns) turns max"),
+            // `0` is "no limit" (Settings → Delegation), and the CLI is then run without
+            // `--max-turns` — so the summary says that rather than "0 turns max".
+            configuration.maxTurns > 0
+                ? String(localized: "\(configuration.maxTurns) turns max")
+                : String(localized: "no turn limit"),
         ]
         if let budget = configuration.maxBudgetUSD {
             parts.append(String(localized: "$\(AgentCLIConfiguration.format(budget: budget)) max"))

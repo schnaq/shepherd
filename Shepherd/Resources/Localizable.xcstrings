@@ -16630,6 +16630,296 @@
           }
         }
       }
+    },
+    "%@ (not found on this Mac)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ (auf diesem Mac nicht gefunden)"
+          }
+        }
+      }
+    },
+    "%@ is not in your checkout of %@ — it may be on another branch than this pull request. Opened the checkout instead.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ fehlt in deinem Checkout von %@ – er ist vielleicht auf einem anderen Branch als dieser pull request. Stattdessen wurde der Checkout geöffnet."
+          }
+        }
+      }
+    },
+    "%@ is not installed on this Mac. Choose another editor in Settings → Delegation.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ist auf diesem Mac nicht installiert. Wähle unter Einstellungen → Delegation einen anderen Editor."
+          }
+        }
+      }
+    },
+    "Choose the folder where you cloned %@. Delegation uses the same checkout.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wähle den Ordner, in den du %@ geklont hast. Die Delegation nutzt denselben Checkout."
+          }
+        }
+      }
+    },
+    "Could not open the editor": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editor konnte nicht geöffnet werden"
+          }
+        }
+      }
+    },
+    "Could not run the editor command": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editor-Befehl konnte nicht ausgeführt werden"
+          }
+        }
+      }
+    },
+    "Cursor": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cursor"
+          }
+        }
+      }
+    },
+    "EDITOR": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EDITOR"
+          }
+        }
+      }
+    },
+    "Editor": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editor"
+          }
+        }
+      }
+    },
+    "IntelliJ IDEA": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IntelliJ IDEA"
+          }
+        }
+      }
+    },
+    "Link a Local Checkout…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokalen Checkout verknüpfen…"
+          }
+        }
+      }
+    },
+    "No limit": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unbegrenzt"
+          }
+        }
+      }
+    },
+    "No local checkout is linked for %@ yet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für %@ ist noch kein lokaler Checkout verknüpft."
+          }
+        }
+      }
+    },
+    "Open in %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In %@ öffnen"
+          }
+        }
+      }
+    },
+    "Open in Default App": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Im Standardprogramm öffnen"
+          }
+        }
+      }
+    },
+    "Open with Editor Command": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit Editor-Befehl öffnen"
+          }
+        }
+      }
+    },
+    "Opens the file in your local checkout. Lines are counted on the pull request's head, so they only match when the checkout is on that commit.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnet die Datei in deinem lokalen Checkout. Zeilen zählen ab dem Head des pull requests und stimmen nur, wenn der Checkout auf diesem Commit steht."
+          }
+        }
+      }
+    },
+    "Runs until the agent is done. The spend cap below still applies when it is on.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Läuft, bis der Agent fertig ist. Die Ausgabengrenze unten gilt weiterhin, wenn sie aktiv ist."
+          }
+        }
+      }
+    },
+    "System default": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Systemstandard"
+          }
+        }
+      }
+    },
+    "The editor command %@ reported an error.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Editor-Befehl %@ hat einen Fehler gemeldet."
+          }
+        }
+      }
+    },
+    "The editor command is empty. Set one in Settings → Delegation.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Editor-Befehl ist leer. Lege unter Einstellungen → Delegation einen fest."
+          }
+        }
+      }
+    },
+    "The editor command must contain {file} so Shepherd knows where the file goes.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Editor-Befehl muss {file} enthalten, damit Shepherd weiß, wohin die Datei gehört."
+          }
+        }
+      }
+    },
+    "This path cannot be passed to the editor.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Pfad kann nicht an den Editor übergeben werden."
+          }
+        }
+      }
+    },
+    "Visual Studio Code": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Visual Studio Code"
+          }
+        }
+      }
+    },
+    "Write the full path to “%@” in the editor command, for example /usr/local/bin/%@. Apps started from the Dock do not see your shell’s PATH.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gib im Editor-Befehl den vollständigen Pfad zu „%@“ an, zum Beispiel /usr/local/bin/%@. Aus dem Dock gestartete Apps sehen den PATH deiner Shell nicht."
+          }
+        }
+      }
+    },
+    "macOS could not open %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS konnte %@ nicht öffnen."
+          }
+        }
+      }
+    },
+    "no turn limit": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "keine Turn-Grenze"
+          }
+        }
+      }
+    },
+    "{file} becomes the file's full path and always exactly one argument, {line} the line (1 when none is known). Split like a shell would, but no shell ever runs it. Start with the full path to the program: apps opened from the Dock do not see your shell's PATH.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{file} wird zum vollständigen Pfad der Datei und immer zu genau einem Argument, {line} zur Zeile (1, wenn keine bekannt ist). Aufgeteilt wie von einer Shell, aber nie von einer ausgeführt. Beginne mit dem vollständigen Pfad zum Programm: Aus dem Dock gestartete Apps sehen den PATH deiner Shell nicht."
+          }
+        }
+      }
+    },
+    "“Open in editor” on a file in the review opens it in the checkout above, at the line when there is one. Lines are counted on the pull request's head, so they match when your checkout is on that commit.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„Im Editor öffnen“ auf einer Datei im Review öffnet sie im Checkout oben, an der Zeile, wenn es eine gibt. Zeilen zählen ab dem Head des pull requests und stimmen, wenn dein Checkout auf diesem Commit steht."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

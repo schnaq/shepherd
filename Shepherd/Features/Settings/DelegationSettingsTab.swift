@@ -11,6 +11,8 @@ struct DelegationSettingsTab: View {
     @State private var detectState: DetectState = .idle
     @State private var newRepoFullName = ""
     @State private var repoError: String?
+    /// Which editors this Mac has, read when the tab appears rather than on every redraw.
+    @State private var installedEditors: Set<EditorKind> = []
 
     /// What the "Detect" button last found.
     private enum DetectState: Equatable {
@@ -26,6 +28,7 @@ struct DelegationSettingsTab: View {
             guardrailCard
             sessionCard
             checkoutCard
+            editorCard
             automaticCard
             policyCard
         }
@@ -122,11 +125,20 @@ struct DelegationSettingsTab: View {
                     .foregroundStyle(Theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
 
-                LabeledStepperRow(
-                    title: String(localized: "Max turns"),
-                    value: turnsBinding,
-                    range: 1...200
-                )
+                HStack(spacing: 12) {
+                    LabeledStepperRow(
+                        title: String(localized: "Max turns"),
+                        value: turnsBinding,
+                        range: 1...200
+                    )
+                    .disabled(isTurnLimitOff)
+                    .opacity(isTurnLimitOff ? 0.5 : 1)
+                    Toggle(String(localized: "No limit"), isOn: noTurnLimitBinding)
+                        .toggleStyle(.checkbox)
+                        .help(String(
+                            localized: "Runs until the agent is done. The spend cap below still applies when it is on."
+                        ))
+                }
 
                 HStack(spacing: 12) {
                     Text(String(localized: "Budget"))
@@ -262,6 +274,51 @@ struct DelegationSettingsTab: View {
                 }
             }
         }
+    }
+
+    // MARK: - Editor (ADR 0039)
+
+    private var editorCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 10) {
+                CardTitle(String(localized: "EDITOR"))
+                Text(String(
+                    localized: "“Open in editor” on a file in the review opens it in the checkout above, at the line when there is one. Lines are counted on the pull request's head, so they match when your checkout is on that commit."
+                ))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+
+                Picker(String(localized: "Editor"), selection: editorKindBinding) {
+                    ForEach(EditorKind.allCases) { kind in
+                        Text(editorTitle(kind)).tag(kind)
+                    }
+                }
+                .pickerStyle(.radioGroup)
+                .labelsHidden()
+
+                if environment.settings.editor.kind == .custom {
+                    LabeledField(
+                        label: String(localized: "Command"),
+                        placeholder: EditorConfiguration.exampleCustomCommandTemplate,
+                        text: editorCommandBinding
+                    )
+                    Text(String(
+                        localized: "{file} becomes the file's full path and always exactly one argument, {line} the line (1 when none is known). Split like a shell would, but no shell ever runs it. Start with the full path to the program: apps opened from the Dock do not see your shell's PATH."
+                    ))
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .onAppear { installedEditors = EditorOpener.installedKinds() }
+    }
+
+    /// The picker row for one editor, with a note when this Mac does not have it.
+    private func editorTitle(_ kind: EditorKind) -> String {
+        guard !installedEditors.contains(kind) else { return kind.title }
+        return String(localized: "\(kind.title) (not found on this Mac)")
     }
 
     // MARK: - Automatic delegation (ADR 0016)
@@ -463,10 +520,46 @@ struct DelegationSettingsTab: View {
         )
     }
 
+    /// Whether `--max-turns` is left off entirely. `0` is the stored form of "no limit", which
+    /// ``AgentCLIConfiguration`` has always read that way (it only passes a positive cap).
+    private var isTurnLimitOff: Bool { environment.settings.agentCLI.maxTurns <= 0 }
+
     private var turnsBinding: Binding<Int> {
         Binding(
-            get: { environment.settings.agentCLI.maxTurns },
-            set: { environment.settings.agentCLI.maxTurns = $0 }
+            // While the limit is off the disabled stepper shows the default it would come back
+            // on at, rather than a `0` that is outside its own range.
+            get: {
+                let turns = environment.settings.agentCLI.maxTurns
+                return turns > 0 ? turns : AgentCLIConfiguration.defaultMaxTurns
+            },
+            set: { environment.settings.agentCLI.maxTurns = max(1, $0) }
+        )
+    }
+
+    /// Switching the limit off stores `0`; switching it back on restores the default rather than
+    /// a remembered number, so what the stepper shows while disabled is exactly what returns.
+    private var noTurnLimitBinding: Binding<Bool> {
+        Binding(
+            get: { isTurnLimitOff },
+            set: { isOff in
+                environment.settings.agentCLI.maxTurns = isOff
+                    ? 0
+                    : AgentCLIConfiguration.defaultMaxTurns
+            }
+        )
+    }
+
+    private var editorKindBinding: Binding<EditorKind> {
+        Binding(
+            get: { environment.settings.editor.kind },
+            set: { environment.settings.editor.kind = $0 }
+        )
+    }
+
+    private var editorCommandBinding: Binding<String> {
+        Binding(
+            get: { environment.settings.editor.customCommandTemplate },
+            set: { environment.settings.editor.customCommandTemplate = $0 }
         )
     }
 

@@ -5,6 +5,8 @@ import SwiftUI
 struct ReviewFileListView: View {
     /// The review model.
     let model: ReviewModel
+    /// "Open in …" on each row's context menu (ADR 0039); `nil` until the summary has loaded.
+    var editor: EditorContext?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -140,6 +142,13 @@ struct ReviewFileListView: View {
         .buttonStyle(.plain)
         .padding(.horizontal, 8)
         .help(priority.file.path)
+        // Not for a deleted file: the head has no such path, so the menu could only ever open
+        // the checkout's folder and say the file is missing, which the row already says.
+        .openInEditorMenu(
+            priority.file.status == .removed ? nil : editor,
+            path: priority.file.path,
+            line: nil
+        )
     }
 
     @ViewBuilder
@@ -196,6 +205,8 @@ struct ReviewFileHeader: View {
     let model: ReviewModel
     /// The write actions.
     let actions: PullRequestActions
+    /// "Open in …" for the file on screen (ADR 0039); `nil` until the summary has loaded.
+    var editor: EditorContext?
     /// Live, and read for the same reason ``ReviewScreen`` reads it: it is half of what
     /// ``DiffRenderer/automatic`` means, so turning VoiceOver on mid-review has to change this
     /// bar as well as the renderer under it.
@@ -263,6 +274,10 @@ struct ReviewFileHeader: View {
                     .fixedSize()
                 }
 
+                if let file = model.selectedFile, file.status != .removed, let editor {
+                    openInEditorButton(file: file, editor: editor)
+                }
+
                 if let file = model.selectedFile {
                     let isWriting = actions.activity.isRunning(model.prID, .viewed)
                     Button {
@@ -297,6 +312,33 @@ struct ReviewFileHeader: View {
         .padding(.horizontal, 14)
         .frame(height: 38)
         .background(Theme.panel)
+    }
+
+    /// The header's "Open in …": an icon, because the bar already carries a path, a chip and two
+    /// segmented controls, with the editor's name in the tooltip and the spoken label. Without a
+    /// linked clone it links one first, exactly like the file list's menu item.
+    ///
+    /// No line: the diff's cursor lives on the far side of the bridge, and this task does not
+    /// widen the bridge for it. The claims and CI cards pass the line they name.
+    private func openInEditorButton(file: ChangedFile, editor: EditorContext) -> some View {
+        let hasCheckout = editor.opener.hasCheckout(for: editor.repo)
+        let title = hasCheckout
+            ? editor.opener.openTitle
+            : String(localized: "Link a Local Checkout…")
+        return Button {
+            if hasCheckout {
+                editor.opener.open(repo: editor.repo, path: file.path, line: nil)
+            } else {
+                editor.opener.linkCheckoutAndOpen(repo: editor.repo, path: file.path, line: nil)
+            }
+        } label: {
+            Image(systemName: "chevron.left.forwardslash.chevron.right")
+                .font(.system(size: 11.5))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Theme.textSecondary)
+        .help(hasCheckout ? title + " — " + EditorOpener.openHelp : title)
+        .accessibilityLabel(Text(title))
     }
 
     private var tabBinding: Binding<ReviewModel.Tab> {

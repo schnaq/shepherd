@@ -42,6 +42,11 @@ struct CIDiagnosisCard: View {
     let cloudBadge: String?
     /// Opens the named file — and line, when there is one — in the diff viewer.
     let onOpenFile: (String, Int?) -> Void
+    /// "Open in …" on the named file, as a context menu (ADR 0039); `nil` for none.
+    ///
+    /// Offered on the plain-text form too: a failing test the pull request did not touch is not
+    /// in the diff, but it is in the reviewer's clone — which is the one place it can be read.
+    var editor: EditorContext?
     /// Asks the cloud tier with the full log. Only ever called from the button that says so.
     let onAskCloud: () -> Void
     /// Opens the delegation sheet with the diagnosis as the finding.
@@ -184,6 +189,7 @@ struct CIDiagnosisCard: View {
             }
             .buttonStyle(.plain)
             .help(String(localized: "Open this line in the diff"))
+            .openInEditorMenu(editor, path: file, line: line)
         } else {
             HStack(spacing: 4) {
                 Text(text)
@@ -194,6 +200,7 @@ struct CIDiagnosisCard: View {
                     .font(.system(size: 10.5))
             }
             .foregroundStyle(Theme.textMuted)
+            .openInEditorMenu(editor, path: file, line: line)
         }
     }
 

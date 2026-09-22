@@ -163,6 +163,22 @@ final class AgentCLITests: XCTestCase {
         XCTAssertFalse(invocation.arguments.contains("--max-budget-usd"))
     }
 
+    func testNoTurnLimitOmitsTheFlagEntirelyAndSaysSo() throws {
+        // `0` is what Settings → Delegation's "No limit" stores; the default stays 25.
+        XCTAssertEqual(AgentCLIConfiguration().maxTurns, 25)
+        var configuration = AgentCLIConfiguration()
+        configuration.maxTurns = 0
+        let invocation = try configuration.invocation(
+            prompt: "p",
+            worktree: worktree,
+            executable: binary
+        )
+        XCTAssertFalse(invocation.arguments.contains("--max-turns"))
+        // And it survives the stored form as `0`, not as "absent → default".
+        let stored = try JSONEncoder().encode(configuration)
+        XCTAssertEqual(try JSONDecoder().decode(AgentCLIConfiguration.self, from: stored).maxTurns, 0)
+    }
+
     func testFractionalBudgetsAndCustomToolsArePassedThrough() throws {
         var configuration = AgentCLIConfiguration()
         configuration.maxBudgetUSD = 2.5

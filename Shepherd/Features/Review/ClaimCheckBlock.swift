@@ -16,6 +16,8 @@ import SwiftUI
 struct ClaimCheckBlock: View {
     let state: ClaimCheckState
     let onOpenFile: (String, Int?) -> Void
+    /// "Open in …" on each excerpt's link, as a context menu (ADR 0039); `nil` for none.
+    var editor: EditorContext?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -98,6 +100,7 @@ struct ClaimCheckBlock: View {
             }
             .buttonStyle(.plain)
             .help(String(localized: "Open this line in the diff"))
+            .openInEditorMenu(editor, path: note.path, line: note.line)
         }
     }
 

@@ -87,6 +87,7 @@ struct ConversationView: View {
             onOpenFile: { path, line in
                 model.reveal(path: path, line: line)
             },
+            editor: editorContext,
             currentSummary: { model.summaryText },
             onWriteSummary: { text in
                 model.summaryText = text
@@ -356,6 +357,16 @@ struct ConversationView: View {
         }
     }
 
+    /// "Open in …" for the `path:line` links of the two cards on this tab (ADR 0039), or `nil`
+    /// before the pull request's summary has loaded and there is no repository to resolve against.
+    private var editorContext: EditorContext? {
+        guard let repo = model.summary?.repo else { return nil }
+        return EditorContext(
+            opener: EditorOpener(settings: environment.settings, toasts: environment.toasts),
+            repo: repo
+        )
+    }
+
     /// The card under the checks list.
     @ViewBuilder
     private func diagnosisCard(_ state: CIDiagnosisState) -> some View {
@@ -369,6 +380,7 @@ struct ConversationView: View {
             onOpenFile: { path, line in
                 model.reveal(path: path, line: line)
             },
+            editor: editorContext,
             onAskCloud: {
                 // The same check, found again by name: the card holds the name rather than the
                 // run, and the second rung must be about the check the reviewer asked about.

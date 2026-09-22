@@ -91,6 +91,7 @@ enum SettingsSyncApplier {
             localCheckouts: settings.localCheckouts,
             autoDelegation: settings.autoDelegation
         )
+        document.editor = SyncedSettingsDocument.EditorGroup(configuration: settings.editor)
         document.automation = SyncedSettingsDocument.AutomationGroup(
             webhooksEnabled: settings.webhooksEnabled,
             webhookURL: settings.webhookURL,
@@ -225,6 +226,8 @@ enum SettingsSyncApplier {
         settings.agentCLI = document.delegation.agentCLI
         settings.localCheckouts = document.delegation.localCheckouts
         settings.autoDelegation = document.delegation.autoDelegation
+        // Nothing to apply beyond the value: every "Open in …" item reads it when it is drawn.
+        settings.editor = document.editor.configuration
 
         settings.webhooksEnabled = document.automation.webhooksEnabled
         settings.webhookURL = document.automation.webhookURL
