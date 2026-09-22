@@ -21,6 +21,10 @@ struct InboxDetailPanel: View {
     @State private var isCommentSheetPresented = false
     @State private var commentBody = ""
 
+    /// The selected pull request's screenshot reading (ADR 0038 item 4). Held here for the
+    /// composer's reason above, and refreshed from the detail without ever downloading anything.
+    @State private var screenshots = ScreenshotReadingModel()
+
     var body: some View {
         Group {
             if let row = model.selectedRow {
@@ -34,6 +38,11 @@ struct InboxDetailPanel: View {
             }
         }
         .background(Theme.panel)
+        // Keyed by the detail and by whether a reader exists, so switching the tiers off takes
+        // the button away at once. A Markdown scan and an availability question; no request.
+        .task(id: ScreenshotRefreshKey(detail: model.detail, hasReader: environment.screenshotReader != nil)) {
+            await screenshots.refresh(detail: model.detail, reader: environment.screenshotReader)
+        }
         .sheet(isPresented: $isCommentSheetPresented) {
             if let row = model.selectedRow {
                 PullRequestCommentSheet(summary: row, actions: actions, text: $commentBody)
@@ -184,6 +193,7 @@ struct InboxDetailPanel: View {
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.textSecondary)
                     }
+                    screenshotBlock
                 }
             }
         case .unavailable(let reason), .failed(let reason):
@@ -196,6 +206,19 @@ struct InboxDetailPanel: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+        }
+    }
+
+    /// The screenshot reading, under the summary it belongs with. Its own seam and its own tier:
+    /// whichever tier wrote the summary, the images are read on this Mac or not at all.
+    @ViewBuilder
+    private var screenshotBlock: some View {
+        if screenshots.state != .none {
+            ScreenshotReadingBlock(state: screenshots.state) {
+                guard let detail = model.detail else { return }
+                screenshots.read(detail: detail, fetcher: environment.descriptionImageFetcher)
+            }
+            .padding(.top, 2)
         }
     }
 
@@ -446,5 +469,20 @@ struct PriorityRowView: View {
         let rest = priority.reasons.filter { !$0.isCategory }.map { $0.localizedText() }
         guard !rest.isEmpty else { return head }
         return head + "\n" + rest.joined(separator: "\n")
+    }
+}
+
+/// What the screenshot refresh depends on: the pull request, its description and whether a reader
+/// exists. The detail's other fields — checks, threads — change on every background refetch and
+/// must not restart it.
+private struct ScreenshotRefreshKey: Equatable {
+    var id: String?
+    var body: String?
+    var hasReader: Bool
+
+    init(detail: PullRequestDetail?, hasReader: Bool) {
+        id = detail?.id
+        body = detail?.bodyMarkdown
+        self.hasReader = hasReader
     }
 }
