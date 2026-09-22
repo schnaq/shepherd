@@ -45,6 +45,9 @@ struct TelemetrySettingsCard: View {
                     Button(String(localized: "Show what would be sent")) { isShowingPayload = true }
                     Button(String(localized: "Clear queue")) { environment.telemetry?.clearQueue() }
                         .disabled(environment.telemetry == nil)
+                    Spacer(minLength: 0)
+                    Link(String(localized: "Privacy statement"), destination: AppConfig.privacyPolicyURL)
+                        .help(String(localized: "What Shepherd stores, what leaves your Mac, and to whom"))
                 }
             }
         }
