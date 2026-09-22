@@ -198,7 +198,9 @@ bumping a dependency that ships inside the app also means a line in
     `Accept: application/vnd.github.html+json`, not cached, whose rendering of the description
     carries a short-lived signed link for every upload; then at most two plain `GET`s of those
     links on GitHub's upload hosts, `private-user-images.githubusercontent.com` (or the older
-    `user-images.githubusercontent.com` a description may still name), with no `Authorization`
+    `user-images.githubusercontent.com` a description may still name) — one more
+    `*.githubusercontent.com` host beside the job-log and release-asset ones already named here,
+    and reached the same way: a signed URL, no `Authorization`
     header, at most 8 MB each, refused by the client for any other host. The
     `github.com/user-attachments/assets/…` URL a description spells is never requested, because it
     redirects to an Amazon S3 bucket that is not on this list, and an image a description links from

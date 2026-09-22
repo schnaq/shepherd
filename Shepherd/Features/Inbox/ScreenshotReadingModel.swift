@@ -83,11 +83,12 @@ final class ScreenshotReadingModel {
     }
 
     /// Downloads at most ``ShepherdCore/DescriptionImages/maximumImages`` screenshots and reads
-    /// them on this Mac.
+    /// them on this Mac. Returns when the reading has landed or been superseded — the
+    /// ``ClaimsEvidenceModel/check(_:)`` shape, so a caller (and a test) can await it.
     /// - Parameters:
     ///   - detail: The selected pull request — the one ``refresh(detail:reader:)`` last saw.
     ///   - fetcher: The signed-in client, or `nil` when signed out.
-    func read(detail: PullRequestDetail, fetcher: (any DescriptionImageFetching)?) {
+    func read(detail: PullRequestDetail, fetcher: (any DescriptionImageFetching)?) async {
         guard case .offered = state, let reader else { return }
         guard let fetcher else {
             state = .failed(String(localized: "Sign in to GitHub to read the screenshots."))
@@ -98,11 +99,13 @@ final class ScreenshotReadingModel {
         let repo = detail.summary.repo
         let number = detail.summary.number
         state = .reading
-        task = Task { [weak self] in
+        let task = Task { [weak self] in
             let outcome = await Self.run(request, repo: repo, number: number, fetcher: fetcher, reader: reader)
             guard let self, !Task.isCancelled, self.key == expected else { return }
             self.state = outcome
         }
+        self.task = task
+        await task.value
     }
 
     /// The whole read: the rendered description, the images, the model.

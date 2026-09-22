@@ -98,13 +98,6 @@ final class ScreenshotReadingTests: XCTestCase {
         )
     }
 
-    private func settle(_ model: ScreenshotReadingModel) async {
-        for _ in 0..<200 {
-            if case .reading = model.state { await Task.yield(); continue }
-            return
-        }
-    }
-
     // MARK: - Offering
 
     func testADescriptionWithUploadsIsOfferedWithoutFetchingAnything() async {
@@ -143,8 +136,7 @@ final class ScreenshotReadingTests: XCTestCase {
         let pullRequest = detail(body: "![a](\(first)) ![b](\(second)) ![c](\(third))")
         await model.refresh(detail: pullRequest, reader: reader)
 
-        model.read(detail: pullRequest, fetcher: fetcher)
-        await settle(model)
+        await model.read(detail: pullRequest, fetcher: fetcher)
 
         guard case .read(let reading) = model.state else { return XCTFail("expected a reading, got \(model.state)") }
         XCTAssertEqual(reading.readCount, 2)
@@ -161,8 +153,7 @@ final class ScreenshotReadingTests: XCTestCase {
         let pullRequest = detail(body: "![a](\(first)) ![b](\(second))")
         await model.refresh(detail: pullRequest, reader: reader)
 
-        model.read(detail: pullRequest, fetcher: fetcher)
-        await settle(model)
+        await model.read(detail: pullRequest, fetcher: fetcher)
 
         let requests = await reader.requests
         XCTAssertEqual(requests.first?.images.map(\.url.absoluteString), [second])
@@ -175,8 +166,7 @@ final class ScreenshotReadingTests: XCTestCase {
         let pullRequest = detail(body: "![a](\(first))")
         await model.refresh(detail: pullRequest, reader: FakeReader(failure: .contextExceeded))
 
-        model.read(detail: pullRequest, fetcher: FakeFetcher(html: html))
-        await settle(model)
+        await model.read(detail: pullRequest, fetcher: FakeFetcher(html: html))
 
         guard case .failed(let reason) = model.state else { return XCTFail("expected a failure") }
         XCTAssertFalse(reason.localizedCaseInsensitiveContains("cloud"))
@@ -188,7 +178,7 @@ final class ScreenshotReadingTests: XCTestCase {
         let pullRequest = detail(body: "![a](\(first))")
         await model.refresh(detail: pullRequest, reader: reader)
 
-        model.read(detail: pullRequest, fetcher: nil)
+        await model.read(detail: pullRequest, fetcher: nil)
 
         guard case .failed = model.state else { return XCTFail("expected a failure") }
         let requests = await reader.requests
@@ -200,8 +190,7 @@ final class ScreenshotReadingTests: XCTestCase {
         let reader = FakeReader()
         let pullRequest = detail(body: "![a](\(first))")
         await model.refresh(detail: pullRequest, reader: reader)
-        model.read(detail: pullRequest, fetcher: FakeFetcher(html: html))
-        await settle(model)
+        await model.read(detail: pullRequest, fetcher: FakeFetcher(html: html))
 
         // The same detail again — a background refetch — keeps it.
         await model.refresh(detail: pullRequest, reader: reader)
