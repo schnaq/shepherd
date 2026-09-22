@@ -29,11 +29,11 @@ cask "shepherd" do
   # Sparkle keeps the installed copy current, so Homebrew should not fight it: `brew upgrade`
   # leaves an app with `auto_updates true` alone unless the cask's version moved.
   auto_updates true
-  # ADR 0038: macOS 27 (Golden Gate) and Apple Silicon only. A bare symbol already means "this version
-  # or newer" in a cask, and `brew style` rewrites `">= :golden_gate"` to this; the blank line above it
-  # goes for the same reason — the three stanzas are one group.
-  depends_on macos: :golden_gate
+  # ADR 0038: Apple Silicon and macOS 27 (Golden Gate) only, in the order `brew style` wants. A bare
+  # symbol already means "this version or newer" in a cask, and `brew style` rewrites
+  # `">= :golden_gate"` to it; no blank line above, because the three stanzas are one group.
   depends_on arch: :arm64
+  depends_on macos: :golden_gate
 
   app "Shepherd.app"
 
