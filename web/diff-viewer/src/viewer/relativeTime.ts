@@ -69,13 +69,14 @@ export function relativeTime(isoTimestamp: string, nowMs: number, locale: string
 /**
  * Full timestamp for the card's `title` tooltip.
  *
- * In the app's language when there is one, in the Mac's own time zone (or `timeZone`, which is
- * how the tests pin it); without a locale, the zone-independent UTC form it always was.
+ * In the app's language when it is not English, in the Mac's own time zone (or `timeZone`, which
+ * is how the tests pin it). English — sent or not — keeps the zone-independent UTC form it always
+ * was, for the same reason `relativeTime` keeps its compact English: nothing changes for English.
  */
 export function absoluteTime(isoTimestamp: string, locale: string | null = null, timeZone?: string): string {
   const then = new Date(isoTimestamp);
   if (Number.isNaN(then.getTime())) return isoTimestamp;
-  if (locale !== null) {
+  if (locale !== null && !isEnglish(locale)) {
     try {
       return new Intl.DateTimeFormat(locale, {
         dateStyle: 'medium',

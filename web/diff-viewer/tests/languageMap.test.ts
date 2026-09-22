@@ -157,6 +157,11 @@ describe('absoluteTime', () => {
     expect(absoluteTime('2026-08-30T09:00:00Z')).toBe('2026-08-30 09:00:00 UTC');
   });
 
+  it('keeps the UTC form when the app says English, whatever the zone', () => {
+    expect(absoluteTime('2026-08-30T09:00:00Z', 'en', 'Europe/Berlin')).toBe('2026-08-30 09:00:00 UTC');
+    expect(absoluteTime('2026-08-30T09:00:00Z', 'en-GB')).toBe('2026-08-30 09:00:00 UTC');
+  });
+
   it('follows the locale and the zone it is given', () => {
     expect(absoluteTime('2026-08-30T09:00:00Z', 'de', 'UTC')).toBe('30.08.2026, 09:00');
     expect(absoluteTime('2026-08-30T09:00:00Z', 'de', 'Europe/Berlin')).toBe('30.08.2026, 11:00');

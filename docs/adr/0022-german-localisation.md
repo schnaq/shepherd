@@ -342,9 +342,10 @@ are `Intl.RelativeTimeFormat` with `style: 'short'` ("jetzt", "vor 5 Min.", "vor
 the buckets floor elapsed time, and "gestern" or "letzte Woche" would be calendar claims they
 cannot back — "letzte Woche" for eight days ago on a Monday is two weeks back. English keeps the
 compact hand-written form ("3h ago") the card was designed around, because `Intl`'s short English
-("3 hr. ago") is longer. The tooltip's absolute time becomes `Intl.DateTimeFormat` in the Mac's
-time zone instead of a UTC ISO string. The page's `lang` follows the locale, so VoiceOver reads the
-German cards with a German voice.
+("3 hr. ago") is longer. In German the tooltip's absolute time becomes `Intl.DateTimeFormat` in
+the Mac's time zone ("30.08.2026, 11:00"); English keeps its UTC ISO string, so nothing on an
+English Mac changes. The page's `lang` follows the locale, so VoiceOver reads the German cards with
+a German voice.
 
 **Monaco's own strings come along, by a different door.** The "N hidden lines" bar, *Show Unchanged
 Region*, Monaco's hovers and its accessibility help are Monaco's, looked up through its `nls`
