@@ -101,3 +101,25 @@ holds tens of rows.
 
 No schema change and no new request: this is one more `SELECT` of the `outbox` table, and the write
 path, the preflight and `mutationSent` are untouched.
+
+## Amendment (2026-09-22): the row says what the outbox is doing, and a failure is retried where it is seen
+
+The queue was honest and hard to see: a merge on its way looked like a pull request nobody had
+touched until the next sweep removed it, and a failed write was visible only in Settings → Sync,
+where a reviewer found it by accident. Nothing about the queue changes; what changes is where it is
+read.
+
+- **One chip per row and in the review header** (`Features/Inbox/RowWriteState.swift`), from three
+  sources that already existed: `ActionActivity` for the click being written (*Merging…*), the
+  observed outbox rows for what outlives it (*Merge queued*, *Sending*, *Parked*, *Not sent*), and
+  the drain's `mutationSent` for *Merged*. **Merged is never shown on the click** — only after
+  GitHub answered — so the optimistic part is "on its way", not the outcome. Failure outranks
+  parked, parked outranks a merge in flight, because the order is what needs the reviewer most.
+- **Retry in place.** The detail panel's queue line and the review header offer *Retry*, which is
+  `SignedInSession.retryFailedWrites(for:)`: the same reset-and-drain Settings → Sync's per-row
+  button does, for the failed rows of that one target. Settings keeps its list and its *Discard*.
+- **A confirmed merge asks for one sweep**, three seconds later and coalesced across a drain that
+  confirmed several, so the merged pull request leaves the inbox now instead of at the next
+  scheduled sweep. The delay is for GitHub's search index, which the inbox query reads.
+- The review header's *Merge* is busy while the merge is written and disabled while one is queued
+  or confirmed, so a second press cannot queue a second merge behind the first.
