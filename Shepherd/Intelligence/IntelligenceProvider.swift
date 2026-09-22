@@ -86,8 +86,9 @@ protocol IntelligenceProvider: Sendable {
     /// the piece that just arrived. A reviewer's text field is not a terminal — it holds a value,
     /// the reviewer may be about to type into it, and a caller that had to concatenate deltas
     /// itself would be one dropped element away from writing a draft with a hole in it. Cumulative
-    /// snapshots also happen to be what the on-device model produces natively, so the two cloud
-    /// tiers do the accumulating where the wire shape is known rather than in the UI.
+    /// snapshots also happen to be what a `LanguageModelSession` produces natively — on-device and
+    /// Claude alike — so the OpenAI-compatible tier does the accumulating where its wire shape is
+    /// known rather than in the UI.
     ///
     /// Same product rule as ``draftReviewSummary(_:)``: this fills a field, nothing else.
     /// - Parameter request: The context, already inside the tier's token budget.

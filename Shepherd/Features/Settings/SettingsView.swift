@@ -1154,7 +1154,7 @@ struct IntelligenceSettingsTab: View {
                         } else {
                             LabeledField(
                                 label: String(localized: "Model"),
-                                placeholder: AnthropicProvider.defaultModel,
+                                placeholder: ClaudeProvider.defaultModelID,
                                 text: anthropicModelBinding
                             )
                         }

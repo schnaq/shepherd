@@ -78,72 +78,6 @@ final class ServerSentEventTests: XCTestCase {
     // MARK: - Anthropic frames
 
     /// A recorded `stream: true` response: the message envelope, two text deltas, the stops.
-    private let anthropicBody = """
-        event: message_start
-        data: {"type":"message_start","message":{"id":"msg_01","type":"message","role":"assistant","content":[],"stop_reason":null,"usage":{"input_tokens":812,"output_tokens":1}}}
-
-        event: content_block_start
-        data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
-
-        : ping
-
-        event: content_block_delta
-        data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"{\\"draft\\": \\"The retry bound"}}
-
-        event: content_block_delta
-        data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":" is not applied to the second upload.\\"}"}}
-
-        event: content_block_stop
-        data: {"type":"content_block_stop","index":0}
-
-        event: message_delta
-        data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":24}}
-
-        event: message_stop
-        data: {"type":"message_stop"}
-
-        """
-
-    func testAnthropicDeltasAccumulateIntoTheAnswerAndNothingElseDoes() {
-        XCTAssertEqual(
-            AnthropicStreamDecoder.text(in: anthropicBody),
-            "{\"draft\": \"The retry bound is not applied to the second upload.\"}"
-        )
-    }
-
-    func testAnthropicFramesWithoutTextContributeNothing() {
-        let events = ServerSentEventParser.events(in: anthropicBody)
-        XCTAssertEqual(events.count, 7, "the keep-alive comment is not a frame")
-        let carrying = events.filter { AnthropicStreamDecoder.textDelta(in: $0) != nil }
-        XCTAssertEqual(carrying.count, 2)
-    }
-
-    func testAnthropicNonTextDeltasAreIgnored() {
-        let event = ServerSentEvent(
-            event: "content_block_delta",
-            data: """
-                {"type":"content_block_delta","index":1,\
-                "delta":{"type":"input_json_delta","partial_json":"{\\"path\\":"}}
-                """
-        )
-        XCTAssertNil(AnthropicStreamDecoder.textDelta(in: event))
-    }
-
-    func testAnthropicAnnouncesAnErrorInsideASuccessfulResponse() {
-        let body = """
-            event: content_block_delta
-            data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"partial"}}
-
-            event: error
-            data: {"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}
-
-            """
-        let events = ServerSentEventParser.events(in: body)
-        XCTAssertEqual(AnthropicStreamDecoder.textDelta(in: events[0]), "partial")
-        XCTAssertNil(AnthropicStreamDecoder.errorMessage(in: events[0]))
-        XCTAssertEqual(AnthropicStreamDecoder.errorMessage(in: events[1]), "Overloaded")
-    }
-
     // MARK: - OpenAI-compatible frames
 
     /// A recorded `stream: true` response: a role-only first frame, two content deltas, a
@@ -297,8 +231,6 @@ final class ServerSentEventTests: XCTestCase {
     func testGarbageFramesAreIgnoredRatherThanThrown() {
         let event = ServerSentEvent(data: "not json at all")
         XCTAssertNil(OpenAICompatibleStreamDecoder.textDelta(in: event))
-        XCTAssertNil(AnthropicStreamDecoder.textDelta(in: event))
         XCTAssertNil(OpenAICompatibleStreamDecoder.errorMessage(in: event))
-        XCTAssertNil(AnthropicStreamDecoder.errorMessage(in: event))
     }
 }

@@ -190,7 +190,9 @@ bumping a dependency that ships inside the app also means a line in
     such reads per sweep, with the rest read on the next one. One read per disappearance, on the
     host already on this list, and a row that came back closed then costs nothing further: it is
     kept for fourteen days and pruned;
-  - only when the user configures a key: api.anthropic.com, or the OpenAI-compatible endpoint
+  - only when the user configures a key: api.anthropic.com — reached through Anthropic's
+    `ClaudeForFoundationModels` package, which sends the key to that host and refuses a redirect
+    anywhere else (ADR 0031, amendment) — or the OpenAI-compatible endpoint
     they chose themselves (a preset's base URL is still their choice). What travels there is the
     tier-1 digest — title, description excerpt, file list, top hunks — and, when you use AI
     drafting (ADR 0007 amendment), the diff excerpt around the line you are commenting on plus

@@ -11,7 +11,8 @@ cannot fit large multi-file diffs. Claude Haiku (200K context, BYOK) fits whole 
 prioritization does not need an LLM at all — deterministic signals (path patterns, churn,
 lockfile/generated-file detection, test-to-source ratio) are free, instant, and predictable.
 Apple's new `LanguageModel` protocol allows swappable backends, including Anthropic's Swift
-package, behind identical call sites.
+package, behind identical call sites — built on 2026-09-22 as `SessionProvider` with an on-device
+and a Claude backend ([ADR 0031](0031-a-model-you-bring.md), amendment; [ADR 0038](0038-macos-27-floor.md)).
 
 ## Decision
 

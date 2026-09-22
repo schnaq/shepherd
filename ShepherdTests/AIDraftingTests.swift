@@ -396,27 +396,6 @@ final class AIDraftingTests: XCTestCase {
         XCTAssertEqual(messages[1]["content"] as? String, "the body")
     }
 
-    func testTheAnthropicProviderSendsTheDraftPromptInTheSystemField() throws {
-        let provider = AnthropicProvider(apiKey: "not-a-real-key", model: "test-model")
-        let data = try provider.completionRequestBody(
-            system: IntelligencePrompt.draftInlineCommentInstructions + "\n"
-                + IntelligencePrompt.draftJSONContract,
-            user: "the body"
-        )
-        let object = try XCTUnwrap(
-            try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        )
-        let system = try XCTUnwrap(object["system"] as? String)
-        XCTAssertTrue(system.contains("suggestion for a human reviewer"))
-        XCTAssertTrue(system.contains("{\"draft\": string}"))
-        XCTAssertNotNil(object["max_tokens"] as? Int)
-
-        let messages = try XCTUnwrap(object["messages"] as? [[String: Any]])
-        XCTAssertEqual(messages.count, 1, "the system prompt is not a message in this shape")
-        XCTAssertEqual(messages[0]["role"] as? String, "user")
-        XCTAssertEqual(messages[0]["content"] as? String, "the body")
-    }
-
     // MARK: - Router degradation
 
     func testDraftingIsDisabledWhenIntelligenceIsOff() async {
@@ -603,7 +582,7 @@ final class AIDraftingTests: XCTestCase {
 
     // MARK: - Streaming: the wire (plan §0.2)
 
-    func testBothCloudShapesAskForAStreamOnlyWhenStreaming() throws {
+    func testTheOpenAICompatibleShapeAsksForAStreamOnlyWhenStreaming() throws {
         let openAI = OpenAICompatibleProvider(
             baseURL: "https://api.example.eu/v1",
             model: "test-model",
@@ -621,25 +600,6 @@ final class AIDraftingTests: XCTestCase {
             ) as? [String: Any]
         )
         XCTAssertEqual(streamed["stream"] as? Bool, true)
-
-        let anthropic = AnthropicProvider(apiKey: "not-a-real-key", model: "test-model")
-        let anthropicStreamed = try XCTUnwrap(
-            try JSONSerialization.jsonObject(
-                with: try anthropic.completionRequestBody(
-                    system: "s",
-                    user: "u",
-                    streaming: true
-                )
-            ) as? [String: Any]
-        )
-        XCTAssertEqual(anthropicStreamed["stream"] as? Bool, true)
-        XCTAssertNil(
-            try XCTUnwrap(
-                try JSONSerialization.jsonObject(
-                    with: try anthropic.completionRequestBody(system: "s", user: "u")
-                ) as? [String: Any]
-            )["stream"]
-        )
     }
 
     func testTheStreamedDraftPromptAsksForTextRatherThanJSON() {

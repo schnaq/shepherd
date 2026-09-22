@@ -126,19 +126,15 @@ enum OnDeviceGeneration {
     static let reservedResponseTokens = 1_000
 
     /// Options for a summary request.
-    static var summary: GenerationOptions {
-        GenerationOptions(
-            temperature: structuredTemperature,
-            maximumResponseTokens: summaryResponseTokens
-        )
+    /// - Parameter caps: The backend's answer lengths.
+    static func summary(_ caps: ResponseCaps) -> GenerationOptions {
+        GenerationOptions(temperature: structuredTemperature, maximumResponseTokens: caps.summary)
     }
 
     /// Options for a focus-hint request.
-    static var focus: GenerationOptions {
-        GenerationOptions(
-            temperature: structuredTemperature,
-            maximumResponseTokens: focusResponseTokens
-        )
+    /// - Parameter caps: The backend's answer lengths.
+    static func focus(_ caps: ResponseCaps) -> GenerationOptions {
+        GenerationOptions(temperature: structuredTemperature, maximumResponseTokens: caps.focus)
     }
 
     /// How many tokens a CI diagnosis may use.
@@ -153,73 +149,72 @@ enum OnDeviceGeneration {
     /// No temperature: a draft is prose a person will rewrite, and the framework's default is
     /// tuned for exactly that. Naming a lower one here would make every draft read like the
     /// same three sentences about "consider adding a test".
-    static var draft: GenerationOptions {
-        GenerationOptions(maximumResponseTokens: draftResponseTokens)
+    /// - Parameter caps: The backend's answer lengths.
+    static func draft(_ caps: ResponseCaps) -> GenerationOptions {
+        GenerationOptions(maximumResponseTokens: caps.draft)
     }
 
     /// Options for a CI diagnosis.
     ///
     /// The structured temperature, for the reason it exists: this answer is read as a fact about
     /// a log, and a warmer model invents the failing test it expects to find rather than the one
-    /// the tools showed it.
-    static var diagnosis: GenerationOptions {
-        GenerationOptions(
-            temperature: structuredTemperature,
-            maximumResponseTokens: diagnosisResponseTokens
-        )
+    /// the tools showed it. (Claude models from Sonnet 5 and Opus 4.7 on take no sampling
+    /// parameters at all; the bridge drops the temperature for them rather than failing, so those
+    /// answers run at the API's default.)
+    /// - Parameter caps: The backend's answer lengths.
+    static func diagnosis(_ caps: ResponseCaps) -> GenerationOptions {
+        GenerationOptions(temperature: structuredTemperature, maximumResponseTokens: caps.diagnosis)
     }
 }
 
 // MARK: - The provider
 
-/// Tier 2: Apple's on-device Foundation Model (ADR 0007).
+/// A provider that drives one `LanguageModelSession` per request, on whichever model its
+/// ``LanguageModelBackend`` hands it (ADR 0007, ADR 0031 §One).
 ///
-/// **`FoundationModels` is imported only by the `OnDevice*.swift` files in this folder** — this
-/// one and ``OnDeviceToolBridge``, which wraps the read-only tool contract in the framework's
-/// `Tool` protocol. Everything the rest of the app sees is ``IntelligenceProvider``, so a change
-/// in that framework can only break those two files.
+/// One struct for tier 2 and for Claude, because the protocol whose whole purpose is a swappable
+/// backend is worth adopting exactly to the extent that nothing above it has to know which backend
+/// answered: the guided-generation shapes, the read-only tools, the streamed cumulative drafts and
+/// the pre-flight are written once here. ``OnDeviceProvider`` and ``ClaudeProvider`` are this type
+/// with a backend chosen.
 ///
-/// The model is guarded twice: the chosen model's `availability` must report `.available` (Apple
-/// Intelligence can be off, the device can be ineligible, the assets can still be downloading),
-/// and the prompt must fit the token budget — ADR 0007 makes the context ceiling a hard error
-/// rather than a silent truncation. The budget is measured against the real tokenizer; the floor
-/// is macOS 27, so the OS can always measure (ADR 0038, plan §0.1).
-struct OnDeviceProvider: IntelligenceProvider {
-    /// The token budget digests are built with for this tier.
-    ///
-    /// Still the conservative estimate-based number, because a digest is built *before* a model
-    /// exists to ask: measuring happens in ``preflight(useCase:instructions:prompt:)``,
-    /// where it can only ever let more through than this.
-    static let budget = TokenBudget.onDevice
+/// **`FoundationModels` is imported only by the `OnDevice*.swift` files in this folder,
+/// `LanguageModelBackend.swift` and `ClaudeProvider.swift`.** Everything the rest of the app sees
+/// is ``IntelligenceProvider``, so a change in that framework can only break those files.
+///
+/// The model is guarded twice: the backend must report it available, and the prompt must fit the
+/// token budget — ADR 0007 makes the context ceiling a hard error rather than a silent truncation.
+struct SessionProvider<Backend: LanguageModelBackend>: IntelligenceProvider {
+    /// What the sessions are built on.
+    let backend: Backend
 
-    var kind: IntelligenceKind { .onDevice }
+    /// The token budget digests are built with for this tier — the backend's, spelled where the
+    /// router and the digest builders have always read it.
+    static var budget: TokenBudget { Backend.budget }
+
+    var kind: IntelligenceKind { backend.kind }
 
     var isAvailable: Bool {
-        get async { OnDeviceProvider.unavailabilityReason() == nil }
+        get async { backend.unavailabilityReason(of: backend.model(for: .prose)) == nil }
     }
 
-    /// Creates a provider.
-    init() {}
-
-    /// Why the on-device model cannot be used, or `nil` when it can.
-    ///
-    /// Surfaced verbatim in Settings so a user who turned Apple Intelligence off knows why the
-    /// summary card is missing.
-    static func unavailabilityReason() -> String? {
-        unavailabilityReason(for: .prose)
+    /// Creates a provider on a backend.
+    /// - Parameter backend: What the sessions are built on.
+    init(backend: Backend) {
+        self.backend = backend
     }
 
     /// Why one use case's model cannot be used, or `nil` when it can.
     /// - Parameter useCase: Which model to ask about.
-    static func unavailabilityReason(for useCase: OnDeviceUseCase) -> String? {
-        unavailabilityReason(of: useCase.model())
+    func unavailabilityReason(for useCase: OnDeviceUseCase) -> String? {
+        backend.unavailabilityReason(of: backend.model(for: useCase))
     }
 
     // MARK: - Requests
 
     func summarizePullRequest(_ digest: PullRequestDigest) async throws -> PRSummary {
         let prompt = IntelligencePrompt.body(for: digest)
-        let session = try await OnDeviceProvider.preflight(
+        let session = try await preflight(
             useCase: .prose,
             instructions: IntelligencePrompt.summaryInstructions,
             prompt: prompt,
@@ -229,10 +224,10 @@ struct OnDeviceProvider: IntelligenceProvider {
             generated = try await session.respond(
                 to: prompt,
                 generating: OnDeviceSummary.self,
-                options: OnDeviceGeneration.summary
+                options: OnDeviceGeneration.summary(Backend.caps)
             ).content
         } catch {
-            throw OnDeviceProvider.mapped(error)
+            throw mapped(error)
         }
         return PRSummary(
             overview: generated.overview.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -245,7 +240,7 @@ struct OnDeviceProvider: IntelligenceProvider {
     func suggestReviewFocus(_ digest: PullRequestDigest) async throws -> [FocusHint] {
         let prompt = IntelligencePrompt.body(for: digest)
         let knownPaths = Set(digest.files.map(\.path))
-        let session = try await OnDeviceProvider.preflight(
+        let session = try await preflight(
             useCase: .prose,
             instructions: IntelligencePrompt.focusInstructions,
             prompt: prompt,
@@ -255,10 +250,10 @@ struct OnDeviceProvider: IntelligenceProvider {
             generated = try await session.respond(
                 to: prompt,
                 generating: OnDeviceFocus.self,
-                options: OnDeviceGeneration.focus
+                options: OnDeviceGeneration.focus(Backend.caps)
             ).content
         } catch {
-            throw OnDeviceProvider.mapped(error)
+            throw mapped(error)
         }
         return generated.hints
             .compactMap { hint -> FocusHint? in
@@ -311,9 +306,6 @@ struct OnDeviceProvider: IntelligenceProvider {
     /// answer read like the same paragraph. Guided generation is what keeps the streamed
     /// snapshots readable (see ``streamedDraft(instructions:prompt:)``): the reviewer
     /// watches sentences arrive, never half a JSON object.
-    ///
-    /// This is the tier the feature is designed for. Tier 2 first, and a tier-2 answer is the
-    /// whole story on a Mac with Apple Intelligence on — nothing leaves the machine.
     func streamExplanation(
         _ request: ExplainSelectionRequest
     ) -> AsyncThrowingStream<String, Error> {
@@ -336,25 +328,25 @@ struct OnDeviceProvider: IntelligenceProvider {
 
     /// Diagnoses a red pull request by letting the model call the read-only tools (plan §3.F).
     ///
-    /// The one request on this tier where Shepherd does not drive the turn: the session is
-    /// created *with* the tools, and the framework decides which of them to call and when. So
-    /// there is no loop here — the loop is inside `respond(to:generating:)` — and the two things
-    /// Shepherd still owns are pushed to the edges: the hop cap lives in the tool wrappers,
-    /// which are the only code that runs per call, and the trace is collected by the
-    /// ``ToolTraceRecorder`` they share and read back once the answer exists.
+    /// The one request where Shepherd does not drive the turn: the session is created *with* the
+    /// tools, and the framework decides which of them to call and when. So there is no loop here
+    /// — the loop is inside `respond(to:generating:)` — and the two things Shepherd still owns
+    /// are pushed to the edges: the hop cap lives in the tool wrappers, which are the only code
+    /// that runs per call, and the trace is collected by the ``ToolTraceRecorder`` they share and
+    /// read back once the answer exists.
     ///
     /// The pre-flight measures the opening prompt only, which is the honest thing it can do: the
     /// tool results are not written yet, and the framework's own accounting of the transcript is
     /// what will notice if they do not fit — arriving here as
     /// ``IntelligenceError/contextExceeded``, which is exactly the failure the router is allowed
-    /// to offer the cloud tier for.
+    /// to offer the next tier for.
     func diagnoseFailingChecks(
         _ request: CIDiagnosisRequest,
         tools: any IntelligenceToolExecuting
     ) async throws -> IntelligenceToolRun<CIDiagnosis> {
         let prompt = IntelligencePrompt.body(for: request)
         let recorder = ToolTraceRecorder()
-        let session = try await OnDeviceProvider.preflight(
+        let session = try await preflight(
             useCase: .prose,
             instructions: IntelligencePrompt.ciDiagnosisInstructions,
             prompt: prompt,
@@ -365,19 +357,35 @@ struct OnDeviceProvider: IntelligenceProvider {
             generated = try await session.respond(
                 to: prompt,
                 generating: OnDeviceCIDiagnosis.self,
-                options: OnDeviceGeneration.diagnosis
+                options: OnDeviceGeneration.diagnosis(Backend.caps)
             ).content
         } catch {
-            throw OnDeviceProvider.mapped(error)
+            throw mapped(error)
         }
         let diagnosis = CIDiagnosis(generated)
         guard !diagnosis.hypothesis.isEmpty else { throw IntelligenceError.malformedResponse }
         return IntelligenceToolRun(value: diagnosis, trace: await recorder.current)
     }
 
+    /// One plain-text turn, for the connection test in Settings: no schema, no tools, the
+    /// answer as the model wrote it.
+    /// - Parameters:
+    ///   - system: The session's instructions.
+    ///   - user: The prompt.
+    /// - Returns: The model's answer, trimmed.
+    func complete(system: String, user: String) async throws -> String {
+        let session = try await preflight(useCase: .prose, instructions: system, prompt: user)
+        do {
+            return try await session.respond(to: user).content
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch {
+            throw mapped(error)
+        }
+    }
+
     /// One drafting request, awaited to the end.
     private func draft(instructions: String, prompt: String) async throws -> String {
-        let session = try await OnDeviceProvider.preflight(
+        let session = try await preflight(
             useCase: .prose,
             instructions: instructions,
             prompt: prompt,
@@ -387,12 +395,12 @@ struct OnDeviceProvider: IntelligenceProvider {
             generated = try await session.respond(
                 to: prompt,
                 generating: OnDeviceReviewDraft.self,
-                options: OnDeviceGeneration.draft
+                options: OnDeviceGeneration.draft(Backend.caps)
             ).content
         } catch {
-            throw OnDeviceProvider.mapped(error)
+            throw mapped(error)
         }
-        return try OnDeviceProvider.usableDraft(in: generated.draft)
+        return try SessionProvider.usableDraft(in: generated.draft)
     }
 
     /// One drafting request, as a stream of cumulative drafts (plan §0.2).
@@ -407,7 +415,7 @@ struct OnDeviceProvider: IntelligenceProvider {
         prompt: String
     ) -> AsyncThrowingStream<String, Error> {
         IntelligenceStreaming.stream { continuation in
-            let session = try await OnDeviceProvider.preflight(
+            let session = try await preflight(
                 useCase: .prose,
                 instructions: instructions,
                 prompt: prompt,
@@ -417,118 +425,46 @@ struct OnDeviceProvider: IntelligenceProvider {
                 let responses = session.streamResponse(
                     to: prompt,
                     generating: OnDeviceReviewDraft.self,
-                    options: OnDeviceGeneration.draft
+                    options: OnDeviceGeneration.draft(Backend.caps)
                 )
                 for try await partial in responses {
-                    let text = OnDeviceProvider.draftText(in: partial.content)
+                    let text = SessionProvider.draftText(in: partial.content)
                     guard !text.isEmpty, text != latest else { continue }
                     latest = text
                     continuation.yield(text)
                 }
             } catch {
-                throw OnDeviceProvider.mapped(error)
+                throw mapped(error)
             }
             // The trim happens once, at the end: trimming every snapshot would make the field
             // jitter as trailing whitespace arrives and is taken away again.
-            let finished = try OnDeviceProvider.usableDraft(in: latest)
+            let finished = try SessionProvider.usableDraft(in: latest)
             if finished != latest { continuation.yield(finished) }
         }
     }
 
     // MARK: - The framework's spelling, in as few lines as possible
 
-    /// How to measure a prompt against a model, and how much room that model has (macOS 26.4+).
-    ///
-    /// **This function is the whole surface of the 26.4-only measurement API.** `contextSize` and
-    /// `tokenCount(for:)` arrived after the SDK this code was written against, so their exact
-    /// spelling cannot be verified here; isolating them means a rename or a signature change
-    /// costs these two lines and nothing else — everything above and below deals in a closure
-    /// that may decline and an `Int`.
-    ///
-    /// The measurement is handed back as a closure rather than a number so
-    /// ``ShepherdCore/TokenBudget/measured(_:using:)`` — pure, and tested on Linux — stays the
-    /// thing that decides what a token count *is*; a closure that returns `nil` (the OS could not
-    /// tokenize this particular string) falls back to the estimate there. It is deliberately not
-    /// `@Sendable`: it captures the model, it is consumed immediately, and requiring the model to
-    /// be `Sendable` would be a claim about the framework this file cannot make.
-    /// - Parameter model: The model that will read the prompt.
-    /// - Returns: The measurement closure and the model's context window in tokens.
-    private static func measuredContext(
-        of model: SystemLanguageModel,
-        measuring text: String
-    ) async -> (measure: (String) -> Int?, contextSize: Int) {
-        // The count is taken once, here, because the framework tokenises asynchronously and
-        // ``ShepherdCore/TokenBudget/measured(_:using:)`` wants a synchronous closure; the
-        // closure then answers for that one string and declines for any other.
-        let count = try? await model.tokenCount(for: text)
-        return ({ candidate in candidate == text ? count : nil }, model.contextSize)
-    }
-
     /// The draft inside one partially generated snapshot.
     ///
-    /// The second and last place that names a shape only the framework defines: a
-    /// `PartiallyGenerated` snapshot has every field optional, and `nil` here means "the model
+    /// A `PartiallyGenerated` snapshot has every field optional, and `nil` here means "the model
     /// has not started that field yet", not "the field is empty".
     private static func draftText(in partial: OnDeviceReviewDraft.PartiallyGenerated) -> String {
         partial.draft ?? ""
     }
 
-    /// Why a model cannot be used, or `nil` when it can.
-    private static func unavailabilityReason(of model: SystemLanguageModel) -> String? {
-        // The case patterns below are exactly the ones Apple documents for this enum; naming
-        // the nested `UnavailableReason` type is avoided on purpose so this file depends on as
-        // little of the framework's spelling as possible.
-        switch model.availability {
-        case .available:
-            return nil
-        case .unavailable(.deviceNotEligible):
-            return String(localized: "This Mac does not support Apple Intelligence.")
-        case .unavailable(.appleIntelligenceNotEnabled):
-            return String(localized: "Apple Intelligence is turned off in System Settings.")
-        case .unavailable(.modelNotReady):
-            return String(localized: "The on-device model is still downloading. Try again later.")
-        case .unavailable:
-            return String(localized: "The on-device model is unavailable right now.")
-        }
-    }
-
-    /// Turns the framework's generation failures into ``IntelligenceError`` where Shepherd has
-    /// something better to say, and passes everything else through untouched.
-    ///
-    /// Two of them are worth naming (plan §0.1). A guardrail violation is not a malfunction:
-    /// review prose is full of deleting, breaking and killing things, the guardrails over-fire on
-    /// technical content, and the honest answer is one sentence saying the model declined —
-    /// **never** an automatic retry, which would trip the same guardrail on the same words and
-    /// spend battery to do it. An exceeded context window is the real tokenizer disagreeing with
-    /// the pre-flight estimate, which is worth its own sentence because the fix ("smaller
-    /// selection, or the cloud tier") is different from every other failure's.
-    ///
-    /// A failure that came out of a *tool* is unwrapped first. The framework reports one as its
-    /// own error wrapping the tool's, so a hop cap that fired inside a wrapper would otherwise
-    /// reach the router as a framework type nobody can read — and the cap firing is one of the
-    /// two failures of this feature a reviewer is most likely to see.
-    private static func mapped(_ error: any Error) -> any Error {
-        if let toolError = error as? LanguageModelSession.ToolCallError {
-            return mapped(toolError.underlyingError)
-        }
-        guard let generation = error as? LanguageModelSession.GenerationError else { return error }
-        switch generation {
-        case .guardrailViolation:
-            return IntelligenceError.guardrailDeclined
-        case .exceededContextWindowSize:
-            return IntelligenceError.contextExceeded
-        default:
-            return error
-        }
+    /// The framework's failures and the backend's own, in Shepherd's words.
+    private func mapped(_ error: any Error) -> any Error {
+        backend.mapped(error)
     }
 
     // MARK: - Pre-flight
 
     /// Availability, budget and session — everything that must be true before a prompt is sent.
     ///
-    /// One function because the three are one decision: ADR 0007 makes tier 2's context ceiling a
-    /// hard error rather than a silent truncation, so nothing may create a session it is not
-    /// already sure it can use.
+    /// One function because the three are one decision: ADR 0007 makes the context ceiling a hard
+    /// error rather than a silent truncation, so nothing may create a session it is not already
+    /// sure it can use.
     /// - Parameters:
     ///   - useCase: Which model the request wants.
     ///   - instructions: The session's instructions. Part of the same context window as the
@@ -536,31 +472,28 @@ struct OnDeviceProvider: IntelligenceProvider {
     ///   - prompt: The prompt.
     ///   - tools: The tools the session may call. Empty for every request that only answers a
     ///     prompt, and the empty case keeps the exact initialiser those requests have always
-    ///     used — a `tools:` argument on a request with no tools would be a change in what the
-    ///     framework is asked for, in return for one fewer line here.
+    ///     used.
     /// - Returns: A session on the chosen model.
     /// - Throws: ``IntelligenceError/unavailable(_:)`` or ``IntelligenceError/digestTooLarge(tokens:limit:)``.
-    private static func preflight(
+    private func preflight(
         useCase: OnDeviceUseCase,
         instructions: String,
         prompt: String,
         tools: [any Tool] = []
     ) async throws -> LanguageModelSession {
-        let model = useCase.model()
-        if let reason = unavailabilityReason(of: model) {
+        let model = backend.model(for: useCase)
+        if let reason = backend.unavailabilityReason(of: model) {
             throw IntelligenceError.unavailable(reason)
         }
 
-        // The instructions share the window with the prompt, so they are measured with it.
+        // The instructions share the window with the prompt, so they are measured with it. Both
+        // halves of the comparison come from the same backend, or this would be a real token
+        // count against a limit that was only ever a guess about the window.
         let text = instructions + "\n" + prompt
-        // Both halves of the comparison come from the same measurement, or this would be a
-        // real token count against a limit that was only ever a guess about the window. The
-        // floor is macOS 27 (ADR 0038), so the OS can always measure; the chars-÷-4 estimate
-        // that used to stand in below 26.4 is gone with the `#available` that guarded it.
-        let context = await measuredContext(of: model, measuring: text)
-        let budget = OnDeviceProvider.budget.limited(
+        let context = await backend.context(of: model, measuring: text)
+        let budget = Backend.budget.limited(
             toContextSize: context.contextSize,
-            reservedForResponse: OnDeviceGeneration.reservedResponseTokens
+            reservedForResponse: Backend.caps.reserved
         )
         let tokens = budget.measured(text, using: context.measure)
         guard tokens <= budget.maxTokens else {
@@ -577,9 +510,90 @@ struct OnDeviceProvider: IntelligenceProvider {
     ///
     /// An empty field with a spinner that stopped looks like a bug; a red line saying the model
     /// returned nothing is at least true.
-    private static func usableDraft(in text: String) throws -> String {
+    static func usableDraft(in text: String) throws -> String {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw IntelligenceError.malformedResponse }
         return trimmed
+    }
+}
+
+// MARK: - Tier 2: Apple's system model
+
+/// Apple's on-device Foundation Model as a ``LanguageModelBackend`` (ADR 0007's tier 2).
+///
+/// The model is asked per use case — prose or tagging — because the assets are downloaded per
+/// model: the tagging model can be ready while the general one is not, and vice versa. The prompt
+/// is measured against the real tokenizer; the floor is macOS 27, so the OS can always measure
+/// (ADR 0038).
+struct OnDeviceBackend: LanguageModelBackend {
+    var kind: IntelligenceKind { .onDevice }
+    static let budget = TokenBudget.onDevice
+    static let caps = ResponseCaps.onDevice
+
+    func model(for useCase: OnDeviceUseCase) -> SystemLanguageModel {
+        useCase.model()
+    }
+
+    /// Why one use case's model cannot be used, or `nil` when it can — the static spelling the
+    /// three on-device classifiers and Settings ask, since the answer needs no instance.
+    /// - Parameter useCase: Which model to ask about.
+    static func unavailabilityReason(for useCase: OnDeviceUseCase) -> String? {
+        OnDeviceBackend().unavailabilityReason(of: useCase.model())
+    }
+
+    /// Why a model cannot be used, or `nil` when it can.
+    ///
+    /// Surfaced verbatim in Settings so a user who turned Apple Intelligence off knows why the
+    /// summary card is missing. The case patterns are exactly the ones Apple documents for this
+    /// enum; naming the nested `UnavailableReason` type is avoided on purpose so this file
+    /// depends on as little of the framework's spelling as possible.
+    func unavailabilityReason(of model: SystemLanguageModel) -> String? {
+        switch model.availability {
+        case .available:
+            return nil
+        case .unavailable(.deviceNotEligible):
+            return String(localized: "This Mac does not support Apple Intelligence.")
+        case .unavailable(.appleIntelligenceNotEnabled):
+            return String(localized: "Apple Intelligence is turned off in System Settings.")
+        case .unavailable(.modelNotReady):
+            return String(localized: "The on-device model is still downloading. Try again later.")
+        case .unavailable:
+            return String(localized: "The on-device model is unavailable right now.")
+        }
+    }
+
+    /// **This function is the whole surface of the measurement API.** `contextSize` and
+    /// `tokenCount(for:)` are the two members of `SystemLanguageModel` the budget rests on;
+    /// isolating them means a rename costs these two lines and nothing else.
+    func context(
+        of model: SystemLanguageModel,
+        measuring text: String
+    ) async -> (measure: (String) -> Int?, contextSize: Int) {
+        // The count is taken once, here, because the framework tokenises asynchronously and
+        // ``ShepherdCore/TokenBudget/measured(_:using:)`` wants a synchronous closure; the
+        // closure then answers for that one string and declines for any other.
+        let count = try? await model.tokenCount(for: text)
+        return ({ candidate in candidate == text ? count : nil }, model.contextSize)
+    }
+}
+
+/// Tier 2, as the rest of the app has always named it.
+typealias OnDeviceProvider = SessionProvider<OnDeviceBackend>
+
+extension SessionProvider where Backend == OnDeviceBackend {
+    /// Creates the on-device provider.
+    init() {
+        self.init(backend: OnDeviceBackend())
+    }
+
+    /// Why the on-device model cannot be used, or `nil` when it can.
+    static func unavailabilityReason() -> String? {
+        OnDeviceBackend.unavailabilityReason(for: .prose)
+    }
+
+    /// Why one use case's model cannot be used, or `nil` when it can.
+    /// - Parameter useCase: Which model to ask about.
+    static func unavailabilityReason(for useCase: OnDeviceUseCase) -> String? {
+        OnDeviceBackend.unavailabilityReason(for: useCase)
     }
 }

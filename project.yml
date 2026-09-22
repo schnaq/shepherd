@@ -27,6 +27,13 @@ packages:
   Sparkle:
     url: https://github.com/sparkle-project/Sparkle
     exactVersion: 2.10.0
+  # Claude as a Foundation Models `LanguageModel` (ADR 0038, programme item 1; ADR 0031's seam).
+  # App target only, for Sparkle's reason, and pinned exactly for Sparkle's reason too — plus
+  # ADR 0031's: a model bridge changes generation behaviour between releases in ways a compiler
+  # cannot see, so a bump is a reviewed change. Apache-2.0; NOTICES.md carries the line.
+  ClaudeForFoundationModels:
+    url: https://github.com/anthropics/ClaudeForFoundationModels
+    exactVersion: 0.2.1
 
 targets:
   Shepherd:
@@ -74,6 +81,8 @@ targets:
       # copy phase and nothing to re-sign by hand (ADR 0010).
       - package: Sparkle
         product: Sparkle
+      - package: ClaudeForFoundationModels
+        product: ClaudeForFoundationModels
     entitlements:
       path: Shepherd/Support/Shepherd.entitlements
       # XcodeGen writes this file from the properties below on every run, so the keys live

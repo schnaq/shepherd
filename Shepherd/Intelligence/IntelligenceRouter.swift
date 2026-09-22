@@ -11,7 +11,7 @@ struct IntelligenceConfiguration: Sendable, Hashable {
     /// Which cloud shape tier 3 uses.
     var cloudKind: CloudProviderKind = .anthropic
     /// The Anthropic model id.
-    var anthropicModel: String = AnthropicProvider.defaultModel
+    var anthropicModel: String = ClaudeProvider.defaultModelID
     /// The OpenAI-compatible base URL.
     var openAIBaseURL: String = ""
     /// The OpenAI-compatible model name.
@@ -343,9 +343,9 @@ struct IntelligenceRouter: Sendable {
         switch configuration.cloudKind {
         case .anthropic:
             guard !configuration.cloudAPIKey.isEmpty else { return nil }
-            return AnthropicProvider(
+            return ClaudeProvider(
                 apiKey: configuration.cloudAPIKey,
-                model: configuration.anthropicModel
+                modelID: configuration.anthropicModel
             )
         case .openAICompatible:
             guard !configuration.openAIModel.isEmpty,
@@ -636,7 +636,7 @@ struct IntelligenceRouter: Sendable {
                             cloud,
                             detail: detail,
                             summary: summary,
-                            budget: AnthropicProvider.budget,
+                            budget: ClaudeProvider.budget,
                             jobLog: jobLog
                         )
                     )
@@ -852,7 +852,7 @@ struct IntelligenceRouter: Sendable {
             // default no-op and leaves it empty (plan §3.K).
             let report = IntelligenceEndpointReport()
             switch await IntelligenceRouter.start(
-                operation(cloud.reporting(to: report), AnthropicProvider.budget),
+                operation(cloud.reporting(to: report), ClaudeProvider.budget),
                 kind: cloud.kind,
                 report: report
             ) {
@@ -1032,7 +1032,7 @@ struct IntelligenceRouter: Sendable {
             do {
                 let value = try await operation(
                     cloud.reporting(to: report),
-                    AnthropicProvider.budget
+                    ClaudeProvider.budget
                 )
                 return .value(
                     IntelligenceOutput(

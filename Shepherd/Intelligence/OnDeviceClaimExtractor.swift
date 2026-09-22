@@ -250,15 +250,7 @@ struct OnDeviceClaimExtractor: ClaimExtracting {
     /// "not this description", not a malfunction, and an exceeded context window is the real
     /// tokenizer disagreeing with the pre-flight estimate. Neither is ever retried.
     private static func mapped(_ error: any Error) -> any Error {
-        guard let generation = error as? LanguageModelSession.GenerationError else { return error }
-        switch generation {
-        case .guardrailViolation:
-            return IntelligenceError.guardrailDeclined
-        case .exceededContextWindowSize:
-            return IntelligenceError.contextExceeded
-        default:
-            return error
-        }
+        LanguageModelErrors.mapped(error)
     }
 
     // MARK: - Pre-flight
