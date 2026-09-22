@@ -144,15 +144,17 @@ struct InboxSidebar: View {
         }
     }
 
-    /// The repositories the inbox is currently showing, and the way to add one it is not.
+    /// The repositories: the watched ones first, always, by name; then the rest of the inbox.
     ///
-    /// Unlike the facets above it this section is drawn even when it is empty, because it is no
-    /// longer only a filter: watching a repository is how a pull request nobody named you on
-    /// reaches the inbox at all, and an inbox with nothing in it is exactly when a reader needs
-    /// that. The rows still come from what is *in* the inbox, so a watched repository with no
-    /// open pull requests shows up here only once it has one.
+    /// Drawn even when it is empty, because watching a repository is how a pull request nobody
+    /// named you on reaches the inbox at all, and an inbox with nothing in it is exactly when a
+    /// reader needs the `+`. The watched block is the fixed part of the rail: its rows come from
+    /// the watch list rather than from what the inbox holds, so a watched repository is listed in
+    /// the same place under every smart view, at zero when the view holds nothing from it. The
+    /// rest keep the whole inbox's order (``InboxModel/repositoryFacets``), so switching smart
+    /// views changes their numbers and never their places.
     private var repositoriesFacet: some View {
-        let facets = model.repositoryFacets
+        let others = unwatchedFacets
         return VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 4) {
                 RailSectionHeader(title: String(localized: "REPOSITORIES"))
@@ -169,34 +171,29 @@ struct InboxSidebar: View {
                 .padding(.trailing, 10)
                 .padding(.bottom, 6)
             }
-            ForEach(facets.prefix(6), id: \.repo) { facet in
+            ForEach(watchedFacets, id: \.repo.fullName) { facet in
                 RailRow(
                     title: facet.repo.fullName,
-                    systemImage: isWatched(facet.repo) ? "binoculars" : nil,
+                    systemImage: "binoculars",
+                    count: facet.count,
+                    isSelected: model.repoFilter.map { $0.isSameRepository(as: facet.repo) } ?? false
+                ) {
+                    toggleRepoFilter(facet.repo)
+                }
+                .help(String(localized: "Watched: every open pull request in this repository reaches the inbox."))
+            }
+            ForEach(others.prefix(6), id: \.repo) { facet in
+                RailRow(
+                    title: facet.repo.fullName,
+                    systemImage: "folder",
                     count: facet.count,
                     isSelected: model.repoFilter == facet.repo
                 ) {
-                    model.repoFilter = model.repoFilter == facet.repo ? nil : facet.repo
+                    toggleRepoFilter(facet.repo)
                 }
             }
-            // A watched repository the current view holds no row from is still listed, at zero.
-            // Without this, pressing the `+` *under this heading* added a repository that then
-            // appeared nowhere near it: the facets are built from what is in the list, so a
-            // repository whose only pull request is one you opened yourself sits under "My pull
-            // requests" and leaves this section looking as though the `+` did nothing.
-            ForEach(unlistedWatched, id: \.fullName) { repo in
-                RailRow(
-                    title: repo.fullName,
-                    systemImage: "binoculars",
-                    count: 0,
-                    isSelected: false
-                ) {}
-                .help(String(
-                    localized: "Watched. No pull request from this repository is in the current view."
-                ))
-            }
-            if facets.count > 6 {
-                Text(String(localized: "\(facets.count - 6) more…"))
+            if others.count > 6 {
+                Text(String(localized: "\(others.count - 6) more…"))
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textMuted)
                     .padding(.horizontal, 10)
@@ -205,16 +202,37 @@ struct InboxSidebar: View {
         }
     }
 
-    /// Whether this repository is on the watch list.
-    private func isWatched(_ repo: RepoRef) -> Bool {
-        watchedRepositories.contains { $0.isSameRepository(as: repo) }
+    /// Filters to a repository, or clears the filter when it is already that one.
+    private func toggleRepoFilter(_ repo: RepoRef) {
+        let isActive = model.repoFilter.map { $0.isSameRepository(as: repo) } ?? false
+        model.repoFilter = isActive ? nil : repo
     }
 
-    /// Watched repositories the facets above do not already name.
-    private var unlistedWatched: [RepoRef] {
-        let listed = model.repositoryFacets.prefix(6).map(\.repo)
-        return watchedRepositories.filter { watched in
-            !listed.contains { $0.isSameRepository(as: watched) }
+    /// The watch list by name, each with the current view's count — zero when it holds none.
+    ///
+    /// The repository is the inbox's own spelling when the inbox has it, because the filter
+    /// compares `RepoRef`s and a watch list typed by hand may differ in case.
+    private var watchedFacets: [(repo: RepoRef, count: Int)] {
+        let facets = model.repositoryFacets
+        return InboxSidebar.watchedFacets(watchedRepositories, facets: facets)
+    }
+
+    /// ``watchedFacets``, pure, so the order and the zeroes are testable.
+    nonisolated static func watchedFacets(
+        _ watched: [RepoRef],
+        facets: [(repo: RepoRef, count: Int)]
+    ) -> [(repo: RepoRef, count: Int)] {
+        watched
+            .map { repo in
+                facets.first { $0.repo.isSameRepository(as: repo) } ?? (repo: repo, count: 0)
+            }
+            .sorted { $0.repo.fullName.lowercased() < $1.repo.fullName.lowercased() }
+    }
+
+    /// Every repository in the inbox that is not on the watch list, in the inbox's order.
+    private var unwatchedFacets: [(repo: RepoRef, count: Int)] {
+        model.repositoryFacets.filter { facet in
+            !watchedRepositories.contains { $0.isSameRepository(as: facet.repo) }
         }
     }
 
@@ -297,6 +315,13 @@ struct RailRow: View {
     /// What clicking does.
     var action: () -> Void
 
+    @State private var isHovering = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// A row whose count is zero in the current view stays where it is and steps back instead of
+    /// leaving (``InboxModel/stabilised(_:counts:key:zero:)``).
+    private var isEmpty: Bool { count == 0 && !isSelected }
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 8) {
@@ -321,17 +346,25 @@ struct RailRow: View {
                         .font(.system(size: 12))
                         .monospacedDigit()
                         .foregroundStyle(isSelected ? Theme.accent : Theme.textMuted)
+                        .contentTransition(reduceMotion ? .identity : .numericText(value: Double(count)))
+                        .animation(reduceMotion ? nil : .snappy, value: count)
                 }
             }
             .foregroundStyle(isSelected ? Theme.textStrong : Theme.textSecondary)
+            .opacity(isEmpty ? 0.55 : 1)
             .padding(.horizontal, 10)
-            .frame(height: systemImage == nil ? 28 : 30)
+            // One height for every row. A row with an icon used to be 2 pt taller than one with a
+            // dot, so a repository gaining or losing its binoculars moved everything below it.
+            .frame(height: 30)
             .background(
-                isSelected ? Theme.selection : Color.clear,
+                isSelected
+                    ? Theme.selection
+                    : (isHovering ? Theme.textMuted.opacity(0.08) : Color.clear),
                 in: RoundedRectangle(cornerRadius: 6, style: .continuous)
             )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
     }
 }

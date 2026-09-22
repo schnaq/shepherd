@@ -781,12 +781,42 @@ final class InboxModel {
         )
     }
 
-    /// The provenance facets present in the current data, with counts.
-    var provenanceFacets: [(filter: ProvenanceFilter, title: String, color: Color, count: Int)] {
+    /// The provenance facets present in the inbox, with the current smart view's counts.
+    ///
+    /// Which rows exist and in which order comes from the **whole** inbox, and only the numbers
+    /// from the smart view (``stabilised(_:counts:key:zero:)``): clicking from "Needs my review" to
+    /// "My pull requests" used to rebuild the section from a different set of rows, so entries
+    /// appeared, vanished and swapped places under the pointer. Now they keep their place and a
+    /// count may read zero.
+    var provenanceFacets: [ProvenanceFacet] {
+        InboxModel.stabilised(
+            InboxModel.provenanceFacets(in: allRows),
+            counts: InboxModel.provenanceFacets(in: allRows.filter(smartView.matches)),
+            key: \.filter,
+            zero: { $0.withCount(0) }
+        )
+    }
+
+    /// One provenance facet: the filter it applies, what it is called, its colour, its count.
+    struct ProvenanceFacet: Equatable {
+        var filter: ProvenanceFilter
+        var title: String
+        var color: Color
+        var count: Int
+
+        func withCount(_ count: Int) -> ProvenanceFacet {
+            var copy = self
+            copy.count = count
+            return copy
+        }
+    }
+
+    /// The provenance facets of some rows: agents by count, then bots, then humans.
+    static func provenanceFacets(in rows: [PullRequestSummary]) -> [ProvenanceFacet] {
         var agents: [String: (title: String, count: Int)] = [:]
         var botCount = 0
         var humanCount = 0
-        for row in allRows where smartView.matches(row) {
+        for row in rows {
             switch row.author.kind {
             case .agent(let identity):
                 let existing = agents[identity.id] ?? (identity.displayName, 0)
@@ -799,8 +829,8 @@ final class InboxModel {
         }
         var result = agents
             .map { id, value in
-                (
-                    filter: ProvenanceFilter.agent(id: id),
+                ProvenanceFacet(
+                    filter: .agent(id: id),
                     title: value.title,
                     color: AgentPalette.color(forAgentID: id),
                     count: value.count
@@ -811,12 +841,32 @@ final class InboxModel {
                 return lhs.title.lowercased() < rhs.title.lowercased()
             }
         if botCount > 0 {
-            result.append((.bots, String(localized: "Bots"), Theme.textSecondary, botCount))
+            result.append(ProvenanceFacet(filter: .bots, title: String(localized: "Bots"), color: Theme.textSecondary, count: botCount))
         }
         if humanCount > 0 {
-            result.append((.humans, String(localized: "Humans"), Theme.accent, humanCount))
+            result.append(ProvenanceFacet(filter: .humans, title: String(localized: "Humans"), color: Theme.accent, count: humanCount))
         }
         return result
+    }
+
+    /// Keeps the entries and the order of `all` and takes each entry's count from `counts`, or
+    /// zero when `counts` has no entry for it.
+    ///
+    /// The rule every rail section follows since 2026-09-22: the rail is a map of the inbox, and a
+    /// map that redraws itself whenever you look at a different part of it is not one you can
+    /// find your way back on. The order of `all` is by the whole inbox's counts, which change when
+    /// the data does, not when the selection does.
+    nonisolated static func stabilised<Facet, Key: Hashable>(
+        _ all: [Facet],
+        counts current: [Facet],
+        key: (Facet) -> Key,
+        zero: (Facet) -> Facet
+    ) -> [Facet] {
+        var byKey: [Key: Facet] = [:]
+        for facet in current where byKey[key(facet)] == nil {
+            byKey[key(facet)] = facet
+        }
+        return all.map { byKey[key($0)] ?? zero($0) }
     }
 
     /// The risk levels present in the current smart view, with counts (ADR 0023).
@@ -830,8 +880,12 @@ final class InboxModel {
     /// off the rail and acts on.
     var riskFacets: [TriageRiskFacet] {
         guard let triage else { return [] }
-        let ids = allRows.filter { smartView.matches($0) }.map(\.id)
-        return triage.riskFacets(for: ids)
+        return InboxModel.stabilised(
+            triage.riskFacets(for: allRows.map(\.id)),
+            counts: triage.riskFacets(for: allRows.filter(smartView.matches).map(\.id)),
+            key: \.risk,
+            zero: { TriageRiskFacet(risk: $0.risk, count: 0, classifiedCount: 0) }
+        )
     }
 
     /// The lanes present in the current smart view, with counts (ADR 0027).
@@ -840,9 +894,11 @@ final class InboxModel {
     /// and repository facets are: a facet whose counts changed when you selected one of its own
     /// rows could not be used to compare them.
     var laneFacets: [TrustLaneFacet] {
-        TrustLaneLoader.facets(
-            rows: allRows.filter { smartView.matches($0) },
-            snapshot: trust
+        InboxModel.stabilised(
+            TrustLaneLoader.facets(rows: allRows, snapshot: trust),
+            counts: TrustLaneLoader.facets(rows: allRows.filter(smartView.matches), snapshot: trust),
+            key: \.lane,
+            zero: { TrustLaneFacet(lane: $0.lane, count: 0) }
         )
     }
 
@@ -852,10 +908,21 @@ final class InboxModel {
         triage?.row(for: id)
     }
 
-    /// The repositories present in the current data, with counts.
+    /// The repositories present in the inbox, with the current smart view's counts, in the
+    /// whole inbox's order (``stabilised(_:counts:key:zero:)``).
     var repositoryFacets: [(repo: RepoRef, count: Int)] {
+        InboxModel.stabilised(
+            InboxModel.repositoryFacets(in: allRows),
+            counts: InboxModel.repositoryFacets(in: allRows.filter(smartView.matches)),
+            key: \.repo,
+            zero: { (repo: $0.repo, count: 0) }
+        )
+    }
+
+    /// The repositories of some rows, by count and then by name.
+    nonisolated static func repositoryFacets(in rows: [PullRequestSummary]) -> [(repo: RepoRef, count: Int)] {
         var counts: [RepoRef: Int] = [:]
-        for row in allRows where smartView.matches(row) {
+        for row in rows {
             counts[row.repo, default: 0] += 1
         }
         return counts

@@ -15891,16 +15891,6 @@
         }
       }
     },
-    "Watched. No pull request from this repository is in the current view.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Beobachtet. In der aktuellen Ansicht ist kein Pull Request aus diesem Repository."
-          }
-        }
-      }
-    },
     "Toggle viewed (v) — or accept and go to the next file (a)": {
       "localizations": {
         "de": {
@@ -16467,6 +16457,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Jede geänderte Datei ist generiert oder mitgeliefert (ein Lockfile, ein Snapshot oder ein Bundle)."
+          }
+        }
+      }
+    },
+    "Watched: every open pull request in this repository reaches the inbox.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beobachtet: Jeder offene Pull Request aus diesem Repository landet in der Inbox."
           }
         }
       }
