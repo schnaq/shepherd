@@ -133,6 +133,10 @@ final class AppEnvironment {
     let autoMergeStore: AutoMergeStore
     /// Decides whether the rows a sweep wrote contain anything to merge on its own (ADR 0018).
     let autoMerge: AutoMergeCoordinator
+    /// Remembers the merges the user armed while their checks were running (ADR 0037).
+    let mergeWhenGreenStore: MergeWhenGreenStore
+    /// Fires an armed merge on the sweep that sees its checks go green (ADR 0037).
+    let mergeWhenGreen: MergeWhenGreenCoordinator
     /// Owns the track-record backfill and the stored history (ADR 0027).
     ///
     /// Created inert, like the two coordinators below it: it reads nothing and asks GitHub
@@ -292,6 +296,18 @@ final class AppEnvironment {
                 }
             }
         )
+        let mergeWhenGreenStore = MergeWhenGreenStore()
+        self.mergeWhenGreenStore = mergeWhenGreenStore
+        self.mergeWhenGreen = MergeWhenGreenCoordinator(
+            settings: settings,
+            store: mergeWhenGreenStore,
+            notify: { payload in
+                // Detached, for the same reason as the two notices above it.
+                Task { [notifications] in
+                    await notifications.present(payload)
+                }
+            }
+        )
         self.search = SearchIndexCoordinator(settings: settings)
         self.triage = TriageCoordinator(settings: settings)
         self.spotlight = SpotlightIndexer(settings: settings)
@@ -407,6 +423,10 @@ final class AppEnvironment {
         // naming the previous account's pull requests has no business being on screen after a
         // sign-out (ADR 0018).
         autoMerge.reset()
+        // And the merges armed while their checks ran: each names a pull request of the leaving
+        // account, and a decision made about one account's commit must not fire on another's
+        // (ADR 0037).
+        mergeWhenGreen.reset()
         // Same argument for the digest's device state: the card names the leaving account's pull
         // requests, and "already delivered today" belongs to that account's morning.
         digest.reset()
@@ -557,54 +577,94 @@ final class AppEnvironment {
         toasts.success(String(localized: "Merged \(slug)."))
     }
 
-    // MARK: - Automatic merging (ADR 0018)
+    // MARK: - Automatic merging (ADR 0018) and merge when checks pass (ADR 0037)
 
-    /// Considers the rows a sweep just wrote for automatic merging.
+    /// Considers the rows a sweep just wrote for the two kinds of merge Shepherd queues without a
+    /// click at that moment: the opt-in rules (ADR 0018) and the merges the user armed while their
+    /// checks were running (ADR 0037).
     ///
-    /// Opt-in and off by default; with no rule armed this is one `Bool` read before anything
-    /// asynchronous is started, which matters because the inbox observation speaks on every inbox
-    /// write. Everything that decides anything is the pure
-    /// ``ShepherdCore/AutoMergePolicy``; the write goes through the *same*
-    /// ``PullRequestActions/merge(_:method:)`` the merge sheet's button calls, so the outbox, the
-    /// retry, the head-commit preflight and the `pr.merged` webhook all behave exactly as they do
-    /// for a merge the user asked for (ADR 0006, ADR 0015's "n ordinary outbox writes").
+    /// With neither armed this is two cheap reads before anything asynchronous is started, which
+    /// matters because the inbox observation speaks on every inbox write. Everything that decides
+    /// anything is a pure policy in `ShepherdCore`; both writes go through the *same*
+    /// ``PullRequestActions/merge(_:method:deletesHeadBranch:)`` the merge sheet's button calls,
+    /// so the outbox, the retry, the head-commit preflight and the `pr.merged` webhook all behave
+    /// exactly as they do for a merge the user asked for (ADR 0006, ADR 0015's "n ordinary outbox
+    /// writes").
+    ///
+    /// One `Task` for both, in this order, on purpose: a pull request can satisfy the rules *and*
+    /// carry an arm — an agent's, approved, and the reviewer pressed *Merge when checks pass* on
+    /// top — and two passes that each read the outbox before the other wrote would queue two
+    /// merges for it. The second pass therefore sees what the first one queued as writes already
+    /// in flight, and waits.
     /// - Parameter rows: Every inbox row the local database now holds.
     private func considerAutoMerge(rows: [PullRequestSummary]) {
-        guard settings.autoMerge.isEnabled, let session else { return }
+        let rulesArmed = settings.autoMerge.isEnabled
+        let decisionsArmed = mergeWhenGreen.armedCount > 0
+        guard rulesArmed || decisionsArmed, let session else { return }
         Task { [weak self] in
-            // Read before the pass rather than per row: one query for the whole batch, and the
-            // coordinator adds its own queued ids as it goes.
-            let queuedWrites = await session.pullRequestIDsWithQueuedWrites()
+            // Read before either pass rather than per row: one query for the whole batch, and
+            // each coordinator adds its own queued ids as it goes.
+            var inFlight = await session.pullRequestIDsWithQueuedWrites()
             guard let self else { return }
-            // `announcesSuccess: false` — the pass announces itself once, as a notification, and
-            // records every merge in the audit log; a toast per row would be a dozen banners for
-            // something nobody was watching. A *failure* still toasts.
-            let actions = PullRequestActions(
-                session: session,
-                toasts: self.toasts,
-                activity: self.activity,
-                announcesSuccess: false,
-                telemetry: self.telemetry,
-                // The one helper in the app whose merges nobody pressed: they are counted as the
-                // rule's, not the detail screen's (ADR 0036).
-                mergeSource: .autoRule
-            )
-            let queued = await self.autoMerge.run(
-                rows: rows,
-                existingOutbox: queuedWrites,
-                write: { summary, method in
-                    // No branch deletion: `deletesHeadBranch` keeps its default. A rule may only
-                    // record a decision a human already made (ADR 0018), and nobody ticked a box
-                    // about a branch — widening what an unattended rule does needs a new ADR.
-                    await actions.merge(summary, method: method)
+
+            if rulesArmed {
+                // `announcesSuccess: false` — the pass announces itself once, as a notification,
+                // and records every merge in the audit log; a toast per row would be a dozen
+                // banners for something nobody was watching. A *failure* still toasts.
+                let actions = PullRequestActions(
+                    session: session,
+                    toasts: self.toasts,
+                    activity: self.activity,
+                    announcesSuccess: false,
+                    telemetry: self.telemetry,
+                    // The one helper in the app whose merges nobody pressed: they are counted as
+                    // the rule's, not the detail screen's (ADR 0036).
+                    mergeSource: .autoRule
+                )
+                let queued = await self.autoMerge.run(
+                    rows: rows,
+                    existingOutbox: inFlight,
+                    write: { summary, method in
+                        // No branch deletion: `deletesHeadBranch` keeps its default. A rule may
+                        // only record a decision a human already made (ADR 0018), and nobody
+                        // ticked a box about a branch — widening what an unattended rule does
+                        // needs a new ADR.
+                        await actions.merge(summary, method: method)
+                    }
+                )
+                for write in queued {
+                    self.webhookCoordinator.handle(write, database: session.database)
+                    // One per merge the rule actually queued (ADR 0036). Skips are not recorded:
+                    // the policy reaches a decision for every inbox row on every sweep, so
+                    // counting them would be tens of thousands of events a month and would drown
+                    // this one.
+                    self.telemetry?.record(.autoMergeRuleFired(outcome: .merged))
                 }
-            )
-            for write in queued {
-                self.webhookCoordinator.handle(write, database: session.database)
-                // One per merge the rule actually queued (ADR 0036). Skips are not recorded: the
-                // policy reaches a decision for every inbox row on every sweep, so counting them
-                // would be tens of thousands of events a month and would drown this one.
-                self.telemetry?.record(.autoMergeRuleFired(outcome: .merged))
+                inFlight.formUnion(queued.map(\.pullRequest.id))
+            }
+
+            if decisionsArmed {
+                // `announcesSuccess: false` here too: the pass posts its own notification, and
+                // the user is not necessarily looking at the window a toast would land in.
+                let actions = PullRequestActions(
+                    session: session,
+                    toasts: self.toasts,
+                    activity: self.activity,
+                    announcesSuccess: false,
+                    telemetry: self.telemetry,
+                    mergeSource: .whenChecksPass
+                )
+                await self.mergeWhenGreen.run(
+                    rows: rows,
+                    existingOutbox: inFlight,
+                    write: { summary, method, deletesHeadBranch in
+                        await actions.merge(
+                            summary,
+                            method: method,
+                            deletesHeadBranch: deletesHeadBranch
+                        )
+                    }
+                )
             }
         }
     }

@@ -42,6 +42,7 @@ founder interview (2026-08-31) combined with three research reports (see
 | 0034 | [A native diff renderer beside Monaco, held to a three-point contract](0034-native-diff-renderer.md) | Accepted |
 | 0035 | [The fleet: an agent gets a screen, and the screen counts rather than ranks](0035-the-fleet.md) | Accepted |
 | 0036 | [Usage telemetry: anonymous by default, reach by consent, absent without a key](0036-usage-telemetry.md) | Accepted (v1.2) |
+| 0037 | [Merge when checks pass: a per-pull-request decision, fired by the sweep](0037-merge-when-checks-pass.md) | Accepted |
 
 Format: lightweight [MADR](https://adr.github.io/madr/)-style — Context, Decision, Consequences.
 New decisions get the next number; superseded ADRs are marked, never deleted.

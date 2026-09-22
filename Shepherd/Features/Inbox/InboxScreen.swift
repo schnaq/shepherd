@@ -204,7 +204,8 @@ struct InboxScreen: View {
                     summary: summary,
                     checkState: summary.checkRollup?.state,
                     actions: actions,
-                    settings: environment.settings
+                    settings: environment.settings,
+                    mergeWhenGreen: environment.mergeWhenGreen
                 )
             }
         }

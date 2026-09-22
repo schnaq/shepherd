@@ -32,7 +32,8 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
                                #   CoreSpotlight; both route through DeepLink (ADR 0021)
   Automation/                  #   outbound webhook payload, signing, dispatcher (ADR 0012);
                                #   auto-delegation coordinator + ledger store (ADR 0016);
-                               #   auto-merge coordinator + ledger/audit store (ADR 0018)
+                               #   auto-merge coordinator + ledger/audit store (ADR 0018);
+                               #   merge-when-green coordinator + store (ADR 0037)
   SettingsSync/                #   encrypted settings document, envelope, SigV4, S3 client (ADR 0014)
   Diagnostics/                 #   MetricKit subscriber + local report folder (ADR 0017)
   Intelligence/                #   IntelligenceProvider impls (FoundationModels, Anthropic)
@@ -60,7 +61,8 @@ Packages/ShepherdKit/          # SPM package, NO AppKit/SwiftUI imports
                                #     issues rail's age buckets and its label/age/agent-PR
                                #     facet counting (ADR 0032)
       Automation/              #     auto-delegation rules, ledger and policy (ADR 0016);
-                               #     auto-merge rules, ledger/audit log and policy (ADR 0018)
+                               #     auto-merge rules, ledger/audit log and policy (ADR 0018);
+                               #     merge-when-green request, list and policy (ADR 0037)
       Digest/                  #     morning-digest report + delivery schedule
       Search/                  #     search document, lexical ranker, vector value (ADR 0019);
                                #     the issue document and its ranker beside them (ADR 0032)
@@ -233,6 +235,14 @@ Pure logic in `ShepherdCore` (all unit-tested):
   `GlobPattern`, and labels that must all be present), so no setting and no corrupt document can
   widen it. `AutoMergeLedger` is the deduplication key set *and* the audit log in one list — one
   queued merge per `(prID, headRefOid)`, ever — which is why the two cannot drift apart.
+- `MergeWhenGreenPolicy` / `MergeWhenGreenRequest` / `MergeWhenGreenList` (`Automation/`) — a
+  merge the user decided on while the checks were running, as a value (ADR 0037).
+  `decide(request:pullRequest:existingOutbox:)` returns `.merge(expectedHeadOid:)`,
+  `.wait(reason)` or `.abandon(reason)`, in a fixed order with the head commit checked first: the
+  request pins the commit, the method and the branch answer the sheet showed, and a push means the
+  decision no longer applies. Unlike `AutoMergePolicy` it checks no approval and no authorship —
+  the human formed the verdict at the click — and treats unknown mergeability as a wait, not a
+  refusal. The list is one entry per pull request, machine-local, never in the settings document.
 - `SavedReply.inserting(_:into:)` (`Review/`) — how a saved reply reaches a comment field:
   appended after exactly one blank line, never at a caret. `TextEditor`/`TextField` expose no
   selection, so an at-cursor insert would mean replacing every review text field with an
@@ -1708,6 +1718,32 @@ Device state versus setting is the usual split: the rules travel in the encrypte
 (`autoMerge` group, both directions of `SettingsSyncApplier`), the ledger deliberately does not —
 the argument `AutoDelegationLedger` makes, unchanged — and it is cleared in `signOutAndErase`
 because an audit log naming the previous account's pull requests has no business staying on screen.
+
+### Merge when checks pass (ADR 0037)
+
+The third way a merge is queued, beside the click and the rule, and the merge sheet is the only
+place it starts: while the head commit's checks are pending, the sheet offers *Merge when checks
+pass* next to *Merge*. `ShepherdCore/Automation/MergeWhenGreenPolicy.swift` holds the decision
+(above); `Automation/MergeWhenGreenCoordinator.swift` and `MergeWhenGreenStore.swift` are the app
+half. The store is `UserDefaults`, machine-local, cleared on sign-out and never in the settings
+document — the arm records what *this* user looked at on *this* Mac.
+
+- **It is the user's verdict, so the policy checks none of the rule's conditions.** No approval, no
+  authorship, no repository: the request pins the head commit, the method and the delete-branch
+  answer as the sheet showed them, and the pass asks only whether that commit is still the one
+  that would be merged and whether it went green. A push, a red check, a conflict or a draft drops
+  the arm with a notification naming the reason; a row missing from the sweep is a wait, not a
+  drop, for seven days.
+- **It runs in the auto-merge pass, after the rules,** in `AppEnvironment.considerAutoMerge(rows:)`:
+  one `Task` reads the outbox once, runs the rules, adds what they queued to the in-flight set and
+  then runs the arms against it. A pull request that satisfies the rules *and* carries an arm gets
+  one merge.
+- **The write is the sheet's write**, `PullRequestActions.merge(_:method:deletesHeadBranch:)`
+  through a seam one argument wider than `AutoMergeWriting`, so the row is an ordinary `.merge`
+  pinned to the armed head, `pr.merged` fires from the drain, and there is no new webhook event:
+  the intent was a click. Telemetry gains one value, `pull_request_merged.source =
+  when_checks_pass`. Arming advances a focus session and leaves the review screen exactly as
+  *Merge* does.
 
 ### Semantic ⌘K search (on-device, ADR 0019)
 

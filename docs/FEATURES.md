@@ -669,6 +669,25 @@ audit log (Settings → Automation, last ten shown) that explains every skip as 
 One notification per sweep says how many were queued, and a `pr.auto_merge_queued` webhook fires
 for each. Off by default ([ADR 0018](adr/0018-auto-merge-rules.md)).
 
+### Merge when the checks pass
+
+You have read the diff, it is good, and the sheet says *Checks are still running.* You can merge
+past that warning, as before — or press **Merge when checks pass** (⇧⌘⏎) and walk away. Shepherd
+remembers the commit you looked at, the merge method and the delete-branch answer as the sheet
+showed them, and queues that merge on the first sweep that finds every check green on **that
+commit**. A new push, a failing check, a conflict or a draft cancels it, with a notification saying
+which. Unknown mergeability waits rather than cancels, because GitHub recomputes it in the
+seconds after the last check ends — and so does a pull request the sweep momentarily cannot see;
+one that stays gone for a week, because somebody else merged or closed it, is forgotten quietly.
+
+The button is only there while checks are running: a red suite cannot go green without a re-run,
+and a re-run brings the button back. The sheet shows the waiting state and offers *Stop waiting*;
+the inbox detail panel says *Merges when the checks pass* next to the queue status. Arming counts
+as finishing with the pull request — a focus session moves on, the review screen goes back to the
+inbox. It fires while Shepherd is running, on the next sweep, through the same outbox row a click
+produces. This is your decision on one commit, not a rule, so it asks for no approval and no agent
+author, and it never travels to another Mac ([ADR 0037](adr/0037-merge-when-checks-pass.md)).
+
 ### Outbound webhooks for your own automation
 
 Point Shepherd at an n8n Webhook node (or any JSON endpoint) and get a versioned event when a

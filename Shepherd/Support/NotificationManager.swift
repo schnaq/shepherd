@@ -274,6 +274,62 @@ final class NotificationManager {
         )
     }
 
+    // MARK: - Merge when checks pass (ADR 0037)
+
+    /// The notice posted when a merge the user armed was queued because its checks went green.
+    ///
+    /// One notice per pass, like the auto-merge notice, and it says **queued** for the same
+    /// reason: the outbox sends the merge, and a head that moved in between parks it instead.
+    /// Not gated by any notification preference — the user is counting on this merge, and the
+    /// moment it goes out is the moment they want to hear about it.
+    /// - Parameter requests: The arms that fired, in the order they were queued.
+    static func payload(forMergedWhenGreen requests: [MergeWhenGreenRequest]) -> NotificationPayload? {
+        guard let first = requests.first else { return nil }
+        let identifier = "merge-when-green-\(first.prID)-\(first.headRefOid)"
+        guard requests.count > 1 else {
+            return NotificationPayload(
+                identifier: identifier,
+                title: String(localized: "Checks passed · \(first.slug)"),
+                body: String(localized: "\(first.title) · Shepherd queued the \(first.mergeMethod) merge you asked for.")
+            )
+        }
+        let slugs = requests.map(\.slug).joined(separator: ", ")
+        return NotificationPayload(
+            identifier: identifier,
+            title: String(localized: "Checks passed · \(requests.count) merges queued"),
+            body: slugs
+        )
+    }
+
+    /// The notice posted when an armed merge was dropped instead of queued.
+    ///
+    /// One per arm, because each carries a reason the user has to act on differently: a push
+    /// means re-reading the diff, a red check means fixing or re-running it, a conflict means a
+    /// rebase. The identifier carries the reason, so a push that follows a failure is a second
+    /// banner rather than a rewrite of the first.
+    /// - Parameter abandonment: The dropped arm and why.
+    static func payload(forAbandonedMergeWhenGreen abandonment: MergeWhenGreenAbandonment) -> NotificationPayload {
+        let request = abandonment.request
+        let body: String
+        switch abandonment.reason {
+        case .headMoved:
+            body = String(localized: "\(request.title) · A new push arrived, so the commit you judged is no longer the one that would be merged. Not merged.")
+        case .checksFailed:
+            body = String(localized: "\(request.title) · A check failed on the commit you judged. Not merged.")
+        case .noChecks:
+            body = String(localized: "\(request.title) · The commit has no checks left to wait for. Not merged.")
+        case .draft:
+            body = String(localized: "\(request.title) · The pull request was turned back into a draft. Not merged.")
+        case .conflicting:
+            body = String(localized: "\(request.title) · GitHub reports conflicts with the base branch. Not merged.")
+        }
+        return NotificationPayload(
+            identifier: "merge-when-green-dropped-\(request.prID)-\(request.headRefOid)-\(abandonment.reason.rawValue)",
+            title: String(localized: "Not merged · \(request.slug)"),
+            body: body
+        )
+    }
+
     // MARK: - Morning digest
 
     /// The notice the morning digest posts, or `nil` when there is nothing to report.

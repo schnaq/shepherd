@@ -121,6 +121,26 @@
         }
       }
     },
+    "%@ will be merged once its checks pass.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ wird gemerged, sobald die Checks grün sind."
+          }
+        }
+      }
+    },
+    "%@ will not be merged when its checks pass.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ wird nicht mehr gemerged, wenn die Checks grün werden."
+          }
+        }
+      }
+    },
     "%@ · %@ · %@": {
       "localizations": {
         "de": {
@@ -141,6 +161,36 @@
         }
       }
     },
+    "%@ · A check failed on the commit you judged. Not merged.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · Ein Check auf dem Commit, den du beurteilt hast, ist fehlgeschlagen. Nicht gemerged."
+          }
+        }
+      }
+    },
+    "%@ · A new push arrived, so the commit you judged is no longer the one that would be merged. Not merged.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · Ein neuer Push ist angekommen – der Commit, den du beurteilt hast, ist nicht mehr der, der gemerged würde. Nicht gemerged."
+          }
+        }
+      }
+    },
+    "%@ · GitHub reports conflicts with the base branch. Not merged.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · GitHub meldet Konflikte mit dem Base-Branch. Nicht gemerged."
+          }
+        }
+      }
+    },
     "%@ · green, approved, agent-authored. Shepherd queued a %@ merge.": {
       "localizations": {
         "de": {
@@ -157,6 +207,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ · Es wird nichts gepusht; öffne die Delegation, um den Diff zu prüfen."
+          }
+        }
+      }
+    },
+    "%@ · Shepherd queued the %@ merge you asked for.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · Shepherd hat den gewünschten %@-Merge eingereiht."
+          }
+        }
+      }
+    },
+    "%@ · The commit has no checks left to wait for. Not merged.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · Der Commit hat keine Checks mehr, auf die gewartet werden könnte. Nicht gemerged."
+          }
+        }
+      }
+    },
+    "%@ · The pull request was turned back into a draft. Not merged.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · Der Pull Request wurde wieder zu einem Draft gemacht. Nicht gemerged."
           }
         }
       }
@@ -2211,6 +2291,16 @@
         }
       }
     },
+    "A new push or a failing check cancels it, with a notification.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein neuer Push oder ein fehlgeschlagener Check bricht das ab – mit einer Mitteilung."
+          }
+        }
+      }
+    },
     "A RECURRING FINDING": {
       "localizations": {
         "de": {
@@ -3587,6 +3677,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "CHECKS"
+          }
+        }
+      }
+    },
+    "Checks passed · %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checks grün · %@"
+          }
+        }
+      }
+    },
+    "Checks passed · %lld merges queued": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checks grün · %lld Merges eingereiht"
           }
         }
       }
@@ -7211,6 +7321,26 @@
         }
       }
     },
+    "Merge when checks pass": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mergen, sobald Checks grün"
+          }
+        }
+      }
+    },
+    "Merges when the checks pass": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird gemerged, sobald die Checks grün sind"
+          }
+        }
+      }
+    },
     "MORNING DIGEST": {
       "localizations": {
         "de": {
@@ -7567,6 +7697,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Meine Pull Requests"
+          }
+        }
+      }
+    },
+    "Not merged · %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht gemerged · %@"
           }
         }
       }
@@ -9471,6 +9611,16 @@
         }
       }
     },
+    "rebase-merge": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "per Rebase mergen"
+          }
+        }
+      }
+    },
     "RECURRING FINDINGS": {
       "localizations": {
         "de": {
@@ -10391,6 +10541,16 @@
         }
       }
     },
+    "Shepherd queues this merge on the first sweep that finds every check green on this commit — while the app is running. A new push or a failing check cancels it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd reiht den Merge beim ersten Sweep ein, der alle Checks auf diesem Commit grün vorfindet – solange die App läuft. Ein neuer Push oder ein fehlgeschlagener Check bricht das ab."
+          }
+        }
+      }
+    },
     "SIGN IN WITH GITHUB": {
       "localizations": {
         "de": {
@@ -10431,6 +10591,16 @@
         }
       }
     },
+    "squash-merge": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "per Squash mergen"
+          }
+        }
+      }
+    },
     "STATE": {
       "localizations": {
         "de": {
@@ -10447,6 +10617,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "NOCH OFFEN"
+          }
+        }
+      }
+    },
+    "Stop waiting": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht mehr warten"
           }
         }
       }
@@ -13461,6 +13641,16 @@
         }
       }
     },
+    "Waiting for the checks to pass. Shepherd will %@ this commit as soon as they are green — while the app is running.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wartet auf grüne Checks. Shepherd wird diesen Commit %@, sobald sie grün sind – solange die App läuft."
+          }
+        }
+      }
+    },
     "WHAT AI NEVER DOES": {
       "localizations": {
         "de": {
@@ -13767,6 +13957,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Falsche Passphrase oder beschädigte Daten. Es wurde nichts übernommen."
+          }
+        }
+      }
+    },
+    "You decided to merge this commit once its checks are green. Press m to stop waiting.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du hast entschieden, diesen Commit zu mergen, sobald die Checks grün sind. Drücke m, um nicht mehr zu warten."
           }
         }
       }

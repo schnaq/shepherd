@@ -21,6 +21,8 @@ struct MergeSheet: View {
     let actions: PullRequestActions
     /// Where the remembered merge method lives, shared with the bulk-triage dialog (ADR 0015).
     let settings: AppSettings
+    /// Where a merge decided on while the checks were still running is kept (ADR 0037).
+    let mergeWhenGreen: MergeWhenGreenCoordinator
     /// Called once the merge is queued, so a caller that was *showing* this pull request can go
     /// somewhere else. `nil` for the inbox, which is already where you would end up.
     var onMerged: (@MainActor () -> Void)?
@@ -56,7 +58,9 @@ struct MergeSheet: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
 
-            if let warning {
+            if isArmed {
+                armedStatus
+            } else if let warning {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "exclamationmark.triangle")
                         .foregroundStyle(Theme.pending)
@@ -72,9 +76,36 @@ struct MergeSheet: View {
                 Button(String(localized: "Cancel")) { dismiss() }
                     .buttonStyle(SecondaryButtonStyle())
                     .keyboardShortcut(.cancelAction)
+                if isArmed {
+                    Button(String(localized: "Stop waiting")) {
+                        mergeWhenGreen.disarm(pullRequestID: summary.id)
+                        actions.toasts.success(
+                            String(localized: "\(summary.slug) will not be merged when its checks pass.")
+                        )
+                        dismiss()
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                } else if offersMergeWhenGreen {
+                    Button {
+                        armMergeWhenGreen()
+                    } label: {
+                        Text(String(localized: "Merge when checks pass"))
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    // ⇧⌘⏎: the deliberate keystroke's sibling, one modifier away from *Merge*.
+                    .keyboardShortcut(.return, modifiers: [.command, .shift])
+                    .help(String(
+                        localized: "Shepherd queues this merge on the first sweep that finds every check green on this commit — while the app is running. A new push or a failing check cancels it."
+                    ))
+                }
                 Button {
                     let method = settings.defaultMergeMethod
                     let deletesBranch = settings.deletesBranchAfterMerge
+                    // Merging by hand supersedes a wait the sheet may be showing: the arm would
+                    // otherwise fire behind this merge on the sweep that sees the checks go green,
+                    // and be refused by the outbox's "one write in flight" rule rather than by
+                    // anything that knew the user had already pressed the button.
+                    mergeWhenGreen.disarm(pullRequestID: summary.id)
                     Task {
                         await actions.merge(
                             summary,
@@ -107,6 +138,73 @@ struct MergeSheet: View {
         .padding(20)
         .frame(width: 420)
         .background(Theme.panel)
+    }
+
+    /// Whether a merge decided on earlier is waiting for this commit's checks (ADR 0037).
+    ///
+    /// Read off the coordinator on every render rather than captured when the sheet opened: the
+    /// store is `@Observable`, so a pass that fires the merge while the sheet is up turns the
+    /// waiting line back into the ordinary buttons.
+    private var isArmed: Bool { mergeWhenGreen.isArmed(summary) }
+
+    /// Whether *Merge when checks pass* is on offer: nothing GitHub would refuse outright, and
+    /// checks that are still running.
+    ///
+    /// Only while they run, not once one has failed. A red suite cannot go green without a re-run
+    /// or a push — and a re-run makes it pending again, which is when the button comes back. A
+    /// pull request with no checks has nothing to wait for, and the plain *Merge* is the honest
+    /// button for it.
+    private var offersMergeWhenGreen: Bool {
+        summary.mergeBlocker == nil && checkState == .pending
+    }
+
+    /// The line the sheet shows instead of the warning while a merge is waiting for green.
+    private var armedStatus: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "clock.badge.checkmark")
+                .foregroundStyle(Theme.pending)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(String(localized: "Waiting for the checks to pass. Shepherd will \(armedMethodName) this commit as soon as they are green — while the app is running."))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(String(localized: "A new push or a failing check cancels it, with a notification."))
+                    .font(Theme.type(.subheadline))
+                    .foregroundStyle(Theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .font(Theme.type(.callout))
+        .foregroundStyle(Theme.textSecondary)
+    }
+
+    /// The verb for the method the arm was recorded with — the sheet's own at the time, which may
+    /// differ from what the picker shows now.
+    private var armedMethodName: String {
+        let raw = mergeWhenGreen.request(forPullRequestID: summary.id)?.mergeMethod
+        switch raw.flatMap(MergeMethod.init(rawValue:)) ?? settings.defaultMergeMethod {
+        case .merge: return String(localized: "merge")
+        case .squash: return String(localized: "squash-merge")
+        case .rebase: return String(localized: "rebase-merge")
+        }
+    }
+
+    /// Records the decision and leaves, the way a merge would.
+    ///
+    /// The method and the branch box are read now, because now is what the user is looking at.
+    /// The focus session advances (``PullRequestActions/onDidQueueVerdict``) and the review screen
+    /// goes away (``onMerged``) exactly as they do for *Merge*: the reviewer is finished with this
+    /// pull request, and the rest is the sweep's.
+    private func armMergeWhenGreen() {
+        mergeWhenGreen.arm(
+            summary,
+            method: settings.defaultMergeMethod,
+            deletesHeadBranch: settings.deletesBranchAfterMerge
+        )
+        actions.toasts.success(
+            String(localized: "\(summary.slug) will be merged once its checks pass.")
+        )
+        actions.onDidQueueVerdict?(summary.id)
+        dismiss()
+        onMerged?()
     }
 
     /// Whether the merge this sheet would queue is already on its way to the outbox.

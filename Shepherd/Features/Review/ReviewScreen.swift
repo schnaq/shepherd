@@ -126,6 +126,7 @@ struct ReviewScreen: View {
                     checkState: model.checkRollup?.state,
                     actions: actions,
                     settings: environment.settings,
+                    mergeWhenGreen: environment.mergeWhenGreen,
                     // A merged pull request is not one you are still reviewing, so the screen
                     // that was reviewing it goes away. Queued rather than done — the write is in
                     // the outbox (ADR 0006) — but the decision is made, and standing in a diff

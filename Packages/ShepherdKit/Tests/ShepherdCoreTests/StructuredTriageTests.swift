@@ -252,6 +252,20 @@ final class StructuredTriageTests: XCTestCase {
         )
         assertNoVerdict(in: AutoMergeLedger(), label: "AutoMergeLedger")
         assertNoVerdict(
+            in: MergeWhenGreenList().arming(
+                MergeWhenGreenRequest(
+                    prID: "PR_1",
+                    slug: "schnaq/review#1",
+                    title: "Fix the thing",
+                    headRefOid: "abc123",
+                    mergeMethod: "squash",
+                    deletesHeadBranch: false,
+                    armedAt: Fixtures.date(0)
+                )
+            ),
+            label: "MergeWhenGreenList"
+        )
+        assertNoVerdict(
             in: AutoDelegationSignal(
                 trigger: .checksFailed,
                 pullRequest: summary,
@@ -290,6 +304,20 @@ final class StructuredTriageTests: XCTestCase {
         )
         assertNoHistoryOrLane(in: AutoMergeRules(isEnabled: true), label: "AutoMergeRules")
         assertNoHistoryOrLane(in: AutoMergeLedger(), label: "AutoMergeLedger")
+        assertNoHistoryOrLane(
+            in: MergeWhenGreenList().arming(
+                MergeWhenGreenRequest(
+                    prID: "PR_1",
+                    slug: "schnaq/review#1",
+                    title: "Fix the thing",
+                    headRefOid: "abc123",
+                    mergeMethod: "squash",
+                    deletesHeadBranch: false,
+                    armedAt: Fixtures.date(0)
+                )
+            ),
+            label: "MergeWhenGreenList"
+        )
         assertNoHistoryOrLane(
             in: AutoDelegationSignal(
                 trigger: .checksFailed,

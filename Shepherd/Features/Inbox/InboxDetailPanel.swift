@@ -305,6 +305,7 @@ struct InboxDetailPanel: View {
     /// request looking untouched — and the only per-pull-request word about the queue was the
     /// one-shot alert a parked review raises once (`DraftConflictQueue`), which a user who was
     /// away when it appeared never sees again.
+    @ViewBuilder
     private func queueStatus(_ row: PullRequestSummary) -> some View {
         QueueStatusLine(
             queued: model.queuedWriteCount(for: row),
@@ -312,6 +313,27 @@ struct InboxDetailPanel: View {
             failed: model.failedWriteCount(for: row),
             target: .pullRequest
         )
+        if environment.mergeWhenGreen.isArmed(row) {
+            mergeWhenGreenStatus
+        }
+    }
+
+    /// The one line about a merge that is waiting for this commit's checks (ADR 0037).
+    ///
+    /// Beside the queue status rather than inside it: the outbox holds nothing yet — that is the
+    /// point — so this is the only place the panel can say that a decision has been made. The
+    /// sheet (`m`) is where it is cancelled, which is why the line names the key.
+    private var mergeWhenGreenStatus: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "clock.badge.checkmark")
+                .font(.system(size: 10))
+                .foregroundStyle(Theme.pending)
+            Text(String(localized: "Merges when the checks pass"))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textSecondary)
+            Spacer(minLength: 0)
+        }
+        .help(String(localized: "You decided to merge this commit once its checks are green. Press m to stop waiting."))
     }
 }
 

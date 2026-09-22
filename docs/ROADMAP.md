@@ -126,6 +126,12 @@ the release workflow is run in earnest.
       Still no auto-push and no auto-approve — the result waits in the Delegation Center marked as
       automatic. Merging is the one action a rule may now perform, under the much narrower
       conditions of ADR 0018 below
+- [x] Merge when checks pass (ADR 0037): a second button on the merge sheet while the checks are
+      running. Shepherd records the commit, method and branch answer the reviewer saw and queues
+      that merge on the sweep that finds the commit green; a push, a red check, a conflict or a
+      draft drops it with a notification naming why. The reviewer's own verdict on one commit, so
+      no approval or authorship condition — and machine-local, because a second Mac cannot know
+      what this one's user looked at
 - [x] Opt-in auto-merge rules (ADR 0018): when an agent's pull request is green, **approved**, not
       a draft and mergeable, Shepherd queues the merge itself — through the ordinary outbox, with
       the head commit the decision was made on as the precondition, so a push in between parks it
