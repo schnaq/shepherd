@@ -119,7 +119,8 @@ public struct PullRequestDigest: Sendable, Codable, Hashable {
         public var bucket: PriorityBucket
         /// The heuristic category of the file.
         public var category: FileCategory
-        /// Human-readable reasons behind the ranking.
+        /// The reasons behind the ranking, as ``FilePriorityReason/englishText``: a digest is
+        /// read by a model, never drawn, so it carries the English wording and not the enum.
         public var reasons: [String]
 
         /// Creates a file statistic.
@@ -283,7 +284,7 @@ public enum PullRequestDigestBuilder {
                 deletions: priority.file.deletions,
                 bucket: priority.bucket,
                 category: priority.category,
-                reasons: priority.reasons
+                reasons: priority.reasons.map(\.englishText)
             )
             let cost = stat.path.count + stat.reasons.reduce(0) { $0 + $1.count } + 24
             if statsUsed + cost > statsLimit, !files.isEmpty {

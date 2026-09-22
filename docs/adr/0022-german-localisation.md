@@ -278,3 +278,28 @@ it cannot see, "stale catalog entry" for every phrase that is in fact live. The 
 file is the other one: a phrase with no German row falls back to the English phrase, which works on
 a German Mac today, so the failure mode is the one this ADR already accepted for the main catalog
 rather than a broken build or a dead Siri command.
+
+## Amendment (2026-09-22): file priority reasons are values, rendered in the app
+
+The review file list, the inbox's file tooltip and the triage "why this risk" popover showed the
+prioritiser's reasons ("Touches security-sensitive path …", "Deletes a test file", "Large change
+(420 lines)") in English on a German Mac: they were sentences built in `ShepherdCore`, which is
+Foundation-only and cannot call `String(localized:)`, and only the first one — the file's
+category — was swapped for a German label on screen.
+
+They now follow the shape `EvidenceFact` set (ADR 0026): `FilePrioritizer` produces a closed
+`FilePriorityReason` enum with associated values (the matched security hint, the line count, the
+previous path), and the triage hints a closed `TriageRiskHint`. Each has an `englishText` in
+`ShepherdCore` — byte for byte the old wording — which is what goes to a model or an agent: the
+intelligence digest (`PullRequestDigest.FileStat.reasons` stays `[String]` and carries it), the
+triage prompt (`TriageInput.make(document:riskHints:)` still takes the English lines), and the
+delegation brief's focus reasons. The screen draws `localizedText(bundle:)`
+(`Shepherd/Features/Review/FilePriorityReasonText.swift`) instead, with paths and the hint
+interpolated verbatim and the two line-count phrases going through plural rules.
+`ShepherdTests/FilePriorityReasonTextTests.swift` walks every case through the compiled `de.lproj`.
+
+No tolerant decoding was needed: neither `FilePriority` nor the triage hints are persisted. The
+priorities are recomputed from the stored changed files whenever a review or the inbox detail
+opens; `TriageVerdictEntry` stores a document hash and the verdict, not the hints, and the hash is
+the search document's, so keeping the prompt's English unchanged also leaves every stored verdict
+usable.

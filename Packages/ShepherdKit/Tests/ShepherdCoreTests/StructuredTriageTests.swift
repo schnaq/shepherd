@@ -30,6 +30,23 @@ final class StructuredTriageTests: XCTestCase {
         )
     }
 
+    func testStructuredHintsLeaveTheCategoryOutAndMatchTheEnglishLines() {
+        let files = [
+            Fixtures.file("Sources/Auth/TokenStore.swift"),
+            Fixtures.file("Sources/Inbox/InboxModel.swift"),
+            Fixtures.file("README.md"),
+        ]
+        let hints = TriageRiskHints.riskHints(for: files)
+        XCTAssertEqual(
+            hints,
+            [.file(path: "Sources/Auth/TokenStore.swift", reasons: [.securitySensitivePath(hint: "auth")])]
+        )
+        XCTAssertEqual(
+            TriageRiskHints.hints(for: files),
+            ["Sources/Auth/TokenStore.swift — Touches security-sensitive path (“auth”)"]
+        )
+    }
+
     func testHintsAreCappedAndKeepThePrioritisedOrder() {
         let files = (0..<12).map { index in
             Fixtures.file("Sources/Auth/File\(index).swift", additions: 400, deletions: 0)

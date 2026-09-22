@@ -80,7 +80,8 @@ final class FilePrioritizerTests: XCTestCase {
         ])
         XCTAssertEqual(priorities.first?.bucket, .reviewFirst)
         XCTAssertTrue(
-            priorities.first?.reasons.contains(where: { $0.contains("security-sensitive") }) == true
+            priorities.first?.reasons.map(\.englishText)
+                .contains(where: { $0.contains("security-sensitive") }) == true
         )
     }
 
@@ -93,7 +94,7 @@ final class FilePrioritizerTests: XCTestCase {
         ])
         XCTAssertEqual(deleted.first?.bucket, .reviewFirst)
         XCTAssertTrue(
-            deleted.first?.reasons.contains("Deletes a test file") == true
+            deleted.first?.reasons.map(\.englishText).contains("Deletes a test file") == true
         )
         guard let deletedScore = deleted.first?.score, let keptScore = kept.first?.score else {
             return XCTFail("expected both files to be scored")
@@ -106,7 +107,10 @@ final class FilePrioritizerTests: XCTestCase {
             Fixtures.file(".github/workflows/release.yml")
         ])
         XCTAssertEqual(priorities.first?.bucket, .reviewFirst)
-        XCTAssertTrue(priorities.first?.reasons.contains(where: { $0.contains("CI workflow") }) == true)
+        XCTAssertTrue(
+            priorities.first?.reasons.map(\.englishText)
+                .contains(where: { $0.contains("CI workflow") }) == true
+        )
     }
 
     func testContainerBuildFilesAreReviewedFirst() {
@@ -198,7 +202,47 @@ final class FilePrioritizerTests: XCTestCase {
             Fixtures.file("Resources/icon.png", patch: nil)
         ])
         XCTAssertTrue(
-            priorities.first?.reasons.contains(where: { $0.contains("No diff available") }) == true
+            priorities.first?.reasons.map(\.englishText)
+                .contains(where: { $0.contains("No diff available") }) == true
+        )
+    }
+
+    /// The reasons are values, and their English is the wording the prompts have always carried.
+    ///
+    /// The app draws a localised sentence per case; a model prompt and an agent brief read
+    /// ``FilePriorityReason/englishText``, so a rewording here is a prompt change and should be
+    /// one on purpose.
+    func testReasonsAreStructuredAndKeepTheirEnglishWording() {
+        let priority = FilePrioritizer.prioritize([
+            ChangedFile(
+                path: "Sources/Auth/Session.swift",
+                previousPath: "Sources/Auth/OldSession.swift",
+                status: .renamed,
+                additions: 250,
+                deletions: 100,
+                patch: "@@ -1,3 +1,3 @@\n-old\n+new\n",
+                isViewed: false
+            )
+        ]).first
+        XCTAssertEqual(
+            priority?.reasons,
+            [
+                .category(.source),
+                .securitySensitivePath(hint: "auth"),
+                .largeChange(lines: 350),
+                .dominatesChanges,
+                .renamed(from: "Sources/Auth/OldSession.swift"),
+            ]
+        )
+        XCTAssertEqual(
+            priority?.reasons.map(\.englishText),
+            [
+                "Source file",
+                "Touches security-sensitive path (“auth”)",
+                "Large change (350 lines)",
+                "Dominates this pull request's changes",
+                "Renamed from Sources/Auth/OldSession.swift",
+            ]
         )
     }
 

@@ -368,7 +368,7 @@ final class StructuredTriageTests: XCTestCase {
 
         let row = try XCTUnwrap(coordinator.row(for: "PR_1"))
         XCTAssertEqual(row.heuristicRisk, .high, "an auth path is review-first without a model")
-        XCTAssertTrue(row.riskHints.contains { $0.contains("Sources/Auth/TokenStore.swift") })
+        XCTAssertTrue(row.riskHints.contains { $0.englishText.contains("Sources/Auth/TokenStore.swift") })
         XCTAssertTrue(row.isClassified, "and the verdict is there too")
 
         let unopened = try XCTUnwrap(coordinator.row(for: "PR_2"))
@@ -501,13 +501,15 @@ final class StructuredTriageTests: XCTestCase {
         let classified = TriageRowSummary(
             verdict: TriageVerdict(kind: .fix, risk: .high, reason: "Touches auth."),
             heuristicRisk: .medium,
-            riskHints: ["Sources/Auth/TokenStore.swift — Touches security-sensitive path"]
+            riskHints: [
+                .file(path: "Sources/Auth/TokenStore.swift", reasons: [.securitySensitivePath(hint: "auth")]),
+            ]
         )
         XCTAssertEqual(classified.risk, .high, "the verdict wins over the heuristic")
         XCTAssertTrue(classified.isClassified)
         XCTAssertEqual(classified.rowRisk, TriageRowRisk(risk: .high, isClassified: true))
 
-        let heuristic = TriageRowSummary(heuristicRisk: .medium, riskHints: ["one hint"])
+        let heuristic = TriageRowSummary(heuristicRisk: .medium, riskHints: [.everyFileGenerated])
         XCTAssertEqual(heuristic.risk, .medium)
         XCTAssertFalse(heuristic.isClassified)
         XCTAssertEqual(heuristic.rowRisk, TriageRowRisk(risk: .medium, isClassified: false))
