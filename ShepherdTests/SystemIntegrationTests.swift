@@ -510,4 +510,66 @@ final class SystemIntegrationTests: XCTestCase {
         let entity = PullRequestEntity(pullRequest: summary(id: "PR_1", number: 1, title: "T"))
         XCTAssertEqual(entity.provenance, "People")
     }
+
+    // MARK: - Siri and Apple Intelligence (ADR 0021's 2026-09-22 amendment)
+
+    func testASpotlightItemNamesItsPullRequestEntity() {
+        let fields = SpotlightItemFields(pullRequest: summary(id: "PR_9", number: 9, title: "T"))
+        let expected = EntityIdentifier(for: PullRequestEntity.self, identifier: "PR_9")
+        XCTAssertEqual(fields.entityIdentifier, expected)
+        XCTAssertEqual(fields.searchableItem.relatedAppEntityIdentifier, expected)
+    }
+
+    func testReindexingSomeIdentifiersWritesOnlyThoseAgain() async {
+        let index = FakeSpotlightIndex()
+        let indexer = SpotlightIndexer(settings: makeSettings(), index: index)
+        await export(indexer, rows: rows)
+
+        indexer.reindex(["PR_2", "PR_GONE"], rows: rows)
+        if let task = indexer.passTask { await task.value }
+
+        let batches = await index.batches
+        XCTAssertEqual(batches.count, 2)
+        XCTAssertEqual(batches.last?.map(\.uniqueIdentifier), ["PR_2"], "a row that left the inbox is not written back")
+        XCTAssertEqual(indexer.status.itemCount, 3)
+    }
+
+    func testReindexingEverythingWritesEveryRowAgain() async {
+        let index = FakeSpotlightIndex()
+        let indexer = SpotlightIndexer(settings: makeSettings(), index: index)
+        await export(indexer, rows: rows)
+
+        indexer.reindex(nil, rows: rows)
+        if let task = indexer.passTask { await task.value }
+
+        let identifiers = await index.indexedIdentifiers
+        XCTAssertEqual(identifiers, ["PR_1", "PR_2", "PR_3", "PR_1", "PR_2", "PR_3"])
+    }
+
+    func testReindexingWithTheExportOffWritesNothing() async {
+        let index = FakeSpotlightIndex()
+        let indexer = SpotlightIndexer(settings: makeSettings(spotlightExportEnabled: false), index: index)
+
+        indexer.reindex(nil, rows: rows)
+        if let task = indexer.passTask { await task.value }
+
+        let batches = await index.batches
+        XCTAssertTrue(batches.isEmpty)
+    }
+
+    func testAReviewRequestNotificationCarriesItsPullRequest() throws {
+        let row = summary(id: "PR_4", number: 4, title: "Retry uploads")
+        let payload = try XCTUnwrap(
+            NotificationManager.payload(for: .newReviewRequest(row), settings: makeSettings())
+        )
+        XCTAssertEqual(payload.pullRequestIDs, ["PR_4"])
+        XCTAssertEqual(
+            payload.entityIdentifiers,
+            [EntityIdentifier(for: PullRequestEntity.self, identifier: "PR_4")]
+        )
+    }
+
+    func testTheDigestNotificationIsAboutNoSinglePullRequest() {
+        XCTAssertEqual(NotificationPayload(identifier: "d", title: "t", body: "b").pullRequestIDs, [])
+    }
 }

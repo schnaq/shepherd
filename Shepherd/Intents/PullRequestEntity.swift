@@ -1,4 +1,5 @@
 import AppIntents
+import CoreSpotlight
 import Foundation
 import ShepherdCore
 
@@ -98,6 +99,16 @@ struct PullRequestEntity: AppEntity {
     /// morning digest and Shortcuts cannot disagree about what is waiting or in what order.
     /// - Parameter limit: How many to return at most.
     /// - Returns: The queue, or an empty list when nobody is signed in.
+    /// Hands a re-index request to the exporter, which writes only rows that are still in the
+    /// inbox and only while the Spotlight export is switched on.
+    @MainActor
+    static func reindex(_ identifiers: [String]?) {
+        guard let environment = IntentBridge.environment, let session = environment.session else {
+            return
+        }
+        environment.spotlight.reindex(identifiers, rows: session.inboxRows)
+    }
+
     @MainActor
     static func reviewQueue(limit: Int = 25) -> [PullRequestEntity] {
         let rows = IntentBridge.environment?.session?.inboxRows ?? []
@@ -135,7 +146,14 @@ struct PullRequestEntity: AppEntity {
 /// into a search field. Every method reads the **local database only**: there is no GitHub call
 /// anywhere in this file, which is the same promise ADR 0019 makes about the palette and for the
 /// same reason (a query field is typed into, repeatedly, by something that is not a review).
-struct PullRequestEntityQuery: EntityStringQuery {
+extension PullRequestEntity: IndexedEntity {
+    /// `true`, because the Spotlight result is already there: the exporter writes one item per
+    /// inbox row and names this entity as its `relatedAppEntityIdentifier`. The conformance is
+    /// for ``PullRequestEntityQuery``'s re-index hooks, not a second way into the index.
+    var hideInSpotlight: Bool { true }
+}
+
+struct PullRequestEntityQuery: EntityStringQuery, IndexedEntityQuery {
     /// Resolves ids a shortcut stored earlier.
     func entities(for identifiers: [String]) async throws -> [PullRequestEntity] {
         await PullRequestEntity.entities(ids: identifiers)
@@ -149,5 +167,20 @@ struct PullRequestEntityQuery: EntityStringQuery {
     /// What the picker offers once the user types.
     func entities(matching string: String) async throws -> [PullRequestEntity] {
         await PullRequestEntity.matches(for: string)
+    }
+
+    // MARK: - The system lost its index (macOS 27)
+
+    /// The system asks for some items again — after a restore, a rebuilt index, a migration.
+    func reindexEntities(
+        for identifiers: [String],
+        indexDescription: CSSearchableIndexDescription
+    ) async throws {
+        await PullRequestEntity.reindex(identifiers)
+    }
+
+    /// The system asks for every item again.
+    func reindexAllEntities(indexDescription: CSSearchableIndexDescription) async throws {
+        await PullRequestEntity.reindex(nil)
     }
 }

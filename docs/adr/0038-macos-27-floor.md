@@ -58,6 +58,11 @@ floor is a SwiftPM concern and it keeps `swift test` green on Linux.
    index can ask the app to re-donate, and `OwnershipProvidingEntity` so a merge is confirmed
    before it happens. ADR 0021's rule that nothing writes from a phrase is *relaxed*, not dropped:
    a write intent exists only behind a setting that is off by default, and it confirms.
+   *Landed 2026-09-22 read-only, by the founder's decision, as [ADR 0021](0021-app-intents-and-spotlight.md)'s
+   amendment of that date records:* notifications and Spotlight items name their
+   `PullRequestEntity`, the query answers the system's re-index requests, and there is no write
+   intent. `OwnershipProvidingEntity` turned out to classify ownership rather than confirm
+   anything, and is not adopted until rows carry a repository's visibility.
 
 4. **Images in the prompt.** `Attachment(ImageAttachmentContent(...))` for the screenshots agents
    put in their descriptions, so the on-device digest can say what changed visually.
