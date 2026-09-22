@@ -12,7 +12,7 @@ final class BridgeProtocolTests: XCTestCase {
     /// Message types that travel Swift → web.
     private static let commandTypes: Set<String> = [
         "loadFile", "setTheme", "setThreads", "setDraftComments", "revealLine", "focusEditor",
-        "setAccessibility",
+        "setAccessibility", "setLocale",
     ]
 
     /// Message types that travel web → Swift.
@@ -172,6 +172,68 @@ final class BridgeProtocolTests: XCTestCase {
         XCTAssertThrowsError(
             try JSONDecoder().decode(DiffViewerCommand.self, from: Data(json.utf8))
         )
+    }
+
+    func testSetLocaleCarriesTheTagAndEveryWordBothWays() throws {
+        let command = DiffViewerCommand.setLocale(locale: "de", strings: DiffViewerView.viewerStrings())
+        let data = try JSONEncoder().encode(command)
+        let decoded = try JSONDecoder().decode(DiffViewerCommand.self, from: data)
+        XCTAssertEqual(decoded, command)
+        // The keys the bundle reads, spelled the way `protocol.ts` spells them.
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try XCTUnwrap(object["strings"] as? [String: Any])
+        XCTAssertEqual(
+            Set(strings.keys),
+            [
+                "resolved", "outdated", "pending", "noComments", "unknownAuthor",
+                "agentBadgeTitle", "agentBadgeLabel", "addComment", "commentCount",
+            ]
+        )
+        let count = try XCTUnwrap(strings["commentCount"] as? [String: String])
+        XCTAssertEqual(Set(count.keys), ["one", "other"])
+        XCTAssertTrue(
+            count["other"]?.contains("{count}") == true,
+            "the bundle replaces {count}; a phrase without it would show no number at all"
+        )
+    }
+
+    func testAnEmptyViewerWordIsRejected() {
+        // An empty pill is worse than an English one.
+        let json = """
+            {"v":1,"type":"setLocale","locale":"de","strings":{
+             "resolved":"","outdated":"Veraltet","pending":"Offen","noComments":"Keine Kommentare.",
+             "unknownAuthor":"unbekannt","agentBadgeTitle":"Von einem Agenten gepostet",
+             "agentBadgeLabel":"Agent","addComment":"Review-Kommentar hinzufügen",
+             "commentCount":{"one":"1 Kommentar","other":"{count} Kommentare"}}}
+            """
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(DiffViewerCommand.self, from: Data(json.utf8))
+        )
+    }
+
+    func testTheAppLanguageIsATagIntlAccepts() {
+        // `Intl` throws on `de_DE`; the bundle's language is `de` or `en`.
+        let language = DiffViewerView.appLanguage()
+        XCTAssertFalse(language.isEmpty)
+        XCTAssertFalse(language.contains("_"), "“\(language)” is not a BCP 47 tag")
+        XCTAssertNotEqual(language, "Base")
+    }
+
+    func testMonacoIsLeftInEnglishForEnglishAndForAnUnknownLanguage() throws {
+        let dist = try XCTUnwrap(DiffViewerView.distributionURL(), "the diff viewer bundle is missing")
+        XCTAssertNil(DiffViewerView.monacoMessages(for: "en", in: dist))
+        XCTAssertNil(DiffViewerView.monacoMessages(for: "xx", in: dist))
+        XCTAssertNil(DiffViewerView.monacoMessages(for: "../index", in: dist), "a tag is not a path")
+    }
+
+    func testMonacoGetsItsGermanTableFromTheShippedBundle() throws {
+        let dist = try XCTUnwrap(DiffViewerView.distributionURL(), "the diff viewer bundle is missing")
+        let source = try XCTUnwrap(
+            DiffViewerView.monacoMessages(for: "de", in: dist),
+            "dist/nls/de.js did not ship: rebuild the diff viewer"
+        )
+        XCTAssertTrue(source.contains("globalThis._VSCODE_NLS_MESSAGES"))
+        XCTAssertTrue(source.contains("Unveränderten Bereich"))
     }
 
     func testSetAccessibilityCarriesTheFlagBothWays() throws {

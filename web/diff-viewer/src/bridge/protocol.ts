@@ -179,8 +179,64 @@ export interface SetAccessibilityMessage {
   readonly screenReader: boolean;
 }
 
+/**
+ * The words this bundle draws itself, in the app's language.
+ *
+ * Every other string the reviewer reads in the diff is Monaco's or GitHub's; these are the
+ * handful the thread cards and the gutter add. They are sent from Swift for the reason
+ * ``PaneLabels`` is: the app is localised through its String Catalog and this bundle is not, so
+ * a German Mac must not get English pills (ADR 0022's second amendment).
+ *
+ * `commentCount` is a pair of whole phrases rather than a noun, because a count assembled from
+ * a number and a word is a sentence built at runtime — which no catalog can translate. The
+ * bundle picks `one` or `other` with `Intl.PluralRules` for `locale` and replaces `{count}`.
+ */
+export interface ViewerStrings {
+  /** First part of a collapsed resolved thread ("Resolved · octocat · 2 comments"). */
+  readonly resolved: string;
+  /** The pill on a thread whose anchor has moved. */
+  readonly outdated: string;
+  /** The pill on a local draft comment. */
+  readonly pending: string;
+  /** A thread that arrived without any comment. */
+  readonly noComments: string;
+  /** Stands in for the author of a resolved thread with no comment to name one. */
+  readonly unknownAuthor: string;
+  /** Tooltip of the 🤖 badge. */
+  readonly agentBadgeTitle: string;
+  /** What a screen reader calls the 🤖 badge. */
+  readonly agentBadgeLabel: string;
+  /** Hover text of the gutter “+”. */
+  readonly addComment: string;
+  readonly commentCount: {
+    /** Plural category `one`, e.g. "1 comment". May contain `{count}`. */
+    readonly one: string;
+    /** Every other category, e.g. "{count} comments". */
+    readonly other: string;
+  };
+}
+
+/**
+ * The app's language, and the words that go with it (ADR 0022's second amendment).
+ *
+ * Sent once, before the first `loadFile`. Until it arrives the viewer speaks English, which is
+ * what the tests and the dev harness see.
+ */
+export interface SetLocaleMessage {
+  readonly v: ProtocolVersion;
+  readonly type: 'setLocale';
+  /**
+   * A BCP 47 language tag (`"de"`, `"en"`) — the language the app's own strings resolved to, so
+   * that `Intl`'s relative times agree with the words around them. The bundle falls back to
+   * English for a tag `Intl` does not accept.
+   */
+  readonly locale: string;
+  readonly strings: ViewerStrings;
+}
+
 export type InboundMessage =
   | LoadFileMessage
+  | SetLocaleMessage
   | SetThemeMessage
   | SetThreadsMessage
   | SetDraftCommentsMessage
@@ -198,6 +254,7 @@ export const INBOUND_MESSAGE_TYPES: readonly InboundMessageType[] = [
   'revealLine',
   'focusEditor',
   'setAccessibility',
+  'setLocale',
 ];
 
 // ---------------------------------------------------------------------------------------------
@@ -376,6 +433,39 @@ function parsePaneLabels(value: unknown, path: string): ParseResult<PaneLabels> 
   return ok({ left: value['left'], right: value['right'] });
 }
 
+const VIEWER_STRING_KEYS = [
+  'resolved',
+  'outdated',
+  'pending',
+  'noComments',
+  'unknownAuthor',
+  'agentBadgeTitle',
+  'agentBadgeLabel',
+  'addComment',
+] as const;
+
+function isNonEmptyString(value: unknown): value is string {
+  return isString(value) && value.length > 0;
+}
+
+function parseViewerStrings(value: unknown, path: string): ParseResult<ViewerStrings> {
+  if (!isRecord(value)) return fail(`${path}: expected an object`);
+  const words: Partial<Record<(typeof VIEWER_STRING_KEYS)[number], string>> = {};
+  for (const key of VIEWER_STRING_KEYS) {
+    const word = value[key];
+    if (!isNonEmptyString(word)) return fail(`${path}.${key}: expected non-empty string`);
+    words[key] = word;
+  }
+  const count = value['commentCount'];
+  if (!isRecord(count)) return fail(`${path}.commentCount: expected an object`);
+  if (!isNonEmptyString(count['one'])) return fail(`${path}.commentCount.one: expected non-empty string`);
+  if (!isNonEmptyString(count['other'])) return fail(`${path}.commentCount.other: expected non-empty string`);
+  return ok({
+    ...(words as Record<(typeof VIEWER_STRING_KEYS)[number], string>),
+    commentCount: { one: count['one'], other: count['other'] },
+  });
+}
+
 function parseThreadComment(value: unknown, path: string): ParseResult<ThreadComment> {
   if (!isRecord(value)) return fail(`${path}: expected an object`);
   if (!isString(value['author'])) return fail(`${path}.author: expected string`);
@@ -513,6 +603,12 @@ export function parseInbound(value: unknown): ParseResult<InboundMessage> {
         return fail('setAccessibility.screenReader: expected boolean');
       }
       return ok({ v: PROTOCOL_VERSION, type: 'setAccessibility', screenReader });
+    }
+    case 'setLocale': {
+      if (!isNonEmptyString(msg['locale'])) return fail('setLocale.locale: expected non-empty string');
+      const strings = parseViewerStrings(msg['strings'], 'setLocale.strings');
+      if (!strings.ok) return fail(strings.error);
+      return ok({ v: PROTOCOL_VERSION, type: 'setLocale', locale: msg['locale'], strings: strings.value });
     }
     case 'focusEditor': {
       // The command is almost the whole message: `side` is optional, and absent means the

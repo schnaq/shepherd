@@ -16,6 +16,7 @@
  */
 
 import type { DraftComment, Thread } from '../bridge/protocol.js';
+import { commentCount, DEFAULT_LOCALE, type ViewerLocale } from './locale.js';
 import { absoluteTime, relativeTime } from './relativeTime.js';
 
 const FORBIDDEN_TAGS: ReadonlySet<string> = new Set([
@@ -82,6 +83,10 @@ export interface CardOptions {
   readonly nowMs: number;
   /** Invoked on click / Enter / Space. */
   readonly onActivate: () => void;
+  /** The words and language to draw in (`setLocale`); English when absent. */
+  readonly locale?: ViewerLocale;
+  /** Time zone for the absolute-time tooltip — pinned by tests, the Mac's own otherwise. */
+  readonly timeZone?: string;
 }
 
 function makeInteractive(root: HTMLElement, onActivate: () => void): void {
@@ -99,19 +104,25 @@ function makeInteractive(root: HTMLElement, onActivate: () => void): void {
   });
 }
 
-function commentNode(doc: Document, comment: Thread['comments'][number], nowMs: number): HTMLElement {
+function commentNode(
+  doc: Document,
+  comment: Thread['comments'][number],
+  nowMs: number,
+  locale: ViewerLocale,
+  timeZone: string | undefined,
+): HTMLElement {
   const wrapper = el(doc, 'div', 'sh-comment');
 
   const head = el(doc, 'div', 'sh-comment__head');
   head.append(el(doc, 'span', 'sh-author', comment.author));
   if (comment.isAgent) {
     const badge = el(doc, 'span', 'sh-badge sh-badge--agent', '🤖');
-    badge.setAttribute('title', 'Posted by an agent');
-    badge.setAttribute('aria-label', 'Agent');
+    badge.setAttribute('title', locale.strings.agentBadgeTitle);
+    badge.setAttribute('aria-label', locale.strings.agentBadgeLabel);
     head.append(badge);
   }
-  const time = el(doc, 'span', 'sh-time', relativeTime(comment.createdAt, nowMs));
-  time.setAttribute('title', absoluteTime(comment.createdAt));
+  const time = el(doc, 'span', 'sh-time', relativeTime(comment.createdAt, nowMs, locale.locale));
+  time.setAttribute('title', absoluteTime(comment.createdAt, locale.locale, timeZone));
   head.append(time);
   wrapper.append(head);
 
@@ -126,7 +137,9 @@ function commentNode(doc: Document, comment: Thread['comments'][number], nowMs: 
 
 /** Full or collapsed card for a published review thread. */
 export function renderThreadZone(thread: Thread, options: CardOptions): HTMLElement {
-  const { doc, nowMs } = options;
+  const { doc, nowMs, timeZone } = options;
+  const locale = options.locale ?? DEFAULT_LOCALE;
+  const words = locale.strings;
   const root = el(doc, 'div', 'sh-zone sh-zone--thread');
   root.dataset['threadId'] = thread.id;
   root.setAttribute('data-side', thread.side);
@@ -136,16 +149,12 @@ export function renderThreadZone(thread: Thread, options: CardOptions): HTMLElem
     root.classList.add('sh-zone--resolved');
     const first = thread.comments[0];
     const count = thread.comments.length;
-    const parts = [
-      'Resolved',
-      first?.author ?? 'unknown',
-      `${count} ${count === 1 ? 'comment' : 'comments'}`,
-    ];
-    if (first !== undefined) parts.push(relativeTime(first.createdAt, nowMs));
+    const parts = [words.resolved, first?.author ?? words.unknownAuthor, commentCount(count, locale)];
+    if (first !== undefined) parts.push(relativeTime(first.createdAt, nowMs, locale.locale));
     const line = el(doc, 'div', 'sh-zone__collapsed');
     line.append(pill(doc, 'sh-pill--resolved', '✓'));
     line.append(el(doc, 'span', 'sh-collapsed__text', parts.join(' · ')));
-    if (thread.outdated) line.append(pill(doc, 'sh-pill--outdated', 'Outdated'));
+    if (thread.outdated) line.append(pill(doc, 'sh-pill--outdated', words.outdated));
     root.append(line);
     makeInteractive(root, options.onActivate);
     return root;
@@ -154,12 +163,12 @@ export function renderThreadZone(thread: Thread, options: CardOptions): HTMLElem
   const card = el(doc, 'div', 'sh-card');
   if (thread.outdated) {
     const head = el(doc, 'div', 'sh-card__flags');
-    head.append(pill(doc, 'sh-pill--outdated', 'Outdated'));
+    head.append(pill(doc, 'sh-pill--outdated', words.outdated));
     card.append(head);
   }
-  for (const comment of thread.comments) card.append(commentNode(doc, comment, nowMs));
+  for (const comment of thread.comments) card.append(commentNode(doc, comment, nowMs, locale, timeZone));
   if (thread.comments.length === 0) {
-    card.append(el(doc, 'div', 'sh-comment__body sh-empty', 'No comments.'));
+    card.append(el(doc, 'div', 'sh-comment__body sh-empty', words.noComments));
   }
   root.append(card);
   makeInteractive(root, options.onActivate);
@@ -175,7 +184,7 @@ export function renderDraftZone(draft: DraftComment, options: CardOptions): HTML
 
   const card = el(doc, 'div', 'sh-card sh-card--draft');
   const head = el(doc, 'div', 'sh-card__flags');
-  head.append(pill(doc, 'sh-pill--pending', 'Pending'));
+  head.append(pill(doc, 'sh-pill--pending', (options.locale ?? DEFAULT_LOCALE).strings.pending));
   card.append(head);
   // Plain text — never innerHTML.
   card.append(el(doc, 'div', 'sh-comment__body sh-draft__body', draft.body));

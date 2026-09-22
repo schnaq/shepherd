@@ -238,6 +238,125 @@ struct BridgePaneLabels: Codable, Hashable, Sendable {
     }
 }
 
+/// The words the web bundle draws itself — thread-card pills, the agent badge, the gutter's
+/// hover text — in the app's language.
+///
+/// Sent from here for the reason ``BridgePaneLabels`` is: the app is localised through its
+/// String Catalog and the bundle is not, so a German Mac must not get English pills in its diff
+/// (ADR 0022's second amendment). Every field is required and non-empty, because an empty pill
+/// is worse than an English one.
+struct BridgeViewerStrings: Codable, Hashable, Sendable {
+    /// A comment count as two whole phrases, one per plural category.
+    ///
+    /// Two phrases rather than a noun, because a count glued to a word is a sentence assembled at
+    /// runtime, which no catalog can translate. The bundle picks one with `Intl.PluralRules` for
+    /// the locale and replaces `{count}`.
+    struct CommentCount: Codable, Hashable, Sendable {
+        /// Plural category `one` — "1 comment".
+        var one: String
+        /// Every other category — "{count} comments".
+        var other: String
+
+        /// Creates a payload.
+        init(one: String, other: String) {
+            self.one = one
+            self.other = other
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case one, other
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.init(
+                one: try container.decodeNonEmpty(forKey: .one, name: "strings.commentCount.one"),
+                other: try container.decodeNonEmpty(forKey: .other, name: "strings.commentCount.other")
+            )
+        }
+    }
+
+    /// First part of a collapsed resolved thread.
+    var resolved: String
+    /// The pill on a thread whose anchor moved.
+    var outdated: String
+    /// The pill on a local draft comment.
+    var pending: String
+    /// A thread that arrived without a comment.
+    var noComments: String
+    /// Stands in for a resolved thread's author when there is no comment to name one.
+    var unknownAuthor: String
+    /// Tooltip of the 🤖 badge.
+    var agentBadgeTitle: String
+    /// What a screen reader calls the 🤖 badge.
+    var agentBadgeLabel: String
+    /// Hover text of the gutter “+”.
+    var addComment: String
+    /// "1 comment" / "{count} comments".
+    var commentCount: CommentCount
+
+    /// Creates a payload.
+    init(
+        resolved: String,
+        outdated: String,
+        pending: String,
+        noComments: String,
+        unknownAuthor: String,
+        agentBadgeTitle: String,
+        agentBadgeLabel: String,
+        addComment: String,
+        commentCount: CommentCount
+    ) {
+        self.resolved = resolved
+        self.outdated = outdated
+        self.pending = pending
+        self.noComments = noComments
+        self.unknownAuthor = unknownAuthor
+        self.agentBadgeTitle = agentBadgeTitle
+        self.agentBadgeLabel = agentBadgeLabel
+        self.addComment = addComment
+        self.commentCount = commentCount
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case resolved, outdated, pending, noComments, unknownAuthor
+        case agentBadgeTitle, agentBadgeLabel, addComment, commentCount
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            resolved: try container.decodeNonEmpty(forKey: .resolved, name: "strings.resolved"),
+            outdated: try container.decodeNonEmpty(forKey: .outdated, name: "strings.outdated"),
+            pending: try container.decodeNonEmpty(forKey: .pending, name: "strings.pending"),
+            noComments: try container.decodeNonEmpty(forKey: .noComments, name: "strings.noComments"),
+            unknownAuthor: try container.decodeNonEmpty(
+                forKey: .unknownAuthor,
+                name: "strings.unknownAuthor"
+            ),
+            agentBadgeTitle: try container.decodeNonEmpty(
+                forKey: .agentBadgeTitle,
+                name: "strings.agentBadgeTitle"
+            ),
+            agentBadgeLabel: try container.decodeNonEmpty(
+                forKey: .agentBadgeLabel,
+                name: "strings.agentBadgeLabel"
+            ),
+            addComment: try container.decodeNonEmpty(forKey: .addComment, name: "strings.addComment"),
+            commentCount: try container.decode(CommentCount.self, forKey: .commentCount)
+        )
+    }
+}
+
+private extension KeyedDecodingContainer {
+    /// Decodes a string that must not be empty, naming the field when it is.
+    func decodeNonEmpty(forKey key: Key, name: String) throws -> String {
+        let value = try decode(String.self, forKey: key)
+        guard !value.isEmpty else { throw BridgeProtocolError.emptyField(name) }
+        return value
+    }
+}
+
 struct BridgeCommentableLines: Codable, Hashable, Sendable {
     /// Commentable 1-based lines of the original (left) document.
     var left: [Int]
@@ -337,6 +456,12 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
     /// On the wire the side is optional, and absent means `.right` — the shape the command had
     /// before there was another pane to ask for.
     case focusEditor(side: BridgeSide)
+    /// The app's language, and the words the viewer draws itself (ADR 0022's second amendment).
+    ///
+    /// `locale` is a BCP 47 language tag — the language the app's own strings resolved to, so the
+    /// bundle's `Intl` relative times agree with the words around them. Sent once, before the
+    /// first `loadFile`; until it arrives the viewer speaks English.
+    case setLocale(locale: String, strings: BridgeViewerStrings)
 
     /// The `type` discriminator of this message.
     var messageType: String {
@@ -348,12 +473,14 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
         case .revealLine: return "revealLine"
         case .focusEditor: return "focusEditor"
         case .setAccessibility: return "setAccessibility"
+        case .setLocale: return "setLocale"
         }
     }
 
     private enum CodingKeys: String, CodingKey {
         case v, type
         case path, language, original, modified, mode, wrap, commentableLines, paneLabels
+        case locale, strings
         case theme, fontSize
         case threads, comments
         case line, side
@@ -419,6 +546,13 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
             self = .setAccessibility(
                 screenReader: try container.decode(Bool.self, forKey: .screenReader)
             )
+        case "setLocale":
+            let locale = try container.decode(String.self, forKey: .locale)
+            guard !locale.isEmpty else { throw BridgeProtocolError.emptyField("locale") }
+            self = .setLocale(
+                locale: locale,
+                strings: try container.decode(BridgeViewerStrings.self, forKey: .strings)
+            )
         default:
             throw BridgeProtocolError.unknownMessageType(type)
         }
@@ -452,6 +586,9 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
             try container.encode(side, forKey: .side)
         case .setAccessibility(let screenReader):
             try container.encode(screenReader, forKey: .screenReader)
+        case .setLocale(let locale, let strings):
+            try container.encode(locale, forKey: .locale)
+            try container.encode(strings, forKey: .strings)
         }
     }
 }

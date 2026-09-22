@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import type { DraftComment, InboundMessage, LoadFileMessage, SetThemeMessage, Side, Thread } from '../src/bridge/protocol.js';
+import type {
+  DraftComment,
+  InboundMessage,
+  LoadFileMessage,
+  SetLocaleMessage,
+  SetThemeMessage,
+  Side,
+  Thread,
+} from '../src/bridge/protocol.js';
+import { ENGLISH_STRINGS } from '../src/viewer/locale.js';
 import { routeInbound, routeInboundSafely, type ViewerPort } from '../src/viewer/router.js';
 
 interface Call {
@@ -19,6 +28,7 @@ function fakePort(): { port: ViewerPort; calls: Call[] } {
     focusEditor: (side: Side) => calls.push({ name: 'focusEditor', payload: side }),
     setAccessibility: (screenReader: boolean) =>
       calls.push({ name: 'setAccessibility', payload: screenReader }),
+    setLocale: (m: SetLocaleMessage) => calls.push({ name: 'setLocale', payload: m }),
   };
   return { port, calls };
 }
@@ -44,6 +54,7 @@ describe('routeInbound', () => {
       { v: 1, type: 'revealLine', line: 5, side: 'left' },
       { v: 1, type: 'focusEditor' },
       { v: 1, type: 'setAccessibility', screenReader: true },
+      { v: 1, type: 'setLocale', locale: 'en', strings: ENGLISH_STRINGS },
     ];
 
     for (const message of messages) routeInbound(message, port);
@@ -56,6 +67,7 @@ describe('routeInbound', () => {
       'revealLine',
       'focusEditor',
       'setAccessibility',
+      'setLocale',
     ]);
     expect(calls[0]?.payload).toBe(loadFile);
     expect(calls[4]?.payload).toEqual({ line: 5, side: 'left' });

@@ -50,7 +50,8 @@ identical; [`fixtures/`](fixtures) is the shared decode corpus both sides test a
 
 Every message carries `"v": 1`.
 
-Swift → web: `loadFile`, `setTheme`, `setThreads`, `setDraftComments`, `revealLine`.
+Swift → web: `loadFile`, `setTheme`, `setThreads`, `setDraftComments`, `revealLine`,
+`focusEditor`, `setAccessibility`, `setLocale`.
 Web → Swift: `ready`, `addComment`, `commentClicked`, `viewportChanged`.
 
 `shepherd.receive` returns `true`/`false` so Swift can assert delivery, and
@@ -66,6 +67,11 @@ Web → Swift: `ready`, `addComment`, `commentClicked`, `viewportChanged`.
   viewer always emits the single-line form today, but `startLine` is already validated and
   decoded on both sides so the affordance can land without a protocol bump.
 - **`viewportChanged` is throttled** to one message per 120 ms (leading + trailing).
+- **The bundle's own words come from the app.** Until `setLocale` arrives the thread cards and
+  the gutter speak English (`src/viewer/locale.ts`), which is what the tests and the dev harness
+  see; after it, the app's words, `Intl` relative times in its language and the page's `lang`.
+  Monaco's own strings are a separate table the app injects before the page parses
+  (`dist/nls/de.js`, see *Build output*).
 - **Inline mode** has a single pane, so left-side threads render on the modified editor at
   their original-model line number — exact for right-side threads, approximate for left-side
   ones. Side-by-side mode places each zone on its own pane.
@@ -159,7 +165,15 @@ webView.loadFileURL(dist.appendingPathComponent("index.html"), allowingReadAcces
 | `viewer.js` | 2.95 MB | Monaco core, Monarch grammars, the bridge, the inlined worker |
 | `viewer.css` | 82 KB | Monaco CSS + thread-zone chrome |
 | `editor.worker.js` | 297 KB | fallback/debug copy of the worker |
-| **total** | **≈ 3.3 MB** | |
+| `nls/de.js` | 130 KB | Monaco's own German UI strings, copied verbatim from `monaco-editor/esm/vs/nls/lang/de.js` |
+| **total** | **≈ 3.5 MB** | |
+
+`nls/de.js` is not referenced by `index.html`. Monaco looks its strings up in
+`globalThis._VSCODE_NLS_MESSAGES` while its modules evaluate, so the table has to be in place
+before `viewer.js` runs and no bridge message can deliver it; the app reads the file and injects
+it as a document-start `WKUserScript` when it runs in German (`DiffViewerView.monacoMessages`).
+It is copied from `esm/` because its indices are the numeric `localize(…)` calls of the ESM build
+this bundle is made of — the `min/` table is numbered for a different build.
 
 The build is deterministic — no content hashes, no timestamps, no sourcemaps — so rebuilding
 unchanged sources produces byte-identical files and CI's `git diff --exit-code` on `dist/`

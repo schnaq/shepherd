@@ -117,9 +117,12 @@ bumping a dependency that ships inside the app also means a line in
   catalog's `variations.plural`, never through concatenation in code.
 
   What is deliberately *not* localised: the `shepherd` CLI (above — console output is English),
-  `Packages/ShepherdKit` (no user-visible strings by decision), the web diff viewer (ADR 0003 keeps
-  that boundary at the bridge protocol), and literal syntax inside translated text — placeholders
-  like `{prompt}`, flag names, example values (`owner/repo`, `github_pat_…`) and shortcut names.
+  `Packages/ShepherdKit` (no user-visible strings by decision), and literal syntax inside
+  translated text — placeholders like `{prompt}` or `{count}`, flag names, example values
+  (`owner/repo`, `github_pat_…`) and shortcut names. The web diff viewer *is* localised, from
+  here: its handful of words are `String(localized:)` in `DiffViewerView.viewerStrings()` and cross
+  the bridge in `setLocale` (ADR 0022's second amendment) — a new word the bundle draws goes there,
+  never as an English literal in TypeScript.
 - **Text size** goes through `Theme.type(_:weight:)` — or `Theme.mono(_:weight:)` for paths and
   slugs — which name a `Font.TextStyle`. `Font.system(size:)` is a fixed measurement and does not
   take part in macOS's Larger Text setting, so text spelled that way never grows for a low-vision

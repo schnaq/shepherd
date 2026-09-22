@@ -5,6 +5,7 @@
 //   dist/viewer.js          the whole viewer: Monaco core + Monarch grammars + bridge
 //   dist/viewer.css         Monaco's CSS + Shepherd's thread-zone chrome, fonts inlined
 //   dist/editor.worker.js   Monaco's editor worker (also inlined into viewer.js as a blob)
+//   dist/nls/de.js          Monaco's German UI strings, injected by the app on a German Mac
 //
 // The "generated, do not edit" note lives one level up, in Resources/DiffViewer/README.md, so
 // dist/ holds nothing but build artefacts (everything in it is copied into the .app bundle).
@@ -42,11 +43,38 @@ async function main() {
   const html = await readFile(path.join(projectRoot, 'src', 'index.html'), 'utf8');
   await writeFile(path.join(distDir, 'index.html'), html, 'utf8');
 
+  await copyMonacoMessages();
+
   await report();
 }
 
+/**
+ * Monaco's own UI strings in the languages the app ships besides English (ADR 0022's second
+ * amendment).
+ *
+ * Each file is Monaco's message table for *this* Monaco version — a classic script that sets
+ * `globalThis._VSCODE_NLS_MESSAGES`, indexed exactly as the numeric `localize(…)` calls in the
+ * ESM build the viewer bundles, which is why it is copied from `esm/` and never from `min/`.
+ * Nothing in the page loads it: Monaco reads the table while its modules evaluate, before the
+ * bridge exists, so the app injects the file as a document-start user script when it is German
+ * (`DiffViewerView.monacoMessages(for:)`).
+ */
+const MONACO_MESSAGE_LANGUAGES = ['de'];
+
+async function copyMonacoMessages() {
+  const target = path.join(distDir, 'nls');
+  await mkdir(target, { recursive: true });
+  for (const language of MONACO_MESSAGE_LANGUAGES) {
+    const source = path.join(projectRoot, 'node_modules', 'monaco-editor', 'esm', 'vs', 'nls', 'lang', `${language}.js`);
+    await writeFile(path.join(target, `${language}.js`), await readFile(source, 'utf8'), 'utf8');
+  }
+}
+
 async function report() {
-  const names = (await readdir(distDir)).sort();
+  const names = [
+    ...(await readdir(distDir)).filter((name) => name !== 'nls'),
+    ...MONACO_MESSAGE_LANGUAGES.map((language) => path.join('nls', `${language}.js`)),
+  ].sort();
   let total = 0;
   const rows = [];
   for (const name of names) {

@@ -1,0 +1,18 @@
+{
+  "v": 1,
+  "type": "setLocale",
+  "locale": "de",
+  "strings": {
+    "resolved": "Aufgelöst",
+    "outdated": "Veraltet",
+    "pending": "Offen",
+    "noComments": "Keine Kommentare.",
+    "unknownAuthor": "unbekannt",
+    "agentBadgeTitle": "Von einem Agenten gepostet",
+    "agentBadgeLabel": "Agent",
+    "addComment": "Review-Kommentar hinzufügen",
+    "commentCount": {
+      "one": "1 Kommentar"
+    }
+  }
+}

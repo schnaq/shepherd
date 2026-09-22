@@ -3,7 +3,15 @@
  * dispatch table is testable against a fake `ViewerPort`.
  */
 
-import type { DraftComment, InboundMessage, LoadFileMessage, SetThemeMessage, Side, Thread } from '../bridge/protocol.js';
+import type {
+  DraftComment,
+  InboundMessage,
+  LoadFileMessage,
+  SetLocaleMessage,
+  SetThemeMessage,
+  Side,
+  Thread,
+} from '../bridge/protocol.js';
 
 export interface ViewerPort {
   loadFile(message: LoadFileMessage): void;
@@ -13,6 +21,7 @@ export interface ViewerPort {
   revealLine(line: number, side: Side): void;
   focusEditor(side: Side): void;
   setAccessibility(screenReader: boolean): void;
+  setLocale(message: SetLocaleMessage): void;
 }
 
 /** Dispatches one validated inbound message. Exhaustive over `InboundMessage`. */
@@ -41,6 +50,9 @@ export function routeInbound(message: InboundMessage, port: ViewerPort): void {
       return;
     case 'setAccessibility':
       port.setAccessibility(message.screenReader);
+      return;
+    case 'setLocale':
+      port.setLocale(message);
       return;
     default: {
       const exhaustive: never = message;
