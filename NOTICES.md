@@ -15,7 +15,7 @@ Keep this file in step with a dependency change in the same pull request; a rele
 
 | Component | Version | License | Where it lives in the app |
 | --- | --- | --- | --- |
-| [Monaco Editor](https://github.com/microsoft/monaco-editor) | 0.56.0 | MIT | `Contents/Resources/DiffViewer/dist/` (bundled into `viewer.js` / `viewer.css`) |
+| [Monaco Editor](https://github.com/microsoft/monaco-editor) | 0.56.0 | MIT | `Contents/Resources/DiffViewer/dist/` (bundled into `viewer.js` / `viewer.css`; its German UI strings copied verbatim to `nls/de.js`) |
 | [GRDB.swift](https://github.com/groue/GRDB.swift) | 7.11.x | MIT | linked into the app binary |
 | [Sparkle](https://github.com/sparkle-project/Sparkle) | 2.10.0 | MIT-style (Sparkle license, see below) | `Contents/Frameworks/Sparkle.framework` |
 | [ClaudeForFoundationModels](https://github.com/anthropics/ClaudeForFoundationModels) | 0.2.1 | Apache-2.0 | linked into the app binary |

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { DraftComment, Thread, ThreadComment } from '../src/bridge/protocol.js';
-import { makeLocale } from '../src/viewer/locale.js';
+import { ENGLISH_STRINGS, makeLocale } from '../src/viewer/locale.js';
 import { renderDraftZone, renderThreadZone, sanitizeInPlace } from '../src/viewer/threadCard.js';
 import germanFixture from '../fixtures/setLocale.valid.json';
 
@@ -148,6 +148,20 @@ describe('in the language the app sends (setLocale)', () => {
   it('formats the tooltip in the language and the zone it is given', () => {
     const node = renderThreadZone(thread(), inGerman());
     expect(node.querySelector('.sh-time')?.getAttribute('title')).toBe('30.08.2026, 09:00');
+  });
+});
+
+describe('in English, as the app sends it (setLocale "en")', () => {
+  const english = { ...options(), locale: makeLocale('en', ENGLISH_STRINGS), timeZone: 'Europe/Berlin' };
+
+  it('draws exactly what it drew before there was a setLocale', () => {
+    const node = renderThreadZone(thread(), english);
+    expect(node.querySelector('.sh-time')?.textContent).toBe('3h ago');
+    expect(node.querySelector('.sh-time')?.getAttribute('title')).toBe('2026-08-30 09:00:00 UTC');
+    const resolved = renderThreadZone(thread({ resolved: true, comments: [comment(), comment()] }), english);
+    expect(resolved.querySelector('.sh-collapsed__text')?.textContent).toBe(
+      'Resolved · octocat · 2 comments · 3h ago',
+    );
   });
 });
 
