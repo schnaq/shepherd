@@ -236,7 +236,9 @@ final class SettingsSyncTests: XCTestCase {
             openAICompatibleZeroRetention: true,
             // Non-default means *off* here: structured triage ships on, because it is on-device
             // and costs nothing but CPU (plan §0.5).
-            structuredTriageEnabled: false
+            structuredTriageEnabled: false,
+            // Non-default means *on* here: the screenshot switch ships off (ADR 0038 item 4).
+            screenshotReadingEnabled: true
         )
         var cli = AgentCLIConfiguration()
         cli.kind = .custom(commandTemplate: "/usr/local/bin/my-agent --task {prompt}")
@@ -745,6 +747,9 @@ final class SettingsSyncTests: XCTestCase {
         // And the third such default: a document written before structured triage existed says
         // nothing about it, which must not read as "switched off" either (plan §0.5).
         XCTAssertTrue(document.intelligence.structuredTriageEnabled)
+        // The opposite for the screenshot switch: it stands for a download host, so a document
+        // that does not name it must leave it off (ADR 0038 item 4).
+        XCTAssertFalse(document.intelligence.screenshotReadingEnabled)
         // A document written before the sovereignty policy existed says nothing about it, which
         // must read as "no policy" — an empty list is never sent, and a `false` zero-retention
         // flag is not a constraint (plan §3.K).
@@ -1113,6 +1118,7 @@ final class SettingsSyncTests: XCTestCase {
         // The switch travels; the verdicts it produces never do — they are rebuildable device
         // state, like the search vectors (plan §3.A).
         XCTAssertFalse(settings.structuredTriageEnabled)
+        XCTAssertTrue(settings.screenshotReadingEnabled)
         XCTAssertEqual(settings.agentCLI.maxTurns, 42)
         XCTAssertNil(settings.agentCLI.maxBudgetUSD)
         XCTAssertEqual(settings.agentCLI.permissionMode, .plan)
@@ -1378,6 +1384,8 @@ final class SettingsSyncTests: XCTestCase {
         // And for structured triage, which is on-device for the same reason (plan §0.5) — even
         // though nothing classifies anything until the tiers are switched on.
         XCTAssertTrue(document.intelligence.structuredTriageEnabled)
+        // Screenshot reading is not: it ships off, because it is the switch for a host.
+        XCTAssertFalse(document.intelligence.screenshotReadingEnabled)
     }
 
     // MARK: - The model's flow

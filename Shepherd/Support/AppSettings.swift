@@ -112,6 +112,8 @@ final class AppSettings {
             .object(forKey: Keys.openAIZeroRetention) as? Bool ?? false
         self.structuredTriageEnabled = defaults
             .object(forKey: Keys.structuredTriage) as? Bool ?? true
+        self.screenshotReadingEnabled = defaults
+            .object(forKey: Keys.screenshotReading) as? Bool ?? false
         self.groupBy = Self.read(defaults, Keys.groupBy, default: InboxFacet.provenance)
         self.sortOrder = Self.read(defaults, Keys.sortOrder, default: InboxSortOrder.priority)
         self.defaultMergeMethod = Self.read(
@@ -391,6 +393,17 @@ final class AppSettings {
     /// it is named after.
     var structuredTriageEnabled: Bool {
         didSet { defaults.set(structuredTriageEnabled, forKey: Keys.structuredTriage) }
+    }
+
+    /// Whether the summary card may offer to read a description's screenshots on this Mac
+    /// (ADR 0038 item 4, ADR 0007's 2026-09-22 amendment).
+    ///
+    /// **Off by default**, because it is the switch CONTRIBUTING.md asks of a new host: reading a
+    /// screenshot downloads it from GitHub's upload host (`private-user-images.githubusercontent.com`).
+    /// With it off there is no button and no request; with it on, the click is still the only
+    /// trigger. Needs the tiers on as well — there is no model to ask otherwise.
+    var screenshotReadingEnabled: Bool {
+        didSet { defaults.set(screenshotReadingEnabled, forKey: Keys.screenshotReading) }
     }
 
     // MARK: - Inbox
@@ -1000,6 +1013,7 @@ final class AppSettings {
         static let openAISovereigntyCountries = "intelligence.openaiCompatible.sovereigntyCountries"
         static let openAIZeroRetention = "intelligence.openaiCompatible.zeroRetention"
         static let structuredTriage = "intelligence.structuredTriageEnabled"
+        static let screenshotReading = "intelligence.screenshotReadingEnabled"
         static let groupBy = "inbox.groupBy"
         static let sortOrder = "inbox.sortOrder"
         static let ignoredPullRequests = "inbox.ignoredPullRequests"

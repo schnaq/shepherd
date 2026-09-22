@@ -40,6 +40,15 @@ struct OnDeviceScreenshotReader: DescriptionScreenshotReading {
     /// The longest side an image is decoded at.
     static let maximumPixelEdge = 1_024
 
+    /// The most pixels an image may declare before it is refused undecoded.
+    ///
+    /// Fifty megapixels is well above any real screenshot (a 6K display is 20 MP). The cap exists
+    /// for the image that is small on the wire and enormous in memory — a PNG of one colour that
+    /// declares 100,000 × 100,000 compresses to kilobytes — because ImageIO may allocate the full
+    /// bitmap to produce even a thumbnail. The dimensions come from the header, before anything
+    /// is decoded.
+    static let maximumPixels = 50_000_000
+
     /// How many tokens the answer may use: five short sentences, with room to finish the last.
     static let responseTokens = 400
 
@@ -98,9 +107,16 @@ struct OnDeviceScreenshotReader: DescriptionScreenshotReading {
     // MARK: - Decoding
 
     /// The image in some bytes, at most ``maximumPixelEdge`` on its long side, or `nil` when they
-    /// are not an image ImageIO can decode.
+    /// are not an image ImageIO can decode or declare more than ``maximumPixels``.
     static func image(from data: Data) -> CGImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = (properties[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue,
+              let height = (properties[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue,
+              width > 0, height > 0,
+              width.multipliedReportingOverflow(by: height).partialValue <= maximumPixels,
+              !width.multipliedReportingOverflow(by: height).overflow
+        else { return nil }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,

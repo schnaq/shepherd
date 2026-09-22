@@ -200,6 +200,20 @@ final class ScreenshotReadingTests: XCTestCase {
         XCTAssertEqual(model.state, .offered(count: 1))
     }
 
+    // MARK: - Decoding
+
+    func testAnImageDeclaringMoreThanFiftyMegapixelsIsRefusedUndecoded() throws {
+        // 7,100 × 7,100 is 50.4 MP: a valid PNG of about 50 KB that ImageIO would happily decode
+        // into 50 MB. The header is what refuses it.
+        let bomb = try PNGFixture.blank(width: 7_100, height: 7_100)
+        XCTAssertLessThan(bomb.count, 200_000)
+        XCTAssertNil(OnDeviceScreenshotReader.image(from: bomb))
+
+        let screenshot = try XCTUnwrap(OnDeviceScreenshotReader.image(from: try PNGFixture.blank(width: 64, height: 48)))
+        XCTAssertEqual(screenshot.width, 64)
+        XCTAssertNil(OnDeviceScreenshotReader.image(from: Data("<svg/>".utf8)))
+    }
+
     // MARK: - Labels
 
     func testTheButtonAndCaptionCountWhatIsRead() {
@@ -210,5 +224,39 @@ final class ScreenshotReadingTests: XCTestCase {
             ScreenshotReadingBlock.caption(for: ScreenshotReading(observations: [], readCount: 1, totalCount: 3)),
             "1 of 3 screenshots, read on this Mac"
         )
+    }
+}
+
+/// A valid, all-black greyscale PNG of any size, built in memory: tiny on the wire however large
+/// it declares itself, which is exactly the shape of a decompression bomb.
+private enum PNGFixture {
+    static func blank(width: Int, height: Int) throws -> Data {
+        // Every scanline is a zero filter byte and zero pixels, so the zlib stream's Adler-32 has
+        // a closed form: `a` stays 1 and `b` is the byte count modulo 65521.
+        let count = (width + 1) * height
+        let deflated = try (Data(count: count) as NSData).compressed(using: .zlib) as Data
+        let adler = UInt32(count % 65_521) << 16 | 1
+        let stream: [UInt8] = [0x78, 0x9C] + Array(deflated) + bigEndian(adler)
+        let header = bigEndian(UInt32(width)) + bigEndian(UInt32(height)) + [8, 0, 0, 0, 0]
+        let signature: [UInt8] = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]
+        return Data(signature + chunk("IHDR", header) + chunk("IDAT", stream) + chunk("IEND", []))
+    }
+
+    private static func chunk(_ type: String, _ data: [UInt8]) -> [UInt8] {
+        let body = Array(type.utf8) + data
+        return bigEndian(UInt32(data.count)) + body + bigEndian(crc32(body))
+    }
+
+    private static func bigEndian(_ value: UInt32) -> [UInt8] {
+        [UInt8(value >> 24 & 0xFF), UInt8(value >> 16 & 0xFF), UInt8(value >> 8 & 0xFF), UInt8(value & 0xFF)]
+    }
+
+    private static func crc32(_ bytes: [UInt8]) -> UInt32 {
+        var crc: UInt32 = 0xFFFF_FFFF
+        for byte in bytes {
+            crc ^= UInt32(byte)
+            for _ in 0..<8 { crc = (crc & 1) == 1 ? (crc >> 1) ^ 0xEDB8_8320 : crc >> 1 }
+        }
+        return crc ^ 0xFFFF_FFFF
     }
 }

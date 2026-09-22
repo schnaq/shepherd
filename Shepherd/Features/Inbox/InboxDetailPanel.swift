@@ -204,6 +204,10 @@ struct InboxDetailPanel: View {
                         .font(.system(size: 11))
                         .foregroundStyle(Theme.textMuted)
                         .fixedSize(horizontal: false, vertical: true)
+                    // A text summary that failed — too long a description, a cloud tier that
+                    // declined — says nothing about whether the images can be read here: the
+                    // block asks its own model, and is only drawn when that one said yes.
+                    screenshotBlock
                 }
             }
         }

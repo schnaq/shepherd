@@ -17450,6 +17450,36 @@
           }
         }
       }
+    },
+    "SCREENSHOTS": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SCREENSHOTS"
+          }
+        }
+      }
+    },
+    "Read screenshots in descriptions on this Mac": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshots in Beschreibungen auf diesem Mac lesen"
+          }
+        }
+      }
+    },
+    "Adds a button to the summary card. Pressing it downloads up to two of the description's screenshots from GitHub's upload host (private-user-images.githubusercontent.com) and reads them with the model on this Mac. The images are never sent anywhere else, and nothing is downloaded until you press it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fügt der Zusammenfassung einen Button hinzu. Ein Klick lädt bis zu zwei Screenshots der Beschreibung vom Upload-Host von GitHub (private-user-images.githubusercontent.com) und liest sie mit dem Modell auf diesem Mac. Die Bilder werden nirgendwohin sonst gesendet, und vor dem Klick wird nichts geladen."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

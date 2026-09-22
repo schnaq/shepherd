@@ -1224,6 +1224,8 @@ struct IntelligenceSettingsTab: View {
 
             spotlightCard
 
+            screenshotCard
+
             Card {
                 VStack(alignment: .leading, spacing: 6) {
                     CardTitle(String(localized: "WHAT AI NEVER DOES"))
@@ -1261,6 +1263,34 @@ struct IntelligenceSettingsTab: View {
         }
         .onChange(of: environment.settings.intelligenceMode) { _, _ in
             environment.refreshIntelligence()
+        }
+        .onChange(of: environment.settings.screenshotReadingEnabled) { _, _ in
+            environment.refreshIntelligence()
+        }
+    }
+
+    // MARK: - Screenshots (ADR 0038 item 4)
+
+    /// The switch for the one host this feature adds, off by default (CONTRIBUTING.md).
+    private var screenshotCard: some View {
+        Card {
+            VStack(alignment: .leading, spacing: 8) {
+                CardTitle(String(localized: "SCREENSHOTS"))
+                Toggle(
+                    String(localized: "Read screenshots in descriptions on this Mac"),
+                    isOn: Binding(
+                        get: { environment.settings.screenshotReadingEnabled },
+                        set: { environment.settings.screenshotReadingEnabled = $0 }
+                    )
+                )
+                .disabled(environment.settings.intelligenceMode == .off)
+                Text(String(
+                    localized: "Adds a button to the summary card. Pressing it downloads up to two of the description's screenshots from GitHub's upload host (private-user-images.githubusercontent.com) and reads them with the model on this Mac. The images are never sent anywhere else, and nothing is downloaded until you press it."
+                ))
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 

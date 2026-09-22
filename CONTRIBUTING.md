@@ -193,15 +193,17 @@ bumping a dependency that ships inside the app also means a line in
     such reads per sweep, with the rest read on the next one. One read per disappearance, on the
     host already on this list, and a row that came back closed then costs nothing further: it is
     kept for fourteen days and pruned. **Read screenshots** on the inbox's summary card (ADR 0038
-    item 4, ADR 0007's 2026-09-22 amendment) makes two kinds of request, and only on that click —
-    never on selection, never in a sweep: one `GET /repos/…/pulls/{n}` on api.github.com with
+    item 4, ADR 0007's 2026-09-22 amendment) exists only while Settings → Intelligence → *Read
+    screenshots in descriptions on this Mac* is on — **off by default** — and makes two kinds of
+    request, only on that click, never on selection, never in a sweep: one `GET /repos/…/pulls/{n}` on api.github.com with
     `Accept: application/vnd.github.html+json`, not cached, whose rendering of the description
     carries a short-lived signed link for every upload; then at most two plain `GET`s of those
     links on GitHub's upload hosts, `private-user-images.githubusercontent.com` (or the older
     `user-images.githubusercontent.com` a description may still name) — one more
     `*.githubusercontent.com` host beside the job-log and release-asset ones already named here,
     and reached the same way: a signed URL, no `Authorization`
-    header, at most 8 MB each, refused by the client for any other host. The
+    header, at most 8 MB each, refused by the client for any other host, and with redirects from
+    those hosts refused rather than followed. The
     `github.com/user-attachments/assets/…` URL a description spells is never requested, because it
     redirects to an Amazon S3 bucket that is not on this list, and an image a description links from
     anywhere else is not read at all. The bytes go to the on-device model and nowhere else;

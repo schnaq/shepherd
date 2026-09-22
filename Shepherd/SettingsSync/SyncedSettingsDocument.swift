@@ -183,6 +183,13 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         /// from local rows and re-derived when the pull request changes, exactly like the search
         /// vectors (ADR 0019's argument, applied to a second cache).
         var structuredTriageEnabled: Bool
+        /// Whether the summary card may read a description's screenshots on this Mac.
+        ///
+        /// It travels for the reason ``structuredTriageEnabled`` does — it is a preference about
+        /// what the on-device model may be asked — and it defaults to *off*, because it is the
+        /// switch for a download host (ADR 0038 item 4): a document from a build that predates it
+        /// must not turn it on.
+        var screenshotReadingEnabled: Bool
 
         /// Creates the group.
         init(
@@ -193,7 +200,8 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
             openAICompatibleModel: String = "",
             openAICompatibleSovereigntyCountries: [String] = [],
             openAICompatibleZeroRetention: Bool = false,
-            structuredTriageEnabled: Bool = true
+            structuredTriageEnabled: Bool = true,
+            screenshotReadingEnabled: Bool = false
         ) {
             self.mode = mode
             self.cloudProviderKind = cloudProviderKind
@@ -203,6 +211,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
             self.openAICompatibleSovereigntyCountries = openAICompatibleSovereigntyCountries
             self.openAICompatibleZeroRetention = openAICompatibleZeroRetention
             self.structuredTriageEnabled = structuredTriageEnabled
+            self.screenshotReadingEnabled = screenshotReadingEnabled
         }
 
         private enum CodingKeys: String, CodingKey {
@@ -210,6 +219,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
             case openAICompatibleBaseURL, openAICompatibleModel
             case openAICompatibleSovereigntyCountries, openAICompatibleZeroRetention
             case structuredTriageEnabled
+            case screenshotReadingEnabled
         }
 
         init(from decoder: any Decoder) throws {
@@ -238,6 +248,12 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
             structuredTriageEnabled = container.syncedValue(
                 .structuredTriageEnabled,
                 default: true
+            )
+            // Defaults to `false`: an absent field is a document from before the switch existed,
+            // and a host switch must never be turned on by a document that did not name it.
+            screenshotReadingEnabled = container.syncedValue(
+                .screenshotReadingEnabled,
+                default: false
             )
         }
     }
