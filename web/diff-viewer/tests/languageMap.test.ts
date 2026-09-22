@@ -141,7 +141,10 @@ describe('relativeTime', () => {
     expect(relativeTime('2026-08-30T11:59:40Z', now, 'de')).toBe('jetzt');
     expect(relativeTime('2026-08-30T11:45:00Z', now, 'de')).toBe('vor 15 Min.');
     expect(relativeTime('2026-08-30T09:00:00Z', now, 'de')).toBe('vor 3 Std.');
-    expect(relativeTime('2026-08-29T12:00:00Z', now, 'de')).toBe('gestern');
+    // Elapsed time, not calendar days: no "gestern", "vorgestern" or "letzte Woche".
+    expect(relativeTime('2026-08-29T12:00:00Z', now, 'de')).toBe('vor 1 Tag');
+    expect(relativeTime('2026-08-28T12:00:00Z', now, 'de')).toBe('vor 2 Tagen');
+    expect(relativeTime('2026-08-23T12:00:00Z', now, 'de')).toBe('vor 1 Woche');
     expect(relativeTime('2026-08-26T12:00:00Z', now, 'de')).toBe('vor 4 Tagen');
     expect(relativeTime('2026-08-09T12:00:00Z', now, 'de')).toBe('vor 3 Wochen');
     expect(relativeTime('2024-08-30T12:00:00Z', now, 'de')).toBe('vor 2 Jahren');

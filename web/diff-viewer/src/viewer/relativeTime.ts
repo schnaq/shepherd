@@ -55,9 +55,12 @@ export function relativeTime(isoTimestamp: string, nowMs: number, locale: string
   const { value, unit } = bucket(Math.max(0, nowMs - then));
   if (locale === null || isEnglish(locale)) return english(value, unit);
   try {
-    // `numeric: 'auto'` so zero seconds is the language's own "now" ("jetzt") and one day its
-    // "yesterday" ("gestern"), rather than "vor 0 Sekunden".
-    return new Intl.RelativeTimeFormat(locale, { numeric: 'auto', style: 'short' }).format(-value, unit);
+    // `'auto'` only for "now", so zero seconds is the language's own "jetzt" rather than
+    // "vor 0 Sekunden". Everywhere else it would make calendar claims these buckets cannot back:
+    // they floor *elapsed* time, and "letzte Woche" for 7–13 days ago is, on a Monday, two
+    // calendar weeks back. "vor 1 Woche" says what "1w ago" says.
+    const numeric = unit === 'second' ? 'auto' : 'always';
+    return new Intl.RelativeTimeFormat(locale, { numeric, style: 'short' }).format(-value, unit);
   } catch {
     return english(value, unit);
   }

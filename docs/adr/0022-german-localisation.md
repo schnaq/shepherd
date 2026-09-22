@@ -337,9 +337,11 @@ the locale and replaces `{count}`. `{count}` is a placeholder in the sense this 
 `Bundle.main.preferredLocalizations.first`, `"de"` or `"en"` — rather than `Locale.current`, both
 because a French Mac gets this app in English and the diff must agree with the screen around it,
 and because `Locale.current.identifier` is `de_DE`, which `Intl` rejects. In German, relative times
-are `Intl.RelativeTimeFormat` with `style: 'short'` and `numeric: 'auto'` ("jetzt", "vor 5 Min.",
-"gestern", "vor 3 Wochen"); `narrow` would have given "vor 5 m". English keeps the compact
-hand-written form ("3h ago") the card was designed around, because `Intl`'s short English
+are `Intl.RelativeTimeFormat` with `style: 'short'` ("jetzt", "vor 5 Min.", "vor 1 Tag",
+"vor 3 Wochen"); `narrow` would have given "vor 5 m". `numeric: 'auto'` is used for "jetzt" only:
+the buckets floor elapsed time, and "gestern" or "letzte Woche" would be calendar claims they
+cannot back — "letzte Woche" for eight days ago on a Monday is two weeks back. English keeps the
+compact hand-written form ("3h ago") the card was designed around, because `Intl`'s short English
 ("3 hr. ago") is longer. The tooltip's absolute time becomes `Intl.DateTimeFormat` in the Mac's
 time zone instead of a UTC ISO string. The page's `lang` follows the locale, so VoiceOver reads the
 German cards with a German voice.
