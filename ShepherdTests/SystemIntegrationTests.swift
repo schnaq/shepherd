@@ -533,6 +533,19 @@ final class SystemIntegrationTests: XCTestCase {
         XCTAssertEqual(indexer.status.itemCount, 3)
     }
 
+    func testReindexingKeepsTheDeletionOwedForARowThatLeft() async {
+        let index = FakeSpotlightIndex()
+        let indexer = SpotlightIndexer(settings: makeSettings(), index: index)
+        await export(indexer, rows: rows)
+
+        indexer.reindex(nil, rows: [rows[0], rows[1]])
+        if let task = indexer.passTask { await task.value }
+
+        let deletions = await index.deletions
+        XCTAssertEqual(deletions.flatMap { $0 }, ["PR_3"], "the row that left is still deleted")
+        XCTAssertEqual(indexer.status.itemCount, 2)
+    }
+
     func testReindexingEverythingWritesEveryRowAgain() async {
         let index = FakeSpotlightIndex()
         let indexer = SpotlightIndexer(settings: makeSettings(), index: index)

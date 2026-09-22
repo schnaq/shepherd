@@ -228,29 +228,29 @@ final class SpotlightIndexer {
         run(plan: plan)
     }
 
-    /// Switches the export off: cancels the pass and deletes every item Shepherd wrote.
-    ///
-    /// Called from the toggle and from an applied settings document (ADR 0014), both through
-    /// ``AppEnvironment/applySpotlightSetting()`` — one route, exactly as the diagnostics opt-in
-    /// (ADR 0017) and the search index (ADR 0019) have one.
     /// Writes items again that the system says it lost (`IndexedEntityQuery`, ADR 0021's
     /// 2026-09-22 amendment).
     ///
     /// Forgets what it believes it exported for those ids — every id when `identifiers` is `nil` —
     /// and runs the ordinary plan over today's rows, so a re-donation is the same diff, batch and
-    /// failure handling as a sweep, and an id that has left the inbox is not written back.
+    /// failure handling as a sweep. Only ids still in the inbox are forgotten: an id that has left
+    /// it stays in the map, because the map is the only record that its deletion is still owed.
     /// - Parameters:
     ///   - identifiers: The node ids to write again, or `nil` for all.
     ///   - rows: The inbox as the local database holds it now.
     func reindex(_ identifiers: [String]?, rows: [PullRequestSummary]) {
-        if let identifiers {
-            for identifier in identifiers { exported[identifier] = nil }
-        } else {
-            exported = [:]
+        let present = Set(rows.map(\.id))
+        for identifier in identifiers ?? Array(exported.keys) where present.contains(identifier) {
+            exported[identifier] = nil
         }
         considerExporting(rows: rows)
     }
 
+    /// Switches the export off: cancels the pass and deletes every item Shepherd wrote.
+    ///
+    /// Called from the toggle and from an applied settings document (ADR 0014), both through
+    /// ``AppEnvironment/applySpotlightSetting()`` — one route, exactly as the diagnostics opt-in
+    /// (ADR 0017) and the search index (ADR 0019) have one.
     func disable() async {
         forgetExport()
         status.isEnabled = false
