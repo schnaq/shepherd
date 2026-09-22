@@ -83,7 +83,7 @@ struct EditorOpener {
         case .file(let file):
             perform(file: file, line: line)
         case .missingFile(let checkout, _):
-            guard perform(file: checkout, line: nil) else { return }
+            guard perform(file: checkout, line: nil, isDirectory: true) else { return }
             toasts.show(Toast(
                 message: String(localized: "\(path) is not in your checkout of \(repo.fullName) — it may be on another branch than this pull request. Opened the checkout instead."),
                 kind: .warning,
@@ -122,10 +122,15 @@ struct EditorOpener {
     /// Hands one file or folder to the editor.
     /// - Returns: Whether anything was launched; a failure has already been toasted.
     @discardableResult
-    private func perform(file: URL, line: Int?) -> Bool {
+    private func perform(file: URL, line: Int?, isDirectory: Bool = false) -> Bool {
         let launch: EditorLaunch
         do {
-            launch = try EditorLauncher.launch(for: settings.editor, file: file, line: line)
+            launch = try EditorLauncher.launch(
+                for: settings.editor,
+                file: file,
+                line: line,
+                isDirectory: isDirectory
+            )
         } catch {
             toasts.failure(error, context: String(localized: "Could not open the editor"))
             return false

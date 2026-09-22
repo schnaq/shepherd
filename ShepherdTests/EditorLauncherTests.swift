@@ -90,6 +90,30 @@ final class EditorLauncherTests: XCTestCase {
         XCTAssertEqual(bundles, ["com.jetbrains.intellij", "com.jetbrains.intellij.ce"])
     }
 
+    func testAFolderNeverGoesToACustomCommandButDoesGoToAURLEditor() throws {
+        let folder = URL(fileURLWithPath: "/Users/alex/code/review")
+        let custom = EditorConfiguration(
+            kind: .custom,
+            customCommandTemplate: "/usr/local/bin/code --goto {file}:{line}"
+        )
+        // `…/review:1` is no folder; Finder is the honest place for the clone itself.
+        XCTAssertEqual(
+            try EditorLauncher.launch(for: custom, file: folder, line: nil, isDirectory: true),
+            .systemDefault(folder)
+        )
+        // VS Code opens a folder as a workspace, so the URL is kept.
+        let launch = try EditorLauncher.launch(
+            for: EditorConfiguration(kind: .visualStudioCode),
+            file: folder,
+            line: nil,
+            isDirectory: true
+        )
+        guard case .url(let url, _, _) = launch else {
+            return XCTFail("expected a URL launch, got \(launch)")
+        }
+        XCTAssertEqual(url.absoluteString, "vscode://file/Users/alex/code/review")
+    }
+
     func testTheBundleIdentifiersAreTheOnesTheEditorsShipWith() {
         XCTAssertEqual(EditorKind.visualStudioCode.bundleIdentifiers, ["com.microsoft.VSCode"])
         XCTAssertEqual(EditorKind.cursor.bundleIdentifiers, ["com.todesktop.230313mzl4w4u92"])
@@ -188,31 +212,34 @@ final class EditorLauncherTests: XCTestCase {
         )
     }
 
+    // Compared by `.path` rather than `URL ==`: two file URLs to the same place can differ in
+    // how they were built, and the path is what reaches the editor.
+
     func testAFileTheCheckoutHasIsOpenedWhereItIs() {
         let checkout = URL(fileURLWithPath: "/Users/alex/code/review")
-        XCTAssertEqual(
-            EditorFileTarget.resolve(
-                checkout: checkout,
-                relativePath: "Sources/App/Main.swift",
-                fileExists: { $0 == "/Users/alex/code/review/Sources/App/Main.swift" }
-            ),
-            .file(file)
+        let target = EditorFileTarget.resolve(
+            checkout: checkout,
+            relativePath: "Sources/App/Main.swift",
+            fileExists: { $0 == "/Users/alex/code/review/Sources/App/Main.swift" }
         )
+        guard case .file(let url) = target else {
+            return XCTFail("expected the file, got \(target)")
+        }
+        XCTAssertEqual(url.path, file.path)
     }
 
     func testAFileTheCheckoutLacksFallsBackToTheCheckout() {
         let checkout = URL(fileURLWithPath: "/Users/alex/code/review")
-        XCTAssertEqual(
-            EditorFileTarget.resolve(
-                checkout: checkout,
-                relativePath: "Sources/New.swift",
-                fileExists: { _ in false }
-            ),
-            .missingFile(
-                checkout: checkout,
-                expected: URL(fileURLWithPath: "/Users/alex/code/review/Sources/New.swift")
-            )
+        let target = EditorFileTarget.resolve(
+            checkout: checkout,
+            relativePath: "Sources/New.swift",
+            fileExists: { _ in false }
         )
+        guard case .missingFile(let root, let expected) = target else {
+            return XCTFail("expected a missing file, got \(target)")
+        }
+        XCTAssertEqual(root.path, checkout.path)
+        XCTAssertEqual(expected.path, "/Users/alex/code/review/Sources/New.swift")
     }
 
     func testAPathThatClimbsOutOfTheCheckoutIsNeverOpened() {
@@ -226,7 +253,7 @@ final class EditorLauncherTests: XCTestCase {
         guard case .missingFile(let root, _) = target else {
             return XCTFail("expected the path to be refused, got \(target)")
         }
-        XCTAssertEqual(root, checkout)
+        XCTAssertEqual(root.path, checkout.path)
         // A sibling whose name merely starts with the checkout's is outside it too.
         let sibling = EditorFileTarget.resolve(
             checkout: checkout,
@@ -255,7 +282,9 @@ final class EditorLauncherTests: XCTestCase {
 
     @MainActor
     func testTheSettingIsStoredUnderTheEditorKey() throws {
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: "EditorLauncherTests-\(UUID())"))
+        let suite = "com.schnaq.shepherd.tests.editor.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
         let settings = AppSettings(defaults: defaults)
         XCTAssertEqual(settings.editor, EditorConfiguration())
         settings.editor = EditorConfiguration(kind: .visualStudioCode)
