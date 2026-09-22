@@ -55,6 +55,7 @@ final class DescriptionImageTests: XCTestCase {
             "https://github-production-user-asset-6210df.s3.amazonaws.com/1.png",
             "https://example.com/shot.png",
             "http://private-user-images.githubusercontent.com/1/2.png",
+            "https://private-user-images.githubusercontent.com.evil.com/1/2.png",
         ] {
             do {
                 _ = try await client.descriptionImage(at: try XCTUnwrap(URL(string: link)))
@@ -65,6 +66,40 @@ final class DescriptionImageTests: XCTestCase {
         }
         let requests = await transport.requests
         XCTAssertEqual(requests.count, 0)
+    }
+
+    func testAnAnswerFromAnotherHostAfterARedirectIsRefused() async throws {
+        // A transport that followed a redirect on its own reports the URL that answered; the
+        // image must have come from GitHub's upload host, or it is refused unread.
+        let transport = MockTransport()
+        await transport.route(
+            "private-user-images.githubusercontent.com",
+            HTTPResponse(
+                statusCode: 200,
+                headers: ["Content-Type": "image/png"],
+                body: Data([0x89]),
+                url: URL(string: "https://github-production-user-asset-6210df.s3.amazonaws.com/2.png")
+            )
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            _ = try await client.descriptionImage(at: try XCTUnwrap(URL(string: signed)))
+            XCTFail("expected a foreign final host to be refused")
+        } catch let error as GitHubError {
+            guard case .invalidURL = error else { return XCTFail("expected invalidURL, got \(error)") }
+        }
+    }
+
+    func testTheSessionRefusesToFollowARedirectFromTheUploadHosts() throws {
+        XCTAssertTrue(RedirectPolicy.refusesRedirect(from: try XCTUnwrap(URL(string: signed))))
+        XCTAssertTrue(RedirectPolicy.refusesRedirect(
+            from: try XCTUnwrap(URL(string: "https://user-images.githubusercontent.com/1/a.png"))
+        ))
+        // The job log's redirect off api.github.com is still followed (ADR 0024).
+        XCTAssertFalse(RedirectPolicy.refusesRedirect(
+            from: try XCTUnwrap(URL(string: "https://api.github.com/repos/o/r/actions/jobs/1/logs"))
+        ))
     }
 
     func testAnAnswerThatIsNotAnImageOrTooLargeIsRefused() async throws {

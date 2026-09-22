@@ -784,8 +784,11 @@ public actor GitHubClient {
     ///
     /// One plain `GET` with **no `Authorization` header**: the link carries its own signature, and
     /// ``ShepherdCore/DescriptionImages/isDownloadable(_:)`` is asked again here so that only
-    /// GitHub's two upload hosts are ever contacted, whatever handed this method the URL. No cache
-    /// and no retry, the job log's shape (``performLogRequest(url:authorized:resource:)``).
+    /// GitHub's two upload hosts are ever contacted, whatever handed this method the URL — before
+    /// the request, and of the URL that answered it, since a redirect from those hosts is refused
+    /// by ``RedirectStrippingDelegate`` and must not have been followed by anything else. No cache
+    /// and no retry, the job log's shape (``performLogRequest(url:authorized:resource:)``). The
+    /// 8 MB cap is checked on the downloaded body, as the job log's is.
     /// - Parameter url: A link from ``ShepherdCore/DescriptionImages/signedSources(for:inBodyHTML:)``.
     /// - Returns: The image's bytes.
     /// - Throws: ``GitHubError/invalidURL(_:)`` for a link on any other host,
@@ -798,6 +801,12 @@ public actor GitHubClient {
         }
         let resource = "description screenshot \(url.lastPathComponent)"
         let response = try await performLogRequest(url: url, authorized: false, resource: resource)
+        // The transport may have followed a redirect on its own (``URLSessionTransport`` refuses
+        // one from these hosts, but an injected session might not): whatever answered has to be
+        // one of the two hosts too, or the bytes came from somewhere nobody agreed to.
+        if let answered = response.url, !DescriptionImages.isDownloadable(answered) {
+            throw GitHubError.invalidURL(answered.host ?? answered.absoluteString)
+        }
         guard response.isSuccess else {
             throw Self.mapFailure(response, resource: resource, now: now())
         }

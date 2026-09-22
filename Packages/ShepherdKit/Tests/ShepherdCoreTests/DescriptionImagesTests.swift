@@ -51,6 +51,19 @@ final class DescriptionImagesTests: XCTestCase {
         XCTAssertEqual(DescriptionImages.attachments(inMarkdown: markdown), [])
     }
 
+    func testAnUploadWhoseKeyIsNotAUUIDIsNotAnAttachment() {
+        // A key is matched as a substring of a signed file name; "1" or "png" would match
+        // somebody else's upload, so only a UUID-shaped one counts.
+        let markdown = """
+            ![short](https://github.com/user-attachments/assets/1)
+            ![ext](https://github.com/user-attachments/assets/png)
+            ![almost](https://github.com/user-attachments/assets/8a9a7a9a-b522-4d7c-b0ce-0cada5cf156z)
+            ![shifted](https://github.com/user-attachments/assets/8a9a7a9ab-522-4d7c-b0ce-0cada5cf1568)
+            """
+        XCTAssertEqual(DescriptionImages.attachments(inMarkdown: markdown), [])
+        XCTAssertEqual(DescriptionImages.attachments(inMarkdown: "![ok](\(upload))").count, 1)
+    }
+
     func testAnImageInsideAFencedBlockIsText() {
         let markdown = """
             ```markdown
@@ -128,6 +141,7 @@ final class DescriptionImagesTests: XCTestCase {
         XCTAssertFalse(DescriptionImages.isDownloadable(URL(string: upload)!), "github.com redirects to S3")
         XCTAssertFalse(DescriptionImages.isDownloadable(URL(string: "https://camo.githubusercontent.com/a")!))
         XCTAssertFalse(DescriptionImages.isDownloadable(URL(string: "https://github-production-user-asset-6210df.s3.amazonaws.com/a.png")!))
+        XCTAssertFalse(DescriptionImages.isDownloadable(URL(string: "https://private-user-images.githubusercontent.com.evil.com/1/a.png")!))
     }
 
     // MARK: - The request

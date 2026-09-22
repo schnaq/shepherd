@@ -152,10 +152,13 @@ public enum DescriptionImages {
         let key: String?
         switch host {
         case "github.com":
-            // `/user-attachments/assets/<uuid>` — the upload GitHub writes today.
+            // `/user-attachments/assets/<uuid>` — the upload GitHub writes today. The key has to
+            // be UUID-shaped: it is matched as a substring of a signed file name, and a short or
+            // odd key ("1", "png") would match somebody else's upload.
             guard components.count == 3,
                   components[0] == "user-attachments",
-                  components[1] == "assets"
+                  components[1] == "assets",
+                  isUUIDShaped(components[2])
             else { return nil }
             key = components[2]
         case _ where downloadHosts.contains(host):
@@ -170,6 +173,20 @@ public enum DescriptionImages {
             altText: altText.trimmingCharacters(in: .whitespacesAndNewlines),
             key: key.lowercased()
         )
+    }
+
+    /// Thirty-six characters of hex digits and dashes, dashes where a UUID has them.
+    static func isUUIDShaped(_ text: String) -> Bool {
+        let characters = Array(text.lowercased())
+        guard characters.count == 36 else { return false }
+        for (index, character) in characters.enumerated() {
+            if [8, 13, 18, 23].contains(index) {
+                guard character == "-" else { return false }
+            } else {
+                guard character.isHexDigit else { return false }
+            }
+        }
+        return true
     }
 
     // MARK: - Parsing
