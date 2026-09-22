@@ -63,6 +63,26 @@ struct EmptyStateView: View {
     /// the fix leaves the reviewer hunting for the refresh key.
     var action: (title: String, run: () -> Void)?
 
+    // No `.fixedSize(horizontal: false, vertical: true)` on the message, here or in the two
+    // siblings below — and none may be added back. This view is the whole content of a
+    // `NavigationSplitView` column whenever a list is empty, and with a vertically fixed message
+    // the split view lays *every* column out far taller than the window and centres the lot: the
+    // rail's first rows above the title bar, Fleet and Settings below the bottom edge, which is
+    // what "the sidebar jumps when the list says Nothing to review" was.
+    //
+    // Measured on 2026-09-22 with a stand-alone three-column reproduction, columns logged in
+    // window coordinates. With this sentence fixed, the columns came out 1,165 pt (one empty
+    // state showing) and 1,224 pt (two) inside a 998 pt content area. Of nine candidate fixes —
+    // the columns' ideal height, the window frame, the toolbar, the safe-area insets, a scroll
+    // view around the empty state — only dropping `fixedSize` put all three columns back at the
+    // toolbar's edge, in both the empty and the filled state; a ten-character message stayed
+    // correct *with* the modifier, so the excess grows with the text. The rendered message was
+    // 287 × 30 pt, two lines, in every run: without the modifier nothing truncates, because the
+    // frame around it has all the height it needs. What the split view proposes during that
+    // measurement is not observable from here; the deduction is a very narrow width, which a
+    // fixed `Text` answers with a height for every word. The 1,158 pt of the 2026-09-17
+    // cold-start fix is very likely the same mechanism through ``LoadingStateView``'s message —
+    // not re-measured, since that state cannot be held still.
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: systemImage)
@@ -76,7 +96,6 @@ struct EmptyStateView: View {
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textMuted)
                     .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             if let action {
                 Button(action.title, action: action.run)
@@ -112,11 +131,11 @@ struct LoadingStateView: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Theme.textSecondary)
             if let message {
+                // Not vertically fixed — see ``EmptyStateView``.
                 Text(message)
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textMuted)
                     .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(maxWidth: 320)

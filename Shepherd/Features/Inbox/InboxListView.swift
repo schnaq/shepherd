@@ -434,11 +434,11 @@ struct InboxZeroView: View {
             Text(String(localized: "You are caught up."))
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Theme.textStrong)
+            // Not vertically fixed — see ``EmptyStateView``.
             Text(message)
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textMuted)
                 .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: 320)
         .padding(28)

@@ -17,9 +17,10 @@ extension View {
     ///
     /// One modifier rather than the same three lines per call site, because the next column added
     /// to a split view has to have it too and a convention nobody can see is a convention that
-    /// gets missed. The two rails carry it because they are where the bug was seen; the list and
-    /// fleet columns have the same shape and are candidates for the same treatment the next time
-    /// one of them is worked on.
+    /// gets missed. The two rails carry it because they are where the bug was seen. The list and
+    /// detail columns do *not* need it: their version of the same symptom came from a vertically
+    /// fixed `Text` in the empty and loading states, not from a scroll view's ideal height —
+    /// ``EmptyStateView`` has the measurement and the rule.
     func columnHeight() -> some View {
         frame(idealHeight: 0, maxHeight: .infinity)
     }

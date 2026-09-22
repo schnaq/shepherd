@@ -198,22 +198,21 @@ struct FleetScreen: View {
     // MARK: - Sparse states
 
     private var noAgentsState: some View {
-        VStack(spacing: 4) {
-            EmptyStateView(
-                systemImage: "person.2",
-                title: String(localized: "No agents yet"),
-                message: String(
-                    localized: "Shepherd names an author as an agent from its login, its branch prefix or a commit trailer."
-                )
+        // The button is the empty state's own `action`, not a sibling under a vertically fixed
+        // copy of it: a `.fixedSize` on a column's whole content is the mechanism that drew the
+        // inbox rail above the title bar (``EmptyStateView`` has the measurement), and the
+        // `action` slot exists for exactly this — one way out, drawn under the message.
+        EmptyStateView(
+            systemImage: "person.2",
+            title: String(localized: "No agents yet"),
+            message: String(
+                localized: "Shepherd names an author as an agent from its login, its branch prefix or a commit trailer."
+            ),
+            action: (
+                title: String(localized: "Open Settings → Agents"),
+                run: { environment.showSettings(.agents) }
             )
-            // Vertically fixed, so the empty state takes the height of its own content instead of
-            // filling the screen and pushing the button that answers it down to the bottom edge.
-            .fixedSize(horizontal: false, vertical: true)
-            Button(String(localized: "Open Settings → Agents")) {
-                environment.showSettings(.agents)
-            }
-            .buttonStyle(SecondaryButtonStyle())
-        }
+        )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // The list — and with it the header's chevron and the key handler Escape used to go
         // through — is not drawn in this state, so the way back is drawn here. It carries the
