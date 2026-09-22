@@ -9,7 +9,7 @@ export function Footer() {
         <ul>
           <li><a href="https://github.com/schnaq/shepherd">Source on GitHub</a></li>
           <li><a href="https://github.com/schnaq/shepherd/blob/main/docs/PRIVACY.md">Privacy notice</a></li>
-          <li><a href="https://schnaq.com/de/legal-note">Imprint</a></li>
+          <li><a href="https://schnaq.com/de/legal-note">Legal note</a></li>
           <li><a href="https://github.com/schnaq/shepherd/blob/main/LICENSE">Licence</a></li>
         </ul>
       </div>

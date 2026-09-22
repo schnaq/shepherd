@@ -1,0 +1,82 @@
+# The product page at shepherd.schnaq.com: built on every change under site/, deployed from main.
+#
+# A workflow of its own rather than a job in ci.yml, because it has nothing to do with the app —
+# a different runner, a different toolchain, and a deploy step whose secrets the app jobs must not
+# see. The `paths` filter keeps a Swift commit from rebuilding a page it did not touch.
+#
+# Deploying goes through the Vercel CLI with a prebuilt output (`vercel build` here, `vercel deploy
+# --prebuilt` there), so what lands is exactly what this job built and typechecked. The three
+# secrets are the ones the CLI documents: VERCEL_TOKEN authenticates, VERCEL_ORG_ID and
+# VERCEL_PROJECT_ID name the project that `vercel pull` links against. If the Vercel project is
+# *also* connected to this repository through Vercel's Git integration, disconnect it, or every push
+# deploys twice.
+name: Site
+
+on:
+  push:
+    branches: ["main"]
+    paths: ["site/**", ".github/workflows/site.yml"]
+  pull_request:
+    paths: ["site/**", ".github/workflows/site.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: site
+
+jobs:
+  build:
+    name: Build and typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Bun installs and runs the scripts, Node runs Next: `next build` does not get through
+      # page-data collection under Bun's runtime (site/README.md), and Vercel builds with Node too.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run build
+
+  deploy:
+    name: Deploy to Vercel
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://shepherd.schnaq.com
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    defaults:
+      run:
+        # The repository root, not site/: the Vercel project's Root Directory is `site`
+        # (site/README.md), and the CLI resolves that setting against the directory it runs in.
+        # Run from site/ and it would look for site/site.
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+        working-directory: site
+      - run: npm install --global vercel@latest
+      - name: Link the project and pull its production settings
+        run: vercel pull --yes --environment=production --token="${{ secrets.VERCEL_TOKEN }}"
+      - name: Build the production output
+        run: vercel build --prod --token="${{ secrets.VERCEL_TOKEN }}"
+      - name: Deploy the prebuilt output
+        run: vercel deploy --prebuilt --prod --token="${{ secrets.VERCEL_TOKEN }}"

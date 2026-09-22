@@ -9,7 +9,7 @@ const HOSTS = [
     name: "Usage counts",
     host: "eu.i.posthog.com",
     what: "About once a day: the app version, the language, and which features were used, as categories and buckets. No identifier, nothing that could recognise this Mac again, and never a repository, a branch or a line of code.",
-    control: "On by default, one click to switch off in Settings. Counting people rather than launches needs a random ID that is thrown away every month. That is a separate opt-in.",
+    control: "Off until you say yes when the app first opens, and one click to switch off again in Settings. Counting people rather than launches needs a random ID that is thrown away every month. That is a separate choice on the same screen.",
   },
   {
     name: "Updates",
