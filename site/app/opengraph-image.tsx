@@ -34,7 +34,7 @@ export default function OpenGraphImage() {
         </div>
         <div style={{ display: "flex", gap: 32, fontSize: 24, color: "#636b7e" }}>
           <span>shepherd.schnaq.com</span>
-          <span>macOS 26 Tahoe</span>
+          <span>macOS 27 Golden Gate</span>
           <span>MIT</span>
         </div>
       </div>

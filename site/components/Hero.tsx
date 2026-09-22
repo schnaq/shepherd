@@ -17,7 +17,7 @@ export function Hero({ release }: { release: Release }) {
             <a className="button" href={release.dmgURL}>Download Shepherd {release.version}</a>
           </div>
           <p className="hero-meta">
-            macOS 26 Tahoe on Apple Silicon. Open source under the MIT licence. Your data stays on your Mac.
+            macOS 27 Golden Gate on Apple Silicon. Open source under the MIT licence. Your data stays on your Mac.
           </p>
         </div>
         <InboxDemo />
