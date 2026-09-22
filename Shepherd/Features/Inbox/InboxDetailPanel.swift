@@ -216,7 +216,8 @@ struct InboxDetailPanel: View {
         if screenshots.state != .none {
             ScreenshotReadingBlock(state: screenshots.state) {
                 guard let detail = model.detail else { return }
-                screenshots.read(detail: detail, fetcher: environment.descriptionImageFetcher)
+                let fetcher = environment.descriptionImageFetcher
+                Task { await screenshots.read(detail: detail, fetcher: fetcher) }
             }
             .padding(.top, 2)
         }
