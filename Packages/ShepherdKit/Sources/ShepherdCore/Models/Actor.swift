@@ -60,7 +60,10 @@ public enum ActorKind: Sendable, Codable, Hashable {
         return nil
     }
 
-    /// A short, stable label suitable for grouping headers and filters.
+    /// A short, stable English label, for tests, logs and model prompts.
+    ///
+    /// Not what the app shows: it cannot be localised here, so the app renders provenance itself
+    /// (`ActorKind.localizedProvenanceLabel`, ADR 0022's 2026-09-22 amendment).
     public var provenanceLabel: String {
         switch self {
         case .human: return "People"
