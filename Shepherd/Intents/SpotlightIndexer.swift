@@ -82,11 +82,6 @@ extension SpotlightItemFields {
     /// inbox — and deletes the item then (``SpotlightExportPlan/deletions``). Leaving the default
     /// in place would mean long-lived pull requests silently vanishing from Spotlight while still
     /// sitting in the inbox, with nothing in the app to explain it.
-    /// The `PullRequestEntity` this item stands for.
-    var entityIdentifier: EntityIdentifier {
-        EntityIdentifier(for: PullRequestEntity.self, identifier: uniqueIdentifier)
-    }
-
     var searchableItem: CSSearchableItem {
         let attributes = CSSearchableItemAttributeSet(contentType: .content)
         attributes.identifier = uniqueIdentifier
@@ -99,10 +94,11 @@ extension SpotlightItemFields {
             attributeSet: attributes
         )
         item.expirationDate = .distantFuture
-        // The item *is* the pull request Siri and Shortcuts know as a `PullRequestEntity`: the
-        // unique identifier is the node id, which is the entity's id, so the system can hand the
-        // entity to an intent from a Spotlight result (ADR 0021's 2026-09-22 amendment).
-        item.relatedAppEntityIdentifier = entityIdentifier
+        // The item *is* the pull request Siri and Shortcuts know as a `PullRequestEntity`, so the
+        // system can hand the entity to an intent from a Spotlight result (ADR 0021's 2026-09-22
+        // amendment). The framework does not read the association back outside a registered app,
+        // so no test can observe it; the entity it is built from is tested instead.
+        item.associateAppEntity(entity)
         return item
     }
 }
