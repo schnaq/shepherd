@@ -83,6 +83,15 @@ enum AppConfig {
         return raw
     }
 
+    /// Shepherd's privacy statement: what is stored, what leaves the Mac, to whom (ADR 0036).
+    ///
+    /// The document in the repository rather than a web page, because it is the one that is
+    /// reviewed in the same pull request as the code it describes.
+    static var privacyPolicyURL: URL {
+        URL(string: "https://github.com/schnaq/shepherd/blob/main/docs/PRIVACY.md")
+            ?? URL(fileURLWithPath: "/")
+    }
+
     /// `https://github.com`, used for "open on GitHub" links.
     static var webBaseURL: URL {
         URL(string: "https://github.com") ?? URL(fileURLWithPath: "/")

@@ -60,9 +60,13 @@ struct TelemetryNoticeSheet: View {
                 .font(Theme.type(.callout))
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
-                Button(String(localized: "Show what would be sent")) { isShowingExample = true }
-                    .buttonStyle(.link)
-                    .font(Theme.type(.callout))
+                HStack(spacing: 14) {
+                    Button(String(localized: "Show what would be sent")) { isShowingExample = true }
+                        .buttonStyle(.link)
+                    Link(String(localized: "Privacy statement"), destination: AppConfig.privacyPolicyURL)
+                        .help(String(localized: "What Shepherd stores, what leaves your Mac, and to whom"))
+                }
+                .font(Theme.type(.callout))
             }
 
             Toggle(isOn: $countsReach) {

@@ -16260,6 +16260,26 @@
           }
         }
       }
+    },
+    "Privacy statement": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datenschutzhinweise"
+          }
+        }
+      }
+    },
+    "What Shepherd stores, what leaves your Mac, and to whom": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was Shepherd speichert, was deinen Mac verlässt und an wen"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
