@@ -9,8 +9,7 @@ export function Hero({ release }: { release: Release }) {
           <h1>Agents open pull requests faster than anyone can read them.</h1>
           <p className="lead">
             Shepherd is a native macOS inbox for every pull request from every repository you
-            care about. Triage, review and merge from the keyboard, and know at a glance whether
-            an agent or a person wrote it.
+            care about. Triage, review and merge from the keyboard.
           </p>
           <div className="hero-actions">
             <a className="button button-primary" href="#install">Install with Homebrew</a>
