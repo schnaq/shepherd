@@ -182,13 +182,13 @@ enum OnDeviceGeneration {
 /// The model is guarded twice: the chosen model's `availability` must report `.available` (Apple
 /// Intelligence can be off, the device can be ineligible, the assets can still be downloading),
 /// and the prompt must fit the token budget — ADR 0007 makes the context ceiling a hard error
-/// rather than a silent truncation. The budget is measured against the real tokenizer where the
-/// OS can do that and estimated at four characters per token where it cannot (plan §0.1).
+/// rather than a silent truncation. The budget is measured against the real tokenizer; the floor
+/// is macOS 27, so the OS can always measure (ADR 0038, plan §0.1).
 struct OnDeviceProvider: IntelligenceProvider {
     /// The token budget digests are built with for this tier.
     ///
     /// Still the conservative estimate-based number, because a digest is built *before* a model
-    /// exists to ask: measuring happens in ``preflight(useCase:instructions:prompt:estimate:)``,
+    /// exists to ask: measuring happens in ``preflight(useCase:instructions:prompt:)``,
     /// where it can only ever let more through than this.
     static let budget = TokenBudget.onDevice
 
@@ -223,7 +223,6 @@ struct OnDeviceProvider: IntelligenceProvider {
             useCase: .prose,
             instructions: IntelligencePrompt.summaryInstructions,
             prompt: prompt,
-            estimate: digest.approximateTokenCount
         )
         let generated: OnDeviceSummary
         do {
@@ -250,7 +249,6 @@ struct OnDeviceProvider: IntelligenceProvider {
             useCase: .prose,
             instructions: IntelligencePrompt.focusInstructions,
             prompt: prompt,
-            estimate: digest.approximateTokenCount
         )
         let generated: OnDeviceFocus
         do {
@@ -277,7 +275,6 @@ struct OnDeviceProvider: IntelligenceProvider {
         try await draft(
             instructions: IntelligencePrompt.draftSummaryInstructions,
             prompt: IntelligencePrompt.body(for: request),
-            estimate: request.approximateTokenCount
         )
     }
 
@@ -285,7 +282,6 @@ struct OnDeviceProvider: IntelligenceProvider {
         try await draft(
             instructions: IntelligencePrompt.draftInlineCommentInstructions,
             prompt: IntelligencePrompt.body(for: request),
-            estimate: request.approximateTokenCount
         )
     }
 
@@ -295,7 +291,6 @@ struct OnDeviceProvider: IntelligenceProvider {
         streamedDraft(
             instructions: IntelligencePrompt.draftSummaryInstructions,
             prompt: IntelligencePrompt.body(for: request),
-            estimate: request.approximateTokenCount
         )
     }
 
@@ -305,7 +300,6 @@ struct OnDeviceProvider: IntelligenceProvider {
         streamedDraft(
             instructions: IntelligencePrompt.draftInlineCommentInstructions,
             prompt: IntelligencePrompt.body(for: request),
-            estimate: request.approximateTokenCount
         )
     }
 
@@ -315,7 +309,7 @@ struct OnDeviceProvider: IntelligenceProvider {
     /// uses, because it is the same kind of work: a few sentences of prose from a windowed diff
     /// excerpt, with the framework's default temperature because naming a colder one makes every
     /// answer read like the same paragraph. Guided generation is what keeps the streamed
-    /// snapshots readable (see ``streamedDraft(instructions:prompt:estimate:)``): the reviewer
+    /// snapshots readable (see ``streamedDraft(instructions:prompt:)``): the reviewer
     /// watches sentences arrive, never half a JSON object.
     ///
     /// This is the tier the feature is designed for. Tier 2 first, and a tier-2 answer is the
@@ -326,7 +320,6 @@ struct OnDeviceProvider: IntelligenceProvider {
         streamedDraft(
             instructions: request.instructions,
             prompt: IntelligencePrompt.body(for: request),
-            estimate: request.approximateTokenCount
         )
     }
 
@@ -338,7 +331,6 @@ struct OnDeviceProvider: IntelligenceProvider {
             instructions: IntelligencePrompt.agentBriefInstructions
                 + "\n" + IntelligencePrompt.agentBriefMarkdownContract,
             prompt: IntelligencePrompt.body(for: request),
-            estimate: request.approximateTokenCount
         )
     }
 
@@ -366,7 +358,6 @@ struct OnDeviceProvider: IntelligenceProvider {
             useCase: .prose,
             instructions: IntelligencePrompt.ciDiagnosisInstructions,
             prompt: prompt,
-            estimate: request.approximateTokenCount,
             tools: OnDeviceToolBridge.tools(executor: tools, recorder: recorder)
         )
         let generated: OnDeviceCIDiagnosis
@@ -385,12 +376,11 @@ struct OnDeviceProvider: IntelligenceProvider {
     }
 
     /// One drafting request, awaited to the end.
-    private func draft(instructions: String, prompt: String, estimate: Int) async throws -> String {
+    private func draft(instructions: String, prompt: String) async throws -> String {
         let session = try await OnDeviceProvider.preflight(
             useCase: .prose,
             instructions: instructions,
             prompt: prompt,
-            estimate: estimate
         )
         let generated: OnDeviceReviewDraft
         do {
@@ -414,15 +404,13 @@ struct OnDeviceProvider: IntelligenceProvider {
     /// every element the UI sees is a write into a text field the reviewer may be looking at.
     private func streamedDraft(
         instructions: String,
-        prompt: String,
-        estimate: Int
+        prompt: String
     ) -> AsyncThrowingStream<String, Error> {
         IntelligenceStreaming.stream { continuation in
             let session = try await OnDeviceProvider.preflight(
                 useCase: .prose,
                 instructions: instructions,
                 prompt: prompt,
-                estimate: estimate
             )
             var latest = ""
             do {
@@ -465,7 +453,6 @@ struct OnDeviceProvider: IntelligenceProvider {
     /// be `Sendable` would be a claim about the framework this file cannot make.
     /// - Parameter model: The model that will read the prompt.
     /// - Returns: The measurement closure and the model's context window in tokens.
-    @available(macOS 26.4, *)
     private static func measuredContext(
         of model: SystemLanguageModel,
         measuring text: String
@@ -547,7 +534,6 @@ struct OnDeviceProvider: IntelligenceProvider {
     ///   - instructions: The session's instructions. Part of the same context window as the
     ///     prompt, which is why they are measured together.
     ///   - prompt: The prompt.
-    ///   - estimate: The request's own chars-÷-4 estimate, used when the OS cannot measure.
     ///   - tools: The tools the session may call. Empty for every request that only answers a
     ///     prompt, and the empty case keeps the exact initialiser those requests have always
     ///     used — a `tools:` argument on a request with no tools would be a change in what the
@@ -558,7 +544,6 @@ struct OnDeviceProvider: IntelligenceProvider {
         useCase: OnDeviceUseCase,
         instructions: String,
         prompt: String,
-        estimate: Int,
         tools: [any Tool] = []
     ) async throws -> LanguageModelSession {
         let model = useCase.model()
@@ -568,18 +553,16 @@ struct OnDeviceProvider: IntelligenceProvider {
 
         // The instructions share the window with the prompt, so they are measured with it.
         let text = instructions + "\n" + prompt
-        var budget = OnDeviceProvider.budget
-        var tokens = estimate
-        if #available(macOS 26.4, *) {
-            // Both halves of the comparison come from the same measurement, or this would be a
-            // real token count against a limit that was only ever a guess about the window.
-            let context = await measuredContext(of: model, measuring: text)
-            budget = budget.limited(
-                toContextSize: context.contextSize,
-                reservedForResponse: OnDeviceGeneration.reservedResponseTokens
-            )
-            tokens = budget.measured(text, using: context.measure)
-        }
+        // Both halves of the comparison come from the same measurement, or this would be a
+        // real token count against a limit that was only ever a guess about the window. The
+        // floor is macOS 27 (ADR 0038), so the OS can always measure; the chars-÷-4 estimate
+        // that used to stand in below 26.4 is gone with the `#available` that guarded it.
+        let context = await measuredContext(of: model, measuring: text)
+        let budget = OnDeviceProvider.budget.limited(
+            toContextSize: context.contextSize,
+            reservedForResponse: OnDeviceGeneration.reservedResponseTokens
+        )
+        let tokens = budget.measured(text, using: context.measure)
         guard tokens <= budget.maxTokens else {
             throw IntelligenceError.digestTooLarge(tokens: tokens, limit: budget.maxTokens)
         }

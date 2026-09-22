@@ -1,6 +1,6 @@
 # ADR 0002: Require macOS 26+ (Tahoe) on Apple Silicon
 
-Status: Accepted · Date: 2026-08-31
+Status: Superseded in part by [ADR 0038](0038-macos-27-floor.md) (minimum version now macOS 27; Apple Silicon only still stands) · Date: 2026-08-31
 
 ## Context
 

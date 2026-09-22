@@ -37,8 +37,6 @@
 	<string>6</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.developer-tools</string>
-	<key>LSMinimumSystemVersion</key>
-	<string>26.0</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>MIT licensed — schnaq GmbH and the Shepherd contributors</string>
 	<key>SHPostHogProjectKey</key>

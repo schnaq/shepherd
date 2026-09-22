@@ -4,7 +4,7 @@ Thanks for helping herd the agents! 🐑
 
 ## Prerequisites
 
-- macOS 26+, Xcode 26+ (app target)
+- macOS 27+, Xcode 27+ (app target; ADR 0038)
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
 - Node 22+ (only if you touch `web/diff-viewer`)
 
