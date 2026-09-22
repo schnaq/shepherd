@@ -17,6 +17,8 @@ struct ReviewScreen: View {
     @State private var model: ReviewModel
     /// Whether "end the session with pull requests still in it?" is being asked.
     @State private var isEndSessionConfirmationPresented = false
+    /// This pull request's outbox rows, observed, for the header's write state.
+    @State private var outboxItems: [OutboxItem] = []
     @FocusState private var isFileListFocused: Bool
 
     /// Creates the screen.
@@ -37,11 +39,18 @@ struct ReviewScreen: View {
             ReviewHeaderView(
                 model: model,
                 checkRollup: model.checkRollup,
+                write: writeState,
                 onBack: leaveReview,
                 onMerge: { model.isMergeSheetPresented = true },
                 onReview: { model.isSubmitSheetPresented = true },
-                onDelegate: delegate
+                onDelegate: delegate,
+                onRetry: { Task { await session.retryFailedWrites(for: prID) } }
             )
+            .task(id: prID) {
+                for await items in session.database.observeOutboxItems() {
+                    outboxItems = items.filter { $0.prID == prID }
+                }
+            }
             Divider().overlay(Theme.border)
             // Above everything the review is made of, because it is about all of it: the file
             // list, the diff and the composer are all showing a head commit that GitHub may have
@@ -356,6 +365,17 @@ struct ReviewScreen: View {
     /// so a verdict or a merge queued from it is the user finishing with the pull request under
     /// the cursor. `AppEnvironment` still checks the id, so a review submitted for anything else
     /// cannot move the queue.
+    /// What the outbox is doing for this pull request (``RowWriteState``), the same state its
+    /// inbox row shows.
+    private var writeState: RowWriteState? {
+        RowWriteState.make(
+            items: outboxItems,
+            for: prID,
+            isMerging: environment.activity.isRunning(prID, .merge),
+            wasMerged: environment.mergedPullRequestIDs.contains(prID)
+        )
+    }
+
     private var actions: PullRequestActions {
         PullRequestActions(
             session: session,
@@ -532,6 +552,8 @@ struct ReviewHeaderView: View {
     let model: ReviewModel
     /// The freshest CI rollup, from the model (``ReviewModel/checkRollup``).
     let checkRollup: CheckRollup?
+    /// What the outbox is doing for this pull request, or `nil`.
+    var write: RowWriteState?
     /// Returns to the inbox.
     var onBack: () -> Void
     /// Opens the merge sheet.
@@ -540,6 +562,10 @@ struct ReviewHeaderView: View {
     var onReview: () -> Void
     /// Opens the delegation sheet.
     var onDelegate: () -> Void
+    /// Sends this pull request's failed writes again.
+    var onRetry: () -> Void = {}
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 12) {
@@ -597,6 +623,19 @@ struct ReviewHeaderView: View {
                 ChecksSummaryView(rollup: checkRollup)
             }
 
+            if let write {
+                HStack(spacing: 6) {
+                    ChipView(text: write.text, color: write.color)
+                        .help(write.help)
+                    if case .failed = write {
+                        Button(String(localized: "Retry"), action: onRetry)
+                            .buttonStyle(SecondaryButtonStyle(height: 24, tint: Theme.accentText))
+                            .help(String(localized: "Send the failed changes to GitHub again"))
+                    }
+                }
+                .transition(.opacity)
+            }
+
             Button(action: onDelegate) {
                 HStack(spacing: 6) {
                     Image(systemName: "arrow.uturn.backward.badge.clock")
@@ -627,6 +666,7 @@ struct ReviewHeaderView: View {
         .padding(.horizontal, 16)
         .frame(height: 52)
         .background(Theme.panel)
+        .animation(reduceMotion ? nil : .snappy, value: write)
     }
 
     /// The Merge button, green only when merging is the next thing to do.
@@ -641,15 +681,19 @@ struct ReviewHeaderView: View {
     /// type: there is no value both styles fit in without erasing them.
     @ViewBuilder
     private var mergeButton: some View {
-        let isDisabled = model.summary?.mergeBlocker != nil || model.hasEndedOnGitHub
+        // A merge that is on its way, queued or confirmed is not a merge to press again.
+        let isOnItsWay = write == .merging || write == .mergeQueued || write == .merged
+        let isDisabled = model.summary?.mergeBlocker != nil || model.hasEndedOnGitHub || isOnItsWay
         if model.summary?.mergeBlocker == nil, checkRollup?.state == .success {
             Button(action: onMerge) { Text(String(localized: "Merge")) }
                 .buttonStyle(SuccessButtonStyle(height: 30))
+                .busy(write == .merging)
                 .disabled(isDisabled)
                 .help(mergeHelp)
         } else {
             Button(action: onMerge) { Text(String(localized: "Merge")) }
                 .buttonStyle(SecondaryButtonStyle(height: 30))
+                .busy(write == .merging)
                 .disabled(isDisabled)
                 .help(mergeHelp)
         }

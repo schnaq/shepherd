@@ -16470,6 +16470,156 @@
           }
         }
       }
+    },
+    "%lld not sent": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld nicht gesendet"
+          }
+        }
+      }
+    },
+    "%lld parked": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld zurückgestellt"
+          }
+        }
+      }
+    },
+    "%lld sending": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld werden gesendet"
+          }
+        }
+      }
+    },
+    "A change is held because the pull request moved on underneath it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Änderung ist zurückgestellt, weil sich der Pull Request inzwischen weiterentwickelt hat."
+          }
+        }
+      }
+    },
+    "GitHub confirmed the merge. The pull request leaves the inbox with the next sync.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub hat den Merge bestätigt. Der Pull Request verschwindet mit der nächsten Synchronisierung aus der Inbox."
+          }
+        }
+      }
+    },
+    "Merge queued": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge eingereiht"
+          }
+        }
+      }
+    },
+    "Merging…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird gemergt …"
+          }
+        }
+      }
+    },
+    "Not sent": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht gesendet"
+          }
+        }
+      }
+    },
+    "Parked": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zurückgestellt"
+          }
+        }
+      }
+    },
+    "Send the failed changes to GitHub again": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die fehlgeschlagenen Änderungen erneut an GitHub senden"
+          }
+        }
+      }
+    },
+    "Sending": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird gesendet"
+          }
+        }
+      }
+    },
+    "Shepherd could not send a change to GitHub. Open the pull request to retry it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd konnte eine Änderung nicht an GitHub senden. Öffne den Pull Request, um es erneut zu versuchen."
+          }
+        }
+      }
+    },
+    "Shepherd is sending the merge to GitHub.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd sendet den Merge an GitHub."
+          }
+        }
+      }
+    },
+    "Shepherd is sending your change to GitHub.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd sendet deine Änderung an GitHub."
+          }
+        }
+      }
+    },
+    "The merge is queued and goes out as soon as GitHub can be reached.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Merge ist eingereiht und geht raus, sobald GitHub erreichbar ist."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

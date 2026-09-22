@@ -305,13 +305,20 @@ struct InboxDetailPanel: View {
     /// request looking untouched — and the only per-pull-request word about the queue was the
     /// one-shot alert a parked review raises once (`DraftConflictQueue`), which a user who was
     /// away when it appeared never sees again.
+    /// Sends the row's failed writes again; the observed outbox updates the line by itself.
+    private func retryFailedWrites(_ row: PullRequestSummary) {
+        guard let session = environment.session else { return }
+        Task { await session.retryFailedWrites(for: row.id) }
+    }
+
     @ViewBuilder
     private func queueStatus(_ row: PullRequestSummary) -> some View {
         QueueStatusLine(
             queued: model.queuedWriteCount(for: row),
             parked: model.parkedWriteCount(for: row),
             failed: model.failedWriteCount(for: row),
-            target: .pullRequest
+            target: .pullRequest,
+            onRetry: { retryFailedWrites(row) }
         )
         if environment.mergeWhenGreen.isArmed(row) {
             mergeWhenGreenStatus

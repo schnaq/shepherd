@@ -595,6 +595,9 @@ struct QueueStatusLine: View {
     let failed: Int
     /// Which kind of node the three counts are about.
     let target: QueueStatusTarget
+    /// Sends this target's failed writes again, right here. `nil` keeps the pointer to
+    /// Settings → Sync, for a surface that cannot act.
+    var onRetry: (() -> Void)?
 
     var body: some View {
         if queued > 0 || parked > 0 || failed > 0 {
@@ -617,11 +620,18 @@ struct QueueStatusLine: View {
                 }
                 if failed > 0 {
                     indicator(
-                        String(localized: "\(failed) failed — see Settings → Sync"),
+                        onRetry == nil
+                            ? String(localized: "\(failed) failed — see Settings → Sync")
+                            : String(localized: "\(failed) not sent"),
                         systemImage: "xmark.octagon",
                         symbolTint: Theme.failure,
                         textTint: Theme.failure
                     )
+                    if let onRetry {
+                        Button(String(localized: "Retry"), action: onRetry)
+                            .buttonStyle(SecondaryButtonStyle(height: 22, tint: Theme.accentText))
+                            .help(String(localized: "Send the failed changes to GitHub again"))
+                    }
                 }
                 Spacer(minLength: 0)
             }

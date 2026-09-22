@@ -581,7 +581,36 @@ final class AppEnvironment {
         // two fields the draft-conflict notification spells a slug out of.
         let slug = "\(sent.repo.fullName)#\(sent.number)"
         toasts.success(String(localized: "Merged \(slug)."))
+        mergedPullRequestIDs.insert(sent.prID)
+        scheduleSyncAfterMerge()
     }
+
+    /// Pull requests whose merge GitHub confirmed while this app was running.
+    ///
+    /// What the row's *Merged* chip reads (``RowWriteState/merged``). Never set on the click —
+    /// only by ``confirmMerge(_:)``, i.e. after the drain heard back — and never cleared: the row
+    /// leaves the inbox with the next sweep, and a set of a few node ids is not worth a lifecycle.
+    private(set) var mergedPullRequestIDs: Set<String> = []
+
+    /// The sweep a confirmed merge asks for, coalesced.
+    @ObservationIgnored private var syncAfterMergeTask: Task<Void, Never>?
+
+    /// Syncs a few seconds after a merge landed, so the merged pull request leaves the inbox now
+    /// rather than at the next scheduled sweep. Coalesced: automatic merging can confirm several
+    /// in one drain, and they share one sweep. The delay is for GitHub's search index, which the
+    /// inbox query reads and which lags a merge by a moment.
+    private func scheduleSyncAfterMerge() {
+        guard syncAfterMergeTask == nil else { return }
+        syncAfterMergeTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(AppEnvironment.syncAfterMergeDelay))
+            guard let self, !Task.isCancelled else { return }
+            self.syncAfterMergeTask = nil
+            try? await self.session?.syncNow()
+        }
+    }
+
+    /// How long a confirmed merge waits before its sweep.
+    static let syncAfterMergeDelay: Double = 3
 
     // MARK: - Automatic merging (ADR 0018) and merge when checks pass (ADR 0037)
 
