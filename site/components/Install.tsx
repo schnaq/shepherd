@@ -25,7 +25,7 @@ export function Install({ release }: { release: Release }) {
             </p>
             <a className="button" href={release.dmgURL}>Download Shepherd {release.version}</a>
             <p>
-              Needs macOS 26 Tahoe on Apple Silicon. Sign in with GitHub through the device flow, or
+              Needs macOS 27 Golden Gate on Apple Silicon (on macOS 26, 1.3 keeps working). Sign in with GitHub through the device flow, or
               paste a fine-grained personal access token.{" "}
               <a href={release.releaseURL}>Release notes</a>
             </p>
