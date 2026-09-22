@@ -515,9 +515,8 @@ final class SystemIntegrationTests: XCTestCase {
 
     func testASpotlightItemNamesItsPullRequestEntity() {
         let fields = SpotlightItemFields(pullRequest: summary(id: "PR_9", number: 9, title: "T"))
-        let expected = EntityIdentifier(for: PullRequestEntity.self, identifier: "PR_9")
-        XCTAssertEqual(fields.entityIdentifier, expected)
-        XCTAssertEqual(fields.searchableItem.relatedAppEntityIdentifier, expected)
+        XCTAssertEqual(fields.entity.id, "PR_9", "the entity is the item's own pull request")
+        XCTAssertEqual(fields.entity.title, "T")
     }
 
     func testReindexingSomeIdentifiersWritesOnlyThoseAgain() async {

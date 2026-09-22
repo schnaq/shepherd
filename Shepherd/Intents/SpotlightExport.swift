@@ -62,11 +62,25 @@ struct SpotlightItemFields: Equatable, Sendable {
     /// "Claude Code", "review". Deduplicated and in a fixed order, so two identical inbox states
     /// produce two identical items and the diff below sees no change.
     let keywords: [String]
+    /// The `PullRequestEntity` the item stands for, so Siri and Shortcuts receive the same thing
+    /// from a Spotlight result as from their own search (ADR 0021's 2026-09-22 amendment).
+    ///
+    /// Left out of `==` on purpose: it is made of the same row, and the export's diff is about the
+    /// four fields above — the entity is a handle that re-reads its row when it is resolved.
+    let entity: PullRequestEntity
+
+    static func == (lhs: SpotlightItemFields, rhs: SpotlightItemFields) -> Bool {
+        lhs.uniqueIdentifier == rhs.uniqueIdentifier
+            && lhs.title == rhs.title
+            && lhs.contentDescription == rhs.contentDescription
+            && lhs.keywords == rhs.keywords
+    }
 
     /// Maps one inbox row onto what Spotlight is allowed to know about it.
     /// - Parameter pullRequest: The row, as the local database holds it.
     init(pullRequest: PullRequestSummary) {
         uniqueIdentifier = pullRequest.id
+        entity = PullRequestEntity(pullRequest: pullRequest)
         title = pullRequest.title
         contentDescription = String(
             localized: "\(pullRequest.slug) · \(pullRequest.author.login) · \(PullRequestMetadataText.checkState(pullRequest.checkRollup))"

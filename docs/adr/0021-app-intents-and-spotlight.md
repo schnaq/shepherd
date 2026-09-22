@@ -326,9 +326,11 @@ unchanged**, and what lands is the read half, which needs no new intent at all.
   or its cap, an automatic merge, merge-when-green queued or dropped; the digest is about no single
   one and carries none. The system can then hand "this" to the intents that already exist —
   *Open*, *Summarize* — with no screen scraping and no new vocabulary.
-- **Spotlight results are the same entity.** Each exported `CSSearchableItem` sets
-  `relatedAppEntityIdentifier` to its `PullRequestEntity` (the unique identifier already is the
-  node id), so a Spotlight result and a Shortcuts parameter are one thing.
+- **Spotlight results are the same entity.** Each exported `CSSearchableItem` is associated with
+  its `PullRequestEntity` (`associateAppEntity(_:)`; the unique identifier already is the node id),
+  so a Spotlight result and a Shortcuts parameter are one thing. `relatedAppEntityIdentifier`
+  (new in 27) names a *related* entity, not the item's own, and was not used; the framework reads
+  neither back outside a registered app, so the association is not observable in a test.
 - **The system can ask for its index back.** `PullRequestEntity` conforms to `IndexedEntity` with
   `hideInSpotlight == true` — the exporter's items are the Spotlight representation, and a second
   one would duplicate every result — and `PullRequestEntityQuery` to `IndexedEntityQuery`. Its two
