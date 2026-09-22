@@ -39,6 +39,7 @@ Swift → web:
 | `revealLine` | `revealLine.valid.json` | `side: "modified"` is not `left`/`right` |
 | `focusEditor` | `focusEditor.valid.json`, `focusEditor.valid-side.json` | `v: 2` — the envelope is all a message whose only field is optional can get wrong |
 | `setAccessibility` | `setAccessibility.valid.json` | `screenReader: "yes"` is a string, not a boolean |
+| `setLocale` | `setLocale.valid.json` (the German the app sends) | `strings.commentCount.other` is missing — a count needs both phrases |
 
 Web → Swift:
 

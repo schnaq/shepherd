@@ -3,7 +3,8 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { relativeTime } from '../src/viewer/relativeTime.js';
+import { canonicalLocale, commentCount, DEFAULT_LOCALE, ENGLISH_STRINGS, makeLocale } from '../src/viewer/locale.js';
+import { absoluteTime, relativeTime } from '../src/viewer/relativeTime.js';
 import { resolveLanguage, SUPPORTED_LANGUAGES } from '../src/viewer/languageMap.js';
 
 const srcDir = path.resolve(process.cwd(), 'src');
@@ -129,5 +130,59 @@ describe('relativeTime', () => {
 
   it('echoes an unparseable timestamp rather than showing NaN', () => {
     expect(relativeTime('not a date', now)).toBe('not a date');
+  });
+
+  it('keeps the compact English when the app says English', () => {
+    expect(relativeTime('2026-08-30T09:00:00Z', now, 'en')).toBe('3h ago');
+    expect(relativeTime('2026-08-30T11:59:40Z', now, 'en-GB')).toBe('just now');
+  });
+
+  it('formats each bucket in German through Intl', () => {
+    expect(relativeTime('2026-08-30T11:59:40Z', now, 'de')).toBe('jetzt');
+    expect(relativeTime('2026-08-30T11:45:00Z', now, 'de')).toBe('vor 15 Min.');
+    expect(relativeTime('2026-08-30T09:00:00Z', now, 'de')).toBe('vor 3 Std.');
+    expect(relativeTime('2026-08-29T12:00:00Z', now, 'de')).toBe('gestern');
+    expect(relativeTime('2026-08-26T12:00:00Z', now, 'de')).toBe('vor 4 Tagen');
+    expect(relativeTime('2026-08-09T12:00:00Z', now, 'de')).toBe('vor 3 Wochen');
+    expect(relativeTime('2024-08-30T12:00:00Z', now, 'de')).toBe('vor 2 Jahren');
+    expect(relativeTime('2026-09-01T12:00:00Z', now, 'de')).toBe('jetzt');
+  });
+});
+
+describe('absoluteTime', () => {
+  it('stays zone-independent UTC without a locale', () => {
+    expect(absoluteTime('2026-08-30T09:00:00Z')).toBe('2026-08-30 09:00:00 UTC');
+  });
+
+  it('follows the locale and the zone it is given', () => {
+    expect(absoluteTime('2026-08-30T09:00:00Z', 'de', 'UTC')).toBe('30.08.2026, 09:00');
+    expect(absoluteTime('2026-08-30T09:00:00Z', 'de', 'Europe/Berlin')).toBe('30.08.2026, 11:00');
+  });
+});
+
+describe('the viewer locale', () => {
+  it('accepts a language tag and refuses what Intl would throw on', () => {
+    expect(canonicalLocale('de')).toBe('de');
+    expect(canonicalLocale('de-DE')).toBe('de-DE');
+    // `Locale.current.identifier` spelling, which `new Intl.RelativeTimeFormat` rejects.
+    expect(canonicalLocale('de_DE')).toBeNull();
+  });
+
+  it('picks a whole phrase by the plural rules of the language', () => {
+    const german = makeLocale('de', {
+      ...ENGLISH_STRINGS,
+      commentCount: { one: '1 Kommentar', other: '{count} Kommentare' },
+    });
+    expect(commentCount(1, german)).toBe('1 Kommentar');
+    expect(commentCount(0, german)).toBe('0 Kommentare');
+    expect(commentCount(12, german)).toBe('12 Kommentare');
+    expect(commentCount(1, DEFAULT_LOCALE)).toBe('1 comment');
+    expect(commentCount(3, DEFAULT_LOCALE)).toBe('3 comments');
+  });
+
+  it('falls back to English plurals and times for a tag Intl refuses', () => {
+    const odd = makeLocale('de_DE', ENGLISH_STRINGS);
+    expect(odd.locale).toBeNull();
+    expect(commentCount(2, odd)).toBe('2 comments');
   });
 });

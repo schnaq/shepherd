@@ -12,6 +12,7 @@ import * as monaco from 'monaco-editor/editor/editor.api';
 import type {
   DraftComment,
   LoadFileMessage,
+  SetLocaleMessage,
   SetThemeMessage,
   Side,
   Thread,
@@ -20,6 +21,7 @@ import { makeAddComment, makeDraftClicked, makeThreadClicked, makeViewportChange
 import type { OutboundSink } from '../bridge/transport.js';
 import { addCommentTarget, cursorHit, gutterHit, hitChanged, type GutterHit } from './gutter.js';
 import { registerLanguages, resolveLanguage } from './languages.js';
+import { DEFAULT_LOCALE, makeLocale, type ViewerLocale } from './locale.js';
 import type { ViewerPort } from './router.js';
 import { clampFontSize, documentThemeClass, THEME_IDS, THEMES } from './themes.js';
 import { renderDraftZone, renderThreadZone } from './threadCard.js';
@@ -103,6 +105,8 @@ export class MonacoDiffViewer implements ViewerPort {
    */
   private commentable: Record<Side, ReadonlySet<number> | null> = { left: null, right: null };
 
+  /** The words the cards and the gutter draw in, English until the app sends its own. */
+  private locale: ViewerLocale = DEFAULT_LOCALE;
 
   constructor(options: ViewerOptions) {
     this.container = options.container;
@@ -240,6 +244,24 @@ export class MonacoDiffViewer implements ViewerPort {
     const root = this.container.ownerDocument.documentElement;
     root.classList.remove('shepherd-theme-light', 'shepherd-theme-dark');
     root.classList.add(documentThemeClass(message.theme));
+  }
+
+  /**
+   * Takes the app's language and words (ADR 0022's second amendment).
+   *
+   * The app sends this before its first `loadFile`, so normally nothing is on screen yet; the
+   * zones that are get redrawn anyway, because a card left in the previous language would stay
+   * that way until its thread next changed. The page's `lang` follows too, so VoiceOver reads the
+   * German cards with a German voice.
+   */
+  setLocale(message: SetLocaleMessage): void {
+    this.locale = makeLocale(message.locale, message.strings);
+    if (this.locale.locale !== null) this.container.ownerDocument.documentElement.lang = this.locale.locale;
+    this.arm(null);
+    for (const [key, entry] of [...this.mounted]) {
+      this.unmount(key);
+      this.mount(entry.zone);
+    }
   }
 
   setThreads(threads: readonly Thread[]): void {
@@ -454,7 +476,7 @@ export class MonacoDiffViewer implements ViewerPort {
           range: new monaco.Range(hit.line, 1, hit.line, 1),
           options: {
             glyphMarginClassName: 'sh-add-comment',
-            glyphMarginHoverMessage: { value: 'Add a review comment' },
+            glyphMarginHoverMessage: { value: this.locale.strings.addComment },
             stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
           },
         },
@@ -479,10 +501,8 @@ export class MonacoDiffViewer implements ViewerPort {
     const activate = (): void => {
       this.post(zone.kind === 'thread' ? makeThreadClicked(zone.thread.id) : makeDraftClicked(zone.draft.localID));
     };
-    const card =
-      zone.kind === 'thread'
-        ? renderThreadZone(zone.thread, { doc, nowMs: this.now(), onActivate: activate })
-        : renderDraftZone(zone.draft, { doc, nowMs: this.now(), onActivate: activate });
+    const options = { doc, nowMs: this.now(), onActivate: activate, locale: this.locale };
+    const card = zone.kind === 'thread' ? renderThreadZone(zone.thread, options) : renderDraftZone(zone.draft, options);
 
     const host = doc.createElement('div');
     host.className = 'sh-zone-host';

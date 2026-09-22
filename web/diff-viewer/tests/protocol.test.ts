@@ -15,6 +15,7 @@ import {
   parseInbound,
   parseOutbound,
 } from '../src/bridge/protocol.js';
+import { ENGLISH_STRINGS } from '../src/viewer/locale.js';
 
 function expectFail(result: { ok: boolean; error?: string }, fragment: string): void {
   expect(result.ok).toBe(false);
@@ -51,6 +52,7 @@ describe('envelope', () => {
         'revealLine',
         'setAccessibility',
         'setDraftComments',
+        'setLocale',
         'setTheme',
         'setThreads',
       ].sort(),
@@ -166,6 +168,43 @@ describe('parseInbound: setAccessibility', () => {
     expectFail(
       parseInbound({ v: 1, type: 'setAccessibility', screenReader: 'yes' }),
       'setAccessibility.screenReader',
+    );
+  });
+});
+
+describe('parseInbound: setLocale', () => {
+  const valid = { v: 1, type: 'setLocale', locale: 'de', strings: ENGLISH_STRINGS };
+
+  it('keeps the tag and every word', () => {
+    const result = parseInbound(valid);
+    expect(result.ok && result.value).toEqual(valid);
+  });
+
+  it('drops keys it does not know, like every other message', () => {
+    const result = parseInbound({ ...valid, strings: { ...ENGLISH_STRINGS, extra: 'x' } });
+    expect(result.ok && result.value).toEqual(valid);
+  });
+
+  it('rejects a missing or empty tag', () => {
+    expectFail(parseInbound({ ...valid, locale: '' }), 'setLocale.locale');
+    expectFail(parseInbound({ v: 1, type: 'setLocale', strings: ENGLISH_STRINGS }), 'setLocale.locale');
+  });
+
+  it.each(Object.keys(ENGLISH_STRINGS).filter((key) => key !== 'commentCount'))(
+    'rejects strings with an empty %s — an empty pill is worse than an English one',
+    (key) => {
+      expectFail(parseInbound({ ...valid, strings: { ...ENGLISH_STRINGS, [key]: '' } }), `setLocale.strings.${key}`);
+    },
+  );
+
+  it('needs both plural phrases', () => {
+    expectFail(
+      parseInbound({ ...valid, strings: { ...ENGLISH_STRINGS, commentCount: { one: '1 comment' } } }),
+      'setLocale.strings.commentCount.other',
+    );
+    expectFail(
+      parseInbound({ ...valid, strings: { ...ENGLISH_STRINGS, commentCount: 'comments' } }),
+      'setLocale.strings.commentCount',
     );
   });
 });

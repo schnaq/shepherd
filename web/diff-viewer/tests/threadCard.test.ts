@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { DraftComment, Thread, ThreadComment } from '../src/bridge/protocol.js';
+import { makeLocale } from '../src/viewer/locale.js';
 import { renderDraftZone, renderThreadZone, sanitizeInPlace } from '../src/viewer/threadCard.js';
+import germanFixture from '../fixtures/setLocale.valid.json';
 
 const NOW = Date.parse('2026-08-30T12:00:00Z');
 
@@ -105,6 +107,47 @@ describe('renderThreadZone', () => {
     node.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
 
     expect(onActivate).toHaveBeenCalledTimes(3);
+  });
+});
+
+describe('in the language the app sends (setLocale)', () => {
+  // The German the app actually sends, straight from the shared fixture.
+  const german = makeLocale(germanFixture.locale, germanFixture.strings);
+  const inGerman = (onActivate: () => void = () => {}) => ({
+    ...options(onActivate),
+    locale: german,
+    timeZone: 'UTC',
+  });
+
+  it('draws every pill and label in German', () => {
+    const outdated = renderThreadZone(thread({ outdated: true }), inGerman());
+    expect(outdated.querySelector('.sh-pill--outdated')?.textContent).toBe('Veraltet');
+    expect(renderThreadZone(thread({ comments: [] }), inGerman()).querySelector('.sh-empty')?.textContent).toBe(
+      'Keine Kommentare.',
+    );
+    const draft = renderDraftZone({ localID: 'D', line: 1, side: 'right', body: 'x' }, inGerman());
+    expect(draft.querySelector('.sh-pill--pending')?.textContent).toBe('Offen');
+  });
+
+  it('names the agent badge in German, for the pointer and for VoiceOver', () => {
+    const node = renderThreadZone(thread({ comments: [comment({ isAgent: true })] }), inGerman());
+    const badge = node.querySelector('.sh-badge--agent');
+    expect(badge?.getAttribute('title')).toBe('Von einem Agenten gepostet');
+    expect(badge?.getAttribute('aria-label')).toBe('Agent');
+  });
+
+  it('collapses a resolved thread with a German plural and a German relative time', () => {
+    const one = renderThreadZone(thread({ resolved: true }), inGerman());
+    expect(one.querySelector('.sh-collapsed__text')?.textContent).toBe('Aufgelöst · octocat · 1 Kommentar · vor 3 Std.');
+    const two = renderThreadZone(thread({ resolved: true, comments: [comment(), comment()] }), inGerman());
+    expect(two.querySelector('.sh-collapsed__text')?.textContent).toContain('2 Kommentare');
+    const none = renderThreadZone(thread({ resolved: true, comments: [] }), inGerman());
+    expect(none.querySelector('.sh-collapsed__text')?.textContent).toBe('Aufgelöst · unbekannt · 0 Kommentare');
+  });
+
+  it('formats the tooltip in the language and the zone it is given', () => {
+    const node = renderThreadZone(thread(), inGerman());
+    expect(node.querySelector('.sh-time')?.getAttribute('title')).toBe('30.08.2026, 09:00');
   });
 });
 

@@ -660,6 +660,21 @@ Swift → web (`postMessage` via `evaluateJavaScript("shepherd.receive(…)")`):
   `accessibilityPageSize`. Monaco's own `'auto'` detection is a browser's and cannot see that
   VoiceOver is reading the window this web view is embedded in; macOS can, so the app is the
   source of the flag (SwiftUI's `accessibilityVoiceOverEnabled`, straight through).
+- `setLocale` `{locale, strings: {resolved, outdated, pending, noComments, unknownAuthor,
+  agentBadgeTitle, agentBadgeLabel, addComment, commentCount: {one, other}}}` — the app's
+  language and the words the bundle draws itself (thread-card pills, the agent badge, the gutter
+  “+” hover), all from the String Catalog, because the app is localised and the bundle is not
+  (ADR 0022's second amendment). `locale` is a BCP 47 language tag — the language the app's strings
+  resolved to (`Bundle.main.preferredLocalizations`), never `Locale.current.identifier`, whose
+  `de_DE` `Intl` rejects — and the bundle formats relative times and picks the `commentCount`
+  phrase through `Intl` with it; `{count}` in either phrase is replaced there. Every word is
+  required and non-empty. Sent once, first; until it arrives the viewer speaks English.
+  A new message type rather than a change to an existing one, so `v` stays 1.
+
+Monaco's *own* strings (the "hidden lines" bar, its hovers, its accessibility help) do not cross
+the bridge: Monaco reads its message table while its modules evaluate, before `ready`. The build
+copies Monaco's German table into `dist/nls/de.js`, and the app injects it as a document-start
+`WKUserScript` when it runs in German — the same seam the theme bootstrap uses, nothing fetched.
 
 Web → Swift (`window.webkit.messageHandlers.shepherd.postMessage`):
 - `ready` `{}` — bundle booted, safe to send

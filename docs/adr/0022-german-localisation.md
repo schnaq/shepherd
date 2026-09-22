@@ -303,3 +303,59 @@ priorities are recomputed from the stored changed files whenever a review or the
 opens; `TriageVerdictEntry` stores a document hash and the verdict, not the hints, and the hash is
 the search document's, so keeping the prompt's English unchanged also leaves every stored verdict
 usable.
+
+## Amendment (2026-09-22): the diff viewer speaks German too
+
+*What is not localised* above excluded the web diff viewer on the grounds that "pushing a
+translation table across [the bridge] is a change to a contract, not a translation". Both halves
+of that were true, and the exclusion is reversed anyway: a German reviewer saw *Resolved*,
+*Outdated*, *Pending*, *2 comments* and *3h ago* in the middle of an otherwise German review screen,
+which is exactly the mixed-language UI this ADR exists to prevent. ADR 0033's second amendment had
+already crossed the line in principle — `loadFile.paneLabels` is localised wording sent from Swift
+because "the app is localised and this bundle is not" — so this finishes the job rather than
+opening a new question.
+
+**The bundle's own words cross the bridge.** A new inbound message, `setLocale {locale, strings}`,
+carries every string the TypeScript draws itself: the *Resolved*, *Outdated* and *Pending* pills,
+*No comments.*, the *unknown* author stand-in, the agent badge's tooltip and aria label, the gutter
+“+”'s hover text, and the comment count. The words are `String(localized:)` in
+`DiffViewerView.viewerStrings()`, so they are ordinary catalog rows with German values and the
+checker gates them like any other; the bundle keeps the English as a default
+(`src/viewer/locale.ts`) for the tests, the dev harness and the instant before the message
+arrives. The Coordinator sends it once, first, ahead of `setTheme` and the first `loadFile`, so no
+card is drawn in English and redrawn. It is a new message type, not a new field, and additive, so
+the protocol stays at `v: 1` — the same call `focusEditor` and `setAccessibility` made.
+
+**The count is two phrases, not a noun.** The bundle used to build `${count} comment(s)`, which is
+the "sentence assembled at runtime" this ADR's plural section calls a bug. The count lives in the
+web view, so the catalog's `variations.plural` cannot reach it; instead the catalog holds two whole
+phrases, `1 comment` and `{count} comments`, and the bundle picks one with `Intl.PluralRules` for
+the locale and replaces `{count}`. `{count}` is a placeholder in the sense this ADR already uses for
+`{prompt}`: syntax, kept verbatim in the German.
+
+**Times go through `Intl`.** `locale` is the language the app's strings resolved to —
+`Bundle.main.preferredLocalizations.first`, `"de"` or `"en"` — rather than `Locale.current`, both
+because a French Mac gets this app in English and the diff must agree with the screen around it,
+and because `Locale.current.identifier` is `de_DE`, which `Intl` rejects. In German, relative times
+are `Intl.RelativeTimeFormat` with `style: 'short'` and `numeric: 'auto'` ("jetzt", "vor 5 Min.",
+"gestern", "vor 3 Wochen"); `narrow` would have given "vor 5 m". English keeps the compact
+hand-written form ("3h ago") the card was designed around, because `Intl`'s short English
+("3 hr. ago") is longer. The tooltip's absolute time becomes `Intl.DateTimeFormat` in the Mac's
+time zone instead of a UTC ISO string. The page's `lang` follows the locale, so VoiceOver reads the
+German cards with a German voice.
+
+**Monaco's own strings come along, by a different door.** The "N hidden lines" bar, *Show Unchanged
+Region*, Monaco's hovers and its accessibility help are Monaco's, looked up through its `nls`
+table — which Monaco reads while its modules evaluate, before the bridge exists. So they cannot
+ride `setLocale`. `monaco-editor` ships that table per language; the build copies the German one
+verbatim into `dist/nls/de.js` (130 KB, about 4 % of the bundle, from `esm/` because its indices are
+the ESM build's), and `DiffViewerView` injects it as a document-start `WKUserScript` when the app
+runs in German — the seam the theme bootstrap already uses. Nothing is fetched and nothing in
+`index.html` changes, so ADR 0003 is untouched; an English Mac never reads the file. It is
+Microsoft's translation, not ours, so its German is VS Code's rather than this ADR's: it says
+*Regionen* and *Linien* where Shepherd would say *Bereich* and *Zeilen*. That is the price of not
+maintaining a 2,120-string table by hand, and it is still German.
+
+**Still English, deliberately:** the error banner (`Could not handle “…”`, `Rejected message: …`)
+that shows only when the bridge itself is broken. It reports a developer's problem, verbatim with
+the parser's own detail, and the detail is English either way.

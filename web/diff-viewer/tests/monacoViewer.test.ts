@@ -12,7 +12,8 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { LoadFileMessage, OutboundMessage, Thread } from '../src/bridge/protocol.js';
+import type { LoadFileMessage, OutboundMessage, SetLocaleMessage, Thread } from '../src/bridge/protocol.js';
+import germanFixture from '../fixtures/setLocale.valid.json';
 
 // -- the stand-in ------------------------------------------------------------------------------
 
@@ -31,12 +32,18 @@ const createdURIs: string[] = [];
 
 interface FakeCodeEditor {
   zones: Set<string>;
+  /** Each live zone's DOM node, so a test can read the card the viewer drew. */
+  zoneNodes: Map<string, HTMLElement>;
   model: FakeModel | null;
   /** Everything `updateOptions` has been handed, merged — the pane's aria label lands here. */
   options: Record<string, unknown>;
   updateOptions(options: Record<string, unknown>): void;
   onDidScrollChange(handler: () => void): void;
   onMouseMove(handler: (event: unknown) => void): void;
+  /** The pointer handler the viewer registered, so a test can hover the gutter itself. */
+  mouseMoveHandler: ((event: unknown) => void) | null;
+  /** The last gutter decorations the viewer set — where the “+” hover text lands. */
+  decorations: unknown[];
   onMouseLeave(handler: () => void): void;
   onMouseDown(handler: (event: unknown) => void): void;
   /** The handler the viewer registered, so a test can press the key itself. */
@@ -47,7 +54,7 @@ interface FakeCodeEditor {
   /** Where the cursor is, which is what the keyboard comment path reads. */
   position: { lineNumber: number } | null;
   getPosition(): { lineNumber: number } | null;
-  createDecorationsCollection(): { set(): void };
+  createDecorationsCollection(): { set(decorations: unknown[]): void };
   getModel(): FakeModel | null;
   /** The lines on screen — what `anchorCursor` reads before a pane takes the keyboard. */
   visibleRanges: { startLineNumber: number; endLineNumber: number }[];
@@ -58,7 +65,7 @@ interface FakeCodeEditor {
 }
 
 interface FakeZoneAccessor {
-  addZone(zone: { afterLineNumber: number }): string;
+  addZone(zone: { afterLineNumber: number; domNode?: HTMLElement }): string;
   removeZone(id: string): void;
   layoutZone(id: string): void;
 }
@@ -66,15 +73,21 @@ interface FakeZoneAccessor {
 function makeCodeEditor(): FakeCodeEditor {
   let nextZone = 0;
   const zones = new Set<string>();
+  const zoneNodes = new Map<string, HTMLElement>();
   const editor: FakeCodeEditor = {
     zones,
+    zoneNodes,
+    mouseMoveHandler: null,
+    decorations: [],
     model: null,
     options: {},
     updateOptions: (options) => {
       Object.assign(editor.options, options);
     },
     onDidScrollChange: () => undefined,
-    onMouseMove: () => undefined,
+    onMouseMove: (handler) => {
+      editor.mouseMoveHandler = handler;
+    },
     onMouseLeave: () => undefined,
     onMouseDown: () => undefined,
     keyHandler: null,
@@ -87,20 +100,26 @@ function makeCodeEditor(): FakeCodeEditor {
     },
     position: null,
     getPosition: () => editor.position,
-    createDecorationsCollection: () => ({ set: () => undefined }),
+    createDecorationsCollection: () => ({
+      set: (decorations) => {
+        editor.decorations = decorations;
+      },
+    }),
     getModel: () => editor.model,
     visibleRanges: [{ startLineNumber: 1, endLineNumber: 20 }],
     getVisibleRanges: () => editor.visibleRanges,
     changeViewZones: (callback) => {
       callback({
-        addZone: () => {
+        addZone: (zone) => {
           nextZone += 1;
           const id = `zone-${nextZone}`;
           zones.add(id);
+          if (zone.domNode !== undefined) zoneNodes.set(id, zone.domNode);
           return id;
         },
         removeZone: (id) => {
           zones.delete(id);
+          zoneNodes.delete(id);
         },
         layoutZone: () => undefined,
       });
@@ -316,6 +335,35 @@ describe('MonacoDiffViewer.loadFile', () => {
 
     expect('ariaLabel' in originalEditor.options).toBe(false);
     expect('ariaLabel' in modifiedEditor.options).toBe(false);
+  });
+
+  it('redraws the cards already on screen in the language setLocale brings, and says so in lang', () => {
+    const viewer = makeViewer();
+    viewer.loadFile(message());
+    viewer.setThreads([{ id: 'T1', line: 2, side: 'right', resolved: false, outdated: true, comments: [] }]);
+    const pill = (): string | null | undefined =>
+      [...modifiedEditor.zoneNodes.values()][0]?.querySelector('.sh-pill--outdated')?.textContent;
+    expect(pill()).toBe('Outdated');
+
+    viewer.setLocale(germanFixture as SetLocaleMessage);
+
+    expect(modifiedEditor.zones.size).toBe(1);
+    expect(pill()).toBe('Veraltet');
+    expect(document.documentElement.lang).toBe('de');
+  });
+
+  it('hovers the gutter “+” with the words setLocale brings', () => {
+    const viewer = makeViewer();
+    viewer.setLocale(germanFixture as SetLocaleMessage);
+    viewer.loadFile(message());
+
+    // 2 is Monaco's MouseTargetType.GUTTER_GLYPH_MARGIN.
+    modifiedEditor.mouseMoveHandler?.({ target: { type: 2, position: { lineNumber: 2 } } });
+
+    const decoration = modifiedEditor.decorations[0] as
+      | { options: { glyphMarginHoverMessage: { value: string } } }
+      | undefined;
+    expect(decoration?.options.glyphMarginHoverMessage.value).toBe('Review-Kommentar hinzufügen');
   });
 
   it('remounts zones after a same-path reload', () => {

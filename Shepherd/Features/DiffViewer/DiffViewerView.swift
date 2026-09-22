@@ -72,6 +72,15 @@ struct DiffViewerView: NSViewRepresentable {
         // Before the web view exists, because the script has to be registered before the first
         // navigation starts for `.atDocumentStart` to mean anything.
         configuration.userContentController.addUserScript(DiffViewerView.themeBootstrap(theme))
+        // Monaco's own words — the "hidden lines" bar, its hovers, its accessibility help — in
+        // the app's language. Same reason to be a document-start script: Monaco reads its message
+        // table while its modules evaluate, long before the bridge exists to carry anything.
+        if let dist = DiffViewerView.distributionURL(),
+           let messages = DiffViewerView.monacoMessages(for: DiffViewerView.appLanguage(), in: dist) {
+            configuration.userContentController.addUserScript(
+                WKUserScript(source: messages, injectionTime: .atDocumentStart, forMainFrameOnly: true)
+            )
+        }
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
         webView.underPageBackgroundColor = NSColor(rgbHex: theme == .dark ? 0x101116 : 0xF7F8FA)
@@ -161,6 +170,58 @@ struct DiffViewerView: NSViewRepresentable {
         )
     }
 
+    /// The language the app's own strings resolved to — `"de"` or `"en"` — as a BCP 47 tag.
+    ///
+    /// The *bundle's* answer rather than `Locale.current`: a Mac set to French gets this app in
+    /// English (it ships no French), and the diff has to agree with the screen around it rather
+    /// than with the system. `Locale.current.identifier` would also be `de_DE`, which `Intl`
+    /// rejects outright.
+    nonisolated static func appLanguage(bundle: Bundle = .main) -> String {
+        let language = bundle.preferredLocalizations.first ?? "en"
+        return language == "Base" ? "en" : language
+    }
+
+    /// The words the web bundle draws itself, in the app's language (ADR 0022's second amendment).
+    ///
+    /// The thread-card pills, the agent badge and the gutter's hover text are the only UI the
+    /// bundle writes on its own; everything else in the diff is Monaco's or GitHub's. The bundle
+    /// is not localised, so it is told.
+    nonisolated static func viewerStrings() -> BridgeViewerStrings {
+        BridgeViewerStrings(
+            resolved: String(localized: "Resolved"),
+            outdated: String(localized: "Outdated"),
+            pending: String(localized: "Pending"),
+            noComments: String(localized: "No comments."),
+            unknownAuthor: String(localized: "unknown"),
+            agentBadgeTitle: String(localized: "Posted by an agent"),
+            agentBadgeLabel: String(localized: "Agent"),
+            addComment: String(localized: "Add a review comment"),
+            // `{count}` is the bundle's placeholder, not a format specifier: the count lives in
+            // the web view, and `Intl.PluralRules` picks between the two phrases there.
+            commentCount: BridgeViewerStrings.CommentCount(
+                one: String(localized: "1 comment"),
+                other: String(localized: "{count} comments")
+            )
+        )
+    }
+
+    /// Monaco's message table for a language, the source of a document-start user script — or
+    /// `nil` for English, which is what Monaco is written in, and for a language the build did not
+    /// copy.
+    ///
+    /// The file is Monaco's own (`web/diff-viewer/scripts/build.mjs` copies it into `dist/nls/`),
+    /// a classic script that sets the global Monaco looks its strings up in. It is read here and
+    /// injected rather than referenced from `index.html`, because only the app knows which
+    /// language it is in before the page parses, and nothing is fetched — ADR 0003 is untouched.
+    /// - Parameters:
+    ///   - language: The app's language, from ``appLanguage(bundle:)``.
+    ///   - dist: The bundle directory, from ``distributionURL()``.
+    nonisolated static func monacoMessages(for language: String, in dist: URL) -> String? {
+        guard language != "en", !language.contains("/"), !language.contains(".") else { return nil }
+        let file = dist.appendingPathComponent("nls/\(language).js")
+        return try? String(contentsOf: file, encoding: .utf8)
+    }
+
     /// Locates the built web bundle inside the app bundle.
     ///
     /// Tries the folder-reference layout first (`DiffViewer/dist`, which is how `project.yml`
@@ -214,6 +275,7 @@ struct DiffViewerView: NSViewRepresentable {
         private var sentRevealLine: Int?
         private var sentFocusRequest = 0
         private var sentScreenReader: Bool?
+        private var sentLocale = false
 
         /// Creates a coordinator.
         /// - Parameter onEvent: The event sink.
@@ -240,6 +302,15 @@ struct DiffViewerView: NSViewRepresentable {
         /// declaration that has to be extended twice for every field the bridge grows.
         /// - Parameter view: The representable being updated.
         func apply(_ view: DiffViewerView) {
+            // First of all, so no card is ever drawn in English and then redrawn. The app's
+            // language does not change while it runs, so once is enough.
+            if !sentLocale {
+                sentLocale = true
+                send(.setLocale(
+                    locale: DiffViewerView.appLanguage(),
+                    strings: DiffViewerView.viewerStrings()
+                ))
+            }
             if sentTheme != view.theme || sentFontSize != view.fontSize {
                 sentTheme = view.theme
                 sentFontSize = view.fontSize
