@@ -66,6 +66,17 @@ floor is a SwiftPM concern and it keeps `swift test` green on Linux.
 
 4. **Images in the prompt.** `Attachment(ImageAttachmentContent(...))` for the screenshots agents
    put in their descriptions, so the on-device digest can say what changed visually.
+   *Landed 2026-09-22 as its own click, not inside the digest, as [ADR 0007](0007-layered-intelligence.md)'s
+   amendment of that date records:* *Read screenshots* on the inbox's summary card, on-device only,
+   at most two images, fetched only on the click — the summary runs on every row selection, so it
+   could not carry images without downloading them as the reviewer scrolls. The SDK spelling
+   differs from the line above: `ImageAttachmentContent` has no public initialiser; images are
+   attached as `Attachment(cgImage)` or `Attachment(imageURL:)` inside a `Prompt` builder, and
+   `.label(_:)` names each. Support is `SystemLanguageModel.default.capabilities.contains(.vision)`
+   (`LanguageModelCapabilities.Capability.vision`), which is `true` on the build Mac, and a spike
+   compiled for `arm64-apple-macos27.0` described a 256-pixel test PNG and a real pull request's
+   screenshot correctly in about 1.4 seconds. `tokenCount(for:)` does **not** accept a prompt
+   with an attachment (`ModelManagerError 1001`); `session.usage` after the answer does count it.
 
 5. **The list that moves.** `reorderable()` for a manual order in the inbox, `swipeActionsContainer()`
    for approve and merge under a trackpad swipe, both inside the toolbar-and-motion work already

@@ -295,6 +295,65 @@ sentence of preset copy. Anything that needs the *provider* to behave differentl
 a second request shape, a capability probe, a branch on a base URL — still needs its own provider
 and its own ADR, exactly as the preset amendment says.
 
+## Amendment (2026-09-22): screenshots are an on-device-only content class, read on a click
+
+[ADR 0038](0038-macos-27-floor.md)'s item 4 asked for images in the prompt "so the on-device digest
+can say what changed visually". Additive, and narrower than that sentence: the tiers, the provider
+protocol and the text summary are unchanged, and `PRSummary` gains no field. What is new is a
+second content class under the thread-digest amendment's rule — *a further on-device-only content
+class is a new seam plus its own file, not a case in `IntelligenceProvider`*.
+
+**Why on-device only.** A screenshot in a description is a colleague's content, and less
+predictable than their prose: it shows whatever was on their screen — a customer record, a token
+in a terminal, a Slack window behind the simulator. The thread-digest argument applies word for
+word (the person who took it configured no endpoint), and more strongly, so it is expressed as
+unreachability: `Intelligence/ScreenshotReading.swift` declares `DescriptionScreenshotReading`,
+whose one conformer `OnDeviceScreenshotReader` takes no router, base URL or key;
+`IntelligenceProvider` has no image request; the cloud tiers keep receiving the description as
+text, as they always have. Sending screenshots to a BYOK endpoint, even as an opt-in, needs a new
+ADR.
+
+**Why a click, and not the summary.** The inbox's summary runs whenever a row is selected — `j`/`k`
+through thirty rows asks thirty times — so "the summary is already a click" is not true of this
+app, and folding images into it would download every colleague's screenshots as the reviewer
+scrolls. The summary card instead offers *Read the 2 screenshots* when the description attaches
+GitHub-hosted uploads **and** `SystemLanguageModel.default.capabilities.contains(.vision)`; with
+either missing, there is no button. Selecting a row costs a Markdown scan
+(`ShepherdCore/Markdown/DescriptionImages.swift`) of a description already in the database, and
+nothing else.
+
+**What the click fetches.** GitHub's HTML rendering of the description (`Accept:
+application/vnd.github.html+json` on the `/pulls/{n}` read the detail already makes), which carries
+a short-lived signed `private-user-images.githubusercontent.com` link for each upload; then at most
+two of those links, with no token, at most 8 MB each, refused for any other host. Not the
+`github.com/user-attachments` URL the Markdown spells — it redirects to an S3 bucket that is not on
+CONTRIBUTING.md's host list — and never an image hosted anywhere else. Checked on 2026-09-22 against
+a public and a private repository: in both, the signed link answered `200 image/png` directly, with
+no redirect and no token, and its file name carried the upload's UUID, which is how each Markdown
+attachment is matched to its link. Nothing is cached or stored: the bytes and the answer live as
+long as the selection.
+
+**What the model is asked, and what it may say.** The title and each image's label — position, and
+the author's alt text when it is more than an upload's default — and not the description, because
+the description is where the claims are, and a model told "this makes the button blue" beside a
+screenshot writes that the button is blue. The `@Generable` answer is a list of sentences with no
+status and no confidence field (ADR 0026's rule); the instructions say what is visible and forbid
+judging the change or advising the reviewer. The block is tagged *2 screenshots, read on this Mac*
+(*1 of 3* when fewer were read than attached), under whichever tier wrote the text summary.
+
+**The budget.** `tokenCount(for:)` throws for a prompt with an attachment on macOS 27.0
+(`ModelManagerError 1001`), so the images cannot be measured. The text is measured as every other
+request is, and each image is charged 256 tokens — the spike on 2026-09-22 read
+`session.usage.input.totalTokenCount` at 35–165 tokens an image from 256 to 2,048 pixels, flat past
+about 1,024 because the framework scales images itself. Images are decoded at most 1,024 pixels on
+their long side. Two images, the instructions and the schema came to 586 input tokens on a real
+pull request.
+
+A known limit, recorded rather than engineered around: shown two near-identical screenshots, the
+model can report a difference that is a pixel or two ("slightly larger"). The tag and the help text
+say it is what the model on this Mac saw; nothing downstream reads the sentences, and there is no
+path from them to a comment, a review or the composer.
+
 ## Consequences
 
 - No feature may hard-depend on an LLM; every AI surface needs a heuristic-only fallback state.

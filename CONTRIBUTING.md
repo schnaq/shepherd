@@ -192,7 +192,17 @@ bumping a dependency that ships inside the app also means a line in
     or merely left the user's facets, so the closed row can be kept — and it is **capped** at ten
     such reads per sweep, with the rest read on the next one. One read per disappearance, on the
     host already on this list, and a row that came back closed then costs nothing further: it is
-    kept for fourteen days and pruned;
+    kept for fourteen days and pruned. **Read screenshots** on the inbox's summary card (ADR 0038
+    item 4, ADR 0007's 2026-09-22 amendment) makes two kinds of request, and only on that click —
+    never on selection, never in a sweep: one `GET /repos/…/pulls/{n}` on api.github.com with
+    `Accept: application/vnd.github.html+json`, not cached, whose rendering of the description
+    carries a short-lived signed link for every upload; then at most two plain `GET`s of those
+    links on GitHub's upload hosts, `private-user-images.githubusercontent.com` (or the older
+    `user-images.githubusercontent.com` a description may still name), with no `Authorization`
+    header, at most 8 MB each, refused by the client for any other host. The
+    `github.com/user-attachments/assets/…` URL a description spells is never requested, because it
+    redirects to an Amazon S3 bucket that is not on this list, and an image a description links from
+    anywhere else is not read at all. The bytes go to the on-device model and nowhere else;
   - only when the user configures a key: api.anthropic.com — reached through Anthropic's
     `ClaudeForFoundationModels` package, which sends the key to that host and refuses a redirect
     anywhere else (ADR 0031, amendment) — or the OpenAI-compatible endpoint
