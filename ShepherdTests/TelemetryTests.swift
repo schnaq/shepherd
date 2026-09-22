@@ -36,13 +36,14 @@ final class TelemetryTests: XCTestCase {
 
     // MARK: - The level
 
-    /// The default is the whole privacy story for a fresh install: anonymous *and* unacknowledged,
-    /// so the mechanism stays inert until the notice has been seen.
-    func testAFreshInstallIsAnonymousAndHasNotSeenTheNotice() {
+    /// The default is the whole privacy story for a fresh install: off *and* unasked, so nothing
+    /// is counted until the first-run question has been answered with a yes (ADR 0036, 2026-09-22
+    /// amendment).
+    func testAFreshInstallIsOffAndHasNotBeenAsked() {
         let defaults = makeDefaults()
         let fresh = AppSettings(defaults: defaults)
 
-        XCTAssertEqual(fresh.telemetryLevel, .anonymous)
+        XCTAssertEqual(fresh.telemetryLevel, .off)
         XCTAssertFalse(fresh.telemetryNoticeAcknowledged)
     }
 

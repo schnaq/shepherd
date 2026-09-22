@@ -35,27 +35,33 @@ Shepherd has no account system of its own. The only identity involved is your Gi
 
 ### The two levels
 
-Shepherd asks once, on first launch, before anything is recorded. Three answers:
+Shepherd asks once, when it first opens, before anything is recorded. **Nothing is counted until
+you say yes.** Three levels:
 
 | Level | What it means | Legal basis |
 |---|---|---|
-| **Off** | Nothing is collected and nothing is sent. The mechanism is not built: no queue file, no timer, no request | — |
-| **Anonymous** (default, after the notice) | Allow-listed counts with **no identifier**. The `distinct_id` is a random value created in memory at launch and gone when the queue is flushed — never written to disk, never surviving a restart | Art. 6(1)(f) GDPR (legitimate interest in knowing which parts of the app are used), with your right to object under Art. 21 |
-| **Anonymous + reach** (opt-in) | The above plus a random UUID stored for the current calendar month in UTC and replaced by a fresh random one when the month turns | Art. 6(1)(a) GDPR + § 25(1) TDDDG — your explicit consent, and nothing else |
+| **Off** (the default) | Nothing is collected and nothing is sent. The mechanism is not built: no queue file, no timer, no request | — |
+| **Anonymous** (after your yes) | Allow-listed counts with **no identifier**. The `distinct_id` is a random value created in memory at launch and gone when the queue is flushed — never written to disk, never surviving a restart | Art. 6(1)(a) GDPR — your consent, given on the first-run sheet, withdrawable at any time in Settings → Account |
+| **Anonymous + reach** (a separate switch on the same sheet) | The above plus a random UUID stored for the current calendar month in UTC and replaced by a fresh random one when the month turns | Art. 6(1)(a) GDPR + § 25(1) TDDDG — your explicit consent, and nothing else |
 
 There is deliberately **no master secret and no hash** behind the monthly UUID. A derived identifier
 could be recomputed for a past month; a random one cannot. September's value and October's are
 unlinkable to us as much as to anyone else.
 
-### Why the first-run sheet is a notice and not a yes/no question
+### The first-run question
 
-Anonymous counting does not rest on consent, so a symmetric consent dialog would misdescribe it —
-and pre-selected consent is not consent at all. The sheet therefore states what is sent and offers
-an immediate way out (*Nutzungsstatistik ausschalten*). The one choice on it that **is** consent,
-the reach level, is a separate and deliberately quieter button, because a consent offered more
-loudly than the refusal beside it is not freely given.
+The sheet asks, and it asks the way consent has to be asked: *Nicht jetzt* and *Ja, anonym zählen*
+carry the same weight, neither is pre-selected, and Escape declines. It lists what would be sent and
+what never is, names the recipient and the controller, and shows one representative event as the
+exact JSON on request — before anything has been recorded. The reach level is a switch on the same
+sheet, off until you turn it on, and it only takes effect together with a yes.
 
-Nothing is recorded before that sheet is answered.
+Until 2026-09-22 the anonymous level was on by default after a notice, on the basis of legitimate
+interest. That was lawful and it was retired anyway: an app whose promise is that your data stays on
+your Mac should not send anything before it has asked. ([ADR 0036](adr/0036-usage-telemetry.md),
+amendment.)
+
+Nothing is recorded before that sheet is answered, and nothing is recorded if the answer is no.
 
 ### The events
 
@@ -136,8 +142,7 @@ deleted when you switch telemetry off.
 
 At the `anonymous` level this yields daily active *installations* and nothing more. Monthly active
 users, retention and "x % of users do y" are all impossible at that level, because they need a Mac
-to be recognisable across days. That limitation is the price of needing no consent, and it is not
-worked around.
+to be recognisable across days. That limitation is deliberate, and it is not worked around.
 
 ### Withdrawal erases
 

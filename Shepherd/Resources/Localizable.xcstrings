@@ -15961,66 +15961,6 @@
         }
       }
     },
-    "Shepherd counts a little": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Shepherd zählt ein wenig mit"
-          }
-        }
-      }
-    },
-    "So we know which half of Shepherd is worth building on, the app sends anonymous counts: the version, the language, and which features you use. No identifier, nothing that could recognise this Mac again, and never a repository, a branch or any of your code.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Damit wir wissen, welche Hälfte von Shepherd es wert ist, weitergebaut zu werden, sendet die App anonyme Zählungen: die Version, die Sprache und welche Funktionen Sie nutzen. Keine Kennung, nichts, woran dieser Mac wiedererkannt werden könnte, und niemals ein Repository, ein Branch oder irgendein Stück Ihres Codes."
-          }
-        }
-      }
-    },
-    "schnaq GmbH is responsible for this data. You can switch it off at any time in Settings → Account.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Verantwortlich für diese Daten ist die schnaq GmbH. Sie können das jederzeit unter Einstellungen → Konto abschalten."
-          }
-        }
-      }
-    },
-    "Also count reach": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Auch Reichweite messen"
-          }
-        }
-      }
-    },
-    "Turn usage statistics off": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nutzungsstatistik ausschalten"
-          }
-        }
-      }
-    },
-    "Understood": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Verstanden"
-          }
-        }
-      }
-    },
     "USAGE STATISTICS": {
       "localizations": {
         "de": {
@@ -16097,6 +16037,116 @@
           "stringUnit": {
             "state": "translated",
             "value": "Die Warteschlange konnte nicht gelesen werden."
+          }
+        }
+      }
+    },
+    "May Shepherd count, anonymously?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Darf Shepherd anonym mitzählen?"
+          }
+        }
+      }
+    },
+    "Shepherd is built on what gets used. To know that, the app would send us a few numbers about once a day.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd wird nach dem gebaut, was genutzt wird. Damit wir das wissen, würde die App etwa einmal am Tag ein paar Zahlen an uns senden."
+          }
+        }
+      }
+    },
+    "The version, the language, and which features are used": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Version, die Sprache und welche Funktionen genutzt werden"
+          }
+        }
+      }
+    },
+    "Only as categories and buckets, never as text": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur als Kategorien und Stufen, nie als Text"
+          }
+        }
+      }
+    },
+    "No identifier, no repository, no branch, not a line of code": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Kennung, kein Repository, kein Branch, keine Zeile Code"
+          }
+        }
+      }
+    },
+    "The counts go to PostHog in the EU (eu.i.posthog.com); your IP address is discarded and no profile is kept. schnaq GmbH is responsible for the data.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Zahlen gehen an PostHog in der EU (eu.i.posthog.com); Ihre IP-Adresse wird verworfen, ein Profil entsteht nicht. Verantwortlich ist die schnaq GmbH."
+          }
+        }
+      }
+    },
+    "Also count how many people use Shepherd each month": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auch zählen, wie viele Menschen Shepherd im Monat nutzen"
+          }
+        }
+      }
+    },
+    "A random identifier is stored for this and thrown away every month.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dafür wird eine zufällige Kennung gespeichert und jeden Monat verworfen."
+          }
+        }
+      }
+    },
+    "You can change this at any time in Settings → Account.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sie können das jederzeit in Einstellungen → Konto ändern."
+          }
+        }
+      }
+    },
+    "Yes, count anonymously": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ja, anonym zählen"
+          }
+        }
+      }
+    },
+    "An example of what is sent": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Beispiel dessen, was gesendet wird"
           }
         }
       }

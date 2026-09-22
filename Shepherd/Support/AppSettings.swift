@@ -201,7 +201,7 @@ final class AppSettings {
         self.settingsSyncLastUploadAt = defaults.object(forKey: Keys.syncLastUpload) as? Date
         self.settingsSyncLastDownloadAt = defaults.object(forKey: Keys.syncLastDownload) as? Date
         self.diagnosticsEnabled = defaults.object(forKey: Keys.diagnosticsEnabled) as? Bool ?? false
-        self.telemetryLevel = Self.read(defaults, Keys.telemetryLevel, default: TelemetryLevel.anonymous)
+        self.telemetryLevel = Self.read(defaults, Keys.telemetryLevel, default: TelemetryLevel.off)
         self.telemetryNoticeAcknowledged = defaults
             .object(forKey: Keys.telemetryNoticeAcknowledged) as? Bool ?? false
     }
@@ -914,19 +914,20 @@ final class AppSettings {
 
     /// How much Shepherd may count.
     ///
-    /// `anonymous` out of the box, but see ``telemetryNoticeAcknowledged``: the level alone does
-    /// not start anything. This is the flag that decides whether ``UsageTelemetry`` is constructed
-    /// at all — with `off` there is no queue, no timer and no request, the same shape as
-    /// ``diagnosticsEnabled`` and the MetricKit subscriber.
+    /// `off` out of the box (ADR 0036's 2026-09-22 amendment): the first-run question is what
+    /// turns it on, in whichever direction the reader chooses, and see
+    /// ``telemetryNoticeAcknowledged`` for the second latch. This is the flag that decides whether
+    /// ``UsageTelemetry`` is constructed at all — with `off` there is no queue, no timer and no
+    /// request, the same shape as ``diagnosticsEnabled`` and the MetricKit subscriber.
     var telemetryLevel: TelemetryLevel {
         didSet { Self.write(defaults, telemetryLevel, Keys.telemetryLevel) }
     }
 
-    /// Whether the first-run notice has been answered.
+    /// Whether the first-run question has been answered.
     ///
-    /// False on a fresh install, and nothing is recorded while it is false. This is the difference
-    /// between "on by default with a notice somewhere" and "on by default, after you were told" —
-    /// the second is the one ADR 0036 decided on.
+    /// False on a fresh install, and nothing is recorded while it is false — a second latch beside
+    /// the level, so that a synced or restored `anonymous` on a Mac that has never been asked still
+    /// waits for this Mac's own answer (ADR 0036's 2026-09-22 amendment).
     var telemetryNoticeAcknowledged: Bool {
         didSet { defaults.set(telemetryNoticeAcknowledged, forKey: Keys.telemetryNoticeAcknowledged) }
     }

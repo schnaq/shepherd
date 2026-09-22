@@ -288,16 +288,17 @@ enum SettingsSyncApplier {
         settings.diagnosticsEnabled = document.diagnostics.isEnabled
 
         // Absent means "leave it alone", not "apply the default": a document written before
-        // ADR 0036 has no telemetry group, and defaulting to `anonymous` would switch telemetry
-        // back on for somebody who had switched it off. Only the flags are applied here — building
-        // or tearing down the mechanism is the window's job, driven by
-        // `onChange(of: settings.telemetryLevel)` in `ShepherdApp`, exactly like the MetricKit
-        // subscriber.
+        // ADR 0036 has no telemetry group, and applying a default would decide the question for
+        // somebody who has not been asked. Only the flags are applied here — building or tearing
+        // down the mechanism is the window's job, driven by `onChange(of: settings.telemetryLevel)`
+        // in `ShepherdApp`, exactly like the MetricKit subscriber.
         if let telemetry = document.telemetry {
             settings.telemetryLevel = telemetry.level
-            // An applied `off` also answers the notice: the question has been settled for this
-            // account, and asking again on the second Mac would be asking twice.
-            settings.telemetryNoticeAcknowledged = telemetry.noticeAcknowledged || telemetry.level == .off
+            // Both flags travel as they are. Since the 2026-09-22 amendment an unasked Mac and a
+            // Mac that said no both read `off`; only this flag tells them apart, so an applied
+            // `off` may not be taken as an answer — the second Mac asks its own question, and a
+            // document that carries a `yes` or a `no` is applied as that answer.
+            settings.telemetryNoticeAcknowledged = telemetry.noticeAcknowledged
         }
 
         // The registry lives in the database, not here, so it is applied only when there is one.

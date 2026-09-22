@@ -641,14 +641,16 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
     struct TelemetryGroup: Codable, Sendable, Equatable {
         /// How much this account's Macs may count.
         var level: TelemetryLevel
-        /// Whether the notice has been answered, so a second Mac does not ask again.
+        /// Whether the first-run question has been answered. Carried so that a `yes` given on one
+        /// Mac is a `yes` on the next; a Mac that has never been asked carries `false`, and an
+        /// applied `off` with `false` is the second Mac's cue to ask, not an answer.
         var noticeAcknowledged: Bool
 
         /// Creates the group.
         /// - Parameters:
         ///   - level: The level to carry.
         ///   - noticeAcknowledged: Whether the notice has been answered.
-        init(level: TelemetryLevel = .anonymous, noticeAcknowledged: Bool = false) {
+        init(level: TelemetryLevel = .off, noticeAcknowledged: Bool = false) {
             self.level = level
             self.noticeAcknowledged = noticeAcknowledged
         }

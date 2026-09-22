@@ -1,6 +1,8 @@
 # ADR 0036: Usage telemetry — anonymous by default, reach by consent, absent without a key
 
-Status: Accepted (v1.2 scope) · Date: 2026-09-18
+Status: Accepted (v1.2 scope) · Date: 2026-09-18 · Amended 2026-09-22: **off until asked** — see
+the amendment at the end, which replaces "anonymous by default" in the title and in the Decision
+below with an opt-in.
 
 ## Context
 
@@ -138,3 +140,33 @@ entirely — they are machine-local state, beside the outbox and the auto-delega
   notice precedes the first event rather than following it — but the final call belongs to the
   data-protection officer, not to this record. `docs/plans/usage-telemetry.md` § 10 states the same
   weak point in the same words.
+
+## Amendment (2026-09-22): a question, not a notice
+
+The founder's decision, on the day the product page went up: usage statistics are **opt-in**. A
+fresh install has `telemetryLevel = off` as well as `telemetryNoticeAcknowledged = false`, and the
+first-run sheet asks rather than informs. Two answers of the same weight — *Nicht jetzt* and *Ja,
+anonym zählen* — neither pre-selected, Escape declines, and the reach level is a switch on the same
+sheet that is off until turned on and only means anything together with a yes. The sheet shows the
+exact bytes on request (*Zeigen, was gesendet würde*, one representative event) before anything has
+been recorded.
+
+What changes in law: the `anonymous` level now rests on **Art. 6(1)(a) GDPR** — consent, given
+on that sheet — rather than on Art. 6(1)(f), and withdrawal under Art. 7(3) is the switch in
+Settings → Account, as before. What does not change: the technical anonymity of the level (no
+identifier survives the flush), the allow-list, the single host, the daily timestamp, the absence of
+an SDK, and the second latch — a level synced from another Mac still waits for this Mac's own
+answer. The Planet49 reasoning that shaped the *notice* still shapes the *question*: the yes is not
+louder than the no.
+
+Why the change: not a legal necessity — the legitimate-interest construction was sound — but the
+product's own promise. Shepherd sells the sentence "your data stays on your Mac", and a default that
+sends anything before being asked reads against it, however anonymous the payload. Asking costs
+some statistical coverage; the amendment accepts that price. The cost is measured honestly:
+`app_active_day` now counts installations whose owners said yes, and every rate the fleet of
+counters produces is a rate among consenting installations.
+
+Consequences: the README badge says *opt-in*; `docs/PRIVACY.md` § 2 describes the question and the
+new legal basis; the product page's privacy table says "off until you say yes"; the test that pinned
+the fresh-install default now pins `off`.
+

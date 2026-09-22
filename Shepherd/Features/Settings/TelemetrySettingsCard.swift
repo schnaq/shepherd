@@ -71,12 +71,57 @@ struct TelemetrySettingsCard: View {
 /// Not a summary and not a description: the bytes. This is the card's whole argument — a promise
 /// about what leaves the Mac is only worth as much as the ability to check it.
 struct TelemetryPayloadSheet: View {
-    let events: [QueuedEvent]
+    /// The sheet's heading.
+    var title: String = String(localized: "Waiting to be sent")
+    /// The events to print, or `nil` to print ``exampleJSON`` — the first-run question shows what
+    /// *would* be sent before anything has been recorded, and a promise about bytes is best kept
+    /// by showing the bytes.
+    var events: [QueuedEvent]?
+
     @Environment(\.dismiss) private var dismiss
+
+    init(events: [QueuedEvent]) {
+        self.events = events
+    }
+
+    private init(title: String) {
+        self.title = title
+        self.events = nil
+    }
+
+    /// The sheet the first-run question opens: one representative event, in the exact shape
+    /// `docs/PRIVACY.md` documents.
+    static var example: TelemetryPayloadSheet {
+        TelemetryPayloadSheet(title: String(localized: "An example of what is sent"))
+    }
+
+    /// One `review_submitted` event as it leaves the Mac. Kept in step with `docs/PRIVACY.md` § 2.
+    static let exampleJSON = """
+    {
+      "api_key": "phc_…",
+      "batch": [
+        {
+          "event": "review_submitted",
+          "timestamp": "2026-09-18T00:00:00Z",
+          "properties": {
+            "distinct_id": "9F3C…",
+            "$process_person_profile": false,
+            "$ip": null,
+            "$lib": "shepherd",
+            "app_version": "1.3.0",
+            "os_major": 27,
+            "locale": "de",
+            "kind": "approve",
+            "inline_comments": "1-3"
+          }
+        }
+      ]
+    }
+    """
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(String(localized: "Waiting to be sent"))
+            Text(title)
                 .font(Theme.type(.title3, weight: .semibold))
                 .foregroundStyle(Theme.text)
             ScrollView {
@@ -97,6 +142,7 @@ struct TelemetryPayloadSheet: View {
     }
 
     private var json: String {
+        guard let events else { return Self.exampleJSON }
         guard !events.isEmpty else {
             return String(localized: "Nothing is waiting to be sent.")
         }
