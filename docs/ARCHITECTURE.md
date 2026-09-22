@@ -29,7 +29,9 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 27+)
     Onboarding/                #   device-flow sign-in, PAT entry
   Intents/                     #   App Intents (Shortcuts/Siri) + Core Spotlight export of the
                                #   inbox — app target only, the sole importers of AppIntents and
-                               #   CoreSpotlight; both route through DeepLink (ADR 0021)
+                               #   CoreSpotlight, except that Support/NotificationManager imports
+                               #   AppIntents to name a notification's PullRequestEntity; both
+                               #   route through DeepLink (ADR 0021 and its 2026-09-22 amendment)
   Automation/                  #   outbound webhook payload, signing, dispatcher (ADR 0012);
                                #   auto-delegation coordinator + ledger store (ADR 0016);
                                #   auto-merge coordinator + ledger/audit store (ADR 0018);

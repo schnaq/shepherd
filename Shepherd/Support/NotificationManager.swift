@@ -1,3 +1,4 @@
+import AppIntents
 import Foundation
 import ShepherdCore
 import ShepherdSync
@@ -28,6 +29,9 @@ struct NotificationPayload: Sendable, Equatable {
     var body: String
     /// The category a click is routed on, when this notification is clickable.
     var categoryIdentifier: String?
+    /// The pull requests this notification is about, by node id — what lets Siri and Apple
+    /// Intelligence act on "this" with a read intent (ADR 0021's 2026-09-22 amendment).
+    var pullRequestIDs: [String]
 
     /// Creates a payload.
     /// - Parameters:
@@ -35,16 +39,24 @@ struct NotificationPayload: Sendable, Equatable {
     ///   - title: The bold first line.
     ///   - body: The body.
     ///   - categoryIdentifier: The category, for notifications a click should route.
+    ///   - pullRequestIDs: The pull requests it is about, by node id.
     init(
         identifier: String,
         title: String,
         body: String,
-        categoryIdentifier: String? = nil
+        categoryIdentifier: String? = nil,
+        pullRequestIDs: [String] = []
     ) {
         self.identifier = identifier
         self.title = title
         self.body = body
         self.categoryIdentifier = categoryIdentifier
+        self.pullRequestIDs = pullRequestIDs
+    }
+
+    /// The entities the system attaches to the notification.
+    var entityIdentifiers: [EntityIdentifier] {
+        pullRequestIDs.map { EntityIdentifier(for: PullRequestEntity.self, identifier: $0) }
     }
 }
 
@@ -119,6 +131,7 @@ final class NotificationManager {
         if let category = payload.categoryIdentifier {
             content.categoryIdentifier = category
         }
+        content.appEntityIdentifiers = payload.entityIdentifiers
 
         let request = UNNotificationRequest(
             identifier: payload.identifier,
@@ -145,7 +158,8 @@ final class NotificationManager {
             return NotificationPayload(
                 identifier: "review-request-\(summary.id)",
                 title: String(localized: "Review requested · \(summary.slug)"),
-                body: summary.title
+                body: summary.title,
+                pullRequestIDs: [summary.id]
             )
         case .checksFailedOnOwnPR(let failure):
             guard settings.notifyOnChecksFailed else { return nil }
@@ -153,14 +167,16 @@ final class NotificationManager {
             return NotificationPayload(
                 identifier: "checks-failed-\(summary.id)-\(summary.headRefOid)",
                 title: String(localized: "Checks failed · \(summary.slug)"),
-                body: summary.title
+                body: summary.title,
+                pullRequestIDs: [summary.id]
             )
         case .draftConflict(let conflict):
             guard settings.notifyOnDraftConflict else { return nil }
             return NotificationPayload(
                 identifier: "draft-conflict-\(conflict.prID)-\(conflict.actualHeadOid)",
                 title: String(localized: "Review not sent · \(conflict.repo.fullName)#\(conflict.number)"),
-                body: String(localized: "The pull request got new commits. Re-review before submitting.")
+                body: String(localized: "The pull request got new commits. Re-review before submitting."),
+                pullRequestIDs: [conflict.prID]
             )
         case .changesRequestedOnOwnPR, .prMerged, .prUpdated, .mutationSent, .sweepCompleted,
              .syncFailed:
@@ -203,7 +219,8 @@ final class NotificationManager {
         return NotificationPayload(
             identifier: "auto-delegation-\(summary.id)-\(summary.headRefOid)",
             title: String(localized: "Auto-delegated \(summary.slug) to \(agent) — \(reason)"),
-            body: String(localized: "\(summary.title) · nothing is pushed; open the delegation to review the diff.")
+            body: String(localized: "\(summary.title) · nothing is pushed; open the delegation to review the diff."),
+            pullRequestIDs: [summary.id]
         )
     }
 
@@ -234,7 +251,8 @@ final class NotificationManager {
         return NotificationPayload(
             identifier: "auto-delegation-capped-\(summary.id)-\(summary.headRefOid)",
             title: String(localized: "Not auto-delegated · \(summary.slug)"),
-            body: body
+            body: body,
+            pullRequestIDs: [summary.id]
         )
     }
 
@@ -263,14 +281,16 @@ final class NotificationManager {
             return NotificationPayload(
                 identifier: identifier,
                 title: String(localized: "Auto-merge queued · \(first.slug)"),
-                body: String(localized: "\(first.title) · green, approved, agent-authored. Shepherd queued a \(first.mergeMethod) merge.")
+                body: String(localized: "\(first.title) · green, approved, agent-authored. Shepherd queued a \(first.mergeMethod) merge."),
+                pullRequestIDs: [first.prID]
             )
         }
         let slugs = entries.map(\.slug).joined(separator: ", ")
         return NotificationPayload(
             identifier: identifier,
             title: String(localized: "Auto-merge queued · \(entries.count) pull requests"),
-            body: slugs
+            body: slugs,
+            pullRequestIDs: entries.map(\.prID)
         )
     }
 
@@ -290,14 +310,16 @@ final class NotificationManager {
             return NotificationPayload(
                 identifier: identifier,
                 title: String(localized: "Checks passed · \(first.slug)"),
-                body: String(localized: "\(first.title) · Shepherd queued the \(first.mergeMethod) merge you asked for.")
+                body: String(localized: "\(first.title) · Shepherd queued the \(first.mergeMethod) merge you asked for."),
+                pullRequestIDs: [first.prID]
             )
         }
         let slugs = requests.map(\.slug).joined(separator: ", ")
         return NotificationPayload(
             identifier: identifier,
             title: String(localized: "Checks passed · \(requests.count) merges queued"),
-            body: slugs
+            body: slugs,
+            pullRequestIDs: requests.map(\.prID)
         )
     }
 
@@ -326,7 +348,8 @@ final class NotificationManager {
         return NotificationPayload(
             identifier: "merge-when-green-dropped-\(request.prID)-\(request.headRefOid)-\(abandonment.reason.rawValue)",
             title: String(localized: "Not merged · \(request.slug)"),
-            body: body
+            body: body,
+            pullRequestIDs: [request.prID]
         )
     }
 

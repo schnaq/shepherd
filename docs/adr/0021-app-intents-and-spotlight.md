@@ -311,3 +311,32 @@ Consequences, beyond the ones already stated:
   formatted failure. There is deliberately no "and here is why" path to Settings: a voice answer
   has no screen to link to, and the card beside the toggle already carries the three-way
   Apple Intelligence reason for the reader who is looking at it.
+
+## Amendment (2026-09-22): Siri and Apple Intelligence can point at a pull request — still nothing writes
+
+[ADR 0038](0038-macos-27-floor.md)'s item 3 proposed relaxing "No write intents" behind an
+off-by-default setting. The founder decided against it on 2026-09-22: **the section above stands
+unchanged**, and what lands is the read half, which needs no new intent at all.
+
+- **Notifications name their pull requests.** `NotificationPayload.pullRequestIDs` carries the
+  node ids of the pull requests a notification is about, and `NotificationManager.present(_:)`
+  sets them as `UNMutableNotificationContent.appEntityIdentifiers` (the
+  `_UserNotifications_AppIntents` overlay, macOS 27). Every notification that concerns a pull
+  request carries it — review requested, checks failed, a draft conflict, an automatic delegation
+  or its cap, an automatic merge, merge-when-green queued or dropped; the digest is about no single
+  one and carries none. The system can then hand "this" to the intents that already exist —
+  *Open*, *Summarize* — with no screen scraping and no new vocabulary.
+- **Spotlight results are the same entity.** Each exported `CSSearchableItem` sets
+  `relatedAppEntityIdentifier` to its `PullRequestEntity` (the unique identifier already is the
+  node id), so a Spotlight result and a Shortcuts parameter are one thing.
+- **The system can ask for its index back.** `PullRequestEntity` conforms to `IndexedEntity` with
+  `hideInSpotlight == true` — the exporter's items are the Spotlight representation, and a second
+  one would duplicate every result — and `PullRequestEntityQuery` to `IndexedEntityQuery`. Its two
+  re-index hooks call `SpotlightIndexer.reindex(_:rows:)`, which forgets those ids and runs the
+  ordinary plan over today's rows: the same diff, batching and failure handling as a sweep, nothing
+  written while the export is off, and an id that has left the inbox not written back.
+
+Not adopted, with the reason: `OwnershipProvidingEntity` is not a confirmation mechanism (ADR 0038
+guessed it was) but a classification — `unknown` / `shared` / `public` — and Shepherd's rows do
+not carry a repository's visibility, so any answer but the default would be a guess about somebody
+else's repository. It becomes worth adopting when the inbox query fetches `isPrivate`.

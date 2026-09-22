@@ -1,3 +1,4 @@
+import AppIntents
 import CoreSpotlight
 import Foundation
 import Observation
@@ -81,6 +82,11 @@ extension SpotlightItemFields {
     /// inbox — and deletes the item then (``SpotlightExportPlan/deletions``). Leaving the default
     /// in place would mean long-lived pull requests silently vanishing from Spotlight while still
     /// sitting in the inbox, with nothing in the app to explain it.
+    /// The `PullRequestEntity` this item stands for.
+    var entityIdentifier: EntityIdentifier {
+        EntityIdentifier(for: PullRequestEntity.self, identifier: uniqueIdentifier)
+    }
+
     var searchableItem: CSSearchableItem {
         let attributes = CSSearchableItemAttributeSet(contentType: .content)
         attributes.identifier = uniqueIdentifier
@@ -93,6 +99,10 @@ extension SpotlightItemFields {
             attributeSet: attributes
         )
         item.expirationDate = .distantFuture
+        // The item *is* the pull request Siri and Shortcuts know as a `PullRequestEntity`: the
+        // unique identifier is the node id, which is the entity's id, so the system can hand the
+        // entity to an intent from a Spotlight result (ADR 0021's 2026-09-22 amendment).
+        item.relatedAppEntityIdentifier = entityIdentifier
         return item
     }
 }
@@ -227,6 +237,24 @@ final class SpotlightIndexer {
     /// Called from the toggle and from an applied settings document (ADR 0014), both through
     /// ``AppEnvironment/applySpotlightSetting()`` — one route, exactly as the diagnostics opt-in
     /// (ADR 0017) and the search index (ADR 0019) have one.
+    /// Writes items again that the system says it lost (`IndexedEntityQuery`, ADR 0021's
+    /// 2026-09-22 amendment).
+    ///
+    /// Forgets what it believes it exported for those ids — every id when `identifiers` is `nil` —
+    /// and runs the ordinary plan over today's rows, so a re-donation is the same diff, batch and
+    /// failure handling as a sweep, and an id that has left the inbox is not written back.
+    /// - Parameters:
+    ///   - identifiers: The node ids to write again, or `nil` for all.
+    ///   - rows: The inbox as the local database holds it now.
+    func reindex(_ identifiers: [String]?, rows: [PullRequestSummary]) {
+        if let identifiers {
+            for identifier in identifiers { exported[identifier] = nil }
+        } else {
+            exported = [:]
+        }
+        considerExporting(rows: rows)
+    }
+
     func disable() async {
         forgetExport()
         status.isEnabled = false
