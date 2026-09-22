@@ -133,3 +133,15 @@ sheet where the changes can be committed or discarded. A clean leftover is clear
 The asymmetry with `prepare(branch:headOid:)`, which does clear a dirty worktree, is deliberate:
 there the reviewer pressed Run again in the sheet that shows the diff, and here they pressed a
 button on an issue that says nothing about a previous run.
+
+## Amendment (2026-09-22): the turn cap can be switched off
+
+Settings → Delegation's *Max turns* gains a **No limit** checkbox. It stores `maxTurns = 0`, which
+`AgentCLIConfiguration` already read as "pass no `--max-turns`" — so this is a control for an
+existing state, not a new one. The default stays 25, switching the box off restores 25, and the
+delegation sheet's guardrail line says "no turn limit" rather than "0 turns max". The spend cap is
+untouched and still applies, which is why the box's help says so: a run without a turn limit is a
+run the budget has to stop.
+
+The local-checkouts map this ADR introduced has a second reader since ADR 0039: *Open in editor*
+resolves a pull request's paths against the same clones.

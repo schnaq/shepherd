@@ -20,6 +20,7 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 27+)
     DiffViewer/                #   WKWebView host + bridge (Swift side)
     Delegation/                #   delegate-to-local-agent model + sheet (ADR 0011, 0016);
                                #   session back-channel: decisions + confirmation (ADR 0030)
+    Editor/                    #   "Open in editor": opener + menu item (ADR 0039)
     Search/                    #   ⌘K semantic search: on-device embedder, index coordinator,
                                #   result row (ADR 0019); the issue result row beside it, fed
                                #   by the coordinator's second pass (ADR 0032)
@@ -43,6 +44,7 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 27+)
   Support/                     #   AppConfig, keyboard shortcuts, theming, notifications,
                                #   Sparkle updater wrapper (ADR 0010)
     AgentCLI/                  #   agent-CLI engine: config, locator, stream parser, worktrees
+    Editor/                    #   editor choice + pure URL/argv construction (ADR 0039)
   Resources/                   #   Assets.xcassets, DiffViewer/dist (built web bundle),
                                #   Localizable.xcstrings (en keys + de, ADR 0022)
 Packages/ShepherdKit/          # SPM package, NO AppKit/SwiftUI imports
@@ -1641,6 +1643,23 @@ reasoning inline): a sandboxed child process cannot usefully be a coding agent �
 access to the user's CLI configuration, every path needing a bookmark. ADR 0010 already rules
 the Mac App Store out for v1, so this costs nothing that was on the table; hardened runtime
 stays on.
+
+### Open in editor (ADR 0039)
+
+The same split as the delegation engine. `Support/Editor/EditorConfiguration.swift` is pure:
+`EditorConfiguration` (the choice — system default, VS Code, IntelliJ IDEA, Cursor, or a custom
+`{file}`/`{line}` command — stored as one JSON blob under `editor.configuration` and carried by
+settings sync in its own `EditorGroup`), `EditorLauncher` (the `vscode://file/…`, `cursor://file/…`
+and `idea://open?…` URLs, and the custom command's argv — `ShellWords` first, placeholders after,
+no shell, a bare program name refused) and `EditorFileTarget` (a repository-relative path against
+the clone in `AppSettings.localCheckouts`, delegation's own map: no checkout, the file, or the
+folder when the file is missing — and never a path that climbs out of it). `EditorLauncherTests`
+pins every URL and argv. `Features/Editor/EditorOpener.swift` is the `@MainActor` half that hands
+the plan to `NSWorkspace` or `Process`, links a clone through `FolderPicker` when there is none,
+and says in a toast when the clone lacks the file (another branch). The review file list's context
+menu, the file header's icon and the claims/*Look closer*/CI-diagnosis `path:line` links offer it
+through one `EditorContext`; the diff bridge is untouched, so the header opens the file without a
+line.
 
 ### The feedback loop: a recurring finding to an agent rule (ADR 0029)
 
