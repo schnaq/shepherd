@@ -180,6 +180,17 @@ final class EditorLauncherTests: XCTestCase {
         }
     }
 
+    func testARelativeCommandPathIsRefusedLikeABareName() {
+        for template in ["bin/code {file}", "../code {file}", "./code {file}"] {
+            let binary = String(template.split(separator: " ")[0])
+            XCTAssertThrowsError(
+                try EditorLauncher.customInvocation(template: template, file: file, line: 1)
+            ) { error in
+                XCTAssertEqual(error as? EditorLauncher.Failure, .bareExecutable(binary))
+            }
+        }
+    }
+
     func testAnEmptyOrPlaceholderlessCommandIsRefused() {
         XCTAssertThrowsError(
             try EditorLauncher.customInvocation(template: "   ", file: file, line: 1)

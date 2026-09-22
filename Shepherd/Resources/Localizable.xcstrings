@@ -16920,6 +16920,16 @@
           }
         }
       }
+    },
+    "Could not open the editor: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editor konnte nicht geöffnet werden: %@"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

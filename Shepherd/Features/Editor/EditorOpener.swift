@@ -47,8 +47,22 @@ struct EditorOpener {
     /// or first asks for a folder.
     /// - Parameter repo: The repository.
     /// - Returns: `true` when a checkout is configured.
+    ///
+    /// A linked folder that no longer exists — moved, renamed, on an unmounted volume — counts as
+    /// no checkout, so the action offers to link it again rather than claiming the file is on
+    /// another branch.
     func hasCheckout(for repo: RepoRef) -> Bool {
-        settings.localCheckoutURL(for: repo) != nil
+        existingCheckout(for: repo) != nil
+    }
+
+    /// The linked clone, when it is still a folder on this disk.
+    private func existingCheckout(for repo: RepoRef) -> URL? {
+        guard let url = settings.localCheckoutURL(for: repo) else { return nil }
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory),
+              isDirectory.boolValue
+        else { return nil }
+        return url
     }
 
     /// Opens one file of a pull request in the configured editor.
@@ -62,7 +76,7 @@ struct EditorOpener {
     ///   - line: The head-side line, when one is known.
     func open(repo: RepoRef, path: String, line: Int?) {
         let target = EditorFileTarget.resolve(
-            checkout: settings.localCheckoutURL(for: repo),
+            checkout: existingCheckout(for: repo),
             relativePath: path,
             fileExists: { path in
                 var isDirectory: ObjCBool = false
@@ -148,17 +162,39 @@ struct EditorOpener {
             return true
         case .url(let url, let file, let fallbacks):
             if NSWorkspace.shared.urlForApplication(toOpen: url) != nil {
-                return NSWorkspace.shared.open(url)
+                guard NSWorkspace.shared.open(url) else {
+                    toasts.show(Toast(
+                        message: String(localized: "macOS could not open \(url.lastPathComponent)."),
+                        kind: .failure,
+                        duration: 8
+                    ))
+                    return false
+                }
+                return true
             }
             // The scheme has no handler — an editor that was installed but never launched has
             // not registered it yet. Opening the file *with* the editor loses the line and keeps
             // the rest, which beats a refusal.
             if let application = fallbacks.lazy.compactMap(Self.application(bundleIdentifier:)).first {
+                // Asynchronous, so "launched" here means "asked"; a refusal arrives in the
+                // completion handler and is toasted from there, which keeps this function's
+                // contract that every failure has been reported.
+                let toasts = self.toasts
                 NSWorkspace.shared.open(
                     [file],
                     withApplicationAt: application,
                     configuration: NSWorkspace.OpenConfiguration()
-                )
+                ) { _, error in
+                    guard let error else { return }
+                    let description = error.localizedDescription
+                    Task { @MainActor in
+                        toasts.show(Toast(
+                            message: String(localized: "Could not open the editor: \(description)"),
+                            kind: .failure,
+                            duration: 8
+                        ))
+                    }
+                }
                 return true
             }
             toasts.show(Toast(
