@@ -30,7 +30,7 @@ struct ClaimCheckBlock: View {
             case .done(let check):
                 tag
                 if check.notes.isEmpty {
-                    Text(ClaimCheckBlock.nothingFoundText(reads: check.trace.count))
+                    Text(ClaimCheckBlock.nothingFoundText(count: check.trace.count))
                         .font(Theme.type(.subheadline))
                         .foregroundStyle(Theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -101,9 +101,9 @@ struct ClaimCheckBlock: View {
         }
     }
 
-    static func nothingFoundText(reads: Int) -> String {
-        reads == 1
+    static func nothingFoundText(count: Int) -> String {
+        count == 1
             ? String(localized: "The model read 1 time and pointed at nothing Shepherd could find in the diff.")
-            : String(localized: "The model read \(reads) times and pointed at nothing Shepherd could find in the diff.")
+            : String(localized: "The model read \(count) times and pointed at nothing Shepherd could find in the diff.")
     }
 }

@@ -16190,6 +16190,76 @@
           }
         }
       }
+    },
+    "Look closer": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Genauer ansehen"
+          }
+        }
+      }
+    },
+    "Places the on-device model pointed at. Shepherd found each excerpt in the diff itself; the claim's mark above is still Shepherd's own.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stellen, auf die das Modell auf diesem Mac gezeigt hat. Shepherd hat jeden Auszug selbst im Diff gefunden; die Markierung der Aussage darüber stammt weiterhin von Shepherd."
+          }
+        }
+      }
+    },
+    "Read by the model on this Mac": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vom Modell auf diesem Mac gelesen"
+          }
+        }
+      }
+    },
+    "Reading the diff on this Mac…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diff wird auf diesem Mac gelesen …"
+          }
+        }
+      }
+    },
+    "The model on this Mac reads the diff for this claim and points at the lines that bear on it. Nothing leaves the Mac.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Modell auf diesem Mac liest den Diff zu dieser Aussage und zeigt auf die Zeilen, die dazu gehören. Nichts verlässt den Mac."
+          }
+        }
+      }
+    },
+    "The model read %lld times and pointed at nothing Shepherd could find in the diff.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Modell hat %lld-mal gelesen und auf nichts gezeigt, das Shepherd im Diff finden konnte."
+          }
+        }
+      }
+    },
+    "The model read 1 time and pointed at nothing Shepherd could find in the diff.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Modell hat einmal gelesen und auf nichts gezeigt, das Shepherd im Diff finden konnte."
+          }
+        }
+      }
     }
   },
   "version": "1.0"
