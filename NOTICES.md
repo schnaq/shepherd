@@ -17,7 +17,7 @@ Keep this file in step with a dependency change in the same pull request; a rele
 | --- | --- | --- | --- |
 | [Monaco Editor](https://github.com/microsoft/monaco-editor) | 0.56.0 | MIT | `Contents/Resources/DiffViewer/dist/` (bundled into `viewer.js` / `viewer.css`) |
 | [GRDB.swift](https://github.com/groue/GRDB.swift) | 7.11.x | MIT | linked into the app binary |
-| [Sparkle](https://github.com/sparkle-project/Sparkle) | 2.9.6 | MIT-style (Sparkle license, see below) | `Contents/Frameworks/Sparkle.framework` |
+| [Sparkle](https://github.com/sparkle-project/Sparkle) | 2.10.0 | MIT-style (Sparkle license, see below) | `Contents/Frameworks/Sparkle.framework` |
 
 Shepherd links Apple's own frameworks (SwiftUI, WebKit, Security, FoundationModels, …) under the
 Apple SDK license; they are part of macOS and are not redistributed.
@@ -94,7 +94,7 @@ The in-app update framework ([ADR 0010](docs/adr/0010-distribution-dmg-homebrew.
 under Sparkle's own license, which is MIT in substance, plus the licenses of four components
 Sparkle vendors. All of them are permissive and reproduced below, condensed to their operative
 terms; the authoritative text is
-[`LICENSE`](https://github.com/sparkle-project/Sparkle/blob/2.9.6/LICENSE) in the Sparkle
+[`LICENSE`](https://github.com/sparkle-project/Sparkle/blob/2.10.0/LICENSE) in the Sparkle
 repository at the pinned tag.
 
 ```

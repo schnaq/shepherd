@@ -7,7 +7,7 @@ founder interview (2026-08-31) combined with three research reports (see
 | #    | Decision                                                                  | Status   |
 | ---- | ------------------------------------------------------------------------- | -------- |
 | 0001 | [Native macOS app in Swift/SwiftUI](0001-native-macos-swift.md)           | Accepted |
-| 0002 | [Require macOS 26+ on Apple Silicon](0002-macos-26-apple-silicon.md)      | Accepted |
+| 0002 | [Require macOS 26+ on Apple Silicon](0002-macos-26-apple-silicon.md)      | Superseded in part by [0038](0038-macos-27-floor.md) |
 | 0003 | [Monaco diff editor in WKWebView](0003-monaco-diff-viewer-in-wkwebview.md)| Accepted |
 | 0004 | [GitHub App + device flow auth, PAT fallback](0004-github-app-device-flow-auth.md) | Accepted |
 | 0005 | [GraphQL search reads, REST writes, ETag polling](0005-api-strategy-graphql-search-rest-writes.md) | Accepted |
@@ -43,6 +43,7 @@ founder interview (2026-08-31) combined with three research reports (see
 | 0035 | [The fleet: an agent gets a screen, and the screen counts rather than ranks](0035-the-fleet.md) | Accepted |
 | 0036 | [Usage telemetry: anonymous by default, reach by consent, absent without a key](0036-usage-telemetry.md) | Accepted (v1.2) |
 | 0037 | [Merge when checks pass: a per-pull-request decision, fired by the sweep](0037-merge-when-checks-pass.md) | Accepted |
+| 0038 | [macOS 27 (Golden Gate) as the floor, and what it buys](0038-macos-27-floor.md) | Accepted |
 
 Format: lightweight [MADR](https://adr.github.io/madr/)-style — Context, Decision, Consequences.
 New decisions get the next number; superseded ADRs are marked, never deleted.

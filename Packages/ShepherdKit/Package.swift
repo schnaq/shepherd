@@ -11,7 +11,7 @@ import PackageDescription
 let package = Package(
     name: "ShepherdKit",
     platforms: [
-        // The package APIs deliberately target a lower floor than the app (macOS 26): the
+        // The package APIs deliberately target a lower floor than the app (macOS 27): the
         // domain logic is reusable and testable on any recent toolchain. The app target
         // declares its own, higher deployment target in project.yml.
         .macOS("15.0")

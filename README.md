@@ -8,9 +8,9 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/schnaq/shepherd/ci.yml?style=flat-square&label=CI)](.github/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
-[![Platform: macOS 26+](https://img.shields.io/badge/macOS-26%20Tahoe-101116?style=flat-square)](docs/adr/0002-macos-26-apple-silicon.md)
+[![Platform: macOS 27+](https://img.shields.io/badge/macOS-27%20Golden%20Gate-101116?style=flat-square)](docs/adr/0038-macos-27-floor.md)
 [![Swift 6](https://img.shields.io/badge/Swift-6-f05138?style=flat-square)](Packages/ShepherdKit/Package.swift)
-[![Telemetry: anonymous, opt-out](https://img.shields.io/badge/telemetry-anonymous%20%C2%B7%20opt--out-4cc38a?style=flat-square)](docs/PRIVACY.md)
+[![Telemetry: anonymous, opt-in](https://img.shields.io/badge/telemetry-anonymous%20%C2%B7%20opt--in-4cc38a?style=flat-square)](docs/PRIVACY.md)
 
 <img src="docs/assets/hero.svg" width="100%" alt="Shepherd's inbox: pull requests from Claude Code, GitHub Copilot and people across every repository, each row with its CI state, review state and diff size">
 
@@ -181,14 +181,12 @@ presets for **Konduit (EU)** and a local **Ollama**, model discovery and a conne
 ## Install
 
 ```sh
-brew install --cask schnaq/tap/shepherd     # planned — the tap is not published yet
+brew install --cask schnaq/tap/shepherd
 ```
 
-Shepherd will ship as a notarized DMG on GitHub Releases and update itself through Sparkle 2. The
-whole pipeline is committed (`Scripts/release.sh`, [`.github/workflows/release.yml`](.github/workflows/release.yml),
-[the cask template](Scripts/homebrew/shepherd.rb)) but **there are no published releases yet**: it
-waits on the maintainer's Apple Developer ID certificate and Sparkle signing key. Until then, build
-it yourself:
+Or download the DMG from [the latest release](https://github.com/schnaq/shepherd/releases/latest).
+Every build is notarized by Apple and keeps itself current through Sparkle 2; the cask sets
+`auto_updates`, so Homebrew leaves the installed copy to it. To build from source instead:
 
 ```sh
 brew install xcodegen
@@ -198,7 +196,7 @@ xcodegen generate
 open Shepherd.xcodeproj
 ```
 
-Needs macOS 26 (Tahoe) or later on Apple Silicon, Xcode 26+ and Node 22+. Sign in with GitHub via
+Needs macOS 27 (Golden Gate) or later on Apple Silicon, Xcode 27+ and Node 22+. Sign in with GitHub via
 device flow, or paste a fine-grained personal access token. A source build is unsigned and has its
 updater switched off, which Settings → Account states in one line. The `ShepherdKit` package is
 platform-independent — `cd Packages/ShepherdKit && swift test` needs no Xcode. The `shepherd` CLI is

@@ -109,7 +109,7 @@ SPARKLE_BIN=$(dirname "$(find .build/release/SourcePackages/artifacts -name gene
 echo "$SPARKLE_BIN"
 ```
 
-(Alternatively, download `Sparkle-2.9.6.tar.xz` from
+(Alternatively, download `Sparkle-2.10.0.tar.xz` from
 <https://github.com/sparkle-project/Sparkle/releases> and use its `bin/` directory.)
 
 Generate the key pair. It is stored in your **login Keychain**, as an item named

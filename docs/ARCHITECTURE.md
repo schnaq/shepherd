@@ -6,7 +6,7 @@ disagree, fix one of them in the same PR. Decisions behind this design: [docs/ad
 ## Repository layout
 
 ```
-Shepherd/                      # macOS app target (SwiftUI, macOS 26+)
+Shepherd/                      # macOS app target (SwiftUI, macOS 27+)
   App/                         #   @main, DI container (AppEnvironment), shepherd:// routing
   Features/
     Inbox/                     #   inbox list, sections, filters, command palette actions;
@@ -1387,9 +1387,10 @@ budget (`TokenBudget.onDevice` ≈ 6K for Foundation Models, `TokenBudget.cloud`
 degrades cloud → on-device → nothing. The chars-÷-4 estimate is the floor rather than the law:
 `TokenBudget.measured(_:using:)` takes a measurement closure and
 `limited(toContextSize:reservedForResponse:)` re-derives the budget from a context window the
-platform reported, so on macOS 26.4+ `OnDeviceProvider` pre-flights the real prompt against the
-real window (minus room for the answer) and only falls back to the estimate where the OS cannot
-measure. Both helpers are pure and live in `ShepherdCore`. Per-request choices also live in that
+platform reported, so `OnDeviceProvider` pre-flights the real prompt against the real window
+(minus room for the answer); the chars-÷-4 estimate is only the seed the request carries until
+that measurement is taken, since the floor is macOS 27 (ADR 0038). Both helpers are pure and live
+in `ShepherdCore`. Per-request choices also live in that
 file: `OnDeviceUseCase` picks the general or the content-tagging model (availability is checked per
 model, since the assets download per model) and `OnDeviceGeneration` holds every temperature and
 `maximumResponseTokens` cap. A guardrail refusal and an exceeded context window map to

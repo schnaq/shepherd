@@ -72,8 +72,8 @@ struct OnDeviceThreadDigest {
 ///   model is actually good at. Availability is asked of that model specifically, because the
 ///   assets download per model (plan §0.1).
 /// - **Measured pre-flight, and the ceiling is a hard error.** The prompt is measured against the
-///   real tokenizer where the OS can do that and estimated at four characters per token where it
-///   cannot; over budget throws ``IntelligenceError/digestTooLarge(tokens:limit:)`` rather than
+///   real tokenizer — the floor is macOS 27, so the OS can always measure (ADR 0038); over budget
+///   throws ``IntelligenceError/digestTooLarge(tokens:limit:)`` rather than
 ///   silently truncating a conversation into a wrong summary. The *thread* is trimmed one layer
 ///   up, by ``ShepherdCore/ThreadDigestRequest``, which also records what it gave up so the card
 ///   can say so.
@@ -100,7 +100,6 @@ struct OnDeviceThreadDigester: ThreadDigesting {
         let prompt = request.promptText
         let session = try await OnDeviceThreadDigester.preflight(
             prompt: prompt,
-            estimate: request.approximateTokenCount
         )
         let generated: OnDeviceThreadDigest
         do {
@@ -182,7 +181,6 @@ struct OnDeviceThreadDigester: ThreadDigesting {
     ///   - model: The model that will read the prompt.
     ///   - text: The string the count is taken for; the closure declines for any other.
     /// - Returns: The measurement closure and the model's context window in tokens.
-    @available(macOS 26.4, *)
     private static func measuredContext(
         of model: SystemLanguageModel,
         measuring text: String
@@ -218,13 +216,11 @@ struct OnDeviceThreadDigester: ThreadDigesting {
     /// silent truncation, so nothing may create a session it is not already sure it can use.
     /// - Parameters:
     ///   - prompt: The prompt.
-    ///   - estimate: The request's own chars-÷-4 estimate, used when the OS cannot measure.
     /// - Returns: A session on the prose model.
     /// - Throws: ``IntelligenceError/unavailable(_:)`` or
     ///   ``IntelligenceError/digestTooLarge(tokens:limit:)``.
     private static func preflight(
-        prompt: String,
-        estimate: Int
+        prompt: String
     ) async throws -> LanguageModelSession {
         let useCase = OnDeviceUseCase.prose
         if let reason = OnDeviceProvider.unavailabilityReason(for: useCase) {
@@ -234,18 +230,16 @@ struct OnDeviceThreadDigester: ThreadDigesting {
 
         // The instructions share the window with the prompt, so they are measured with it.
         let text = instructions + "\n" + prompt
-        var budget = OnDeviceProvider.budget
-        var tokens = estimate
-        if #available(macOS 26.4, *) {
-            // Both halves of the comparison come from the same measurement, or this would be a
-            // real token count against a limit that was only ever a guess about the window.
-            let context = await measuredContext(of: model, measuring: text)
-            budget = budget.limited(
-                toContextSize: context.contextSize,
-                reservedForResponse: OnDeviceGeneration.reservedResponseTokens
-            )
-            tokens = budget.measured(text, using: context.measure)
-        }
+        // Both halves of the comparison come from the same measurement, or this would be a
+        // real token count against a limit that was only ever a guess about the window. The
+        // floor is macOS 27 (ADR 0038), so the OS can always measure; the chars-÷-4 estimate
+        // that used to stand in below 26.4 is gone with the `#available` that guarded it.
+        let context = await measuredContext(of: model, measuring: text)
+        let budget = OnDeviceProvider.budget.limited(
+            toContextSize: context.contextSize,
+            reservedForResponse: OnDeviceGeneration.reservedResponseTokens
+        )
+        let tokens = budget.measured(text, using: context.measure)
         guard tokens <= budget.maxTokens else {
             throw IntelligenceError.digestTooLarge(tokens: tokens, limit: budget.maxTokens)
         }
