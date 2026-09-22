@@ -63,7 +63,7 @@ struct ReviewScreen: View {
                 )
             }
             HStack(spacing: 0) {
-                ReviewFileListView(model: model)
+                ReviewFileListView(model: model, editor: editorContext)
                     .frame(width: 292)
                     .focusable()
                     .focusEffectDisabled()
@@ -170,7 +170,7 @@ struct ReviewScreen: View {
 
     private var diffArea: some View {
         VStack(spacing: 0) {
-            ReviewFileHeader(model: model, actions: actions)
+            ReviewFileHeader(model: model, actions: actions, editor: editorContext)
             Divider().overlay(Theme.border)
             // Under the round picker, and only while it is showing that round: the findings are
             // the other half of "since your review" — the diff says what the agent changed, the
@@ -359,12 +359,6 @@ struct ReviewScreen: View {
 
     // MARK: - Actions
 
-    /// The write helper, with the focus session's advance hooked to the enqueue.
-    ///
-    /// The callback is attached here and only here: this is the screen a session walks through,
-    /// so a verdict or a merge queued from it is the user finishing with the pull request under
-    /// the cursor. `AppEnvironment` still checks the id, so a review submitted for anything else
-    /// cannot move the queue.
     /// What the outbox is doing for this pull request (``RowWriteState``), the same state its
     /// inbox row shows.
     private var writeState: RowWriteState? {
@@ -376,6 +370,22 @@ struct ReviewScreen: View {
         )
     }
 
+    /// "Open in …" for the file list and the file header (ADR 0039), or `nil` before the pull
+    /// request's summary has loaded and there is no repository to resolve a path against.
+    private var editorContext: EditorContext? {
+        guard let repo = model.summary?.repo else { return nil }
+        return EditorContext(
+            opener: EditorOpener(settings: environment.settings, toasts: environment.toasts),
+            repo: repo
+        )
+    }
+
+    /// The write helper, with the focus session's advance hooked to the enqueue.
+    ///
+    /// The callback is attached here and only here: this is the screen a session walks through,
+    /// so a verdict or a merge queued from it is the user finishing with the pull request under
+    /// the cursor. `AppEnvironment` still checks the id, so a review submitted for anything else
+    /// cannot move the queue.
     private var actions: PullRequestActions {
         PullRequestActions(
             session: session,

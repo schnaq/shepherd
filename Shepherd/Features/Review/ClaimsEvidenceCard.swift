@@ -34,6 +34,8 @@ struct ClaimsEvidenceCard: View {
     let model: ClaimsEvidenceModel
     /// Opens a file — and a line, when the fact names one — in the diff viewer.
     let onOpenFile: (String, Int?) -> Void
+    /// "Open in …" on the same links, as a context menu (ADR 0039); `nil` for none.
+    var editor: EditorContext?
     /// The review summary as it stands, read at click time.
     ///
     /// A closure rather than a value on purpose: the card only needs the field's contents when a
@@ -220,7 +222,7 @@ struct ClaimsEvidenceCard: View {
             }
 
             if let check = model.checks[line.id] {
-                ClaimCheckBlock(state: check, onOpenFile: onOpenFile)
+                ClaimCheckBlock(state: check, onOpenFile: onOpenFile, editor: editor)
                     .padding(.leading, 19)
             }
 
@@ -273,6 +275,7 @@ struct ClaimsEvidenceCard: View {
                 }
                 .buttonStyle(.plain)
                 .help(String(localized: "Open this line in the diff"))
+                .openInEditorMenu(editor, path: path, line: fact.line)
             }
             if let url = fact.url {
                 Link(destination: url) {

@@ -142,6 +142,7 @@ final class AppSettings {
             Keys.autoDelegation,
             default: AutoDelegationRules()
         )
+        self.editor = Self.readJSON(defaults, Keys.editor, default: EditorConfiguration())
         self.autoMerge = Self.readJSON(
             defaults,
             Keys.autoMerge,
@@ -547,6 +548,17 @@ final class AppSettings {
     /// fresh install — ``AutoDelegationRules/isEnabled`` is what lets any of this run at all.
     var autoDelegation: AutoDelegationRules {
         didSet { Self.writeJSON(defaults, autoDelegation, Keys.autoDelegation) }
+    }
+
+    /// Which program "Open in editor" hands a file to (ADR 0039).
+    ///
+    /// Edited on the Delegation tab beside ``localCheckouts``, because the two only work together:
+    /// the clone map says *where* a pull request's file is on this Mac, this says *what* opens it.
+    /// One JSON blob for ``agentCLI``'s reason. It travels with settings sync — an editor is a
+    /// person's habit rather than a machine's — in a group of its own
+    /// (``SyncedSettingsDocument/EditorGroup``).
+    var editor: EditorConfiguration {
+        didSet { Self.writeJSON(defaults, editor, Keys.editor) }
     }
 
     /// The local clone configured for a repository, if any.
@@ -1005,6 +1017,7 @@ final class AppSettings {
         static let agentCLI = "delegation.agentCLI"
         static let localCheckouts = "delegation.localCheckouts"
         static let autoDelegation = "delegation.autoRules"
+        static let editor = "editor.configuration"
         static let autoMerge = "automation.autoMergeRules"
         static let trustLaneMaxFiles = "trust.laneMaxFiles"
         static let trustLaneMaxChangedLines = "trust.laneMaxChangedLines"

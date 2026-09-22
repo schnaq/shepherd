@@ -259,6 +259,14 @@ final class SettingsSyncTests: XCTestCase {
                 maxPerDay: 9
             )
         )
+        // Non-default in both fields: the editor ships as "system default" with no command
+        // (ADR 0039).
+        document.editor = SyncedSettingsDocument.EditorGroup(
+            configuration: EditorConfiguration(
+                kind: .intelliJ,
+                customCommandTemplate: "/usr/local/bin/code --goto {file}:{line}"
+            )
+        )
         document.automation = SyncedSettingsDocument.AutomationGroup(
             webhooksEnabled: true,
             webhookURL: "https://n8n.example.com/webhook/shepherd",
@@ -713,6 +721,10 @@ final class SettingsSyncTests: XCTestCase {
         )
         XCTAssertTrue(document.delegation.agentCLI.remoteSessionTemplate.isEmpty)
         XCTAssertEqual(document.delegation.autoDelegation, AutoDelegationRules())
+        // A document written before "Open in editor" existed opens files the way Finder would,
+        // which is the local default too (ADR 0039).
+        XCTAssertEqual(document.editor, SyncedSettingsDocument.EditorGroup())
+        XCTAssertEqual(document.editor.configuration.kind, .systemDefault)
         // A document written before saved replies existed carries neither list, and an absent list
         // is empty rather than a decoding failure.
         XCTAssertEqual(document.composer, SyncedSettingsDocument.ComposerGroup())
@@ -1114,6 +1126,12 @@ final class SettingsSyncTests: XCTestCase {
             "/usr/local/bin/my-agent remote {sessionURL} {message}"
         )
         XCTAssertEqual(settings.localCheckouts["schnaq/review"], "/Users/someone/code/review")
+        // The editor is a person's habit, so it travels (ADR 0039).
+        XCTAssertEqual(settings.editor.kind, .intelliJ)
+        XCTAssertEqual(
+            settings.editor.customCommandTemplate,
+            "/usr/local/bin/code --goto {file}:{line}"
+        )
         // The rules travel (ADR 0016); the ledger of what a rule already did deliberately does
         // not — it is one Mac's automation state.
         XCTAssertTrue(settings.autoDelegation.isEnabled)

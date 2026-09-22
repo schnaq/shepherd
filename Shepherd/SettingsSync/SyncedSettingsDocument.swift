@@ -289,6 +289,42 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         }
     }
 
+    /// Which program "Open in editor" uses (ADR 0039).
+    ///
+    /// A group of its own rather than a field of ``DelegationGroup``, although the card sits on
+    /// the Delegation tab: that group is *how an agent is run*, and an editor runs no agent. The
+    /// choice travels because it is a person's habit — VS Code on the laptop is VS Code on the
+    /// desktop. The custom command can name a path that exists on one Mac only, the trade
+    /// ``AgentCLIConfiguration/executablePath`` already makes one group up.
+    ///
+    /// The clone map it is used with is *not* here and did not move: it has travelled inside
+    /// ``DelegationGroup`` since ADR 0014, although a checkout path is a fact about one Mac's
+    /// disk. That is recorded in ADR 0039 rather than changed in passing.
+    struct EditorGroup: Codable, Sendable, Equatable {
+        /// The editor choice and the custom command.
+        var configuration: EditorConfiguration
+
+        /// Creates the group.
+        /// - Parameter configuration: The editor choice.
+        init(configuration: EditorConfiguration = EditorConfiguration()) {
+            self.configuration = configuration
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case configuration
+        }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            // A document from a build that predates the editor decodes to "system default",
+            // which is what that build did — it opened nothing, and the default opens with Finder.
+            configuration = container.syncedValue(
+                .configuration,
+                default: EditorConfiguration()
+            )
+        }
+    }
+
     /// The non-secret half of the outbound-webhook configuration (ADR 0012).
     struct AutomationGroup: Codable, Sendable, Equatable {
         /// Whether webhooks are on.
@@ -759,6 +795,8 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
     var intelligence: IntelligenceGroup
     /// Delegation configuration.
     var delegation: DelegationGroup
+    /// The "Open in editor" choice.
+    var editor: EditorGroup
     /// Webhook configuration, without the signing secret.
     var automation: AutomationGroup
     /// The opt-in automatic-merge rules.
@@ -795,6 +833,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         agents: AgentsGroup = AgentsGroup(),
         intelligence: IntelligenceGroup = IntelligenceGroup(),
         delegation: DelegationGroup = DelegationGroup(),
+        editor: EditorGroup = EditorGroup(),
         automation: AutomationGroup = AutomationGroup(),
         autoMerge: AutoMergeGroup = AutoMergeGroup(),
         trust: TrustGroup = TrustGroup(),
@@ -814,6 +853,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         self.agents = agents
         self.intelligence = intelligence
         self.delegation = delegation
+        self.editor = editor
         self.automation = automation
         self.autoMerge = autoMerge
         self.trust = trust
@@ -830,6 +870,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case v, sync, notifications, digest, agents, intelligence, delegation, automation
         case autoMerge
+        case editor
         case trust
         case search
         case appearance, triage, composer, diagnostics, account, secrets
@@ -853,6 +894,7 @@ struct SyncedSettingsDocument: Codable, Sendable, Equatable {
         agents = container.syncedValue(.agents, default: AgentsGroup())
         intelligence = container.syncedValue(.intelligence, default: IntelligenceGroup())
         delegation = container.syncedValue(.delegation, default: DelegationGroup())
+        editor = container.syncedValue(.editor, default: EditorGroup())
         automation = container.syncedValue(.automation, default: AutomationGroup())
         autoMerge = container.syncedValue(.autoMerge, default: AutoMergeGroup())
         trust = container.syncedValue(.trust, default: TrustGroup())
