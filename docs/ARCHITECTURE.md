@@ -874,8 +874,8 @@ localised.
 
 Each tier drives the loop in its own shape and they agree on everything that matters:
 `OnDeviceToolBridge` (`FoundationModels` is imported only by the `OnDevice*.swift` files in
-`Intelligence/` — the provider, this bridge, the triage classifier, the thread digester and the
-claim extractor — plus `LanguageModelBackend.swift` and `ClaudeProvider.swift`) wraps
+`Intelligence/` — the provider, this bridge, the triage classifier, the thread digester, the
+claim extractor and checker, and the screenshot reader — plus `LanguageModelBackend.swift` and `ClaudeProvider.swift`) wraps
 the three tools in `FoundationModels.Tool` conformances with `@Generable` argument structs, and the framework
 drives the calls — so the hop cap lives in the wrappers and the trace is collected by a shared
 `ToolTraceRecorder` actor. That is the shape for both session backends, on-device and Claude;
@@ -993,6 +993,15 @@ whose excerpt `DiffExcerpt.locate(_:inPatch:)` finds on consecutive lines of tha
 `ClaimsEvidenceModel.check(_:)` runs it for a ✗ or ? line on the click, keeps the result per line
 id in `checks` until the detail changes, and `ClaimCheckBlock` draws the notes tagged, with
 `CIDiagnosisTraceView` for the reads. `AppEnvironment.claimChecker` is `nil` while the tiers are off.
+
+**Read screenshots** (ADR 0038 item 4, ADR 0007's 2026-09-22 amendment) is the same shape on the
+inbox's summary card: `DescriptionScreenshotReading` / `Intelligence/OnDeviceScreenshotReader.swift`
+(on-device only, `SystemLanguageModel.capabilities.contains(.vision)`, images attached as
+`Attachment(cgImage)`), `ShepherdCore/Markdown/DescriptionImages.swift` for which uploads a
+description has and which signed `body_html` link belongs to each, and
+`Features/Inbox/ScreenshotReadingModel.swift`, which scans the Markdown on selection and fetches —
+`GitHubClient.pullRequestBodyHTML(repo:number:)`, then at most two
+`descriptionImage(at:)` without the token — only on the click.
 
 ### The issues a pull request closes, and the state of the pull requests an issue has (ADR 0032)
 
