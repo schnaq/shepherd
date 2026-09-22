@@ -104,11 +104,13 @@ struct ConversationView: View {
     ///
     /// `nil` while the card is collapsed, which is the whole of "the pass is attended": the
     /// reviewer expanding the card is what starts it, and there is no button because the
-    /// expansion *is* the click (ADR 0026's amendment). A new pull request — or new data for the
-    /// same one — is the other half, and the model refuses a second pass for the same detail
-    /// itself, so a collapse and re-open costs nothing.
-    private var claimsReadTrigger: PullRequestDetail? {
-        claims.state.isExpanded ? model.detail : nil
+    /// expansion *is* the click (ADR 0026's amendment). A new pull request — or an edited
+    /// description — is the other half; a routine refresh that changes neither does not restart
+    /// the pass, and the model refuses a second pass for the same text itself, so a collapse and
+    /// re-open costs nothing.
+    private var claimsReadTrigger: String? {
+        guard claims.state.isExpanded, let detail = model.detail else { return nil }
+        return ClaimsEvidenceModel.readKey(for: detail)
     }
 
     /// "You have said this three times." — the feedback loop's card (ADR 0029).
