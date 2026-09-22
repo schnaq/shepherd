@@ -15,7 +15,7 @@ export type Release = {
  * rather than a DMG that may no longer exist.
  */
 const FALLBACK: Release = {
-  version: "1.3.0",
+  version: "1.4.0",
   dmgURL: "https://github.com/schnaq/shepherd/releases/latest",
   releaseURL: "https://github.com/schnaq/shepherd/releases/latest",
 };
