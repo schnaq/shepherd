@@ -1312,7 +1312,7 @@ final class ReviewModel {
         priorities
             .filter { !$0.reasons.isEmpty }
             .prefix(6)
-            .map { "\($0.file.path) — \($0.reasons.joined(separator: ", "))" }
+            .map { "\($0.file.path) — \($0.reasons.map(\.englishText).joined(separator: ", "))" }
     }
 
     /// The delegation context for the whole pull request, when it has loaded.

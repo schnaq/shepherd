@@ -13,7 +13,8 @@ public enum FileCategory: String, Sendable, Codable, Hashable, CaseIterable {
     /// Machine-generated or vendored content: lockfiles, bundles, snapshots, `vendor/`.
     case generated
 
-    /// A short human-readable label used as the first review reason.
+    /// A short English label, the ``FilePriorityReason/englishText`` of the category reason.
+    /// The app draws `localizedLabel` instead.
     public var reasonLabel: String {
         switch self {
         case .source: return "Source file"
@@ -57,6 +58,70 @@ public enum PriorityBucket: String, Sendable, Codable, Hashable, CaseIterable {
     }
 }
 
+/// Why ``FilePrioritizer`` ranked a file where it did: one case per signal of its scoring table.
+///
+/// A closed enum rather than a sentence because the same reason has two readers. A reviewer reads
+/// it on screen, in their own language, and ShepherdCore — Foundation-only, tested on Linux —
+/// cannot call `String(localized:)`; so the app renders the German (ADR 0022's amendment, in
+/// `Shepherd/Features/Review/FilePriorityReasonText.swift`). A model prompt or an agent brief
+/// reads ``englishText``, which is the wording this type replaced, byte for byte.
+///
+/// Paths and the matched security hint travel as associated values and are interpolated
+/// verbatim in either language: they are somebody's file names.
+public enum FilePriorityReason: Sendable, Codable, Hashable {
+    /// The file's category. Always the first reason of a ``FilePriority``.
+    case category(FileCategory)
+    /// The path contains a security-sensitive substring, e.g. `auth`.
+    case securitySensitivePath(hint: String)
+    /// A CI workflow under `.github/workflows/`.
+    case ciWorkflow
+    /// A `Dockerfile`, `Containerfile` or compose file.
+    case containerBuildFile
+    /// An `*.entitlements` file.
+    case entitlements
+    /// A test file is deleted.
+    case deletesTestFile
+    /// A source file is deleted.
+    case deletesSourceFile
+    /// At least 300 changed lines.
+    case largeChange(lines: Int)
+    /// At least 100 changed lines.
+    case sizeableChange(lines: Int)
+    /// The file accounts for more than 40 % of the pull request's churn.
+    case dominatesChanges
+    /// A newly added source file.
+    case newSourceFile
+    /// The file was renamed from this path.
+    case renamed(from: String)
+    /// GitHub sent no patch: a binary file, or a diff too large to include.
+    case noDiffAvailable
+
+    /// The reason in English, for what is sent to a model or an agent rather than drawn.
+    public var englishText: String {
+        switch self {
+        case .category(let category): return category.reasonLabel
+        case .securitySensitivePath(let hint): return "Touches security-sensitive path (“\(hint)”)"
+        case .ciWorkflow: return "Changes a CI workflow — supply-chain relevant"
+        case .containerBuildFile: return "Container build definition — supply-chain relevant"
+        case .entitlements: return "Changes app entitlements"
+        case .deletesTestFile: return "Deletes a test file"
+        case .deletesSourceFile: return "Deletes a source file"
+        case .largeChange(let lines): return "Large change (\(lines) lines)"
+        case .sizeableChange(let lines): return "Sizeable change (\(lines) lines)"
+        case .dominatesChanges: return "Dominates this pull request's changes"
+        case .newSourceFile: return "New source file"
+        case .renamed(let previous): return "Renamed from \(previous)"
+        case .noDiffAvailable: return "No diff available (binary or truncated)"
+        }
+    }
+
+    /// Whether this is the ``category(_:)`` reason, which says nothing the path does not.
+    public var isCategory: Bool {
+        if case .category = self { return true }
+        return false
+    }
+}
+
 /// A changed file together with its computed review priority.
 public struct FilePriority: Sendable, Codable, Hashable, Identifiable {
     /// The file this priority describes.
@@ -67,8 +132,9 @@ public struct FilePriority: Sendable, Codable, Hashable, Identifiable {
     public var bucket: PriorityBucket
     /// The detected category of the file.
     public var category: FileCategory
-    /// Human-readable explanations, in the order they were applied. Shown in the UI.
-    public var reasons: [String]
+    /// Why the file ranks where it does, in the order the signals were applied. The first is
+    /// always ``FilePriorityReason/category(_:)``.
+    public var reasons: [FilePriorityReason]
 
     /// Creates a file priority.
     public init(
@@ -76,7 +142,7 @@ public struct FilePriority: Sendable, Codable, Hashable, Identifiable {
         score: Double,
         bucket: PriorityBucket,
         category: FileCategory,
-        reasons: [String]
+        reasons: [FilePriorityReason]
     ) {
         self.file = file
         self.score = score
@@ -113,7 +179,7 @@ public struct PrioritizationContext: Sendable, Hashable {
 /// (tier 1 of ADR 0007).
 ///
 /// Scoring is a base score per ``FileCategory`` plus additive boosts, clamped to `0...100`.
-/// Every boost contributes a human-readable reason, because the UI shows *why* a file was
+/// Every boost contributes a ``FilePriorityReason``, because the UI shows *why* a file was
 /// ranked where it was — the heuristic has to be arguable, not magic.
 ///
 /// | Signal | Effect |
@@ -232,38 +298,38 @@ public enum FilePrioritizer {
         let path = file.path.lowercased()
         let category = category(of: file)
         var score = baseScores[category] ?? 30
-        var reasons: [String] = [category.reasonLabel]
+        var reasons: [FilePriorityReason] = [.category(category)]
 
         if category != .generated {
             let hints = securityPathHints + context.extraSecurityPathHints.map { $0.lowercased() }
             if let hit = hints.first(where: { !$0.isEmpty && path.contains($0) }) {
                 score += 30
-                reasons.append("Touches security-sensitive path (“\(hit)”)")
+                reasons.append(.securitySensitivePath(hint: hit))
             }
         }
 
         if path.hasPrefix(".github/workflows/") || path.contains("/.github/workflows/") {
             score += 45
-            reasons.append("Changes a CI workflow — supply-chain relevant")
+            reasons.append(.ciWorkflow)
         }
 
         if isContainerBuildFile(path: path) {
             score += 40
-            reasons.append("Container build definition — supply-chain relevant")
+            reasons.append(.containerBuildFile)
         }
 
         if path.hasSuffix(".entitlements") {
             score += 30
-            reasons.append("Changes app entitlements")
+            reasons.append(.entitlements)
         }
 
         if file.status == .removed {
             if category == .tests {
                 score += 40
-                reasons.append("Deletes a test file")
+                reasons.append(.deletesTestFile)
             } else if category == .source {
                 score += 10
-                reasons.append("Deletes a source file")
+                reasons.append(.deletesSourceFile)
             }
         }
 
@@ -273,30 +339,30 @@ public enum FilePrioritizer {
         if category != .generated {
             if churn >= 300 {
                 score += 15
-                reasons.append("Large change (\(churn) lines)")
+                reasons.append(.largeChange(lines: churn))
             } else if churn >= 100 {
                 score += 8
-                reasons.append("Sizeable change (\(churn) lines)")
+                reasons.append(.sizeableChange(lines: churn))
             }
 
             if totalChurn > 0, churn > 0, Double(churn) / Double(totalChurn) > 0.4 {
                 score += 10
-                reasons.append("Dominates this pull request's changes")
+                reasons.append(.dominatesChanges)
             }
         }
 
         if file.status == .added, category == .source {
             score += 5
-            reasons.append("New source file")
+            reasons.append(.newSourceFile)
         }
 
         if file.status == .renamed, let previous = file.previousPath {
-            reasons.append("Renamed from \(previous)")
+            reasons.append(.renamed(from: previous))
         }
 
         if !file.hasPatch {
             score -= 10
-            reasons.append("No diff available (binary or truncated)")
+            reasons.append(.noDiffAvailable)
         }
 
         let clamped = min(100, max(0, score))

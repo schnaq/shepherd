@@ -30,8 +30,8 @@ struct TriageRowSummary: Equatable, Sendable {
     var verdict: TriageVerdict?
     /// The tier-1 risk level, when Shepherd has a diff to judge.
     var heuristicRisk: TriageVerdict.Risk?
-    /// The tier-1 hint sentences, in priority order.
-    var riskHints: [String] = []
+    /// The tier-1 hints, in priority order. Drawn localized; the prompt got their English.
+    var riskHints: [TriageRiskHint] = []
 
     /// The risk to show: the model's when it spoke, the heuristics' otherwise.
     var risk: TriageVerdict.Risk? { verdict?.risk ?? heuristicRisk }
@@ -474,8 +474,8 @@ private struct TriagePreparedRow: Sendable {
     let input: TriageInput
     /// The tier-1 risk level, or `nil` when there is no diff to judge.
     let heuristicRisk: TriageVerdict.Risk?
-    /// The tier-1 hint sentences.
-    let riskHints: [String]
+    /// The tier-1 hints, for the popover.
+    let riskHints: [TriageRiskHint]
 
     /// Prepares one pull request.
     /// - Parameters:
@@ -483,9 +483,9 @@ private struct TriagePreparedRow: Sendable {
     ///   - budget: What may enter the document.
     init(source: SearchIndexSource, budget: SearchDocumentBudget) {
         let document = SearchDocument.make(source: source, budget: budget)
-        let hints = TriageRiskHints.hints(for: source.files)
+        let hints = TriageRiskHints.riskHints(for: source.files)
         self.fingerprint = document.sourceFingerprint
-        self.input = TriageInput.make(document: document, riskHints: hints)
+        self.input = TriageInput.make(document: document, riskHints: hints.map(\.englishText))
         self.heuristicRisk = TriageRiskHints.heuristicRisk(for: source.files)
         self.riskHints = hints
     }

@@ -146,12 +146,12 @@ struct TriageReasonPopover: View {
                 Divider().overlay(Theme.hairline)
                 CardTitle(String(localized: "RISK HINTS"))
                 // The AI summary card's bullet shape (``InboxDetailPanel``), reused rather than
-                // re-invented: one catalog key for the bullet, and the hint itself is runtime
-                // text that never becomes one.
+                // re-invented. The hint is drawn in the reader's language; the triage prompt got
+                // the same hint's English.
                 ForEach(summary.riskHints, id: \.self) { hint in
                     HStack(alignment: .top, spacing: 6) {
                         Text("•").foregroundStyle(Theme.textMuted)
-                        Text(hint)
+                        Text(hint.localizedText())
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .font(.system(size: 11))

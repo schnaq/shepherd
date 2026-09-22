@@ -184,17 +184,9 @@ struct ReviewFileListView: View {
         return isSelected ? Theme.textStrong : Theme.text
     }
 
-    /// The reason chips shown on a file row, with the first one translated.
-    ///
-    /// `priority.reasons.first` is always the category's plain-English label
-    /// (`FilePrioritizer.swift`'s `score(_:totalChurn:context:)` seeds `reasons` with it and only
-    /// ever appends after it), so this is the one entry that can be swapped for
-    /// ``FileCategory/localizedLabel`` without touching the rest — the other reasons ("Touches
-    /// security-sensitive path …") stay English.
+    /// The reason chips shown on a file row: the first two, in the reader's language.
     private func displayReasons(for priority: FilePriority) -> [String] {
-        var reasons = priority.reasons
-        if !reasons.isEmpty { reasons[0] = priority.category.localizedLabel }
-        return Array(reasons.prefix(2))
+        priority.reasons.prefix(2).map { $0.localizedText() }
     }
 }
 

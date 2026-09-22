@@ -16280,6 +16280,196 @@
           }
         }
       }
+    },
+    "Touches security-sensitive path (“%@”)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Berührt einen sicherheitskritischen Pfad („%@“)"
+          }
+        }
+      }
+    },
+    "Changes a CI workflow — supply-chain relevant": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ändert einen CI-Workflow — relevant für die Lieferkette"
+          }
+        }
+      }
+    },
+    "Container build definition — supply-chain relevant": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Container-Build-Definition — relevant für die Lieferkette"
+          }
+        }
+      }
+    },
+    "Changes app entitlements": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ändert die Entitlements der App"
+          }
+        }
+      }
+    },
+    "Deletes a test file": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Löscht eine Testdatei"
+          }
+        }
+      }
+    },
+    "Deletes a source file": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Löscht eine Quelldatei"
+          }
+        }
+      }
+    },
+    "Large change (%lld lines)": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Große Änderung (%lld Zeile)"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Große Änderung (%lld Zeilen)"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Large change (%lld line)"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Large change (%lld lines)"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Sizeable change (%lld lines)": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Größere Änderung (%lld Zeile)"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Größere Änderung (%lld Zeilen)"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Sizeable change (%lld line)"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Sizeable change (%lld lines)"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "Dominates this pull request's changes": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Macht den Großteil der Änderungen dieses Pull Requests aus"
+          }
+        }
+      }
+    },
+    "New source file": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Quelldatei"
+          }
+        }
+      }
+    },
+    "Renamed from %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Umbenannt von %@"
+          }
+        }
+      }
+    },
+    "No diff available (binary or truncated)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kein Diff verfügbar (binär oder gekürzt)"
+          }
+        }
+      }
+    },
+    "Every changed file is generated or vendored (a lockfile, a snapshot or a bundle).": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jede geänderte Datei ist generiert oder mitgeliefert (ein Lockfile, ein Snapshot oder ein Bundle)."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

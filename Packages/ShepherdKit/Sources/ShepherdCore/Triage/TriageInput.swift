@@ -59,7 +59,7 @@ public struct TriageInput: Sendable, Hashable {
     /// Composes the input for one pull request.
     /// - Parameters:
     ///   - document: The search document the index already built.
-    ///   - riskHints: The tier-1 hints, from ``TriageRiskHints/hints(for:limit:)``.
+    ///   - riskHints: The tier-1 hints in English, from ``TriageRiskHints/hints(for:limit:)``.
     /// - Returns: The input.
     public static func make(document: SearchDocument, riskHints: [String]) -> TriageInput {
         TriageInput(
@@ -99,6 +99,25 @@ public struct TriageInput: Sendable, Hashable {
     }
 }
 
+/// One tier-1 risk hint: a fact about a pull request's diff that ``TriageRiskHints`` established
+/// without a model.
+public enum TriageRiskHint: Sendable, Codable, Hashable {
+    /// Every changed file is generated or vendored — a dependency bump, not a code change.
+    case everyFileGenerated
+    /// One file and the reasons, other than its category, that it ranks where it does.
+    case file(path: String, reasons: [FilePriorityReason])
+
+    /// The hint in English, as the triage prompt carries it.
+    public var englishText: String {
+        switch self {
+        case .everyFileGenerated:
+            return "Every changed file is generated or vendored (a lockfile, a snapshot or a bundle)."
+        case .file(let path, let reasons):
+            return "\(path) — \(reasons.map(\.englishText).joined(separator: ", "))"
+        }
+    }
+}
+
 /// The tier-1 half of structured triage: what Shepherd can say about a change's risk with no
 /// model at all (ADR 0007, tier 1).
 ///
@@ -127,30 +146,46 @@ public enum TriageRiskHints {
     /// Only the reasons that say something *about the risk* are kept: the prioritiser's first
     /// reason is always the file's category ("Source file"), which is visible from the path and
     /// would spend prompt budget on nothing. A file whose only reason is its category contributes
-    /// no line at all.
+    /// no hint at all.
+    ///
+    /// Structured rather than sentences because the hints have two readers: the triage prompt,
+    /// which takes ``TriageRiskHint/englishText`` (see ``hints(for:limit:)``), and the inbox's
+    /// "why this risk" popover, which draws them in the reader's language.
     /// - Parameters:
     ///   - files: The changed files, as the detail fetch stored them. Empty for a pull request
     ///     nobody has opened, which yields no hints — Shepherd has no diff to judge yet, and
     ///     inventing a hint from a title would be worse than saying nothing.
-    ///   - limit: How many lines at most. Defaults to ``maximumHints``.
+    ///   - limit: How many hints at most. Defaults to ``maximumHints``.
     /// - Returns: The hints, in priority order.
-    public static func hints(for files: [ChangedFile], limit: Int = TriageRiskHints.maximumHints) -> [String] {
+    public static func riskHints(
+        for files: [ChangedFile],
+        limit: Int = TriageRiskHints.maximumHints
+    ) -> [TriageRiskHint] {
         guard !files.isEmpty, limit > 0 else { return [] }
         let priorities = FilePrioritizer.prioritize(files)
-        var result: [String] = []
+        var result: [TriageRiskHint] = []
         // The aggregate hint goes first, and it is the one hint that is about the *set* rather
         // than about a file: "every changed file is generated" is what separates a dependency
         // bump from a change to the code, and no per-file reason can say it.
         if priorities.allSatisfy({ $0.category == .generated }) {
-            result.append("Every changed file is generated or vendored (a lockfile, a snapshot or a bundle).")
+            result.append(.everyFileGenerated)
         }
         for priority in priorities {
             guard result.count < limit else { break }
-            let notes = priority.reasons.filter { $0 != priority.category.reasonLabel }
+            let notes = priority.reasons.filter { !$0.isCategory }
             guard !notes.isEmpty else { continue }
-            result.append("\(priority.file.path) — \(notes.joined(separator: ", "))")
+            result.append(.file(path: priority.file.path, reasons: notes))
         }
         return result
+    }
+
+    /// The tier-1 risk hints as the English lines the triage prompt carries.
+    /// - Parameters:
+    ///   - files: The changed files.
+    ///   - limit: How many lines at most. Defaults to ``maximumHints``.
+    /// - Returns: ``riskHints(for:limit:)``, each as its ``TriageRiskHint/englishText``.
+    public static func hints(for files: [ChangedFile], limit: Int = TriageRiskHints.maximumHints) -> [String] {
+        riskHints(for: files, limit: limit).map(\.englishText)
     }
 
     /// The risk level Shepherd assigns without a model.
