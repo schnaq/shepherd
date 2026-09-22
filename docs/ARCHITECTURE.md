@@ -963,6 +963,18 @@ verdict is the same value it was. The card's whole visible share of it is a `Rea
 chip on those lines and one caption (`Read on-device`, or a spinner while reading). Nothing is
 persisted, nothing is reported when the model is absent or declines, and nothing acts.
 
+**Look closer** (ADR 0026's 2026-09-22 amendment, ADR 0038 item 2) is the one *asked-for* model
+surface on the card. `ClaimChecking` is `ClaimExtracting`'s sibling and
+`Intelligence/OnDeviceClaimChecker.swift` its one implementation: a `LanguageModelSession(profile:)`
+whose `ClaimCheckProfile` sets `.toolCallingMode` from a `Mutex`-backed read counter —
+`.required` before the first read, `.allowed` below three, `.disallowed` after — over the CI
+diagnosis's three tools (`OnDeviceToolBridge`, `LocalToolExecutor`). The `@Generable` answer is
+path / excerpt / sentence, and `ShepherdCore`'s `ClaimCheck.verified(_:in:)` keeps only notes
+whose excerpt `DiffExcerpt.locate(_:inPatch:)` finds on consecutive lines of that file's patch.
+`ClaimsEvidenceModel.check(_:)` runs it for a ✗ or ? line on the click, keeps the result per line
+id in `checks` until the detail changes, and `ClaimCheckBlock` draws the notes tagged, with
+`CIDiagnosisTraceView` for the reads. `AppEnvironment.claimChecker` is `nil` while the tiers are off.
+
 ### The issues a pull request closes, and the state of the pull requests an issue has (ADR 0032)
 
 `Features/PullRequest/ClosingIssuesCard.swift` is the **"Closes" section**, above the description

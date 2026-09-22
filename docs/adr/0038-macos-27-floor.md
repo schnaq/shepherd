@@ -47,6 +47,11 @@ floor is a SwiftPM concern and it keeps `swift test` green on Linux.
    `onToolCall` for the audit line, and `PrivateCloudComputeLanguageModel` with
    `ContextOptions(reasoningLevel:)` when the diff exceeds the on-device window. Everything ADR 0007
    says about tiers, budgets and drafts-not-submissions holds unchanged.
+   *Landed 2026-09-22 narrower than written, as [ADR 0026](0026-claims-vs-evidence.md)'s
+   amendment of that date records:* *Look closer* on one ✗ or ? line, on-device only, answering
+   with excerpts Shepherd locates in the patch rather than a check. No PCC — availability says yes
+   and the first request fails without the App Store entitlement — and no Spotlight tool, because
+   the index holds only open pull requests' titles and labels.
 
 3. **Siri acts on Shepherd's notifications.** `appEntityIdentifiers` on the check-and-review
    notifications (the `_UserNotifications_AppIntents` overlay), `IndexedEntityQuery` so Siri's

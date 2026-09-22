@@ -340,3 +340,47 @@ What this does **not** do is act, rank or judge. No verdict is formed, nothing i
 nothing is fetched that was not fetched before, and the card the reviewer lands on is the same
 card with the same absent score. The only thing that moved is which half of the screen is in
 front of them when the pull request opens.
+
+## Amendment (2026-09-22): *Look closer* — the model reads the diff for one line, and points
+
+[ADR 0038](0038-macos-27-floor.md)'s item 2 asked for "the reviewer that reads the diff": a
+session with tools that checks a claim. Read against this ADR, most of that sentence is
+forbidden and should stay so — a model **checking** a claim is a model issuing a verdict, and a
+verdict beside a claim is the trust score the Context section refuses. What survives, and what
+landed, is narrower and inside the decision above:
+
+- **One click on one line.** A ✗ or ? line gets a *Look closer* button once the on-device model
+  says it is there; a ✓ line does not, because it already carries the facts that support it. The
+  click starts one session for that line and detail; nothing starts one on expansion, sweep or
+  scroll. This is the first surface of the card that is *asked for*, which is what lets a failure
+  be said out loud — the tier-2 extraction above stays silent because nobody asked it anything.
+- **Pointers, not a verdict.** The session answers with at most four places in the diff: a file,
+  one to three lines copied from it, and one sentence. `ShepherdCore/Claims/ClaimCheck.swift`'s
+  `DiffExcerpt.locate(_:inPatch:)` looks for every excerpt on consecutive lines of that file's
+  patch — markers ignored, whitespace folded, case kept — and `ClaimCheck.verified(_:in:)` drops
+  every note it cannot find, exactly as `ClaimList.quoted(in:)` drops a quote the author did not
+  write. The line's ✓ / ✗ / ? is still `EvidenceChecker`'s; the block under it is tagged *Read by
+  the model on this Mac*; the schema has no status and no confidence field.
+- **The reads are shown.** The tools are the three the CI diagnosis already uses, over the same
+  `LocalToolExecutor`, and the block renders the same `CIDiagnosisTraceView`: every read, verbatim.
+- **On-device only, as unreachability.** `Intelligence/ClaimChecking.swift` is
+  `ClaimExtracting`'s sibling: its one conformer, `OnDeviceClaimChecker`, takes no router, base
+  URL or key, and `IntelligenceProvider` gains no request. The claim is a colleague's sentence, for
+  the reason the Tiers section gives. A claim and its context that do not fit the window are a
+  sentence on the card, not a cloud rung.
+- **What macOS 27 adds.** The session is built from a `LanguageModelSession.DynamicProfile` whose
+  tool-calling mode is a function of the reads so far: `.required` before the first, `.allowed`
+  below three, `.disallowed` after. The first turn therefore always reads the diff — a guarantee,
+  not a request in the instructions. `.required` for the whole session never ends; the spike on
+  2026-09-22 showed the model calling the tool on every turn.
+- **Nothing is stored and nothing acts.** Results live as long as the review screen and the
+  detail they were read from; a new head forgets them. The block has one link per note, into the
+  diff, and no path into the summary composer — *Turn into a comment* still writes only
+  Shepherd's own facts.
+
+Two things ADR 0038's item 2 named are **not** part of this, for reasons found the same day:
+Private Cloud Compute answers `availability == .available` to a Developer-ID build and then
+fails the first request (`ModelManagerError 1046`), so [ADR 0025](0025-private-cloud-compute.md)
+stays parked on its entitlement condition; and `SpotlightSearchTool` over Shepherd's own index
+would search titles, labels and authors of open pull requests only (`SpotlightExport`), which
+the app can do without a model.
