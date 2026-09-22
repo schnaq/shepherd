@@ -57,6 +57,15 @@ enum RowWriteState: Equatable, Sendable {
         return waiting.isEmpty ? nil : .queued(waiting.count)
     }
 
+    /// Whether a merge is being sent, is queued or has landed — a state in which pressing Merge
+    /// again could only queue a merge GitHub would refuse.
+    var isMergeOnItsWay: Bool {
+        switch self {
+        case .merging, .mergeQueued, .merged: return true
+        case .failed, .parked, .queued: return false
+        }
+    }
+
     /// The chip's words.
     var text: String {
         switch self {

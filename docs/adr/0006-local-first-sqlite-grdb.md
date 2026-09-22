@@ -121,5 +121,8 @@ read.
 - **A confirmed merge asks for one sweep**, three seconds later and coalesced across a drain that
   confirmed several, so the merged pull request leaves the inbox now instead of at the next
   scheduled sweep. The delay is for GitHub's search index, which the inbox query reads.
-- The review header's *Merge* is busy while the merge is written and disabled while one is queued
-  or confirmed, so a second press cannot queue a second merge behind the first.
+- **One merge per pull request.** `PullRequestActions.merge` — where the sheet, the `m` key, bulk
+  triage and the automatic rules all end — refuses a merge while `SignedInSession.hasMergeOnItsWay`
+  finds one queued, being sent or confirmed, and says so; the header's *Merge* and the `m` key follow
+  the same state. Without that, a second merge behind a landed one became a failed row whose
+  *Retry* could never succeed. The confirmed set lives on the session, so it ends with the account.
