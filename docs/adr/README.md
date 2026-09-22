@@ -44,6 +44,7 @@ founder interview (2026-08-31) combined with three research reports (see
 | 0036 | [Usage telemetry: anonymous by default, reach by consent, absent without a key](0036-usage-telemetry.md) | Accepted (v1.2) |
 | 0037 | [Merge when checks pass: a per-pull-request decision, fired by the sweep](0037-merge-when-checks-pass.md) | Accepted |
 | 0038 | [macOS 27 (Golden Gate) as the floor, and what it buys](0038-macos-27-floor.md) | Accepted |
+| 0039 | [Open in editor: a pull request's file, in your own clone, in your own editor](0039-open-in-editor.md) | Accepted |
 
 Format: lightweight [MADR](https://adr.github.io/madr/)-style — Context, Decision, Consequences.
 New decisions get the next number; superseded ADRs are marked, never deleted.
