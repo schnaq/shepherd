@@ -136,6 +136,23 @@ final class ClaimCheckTests: XCTestCase {
         XCTAssertEqual(ClaimCheck.verified([note(excerpt)], in: [file(patch: twice)]).first?.id, "Sources/Parser.swift:-1")
     }
 
+    func testAnExcerptSpanningABlankLineIsFound() {
+        let blank = "@@ -1,3 +1,4 @@\n func foo() {\n+\n+    return x\n }"
+        let excerpt = "func foo() {\n\n    return x"
+        XCTAssertEqual(DiffExcerpt.locate(excerpt, inPatch: blank)?.line, 1)
+    }
+
+    func testAMarkerThatIsCodeMatchesItselfBeforeAStrippedRow() {
+        let minus = "@@ -1,2 +1,2 @@\n+1\n+-1"
+        XCTAssertEqual(DiffExcerpt.locate("-1", inPatch: minus)?.line, 2)
+    }
+
+    func testAnExcerptNeverSpansTwoHunks() {
+        let two = "@@ -1,1 +1,1 @@\n-first()\n+first(1)\n@@ -40,1 +40,1 @@\n-second()\n+second(2)"
+        XCTAssertNil(DiffExcerpt.locate("first(1)\nsecond()", inPatch: two))
+        XCTAssertEqual(DiffExcerpt.locate("second(2)", inPatch: two)?.line, 40)
+    }
+
     func testAnEmptySentenceIsDropped() {
         XCTAssertTrue(ClaimCheck.verified([note("return AST(text)", sentence: "  ")], in: [file()]).isEmpty)
     }
