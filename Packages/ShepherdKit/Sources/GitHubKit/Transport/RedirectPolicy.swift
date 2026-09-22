@@ -1,4 +1,5 @@
 import Foundation
+import ShepherdCore
 
 #if canImport(FoundationNetworking)
 import FoundationNetworking
@@ -70,6 +71,19 @@ public enum RedirectPolicy {
     ///   - one: The first URL.
     ///   - other: The second URL.
     /// - Returns: `true` only when both name the same non-empty host.
+    /// Whether a redirect away from this URL must not be followed at all.
+    ///
+    /// A description screenshot (ADR 0038 item 4) is fetched from one of GitHub's upload hosts
+    /// and from nowhere else, so a redirect from one of them is refused rather than followed —
+    /// wherever it points, it is a host the reviewer's click did not agree to. The refused `3xx`
+    /// becomes the answer, which ``GitHubClient/descriptionImage(at:)`` reports as a failure.
+    /// - Parameter original: The URL the request was sent to.
+    /// - Returns: `true` when the request came from ``ShepherdCore/DescriptionImages/downloadHosts``.
+    public static func refusesRedirect(from original: URL) -> Bool {
+        guard let host = original.host?.lowercased() else { return false }
+        return DescriptionImages.downloadHosts.contains(host)
+    }
+
     static func isSameHost(_ one: URL, _ other: URL) -> Bool {
         guard let first = one.host?.lowercased(), !first.isEmpty,
               let second = other.host?.lowercased(), !second.isEmpty
@@ -152,6 +166,10 @@ public final class RedirectStrippingDelegate: NSObject, URLSessionTaskDelegate {
         // happened to agree.
         guard let original = task.originalRequest else {
             completionHandler(request)
+            return
+        }
+        if let url = original.url, RedirectPolicy.refusesRedirect(from: url) {
+            completionHandler(nil)
             return
         }
         completionHandler(

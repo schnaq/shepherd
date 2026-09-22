@@ -39,14 +39,20 @@ public struct HTTPResponse: Sendable, Hashable {
     public var headers: [String: String]
     /// The response body. Empty for `204` and `304`.
     public var body: Data
+    /// The URL that actually answered, after any redirects the transport followed itself, or
+    /// `nil` when the transport cannot say (a test double). A read that must stay on a set of
+    /// hosts checks this, because `URLSession` follows a redirect before anybody sees it.
+    public var url: URL?
 
     /// Creates a response.
     /// - Parameters:
     ///   - statusCode: The HTTP status code.
     ///   - headers: Response headers; keys are lowercased on the way in.
     ///   - body: The response body.
-    public init(statusCode: Int, headers: [String: String] = [:], body: Data = Data()) {
+    ///   - url: The URL that answered, when known.
+    public init(statusCode: Int, headers: [String: String] = [:], body: Data = Data(), url: URL? = nil) {
         self.statusCode = statusCode
+        self.url = url
         var lowercased: [String: String] = [:]
         lowercased.reserveCapacity(headers.count)
         for (key, value) in headers {
@@ -186,7 +192,8 @@ extension URLSessionTransport: HTTPTransport {
                         returning: HTTPResponse(
                             statusCode: http.statusCode,
                             headers: headers,
-                            body: data ?? Data()
+                            body: data ?? Data(),
+                            url: http.url
                         )
                     )
                 }
