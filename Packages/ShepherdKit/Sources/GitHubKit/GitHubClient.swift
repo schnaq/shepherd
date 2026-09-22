@@ -745,6 +745,75 @@ public actor GitHubClient {
         return response
     }
 
+    // MARK: - Description screenshots (ADR 0038 item 4)
+
+    /// The most bytes one description screenshot may have before it is refused.
+    ///
+    /// Eight megabytes covers a full-resolution Retina capture as PNG with room to spare; the model
+    /// reads it downscaled to 1,024 pixels either way, so anything larger is bytes downloaded to be
+    /// thrown away. A refusal rather than a prefix, because half a PNG does not decode.
+    public static let maximumDescriptionImageBytes = 8 * 1024 * 1024
+
+    /// GitHub's HTML rendering of a pull request's description, in which every upload is a
+    /// short-lived signed link (ADR 0038 item 4).
+    ///
+    /// The same `GET /repos/{owner}/{repo}/pulls/{number}` the detail read makes, on the same host
+    /// with the same token, asked for `application/vnd.github.html+json` instead. **Not
+    /// ETag-cached**: the links in it expire within minutes, so a replayed `304` would hand back
+    /// links that no longer open — and the JSON response's cache row, which shares this URL, is
+    /// left alone.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - number: The pull request number.
+    /// - Returns: The rendered description; empty when it has none.
+    public func pullRequestBodyHTML(repo: RepoRef, number: Int) async throws -> String {
+        let response = try await performREST(
+            method: "GET",
+            path: "/repos/\(repo.owner)/\(repo.name)/pulls/\(number)",
+            queryItems: [],
+            body: nil,
+            useCache: false,
+            resource: "\(repo.fullName)#\(number) description",
+            accept: "application/vnd.github.html+json"
+        )
+        let dto: RESTPullRequestBodyHTMLDTO = try RESTJSON.decode(response.body)
+        return dto.bodyHtml ?? ""
+    }
+
+    /// Downloads one description screenshot from its signed link (ADR 0038 item 4).
+    ///
+    /// One plain `GET` with **no `Authorization` header**: the link carries its own signature, and
+    /// ``ShepherdCore/DescriptionImages/isDownloadable(_:)`` is asked again here so that only
+    /// GitHub's two upload hosts are ever contacted, whatever handed this method the URL. No cache
+    /// and no retry, the job log's shape (``performLogRequest(url:authorized:resource:)``).
+    /// - Parameter url: A link from ``ShepherdCore/DescriptionImages/signedSources(for:inBodyHTML:)``.
+    /// - Returns: The image's bytes.
+    /// - Throws: ``GitHubError/invalidURL(_:)`` for a link on any other host,
+    ///   ``GitHubError/responseTooLarge(resource:bytes:limit:)`` past
+    ///   ``maximumDescriptionImageBytes``, ``GitHubError/decoding(message:)`` when the answer is not
+    ///   an image, or the status's own ``GitHubError``.
+    public func descriptionImage(at url: URL) async throws -> Data {
+        guard DescriptionImages.isDownloadable(url) else {
+            throw GitHubError.invalidURL(url.host ?? url.absoluteString)
+        }
+        let resource = "description screenshot \(url.lastPathComponent)"
+        let response = try await performLogRequest(url: url, authorized: false, resource: resource)
+        guard response.isSuccess else {
+            throw Self.mapFailure(response, resource: resource, now: now())
+        }
+        guard response.body.count <= Self.maximumDescriptionImageBytes else {
+            throw GitHubError.responseTooLarge(
+                resource: resource,
+                bytes: response.body.count,
+                limit: Self.maximumDescriptionImageBytes
+            )
+        }
+        guard response.header("content-type")?.lowercased().hasPrefix("image/") == true else {
+            throw GitHubError.decoding(message: "\(resource) is not an image")
+        }
+        return response.body
+    }
+
     /// Fetches the review threads of a pull request, following pagination.
     ///
     /// GraphQL-only: thread ids do not exist in REST, and without them threads cannot be
@@ -1312,7 +1381,8 @@ public actor GitHubClient {
         body: Data?,
         useCache: Bool,
         resource: String,
-        extraHeaders: [String: String] = [:]
+        extraHeaders: [String: String] = [:],
+        accept: String = "application/vnd.github+json"
     ) async throws -> HTTPResponse {
         guard var components = URLComponents(
             url: configuration.apiBaseURL,
@@ -1331,7 +1401,7 @@ public actor GitHubClient {
             method: method,
             url: url,
             body: body,
-            accept: "application/vnd.github+json",
+            accept: accept,
             useCache: useCache,
             resource: resource,
             extraHeaders: extraHeaders,

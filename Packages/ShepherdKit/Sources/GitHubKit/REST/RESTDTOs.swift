@@ -19,6 +19,12 @@ struct RESTRepositoryDTO: Decodable {
     var owner: RESTUserDTO?
 }
 
+/// `GET /repos/{owner}/{repo}/pulls/{number}` with `Accept: application/vnd.github.html+json`:
+/// the one field the description-screenshot read wants (ADR 0038 item 4).
+struct RESTPullRequestBodyHTMLDTO: Decodable {
+    var bodyHtml: String?
+}
+
 /// `GET /repos/{owner}/{repo}/pulls/{number}`.
 struct RESTPullRequestDTO: Decodable {
     struct Ref: Decodable {
