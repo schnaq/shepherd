@@ -226,7 +226,8 @@ enum EditorLauncher {
     /// rather than the empty string, because `code --goto path:` and `subl path:` read an empty
     /// line differently and "the top of the file" is what every editor agrees `1` means.
     ///
-    /// The first word must be a path. A bare `code` is refused rather than looked up: an app
+    /// The first word must be an absolute path (or start with `~`). A bare `code` — or a relative
+    /// `bin/code` — is refused rather than looked up: an app
     /// started from the Dock inherits launchd's minimal `PATH`, so the lookup would find a
     /// different `code` than the user's terminal does — or none — and guessing at a program name
     /// would run something the user did not name. That is ADR 0030's rule for the session
@@ -252,7 +253,9 @@ enum EditorLauncher {
             )
         }
         guard let binary = words.first, !binary.isEmpty else { throw Failure.emptyTemplate }
-        guard binary.contains("/") || binary.hasPrefix("~") else {
+        // Absolute or home-relative only: `bin/code` or `../code` would resolve against
+        // whatever the app's working directory happens to be, which is guessing too.
+        guard binary.hasPrefix("/") || binary.hasPrefix("~") else {
             throw Failure.bareExecutable(binary)
         }
         let lineText = String(line.flatMap { $0 > 0 ? $0 : nil } ?? 1)
