@@ -23,19 +23,29 @@ public struct ClaimCheck: Sendable, Hashable {
         /// The head-side line the excerpt starts at, or `nil` when that line was removed or the
         /// note has not been located yet.
         public var line: Int?
+        /// The base-side line the excerpt starts at, once located — what tells two removed lines
+        /// apart, since neither has a head-side line.
+        public var baseLine: Int?
 
-        public init(path: String, excerpt: String, sentence: String, line: Int? = nil) {
+        public init(
+            path: String,
+            excerpt: String,
+            sentence: String,
+            line: Int? = nil,
+            baseLine: Int? = nil
+        ) {
             self.path = path
             self.excerpt = excerpt
             self.sentence = sentence
             self.line = line
+            self.baseLine = baseLine
         }
 
-        /// The file and line, or the file and the excerpt's first line for a removal — two notes
-        /// about one place are one note.
+        /// The place in the file: two notes about one place are one note, however the model
+        /// spelled the excerpt.
         public var id: String {
             if let line { return "\(path):\(line)" }
-            return "\(path):-:\(DiffExcerpt.lines(of: excerpt).first ?? "")"
+            return "\(path):-\(baseLine ?? 0)"
         }
     }
 
@@ -77,7 +87,8 @@ public struct ClaimCheck: Sendable, Hashable {
                 path: file.path,
                 excerpt: DiffExcerpt.lines(of: note.excerpt).joined(separator: "\n"),
                 sentence: sentence,
-                line: location.line
+                line: location.line,
+                baseLine: location.baseLine
             )
             guard seen.insert(located.id).inserted else { continue }
             kept.append(located)
@@ -98,9 +109,13 @@ public enum DiffExcerpt {
     public struct Location: Sendable, Hashable {
         /// The head-side line of the first excerpt line, `nil` when it was removed.
         public var line: Int?
+        /// The base-side line of the first excerpt line (for an added line, the base line it was
+        /// inserted before).
+        public var baseLine: Int
 
-        public init(line: Int?) {
+        public init(line: Int?, baseLine: Int) {
             self.line = line
+            self.baseLine = baseLine
         }
 
         /// Whether the first excerpt line is a removed line.
@@ -124,7 +139,10 @@ public enum DiffExcerpt {
             }
             if matches {
                 let first = rows[start]
-                return Location(line: first.kind == .removed ? nil : first.headLine)
+                return Location(
+                    line: first.kind == .removed ? nil : first.headLine,
+                    baseLine: first.baseLine
+                )
             }
         }
         return nil
