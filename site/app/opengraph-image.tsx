@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "Shepherd: a native macOS review inbox for pull requests from coding agents";
+export const alt = "Shepherd: a native macOS review inbox for the pull request flood";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 

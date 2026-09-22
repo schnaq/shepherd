@@ -4,8 +4,8 @@ export function Fact() {
       <div className="wrap">
         <p>
           In a study of 33,596 pull requests written by coding agents, <strong>61 percent</strong> had
-          no recorded human review at all. Review tools were built for a world where a person wrote
-          every change. Shepherd is built for the one where they don&rsquo;t.
+          no recorded human review at all. Review tools were built for a handful of pull requests a
+          week. Shepherd is built for the flood.
         </p>
         <cite>
           &ldquo;These Aren&rsquo;t the Reviews You&rsquo;re Looking For&rdquo;,{" "}

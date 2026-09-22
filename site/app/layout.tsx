@@ -12,11 +12,11 @@ const display = Bricolage_Grotesque({
 const SITE = "https://shepherd.schnaq.com";
 const TITLE = "Shepherd";
 const DESCRIPTION =
-  "A native macOS review inbox for pull requests from coding agents. Triage, review and merge from the keyboard, across every repository, with your data on your Mac.";
+  "A native macOS inbox for the pull request flood. Triage, review and merge from the keyboard, across every repository, with your data on your Mac.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),
-  title: { default: `${TITLE}: a review inbox for agent pull requests`, template: `%s · ${TITLE}` },
+  title: { default: `${TITLE}: a review inbox for the pull request flood`, template: `%s · ${TITLE}` },
   description: DESCRIPTION,
   applicationName: TITLE,
   keywords: ["pull request", "code review", "macOS", "Claude Code", "Copilot", "Codex", "GitHub"],
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     type: "website",
     url: SITE,
     siteName: TITLE,
-    title: `${TITLE}: a review inbox for agent pull requests`,
+    title: `${TITLE}: a review inbox for the pull request flood`,
     description: DESCRIPTION,
     locale: "en",
   },

@@ -18,35 +18,29 @@ type Row = {
 
 type Section = { name: string; color: string; rows: Row[] };
 
-/** The inbox as the app draws it: grouped by who wrote the change, CI and review state per row. */
+/** The inbox as the app draws it: grouped by repository, CI and review state per row. */
 const SECTIONS: Section[] = [
   {
-    name: "Claude Code",
+    name: "schnaq/konduit",
     color: "#8b74d9",
     rows: [
       { repo: "schnaq/konduit", number: 412, title: "Retry the auth suite when the token refresh races", author: "Claude Code", agent: true, ci: "green", status: "Approved", statusKind: "ok", added: 48, removed: 12, age: "2 h" },
-      { repo: "schnaq/shepherd", number: 388, title: "Keep the appcast on the latest release", author: "Claude Code", agent: true, ci: "amber", status: "CI running", added: 19, removed: 4, age: "3 h" },
-    ],
-  },
-  {
-    name: "GitHub Copilot",
-    color: "#6e9df2",
-    rows: [
-      { repo: "schnaq/unlock", number: 77, title: "Bump stripe-node to 14.2", author: "Copilot", agent: true, ci: "green", status: "Review requested", added: 2, removed: 2, age: "5 h" },
-    ],
-  },
-  {
-    name: "Codex",
-    color: "#d9a13c",
-    rows: [
       { repo: "schnaq/konduit", number: 915, title: "Extract the rate limiter into middleware", author: "Codex", agent: true, ci: "red", status: "1 check failing", statusKind: "fail", added: 210, removed: 96, age: "1 d" },
     ],
   },
   {
-    name: "People",
+    name: "schnaq/shepherd",
+    color: "#6e9df2",
+    rows: [
+      { repo: "schnaq/shepherd", number: 388, title: "Keep the appcast on the latest release", author: "Claude Code", agent: true, ci: "amber", status: "CI running", added: 19, removed: 4, age: "3 h" },
+      { repo: "schnaq/shepherd", number: 131, title: "Fix smart light example; fix attribute access", author: "mara", agent: false, ci: "green", status: "Review requested", added: 8, removed: 5, age: "1 d" },
+    ],
+  },
+  {
+    name: "schnaq/unlock",
     color: "#4cc38a",
     rows: [
-      { repo: "schnaq/shepherd", number: 131, title: "Fix smart light example; fix attribute access", author: "mara", agent: false, ci: "green", status: "Review requested", added: 8, removed: 5, age: "1 d" },
+      { repo: "schnaq/unlock", number: 77, title: "Bump stripe-node to 14.2", author: "Copilot", agent: true, ci: "green", status: "Review requested", added: 2, removed: 2, age: "5 h" },
     ],
   },
 ];
@@ -108,7 +102,7 @@ export function InboxDemo() {
   return (
     <>
     <p className="visually-hidden">
-      An example of the inbox: five pull requests grouped by who wrote them, with the CI state,
+      An example of the inbox: five pull requests grouped by repository, with the CI state,
       the review state and the size of the diff on every row. Press j and k to move the selection.
     </p>
     <div className="inbox" aria-hidden="true" ref={container}>
@@ -131,12 +125,16 @@ export function InboxDemo() {
                 return (
                   <li key={`${row.repo}#${row.number}`} className="row" data-selected={isSelected ? "true" : undefined}>
                     <span className={`dot dot-${row.ci}`} aria-hidden="true" />
+                    {/* Two lines, as in the app: the title is the row's sentence, and what it
+                        is about goes on the line under it. */}
                     <span className="row-main">
-                      <span className="row-ref">{row.repo.split("/")[1]} #{row.number}</span>
                       <span className="row-title">{row.title}</span>
+                      <span className="row-meta">
+                        <span className="row-ref">{row.repo.split("/")[1]} #{row.number}</span>
+                        <span className={`chip ${row.agent ? "chip-agent" : "chip-human"}`}>{row.author}</span>
+                      </span>
                     </span>
                     <span className="row-side">
-                      <span className={`chip ${row.agent ? "chip-agent" : "chip-human"}`}>{row.author}</span>
                       <span className={`chip ${row.statusKind ? `chip-${row.statusKind}` : ""}`}>{row.status}</span>
                       <span className="diff"><b>+{row.added}</b> <s>&minus;{row.removed}</s></span>
                       <span className="age">{row.age}</span>

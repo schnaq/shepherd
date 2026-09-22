@@ -25,7 +25,7 @@ export function Screens() {
             sizes="(max-width: 1100px) 100vw, 1100px"
           />
           <figcaption>
-            The inbox. Grouped by who wrote the change, with CI, review state and diff size on every
+            The inbox. Grouped by repository, review state or source, with CI and diff size on every
             row, and an on-device summary in the panel. Shepherd speaks English and German; both
             screenshots show the German side.
           </figcaption>

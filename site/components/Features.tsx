@@ -14,12 +14,12 @@ const GROUPS: Group[] = [
   },
   {
     name: "Triage",
-    summary: "Who wrote it is a fact, not a guess.",
+    summary: "Get through the pile, not just to it.",
     items: [
-      { lead: "Agent provenance.", rest: "Claude Code, Copilot, Codex, Devin, Cursor or a person, detected on every row and usable as a filter next to repository and review state." },
-      { lead: "Claims beside the evidence.", rest: "What the description says it did, from tests added to fixes #142, next to what the diff and CI actually show. Look closer lets the on-device model point at the lines behind a claim; Shepherd finds every excerpt in the diff itself." },
-      { lead: "Bulk triage.", rest: "Tick the green agent pull requests and approve or merge them behind one confirmation that lists what it will skip, and why." },
+            { lead: "Claims beside the evidence.", rest: "What the description says it did, from tests added to fixes #142, next to what the diff and CI actually show. Look closer lets the on-device model point at the lines behind a claim; Shepherd finds every excerpt in the diff itself." },
+      { lead: "Bulk triage.", rest: "Tick the green ones and approve or merge them behind one confirmation that lists what it will skip, and why." },
       { lead: "Search that understands.", rest: "Type what a pull request is about. On-device embeddings of titles, labels, branches and the diffs you have opened, never sent anywhere." },
+      { lead: "Where it came from.", rest: "Claude Code, Copilot, Codex, Devin, Cursor or a colleague, detected on every row and usable as a filter next to repository and review state." },
       { lead: "The fleet.", rest: "What became of every agent's pull requests: merged, closed, reverted, rounds of changes. Counts, never a score." },
     ],
   },
