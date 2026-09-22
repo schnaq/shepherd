@@ -726,10 +726,10 @@ enum IntelligencePrompt {
             return text
         }
         text += "\n\nChanged files. Only these paths can be read:"
-        for path in request.changedFilePaths.prefix(CIDiagnosisRequest.maximumListedPaths) {
+        for path in request.changedFilePaths.prefix(IntelligenceToolRegistry.maximumListedPaths) {
             text += "\n- \(path)"
         }
-        let overflow = request.changedFilePaths.count - CIDiagnosisRequest.maximumListedPaths
+        let overflow = request.changedFilePaths.count - IntelligenceToolRegistry.maximumListedPaths
         if overflow > 0 {
             text += "\n- (and \(overflow) more files, not listed here)"
         }

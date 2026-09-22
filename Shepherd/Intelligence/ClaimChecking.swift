@@ -19,7 +19,7 @@ import ShepherdCore
 /// ✓ / ✗ / ? stays ``EvidenceChecker``'s.
 protocol ClaimChecking: Sendable {
     /// Whether this Mac can run the check, and why not when it cannot. Asked once per screen.
-    func availability() async -> ClaimExtractorAvailability
+    func availability() async -> OnDeviceAvailability
 
     /// Reads the diff for one claim.
     /// - Parameters:

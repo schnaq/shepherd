@@ -280,10 +280,10 @@ final class ClaimsEvidenceModel {
     @ObservationIgnored private var readTask: Task<Void, Never>?
 
     /// The model's answer about this Mac, once it has been asked.
-    @ObservationIgnored private var cachedAvailability: ClaimExtractorAvailability?
+    @ObservationIgnored private var cachedAvailability: OnDeviceAvailability?
 
     /// The ask itself while it is in flight, so two expansions ask once.
-    @ObservationIgnored private var availabilityTask: Task<ClaimExtractorAvailability, Never>?
+    @ObservationIgnored private var availabilityTask: Task<OnDeviceAvailability, Never>?
 
     /// The issue read, when one was injected at construction time.
     private let issues: (any IssueFetching)?
@@ -309,12 +309,13 @@ final class ClaimsEvidenceModel {
     /// of the card: nothing here is stored.
     private(set) var checks: [String: ClaimCheckState] = [:]
 
-    /// Whether this Mac can run *Look closer* — `false` until the checker said so.
-    private(set) var canCheckClaims = false
+    /// What the checker said about this Mac, `nil` until it was asked — the same one-optional
+    /// arrangement ``cachedAvailability`` uses for the extractor. Observed, because the answer
+    /// is what makes the *Look closer* buttons appear.
+    private var checkAvailability: OnDeviceAvailability?
 
     @ObservationIgnored private var checker: (any ClaimChecking)?
     @ObservationIgnored private var checkTasks: [String: Task<Void, Never>] = [:]
-    @ObservationIgnored private var askedCheckAvailability = false
 
     /// Creates a model.
     /// - Parameters:
@@ -346,10 +347,7 @@ final class ClaimsEvidenceModel {
         // Assigned before the guard: the reviewer can switch the tiers off while the same pull
         // request is on screen, and that has to reach the next expansion.
         self.extractor = extractor
-        if checker == nil {
-            canCheckClaims = false
-            askedCheckAvailability = false
-        }
+        if checker == nil { checkAvailability = nil }
         self.checker = checker
         guard builtFrom != detail else { return }
         let previous = builtFrom
@@ -741,20 +739,15 @@ enum ClaimCheckState: Equatable, Sendable {
 extension ClaimsEvidenceModel {
     /// Asks the checker once per screen whether this Mac can look closer.
     func prepareCheckAvailability() async {
-        guard let checker else {
-            canCheckClaims = false
-            return
-        }
-        guard !askedCheckAvailability else { return }
-        askedCheckAvailability = true
-        canCheckClaims = await checker.availability() == .available
+        guard let checker, checkAvailability == nil else { return }
+        checkAvailability = await checker.availability()
     }
 
     /// Whether *Look closer* is offered on this line: only where Shepherd's own evidence
     /// contradicts the claim or is not enough, because a ✓ line already carries the facts that
     /// support it, and only once per line and detail.
     func canCheck(_ line: ClaimsEvidenceReport.Line) -> Bool {
-        guard canCheckClaims, checker != nil, builtFrom != nil else { return false }
+        guard checkAvailability == .available, builtFrom != nil else { return false }
         guard line.verdict.status != .ok else { return false }
         switch checks[line.id] {
         case nil, .failed: return true

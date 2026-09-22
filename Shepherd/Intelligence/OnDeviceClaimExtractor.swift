@@ -131,7 +131,7 @@ struct OnDeviceClaimExtractor: ClaimExtracting {
     /// Creates an extractor. Nothing is loaded here — the model is reached on first use.
     init() {}
 
-    func availability() async -> ClaimExtractorAvailability {
+    func availability() async -> OnDeviceAvailability {
         // Asked of the tagging model specifically, which is the whole reason
         // `OnDeviceProvider.unavailabilityReason(for:)` takes a use case: the tagging model can
         // be ready while the general one is not, and vice versa.

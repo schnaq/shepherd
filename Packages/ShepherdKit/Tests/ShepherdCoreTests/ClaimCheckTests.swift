@@ -29,17 +29,17 @@ final class ClaimCheckTests: XCTestCase {
 
     func testAnAddedLineIsFoundAtItsHeadSideLine() {
         let location = DiffExcerpt.locate("func parse(_ text: String) -> AST {", inPatch: patch)
-        XCTAssertEqual(location, DiffExcerpt.Location(line: 11, isRemoval: false))
+        XCTAssertEqual(location, DiffExcerpt.Location(line: 11))
     }
 
     func testAContextLineIsFoundAtItsHeadSideLine() {
         let location = DiffExcerpt.locate("return AST(text)", inPatch: patch)
-        XCTAssertEqual(location, DiffExcerpt.Location(line: 13, isRemoval: false))
+        XCTAssertEqual(location, DiffExcerpt.Location(line: 13))
     }
 
     func testARemovedLineIsFoundWithoutAHeadLine() {
         let location = DiffExcerpt.locate("func parse(text: String) -> AST {", inPatch: patch)
-        XCTAssertEqual(location, DiffExcerpt.Location(line: nil, isRemoval: true))
+        XCTAssertEqual(location, DiffExcerpt.Location(line: nil))
     }
 
     func testConsecutiveLinesAreFoundTogether() {
@@ -63,7 +63,7 @@ final class ClaimCheckTests: XCTestCase {
             -    func parse(text: String) -> AST {
             +    func parse(_ text: String) -> AST {
             """
-        XCTAssertEqual(DiffExcerpt.locate(excerpt, inPatch: patch), DiffExcerpt.Location(line: nil, isRemoval: true))
+        XCTAssertEqual(DiffExcerpt.locate(excerpt, inPatch: patch), DiffExcerpt.Location(line: nil))
     }
 
     func testWhitespaceIsFoldedButCaseIsKept() {

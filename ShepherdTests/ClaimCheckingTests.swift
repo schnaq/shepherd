@@ -29,7 +29,7 @@ final class ClaimCheckingTests: XCTestCase {
 
         var callCount: Int { lineIDs.count }
 
-        func availability() async -> ClaimExtractorAvailability {
+        func availability() async -> OnDeviceAvailability {
             guard let availabilityReason else { return .available }
             return .unavailable(availabilityReason)
         }
