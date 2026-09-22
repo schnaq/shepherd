@@ -216,7 +216,7 @@ final class SignInModel {
         grant = nil
         step = .idle
         if error is CancellationError { return }
-        errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        errorMessage = error.userFacingDescription
     }
 
     private func reset() {

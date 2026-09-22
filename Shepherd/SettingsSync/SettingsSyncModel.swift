@@ -297,6 +297,6 @@ final class SettingsSyncModel {
 
     /// The user-facing text of an error, whatever kind it is.
     static func message(for error: any Error) -> String {
-        (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        error.userFacingDescription
     }
 }

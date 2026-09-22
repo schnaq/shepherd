@@ -70,6 +70,16 @@ final class InboxGrouperTests: XCTestCase {
             sections.map(\.title),
             ["Claude Code", "GitHub Copilot", "Bots", "People"]
         )
+        // The kind is what the app renders (ADR 0022): agents by name, the rest as closed cases.
+        XCTAssertEqual(
+            sections.map(\.kind),
+            [
+                .agent(displayName: "Claude Code"),
+                .agent(displayName: "GitHub Copilot"),
+                .bots,
+                .humans,
+            ]
+        )
         XCTAssertEqual(sections.map(\.count), [1, 1, 1, 1])
         XCTAssertTrue(sections.allSatisfy { $0.facet == .provenance })
     }
@@ -97,6 +107,13 @@ final class InboxGrouperTests: XCTestCase {
     func testGroupsByRepositoryAlphabetically() {
         let sections = InboxGrouper.group(sample(), by: .repository)
         XCTAssertEqual(sections.map(\.title), ["schnaq/other", "schnaq/review"])
+        XCTAssertEqual(
+            sections.map(\.kind),
+            [
+                .repository(RepoRef(owner: "schnaq", name: "other")),
+                .repository(RepoRef(owner: "schnaq", name: "review")),
+            ]
+        )
         XCTAssertEqual(sections.first?.count, 1)
         XCTAssertEqual(sections.last?.count, 3)
     }
@@ -108,6 +125,15 @@ final class InboxGrouperTests: XCTestCase {
         XCTAssertEqual(
             sections.map(\.title),
             ["Review required", "Changes requested", "Approved", "No review decision"]
+        )
+        XCTAssertEqual(
+            sections.map(\.kind),
+            [
+                .reviewDecision(.reviewRequired),
+                .reviewDecision(.changesRequested),
+                .reviewDecision(.approved),
+                .reviewDecision(nil),
+            ]
         )
         XCTAssertEqual(sections.first?.items.map(\.id), ["pr-human"])
         XCTAssertEqual(sections.last?.items.map(\.id), ["pr-bot"])

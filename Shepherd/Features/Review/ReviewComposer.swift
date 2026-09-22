@@ -959,8 +959,7 @@ struct InlineCommentComposer: View {
                 try await model.saveDraftComment(request, body: commentText)
                 dismiss()
             } catch {
-                errorMessage = (error as? LocalizedError)?.errorDescription
-                    ?? error.localizedDescription
+                errorMessage = error.userFacingDescription
             }
         }
     }
@@ -1068,8 +1067,7 @@ struct InlineCommentComposer: View {
         do {
             try await model.saveDraftComment(request, body: commentText)
         } catch {
-            errorMessage = (error as? LocalizedError)?.errorDescription
-                ?? error.localizedDescription
+            errorMessage = error.userFacingDescription
             return
         }
         dismiss()

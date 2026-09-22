@@ -398,3 +398,51 @@ final class ErrorMappingTests: XCTestCase {
         XCTAssertEqual(requests.count, 1)
     }
 }
+
+/// ``GitHubError/storageCode`` — the value the outbox's `lastErrorCode` column holds so the app can
+/// say a stored error in the user's language (ADR 0022, 2026-09-22 amendment).
+final class GitHubErrorStorageCodeTests: XCTestCase {
+    func testEveryShapeOfPayloadSurvivesTheRoundTrip() {
+        let errors: [GitHubError] = [
+            .invalidURL("not a url"),
+            .transport(message: "offline"),
+            .unauthorized,
+            .forbidden(message: "Resource not accessible by integration"),
+            .rateLimited(retryAfter: 42, resetAt: Date(timeIntervalSince1970: 1_788_162_000)),
+            .rateLimited(retryAfter: nil, resetAt: nil),
+            .notFound(resource: "schnaq/review#128"),
+            .validationFailed(message: "line not in diff"),
+            .notMergeable(message: "Pull Request is not mergeable"),
+            .staleHead(expected: "abc", actual: nil),
+            .conflict(message: "reference already exists"),
+            .graphQL(messages: ["one", "two"]),
+            .decoding(message: "keyNotFound"),
+            .responseTooLarge(resource: "log", bytes: 20_000_000, limit: 10_000_000),
+            .server(status: 502, message: "bad gateway"),
+            .deviceFlowDenied,
+            .deviceFlowExpired,
+            .deviceFlowError(code: "unsupported_grant_type", description: nil),
+            .tokenRefreshFailed(message: "bad_refresh_token"),
+            .missingToken(login: "octocat"),
+            .missingToken(login: nil),
+        ]
+        for error in errors {
+            XCTAssertEqual(GitHubError(storageCode: error.storageCode), error, "\(error)")
+        }
+    }
+
+    func testTheCodeIsKeyedByTheCaseNameSoItStaysReadableAcrossBuilds() {
+        // The contract the column relies on: the case name and its labels, nothing positional
+        // beyond the unlabelled `invalidURL`. A rename would change this string — and the test.
+        XCTAssertEqual(
+            GitHubError.server(status: 502, message: "bad gateway").storageCode,
+            #"{"server":{"message":"bad gateway","status":502}}"#
+        )
+    }
+
+    func testAStringNoBuildWroteDecodesToNothingRatherThanAGuess() {
+        XCTAssertNil(GitHubError(storageCode: ""))
+        XCTAssertNil(GitHubError(storageCode: "422 Unprocessable Entity"))
+        XCTAssertNil(GitHubError(storageCode: #"{"renamedCase":{}}"#))
+    }
+}

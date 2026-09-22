@@ -329,12 +329,14 @@ actor MarkRecordingStore: SyncStoring {
     func markOutboxItemFailed(
         id: UUID,
         error: String,
+        errorCode: String?,
         now: Date,
         retriable: Bool
     ) async throws {
         try await wrapped.markOutboxItemFailed(
             id: id,
             error: error,
+            errorCode: errorCode,
             now: now,
             retriable: retriable
         )

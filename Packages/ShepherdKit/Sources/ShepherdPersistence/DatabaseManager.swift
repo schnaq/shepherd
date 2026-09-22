@@ -62,6 +62,7 @@ public final class DatabaseManager: Sendable {
         migrator.registerMigration("v5", migrate: DatabaseSchema.addV5)
         migrator.registerMigration("v6", migrate: DatabaseSchema.addV6)
         migrator.registerMigration("v7", migrate: DatabaseSchema.addV7)
+        migrator.registerMigration("v8", migrate: DatabaseSchema.addV8)
         return migrator
     }
 
@@ -647,5 +648,22 @@ enum DatabaseSchema {
                 PRIMARY KEY (prID, issueRepoFullName, issueNumber)
             )
             """)
+    }
+
+    /// v8: `outbox.lastErrorCode`, the machine-readable twin of `lastError` (ADR 0022's
+    /// 2026-09-22 amendment).
+    ///
+    /// `lastError` holds an English sentence, because the sync engine lives in a Foundation-only
+    /// package that cannot call `String(localized:)`, and a German user reading Settings → Sync
+    /// was shown that sentence. A composed sentence cannot be translated after the fact, so the
+    /// row now also keeps the error it came from — a GitHub error's `storageCode`, the JSON of the
+    /// closed enum with its payload — and the app renders that in the user's language.
+    ///
+    /// **One nullable column, and nothing else changes.** Additive, so every existing row reads
+    /// back unchanged with `NULL` here and is displayed exactly as before, from `lastError`. A
+    /// column rather than a structured prefix inside `lastError`, because a prefix would put a
+    /// code into the text the log reads and make every reader of that column parse it.
+    static func addV8(_ db: Database) throws {
+        try db.execute(sql: "ALTER TABLE outbox ADD COLUMN lastErrorCode TEXT")
     }
 }

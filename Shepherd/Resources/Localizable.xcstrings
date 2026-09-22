@@ -17020,6 +17020,276 @@
           }
         }
       }
+    },
+    "%@ is %lld MB, more than the %lld MB Shepherd reads.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ist %lld MB groß – mehr als die %lld MB, die Shepherd liest."
+          }
+        }
+      }
+    },
+    "%@ was closed, but the comment could not be posted: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ wurde geschlossen, aber der Kommentar konnte nicht gepostet werden: %@"
+          }
+        }
+      }
+    },
+    "Authorisation was denied.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Autorisierung wurde abgelehnt."
+          }
+        }
+      }
+    },
+    "Conflict: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konflikt: %@"
+          }
+        }
+      }
+    },
+    "Could not build a valid URL from “%@”.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aus „%@“ ließ sich keine gültige URL bilden."
+          }
+        }
+      }
+    },
+    "Could not reach GitHub: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub ist nicht erreichbar: %@"
+          }
+        }
+      }
+    },
+    "Could not refresh the GitHub token: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das GitHub-Token konnte nicht erneuert werden: %@"
+          }
+        }
+      }
+    },
+    "GitHub refused the request: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub hat die Anfrage verweigert: %@"
+          }
+        }
+      }
+    },
+    "GitHub rejected the credentials. Sign in again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub hat die Anmeldedaten abgelehnt. Melde dich erneut an."
+          }
+        }
+      }
+    },
+    "GitHub rejected the data: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub hat die Daten abgelehnt: %@"
+          }
+        }
+      }
+    },
+    "GitHub returned %lld: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub antwortete mit %lld: %@"
+          }
+        }
+      }
+    },
+    "GraphQL error: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GraphQL-Fehler: %@"
+          }
+        }
+      }
+    },
+    "Issue sweep: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issue-Sweep: %@"
+          }
+        }
+      }
+    },
+    "No review decision": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Review-Entscheidung"
+          }
+        }
+      }
+    },
+    "No stored GitHub token.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kein gespeichertes GitHub-Token."
+          }
+        }
+      }
+    },
+    "No stored token for %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kein gespeichertes Token für %@."
+          }
+        }
+      }
+    },
+    "Not found: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht gefunden: %@"
+          }
+        }
+      }
+    },
+    "Rate limited by GitHub until %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub-Anfragelimit erreicht – wieder möglich ab %@."
+          }
+        }
+      }
+    },
+    "Rate limited by GitHub.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub-Anfragelimit erreicht."
+          }
+        }
+      }
+    },
+    "Rate limited by GitHub. Retry in %lld s.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub-Anfragelimit erreicht. Neuer Versuch in %lld s."
+          }
+        }
+      }
+    },
+    "Sign-in failed (%@).": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anmeldung fehlgeschlagen (%@)."
+          }
+        }
+      }
+    },
+    "The pull request moved on (expected %@, found %@).": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Pull Request hat sich weiterbewegt (erwartet %@, jetzt %@)."
+          }
+        }
+      }
+    },
+    "The pull request moved on (expected %@, found another commit).": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Pull Request hat sich weiterbewegt (erwartet %@, jetzt auf einem anderen Commit)."
+          }
+        }
+      }
+    },
+    "The sign-in code expired. Start again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Anmeldecode ist abgelaufen. Starte die Anmeldung erneut."
+          }
+        }
+      }
+    },
+    "This pull request cannot be merged: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Pull Request kann nicht gemergt werden: %@"
+          }
+        }
+      }
+    },
+    "This token cannot read GitHub notifications, so Shepherd keeps the inbox current with its regular sweep instead. (%@)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Token kann keine GitHub-Mitteilungen lesen, deshalb hält Shepherd die Inbox stattdessen mit dem regulären Sweep aktuell. (%@)"
+          }
+        }
+      }
+    },
+    "Unexpected response from GitHub: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unerwartete Antwort von GitHub: %@"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

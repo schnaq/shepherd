@@ -1134,6 +1134,33 @@ final class OutboxDrainTests: XCTestCase {
             return XCTFail("a 4xx is given up on rather than parked")
         }
         XCTAssertEqual(reason?.contains("line not in diff"), true)
+        // And beside the English, the typed error the app renders in German (ADR 0022).
+        XCTAssertEqual(
+            row?.lastErrorCode.flatMap(GitHubError.init(storageCode:)),
+            .validationFailed(message: "line not in diff")
+        )
+    }
+
+    func testAnOutboxFailureEventCarriesTheTypedErrorBesideItsEnglishSentence() async throws {
+        let github = MockGitHub()
+        await github.setHeadOid("head-1", repo: repo, number: 1)
+        await github.setSubmitError(.server(status: 502, message: "bad gateway"))
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(.submitReview(draft(headOid: "head-1")), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        let emitted = await drainCollectingEvents(engine)
+
+        let failure = try XCTUnwrap(
+            emitted.lazy.compactMap { event -> SyncFailure? in
+                if case .syncFailed(let failure) = event { return failure }
+                return nil
+            }.first
+        )
+        XCTAssertEqual(failure.stage, .outbox)
+        XCTAssertEqual(failure.message, "GitHub returned 502: bad gateway")
+        XCTAssertEqual(failure.error, .server(status: 502, message: "bad gateway"))
+        XCTAssertEqual(failure.context, SyncFailure.Context.none)
     }
 
     func testARetryableFailureReadsBackAsStillQueued() async throws {

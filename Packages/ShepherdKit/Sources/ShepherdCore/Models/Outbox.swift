@@ -482,8 +482,17 @@ public struct OutboxItem: Sendable, Codable, Hashable, Identifiable {
     public var attemptCount: Int
     /// The earliest moment the next attempt may be made.
     public var nextAttemptAt: Date
-    /// The last error message, for the UI and the log.
+    /// The last error message, in English, for the log — and for the UI only when
+    /// ``lastErrorCode`` has nothing the app can read.
     public var lastError: String?
+    /// The same error as a stable machine-readable string, when it had one.
+    ///
+    /// Opaque to this package: the sync engine writes a GitHub error's `storageCode` here, and
+    /// the app decodes it back and says it in the user's language (ADR 0022, 2026-09-22
+    /// amendment). `ShepherdCore` cannot hold the typed error itself — `GitHubKit` depends on it,
+    /// not the other way round — and cannot call `String(localized:)` either, which is why the
+    /// English sentence beside it can never be translated after the fact.
+    public var lastErrorCode: String?
     /// The row's lifecycle state.
     public var state: OutboxState
 
@@ -498,6 +507,7 @@ public struct OutboxItem: Sendable, Codable, Hashable, Identifiable {
         attemptCount: Int = 0,
         nextAttemptAt: Date = Date(timeIntervalSince1970: 0),
         lastError: String? = nil,
+        lastErrorCode: String? = nil,
         state: OutboxState = .pending
     ) {
         self.id = id
@@ -509,6 +519,7 @@ public struct OutboxItem: Sendable, Codable, Hashable, Identifiable {
         self.attemptCount = attemptCount
         self.nextAttemptAt = nextAttemptAt
         self.lastError = lastError
+        self.lastErrorCode = lastErrorCode
         self.state = state
     }
 }

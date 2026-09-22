@@ -508,7 +508,9 @@ final class SystemIntegrationTests: XCTestCase {
 
     func testAHumanAuthoredPullRequestSaysSoRatherThanNamingNoAgent() {
         let entity = PullRequestEntity(pullRequest: summary(id: "PR_1", number: 1, title: "T"))
-        XCTAssertEqual(entity.provenance, "People")
+        // The rail's and the section header's word, not ShepherdCore's English "People"
+        // (ADR 0022, 2026-09-22 amendment). Tests run in English.
+        XCTAssertEqual(entity.provenance, "Humans")
     }
 
     // MARK: - Siri and Apple Intelligence (ADR 0021's 2026-09-22 amendment)

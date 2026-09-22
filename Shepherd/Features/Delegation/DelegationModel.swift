@@ -474,7 +474,7 @@ final class DelegationModel: Identifiable {
 
     private func fail(with error: any Error) {
         stopTimer()
-        let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        let message = error.userFacingDescription
         state = .failed(message: message)
         append(.note, message)
         announce(.failed, message: message)

@@ -276,7 +276,7 @@ public actor SyncEngine {
             } catch is CancellationError {
                 return
             } catch {
-                emit(.syncFailed(SyncFailure(stage: .sweep, message: describe(error))))
+                emit(.syncFailed(Self.failure(.sweep, error)))
                 interval = max(interval, configuration.failureBackoff)
             }
             await drainOutbox()
@@ -345,11 +345,20 @@ public actor SyncEngine {
                 // long as the app runs, so the loop says it once and ends. The sweep, which is
                 // what the inbox is actually built from, keeps running.
                 let message = "This token cannot read GitHub notifications, so Shepherd keeps "
-                    + "the inbox current with its regular sweep instead. (\(describe(error)))"
-                emit(.syncFailed(SyncFailure(stage: .notifications, message: message)))
+                    + "the inbox current with its regular sweep instead. (\(Self.describe(error)))"
+                emit(
+                    .syncFailed(
+                        Self.failure(
+                            .notifications,
+                            error,
+                            context: .notificationsUnavailable,
+                            message: message
+                        )
+                    )
+                )
                 return
             } catch {
-                emit(.syncFailed(SyncFailure(stage: .notifications, message: describe(error))))
+                emit(.syncFailed(Self.failure(.notifications, error)))
                 interval = max(interval, configuration.failureBackoff)
             }
             do {
@@ -573,9 +582,11 @@ public actor SyncEngine {
                         } catch is CancellationError {
                             return nil
                         } catch {
-                            return SyncFailure(
-                                stage: .detail,
-                                message: "\(summary.slug): \(String(describing: error))"
+                            return SyncEngine.failure(
+                                .detail,
+                                error,
+                                context: .pullRequestDetail(slug: summary.slug),
+                                message: "\(summary.slug): \(SyncEngine.describe(error))"
                             )
                         }
                     }
@@ -734,7 +745,12 @@ public actor SyncEngine {
         } catch {
             emit(
                 .syncFailed(
-                    SyncFailure(stage: .sweep, message: "issue sweep: \(describe(error))")
+                    Self.failure(
+                        .sweep,
+                        error,
+                        context: .issueSweep,
+                        message: "issue sweep: \(Self.describe(error))"
+                    )
                 )
             )
             return IssueSweepDelta()
@@ -915,7 +931,7 @@ public actor SyncEngine {
                 limit: configuration.outboxBatchSize
             )
         } catch {
-            emit(.syncFailed(SyncFailure(stage: .outbox, message: describe(error))))
+            emit(.syncFailed(Self.failure(.outbox, error)))
             return
         }
 
@@ -959,11 +975,14 @@ public actor SyncEngine {
             } catch {
                 try? await store.markOutboxItemFailed(
                     id: item.id,
-                    error: describe(error),
+                    error: Self.describe(error),
+                    // Not a GitHub error, so there is no typed reading to store: the English
+                    // text is all this row can say.
+                    errorCode: nil,
                     now: now(),
                     retriable: true
                 )
-                emit(.syncFailed(SyncFailure(stage: .outbox, message: describe(error))))
+                emit(.syncFailed(Self.failure(.outbox, error)))
             }
         }
 
@@ -1013,11 +1032,12 @@ public actor SyncEngine {
         }
         try? await store.markOutboxItemFailed(
             id: item.id,
-            error: describe(error),
+            error: Self.describe(error),
+            errorCode: error.storageCode,
             now: now(),
             retriable: error.isRetryable
         )
-        emit(.syncFailed(SyncFailure(stage: .outbox, message: describe(error))))
+        emit(.syncFailed(Self.failure(.outbox, error)))
     }
 
     private func execute(_ item: OutboxItem) async throws -> OutboxOutcome {
@@ -1144,8 +1164,12 @@ public actor SyncEngine {
                     // retried, where closing again is a no-op and the comment still goes out.
                     emit(
                         .syncFailed(
-                            SyncFailure(
-                                stage: .outbox,
+                            Self.failure(
+                                .outbox,
+                                error,
+                                context: .closedButCommentNotPosted(
+                                    slug: "\(item.repo.fullName)#\(item.number)"
+                                ),
                                 message: "\(item.repo.fullName)#\(item.number) was closed, but "
                                     + "the comment could not be posted: "
                                     + (error.errorDescription ?? String(describing: error))
@@ -1417,10 +1441,36 @@ public actor SyncEngine {
         continuation.yield(event)
     }
 
-    private func describe(_ error: any Error) -> String {
+    /// The English sentence for a failure: the one ``SyncFailure/message`` and the outbox's
+    /// `lastError` hold, for logs and tests. The app does not show it for a GitHub error — it
+    /// renders the typed value that travels beside it (``failure(_:_:context:message:)``, and
+    /// ``GitHubKit/GitHubError/storageCode`` in the outbox's `lastErrorCode`) in the user's
+    /// language (ADR 0022, 2026-09-22 amendment).
+    private nonisolated static func describe(_ error: any Error) -> String {
         if let githubError = error as? GitHubError {
             return githubError.errorDescription ?? String(describing: githubError)
         }
         return String(describing: error)
+    }
+
+    /// A ``SyncFailure`` for `error`: the English sentence, plus the typed GitHub error when it
+    /// was one, so the app can say it in German.
+    /// - Parameters:
+    ///   - stage: Where it happened.
+    ///   - error: What went wrong.
+    ///   - context: What it was about beyond the stage.
+    ///   - message: The English sentence, when it says more than ``describe(_:)`` does.
+    private nonisolated static func failure(
+        _ stage: SyncStage,
+        _ error: any Error,
+        context: SyncFailure.Context = .none,
+        message: String? = nil
+    ) -> SyncFailure {
+        SyncFailure(
+            stage: stage,
+            message: message ?? describe(error),
+            error: error as? GitHubError,
+            context: context
+        )
     }
 }

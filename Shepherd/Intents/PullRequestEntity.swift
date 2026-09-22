@@ -50,10 +50,13 @@ struct PullRequestEntity: AppEntity {
     @Property(title: "Checks")
     var checks: String
 
-    /// The agent's name when an agent wrote it, otherwise "People" or "Bots" (ADR 0008).
+    /// The agent's name when an agent wrote it, otherwise "Humans" or "Bots" (ADR 0008), in the
+    /// user's language.
     ///
-    /// ``ShepherdCore/ActorKind/provenanceLabel``, unchanged: the one definition of what a row's
-    /// provenance is called, so a shortcut that groups by it groups the way the inbox does.
+    /// `ActorKind.localizedProvenanceLabel`: ``ShepherdCore/ActorKind/provenanceLabel``'s
+    /// grouping in the words the inbox's rail and section headers say it with, so a shortcut that
+    /// groups by it groups — and reads — the way the inbox does (ADR 0022, 2026-09-22
+    /// amendment).
     @Property(title: "Provenance")
     var provenance: String
 
@@ -65,7 +68,7 @@ struct PullRequestEntity: AppEntity {
         title = pullRequest.title
         author = pullRequest.author.login
         checks = PullRequestMetadataText.checkState(pullRequest.checkRollup)
-        provenance = pullRequest.author.kind.provenanceLabel
+        provenance = pullRequest.author.kind.localizedProvenanceLabel
     }
 
     var displayRepresentation: DisplayRepresentation {

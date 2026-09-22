@@ -582,28 +582,18 @@ final class InboxModel {
 
     /// The grouped sections, ordered by the user's sort choice.
     ///
-    /// The title is remapped here, not in ``InboxGrouper``: that lives in ShepherdCore, which
-    /// imports Foundation only and cannot call `String(localized:)`, so its provenance section
-    /// title is deliberately plain, stable English ("People"). This maps that one section onto
-    /// the same "Humans" key the rail already uses, so the list agrees with the rail instead of
-    /// showing GitHub-facing English where everything else on the section is German.
-    ///
-    /// The section is found by its `id`, not by its title: the id is the bucket key
-    /// ``InboxGrouper`` groups on — the literal `"human"` — and that is the contract between the
-    /// two. A title is display text, and display text is the one thing a remap has to be free to
-    /// change: matching on it means re-wording ShepherdCore's English quietly un-remaps this
-    /// section and puts "People" back on screen in a German list.
+    /// The header text is not decided here any more. ``InboxGrouper`` lives in ShepherdCore,
+    /// which cannot call `String(localized:)`, so its `title` is English; it now also names what
+    /// each section *is* (``ShepherdCore/InboxSection/Kind``), and the header draws that kind's
+    /// `localizedTitle` (`InboxSectionText.swift`, ADR 0022's 2026-09-22 amendment). That replaced
+    /// a remap here that caught the one "People" section by its id and left "Bots" and every
+    /// review-state header in English.
     var sections: [InboxSection] {
         InboxGrouper.group(filteredRows, by: settings.groupBy).map { section in
-            let title: String
-            if section.facet == .provenance, section.id == "human" {
-                title = String(localized: "Humans")
-            } else {
-                title = section.title
-            }
-            return InboxSection(
+            InboxSection(
                 id: section.id,
-                title: title,
+                title: section.title,
+                kind: section.kind,
                 facet: section.facet,
                 items: order(section.items)
             )

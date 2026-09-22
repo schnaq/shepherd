@@ -362,3 +362,71 @@ maintaining a 2,120-string table by hand, and it is still German.
 **Still English, deliberately:** the error banner (`Could not handle “…”`, `Rejected message: …`)
 that shows only when the bridge itself is broken. It reports a developer's problem, verbatim with
 the parser's own detail, and the detail is English either way.
+
+## Amendment (2026-09-22): GitHub errors and inbox section headers — typed in the package, worded in the app
+
+The rule above that `Packages/ShepherdKit` "has no user-visible strings" had two leaks, and both
+put English on a German Mac:
+
+1. **`GitHubError.errorDescription`** (`GitHubKit`) is English, and it reached a toast, the sign-in
+   sheet, every settings card, the composers, the title bar's sync tooltip and the failed-writes list
+   in Settings → Sync — most of them through `(error as? LocalizedError)?.errorDescription`
+   spelled out at each site, the last two because `SyncEngine` baked the sentence into
+   `SyncFailure.message` and into the outbox row's `lastError` column.
+2. **`InboxGrouper`** (`ShepherdCore`) titled its sections "People", "Bots", "Review required",
+   "Changes requested", "Approved" and "No review decision", and the list drew those titles; the app
+   remapped "People" by its id and nothing else. `ActorKind.provenanceLabel` reached Shortcuts the
+   same way, through `PullRequestEntity.provenance`.
+
+The fix is the one ADR 0026's third amendment made for the claims card's facts: **the package
+produces a closed value, and the app says it.**
+
+- **`GitHubError` is rendered app-side**, one catalog key per case
+  (`Shepherd/Support/GitHubErrorText.swift`, `GitHubError.localizedMessage(bundle:)`). GitHub's own
+  words — a `message`, a device-flow `description`, a resource — are interpolated verbatim; a reset
+  time is formatted before it reaches a key. `Error.userFacingDescription` now checks for a
+  `GitHubError` *before* `LocalizedError`, because a `GitHubError` is one and its English
+  `errorDescription` would otherwise win; and every inline copy of the old rule is replaced by a call
+  to it, so there is one place the answer can be wrong. The English `errorDescription` stays: tests
+  assert on it, logs read it, and it is the fallback below.
+- **`SyncFailure` carries the typed error beside its English `message`** — `error: GitHubError?`
+  plus a closed `Context` (`none`, `pullRequestDetail(slug:)`, `issueSweep`,
+  `notificationsUnavailable`, `closedButCommentNotPosted(slug:)`) for the sentences the engine
+  composes around an error. The session renders `SyncFailure.localizedMessage()` into
+  `lastSyncError`. The value rather than a code because a `SyncEvent` never outlives the process, so
+  nothing has to be stable across builds; `GitHubError` became `Codable` (synthesised) because
+  `SyncFailure` already was. A failure that is not a GitHub error — SQLite, decoding — has no typed
+  reading and still shows its English `message`: it is a technical description either way.
+  `TrackRecordBackfillFailure` gains the same optional `error` for the backfill card.
+- **The outbox persists a machine-readable twin of `lastError`**: migration v8 adds one nullable
+  `outbox.lastErrorCode TEXT` column, written by the drain as `GitHubError.storageCode` (the sorted-key
+  JSON of the synthesised `Codable`, i.e. the case name plus its payload) and cleared wherever
+  `lastError` is cleared or replaced (retry, conflict). The app decodes it back
+  (`OutboxItem.localizedLastError`) for the failed-writes list and for the refusal toast after a
+  write. Chosen over the alternatives:
+  - *Carrying the error on `OutboxItem`* is impossible: `OutboxItem` is `ShepherdCore`, and
+    `GitHubKit` depends on `ShepherdCore`, not the reverse. So `ShepherdCore` and
+    `ShepherdPersistence` treat the code as an opaque string.
+  - *A bare code* (`"server"`) loses the payload, and the payload is the sentence — a status, a retry
+    delay, GitHub's message.
+  - *A structured prefix inside `lastError`* would put a code into the text the log reads and make
+    every reader of the column parse it.
+  - *Translating at write time* is not available to a Foundation-only package, and would freeze the
+    language of the day the row failed.
+
+  The column is additive: a row written before v8 has `NULL` there and reads exactly as before, from
+  `lastError`. The code is stable for as long as the case names and labels are; a renamed case makes
+  `GitHubError(storageCode:)` answer `nil` and the display falls back to the English text — the cost
+  of a rename is a language, never a crash or a lost row. Conflicted rows' reasons ("Head moved from
+  …") keep their English text and get no code: nothing shows them (the parked toast deliberately
+  omits the reason, and the draft-conflict alert has its own sentence).
+- **`InboxSection` gains a closed `kind`** (`agent(displayName:)`, `bots`, `humans`,
+  `repository(RepoRef)`, `reviewDecision(ReviewDecision?)`) and the header draws
+  `InboxSection.localizedTitle` (`Shepherd/Features/Inbox/InboxSectionText.swift`). It reuses the keys
+  that already say these things: the rail's "Humans" and "Bots", the review chip's
+  `ReviewDecision.chipTitle`; only "No review decision" is new ("Keine Review-Entscheidung"). Agent
+  and repository names are proper nouns and pass through. The English `title` stays for tests and
+  logs; the id-based "People" remap in `InboxModel` is gone. `PullRequestEntity.provenance` reads
+  `ActorKind.localizedProvenanceLabel`, so Shortcuts and Siri say "Menschen" where the inbox does.
+  `PullRequestDigest`'s `authorProvenance` keeps `provenanceLabel`: it is prompt text for a model,
+  not UI.

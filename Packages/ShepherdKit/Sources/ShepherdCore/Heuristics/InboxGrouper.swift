@@ -12,19 +12,49 @@ public enum InboxFacet: String, Sendable, Codable, Hashable, CaseIterable {
 
 /// One section of the grouped inbox.
 public struct InboxSection: Sendable, Hashable, Identifiable {
+    /// What a section *is*, as a closed value the app renders in the user's language.
+    ///
+    /// This package is Foundation-only and cannot call `String(localized:)` (ADR 0022), so a
+    /// header text built here could only ever be English. The app turns a kind into its header
+    /// instead (`InboxSection.localizedTitle` in `Shepherd/Features/Inbox`), the same split
+    /// ``EvidenceFact/Kind`` makes for the claims card.
+    public enum Kind: Sendable, Hashable {
+        /// Pull requests by an agent — one section per agent, named by its display name, which is
+        /// a proper noun and is shown as it is.
+        case agent(displayName: String)
+        /// Pull requests by a bot that is not a known agent.
+        case bots
+        /// Pull requests by a person.
+        case humans
+        /// One repository, named by its full name.
+        case repository(RepoRef)
+        /// One aggregate review decision; `nil` is "GitHub has no decision to report".
+        case reviewDecision(ReviewDecision?)
+    }
+
     /// A stable identifier, unique within a grouping run.
     public let id: String
-    /// The section header text.
+    /// The section header text in English, for tests and logs. The app shows the rendering of
+    /// ``kind`` instead.
     public let title: String
+    /// What the section is, for the app to render.
+    public let kind: Kind
     /// Which facet produced this section.
     public let facet: InboxFacet
     /// The rows of the section, already sorted.
     public let items: [PullRequestSummary]
 
     /// Creates a section.
-    public init(id: String, title: String, facet: InboxFacet, items: [PullRequestSummary]) {
+    public init(
+        id: String,
+        title: String,
+        kind: Kind,
+        facet: InboxFacet,
+        items: [PullRequestSummary]
+    ) {
         self.id = id
         self.title = title
+        self.kind = kind
         self.facet = facet
         self.items = items
     }
@@ -71,17 +101,36 @@ public enum InboxGrouper {
     // MARK: - Facets
 
     private static func groupByProvenance(_ items: [PullRequestSummary]) -> [InboxSection] {
-        var buckets: [String: (title: String, sortKey: String, items: [PullRequestSummary])] = [:]
+        var buckets: [
+            String: (
+                title: String,
+                kind: InboxSection.Kind,
+                sortKey: String,
+                items: [PullRequestSummary]
+            )
+        ] = [:]
         for item in items {
             let kind = item.author.kind
             let key: String
+            let sectionKind: InboxSection.Kind
             switch kind {
-            case .agent(let identity): key = "agent:\(identity.id)"
-            case .bot: key = "bot"
-            case .human: key = "human"
+            case .agent(let identity):
+                key = "agent:\(identity.id)"
+                sectionKind = .agent(displayName: identity.displayName)
+            case .bot:
+                key = "bot"
+                sectionKind = .bots
+            case .human:
+                key = "human"
+                sectionKind = .humans
             }
             var bucket = buckets[key]
-                ?? (title: kind.provenanceLabel, sortKey: kind.provenanceSortKey, items: [])
+                ?? (
+                    title: kind.provenanceLabel,
+                    kind: sectionKind,
+                    sortKey: kind.provenanceSortKey,
+                    items: []
+                )
             bucket.items.append(item)
             buckets[key] = bucket
         }
@@ -90,6 +139,7 @@ public enum InboxGrouper {
                 (key: key, sortKey: value.sortKey, section: InboxSection(
                     id: key,
                     title: value.title,
+                    kind: value.kind,
                     facet: .provenance,
                     items: sorted(value.items)
                 ))
@@ -111,6 +161,7 @@ public enum InboxGrouper {
                 InboxSection(
                     id: repo.fullName,
                     title: repo.fullName,
+                    kind: .repository(repo),
                     facet: .repository,
                     items: sorted(rows)
                 )
@@ -138,6 +189,7 @@ public enum InboxGrouper {
             return InboxSection(
                 id: entry.key,
                 title: entry.title,
+                kind: .reviewDecision(entry.decision),
                 facet: .reviewState,
                 items: sorted(rows)
             )

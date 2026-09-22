@@ -801,7 +801,7 @@ extension ClaimsEvidenceModel {
             do {
                 state = .done(try await checker.check(line, in: detail))
             } catch {
-                state = .failed(error.localizedDescription)
+                state = .failed(error.userFacingDescription)
             }
             guard !Task.isCancelled, let self,
                   ClaimsEvidenceModel.sameDiff(self.builtFrom, detail)

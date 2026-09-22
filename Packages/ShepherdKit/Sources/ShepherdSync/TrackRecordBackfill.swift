@@ -42,13 +42,17 @@ public struct TrackRecordBackfillProgress: Sendable, Equatable {
 public struct TrackRecordBackfillFailure: Sendable, Equatable {
     /// The repository that failed.
     public var repo: RepoRef
-    /// What went wrong, in the words the error gave.
+    /// What went wrong, in the words the error gave — English, for tests and logs.
     public var message: String
+    /// The GitHub error behind it, when it was one, so the app can say it in the user's language
+    /// rather than showing ``message`` (ADR 0022, 2026-09-22 amendment).
+    public var error: GitHubError?
 
     /// Creates a failure.
-    public init(repo: RepoRef, message: String) {
+    public init(repo: RepoRef, message: String, error: GitHubError? = nil) {
         self.repo = repo
         self.message = message
+        self.error = error
     }
 }
 
@@ -187,7 +191,11 @@ public actor TrackRecordBackfill {
                 // run. The commonest cause is a repository the token cannot search, and the other
                 // five repositories' histories are still worth having.
                 result.failures.append(
-                    TrackRecordBackfillFailure(repo: repo, message: describe(error))
+                    TrackRecordBackfillFailure(
+                        repo: repo,
+                        message: describe(error),
+                        error: error as? GitHubError
+                    )
                 )
             }
         }

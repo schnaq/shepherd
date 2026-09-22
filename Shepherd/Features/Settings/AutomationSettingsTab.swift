@@ -541,7 +541,7 @@ struct AutomationSettingsTab: View {
             _ = try WebhookConfiguration.destination(text)
             return nil
         } catch {
-            return (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            return error.userFacingDescription
         }
     }
 
@@ -672,6 +672,6 @@ enum TrackRecordProgressLine {
     /// - Parameter failure: The failure.
     /// - Returns: The line.
     static func text(for failure: TrackRecordBackfillFailure) -> String {
-        String(localized: "\(failure.repo.fullName): \(failure.message)")
+        String(localized: "\(failure.repo.fullName): \(failure.localizedMessage)")
     }
 }
