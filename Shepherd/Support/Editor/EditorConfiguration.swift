@@ -140,19 +140,28 @@ enum EditorLauncher {
     }
 
     /// Plans how to show one file in the configured editor.
+    ///
+    /// A *folder* — the clone itself, when it lacks the file — goes to the three URL editors as
+    /// it is (each opens a folder as a project), but never to a custom command: its template was
+    /// written for `{file}:{line}`, and `…/review:1` is not a folder any editor can open. Finder
+    /// is the honest fallback there.
     /// - Parameters:
     ///   - configuration: The stored editor choice.
     ///   - file: The absolute file (or folder) to open.
     ///   - line: The 1-based head-side line, when one is known.
+    ///   - isDirectory: Whether `file` is a folder.
     /// - Returns: The launch to perform.
     /// - Throws: ``Failure`` when the configuration cannot produce one.
     static func launch(
         for configuration: EditorConfiguration,
         file: URL,
-        line: Int?
+        line: Int?,
+        isDirectory: Bool = false
     ) throws -> EditorLaunch {
         switch configuration.kind {
         case .systemDefault:
+            return .systemDefault(file)
+        case .custom where isDirectory:
             return .systemDefault(file)
         case .visualStudioCode, .intelliJ, .cursor:
             guard let url = url(kind: configuration.kind, file: file, line: line) else {

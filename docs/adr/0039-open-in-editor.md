@@ -36,7 +36,9 @@ Two things were already in place:
   path; a bare `code` is refused with a message rather than guessed at.
 - **Honest about the checkout.** Line numbers are head-side. The clone is on whatever branch the user
   left it on, and Shepherd does not run git to find out. A path the clone does not have opens the
-  clone's folder with a toast saying the checkout may be on another branch; the action's help says
+  clone's folder with a toast saying the checkout may be on another branch (in the URL editors,
+  which open a folder as a project; with a custom command in Finder, because a template written
+  for `{file}:{line}` has no sensible reading for a folder); the action's help says
   lines only match when the checkout is on the pull request's head. A path that would climb out of
   the chosen folder (`../…`) is never opened.
 - **Where it is offered:** the review file list's context menu, an icon in the file header, and the
