@@ -20,10 +20,10 @@ import Foundation
 ///
 /// The phrases here are English, including both spellings of *summarise*, because Siri matches a
 /// phrase literally and a user who says "summarize" is asking for the same thing. Their German
-/// utterances live in `Resources/AppShortcuts.xcstrings` (ADR 0022's amendment), one per English
-/// key — not in `Localizable.xcstrings`, because the App Intents metadata processor looks them up
-/// in a catalog of exactly that name, which is also why `Scripts/check-localization.py` leaves it
-/// alone.
+/// utterances live in `Resources/AppShortcuts.xcstrings` (ADR 0022's first amendment), one per
+/// English key — not in `Localizable.xcstrings`, because the App Intents metadata processor looks
+/// them up in a catalog of exactly that name, which is also why `Scripts/check-localization.py`
+/// leaves it alone.
 ///
 /// Nothing that writes to GitHub is here, and nothing that writes to GitHub exists as an intent at
 /// all — see the note in `ShepherdIntents.swift` and ADR 0021. A Siri phrase that could approve a
