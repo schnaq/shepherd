@@ -139,9 +139,9 @@ final class RepositoryTaskTests: XCTestCase {
         )
     }
 
-    func testAFreeSlugIsReadAfterAFetchFromLocalAndRemoteAgentBranches() async {
+    func testAFreeSlugIsReadAfterAFetchFromLocalAndRemoteAgentBranches() async throws {
         let git = taskGit()
-        let taken = await handle(git).takenTaskSlugs()
+        let taken = try await handle(git).takenTaskSlugs()
         XCTAssertEqual(taken, [])
         let slug = handle(git).freeTaskSlug(for: "Add dark mode\nwith a toggle", repo: repo, taken: taken)
         XCTAssertEqual(slug, "add-dark-mode")
@@ -158,12 +158,12 @@ final class RepositoryTaskTests: XCTestCase {
         XCTAssertEqual(Set(git.invocations.compactMap(\.currentDirectory)), [checkout.path])
     }
 
-    func testATakenSlugIsSuffixedWhetherTheBranchIsLocalOrOnOrigin() async {
+    func testATakenSlugIsSuffixedWhetherTheBranchIsLocalOrOnOrigin() async throws {
         let local = taskGit(agentRefs: "refs/heads/agent/add-dark-mode\n")
         let fromLocal = handle(local).freeTaskSlug(
             for: "Add dark mode",
             repo: repo,
-            taken: await handle(local).takenTaskSlugs(),
+            taken: try await handle(local).takenTaskSlugs(),
             suffix: { "beef" }
         )
         XCTAssertEqual(fromLocal, "add-dark-mode-beef")
@@ -172,7 +172,7 @@ final class RepositoryTaskTests: XCTestCase {
         let fromRemote = handle(remote).freeTaskSlug(
             for: "Add dark mode",
             repo: repo,
-            taken: await handle(remote).takenTaskSlugs(),
+            taken: try await handle(remote).takenTaskSlugs(),
             suffix: { "beef" }
         )
         XCTAssertEqual(fromRemote, "add-dark-mode-beef")
@@ -296,6 +296,11 @@ final class RepositoryTaskTests: XCTestCase {
         )
         XCTAssertFalse(git.arguments.contains { $0.contains("--detach") })
         XCTAssertFalse(git.arguments.contains { $0.first == "push" }, "Shepherd pushes nothing")
+        XCTAssertEqual(
+            git.arguments.filter { $0 == ["fetch", "origin"] }.count,
+            1,
+            "the slug's fetch is the task's only one"
+        )
 
         // The agent ran in the new directory and was told the branch it is on.
         XCTAssertEqual(agent.directories, [directory])
@@ -382,11 +387,13 @@ final class RepositoryTaskTests: XCTestCase {
         XCTAssertTrue(center.presented === next)
     }
 
-    func testPresentOnlyShowsAModelTheCentreHolds() throws {
-        let center = DelegationCenter()
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: "shepherd.tests.\(UUID().uuidString)"))
-        let settings = AppSettings(defaults: defaults)
-        let first = center.open(context: .repository(repo), settings: settings, toasts: ToastCenter())
+    func testPresentOnlyShowsAModelTheCentreHolds() async throws {
+        // A task that ran: one that never did is forgotten when its sheet closes.
+        let center = center(git: taskGit(), agents: [finishing])
+        let first = center.open(context: .repository(repo), settings: try readySettings(), toasts: ToastCenter())
+        first.task = "Add dark mode"
+        first.start()
+        await first.runTask?.value
         center.dismiss()
         center.present(first)
         XCTAssertTrue(center.presented === first)
@@ -559,7 +566,7 @@ final class RepositoryTaskTests: XCTestCase {
         XCTAssertEqual(center.repositoryTasks.map(\.id), [elsewhere.id, first.id, second.id])
         XCTAssertEqual(
             first.taskPaletteTitle,
-            "Show agent task “Add dark mode” on schnaq/review — finished"
+            "Show agent task on schnaq/review: Add dark mode — finished"
         )
 
         // Reopening a finished task shows that run, not a fresh sheet.
@@ -750,6 +757,139 @@ final class RepositoryTaskTests: XCTestCase {
         XCTAssertEqual(noBranch.state, .idle)
         XCTAssertTrue(noBranchGit.arguments.contains(["worktree", "prune"]))
         XCTAssertFalse(noBranchGit.arguments.contains { $0.first == "rev-list" || $0.first == "branch" })
+    }
+
+    // MARK: - Stopping a task while its worktree is prepared
+
+    /// A git that holds one kind of call until the test lets it go, and records the rest.
+    private final class GatedGit: ProcessRunning, @unchecked Sendable {
+        let recorder: RecordingProcessRunner
+        private let gated: [String]
+        private let gatedResult: ProcessResult
+        private let lock = NSLock()
+        private var reached = false
+        private let (gate, opener) = AsyncStream<Void>.makeStream()
+
+        /// - Parameters:
+        ///   - gated: The argv prefix to hold, e.g. `["fetch", "origin"]`.
+        ///   - result: What the held call answers once it is let go.
+        init(holding gated: [String], answering result: ProcessResult) {
+            self.gated = gated
+            self.gatedResult = result
+            recorder = RecordingProcessRunner { invocation in
+                switch invocation.arguments.first {
+                case "symbolic-ref":
+                    return ProcessResult(status: 0, standardOutput: "origin/main\n", standardError: "")
+                case "rev-parse":
+                    return ProcessResult(status: 1, standardOutput: "", standardError: "")
+                default:
+                    return ProcessResult(status: 0, standardOutput: "", standardError: "")
+                }
+            }
+        }
+
+        /// Whether the held call has been made.
+        var hasReachedGate: Bool { lock.withLock { reached } }
+
+        /// Lets the held call answer.
+        func open() { opener.finish() }
+
+        func run(executable: URL, arguments: [String], currentDirectory: URL?) async throws -> ProcessResult {
+            let result = try await recorder.run(
+                executable: executable,
+                arguments: arguments,
+                currentDirectory: currentDirectory
+            )
+            guard Array(arguments.prefix(gated.count)) == gated else { return result }
+            lock.withLock { reached = true }
+            for await _ in gate {}
+            return gatedResult
+        }
+    }
+
+    private func model(gatedGit git: GatedGit, agent: ScriptedAgentRunner) -> DelegationModel {
+        DelegationModel(
+            context: .repository(repo),
+            configuration: AgentCLIConfiguration(),
+            readiness: .ready,
+            runner: agent,
+            worktree: GitWorktree(
+                checkout: checkout,
+                directory: root,
+                managedRoot: root,
+                git: URL(fileURLWithPath: "/usr/bin/git"),
+                runner: git
+            )
+        )
+    }
+
+    private let succeeded = ProcessResult(status: 0, standardOutput: "", standardError: "")
+
+    func testStoppingWhileTheSlugIsFetchedClaimsAndCreatesNothing() async throws {
+        let git = GatedGit(holding: ["fetch", "origin"], answering: succeeded)
+        let agent = finishing
+        let model = model(gatedGit: git, agent: agent)
+        model.task = "Add dark mode"
+        model.start()
+        await waitUntil { git.hasReachedGate }
+
+        model.cancel()
+        git.open()
+        await model.runTask?.value
+
+        XCTAssertEqual(model.state, .cancelled)
+        XCTAssertNil(model.taskSlug, "nothing was claimed")
+        XCTAssertFalse(git.recorder.arguments.contains { $0.prefix(2) == ["worktree", "add"] })
+        XCTAssertTrue(agent.prompts.isEmpty, "the agent never started")
+    }
+
+    func testStoppingWhileTheWorktreeIsCreatedKeepsItAndSaysSo() async throws {
+        let git = GatedGit(holding: ["worktree", "add"], answering: succeeded)
+        let agent = finishing
+        let model = model(gatedGit: git, agent: agent)
+        model.task = "Add dark mode"
+        model.start()
+        await waitUntil { git.hasReachedGate }
+
+        model.cancel()
+        git.open()
+        await model.runTask?.value
+
+        XCTAssertEqual(model.state, .cancelled)
+        XCTAssertEqual(model.taskSlug, "add-dark-mode", "the worktree exists, and its claim with it")
+        XCTAssertTrue(model.isWorktreeDirectoryKnown, "so it can be revealed or discarded")
+        XCTAssertTrue(model.transcript.contains { $0.text.contains("Stopped after the worktree was created") })
+        XCTAssertTrue(agent.prompts.isEmpty, "the agent never started")
+    }
+
+    func testAGitFailureAfterStoppingDoesNotTurnTheRunIntoAFailure() async throws {
+        let git = GatedGit(
+            holding: ["worktree", "add"],
+            answering: ProcessResult(status: 128, standardOutput: "", standardError: "fatal: interrupted")
+        )
+        let model = model(gatedGit: git, agent: finishing)
+        model.task = "Add dark mode"
+        model.start()
+        await waitUntil { git.hasReachedGate }
+
+        model.cancel()
+        git.open()
+        await model.runTask?.value
+
+        XCTAssertEqual(model.state, .cancelled, "stopped stays stopped")
+        XCTAssertNil(model.taskSlug, "git created nothing, so nothing is claimed")
+        XCTAssertFalse(model.transcript.contains { $0.text.contains("interrupted") })
+        XCTAssertFalse(model.transcript.contains { $0.text.contains("The name is free again") })
+    }
+
+    func testASheetOpenedAndClosedWithoutRunningLeavesNothingBehind() throws {
+        let center = DelegationCenter()
+        let settings = try readySettings()
+        let model = center.open(context: .repository(repo), settings: settings, toasts: ToastCenter())
+        XCTAssertNotNil(center.models[model.id])
+        center.dismiss()
+        XCTAssertNil(center.models[model.id])
+        XCTAssertTrue(center.models.isEmpty)
     }
 
     // MARK: - Probing a folder

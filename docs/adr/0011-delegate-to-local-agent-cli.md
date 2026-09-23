@@ -204,8 +204,14 @@ repository and the branch.
   task; reopening one shows that run — its transcript, diff and push button — rather than a fresh
   sheet that would orphan its worktree. *Run again* in a task's sheet continues in its worktree on its
   branch. *Discard worktree* frees that task only: its claim goes, it leaves the lists, and the
-  repository's other tasks carry on. A sheet opened and never run is not listed, and the next "Start
-  an agent…" on the repository clears it away.
+  repository's other tasks carry on. A sheet opened and never run is not listed, and is forgotten
+  the moment it leaves the screen. The task list shows under the rail row whether or not the clone
+  is still linked — unlinking stops nothing — and only *New task…* needs the link. A new task costs
+  one fetch: the slug's, which fails before anything is claimed on an offline Mac, and
+  `addForNewWork(branch:fetch:)` skips its own. Stopping a task while its worktree is prepared
+  stays *stopped*: a cancellation check after the fetch means nothing is claimed, one after `worktree
+  add` keeps the worktree that now exists (and says so in the transcript) without starting the
+  agent, and a git error on the way out no longer overwrites the stopped state.
 - **When git refuses, the task holds nothing.** A claim is made before `worktree add` runs, so a
   failure there (or in its fetch) releases it again: the branch name is free for the next task and
   for *Try again*, which picks afresh, and the handle goes back to the managed root. The task stays

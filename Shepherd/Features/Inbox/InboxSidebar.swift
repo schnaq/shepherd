@@ -212,22 +212,26 @@ struct InboxSidebar: View {
                         // Always a new task: several run in one repository side by side, each on
                         // its own branch (ADR 0011's 2026-09-23 amendment).
                         Button(String(localized: "Start an agent…")) { onStartAgent(facet.repo) }
-                        let tasks = repositoryTasks(facet.repo)
-                        if !tasks.isEmpty {
-                            // The way back to a task, one entry each with where it is — the
-                            // sheet a new task opens is not, because it would be a new task.
-                            Menu(String(localized: "Agent tasks")) {
-                                ForEach(tasks) { task in
-                                    Button(task.taskMenuTitle) { onReopenTask(task) }
-                                }
-                                Divider()
-                                Button(String(localized: "New task…")) { onStartAgent(facet.repo) }
-                            }
-                        }
                     } else {
                         // The picker first: a delegation needs a clone to build its worktree from,
                         // so "Start an agent…" is only offered once there is one.
                         Button(String(localized: "Link a local checkout…")) { onLinkCheckout(facet.repo) }
+                    }
+                    // The way back to a task, one entry each with where it is. Outside the
+                    // `isLinked` test on purpose: unlinking the clone does not stop a running
+                    // task or delete a finished one's worktree, so it must not hide them either.
+                    // Only a *new* task needs the clone.
+                    let tasks = repositoryTasks(facet.repo)
+                    if !tasks.isEmpty {
+                        Menu(String(localized: "Agent tasks")) {
+                            ForEach(tasks) { task in
+                                Button(task.taskMenuTitle) { onReopenTask(task) }
+                            }
+                            if isLinked {
+                                Divider()
+                                Button(String(localized: "New task…")) { onStartAgent(facet.repo) }
+                            }
+                        }
                     }
                 }
             }

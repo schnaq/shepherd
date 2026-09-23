@@ -1645,8 +1645,12 @@ running, or with a worktree on disk — are `DelegationCenter.repositoryTasks(fo
 rail row's *Agent tasks* submenu and one ⌘K command per task (`repositoryTasks`) list them with
 `DelegationModel.phase`, and `AppEnvironment.reopenRepositoryTask(_:)` re-presents that model
 (`DelegationCenter.present(_:)`). *Discard worktree* clears that task's branch, which drops its claim
-and its list entry and touches no other task; a sheet opened and never run is pruned when the next
-one opens. The sheet's "Choose folder…" rebuild passes its own context back in, so it replaces that
+and its list entry and touches no other task; a sheet opened and never run is forgotten when it
+leaves the screen (`DelegationCenter.show(_:)`, the one place `presented` changes). The submenu shows
+whether or not the clone is still linked; only *New task…* needs it. The slug's fetch is the task's
+only one (`addForNewWork(branch:fetch: false)`), and a cancel during preparation stays cancelled:
+checks after the fetch and after `worktree add`, and `fail(with:)` never overwrites `.cancelled`.
+The sheet's "Choose folder…" rebuild passes its own context back in, so it replaces that
 sheet instead of adding a task. A failed `addForNewWork` releases the claim (branch cleared, handle
 back at the managed root) and the task stays listed as failed with git's error, *Try again* and
 *Dismiss task* (`DelegationCenter.dismissTask(_:)`, only with nothing on disk). `GitWorktree.remove()`

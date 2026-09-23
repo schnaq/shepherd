@@ -65,9 +65,7 @@ final class DelegationCenter {
     ///
     /// A running delegation for the same target is shown as it is: its prompt and transcript
     /// belong to the run in flight and must not be replaced by a new context. A new repository task
-    /// never meets that rule — its identity is fresh — and instead clears away the same
-    /// repository's sheets that were opened and never run (``prunableRepositoryTask(_:)``), so
-    /// a person who opens "Start an agent…" five times and runs once has one task, not five.
+    /// never meets that rule — its identity is fresh.
     /// - Parameters:
     ///   - context: What the delegation is about.
     ///   - settings: Where the CLI configuration and the checkout mapping live.
@@ -91,16 +89,8 @@ final class DelegationCenter {
         brief: AgentBriefDrafter? = nil
     ) -> DelegationModel {
         if let existing = models[context.prID], existing.isBusy {
-            presented = existing
+            show(existing)
             return existing
-        }
-
-        if context.isRepositoryTask {
-            models = models.filter { id, model in
-                id == context.id
-                    || !model.context.repo.isSameRepository(as: context.repo)
-                    || !Self.prunableRepositoryTask(model)
-            }
         }
 
         let model = make(
@@ -115,7 +105,7 @@ final class DelegationCenter {
             brief: brief
         )
         models[context.prID] = model
-        presented = model
+        show(model)
         return model
     }
 
@@ -188,7 +178,7 @@ final class DelegationCenter {
     /// - Parameter model: A model from ``models``.
     func present(_ model: DelegationModel) {
         guard models[model.id] === model else { return }
-        presented = model
+        show(model)
     }
 
     /// A repository's tasks that are worth going back to, oldest first.
@@ -201,16 +191,15 @@ final class DelegationCenter {
     /// is listed, and neither affects the others.
     /// - Parameter repo: The repository, matched case-insensitively.
     func repositoryTasks(for repo: RepoRef) -> [DelegationModel] {
-        repositoryTasks.filter { $0.context.repo.isSameRepository(as: repo) }
+        models.values
+            .filter { $0.context.repo.isSameRepository(as: repo) && Self.isListed($0) }
+            .sorted { $0.sequence < $1.sequence }
     }
 
     /// Every repository's listed tasks, by repository and then oldest first — what ⌘K offers.
     var repositoryTasks: [DelegationModel] {
         models.values
-            .filter {
-                $0.context.isRepositoryTask
-                    && ($0.isBusy || $0.isWorktreeDirectoryKnown || $0.phase == .failed)
-            }
+            .filter(Self.isListed)
             .sorted {
                 let left = $0.context.repo.fullName.lowercased()
                 let right = $1.context.repo.fullName.lowercased()
@@ -234,12 +223,34 @@ final class DelegationCenter {
         )
     }
 
-    /// Whether a repository task's model can go: idle (never run, or discarded), nothing on disk,
-    /// nothing claimed. A failed one stays until it is retried or dismissed — its error is the
-    /// only record of what went wrong.
+    /// Whether a model is one of the repository tasks the lists show (``repositoryTasks(for:)``).
+    private static func isListed(_ model: DelegationModel) -> Bool {
+        model.context.isRepositoryTask
+            && (model.isBusy || model.isWorktreeDirectoryKnown || model.phase == .failed)
+    }
+
+    /// Whether a repository task's model can go when its sheet leaves the screen: not running,
+    /// nothing on disk, nothing claimed — never run, discarded, or stopped before it had a
+    /// directory. A failed one stays until it is retried or dismissed: its error is the only
+    /// record of what went wrong.
     private static func prunableRepositoryTask(_ model: DelegationModel) -> Bool {
-        model.context.isRepositoryTask && model.phase == .idle && !model.isWorktreeDirectoryKnown
-            && model.taskSlug == nil
+        model.context.isRepositoryTask && !model.isBusy && !model.isWorktreeDirectoryKnown
+            && model.taskSlug == nil && model.phase != .failed
+    }
+
+    /// Puts a model on screen — or none — and forgets the one it replaces when that one is a
+    /// repository task holding nothing (``prunableRepositoryTask(_:)``).
+    ///
+    /// The one place a sheet leaves the screen, so the one place the cleanup happens: without it
+    /// every "Start an agent…" that was opened and closed again would stay in ``models`` for the
+    /// rest of the launch. A model that was replaced under the same identity (the "Choose
+    /// folder…" rebuild) is not the one in ``models`` any more and is left alone.
+    private func show(_ model: DelegationModel?) {
+        if let leaving = presented, leaving !== model, models[leaving.id] === leaving,
+           Self.prunableRepositoryTask(leaving) {
+            models[leaving.id] = nil
+        }
+        presented = model
     }
 
     /// Whether ``dismissTask(_:)`` would take a task away: a repository task that is not running
@@ -255,12 +266,14 @@ final class DelegationCenter {
     func dismissTask(_ model: DelegationModel) {
         guard canDismissTask(model) else { return }
         models[model.id] = nil
-        if presented === model { presented = nil }
+        if presented === model { show(nil) }
     }
 
     /// Closes the sheet. A run keeps going in the background; re-opening shows it again.
+    ///
+    /// A repository task's sheet that holds nothing — opened and never run — goes with it.
     func dismiss() {
-        presented = nil
+        show(nil)
     }
 
     /// Where a context's worktree lives, as far as it is known when the sheet opens.
