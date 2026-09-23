@@ -122,7 +122,7 @@ final class AppEnvironment {
     /// Maps Shepherd's events onto webhook deliveries.
     let webhookCoordinator: WebhookCoordinator
     /// Sparkle 2, or an inert stand-in when the build has no update feed and key (ADR 0010).
-    let updates = UpdateController()
+    let updates: UpdateController
     /// MetricKit crash and hang reports, kept on this Mac only and only when asked for
     /// (ADR 0017). Created inert: it subscribes to nothing until ``applyDiagnosticsSetting()``
     /// sees the opt-in.
@@ -189,7 +189,7 @@ final class AppEnvironment {
     /// because the pass is per *account* — it reads the last thirty days of the reviewer's own
     /// review comments across every repository at once — and because the vector cache and the
     /// dismissals must outlive a trip to the inbox and back.
-    let recurringFindings = RecurringFindingCoordinator()
+    let recurringFindings: RecurringFindingCoordinator
     /// Keeps the pull requests in the inbox visible to macOS Spotlight (ADR 0021).
     ///
     /// Created inert, like the search index beside it: it writes nothing until the first inbox
@@ -265,19 +265,44 @@ final class AppEnvironment {
     /// Where a description's screenshots are fetched from — the signed-in client, or `nil`.
     var descriptionImageFetcher: (any DescriptionImageFetching)? { session?.github }
 
+    /// How a signed-in session's GitHub client reaches the network, or `nil` for the one real
+    /// transport. Only the Debug demo mode passes one.
+    @ObservationIgnored private let gitHubTransport: (any HTTPTransport)?
+    /// Whether a signed-in session starts the background sweep loop. Only the Debug demo mode
+    /// switches it off, because its inbox is a seed that no GitHub answer may prune.
+    @ObservationIgnored private let runsSyncLoop: Bool
+
     /// Creates the container.
+    ///
+    /// Every parameter past the first three is a seam for the Debug demo mode
+    /// (`Shepherd/Debug/DemoMode.swift`), which has to run without touching the installed app's
+    /// state; the defaults are what every other build and every test gets.
     /// - Parameters:
     ///   - settings: The preference store.
     ///   - tokenStore: The GitHub credential store.
     ///   - secretStore: The AI-key store.
+    ///   - defaults: Where the device-local automation ledgers and dismissals are kept.
+    ///   - updates: The updater.
+    ///   - spotlightIndex: The system Spotlight index the export writes to (ADR 0021).
+    ///   - gitHubTransport: The session's transport, `nil` for `URLSessionTransport`.
+    ///   - runsSyncLoop: Whether a session starts its sweep loop.
     init(
         settings: AppSettings = AppSettings(),
         tokenStore: KeychainTokenStore = KeychainTokenStore(),
-        secretStore: KeychainSecretStore = KeychainSecretStore()
+        secretStore: KeychainSecretStore = KeychainSecretStore(),
+        defaults: UserDefaults = .standard,
+        updates: UpdateController = UpdateController(),
+        spotlightIndex: any SpotlightIndexing = CoreSpotlightIndex(),
+        gitHubTransport: (any HTTPTransport)? = nil,
+        runsSyncLoop: Bool = true
     ) {
         self.settings = settings
         self.tokenStore = tokenStore
         self.secretStore = secretStore
+        self.updates = updates
+        self.gitHubTransport = gitHubTransport
+        self.runsSyncLoop = runsSyncLoop
+        self.recurringFindings = RecurringFindingCoordinator(defaults: defaults)
         // Assigned from locals rather than from property defaults, because the coordinators
         // built further down need them *during* initialisation.
         let notifications = NotificationManager()
@@ -291,7 +316,7 @@ final class AppEnvironment {
             settings: settings,
             secretStore: secretStore
         )
-        let autoDelegationStore = AutoDelegationStore()
+        let autoDelegationStore = AutoDelegationStore(defaults: defaults)
         self.autoDelegationStore = autoDelegationStore
         self.autoDelegation = AutoDelegationCoordinator(
             settings: settings,
@@ -305,7 +330,7 @@ final class AppEnvironment {
                 }
             }
         )
-        let autoMergeStore = AutoMergeStore()
+        let autoMergeStore = AutoMergeStore(defaults: defaults)
         self.autoMergeStore = autoMergeStore
         self.autoMerge = AutoMergeCoordinator(
             settings: settings,
@@ -318,7 +343,7 @@ final class AppEnvironment {
                 }
             }
         )
-        let mergeWhenGreenStore = MergeWhenGreenStore()
+        let mergeWhenGreenStore = MergeWhenGreenStore(defaults: defaults)
         self.mergeWhenGreenStore = mergeWhenGreenStore
         self.mergeWhenGreen = MergeWhenGreenCoordinator(
             settings: settings,
@@ -332,7 +357,7 @@ final class AppEnvironment {
         )
         self.search = SearchIndexCoordinator(settings: settings)
         self.triage = TriageCoordinator(settings: settings)
-        self.spotlight = SpotlightIndexer(settings: settings)
+        self.spotlight = SpotlightIndexer(settings: settings, index: spotlightIndex)
         self.digest = DigestCoordinator(
             settings: settings,
             notify: { payload in
@@ -479,7 +504,8 @@ final class AppEnvironment {
         let session = try await SignedInSession.make(
             account: account,
             tokenStore: tokenStore,
-            sweepInterval: settings.sweepIntervalMinutes * 60
+            sweepInterval: settings.sweepIntervalMinutes * 60,
+            transport: gitHubTransport ?? URLSessionTransport()
         )
         phase = .signedIn(session)
         // The watched repositories are the engine's, not the configuration's: they change while
@@ -493,6 +519,7 @@ final class AppEnvironment {
         session.start(
             settings: settings,
             notifications: notifications,
+            runsSyncLoop: runsSyncLoop,
             onEvent: { [weak self] event in
                 self?.handle(event)
             },

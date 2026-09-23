@@ -1404,6 +1404,10 @@ final class InboxModel {
             if let cached = try? await self.session.database.fetchPullRequestDetail(id: selectedID) {
                 self.apply(detail: cached)
             }
+            #if DEBUG
+            // The review screen's reason (`ReviewModel.load()`): the demo seed is the detail.
+            if DemoMode.isActive { return }
+            #endif
             self.isRefreshingDetail = true
             defer { self.isRefreshingDetail = false }
             do {

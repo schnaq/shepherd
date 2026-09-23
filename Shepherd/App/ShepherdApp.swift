@@ -18,7 +18,16 @@ enum ShepherdScene {
 /// the same window — plus the standard `Settings` scene and the menu-bar quick inbox.
 @main
 struct ShepherdApp: App {
-    @State private var environment = AppEnvironment()
+    @State private var environment = ShepherdApp.makeEnvironment()
+
+    /// The container: the real one, or — in a Debug build launched with `-ShepherdDemo YES` —
+    /// the demo mode's, which touches none of the installed app's state (`Shepherd/Debug`).
+    private static func makeEnvironment() -> AppEnvironment {
+        #if DEBUG
+        if DemoMode.isActive { return DemoMode.makeEnvironment() }
+        #endif
+        return AppEnvironment()
+    }
 
     var body: some Scene {
         WindowGroup(id: ShepherdScene.mainWindow) {
@@ -29,7 +38,15 @@ struct ShepherdApp: App {
                 .frame(minWidth: 1_040, minHeight: 720)
                 .preferredColorScheme(environment.settings.appearance.colorScheme)
                 .task {
+                    #if DEBUG
+                    // Seeds the scratch database before the session opens it; a no-op unless the
+                    // demo mode is on.
+                    await DemoMode.prepare(environment)
+                    #endif
                     await environment.bootstrap()
+                    #if DEBUG
+                    DemoMode.didBootstrap(environment)
+                    #endif
                 }
                 .onChange(of: environment.settings.appearance) { _, _ in
                     environment.applyAppearance()

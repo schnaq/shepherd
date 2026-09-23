@@ -63,6 +63,35 @@ change to what a diff row shows or which lines may carry a comment has two rende
 step, not one — check `PatchReconstructor.Reconstruction.rows` and `ReviewModel.commentableLineSets(in:)`
 before assuming a bridge-side fix is the whole fix.
 
+## Screenshots and the demo mode
+
+A Debug build launched with `-ShepherdDemo YES` (or `SHEPHERD_DEMO=1`) opens on sample data — a
+dozen pull requests from Claude Code, Copilot, Codex and people across four repositories, a
+detailed one with patches, a failing check and review threads, a few issues, a failed write and a
+queued merge — without touching your real installation. The Debug build shares the installed
+app's bundle id, so the demo redirects everything keyed by it: Application Support becomes
+`$TMPDIR/ShepherdDemo` (wiped at launch), UserDefaults the `com.schnaq.shepherd.demo` suite
+(reset at launch), and the Keychain an in-memory dictionary. It makes no network request at all —
+no GitHub, Sparkle, telemetry, webhooks or cloud model — and starts no sync loop.
+
+```sh
+mise run demo-screenshots             # → .build/screenshots/{inbox,review,review-files,issues,settings-delegation}-{light,dark}.png
+Scripts/demo-screenshots.sh ~/Desktop/shots
+```
+
+The script builds Debug if there is no build yet (`SHEPHERD_DEMO_REBUILD=1` forces it), launches a
+separate demo process per screen with `-ShepherdDemoOpen shepherd://…` — not `open shepherd://…`,
+which LaunchServices may hand to the installed app instead — captures the window with
+`screencapture -l`, and quits it. Your installed Shepherd can keep running. The terminal needs
+Screen Recording permission. To browse the demo by hand:
+
+```sh
+open -n -a .build/app/Build/Products/Debug/Shepherd.app --args -ShepherdDemo YES -ApplePersistenceIgnoreState YES
+```
+
+The seed is `Shepherd/Debug/DemoSeed.swift` and `DemoShowcase.swift`; everything under
+`Shepherd/Debug/` is `#if DEBUG`, so a Release build contains none of it.
+
 ## Working on the release pipeline
 
 `Scripts/release.sh` is the whole thing — build, Developer-ID sign, DMG, notarize, staple,

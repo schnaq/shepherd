@@ -27,6 +27,12 @@ enum AppConfig {
 
     /// `~/Library/Application Support/Shepherd`, created on demand by `DatabaseManager`.
     static var applicationSupportDirectory: URL {
+        #if DEBUG
+        // The demo mode's scratch directory (`Shepherd/Debug/DemoMode.swift`): a Debug build has
+        // the installed app's bundle id, so without this it would open the developer's real
+        // database, worktrees, diagnostics and telemetry queue. Compiled out of Release.
+        if let demo = DemoMode.directory { return demo }
+        #endif
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent("Library/Application Support", isDirectory: true)

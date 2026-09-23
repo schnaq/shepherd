@@ -40,6 +40,7 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 27+)
                                #   merge-when-green coordinator + store (ADR 0037)
   SettingsSync/                #   encrypted settings document, envelope, SigV4, S3 client (ADR 0014)
   Diagnostics/                 #   MetricKit subscriber + local report folder (ADR 0017)
+  Debug/                       #   #if DEBUG only: the demo mode and its seed (screenshots)
   Intelligence/                #   IntelligenceProvider impls (FoundationModels, Anthropic)
     Translation/               #     on-device translation of PR text: offer rules, cache, view (ADR 0020)
   Support/                     #   AppConfig, keyboard shortcuts, theming, notifications,
@@ -1116,6 +1117,30 @@ nothing in it is a thing to triage.
 
 `ShepherdApp` has three scenes: the one `WindowGroup`, the standard `Settings` window, and the
 menu-bar quick inbox (below).
+
+#### The demo mode (Debug only)
+
+`Shepherd/Debug/` is compiled only into Debug builds (every file is `#if DEBUG`), and with
+`-ShepherdDemo YES` or `SHEPHERD_DEMO=1` `ShepherdApp` builds its container from
+`DemoMode.makeEnvironment()` instead of `AppEnvironment()`. It exists for screenshots
+(`Scripts/demo-screenshots.sh`) and uses the container's existing seams rather than a parallel
+app: `AppEnvironment.init`'s default-valued parameters — the defaults suite for the automation
+ledgers, the `UpdateController`, the `SpotlightIndexing` port, the session's `HTTPTransport` and
+whether the session starts its sweep loop — the `KeychainStoring` seam under both Keychain
+stores, and one `#if DEBUG` line in `AppConfig.applicationSupportDirectory`. The rules it keeps:
+
+- **Nothing keyed by the bundle id is shared with the installed app.** A Debug build has the same
+  id, so Application Support, the defaults domain, the Keychain services and the system Spotlight
+  index would all be the real ones. Each is redirected or replaced; the Spotlight port matters most,
+  because switching the export off *deletes* the domain, which would take the real app's items.
+- **The seed is written through the stores a sweep writes through** (`DemoSeed.write(into:)`), so
+  every screen renders it with production code. The summaries go first with their relations,
+  because a detail save keeps an existing row's relation.
+- **No sweep, and a transport that refuses.** An answer — even an empty search — would let
+  `savePullRequestSummaries(_:pruneMissing:)` prune the seed, so the loop is never started and
+  `DemoTransport` throws a non-retryable error for anything a click still reaches. The two detail
+  refreshes that run on their own (`ReviewModel.load()`, `InboxModel.loadDetail()`) return after
+  the cached apply under `#if DEBUG`, so no failure banner covers the seed.
 
 ### Views render from the database, never from the network
 
