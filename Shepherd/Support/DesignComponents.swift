@@ -326,6 +326,31 @@ struct SecondaryButtonStyle: ButtonStyle {
     @Environment(\.buttonIsBusy) private var isBusy
 
     func makeBody(configuration: Configuration) -> some View {
+        SecondaryButtonBody(
+            configuration: configuration,
+            height: height,
+            tint: tint,
+            isEnabled: isEnabled,
+            isBusy: isBusy
+        )
+    }
+}
+
+/// ``SecondaryButtonStyle``'s body, a view of its own so it can hold the hover state.
+///
+/// A button that does not answer the pointer reads as a label — the review screen's back button
+/// was the one that made it obvious — so every secondary button now lightens under the pointer and
+/// shows the pointing hand, the same feedback the rail's rows give.
+private struct SecondaryButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    let height: CGFloat
+    let tint: Color?
+    let isEnabled: Bool
+    let isBusy: Bool
+
+    @State private var isHovering = false
+
+    var body: some View {
         configuration.label
             .font(.system(size: 12.5, weight: .medium))
             .foregroundStyle(tint ?? Theme.text)
@@ -336,11 +361,20 @@ struct SecondaryButtonStyle: ButtonStyle {
                 Theme.control.opacity(configuration.isPressed ? 0.7 : 1),
                 in: RoundedRectangle(cornerRadius: 7, style: .continuous)
             )
+            .overlay {
+                if isHovering && isEnabled {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(Theme.text.opacity(0.06))
+                }
+            }
             .overlay(
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
                     .stroke(Theme.controlBorder, lineWidth: 1)
             )
+            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             .opacity(isEnabled || isBusy ? 1 : 0.45)
+            .onHover { isHovering = $0 }
+            .pointerStyle(isEnabled ? .link : nil)
     }
 }
 

@@ -582,12 +582,13 @@ struct ReviewHeaderView: View {
 
     var body: some View {
         HStack(spacing: 12) {
+            // A real button with a word on it, the height of the header's other buttons. It was a
+            // bare 13 pt chevron — a target you had to aim for, and one that gave no feedback.
             Button(action: onBack) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.textSecondary)
+                Label(String(localized: "Inbox"), systemImage: "chevron.left")
+                    .labelStyle(.titleAndIcon)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SecondaryButtonStyle(height: 30))
             .help(String(localized: "Back to the inbox (esc)"))
             .accessibilityLabel(Text(String(localized: "Back to the inbox")))
 
