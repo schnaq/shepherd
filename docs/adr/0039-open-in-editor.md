@@ -58,3 +58,8 @@ Two things were already in place:
   second Mac's clones on the next download, which needs its own decision.
 - An editor whose URL scheme changes breaks only its own entry; the pure URL/argv construction
   (`EditorLauncher`) is pinned by `EditorLauncherTests`.
+
+Cross-reference (2026-09-23): the clone map gained a third way in. "Add a local repository…" (ADR
+0011's 2026-09-23 amendment) picks a folder, reads the repository from its `origin` and writes the same
+`localCheckouts` entry, so a repository added that way opens in the editor with nothing else to set
+up. Lookups in the map are case-insensitive since then.

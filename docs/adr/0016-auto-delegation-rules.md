@@ -166,3 +166,9 @@ agent is working when nothing is.
   one checkbox — the policy, the ledger, the caps and the UI do not change. Adding a third
   *action* would need a new ADR, because "the action is always a delegation" is what keeps this
   inside ADR 0011's guarantees.
+
+Cross-reference (2026-09-23): ADR 0011's 2026-09-23 amendment added a delegation origin with no pull
+request behind it — a free-text task on a repository. No rule can start one:
+`DelegationCenter.startAutomatically` refuses that origin before anything else, and
+`RepositoryTaskTests.testARuleNeverStartsARepositoryTask` pins it with a CLI present, so the refusal is
+the guard's and not a missing tool's.
