@@ -34,10 +34,10 @@ jobs:
     name: Build and typecheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Bun installs and runs the scripts, Node runs Next: `next build` does not get through
       # page-data collection under Bun's runtime (site/README.md), and Vercel builds with Node too.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - uses: oven-sh/setup-bun@v2
@@ -66,8 +66,8 @@ jobs:
         # Run from site/ and it would look for site/site.
         working-directory: .
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - uses: oven-sh/setup-bun@v2
@@ -80,14 +80,43 @@ jobs:
       # belongs to and the shape of the two ids. "Could not retrieve Project Settings" below is the
       # CLI's one message for a wrong id, a swapped pair and a token without team scope; this is
       # what tells them apart in the log.
+      # The shape of the two ids, without their values. "Could not retrieve Project Settings" below
+      # is the CLI's one message for several causes; Actions → Site → Run workflow runs the
+      # "Check the Vercel link" job, which tells them apart.
       - name: Show what the deploy is linked against
         run: |
           echo "VERCEL_ORG_ID starts with: ${VERCEL_ORG_ID:0:5}… (${#VERCEL_ORG_ID} chars)"
           echo "VERCEL_PROJECT_ID starts with: ${VERCEL_PROJECT_ID:0:4}… (${#VERCEL_PROJECT_ID} chars)"
-          vercel whoami --token="$VERCEL_TOKEN" || true
       - name: Link the project and pull its production settings
         run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
       - name: Build the production output
         run: vercel build --prod --token="$VERCEL_TOKEN"
       - name: Deploy the prebuilt output
         run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+
+  # A manual run on any branch: checks token, team and project against each other without
+  # deploying and without printing a value.
+  diagnose:
+    name: Check the Vercel link
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - name: Token, team and project
+        run: |
+          code() { curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com$1"; }
+          echo "token: ${#VERCEL_TOKEN} chars, whitespace inside: $(printf '%s' "$VERCEL_TOKEN" | grep -c '[[:space:]]')"
+          echo "project id: ${#VERCEL_PROJECT_ID} chars, whitespace inside: $(printf '%s' "$VERCEL_PROJECT_ID" | grep -c '[[:space:]]')"
+          echo "org id: ${#VERCEL_ORG_ID} chars, whitespace inside: $(printf '%s' "$VERCEL_ORG_ID" | grep -c '[[:space:]]')"
+          echo "GET /v2/user: HTTP $(code /v2/user)"
+          echo "GET /v2/teams/<org>: HTTP $(code "/v2/teams/$VERCEL_ORG_ID")"
+          echo "GET /v9/projects/<project>?teamId=<org>: HTTP $(code "/v9/projects/$VERCEL_PROJECT_ID?teamId=$VERCEL_ORG_ID")"
+          echo "GET /v9/projects?teamId=<org> (list): HTTP $(code "/v9/projects?teamId=$VERCEL_ORG_ID&limit=1")"
+          echo "GET /v9/projects/<project> (no team): HTTP $(code "/v9/projects/$VERCEL_PROJECT_ID")"
+          curl -s -H "Authorization: Bearer $VERCEL_TOKEN" "https://api.vercel.com/v9/projects/$VERCEL_PROJECT_ID?teamId=$VERCEL_ORG_ID" | jq -r '.error.code // "no error", .error.message // "", (.name // empty), (.rootDirectory // empty)'

@@ -11,8 +11,8 @@ jobs:
     name: Diff viewer (Node)
     runs-on: [self-hosted, macOS]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - run: npm ci
@@ -28,7 +28,7 @@ jobs:
     name: ShepherdKit tests (Linux)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # Before Swift, because it is the fast check and the one an Xcode-less contributor cannot
       # run any other way: a `String(localized:)` with no German row in the String Catalog builds
       # fine and silently shows English (ADR 0022). Python 3 stdlib only, no setup step.
@@ -52,7 +52,7 @@ jobs:
     name: ShepherdKit tests (macOS)
     runs-on: [self-hosted, macOS]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: swift test
         working-directory: Packages/ShepherdKit
 
@@ -60,7 +60,7 @@ jobs:
     name: App build (macOS)
     runs-on: [self-hosted, macOS]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       # A self-hosted runner that runs as a service does not inherit the login shell's PATH, so
       # whether Homebrew's binaries are visible depends on how the runner happened to be
       # registered — and a re-registration silently took them away once, leaving `xcodegen` and
@@ -91,7 +91,7 @@ jobs:
       # The same Node the diff-viewer job pins, fetched by the action rather than taken from the
       # runner's PATH, for the reason the step above gives: `npm` must not depend on how the
       # runner was registered.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Build diff viewer bundle

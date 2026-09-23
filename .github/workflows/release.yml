@@ -42,7 +42,7 @@ jobs:
     # (`Scripts/ci-signing-setup.sh`), so a new runner needs no preparation beyond Xcode.
     runs-on: [self-hosted, macOS]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # ── Fail before spending 20 minutes on a build that cannot be published ───────────────
       #
@@ -99,7 +99,7 @@ jobs:
       # The Monaco bundle is committed (ADR 0003), but it is rebuilt here anyway so a release
       # can never ship a `dist/` that drifted from `web/diff-viewer/src`. ci.yml enforces that
       # they agree; this makes the release independent of that having been checked.
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Build and test the diff viewer bundle
@@ -182,7 +182,7 @@ jobs:
           ./Scripts/release.sh
 
       - name: Publish the GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: Shepherd ${{ steps.version.outputs.version }}
