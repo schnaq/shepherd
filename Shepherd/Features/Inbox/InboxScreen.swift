@@ -468,14 +468,20 @@ struct InboxScreen: View {
 
         ToolbarSpacer(.fixed, placement: .primaryAction)
 
+        // The account on its own, with the system's spacing before it and no capsule of its own
+        // (ADR 0040). Inside a capsule the avatar was drawn as the last member of the Sync group —
+        // the spacer above could not separate it, because a view that is not a control joins the
+        // glass group beside it — and read as a third button of that group. Bare, the round
+        // picture is its own shape, which is how an account reads in a macOS toolbar.
         ToolbarItem(placement: .primaryAction) {
             AvatarView(
                 login: session.account.login,
                 url: session.account.avatarURL,
-                size: 22
+                size: 24
             )
             .help(Text(session.account.login))
         }
+        .sharedBackgroundVisibility(.hidden)
     }
 
     /// What the bulk-triage menu is called: on screen if it ever draws its title, and to

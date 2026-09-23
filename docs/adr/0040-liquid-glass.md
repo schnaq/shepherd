@@ -74,6 +74,7 @@ illegible case the guidance warns about.
 - The one recommended action in a bar is `.glassProminent`, tinted with a theme colour: the review
   toolbar's Merge, tinted `Theme.success`, only while nothing blocks the merge **and** CI is green,
   the rule the old green `SuccessButtonStyle` followed. Otherwise Merge is an ordinary item.
+  *Superseded the same day: Merge is always the prominent green action (amendment below).*
 - A read-out in the toolbar (the review facts, the inbox's sync status) hides its shared capsule
   with `sharedBackgroundVisibility(.hidden)`, because a capsule is how the toolbar says "press me".
 - `.glass` alone is for a button that floats on its own, outside a toolbar. There is none today.
@@ -115,3 +116,32 @@ type-scale gate (`Scripts/check-type-scale.py`) is unchanged and green.
   is the same change the review screen got and is left for its own pass.
 - Anything new follows the rules above: a new bar under the toolbar paints its own frame only; a
   new toolbar item uses the default style; a new sheet uses the app's styles.
+
+## Amendment 2026-09-23: the prominent action is Merge, everywhere
+
+After the first screenshots the maintainer settled the one question the rule above left to each
+surface: **Merge is the primary action on every surface, always.**
+
+- The review toolbar's Merge is `.glassProminent` tinted `Theme.success` whatever CI says. A
+  blocker (draft, conflict), an ended pull request, or a merge already queued or done disables
+  it; a red suite no longer repaints it — the checks summary beside it says that in words. The
+  spinner while the merge is being sent is unchanged. This supersedes item 3's "only while
+  nothing blocks the merge **and** CI is green".
+- The inbox detail panel's *Merge…* is the panel's green `SuccessButtonStyle` button; *Approve*
+  is a `SecondaryButtonStyle` button with its tick.
+- The review screen's composer bar: *Approve… ⌘⏎* is secondary (tick, key cap and ⌘⏎ kept),
+  because the toolbar's Merge is the screen's green button.
+- Green is Merge's colour and nothing else's. The submit sheet's *Submit*, the delegation
+  sheet's *Commit & push*, and the bulk-triage sheet's confirm button when the plan only
+  approves are `PrimaryButtonStyle`; the bulk-triage confirm is green when the plan merges, and
+  the merge sheet's *Merge* stays green.
+- No surface shows two green buttons.
+
+Two small toolbar and rail fixes landed with it: the inbox toolbar's account avatar stands on
+its own with no capsule (inside one it joined the Sync group and read as its third button), and
+the rail's *Pull requests | Issues* switch is the system segmented control at `.large` size with
+flexible segments, spanning the rail's 10 pt inset so its edges line up with the row highlights,
+with no hairline under it.
+
+In an inactive window macOS draws a prominent toolbar button without its tint; the review
+toolbar's Merge is grey there by the system's rule, not because it is disabled.

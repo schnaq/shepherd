@@ -86,21 +86,27 @@ struct ContentKindPicker: View {
     @Binding var selection: ContentKind
 
     var body: some View {
-        VStack(spacing: 0) {
-            Picker(String(localized: "Section"), selection: $selection) {
-                ForEach(ContentKind.allCases) { kind in
-                    Text(kind.title).tag(kind)
-                }
+        Picker(String(localized: "Section"), selection: $selection) {
+            ForEach(ContentKind.allCases) { kind in
+                Text(kind.title).tag(kind)
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .padding(.horizontal, 10)
-            .padding(.top, 10)
-            .padding(.bottom, 10)
-            Divider().overlay(Theme.hairline)
         }
-        // On the sidebar's glass rather than on a ``Theme/panel`` slab over it (ADR 0040). The
-        // segmented control is a system control and draws its own track.
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        // The system's segmented control as macOS 27 draws it on a sidebar, and nothing of ours
+        // around it (ADR 0040): no fill, no border, and no hairline under it any more — a rule
+        // across the sidebar's glass read as the edge of a panel that is not there. What it
+        // needed instead was the rail's own geometry. `.large` is the control size whose
+        // capsule matches the rail rows' height and corner radius, `.flexible` sizing makes the
+        // two segments share the width equally rather than hugging their labels, and the frame
+        // plus the 10 pt inset puts its edges exactly on the selected row's highlight below —
+        // the same inset ``InboxSidebar`` and ``IssueSidebar`` give their rows.
+        .controlSize(.large)
+        .buttonSizing(.flexible)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 10)
+        .padding(.top, 8)
+        .padding(.bottom, 4)
     }
 }
 

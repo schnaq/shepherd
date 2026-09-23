@@ -726,57 +726,43 @@ struct ReviewToolbar: ToolbarContent {
         }
     }
 
-    /// The Merge button, prominent and green only when merging is the next thing to do.
+    /// The Merge button: the toolbar's one prominent action, always (ADR 0040's 2026-09-23
+    /// amendment).
     ///
-    /// Green is a recommendation, and the header used to make it on nothing at all: a draft or a
-    /// red suite got the same success-green button as a pull request waiting to land. It is
-    /// `.glassProminent` tinted ``Theme/success`` when nothing blocks the merge *and* CI is
-    /// green, and the toolbar's ordinary glass otherwise. No chevron on the label — it opens a
+    /// Merge is the primary action on every surface — the maintainer's decision — so it is
+    /// `.glassProminent` tinted ``Theme/success`` whatever the checks say. What a red suite or a
+    /// draft changes is whether it can be pressed, not how it looks: it used to go neutral whenever
+    /// CI was not green, which made the button's *colour* one of the places a red suite was
+    /// reported, and the checks summary to its left already says that in words. Disabled when
+    /// GitHub would refuse the merge (``PullRequestSummary/mergeBlocker``), when the pull request
+    /// has ended, and once a merge is queued or done. No chevron on the label — it opens a
     /// confirmation sheet, not a menu.
     ///
     /// The spinner is on the label itself (``SwiftUI/View/busyLabel(isBusy:tint:)``), because
     /// ``SwiftUI/View/busy(_:)`` only raises a flag that the app's *own* three styles draw, and a
-    /// system style never reads it. And the button is not `.disabled` while the merge is being
-    /// sent — only once it is queued or done: the system dims a disabled toolbar item, spinner and
-    /// all, and a spinner at half strength is the bug ``SwiftUI/View/busy(_:)``'s arrangement
-    /// exists to prevent. The press is refused by the guard instead, the same rule `m` meets in
+    /// system style never reads it. No tint on it: it takes the label colour the prominent style
+    /// picks for its fill. And the button is not `.disabled` while the merge is being sent — only
+    /// once it is queued or done: the system dims a disabled toolbar item, spinner and all, and a
+    /// spinner at half strength is the bug ``SwiftUI/View/busy(_:)``'s arrangement exists to
+    /// prevent. The press is refused by the guard instead, the same rule `m` meets in
     /// ``ReviewScreen``'s `perform(_:)`, so neither can open a second merge sheet.
-    ///
-    /// Written as two buttons rather than one with a computed style because a `ButtonStyle` is a
-    /// type: there is no value `.glassProminent` and `.automatic` both fit in without erasing them.
-    @ViewBuilder
     private var mergeButton: some View {
         let isOnItsWay = write?.isMergeOnItsWay ?? false
         let isMerging = write == .merging
         let isDisabled = model.summary?.mergeBlocker != nil || model.hasEndedOnGitHub
             || (isOnItsWay && !isMerging)
-        if model.summary?.mergeBlocker == nil, checkRollup?.state == .success {
-            Button {
-                guard !isOnItsWay else { return }
-                onMerge()
-            } label: {
-                Text(String(localized: "Merge"))
-                    // No tint: the spinner takes the label colour the prominent style picks for its
-                // own fill, which is not necessarily ``Theme/textOnFilled``.
+        return Button {
+            guard !isOnItsWay else { return }
+            onMerge()
+        } label: {
+            Text(String(localized: "Merge"))
                 .busyLabel(isBusy: isMerging)
-            }
-            .buttonStyle(.glassProminent)
-            .tint(Theme.success)
-            .disabled(isDisabled)
-            .help(mergeHelp)
-            .accessibilityValue(isMerging ? Text(write?.text ?? "") : Text(verbatim: ""))
-        } else {
-            Button {
-                guard !isOnItsWay else { return }
-                onMerge()
-            } label: {
-                Text(String(localized: "Merge"))
-                    .busyLabel(isBusy: isMerging)
-            }
-            .disabled(isDisabled)
-            .help(mergeHelp)
-            .accessibilityValue(isMerging ? Text(write?.text ?? "") : Text(verbatim: ""))
         }
+        .buttonStyle(.glassProminent)
+        .tint(Theme.success)
+        .disabled(isDisabled)
+        .help(mergeHelp)
+        .accessibilityValue(isMerging ? Text(write?.text ?? "") : Text(verbatim: ""))
     }
 
     /// Why the Merge button is dark, or the shortcut that presses it

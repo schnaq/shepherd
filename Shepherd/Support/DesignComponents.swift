@@ -281,6 +281,14 @@ extension View {
 // of the three styles below. Content is opaque by rule (ADR 0040), and a glass button on an
 // opaque card is glass with nothing behind it to refract. Do not mass-replace these with glass.
 //
+// **The prominent action is Merge** (ADR 0040's 2026-09-23 amendment, the maintainer's decision).
+// On every surface that offers it, Merge is the one green, filled button — `.glassProminent`
+// tinted ``Theme/success`` in a toolbar, ``SuccessButtonStyle`` in content — and a blocker
+// disables it rather than repainting it. Approve is secondary everywhere (it keeps its tick and
+// its shortcut), so no surface shows two green buttons. Green is Merge's colour and nothing
+// else's: a sheet's default action that is not a merge (Submit, Commit & push, Approve N) is
+// ``PrimaryButtonStyle``.
+//
 // One thing a system style does not inherit: ``SwiftUI/View/busy(_:)``'s spinner is drawn by the
 // three styles here, so a write button on a system style must put
 // ``SwiftUI/View/busyLabel(isBusy:tint:)`` on its own label, as the review toolbar's Merge does.

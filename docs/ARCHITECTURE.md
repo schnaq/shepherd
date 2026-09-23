@@ -1072,7 +1072,8 @@ takes a router.
   (a bar under the toolbar uses `background(_:ignoresSafeAreaEdges: [])`); content — lists, cards,
   panels, sheets, the diff — stays opaque. Toolbar buttons use the system styles (default, and
   `.glassProminent` for the one recommended action); buttons inside content keep the app's own
-  three styles in `DesignComponents.swift`.
+  three styles in `DesignComponents.swift`. The prominent, green action is Merge on every surface;
+  Approve is secondary, and green means Merge and nothing else (ADR 0040's amendment).
 - Dark & light mode from day one: semantic color tokens only (`Color.shepherd*` asset
   catalog), theme piped into Monaco via `setTheme`.
 - Text sizes go through `Theme.type(_:weight:)` (or `Theme.mono(_:weight:)`), which name a

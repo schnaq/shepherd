@@ -48,15 +48,24 @@ struct ReviewComposerBar: View {
                 start(preselectedVerdict)
             } label: {
                 HStack(spacing: 6) {
+                    if preselectedVerdict == .approve {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
                     Text(
                         preselectedVerdict == .approve
                             ? String(localized: "Approve…")
                             : String(localized: "Review…")
                     )
-                    KeyCapView(keys: "⌘⏎", onFilledBackground: true)
+                    KeyCapView(keys: "⌘⏎")
                 }
             }
-            .buttonStyle(SuccessButtonStyle(height: 30))
+            // Secondary, not green (ADR 0040's 2026-09-23 amendment): the prominent action on
+            // every surface is Merge, and this screen's Merge is the toolbar's green button. Two
+            // green buttons on one screen are two recommendations, and a reviewer's eye goes to
+            // whichever is nearer. The shortcut, the tick and the key cap stay — ⌘⏎ is still the
+            // fastest way to a verdict; it just is not painted as *the* thing to do.
+            .buttonStyle(SecondaryButtonStyle(height: 30))
             .keyboardShortcut(.return, modifiers: .command)
             // The three verdict buttons go dark together once GitHub has merged or closed the
             // pull request under them, because none of the three has anywhere to land any more
@@ -277,7 +286,10 @@ struct SubmitReviewSheet: View {
                 } label: {
                     Text(String(localized: "Submit"))
                 }
-                .buttonStyle(SuccessButtonStyle())
+                // The sheet's default action, so it is filled — but accent, not green: green is
+                // Merge's colour on every surface (ADR 0040's 2026-09-23 amendment), and a
+                // submitted review is a verdict, not a merge.
+                .buttonStyle(PrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
                 .busy(isSubmitting)
                 .disabled(needsSummary || model.hasEndedOnGitHub)

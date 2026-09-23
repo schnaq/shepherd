@@ -557,7 +557,9 @@ struct DelegationSheet: View {
             ) {
                 model.commitAndPush()
             }
-            .buttonStyle(SuccessButtonStyle(height: 30))
+            // Accent, not green: green is Merge's colour on every surface (ADR 0040's 2026-09-23
+            // amendment), and a push is not a merge.
+            .buttonStyle(PrimaryButtonStyle(height: 30))
             .disabled(model.isPublishing || model.hasPushed || !model.hasChanges)
             .help(String(localized: "Pushes with your own git credentials to \(model.branchName)"))
 

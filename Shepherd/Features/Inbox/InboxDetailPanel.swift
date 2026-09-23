@@ -239,7 +239,11 @@ struct InboxDetailPanel: View {
                     Label(String(localized: "Approve"), systemImage: "checkmark")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(SuccessButtonStyle())
+                // Neutral: Merge is the panel's one green button (ADR 0040's 2026-09-23
+                // amendment), and two of them side by side would be two recommendations. Not even
+                // a green label, which from across the panel reads as a second green button; the
+                // tick is what keeps it recognisable.
+                .buttonStyle(SecondaryButtonStyle())
                 // Both verdict buttons go dark for either reason: GitHub would refuse this one
                 // (``disabled``), or a verdict for this pull request is already on its way to the
                 // outbox (``busy``, which disables as well and spins while it does).
@@ -283,7 +287,10 @@ struct InboxDetailPanel: View {
                     Text(String(localized: "Merge…"))
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(SecondaryButtonStyle())
+                // The primary action, here as everywhere (ADR 0040's 2026-09-23 amendment): the
+                // one filled green button in the panel. A blocker disables it rather than
+                // repainting it, and the help text says why.
+                .buttonStyle(SuccessButtonStyle())
                 // This one only opens the sheet, but it opens the sheet onto a merge that is
                 // already queueing — so it goes quiet with the write rather than with the click.
                 .busy(isWriting(row, .merge))
