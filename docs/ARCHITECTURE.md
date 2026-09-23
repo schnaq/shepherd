@@ -1628,17 +1628,26 @@ to a case-insensitive key, and `setLocalCheckout` replaces an other-case key, so
 
 **"Start an agent…"** (the context menu of a watched rail row with a linked checkout — the row shows
 a laptop glyph — and one ⌘K command per `AppSettings.linkedRepositories`) opens
-`AppEnvironment.startRepositoryDelegation(_:)`: a `DelegationContext.repository(repo)` (origin
-`.repository`, identity `repository:owner/name`, no number, no commit, and no branch until the run
-starts). `DelegationModel.start()` then picks the branch from the task's first line —
-`GitWorktree.freeTaskSlug(for:repo:)` fetches, reads `refs/heads/agent/` and
-`refs/remotes/origin/agent/` with one `for-each-ref`, and uniques the `ShepherdCore/RepositoryTaskBranch`
-slug against those and against the managed directories — re-aims the handle at
-`owner-repo-task-<slug>` (`GitWorktree.relocated(to:)`; until then it names the managed root, which
-`remove()` refuses) and adds the worktree through the issue path's own `addForNewWork(branch:)`. The
-prompt is built after that step, because the third preamble names the branch. *Run again* continues
-in the same worktree; a finished task is re-presented rather than replaced
-(`DelegationCenter.present(_:)`), and *Discard worktree* makes room for the next one.
+`AppEnvironment.startRepositoryDelegation(_:)`: a **new** `DelegationContext.repository(repo)` every
+time (origin `.repository`, identity `repository:owner/name#<uuid>` — one per task, so several run in
+one repository at once — no number, no commit, and no branch until the run starts).
+`DelegationModel.start()` then picks the branch from the task's first line —
+`GitWorktree.takenTaskSlugs()` fetches and reads `refs/heads/agent/` and `refs/remotes/origin/agent/`
+with one `for-each-ref`; then, on the main actor and with no `await` before the claim is recorded,
+`freeTaskSlug(for:repo:taken:suffix:)` uniques the `ShepherdCore/RepositoryTaskBranch` slug against
+those, the managed directories and the slugs the repository's other tasks have claimed
+(`DelegationCenter.claimedTaskSlugs(in:excluding:)`, read from each model's `taskSlug`) — re-aims the
+handle at `owner-repo-task-<slug>` (`GitWorktree.relocated(to:)`; until then it names the managed
+root, which `remove()` refuses) and adds the worktree through the issue path's own
+`addForNewWork(branch:)`. The prompt is built after that step, because the third preamble names the
+branch. *Run again* continues in the same worktree. A repository's tasks worth going back to —
+running, or with a worktree on disk — are `DelegationCenter.repositoryTasks(for:)`, oldest first; the
+rail row's *Agent tasks* submenu and one ⌘K command per task (`repositoryTasks`) list them with
+`DelegationModel.phase`, and `AppEnvironment.reopenRepositoryTask(_:)` re-presents that model
+(`DelegationCenter.present(_:)`). *Discard worktree* clears that task's branch, which drops its claim
+and its list entry and touches no other task; a sheet opened and never run is pruned when the next
+one opens. The sheet's "Choose folder…" rebuild passes its own context back in, so it replaces that
+sheet instead of adding a task.
 `startAutomatically` refuses the origin outright, and the run sends no `delegation.finished` webhook
 (its envelope is a pull request's identity).
 
@@ -2058,7 +2067,9 @@ closures — first element, mid-stream failure, an empty answer stepping down a 
 the delegation engine (stream-event fixtures, argv
 construction, template splitting, git command sequences, state transitions — and, in
 `RepositoryTaskTests`, the repository task's argv from slug to `worktree add -b`, *Run again*
-staying in place, the merge-base diff, a rule's refusal with a CLI present, the folder probe's
+staying in place, two tasks in one repository with their own identity, branch and worktree, the same
+first line started back to back getting two branches, a discard that leaves the other task running
+and listed, the rail's and ⌘K's lists and reopening the task named, the merge-base diff, a rule's refusal with a CLI present, the folder probe's
 findings and "Add a local repository…"'s idempotency; the remote grammar, the slug and the link
 state are `ShepherdCoreTests/LocalRepositoryTests`, on Linux) and the app half of
 auto-delegation (event → signal mapping, ledger persistence across a relaunch, cap notices —
