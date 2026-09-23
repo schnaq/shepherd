@@ -595,7 +595,7 @@ final class AppEnvironment {
         // Built here rather than carried on the event: ``ShepherdSync/SentMutation`` holds the
         // repository and the number and spends no fetch on describing itself, which is the same
         // two fields the draft-conflict notification spells a slug out of.
-        let slug = "\(sent.repo.fullName)#\(sent.number)"
+        let slug = "\(sent.repo.fullName)#\(String(sent.number))"
         toasts.success(String(localized: "Merged \(slug)."))
         session?.noteMerged(sent.prID)
         scheduleSyncAfterMerge()

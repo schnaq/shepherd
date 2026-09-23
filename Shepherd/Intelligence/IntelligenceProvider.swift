@@ -591,7 +591,7 @@ enum IntelligencePrompt {
     static func body(for digest: PullRequestDigest) -> String {
         var text = """
             Repository: \(digest.repoFullName)
-            Pull request: #\(digest.number) — \(digest.title)
+            Pull request: #\(String(digest.number)) — \(digest.title)
             Author: \(digest.authorLogin) (\(digest.authorProvenance))
             Base branch: \(digest.baseRefName)
             Size: \(digest.changedFileCount) files, +\(digest.totalAdditions) −\(digest.totalDeletions)
@@ -659,7 +659,7 @@ enum IntelligencePrompt {
             : "\(request.anchor.lineRange.lowerBound)–\(request.anchor.lineRange.upperBound)"
         var text = """
             Repository: \(request.repoFullName)
-            Pull request: #\(request.number) — \(request.pullRequestTitle)
+            Pull request: #\(String(request.number)) — \(request.pullRequestTitle)
             File: \(request.path)
             """
         if let status = request.fileStatus {
@@ -708,7 +708,7 @@ enum IntelligencePrompt {
     static func body(for request: CIDiagnosisRequest) -> String {
         var text = """
             Repository: \(request.repoFullName)
-            Pull request: #\(request.number) — \(request.pullRequestTitle)
+            Pull request: #\(String(request.number)) — \(request.pullRequestTitle)
             """
         if request.failingChecks.isEmpty {
             text += "\n\nNo check is reported as failing."

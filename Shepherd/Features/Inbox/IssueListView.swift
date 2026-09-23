@@ -242,7 +242,7 @@ struct IssueRowView: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Text("\(row.repo.name) #\(row.number)")
+            Text("\(row.repo.name) #\(String(row.number))")
                 .font(Theme.mono(12))
                 .foregroundStyle(Theme.textMuted)
                 .layoutPriority(1)

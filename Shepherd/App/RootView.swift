@@ -217,7 +217,7 @@ struct SignedInRootView: View {
     private func conflictMessage(for conflict: DraftConflict) -> String {
         let explanation = String(
             localized: """
-                \(conflict.repo.fullName)#\(conflict.number) got new commits after you wrote \
+                \(conflict.repo.fullName)#\(String(conflict.number)) got new commits after you wrote \
                 your review, so your inline comments would land on the wrong lines. \
                 Your draft is kept — open the pull request again to check it against the \
                 new commit.

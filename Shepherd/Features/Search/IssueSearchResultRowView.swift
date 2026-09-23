@@ -55,7 +55,7 @@ struct IssueSearchResultRowView: View {
                 .frame(width: 15)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
-                    Text("\(result.summary.repo.name) #\(result.summary.number)")
+                    Text("\(result.summary.repo.name) #\(String(result.summary.number))")
                         .font(Theme.mono(11))
                         .foregroundStyle(Theme.textMuted)
                         .layoutPriority(1)

@@ -107,7 +107,7 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
 
     /// `owner/name#123`, or just `owner/name` for a repository task, which has no number.
     var slug: String {
-        isRepositoryTask ? repo.fullName : "\(repo.fullName)#\(number)"
+        isRepositoryTask ? repo.fullName : "\(repo.fullName)#\(String(number))"
     }
 
     /// Whether this context is about an issue.
@@ -330,7 +330,7 @@ enum DelegationPrompt {
         return String(
             localized: """
                 You are running inside a detached git worktree that Shepherd created for pull \
-                request #\(context.number) of \(context.repo.fullName) — branch \
+                request #\(String(context.number)) of \(context.repo.fullName) — branch \
                 \(context.headRefName), checked out at commit \(shortOid).
 
                 Ground rules:
@@ -360,7 +360,7 @@ enum DelegationPrompt {
         String(
             localized: """
                 You are running inside a git worktree that Shepherd created for issue \
-                #\(context.number) of \(context.repo.fullName). It is checked out on a new \
+                #\(String(context.number)) of \(context.repo.fullName). It is checked out on a new \
                 branch, \(context.headRefName), started from the tip of the repository's \
                 default branch. Shepherd named that branch; do not rename it and do not switch \
                 to another one.

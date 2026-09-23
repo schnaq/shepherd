@@ -174,7 +174,7 @@ final class NotificationManager {
             guard settings.notifyOnDraftConflict else { return nil }
             return NotificationPayload(
                 identifier: "draft-conflict-\(conflict.prID)-\(conflict.actualHeadOid)",
-                title: String(localized: "Review not sent · \(conflict.repo.fullName)#\(conflict.number)"),
+                title: String(localized: "Review not sent · \(conflict.repo.fullName)#\(String(conflict.number))"),
                 body: String(localized: "The pull request got new commits. Re-review before submitting."),
                 pullRequestIDs: [conflict.prID]
             )

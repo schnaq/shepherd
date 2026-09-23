@@ -796,13 +796,13 @@ final class DelegationModel: Identifiable {
     var commitMessage: String {
         switch context.origin {
         case .pullRequest:
-            return String(localized: "Address review feedback on #\(context.number)")
+            return String(localized: "Address review feedback on #\(String(context.number))")
         case .reviewFinding(let path, _):
             return String(localized: "Address review finding in \(path)")
         case .issue:
             // GitHub's own closing keyword, so the pull request this branch becomes closes the
             // issue it was assigned from without anybody having to remember to link them.
-            return String(localized: "Fix #\(context.number): \(context.title)")
+            return String(localized: "Fix #\(String(context.number)): \(context.title)")
         case .repository:
             // The task's own first line: it is what the user wrote the work down as, and there is
             // no number or title to say it better. Cut at a commit subject's customary length.

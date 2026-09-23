@@ -73,6 +73,20 @@ final class LocalizationTests: XCTestCase {
         XCTAssertEqual(composed, "Kommentar zu Zeile 42")
     }
 
+    func testAPullRequestNumberIsNotGroupedInGerman() throws {
+        let german = try germanTable()
+        // An integer specifier formats with the locale's grouping, which turned `#1024` into
+        // `#1.024` on a German Mac; the number after `#` is interpolated as a string instead
+        // (Scripts/check-localization.py rule 5).
+        let number = 1024
+        let composed = String(
+            localized: "\("shepherd") #\(String(number))",
+            bundle: german,
+            locale: Locale(identifier: "de_DE")
+        )
+        XCTAssertEqual(composed, "shepherd #1024")
+    }
+
     // MARK: - English
 
     func testAMissingTableGivesTheKeyBack() {

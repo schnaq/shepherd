@@ -95,7 +95,7 @@ struct CIDiagnosisRequest: Sendable, Hashable {
     }
 
     /// `owner/name#number`, the way every other surface writes a pull request.
-    var slug: String { "\(repoFullName)#\(number)" }
+    var slug: String { "\(repoFullName)#\(String(number))" }
 
     /// The registry a provider validates this turn's tool calls against.
     ///

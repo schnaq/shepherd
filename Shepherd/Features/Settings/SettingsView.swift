@@ -658,7 +658,7 @@ struct SyncSettingsTab: View {
                     ForEach(hidden.entries) { entry in
                         HStack(alignment: .top, spacing: 8) {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(verbatim: "\(entry.repo.fullName)#\(entry.number)")
+                                Text(verbatim: "\(entry.repo.fullName)#\(String(entry.number))")
                                     .font(Theme.mono(11))
                                     .foregroundStyle(Theme.textMuted)
                                 Text(entry.title)
@@ -724,7 +724,7 @@ struct SyncSettingsTab: View {
     private func failedOutboxRow(_ item: OutboxItem, session: SignedInSession) -> some View {
         HStack(alignment: .top, spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: "\(item.repo.fullName)#\(item.number) · \(Self.actionName(item.action))")
+                Text(verbatim: "\(item.repo.fullName)#\(String(item.number)) · \(Self.actionName(item.action))")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Theme.textSecondary)
                 Text(item.localizedLastError ?? String(localized: "No reason was recorded."))

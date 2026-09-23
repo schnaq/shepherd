@@ -593,7 +593,7 @@ struct InboxRowView: View {
                     // beside "swift-…es #50" (2026-09-09 live test). It outranks the chips beside
                     // it so it is the last thing on this line to give up width; the full
                     // `owner/name#number` is on the tooltip either way.
-                    Text("\(row.repo.name) #\(row.number)")
+                    Text("\(row.repo.name) #\(String(row.number))")
                         .font(Theme.mono(11))
                         .foregroundStyle(Theme.textSecondary)
                         .lineLimit(1)
