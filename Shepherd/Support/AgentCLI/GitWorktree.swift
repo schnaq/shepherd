@@ -216,11 +216,11 @@ struct GitWorktree: Sendable {
     ///
     /// One `for-each-ref` answers for local and remote branches, after a fetch so that "on
     /// `origin`" means now rather than whenever the clone last fetched — a branch pushed from
-    /// another Mac this morning counts. The fetch is best-effort (an offline Mac still gets a name,
-    /// checked against what it knows), and the one ``addForNewWork(branch:)`` makes straight after
-    /// is then a cheap no-op.
-    func takenTaskSlugs() async -> Set<String> {
-        _ = try? await run(["fetch", "origin"], in: checkout, label: "fetch")
+    /// another Mac this morning counts. That fetch is the task's only one: it throws as
+    /// ``addForNewWork(branch:fetch:)``'s would, so an offline Mac is told before anything is
+    /// claimed, and the worktree step then skips its own.
+    func takenTaskSlugs() async throws -> Set<String> {
+        try await run(["fetch", "origin"], in: checkout, label: "fetch")
         let result = try? await runner.run(
             executable: git,
             arguments: [
@@ -324,11 +324,16 @@ struct GitWorktree: Sendable {
     /// Handing the same issue over twice **resumes** the branch rather than resetting it: the
     /// first run's commits are the user's work, and a second worktree that quietly threw them
     /// away would be the worst possible reading of "assign this again".
-    /// - Parameter branch: The branch to create, from ``branchName(issueNumber:)``.
+    /// - Parameters:
+    ///   - branch: The branch to create, from ``branchName(issueNumber:)``.
+    ///   - fetch: Whether to fetch first; `false` only when the caller fetched a moment ago
+    ///     (``takenTaskSlugs()``), so one new task costs one fetch.
     /// - Returns: The ref the branch was started from, e.g. `origin/main`, for the transcript.
     @discardableResult
-    func addForNewWork(branch: String) async throws -> String {
-        try await run(["fetch", "origin"], in: checkout, label: "fetch")
+    func addForNewWork(branch: String, fetch: Bool = true) async throws -> String {
+        if fetch {
+            try await run(["fetch", "origin"], in: checkout, label: "fetch")
+        }
         // Best-effort: a clone made before the default branch was renamed still points at the
         // old name, and this is the cheap way to notice. A failure here is not fatal — the
         // pointer may already be right, and ``defaultBranchRef()`` is what actually decides.
@@ -411,9 +416,13 @@ struct GitWorktree: Sendable {
     /// the sheet with no way out — a run whose `worktree add` failed half-way, or a directory the
     /// user deleted in Finder. The remove is skipped and the prune still runs, which is what
     /// clears git's record of a worktree whose directory has gone.
-    func remove() async throws {
+    /// - Returns: Whether there was a directory to remove — the caller's cue that a branch with
+    ///   no directory may be a leftover (``deleteLocalBranchIfUnused(_:since:)``).
+    @discardableResult
+    func remove() async throws -> Bool {
         try ensureManaged()
-        if FileManager.default.fileExists(atPath: directory.path) {
+        let hadDirectory = FileManager.default.fileExists(atPath: directory.path)
+        if hadDirectory {
             try await run(
                 ["worktree", "remove", "--force", directory.path],
                 in: checkout,
@@ -421,6 +430,7 @@ struct GitWorktree: Sendable {
             )
         }
         try await run(["worktree", "prune"], in: checkout, label: "worktree prune")
+        return hadDirectory
     }
 
     /// Deletes a local branch that exists and holds no work of its own; keeps any other.

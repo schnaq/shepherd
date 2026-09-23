@@ -399,10 +399,10 @@ final class DelegationModel: Identifiable {
         String(localized: "\(taskTitle) — \(phase.title)")
     }
 
-    /// A repository task's ⌘K command, which has to name the repository too — the palette lists
-    /// every repository's tasks together.
+    /// A repository task's ⌘K command: the submenu entry, prefixed with the repository — the
+    /// palette lists every repository's tasks together.
     var taskPaletteTitle: String {
-        String(localized: "Show agent task “\(taskTitle)” on \(context.repo.fullName) — \(phase.title)")
+        String(localized: "Show agent task on \(context.repo.fullName): \(taskMenuTitle)")
     }
 
     /// Whether ``worktree`` names the directory the run uses.
@@ -495,6 +495,10 @@ final class DelegationModel: Identifiable {
                     )
                 }
             } catch {
+                // A cancelled preparation has already said so (``cancel()``); whatever git or the
+                // cancellation check threw on the way out is not news, and must not turn a run the
+                // user stopped into one that failed.
+                guard !Task.isCancelled else { return }
                 self.fail(with: error)
                 return
             }
@@ -573,7 +577,9 @@ final class DelegationModel: Identifiable {
         if taskBranch != nil, FileManager.default.fileExists(atPath: worktree.directory.path) {
             return (worktree, nil)
         }
-        let fromGit = await worktree.takenTaskSlugs()
+        let fromGit = try await worktree.takenTaskSlugs()
+        // Stopped while fetching: nothing is claimed and nothing is created.
+        try Task.checkCancellation()
         // From here to `taskBranch = branch` there is no `await`, and that is the whole race
         // guard: this runs on the main actor, so no other task on the repository can pick a name
         // between this one reading the claims and making its own. A task started a moment ago
@@ -595,24 +601,38 @@ final class DelegationModel: Identifiable {
         // started a moment later off the same name while git is still working.
         self.worktree = relocated
         taskBranch = branch
+        let base: String
         do {
-            let base = try await relocated.addForNewWork(branch: branch)
-            newWorkBase = base
-            return (relocated, base)
+            // No second fetch: ``GitWorktree/takenTaskSlugs()`` fetched a moment ago.
+            base = try await relocated.addForNewWork(branch: branch, fetch: false)
         } catch {
             // git said no, so the task holds nothing: the claim is released — the slug is free
             // for the next task and for *Try again*, which picks afresh — and the handle goes
             // back to the managed root, so *Discard* and *Reveal* have nothing to aim at. The
-            // git error itself becomes the failed state's message (``fail(with:)``).
+            // git error itself becomes the failed state's message (``fail(with:)``). A run the
+            // user stopped gets no such note: it did not fail, it was stopped.
             self.worktree = worktree.relocated(to: worktree.managedRoot)
             taskBranch = nil
             newWorkBase = nil
-            append(
-                .note,
-                String(localized: "Git could not create \(branch). The name is free again; Try again picks a new one.")
-            )
+            if !Task.isCancelled {
+                append(
+                    .note,
+                    String(localized: "Git could not create \(branch). The name is free again; Try again picks a new one.")
+                )
+            }
             throw error
         }
+        newWorkBase = base
+        if Task.isCancelled {
+            // Stopped while git was creating it: the worktree exists now, and the claim with it,
+            // so the sheet can reveal or discard it — but the agent is not started.
+            append(
+                .note,
+                String(localized: "Stopped after the worktree was created. It is left at \(relocated.directory.lastPathComponent); discard it or run again.")
+            )
+            throw CancellationError()
+        }
+        return (relocated, base)
     }
 
     /// Stops the run: `SIGTERM`, then `SIGKILL` after a grace period.
@@ -693,6 +713,9 @@ final class DelegationModel: Identifiable {
     }
 
     private func fail(with error: any Error) {
+        // A stopped run stays stopped: a git step that fails on its way out after ``cancel()``
+        // must not rewrite the state, the transcript or the announced outcome.
+        guard state != .cancelled else { return }
         stopTimer()
         let message = error.userFacingDescription
         state = .failed(message: message)
@@ -832,16 +855,15 @@ final class DelegationModel: Identifiable {
         // its handle still names the managed root — which `remove()` refuses anyway.
         guard isWorktreeDirectoryKnown, let worktree, !isPublishing else { return }
         isPublishing = true
-        let hadDirectory = FileManager.default.fileExists(atPath: worktree.directory.path)
-        let leftoverBranch = context.isRepositoryTask && !hadDirectory ? taskBranch : nil
+        let branch = context.isRepositoryTask ? taskBranch : nil
         let base = newWorkBase
         actionTask = Task { [weak self] in
             guard let self else { return }
             defer { self.isPublishing = false }
             do {
-                try await worktree.remove()
-                if let leftoverBranch {
-                    try await worktree.deleteLocalBranchIfUnused(leftoverBranch, since: base)
+                let removedDirectory = try await worktree.remove()
+                if let branch, !removedDirectory {
+                    try await worktree.deleteLocalBranchIfUnused(branch, since: base)
                 }
                 self.state = .idle
                 self.transcript = []

@@ -17921,16 +17921,6 @@
         }
       }
     },
-    "Show agent task “%@” on %@ — %@": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Agent-Aufgabe „%@“ in %@ zeigen — %@"
-          }
-        }
-      }
-    },
     "Agent tasks": {
       "localizations": {
         "de": {
@@ -17967,6 +17957,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Git konnte %@ nicht anlegen. Der Name ist wieder frei; „Erneut versuchen“ wählt einen neuen."
+          }
+        }
+      }
+    },
+    "Show agent task on %@: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent-Aufgabe in %@ zeigen: %@"
+          }
+        }
+      }
+    },
+    "Stopped after the worktree was created. It is left at %@; discard it or run again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nach dem Anlegen des Worktrees gestoppt. Er liegt unter %@; verwirf ihn oder starte erneut."
           }
         }
       }
