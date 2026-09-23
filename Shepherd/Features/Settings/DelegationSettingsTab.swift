@@ -11,6 +11,11 @@ struct DelegationSettingsTab: View {
     @State private var detectState: DetectState = .idle
     @State private var newRepoFullName = ""
     @State private var repoError: String?
+    /// The folder "Add a local repository…" is confirming, while its sheet is up.
+    ///
+    /// This window's own rather than ``AppEnvironment/localRepositoryDraft``: Settings is a
+    /// window of its own, and the sheet belongs in front of the window the click came from.
+    @State private var localRepositoryDraft: LocalRepositoryDraft?
     /// Which editors this Mac has, read when the tab appears rather than on every redraw.
     @State private var installedEditors: Set<EditorKind> = []
 
@@ -31,6 +36,21 @@ struct DelegationSettingsTab: View {
             editorCard
             automaticCard
             policyCard
+        }
+        .sheet(item: $localRepositoryDraft) { draft in
+            AddLocalRepositorySheet(
+                draft: draft,
+                settings: environment.settings,
+                toasts: environment.toasts,
+                onChooseAnother: { chooseLocalRepository() }
+            )
+        }
+    }
+
+    /// Picks a clone and puts the confirmation up in this window.
+    private func chooseLocalRepository() {
+        Task { @MainActor in
+            localRepositoryDraft = await LocalRepositoryDraft.choose()
         }
     }
 
@@ -223,6 +243,20 @@ struct DelegationSettingsTab: View {
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
+
+                // The one-step way first: the repository is read from the clone's `origin`, and
+                // watching it comes in the same confirmation. The typed row below stays for a
+                // clone whose remote does not say (ADR 0011's 2026-09-23 amendment).
+                HStack(spacing: 8) {
+                    Button(String(localized: "Add a local repository…")) { chooseLocalRepository() }
+                        .buttonStyle(SecondaryButtonStyle(height: 28))
+                    Text(String(
+                        localized: "Pick the folder; Shepherd reads the repository from its origin and can watch it too."
+                    ))
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
 
                 if environment.settings.localCheckouts.isEmpty {
                     Text(String(localized: "None configured yet."))

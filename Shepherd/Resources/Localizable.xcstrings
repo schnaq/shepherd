@@ -15841,16 +15841,6 @@
         }
       }
     },
-    "Watch a repository, so every open pull request in it reaches the inbox (⇧⌘A)": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ein Repository beobachten, damit jeder offene Pull Request daraus in der Inbox landet (⇧⌘A)"
-          }
-        }
-      }
-    },
     "Nothing here yet. Press ⇧⌘A to watch a repository and see the pull requests nobody asked you about.": {
       "localizations": {
         "de": {
@@ -17577,6 +17567,306 @@
           "stringUnit": {
             "state": "translated",
             "value": "neuer Branch"
+          }
+        }
+      }
+    },
+    "%@ is not inside a git clone. Choose the folder you cloned the repository into.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ liegt nicht in einem git-Clone. Wähle den Ordner, in den du das Repository geklont hast."
+          }
+        }
+      }
+    },
+    "Add": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hinzufügen"
+          }
+        }
+      }
+    },
+    "Add Local Repository…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokales Repository hinzufügen…"
+          }
+        }
+      }
+    },
+    "Add a local repository": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokales Repository hinzufügen"
+          }
+        }
+      }
+    },
+    "Add a local repository…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokales Repository hinzufügen…"
+          }
+        }
+      }
+    },
+    "Add a repository": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository hinzufügen"
+          }
+        }
+      }
+    },
+    "Added %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hinzugefügt."
+          }
+        }
+      }
+    },
+    "Agents you start on this repository work in worktrees built from this clone, and “Open in editor” opens its files.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agents, die du in diesem Repository startest, arbeiten in Worktrees aus diesem Clone, und „Im Editor öffnen“ öffnet seine Dateien."
+          }
+        }
+      }
+    },
+    "Already linked.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schon verknüpft."
+          }
+        }
+      }
+    },
+    "Already watched.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird schon beobachtet."
+          }
+        }
+      }
+    },
+    "Choose another folder…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anderen Ordner wählen…"
+          }
+        }
+      }
+    },
+    "Choose your local clone of a GitHub repository": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wähle deinen lokalen Clone eines GitHub-Repositorys"
+          }
+        }
+      }
+    },
+    "Every open pull request in it reaches the inbox, even the ones nobody asked you about.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder offene Pull Request daraus landet in der Inbox, auch die, zu denen dich niemand gefragt hat."
+          }
+        }
+      }
+    },
+    "Link a local checkout…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokalen Checkout verknüpfen…"
+          }
+        }
+      }
+    },
+    "Link this folder as the local checkout": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diesen Ordner als lokalen Checkout verknüpfen"
+          }
+        }
+      }
+    },
+    "Linked your clone of %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Clone von %@ ist verknüpft."
+          }
+        }
+      }
+    },
+    "Pick the folder; Shepherd reads the repository from its origin and can watch it too.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wähle den Ordner; Shepherd liest das Repository aus seinem origin und kann es auch beobachten."
+          }
+        }
+      }
+    },
+    "Replaces the folder linked now: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ersetzt den bisher verknüpften Ordner: %@"
+          }
+        }
+      }
+    },
+    "Shepherd could not read a GitHub repository out of origin (%@). Enter it as owner/repository.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd konnte aus origin (%@) kein GitHub-Repository lesen. Gib es als owner/repository ein."
+          }
+        }
+      }
+    },
+    "Shepherd could not run git to look at this folder: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd konnte git nicht ausführen, um diesen Ordner anzusehen: %@"
+          }
+        }
+      }
+    },
+    "Start an agent on %@…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent in %@ starten…"
+          }
+        }
+      }
+    },
+    "Start an agent…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent starten…"
+          }
+        }
+      }
+    },
+    "This clone has no origin remote, so Shepherd cannot tell which repository it is. Enter it as owner/repository.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieser Clone hat kein origin-Remote, daher weiß Shepherd nicht, welches Repository es ist. Gib es als owner/repository ein."
+          }
+        }
+      }
+    },
+    "Watch a repository by name (⇧⌘A), or add a local clone so agents can start in it too": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Repository per Name beobachten (⇧⌘A) oder einen lokalen Clone hinzufügen, damit auch Agents darin starten können"
+          }
+        }
+      }
+    },
+    "Watch a repository…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository beobachten…"
+          }
+        }
+      }
+    },
+    "Watch the repository": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Repository beobachten"
+          }
+        }
+      }
+    },
+    "Watched, with a local checkout: every open pull request in this repository reaches the inbox, and you can start an agent in it from the context menu.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beobachtet, mit lokalem Checkout: Jeder offene Pull Request aus diesem Repository landet in der Inbox, und über das Kontextmenü kannst du darin einen Agent starten."
+          }
+        }
+      }
+    },
+    "local checkout linked": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "lokaler Checkout verknüpft"
+          }
+        }
+      }
+    },
+    "origin points at %@, not GitHub. If the repository is also on GitHub, enter its name as owner/repository.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "origin zeigt auf %@, nicht auf GitHub. Liegt das Repository auch auf GitHub, gib seinen Namen als owner/repository ein."
+          }
+        }
+      }
+    },
+    "origin points at %@, which looks like GitHub Enterprise. Shepherd only talks to github.com, so it cannot watch this repository or start agents in it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "origin zeigt auf %@, das sieht nach GitHub Enterprise aus. Shepherd spricht nur mit github.com und kann dieses Repository daher weder beobachten noch Agents darin starten."
           }
         }
       }

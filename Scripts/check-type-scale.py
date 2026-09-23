@@ -64,6 +64,8 @@ MIGRATED = (
     # in them came out of `Theme.type(_:weight:)` in the first place.
     "Shepherd/Features/Settings/TelemetryNoticeSheet.swift",
     "Shepherd/Features/Settings/TelemetrySettingsCard.swift",
+    # "Add a local repository…" (ADR 0011's 2026-09-23 amendment), on the scale from birth.
+    "Shepherd/Features/Inbox/AddLocalRepositorySheet.swift",
 )
 
 # A fixed point size, either spelling: SwiftUI's own or `Theme.mono`'s numeric overload. `\s*`

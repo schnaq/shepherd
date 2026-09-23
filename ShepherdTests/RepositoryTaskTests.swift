@@ -380,6 +380,20 @@ final class RepositoryTaskTests: XCTestCase {
         XCTAssertNotNil(settings.localCheckoutURL(for: repo))
     }
 
+    func testLinkedRepositoriesAreTheValidNonEmptyCheckoutsByName() throws {
+        let settings = try settings()
+        settings.localCheckouts = [
+            "schnaq/zeta": "/code/zeta",
+            "schnaq/alpha": "/code/alpha",
+            "not a repository": "/code/x",
+            "schnaq/empty": "  ",
+        ]
+        XCTAssertEqual(
+            settings.linkedRepositories.map(\.fullName),
+            ["schnaq/alpha", "schnaq/zeta"]
+        )
+    }
+
     func testACheckoutIsFoundWhateverCaseTheRepositoryIsSpelledIn() throws {
         let settings = try settings()
         settings.setLocalCheckout(checkout, forRepoNamed: "Schnaq/Review")

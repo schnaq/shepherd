@@ -632,6 +632,17 @@ final class AppSettings {
         return URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
     }
 
+    /// Every repository with a linked clone, by name — what "Start an agent on …" is offered for.
+    ///
+    /// Keys that are not a valid `owner/name` (a hand-edited defaults file) are skipped rather
+    /// than offered as a command that could only fail.
+    var linkedRepositories: [RepoRef] {
+        localCheckouts
+            .filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .compactMap { RepoRef.parse(fullName: $0.key) }
+            .sorted()
+    }
+
     /// Sets (or clears) the local clone for a repository.
     /// - Parameters:
     ///   - url: The checkout directory, or `nil` to forget it.

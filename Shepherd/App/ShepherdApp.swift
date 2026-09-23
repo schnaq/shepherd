@@ -85,10 +85,11 @@ struct ShepherdApp: App {
                     environment.applySpotlightSetting()
                 }
                 // And once more for the watched repositories (ADR 0005's 2026-09-16 amendment).
-                // Only the Settings card writes this one — it is device-local, like the ignore
-                // list, and not in `SyncedSettingsDocument` — but it still goes through an
-                // `onChange` rather than the card, so that the card cannot forget to tell the
-                // sweep and a future second writer inherits the wiring.
+                // It is device-local, like the ignore list, and not in `SyncedSettingsDocument`,
+                // and it goes through an `onChange` rather than through its writers, so that no
+                // writer can forget to tell the sweep. There are three now — the Settings card,
+                // the inbox's watch dialog and "Add a local repository…" — and none of them
+                // needed any wiring of its own to get the same immediate sweep.
                 .onChange(of: environment.settings.watchedRepositories) { _, _ in
                     environment.applyWatchedRepositoriesSetting()
                 }
@@ -239,6 +240,11 @@ struct ShepherdCommands: Commands {
                 environment.isAddingWatchedRepository = true
             }
             .keyboardShortcut("a", modifiers: [.command, .shift])
+            .disabled(environment.session == nil)
+
+            Button(String(localized: "Add Local Repository…")) {
+                environment.addLocalRepository()
+            }
             .disabled(environment.session == nil)
 
             Button(String(localized: "Sync Now")) {
