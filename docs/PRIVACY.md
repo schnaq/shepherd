@@ -33,7 +33,7 @@ Shepherd has no account system of its own. The only identity involved is your Gi
 
 ## 2. Usage statistics
 
-### The two levels
+### The three levels
 
 Shepherd asks once, when it first opens, before anything is recorded. **Nothing is counted until
 you say yes.** Three levels:

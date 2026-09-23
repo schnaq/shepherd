@@ -7,8 +7,9 @@ translation, App Intents, Spotlight — and settled what comes after v1: the iss
 [v1.1](#v11--issues-inbox-and-agent-assignment)). v1 is deliberately full-featured on the review
 path — the founder's bar is "never need to open github.com for a routine review".
 
-Ticked boxes are shipped on `main`; the unticked lines under **Foundation** are what remains before
-the release workflow is run in earnest.
+Ticked boxes are shipped on `main`. The release workflow has been run in earnest: v1.0.0 through
+v1.4.0 are on GitHub Releases, signed, notarized and fed through Sparkle
+([docs/RELEASING.md](RELEASING.md)).
 
 ## v0.x → v1.0 (current work)
 
@@ -160,7 +161,11 @@ the release workflow is run in earnest.
       `onInboxRows` callback auto-merge and the search index use, diffed against what was last
       written so a sweep that changed nothing costs no framework call, batched and low priority;
       a pull request that leaves the inbox is deleted, and signing out or switching the toggle off
-      deletes the whole domain. On by default, synced in the encrypted settings document
+      deletes the whole domain. On by default, synced in the encrypted settings document. **Amended
+      2026-09-22**: notifications about a pull request carry its entity so Siri and the system can
+      act on "this" (*Open*, *Summarize*), Spotlight items are associated with their
+      `PullRequestEntity`, and the system's own re-index request is answered — still read-only, no
+      write intent added (ADR 0038 item 3)
 
 **Intelligence (ADR 0007)**
 - [x] Tier 1 heuristics: file prioritization, risk hints — always on
@@ -208,8 +213,9 @@ the release workflow is run in earnest.
       English. The **CLI stayed English** — CONTRIBUTING.md's existing line, kept deliberately: its
       output is read by shell scripts and n8n nodes, and ADR 0013 leaves it a URL builder with no
       resource bundle
-- [ ] First signed release: the maintainer's Developer ID certificate and Sparkle's `generate_keys`
-      run once, then `Scripts/release.sh` (ADR 0010, [docs/RELEASING.md](RELEASING.md))
+- [x] First signed release: the maintainer's Developer ID certificate and Sparkle's `generate_keys`
+      run once, then `Scripts/release.sh` — v1.0.0 through v1.4.0 are on GitHub Releases
+      (ADR 0010, [docs/RELEASING.md](RELEASING.md))
 
 ## v1.1 — issues inbox and agent assignment
 
@@ -295,28 +301,45 @@ short form.
       embedding (ADR 0019's on-device model, cached per snippet) is nearest to the thread's text are
       offered in the `text.badge.plus` menu first. No new model, no new setting, and nothing
       inserted uninvited
-- Verified and parked 2026-09-03: a **Private Cloud Compute** rung between on-device and
-  bring-your-own-key, and collapsing the providers onto Apple's `LanguageModel` protocol. Both are
-  macOS 27, and the no-cost entitlement is tied to App Store distribution; ADR 0025 records the
-  design and the three conditions that reopen it
+- Verified and parked 2026-09-03, reverified 2026-09-22: a **Private Cloud Compute** rung between
+  on-device and bring-your-own-key stays parked — a Developer-ID build now reports
+  `availability == .available` but the first request fails
+  (`ModelManagerError 1046`), because the no-cost entitlement is still tied to App Store
+  distribution; ADR 0025 records the design and the three conditions that reopen it
+- [x] Collapsing the providers onto Apple's `LanguageModel` protocol — built 2026-09-22, ahead of
+  the Private Cloud Compute rung above and by a different route: `OnDeviceProvider` became
+  `SessionProvider<Backend: LanguageModelBackend>`, one session type driven by whichever backend
+  answers, with `ClaudeBackend` on Anthropic's `ClaudeForFoundationModels` package replacing the
+  hand-written Anthropic HTTP provider entirely (ADR 0031 amendment 2026-09-22)
 - Considered and rejected in the same interview, recorded so it is not proposed again: Image
   Playground / Genmoji (no image surface in a review tool), speech input (`SpeechAnalyzer` — a
   review is read, not dictated), a sentiment check on outgoing comments (tone is the reviewer's
   call; Writing Tools already offers a rewrite when asked), and an AI-written morning digest (the
   digest runs unattended and its lines are deterministic on purpose, see v1.x below)
 
-## macOS 27 — the target moves (decision 2026-09-03)
+## macOS 27 — the target moves, and lands (decision 2026-09-03, floor accepted 2026-09-22)
 
-Shepherd targets macOS 27 as soon as CI can build against its SDK; the plan, verified against
-Apple's documentation, is [`docs/plans/macos-27.md`](plans/macos-27.md). In order: the toolchain
-commit (held until the runner has Xcode 27 or the hosted `xcode-27` image is used), a local model
-you bring via `MLXLanguageModel` as the second on-device model with a context far past 8K and
-nothing leaving the Mac (ADR 0031), image input for the attended surfaces, `DynamicProfile` for the
-CI diagnosis, Siri interaction donations, and Anthropic's `LanguageModel` package at 1.0.
-Private Cloud Compute stays parked (ADR 0025). On 2026-09-06 the owner set the assumption rather
-than the date — until Xcode 27 is on the runner every decision assumes macOS 27 is the target, and
-the toolchain commit is rebased onto `main` waiting for it — and [ADR 0031](adr/0031-a-model-you-bring.md)
-is **Proposed**, to be accepted the day that commit lands.
+Shepherd targeted macOS 27 as soon as CI could build against its SDK, and on 2026-09-22 it did: the
+build machine moved to Xcode 27 and the minimum deployment target became macOS 27.0, Apple Silicon
+only — [ADR 0038](adr/0038-macos-27-floor.md), which supersedes ADR 0002's floor and is **Accepted**.
+The plan, verified against Apple's documentation, is [`docs/plans/macos-27.md`](plans/macos-27.md).
+ADR 0038 lays out the programme this floor is for, in order: Claude as a `LanguageModel`, the
+reviewer that reads the diff, Siri acting on Shepherd's notifications, image input for the attended
+surfaces, and the list that moves. The first three landed the same day, each narrower than the plan
+first sketched: Claude as a `LanguageModel` is the amendment to [ADR 0031](adr/0031-a-model-you-bring.md)
+above — `SessionProvider<Backend>` is the seam, `ClaudeBackend` on `ClaudeForFoundationModels` is the
+first backend through it, and ADR 0031 itself stays **Proposed** until its toolchain commit is judged
+against the GM SDK, which is a separate step from this landing; *Look closer* is
+[ADR 0026](adr/0026-claims-vs-evidence.md)'s amendment (see **Claims vs. Evidence** under v1.2
+below); and Siri/Spotlight naming a pull request is [ADR 0021](adr/0021-app-intents-and-spotlight.md)'s
+amendment, read-only (see **App Intents for Shortcuts and Siri** under v1 above). Image input and
+the reorderable, swipeable list are still ahead.
+
+A local model you bring, over `MLXLanguageModel` as a third backend on the same seam, is still the
+plan's own item and is not part of ADR 0038's programme; it stays as ADR 0031 describes it (§§Two–
+Seven), unbuilt. Private Cloud Compute stays parked (ADR 0025): reverified 2026-09-22 against a
+real Developer-ID build, `availability` answers `.available` and the first request still fails with
+`ModelManagerError 1046` — the entitlement condition is unmet, now confirmed rather than assumed.
 
 ## v1.2 — managing the herd (interview 2026-09-03)
 
@@ -332,7 +355,12 @@ order. Everything here is tier 1 first (deterministic, local); a model only ever
       too — one ETag-cached issue read while the card is open, keyword overlap plus the on-device
       cosine, ✓ only when every bullet is mentioned and never ✗ — and the optional on-device pass
       over the same description is in as well, spent when the reviewer opens the card, additive,
-      its lines marked *Read by the model* (ADR 0026's two amendments)
+      its lines marked *Read by the model* (ADR 0026's two amendments). **Look closer**, landed
+      2026-09-22 (ADR 0038 item 2, narrower than planned — see the amendment above): one click on a
+      ✗ or ? line starts an on-device session that points at one to three lines of the diff and one
+      sentence, never a verdict; no Private Cloud Compute (the entitlement still fails the first
+      request) and no Spotlight tool (the index holds only open pull requests' titles and labels)
+      (ADR 0026's third amendment)
 - [x] Track record and trust lanes — closed pull requests of the last 90 days backfilled once per
       repository; **Short look** only when CI is green and the diff is small, history informs the
       badge and the sort, never the lane (ADR 0027)
@@ -451,15 +479,13 @@ remain and each is a project rather than a label; what they would take is in
   or AppleScript decision ADR 0013 deferred
 - ~~Issues as a first-class inbox section~~ — promoted to the v1.1 block above, together with
   linking and "assign an issue to an agent"
-- ~~Signed + notarized releases, Homebrew cask, Sparkle appcast (ADR 0010)~~ — **built, waiting on
-  one credential.** `Scripts/release.sh` (build → Developer-ID sign → DMG → notarize → staple →
-  Sparkle-sign → appcast), `.github/workflows/release.yml` (tag `v*` or manual), Sparkle 2 in the
-  app with a "Check for Updates…" menu item and an opt-out toggle in Settings, and a Homebrew
-  cask template for `schnaq/homebrew-tap` are all committed. What is missing is the maintainer's
-  Apple Developer ID certificate and one run of Sparkle's `generate_keys`: until then the updater
-  refuses to start (and says why, rather than shipping something unverified) and the release
-  workflow aborts on its first step naming the missing secrets. One-time setup:
-  [docs/RELEASING.md](RELEASING.md)
+- ~~Signed + notarized releases, Homebrew cask, Sparkle appcast (ADR 0010)~~ — **shipped.**
+  `Scripts/release.sh` (build → Developer-ID sign → DMG → notarize → staple → Sparkle-sign →
+  appcast), `.github/workflows/release.yml` (tag `v*` or manual), Sparkle 2 in the app with a
+  "Check for Updates…" menu item and an opt-out toggle in Settings, and the Homebrew cask in
+  `schnaq/homebrew-tap` are all live: v1.0.0 through v1.4.0 are on GitHub Releases, each
+  Developer-ID-signed, notarized and fed through Sparkle. One-time setup, kept for a new
+  maintainer or a rebuilt runner: [docs/RELEASING.md](RELEASING.md)
 
 ## Later / explorations
 

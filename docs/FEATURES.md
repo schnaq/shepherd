@@ -93,7 +93,7 @@ automation hears `issue.assigned_to_agent` the moment the run really starts.
 
 And it is drivable from outside like everything else: `shepherd issue schnaq/review#128` opens one,
 `shepherd inbox issues` opens the section, and `shepherd://issue/…` does the same from a script or
-a Raycast command ([ADR 0013](adr/0013-deep-links-and-cli.md)). An issue a colleague sends you that
+a Raycast command ([ADR 0013](adr/0013-url-scheme-and-cli.md)). An issue a colleague sends you that
 is not in your inbox at all is fetched, once, and opened.
 
 ### Find a pull request by what it is about

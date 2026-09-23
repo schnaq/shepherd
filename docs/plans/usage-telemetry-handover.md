@@ -1,5 +1,8 @@
 # Handover: usage telemetry
 
+Status: done (v1.2.0), see [ADR 0036](../adr/0036-usage-telemetry.md) and
+[docs/PRIVACY.md](../PRIVACY.md)
+
 Branch: `feat/usage-telemetry` · Date: 2026-09-18 · Base: `main` at `632125b`
 
 Everything on this branch is **documentation**. No Swift file has been touched, no build setting
