@@ -289,7 +289,18 @@ final class RepositoryTaskTests: XCTestCase {
         XCTAssertEqual(manual.readiness, .ready)
     }
 
-    func testAFinishedTaskIsShownAgainRatherThanReplaced() throws {
+    func testATaskThatNeverGotADirectoryIsNotKeptForReentry() throws {
+        let center = DelegationCenter()
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "shepherd.tests.\(UUID().uuidString)"))
+        let settings = AppSettings(defaults: defaults)
+        settings.setLocalCheckout(checkout, forRepoNamed: repo.fullName)
+        _ = center.open(context: .repository(repo), settings: settings, toasts: ToastCenter())
+        // Opened but never started: there is no worktree to go back to, so the next "Start an
+        // agent…" may open a fresh sheet.
+        XCTAssertNil(center.finishedRepositoryTask(for: repo))
+    }
+
+    func testPresentOnlyShowsAModelTheCentreHolds() throws {
         let center = DelegationCenter()
         let defaults = try XCTUnwrap(UserDefaults(suiteName: "shepherd.tests.\(UUID().uuidString)"))
         let settings = AppSettings(defaults: defaults)
