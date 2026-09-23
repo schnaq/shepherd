@@ -83,6 +83,17 @@ struct RootView: View {
             .sheet(isPresented: Bindable(environment).isAddingWatchedRepository) {
                 WatchRepositorySheet(settings: environment.settings)
             }
+            // Chained after the watch dialog rather than sharing its modifier, the arrangement
+            // the telemetry notice and the watch dialog above already have: each `.sheet` wraps
+            // the view the previous one produced, so they are separate presentations.
+            .sheet(item: Bindable(environment).localRepositoryDraft) { draft in
+                AddLocalRepositorySheet(
+                    draft: draft,
+                    settings: environment.settings,
+                    toasts: environment.toasts,
+                    onChooseAnother: { environment.addLocalRepository() }
+                )
+            }
             .task {
                 environment.reopenMainWindow = { openWindow(id: ShepherdScene.mainWindow) }
                 environment.openSettingsWindow = { openSettings() }

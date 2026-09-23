@@ -256,7 +256,21 @@ struct InboxScreen: View {
                     model: model,
                     onOpenSettings: { environment.showSettings(.account) },
                     onWatchRepository: { environment.isAddingWatchedRepository = true },
-                    watchedRepositories: environment.settings.watchedRepositories
+                    watchedRepositories: environment.settings.watchedRepositories,
+                    onAddLocalRepository: { environment.addLocalRepository() },
+                    // Read through the settings object on every render, so linking a clone from
+                    // anywhere — the sheet, Settings, the review screen — updates the glyph.
+                    hasLocalCheckout: { environment.settings.localCheckoutURL(for: $0) != nil },
+                    onStartAgent: { environment.startRepositoryDelegation($0) },
+                    onLinkCheckout: { repo in
+                        // Only what the item says: the row's menu offers "Start an agent…" from
+                        // now on, and a delegation sheet appearing unasked would be a surprise.
+                        if environment.chooseLocalCheckout(for: repo) {
+                            environment.toasts.success(
+                                String(localized: "Linked your clone of \(repo.fullName).")
+                            )
+                        }
+                    }
                 )
             case .issues:
                 IssueSidebar(

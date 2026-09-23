@@ -418,6 +418,33 @@ struct CommandPaletteView: View {
         )
         result.append(
             PaletteCommand(
+                id: "add-local-repo",
+                section: inbox,
+                title: String(localized: "Add a local repository…"),
+                systemImage: "laptopcomputer"
+            ) {
+                environment.addLocalRepository()
+            }
+        )
+        // One command per linked clone, because the palette has no "current repository" to act
+        // on from the inbox, and typing the repository's name is exactly how a reader looks for
+        // it here (ADR 0011's 2026-09-23 amendment). Only repositories with a checkout: without
+        // one there is nowhere for the worktree to come from.
+        let delegation = String(localized: "Delegation")
+        for repo in environment.settings.linkedRepositories {
+            result.append(
+                PaletteCommand(
+                    id: "start-agent-\(repo.fullName.lowercased())",
+                    section: delegation,
+                    title: String(localized: "Start an agent on \(repo.fullName)…"),
+                    systemImage: "terminal"
+                ) {
+                    environment.startRepositoryDelegation(repo)
+                }
+            )
+        }
+        result.append(
+            PaletteCommand(
                 id: "group-agent",
                 section: inbox,
                 title: String(localized: "Group inbox by agent"),

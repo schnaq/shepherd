@@ -58,6 +58,12 @@ final class AppEnvironment {
     /// Here rather than in the inbox's own state because three things raise it: the `+` beside
     /// the sidebar's REPOSITORIES heading, ⇧⌘A from the menu, and the ⌘K palette.
     var isAddingWatchedRepository = false
+    /// The folder "Add a local repository…" is confirming, while its sheet is up in the main
+    /// window (ADR 0011's 2026-09-23 amendment).
+    ///
+    /// Here for ``isAddingWatchedRepository``'s reason: the rail's `+` menu, the menu bar and ⌘K
+    /// all raise it. Settings → Delegation raises its own, in its own window.
+    var localRepositoryDraft: LocalRepositoryDraft?
     /// The tab the Settings window shows.
     ///
     /// It lives here rather than inside ``SettingsView`` because every surface that wants a
@@ -882,6 +888,18 @@ final class AppEnvironment {
             model.task = task
         }
         return model
+    }
+
+    /// "Add a local repository…" from the main window: pick a clone, read its `origin`, and put
+    /// the confirmation sheet up (``AddLocalRepositorySheet``).
+    ///
+    /// The panel runs first and the sheet only appears once git has answered, so a cancelled
+    /// panel leaves nothing behind.
+    func addLocalRepository() {
+        Task { @MainActor [weak self] in
+            guard let draft = await LocalRepositoryDraft.choose() else { return }
+            self?.localRepositoryDraft = draft
+        }
     }
 
     /// Asks for a folder and links it as a repository's local checkout (ADR 0039's map).

@@ -13,6 +13,14 @@ struct InboxSidebar: View {
     /// The repositories being watched, which are listed whether or not the current view holds a
     /// row from them.
     var watchedRepositories: [RepoRef] = []
+    /// Raises "Add a local repository…" — pick a clone, link it and watch it in one step.
+    var onAddLocalRepository: () -> Void = {}
+    /// Whether a repository has a linked local checkout, which is what lets an agent start in it.
+    var hasLocalCheckout: (RepoRef) -> Bool = { _ in false }
+    /// Opens the delegation sheet for a free-text task on a repository.
+    var onStartAgent: (RepoRef) -> Void = { _ in }
+    /// Asks for a folder to link as a repository's local checkout.
+    var onLinkCheckout: (RepoRef) -> Void = { _ in }
 
     var body: some View {
         ScrollView {
@@ -158,29 +166,51 @@ struct InboxSidebar: View {
         return VStack(alignment: .leading, spacing: 2) {
             HStack(spacing: 4) {
                 RailSectionHeader(title: String(localized: "REPOSITORIES"))
-                Button(action: onWatchRepository) {
+                // Two ways in, one `+`: watching by name is the old action and keeps ⇧⌘A; adding a
+                // clone from disk names the repository from its `origin` and links it for
+                // delegation as well (ADR 0011's 2026-09-23 amendment).
+                Menu {
+                    Button(String(localized: "Watch a repository…"), action: onWatchRepository)
+                    Button(String(localized: "Add a local repository…"), action: onAddLocalRepository)
+                } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(Theme.textMuted)
                         .frame(width: 16, height: 16)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .help(String(localized: "Watch a repository, so every open pull request in it reaches the inbox (⇧⌘A)"))
-                .accessibilityLabel(Text(String(localized: "Watch a repository")))
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help(String(localized: "Watch a repository by name (⇧⌘A), or add a local clone so agents can start in it too"))
+                .accessibilityLabel(Text(String(localized: "Add a repository")))
                 .padding(.trailing, 10)
                 .padding(.bottom, 6)
             }
             ForEach(watchedFacets, id: \.repo.fullName) { facet in
+                let isLinked = hasLocalCheckout(facet.repo)
                 RailRow(
                     title: facet.repo.fullName,
                     systemImage: "binoculars",
+                    trailingSystemImage: isLinked ? "laptopcomputer" : nil,
+                    trailingAccessibilityLabel: isLinked ? String(localized: "local checkout linked") : nil,
                     count: facet.count,
                     isSelected: model.repoFilter.map { $0.isSameRepository(as: facet.repo) } ?? false
                 ) {
                     toggleRepoFilter(facet.repo)
                 }
-                .help(String(localized: "Watched: every open pull request in this repository reaches the inbox."))
+                .help(isLinked
+                    ? String(localized: "Watched, with a local checkout: every open pull request in this repository reaches the inbox, and you can start an agent in it from the context menu.")
+                    : String(localized: "Watched: every open pull request in this repository reaches the inbox."))
+                .contextMenu {
+                    if isLinked {
+                        Button(String(localized: "Start an agent…")) { onStartAgent(facet.repo) }
+                    } else {
+                        // The picker first: a delegation needs a clone to build its worktree from,
+                        // so "Start an agent…" is only offered once there is one.
+                        Button(String(localized: "Link a local checkout…")) { onLinkCheckout(facet.repo) }
+                    }
+                }
             }
             ForEach(others.prefix(6), id: \.repo) { facet in
                 RailRow(
@@ -308,6 +338,10 @@ struct RailRow: View {
     var systemImage: String?
     /// An optional leading colour dot (used by the agents facet).
     var dotColor: Color?
+    /// An optional small glyph before the count — a watched repository's linked checkout.
+    var trailingSystemImage: String?
+    /// What the trailing glyph says to VoiceOver; a glyph is never the only carrier (ADR 0033).
+    var trailingAccessibilityLabel: String?
     /// The trailing count.
     var count: Int?
     /// Whether the row is the active facet.
@@ -341,6 +375,12 @@ struct RailRow: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: 4)
+                if let trailingSystemImage {
+                    Image(systemName: trailingSystemImage)
+                        .font(.system(size: 10))
+                        .foregroundStyle(Theme.textMuted)
+                        .accessibilityLabel(Text(trailingAccessibilityLabel ?? ""))
+                }
                 if let count {
                     Text("\(count)")
                         .font(.system(size: 12))
