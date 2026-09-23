@@ -20,7 +20,7 @@ import Foundation
 ///
 /// The phrases here are English, including both spellings of *summarise*, because Siri matches a
 /// phrase literally and a user who says "summarize" is asking for the same thing. Their German
-/// utterances live in `Resources/AppShortcuts.xcstrings` (ADR 0022's first amendment), one per
+/// utterances live in `Resources/AppShortcuts.xcstrings` (ADR 0022's Siri-phrases amendment), one per
 /// English key — not in `Localizable.xcstrings`, because the App Intents metadata processor looks
 /// them up in a catalog of exactly that name, which is also why `Scripts/check-localization.py`
 /// leaves it alone.

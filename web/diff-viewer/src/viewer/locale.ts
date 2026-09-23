@@ -1,7 +1,7 @@
 /**
  * The viewer's own words, and the language they are in.
  *
- * The app sends both over the bridge (`setLocale`, ADR 0022's second amendment); until it does,
+ * The app sends both over the bridge (`setLocale`, ADR 0022's diff-viewer amendment); until it does,
  * and in every test and the dev harness, the viewer speaks the English below. Pure + testable.
  */
 

@@ -664,7 +664,7 @@ Swift → web (`postMessage` via `evaluateJavaScript("shepherd.receive(…)")`):
   agentBadgeTitle, agentBadgeLabel, addComment, commentCount: {one, other}}}` — the app's
   language and the words the bundle draws itself (thread-card pills, the agent badge, the gutter
   “+” hover), all from the String Catalog, because the app is localised and the bundle is not
-  (ADR 0022's second amendment). `locale` is a BCP 47 language tag — the language the app's strings
+  (ADR 0022's diff-viewer amendment). `locale` is a BCP 47 language tag — the language the app's strings
   resolved to (`Bundle.main.preferredLocalizations`), never `Locale.current.identifier`, whose
   `de_DE` `Intl` rejects — and the bundle formats relative times and picks the `commentCount`
   phrase through `Intl` with it; `{count}` in either phrase is replaced there. Every word is

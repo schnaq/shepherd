@@ -181,7 +181,7 @@ struct DiffViewerView: NSViewRepresentable {
         return language == "Base" ? "en" : language
     }
 
-    /// The words the web bundle draws itself, in the app's language (ADR 0022's second amendment).
+    /// The words the web bundle draws itself, in the app's language (ADR 0022's diff-viewer amendment).
     ///
     /// The thread-card pills, the agent badge and the gutter's hover text are the only UI the
     /// bundle writes on its own; everything else in the diff is Monaco's or GitHub's. The bundle

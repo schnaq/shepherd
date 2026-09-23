@@ -185,7 +185,7 @@ export interface SetAccessibilityMessage {
  * Every other string the reviewer reads in the diff is Monaco's or GitHub's; these are the
  * handful the thread cards and the gutter add. They are sent from Swift for the reason
  * ``PaneLabels`` is: the app is localised through its String Catalog and this bundle is not, so
- * a German Mac must not get English pills (ADR 0022's second amendment).
+ * a German Mac must not get English pills (ADR 0022's diff-viewer amendment).
  *
  * `commentCount` is a pair of whole phrases rather than a noun, because a count assembled from
  * a number and a word is a sentence built at runtime — which no catalog can translate. The
@@ -217,7 +217,7 @@ export interface ViewerStrings {
 }
 
 /**
- * The app's language, and the words that go with it (ADR 0022's second amendment).
+ * The app's language, and the words that go with it (ADR 0022's diff-viewer amendment).
  *
  * Sent once, before the first `loadFile`. Until it arrives the viewer speaks English, which is
  * what the tests and the dev harness see.
