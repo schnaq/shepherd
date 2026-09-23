@@ -102,7 +102,7 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
     /// ``DelegationPrompt/full(for:task:)``.
     var session: SessionReference?
 
-    /// One sheet per pull request.
+    /// One sheet per target: a pull request, an issue, or one repository task.
     var id: String { prID }
 
     /// `owner/name#123`, or just `owner/name` for a repository task, which has no number.
@@ -239,14 +239,21 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
     ///
     /// Everything a pull request would fill in is empty, on purpose rather than for want of a
     /// value: there is no number, no head commit and — until the run starts and the task text
-    /// names it — no branch. The identity is the repository, so a second "Start an agent…" on the
-    /// same repository while a run is going reveals that run instead of starting a rival one
-    /// (the one-run-per-target rule, ``DelegationCenter``). A finished run's branch and worktree
-    /// are left alone by the next task, which gets a slug of its own.
-    /// - Parameter repo: The repository, which must have a linked local checkout to run.
-    static func repository(_ repo: RepoRef) -> DelegationContext {
+    /// names it — no branch.
+    ///
+    /// The identity is **the task, not the repository**: `repository:owner/name#<uuid>`. Several
+    /// tasks may run in one repository at once, each with its own branch and worktree, so every
+    /// "Start an agent…" is a target of its own and the one-run-per-target rule
+    /// (``DelegationCenter``) never makes a second task wait for the first. A UUID rather than the
+    /// slug, because the slug comes from the task text, which nobody has typed when the sheet
+    /// opens; the prefix is ``repositoryID(_:)``, which is how the centre finds a repository's
+    /// tasks again.
+    /// - Parameters:
+    ///   - repo: The repository, which must have a linked local checkout to run.
+    ///   - task: The task's identity; a fresh one unless a caller is rebuilding a sheet it has.
+    static func repository(_ repo: RepoRef, task: UUID = UUID()) -> DelegationContext {
         DelegationContext(
-            prID: repositoryID(repo),
+            prID: "\(repositoryID(repo))#\(task.uuidString.lowercased())",
             repo: repo,
             number: 0,
             title: repo.fullName,
@@ -256,11 +263,12 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
         )
     }
 
-    /// The identity a repository task is kept under: `repository:owner/name`, lowercased.
+    /// The prefix every repository task's identity starts with: `repository:owner/name`,
+    /// lowercased.
     ///
     /// Not a node id, and it cannot collide with one: GitHub's ids never contain a colon.
     /// Lowercased because GitHub treats the two names case-insensitively, and a rail row and a
-    /// ⌘K command spelling the repository differently must still find the same run.
+    /// ⌘K command spelling the repository differently must still list the same tasks.
     /// - Parameter repo: The repository.
     static func repositoryID(_ repo: RepoRef) -> String {
         "repository:\(repo.fullName.lowercased())"

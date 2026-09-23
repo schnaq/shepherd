@@ -443,6 +443,21 @@ struct CommandPaletteView: View {
                 }
             )
         }
+        // One command per task worth going back to, so a person with three agents working in one
+        // repository can reach the second one by typing a word of what they asked it to do. The
+        // command above always starts a new task; these are the only way back from ⌘K.
+        for task in environment.delegation.repositoryTasks {
+            result.append(
+                PaletteCommand(
+                    id: "agent-task-\(task.id)",
+                    section: delegation,
+                    title: task.taskPaletteTitle,
+                    systemImage: "terminal.fill"
+                ) {
+                    environment.reopenRepositoryTask(task)
+                }
+            )
+        }
         result.append(
             PaletteCommand(
                 id: "group-agent",

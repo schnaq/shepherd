@@ -2,25 +2,49 @@ import Foundation
 import Observation
 import ShepherdCore
 
-/// Owns the delegation sheets: at most one on screen, at most one *run* per pull request.
+/// Owns the delegation sheets: at most one on screen, at most one *run* per target.
 ///
-/// The "one per pull request" rule is the reason this exists at all. Two delegations for the
-/// same pull request would race for the same worktree directory, so a second request while one
-/// is running simply reveals the running one instead of starting anything (ADR 0011). An
-/// automatic start (ADR 0016) goes through the same rule and the same models — it only differs
-/// in not putting a sheet on screen and in being marked as automatic.
+/// The "one per target" rule is the reason this exists at all. Two delegations for the same pull
+/// request would race for the same worktree directory, so a second request while one is running
+/// simply reveals the running one instead of starting anything (ADR 0011). An automatic start
+/// (ADR 0016) goes through the same rule and the same models — it only differs in not putting a
+/// sheet on screen and in being marked as automatic.
+///
+/// A repository task is a target of its own (``DelegationContext/repository(_:task:)``): each one
+/// gets its own branch and worktree, so several run in one repository side by side, and the
+/// centre is what lists them again (``repositoryTasks(for:)``) and keeps their branch names apart
+/// (``claimedTaskSlugs(in:excluding:)``).
 @MainActor
 @Observable
 final class DelegationCenter {
     /// The delegation whose sheet is up, if any.
     private(set) var presented: DelegationModel?
 
-    /// Every delegation started this launch, keyed by pull-request id. Finished ones are kept
-    /// so re-opening the sheet still shows the diff stat and the push button.
+    /// Every delegation started this launch, keyed by target (``DelegationContext/id``). Finished
+    /// ones are kept so re-opening the sheet still shows the diff stat and the push button.
     private(set) var models: [String: DelegationModel] = [:]
 
+    /// The subprocess seam every worktree is built with.
+    private let gitRunner: any ProcessRunning
+    /// The managed worktrees directory.
+    private let worktreesRoot: URL
+    /// Builds the agent runner for a model, when a test replaces the real CLI.
+    private let makeAgentRunner: (@MainActor (DelegationContext) -> any AgentRunning)?
+
     /// Creates an empty centre.
-    init() {}
+    /// - Parameters:
+    ///   - gitRunner: How git is run; the real subprocess runner unless a test records it.
+    ///   - worktreesRoot: Where managed worktrees live.
+    ///   - makeAgentRunner: Replaces the agent CLI, for tests; `nil` runs the configured CLI.
+    init(
+        gitRunner: any ProcessRunning = SystemProcessRunner.shared,
+        worktreesRoot: URL = AppConfig.worktreesDirectory,
+        makeAgentRunner: (@MainActor (DelegationContext) -> any AgentRunning)? = nil
+    ) {
+        self.gitRunner = gitRunner
+        self.worktreesRoot = worktreesRoot
+        self.makeAgentRunner = makeAgentRunner
+    }
 
     /// Whether a delegation for a pull request is currently running.
     /// - Parameter prID: The pull request's node id.
@@ -39,8 +63,11 @@ final class DelegationCenter {
 
     /// Opens (or re-opens) the sheet for a delegation.
     ///
-    /// A running delegation for the same pull request is shown as it is: its prompt and
-    /// transcript belong to the run in flight and must not be replaced by a new context.
+    /// A running delegation for the same target is shown as it is: its prompt and transcript
+    /// belong to the run in flight and must not be replaced by a new context. A new repository task
+    /// never meets that rule — its identity is fresh — and instead clears away the same
+    /// repository's sheets that were opened and never run (``prunableRepositoryTask(_:)``), so
+    /// a person who opens "Start an agent…" five times and runs once has one task, not five.
     /// - Parameters:
     ///   - context: What the delegation is about.
     ///   - settings: Where the CLI configuration and the checkout mapping live.
@@ -66,6 +93,14 @@ final class DelegationCenter {
         if let existing = models[context.prID], existing.isBusy {
             presented = existing
             return existing
+        }
+
+        if context.isRepositoryTask {
+            models = models.filter { id, model in
+                id == context.id
+                    || !model.context.repo.isSameRepository(as: context.repo)
+                    || !Self.prunableRepositoryTask(model)
+            }
         }
 
         let model = make(
@@ -147,30 +182,58 @@ final class DelegationCenter {
 
     /// Puts a delegation this centre already holds back on screen, as it is.
     ///
-    /// For the repository task's re-entry: ``open(context:settings:toasts:onDidPush:onDidFinish:onDidBegin:onDidStart:brief:)``
-    /// replaces a model that is not running, which for a pull request costs nothing — the next run
-    /// reuses the same directory — but for a repository task would orphan the finished run's
-    /// worktree under a slug nothing points at any more. The caller decides when to keep one.
+    /// The re-entry for a repository task: the rail's *Agent tasks* submenu and ⌘K name one task,
+    /// and this shows that one — its transcript, its diff and its push button — rather than
+    /// opening a fresh sheet that would leave its worktree under a slug nothing points at.
     /// - Parameter model: A model from ``models``.
     func present(_ model: DelegationModel) {
         guard models[model.id] === model else { return }
         presented = model
     }
 
-    /// The repository task to show again instead of opening a fresh one, if there is one.
+    /// A repository's tasks that are worth going back to, oldest first.
     ///
-    /// One worktree per repository at a time, like one per pull request: a previous task whose
-    /// worktree is on disk (``DelegationModel/isWorktreeDirectoryKnown``) and that is not running
-    /// is the one to show — its diff and its push button are the only way back to that
-    /// directory. A running one is revealed by ``open(context:settings:toasts:onDidPush:onDidFinish:onDidBegin:onDidStart:brief:)``
-    /// anyway, and one that never got a directory has nothing to keep.
-    /// - Parameter repo: The repository.
-    func finishedRepositoryTask(for repo: RepoRef) -> DelegationModel? {
-        guard let existing = models[DelegationContext.repositoryID(repo)],
-              !existing.isBusy,
-              existing.isWorktreeDirectoryKnown
-        else { return nil }
-        return existing
+    /// Worth going back to means running, or having a worktree on disk
+    /// (``DelegationModel/isWorktreeDirectoryKnown``) whichever way the run ended: its diff and its
+    /// push button are the only way back to that directory. A sheet opened and never run has
+    /// nothing to show, and a discarded task has given its directory up — neither is listed, and
+    /// neither affects the others.
+    /// - Parameter repo: The repository, matched case-insensitively.
+    func repositoryTasks(for repo: RepoRef) -> [DelegationModel] {
+        repositoryTasks.filter { $0.context.repo.isSameRepository(as: repo) }
+    }
+
+    /// Every repository's listed tasks, by repository and then oldest first — what ⌘K offers.
+    var repositoryTasks: [DelegationModel] {
+        models.values
+            .filter { $0.context.isRepositoryTask && ($0.isBusy || $0.isWorktreeDirectoryKnown) }
+            .sorted {
+                let left = $0.context.repo.fullName.lowercased()
+                let right = $1.context.repo.fullName.lowercased()
+                return left == right ? $0.sequence < $1.sequence : left < right
+            }
+    }
+
+    /// The slugs a repository's tasks have claimed, leaving one task out.
+    ///
+    /// What a task picking its branch name must not pick, beside what git already has: a task
+    /// started a moment earlier has a claim (``DelegationModel/taskSlug``) before its branch or its
+    /// directory exist, and without this the two would choose the same name.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - id: The task asking, whose own claim does not count against it.
+    func claimedTaskSlugs(in repo: RepoRef, excluding id: String) -> Set<String> {
+        Set(
+            models.values
+                .filter { $0.id != id && $0.context.isRepositoryTask && $0.context.repo.isSameRepository(as: repo) }
+                .compactMap(\.taskSlug)
+        )
+    }
+
+    /// Whether a repository task's model can go: never run, nothing on disk, nothing claimed.
+    private static func prunableRepositoryTask(_ model: DelegationModel) -> Bool {
+        model.context.isRepositoryTask && !model.isBusy && !model.isWorktreeDirectoryKnown
+            && model.taskSlug == nil
     }
 
     /// Closes the sheet. A run keeps going in the background; re-opening shows it again.
@@ -189,7 +252,7 @@ final class DelegationCenter {
     /// - Parameter context: What the delegation is about.
     static func worktreeDirectory(
         for context: DelegationContext,
-        root: URL = AppConfig.worktreesDirectory
+        root: URL
     ) -> URL {
         switch context.origin {
         case .issue:
@@ -231,22 +294,36 @@ final class DelegationCenter {
                 checkout: checkout,
                 // Issue 128 and pull request 128 are two different pieces of work in the same
                 // repository, so they get two directories (ADR 0032's 2026-09-04 amendment).
-                directory: Self.worktreeDirectory(for: context)
+                directory: Self.worktreeDirectory(for: context, root: worktreesRoot),
+                managedRoot: worktreesRoot,
+                runner: gitRunner
             )
+        }
+
+        // The session travels into the runner, which is the one place that decides which
+        // template builds the command (ADR 0030). Everything else about the run — worktree,
+        // guardrails, transcript, "never pushes" — is the same code either way.
+        let runner: any AgentRunning = makeAgentRunner?(context) ?? AgentCLIRunner(
+            configuration: configuration,
+            executable: executable,
+            session: context.session
+        )
+        // Asked at the moment the task picks its branch, not now: the claims that matter are the
+        // ones made by then.
+        var claimedTaskSlugs: (@MainActor () -> Set<String>)?
+        if context.isRepositoryTask {
+            let repo = context.repo
+            let id = context.id
+            claimedTaskSlugs = { [weak self] in
+                self?.claimedTaskSlugs(in: repo, excluding: id) ?? []
+            }
         }
 
         return DelegationModel(
             context: context,
             configuration: configuration,
             readiness: readiness,
-            // The session travels into the runner, which is the one place that decides which
-            // template builds the command (ADR 0030). Everything else about the run — worktree,
-            // guardrails, transcript, "never pushes" — is the same code either way.
-            runner: AgentCLIRunner(
-                configuration: configuration,
-                executable: executable,
-                session: context.session
-            ),
+            runner: runner,
             worktree: worktree,
             isAutomatic: isAutomatic,
             toasts: toasts,
@@ -254,7 +331,8 @@ final class DelegationCenter {
             onDidFinish: onDidFinish,
             onDidBegin: onDidBegin,
             onDidStart: onDidStart,
-            brief: brief
+            brief: brief,
+            claimedTaskSlugs: claimedTaskSlugs
         )
     }
 }

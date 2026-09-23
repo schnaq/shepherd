@@ -91,12 +91,19 @@ final class RepositoryTaskTests: XCTestCase {
         XCTAssertEqual(DelegationPrompt.defaultTask(for: context), "")
     }
 
-    func testTheIdentityIsTheRepositoryIgnoringCase() {
+    func testEveryTaskIsItsOwnTargetUnderTheRepositorysPrefix() {
+        let first = DelegationContext.repository(repo)
+        let second = DelegationContext.repository(RepoRef(owner: "Schnaq", name: "Review"))
+        XCTAssertNotEqual(first.id, second.id, "two tasks on one repository are two targets")
+        XCTAssertTrue(first.id.hasPrefix("repository:schnaq/review#"))
+        XCTAssertTrue(second.id.hasPrefix("repository:schnaq/review#"), "the prefix ignores case")
+
+        // A caller rebuilding a sheet keeps its identity.
+        let task = UUID()
         XCTAssertEqual(
-            DelegationContext.repository(RepoRef(owner: "Schnaq", name: "Review")).id,
-            DelegationContext.repository(repo).id
+            DelegationContext.repository(repo, task: task).id,
+            DelegationContext.repository(repo, task: task).id
         )
-        XCTAssertEqual(DelegationContext.repository(repo).id, "repository:schnaq/review")
     }
 
     func testTheRepositoryPreambleNamesTheRepositoryAndTheBranchAndAllowsPublishing() {
@@ -134,7 +141,9 @@ final class RepositoryTaskTests: XCTestCase {
 
     func testAFreeSlugIsReadAfterAFetchFromLocalAndRemoteAgentBranches() async {
         let git = taskGit()
-        let slug = await handle(git).freeTaskSlug(for: "Add dark mode\nwith a toggle", repo: repo)
+        let taken = await handle(git).takenTaskSlugs()
+        XCTAssertEqual(taken, [])
+        let slug = handle(git).freeTaskSlug(for: "Add dark mode\nwith a toggle", repo: repo, taken: taken)
         XCTAssertEqual(slug, "add-dark-mode")
         XCTAssertEqual(
             git.arguments,
@@ -151,17 +160,19 @@ final class RepositoryTaskTests: XCTestCase {
 
     func testATakenSlugIsSuffixedWhetherTheBranchIsLocalOrOnOrigin() async {
         let local = taskGit(agentRefs: "refs/heads/agent/add-dark-mode\n")
-        let fromLocal = await handle(local).freeTaskSlug(
+        let fromLocal = handle(local).freeTaskSlug(
             for: "Add dark mode",
             repo: repo,
+            taken: await handle(local).takenTaskSlugs(),
             suffix: { "beef" }
         )
         XCTAssertEqual(fromLocal, "add-dark-mode-beef")
 
         let remote = taskGit(agentRefs: "refs/remotes/origin/agent/add-dark-mode\n")
-        let fromRemote = await handle(remote).freeTaskSlug(
+        let fromRemote = handle(remote).freeTaskSlug(
             for: "Add dark mode",
             repo: repo,
+            taken: await handle(remote).takenTaskSlugs(),
             suffix: { "beef" }
         )
         XCTAssertEqual(fromRemote, "add-dark-mode-beef")
@@ -172,9 +183,21 @@ final class RepositoryTaskTests: XCTestCase {
             at: GitWorktree.directory(repo: repo, taskSlug: "add-dark-mode", root: root),
             withIntermediateDirectories: true
         )
-        let slug = await handle(taskGit()).freeTaskSlug(
+        let slug = handle(taskGit()).freeTaskSlug(
             for: "Add dark mode",
             repo: repo,
+            taken: [],
+            suffix: { "beef" }
+        )
+        XCTAssertEqual(slug, "add-dark-mode-beef")
+    }
+
+    func testASlugAnotherTaskClaimedIsTakenToo() {
+        // Claimed by a task that is still fetching: no branch, no directory, only the claim.
+        let slug = handle(taskGit()).freeTaskSlug(
+            for: "Add dark mode",
+            repo: repo,
+            taken: ["add-dark-mode"],
             suffix: { "beef" }
         )
         XCTAssertEqual(slug, "add-dark-mode-beef")
@@ -345,15 +368,18 @@ final class RepositoryTaskTests: XCTestCase {
         XCTAssertEqual(manual.readiness, .ready)
     }
 
-    func testATaskThatNeverGotADirectoryIsNotKeptForReentry() throws {
+    func testATaskThatNeverRanIsNotListedAndMakesWayForTheNext() throws {
         let center = DelegationCenter()
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: "shepherd.tests.\(UUID().uuidString)"))
-        let settings = AppSettings(defaults: defaults)
-        settings.setLocalCheckout(checkout, forRepoNamed: repo.fullName)
-        _ = center.open(context: .repository(repo), settings: settings, toasts: ToastCenter())
-        // Opened but never started: there is no worktree to go back to, so the next "Start an
-        // agent…" may open a fresh sheet.
-        XCTAssertNil(center.finishedRepositoryTask(for: repo))
+        let settings = try readySettings()
+        let untouched = center.open(context: .repository(repo), settings: settings, toasts: ToastCenter())
+        // Opened but never started: there is no worktree to go back to.
+        XCTAssertTrue(center.repositoryTasks(for: repo).isEmpty)
+
+        // The next "Start an agent…" is a new task, and the sheet nobody ran does not linger.
+        let next = center.open(context: .repository(repo), settings: settings, toasts: ToastCenter())
+        XCTAssertNotEqual(next.id, untouched.id)
+        XCTAssertNil(center.models[untouched.id])
+        XCTAssertTrue(center.presented === next)
     }
 
     func testPresentOnlyShowsAModelTheCentreHolds() throws {
@@ -369,6 +395,189 @@ final class RepositoryTaskTests: XCTestCase {
         center.dismiss()
         center.present(model(git: taskGit()))
         XCTAssertNil(center.presented)
+    }
+
+    // MARK: - Several tasks in one repository
+
+    /// Settings with a linked clone and a CLI that exists, so a centre's models are ready.
+    private func readySettings() throws -> AppSettings {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "shepherd.tests.\(UUID().uuidString)"))
+        let settings = AppSettings(defaults: defaults)
+        settings.setLocalCheckout(checkout, forRepoNamed: repo.fullName)
+        settings.agentCLI.executablePath = "/bin/echo"
+        return settings
+    }
+
+    /// A centre whose git is recorded and whose agents are the given runners, in the order the
+    /// models are made (the last one repeats).
+    private func center(git: RecordingProcessRunner, agents: [any AgentRunning]) -> DelegationCenter {
+        var remaining = agents
+        return DelegationCenter(
+            gitRunner: git,
+            worktreesRoot: root,
+            makeAgentRunner: { _ in remaining.count > 1 ? remaining.removeFirst() : remaining[0] }
+        )
+    }
+
+    private func waitUntil(
+        _ condition: () -> Bool,
+        timeout: TimeInterval = 3,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        let deadline = Date().addingTimeInterval(timeout)
+        while !condition() {
+            if Date() > deadline {
+                XCTFail("timed out waiting for the expected state", file: file, line: line)
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
+    private var finishing: ScriptedAgentRunner {
+        ScriptedAgentRunner(events: [.result(AgentRunResult(isError: false, subtype: "success"))])
+    }
+
+    func testTwoTasksInOneRepositoryGetTheirOwnIdentityBranchWorktreeAndModel() async throws {
+        let git = taskGit()
+        let center = center(git: git, agents: [finishing])
+        let settings = try readySettings()
+
+        let first = center.open(context: .repository(repo), settings: settings, toasts: ToastCenter())
+        first.task = "Add dark mode"
+        first.start()
+        // A second "Start an agent…" while the first runs starts a second task, not a reveal.
+        let second = center.open(context: .repository(repo), settings: settings, toasts: ToastCenter())
+        XCTAssertFalse(first === second)
+        XCTAssertTrue(center.presented === second)
+        second.task = "Fix the flaky login test"
+        second.start()
+        await first.runTask?.value
+        await second.runTask?.value
+
+        XCTAssertNotEqual(first.id, second.id)
+        XCTAssertEqual(first.branchName, "agent/add-dark-mode")
+        XCTAssertEqual(second.branchName, "agent/fix-the-flaky-login-test")
+        XCTAssertEqual(
+            first.worktree?.directory,
+            GitWorktree.directory(repo: repo, taskSlug: "add-dark-mode", root: root)
+        )
+        XCTAssertEqual(
+            second.worktree?.directory,
+            GitWorktree.directory(repo: repo, taskSlug: "fix-the-flaky-login-test", root: root)
+        )
+        XCTAssertEqual(git.arguments.filter { $0.prefix(2) == ["worktree", "add"] }.count, 2)
+        XCTAssertEqual(center.repositoryTasks(for: repo).map(\.id), [first.id, second.id])
+        XCTAssertFalse(git.arguments.contains { $0.first == "push" }, "Shepherd pushes nothing")
+    }
+
+    func testTheSameFirstLineStartedBackToBackGetsTwoBranches() async throws {
+        let git = taskGit()
+        let center = center(git: git, agents: [finishing])
+        let settings = try readySettings()
+
+        let first = center.open(context: .repository(repo), settings: settings, toasts: ToastCenter())
+        first.task = "Add dark mode"
+        let second = center.open(context: .repository(repo), settings: settings, toasts: ToastCenter())
+        second.task = "Add dark mode\nbut for the settings window"
+        // Both started before either has picked a name, created a branch or a directory.
+        first.start()
+        second.start()
+        await first.runTask?.value
+        await second.runTask?.value
+
+        let branches = [first.branchName, second.branchName]
+        XCTAssertEqual(Set(branches).count, 2, "\(branches)")
+        XCTAssertTrue(branches.contains("agent/add-dark-mode"))
+        XCTAssertTrue(branches.contains { $0.hasPrefix("agent/add-dark-mode-") })
+        XCTAssertNotEqual(first.worktree?.directory, second.worktree?.directory)
+    }
+
+    func testDiscardingOneTaskLeavesTheOtherRunningAndListed() async throws {
+        let git = taskGit()
+        let hanging = HangingAgentRunner()
+        let center = center(git: git, agents: [finishing, hanging])
+        let settings = try readySettings()
+
+        let first = center.open(context: .repository(repo), settings: settings, toasts: ToastCenter())
+        first.task = "Add dark mode"
+        first.start()
+        await first.runTask?.value
+        let second = center.open(context: .repository(repo), settings: settings, toasts: ToastCenter())
+        second.task = "Fix the flaky login test"
+        second.start()
+        await waitUntil { second.state == .running }
+        XCTAssertEqual(second.phase, .running)
+
+        let firstDirectory = try XCTUnwrap(first.worktree?.directory)
+        first.discardWorktree()
+        await first.actionTask?.value
+
+        XCTAssertEqual(first.phase, .idle)
+        XCTAssertTrue(second.isBusy, "the other task keeps running")
+        XCTAssertEqual(center.repositoryTasks(for: repo).map(\.id), [second.id])
+        let removed = git.arguments.filter { $0.prefix(2) == ["worktree", "remove"] }
+        XCTAssertEqual(removed, [["worktree", "remove", "--force", firstDirectory.path]])
+        XCTAssertEqual(
+            center.claimedTaskSlugs(in: repo, excluding: "nobody"),
+            ["fix-the-flaky-login-test"],
+            "the discarded task gave up its name, the running one keeps its own"
+        )
+
+        second.cancel()
+        await second.runTask?.value
+        XCTAssertEqual(center.repositoryTasks(for: repo).map(\.phase), [.cancelled])
+    }
+
+    func testTheRailAndThePaletteListBothTasksAndReopeningPicksTheOneNamed() async throws {
+        let center = center(git: taskGit(), agents: [finishing])
+        let settings = try readySettings()
+        let first = center.open(context: .repository(repo), settings: settings, toasts: ToastCenter())
+        first.task = "Add dark mode"
+        first.start()
+        await first.runTask?.value
+        let second = center.open(context: .repository(repo), settings: settings, toasts: ToastCenter())
+        second.task = "Fix the flaky login test"
+        second.start()
+        await second.runTask?.value
+
+        // Another repository's task is listed in ⌘K but not under this rail row.
+        let other = RepoRef(owner: "schnaq", name: "other")
+        settings.setLocalCheckout(checkout, forRepoNamed: other.fullName)
+        let elsewhere = center.open(context: .repository(other), settings: settings, toasts: ToastCenter())
+        elsewhere.task = "Bump the version"
+        elsewhere.start()
+        await elsewhere.runTask?.value
+
+        let rail = center.repositoryTasks(for: RepoRef(owner: "Schnaq", name: "Review"))
+        XCTAssertEqual(rail.map(\.taskMenuTitle), [
+            "Add dark mode — finished",
+            "Fix the flaky login test — finished",
+        ])
+        XCTAssertEqual(center.repositoryTasks.map(\.id), [elsewhere.id, first.id, second.id])
+        XCTAssertEqual(
+            first.taskPaletteTitle,
+            "Show agent task “Add dark mode” on schnaq/review — finished"
+        )
+
+        // Reopening a finished task shows that run, not a fresh sheet.
+        center.dismiss()
+        center.present(rail[0])
+        XCTAssertTrue(center.presented === first)
+        center.present(rail[1])
+        XCTAssertTrue(center.presented === second)
+        XCTAssertEqual(center.models.count, 3, "reopening creates nothing")
+    }
+
+    func testAFailedRunIsListedAsFailed() async throws {
+        let failing = ScriptedAgentRunner(events: [.result(AgentRunResult(isError: true, subtype: "error_max_turns"))])
+        let center = center(git: taskGit(), agents: [failing])
+        let model = center.open(context: .repository(repo), settings: try readySettings(), toasts: ToastCenter())
+        model.task = "Add dark mode"
+        model.start()
+        await model.runTask?.value
+        XCTAssertEqual(center.repositoryTasks(for: repo).map(\.phase), [.failed])
     }
 
     // MARK: - Probing a folder

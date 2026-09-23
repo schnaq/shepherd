@@ -203,27 +203,23 @@ struct GitWorktree: Sendable {
         )
     }
 
-    /// Picks a free slug for a new task on a repository.
+    /// The agent branch names git already knows for this clone, as slugs: `agent/<slug>` locally
+    /// and on `origin` as of a fresh fetch.
     ///
-    /// "Free" means three things at once, because a collision on any of them is a different
-    /// failure: no local branch `agent/<slug>` (``addForNewWork(branch:)`` would *resume* it and
-    /// land this task on another one's commits), no `origin/agent/<slug>` as of the last fetch (a
-    /// push from the button would collide), and no managed directory of that name (which
-    /// ``addForNewWork(branch:)`` would refuse or clear). One `for-each-ref` answers the first two,
-    /// after a fetch so that "on `origin`" means now rather than whenever the clone last fetched —
-    /// a branch pushed from another Mac this morning counts. The fetch is best-effort (an offline
-    /// Mac still gets a name, checked against what it knows), and the one
-    /// ``addForNewWork(branch:)`` makes straight after is then a cheap no-op.
-    /// - Parameters:
-    ///   - task: The task text, whose first line becomes the slug.
-    ///   - repo: The repository, for the directory name.
-    ///   - suffix: A fresh short suffix per call, for when the slug is taken.
-    /// - Returns: A free slug, or `nil` when five suffixed candidates were all taken.
-    func freeTaskSlug(
-        for task: String,
-        repo: RepoRef,
-        suffix: @Sendable () -> String = { RepositoryTaskBranch.randomSuffix() }
-    ) async -> String? {
+    /// The first half of choosing a free slug, and the only half that waits. It is split from
+    /// ``freeTaskSlug(for:repo:taken:suffix:)`` so the caller can do the second half — pick the
+    /// name *and* record it as taken — with no suspension point in between: two tasks started back
+    /// to back on one repository both wait here, and if the pick happened after the wait inside
+    /// this method, both would see the same repository and choose the same name. ``DelegationModel``
+    /// makes the pick on the main actor straight after this returns (ADR 0011's 2026-09-23
+    /// amendment).
+    ///
+    /// One `for-each-ref` answers for local and remote branches, after a fetch so that "on
+    /// `origin`" means now rather than whenever the clone last fetched — a branch pushed from
+    /// another Mac this morning counts. The fetch is best-effort (an offline Mac still gets a name,
+    /// checked against what it knows), and the one ``addForNewWork(branch:)`` makes straight after
+    /// is then a cheap no-op.
+    func takenTaskSlugs() async -> Set<String> {
         _ = try? await run(["fetch", "origin"], in: checkout, label: "fetch")
         let result = try? await runner.run(
             executable: git,
@@ -241,6 +237,31 @@ struct GitWorktree: Sendable {
                 taken.insert(String(line.dropFirst(prefix.count)))
             }
         }
+        return taken
+    }
+
+    /// Picks a free slug for a new task on a repository — synchronously, for the reason
+    /// ``takenTaskSlugs()`` gives.
+    ///
+    /// "Free" means four things at once, because a collision on any of them is a different
+    /// failure: no local branch `agent/<slug>` (``addForNewWork(branch:)`` would *resume* it and
+    /// land this task on another one's commits), no `origin/agent/<slug>` (a push from the button
+    /// would collide), no managed directory of that name (which ``addForNewWork(branch:)`` would
+    /// refuse or clear), and no other task on the repository that has claimed the name but not
+    /// created anything yet. The first two and the last arrive in `taken`; the directory is
+    /// checked here.
+    /// - Parameters:
+    ///   - task: The task text, whose first line becomes the slug.
+    ///   - repo: The repository, for the directory name.
+    ///   - taken: Slugs already spoken for — git's, and the other tasks'.
+    ///   - suffix: A fresh short suffix per call, for when the slug is taken.
+    /// - Returns: A free slug, or `nil` when five suffixed candidates were all taken.
+    func freeTaskSlug(
+        for task: String,
+        repo: RepoRef,
+        taken: Set<String>,
+        suffix: () -> String = { RepositoryTaskBranch.randomSuffix() }
+    ) -> String? {
         let root = managedRoot
         return RepositoryTaskBranch.unique(
             RepositoryTaskBranch.slug(from: task),

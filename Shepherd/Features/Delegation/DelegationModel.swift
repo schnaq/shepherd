@@ -192,6 +192,15 @@ final class DelegationModel: Identifiable {
     /// that did all its work.
     private var newWorkBase: String?
 
+    /// The slugs the repository's *other* tasks have claimed, asked for at the moment this task
+    /// picks its own (``DelegationCenter`` hands it in).
+    ///
+    /// A claim is a task's ``taskBranch``, which is set before git creates anything — so a task
+    /// started a moment earlier whose worktree does not exist yet still counts, and two tasks
+    /// with the same first line started back to back get two names. `nil` for every other
+    /// origin, and for a model built on its own in a test.
+    private let claimedTaskSlugs: (@MainActor () -> Set<String>)?
+
     private let runner: any AgentRunning
     private let toasts: ToastCenter?
     private let onDidPush: (@MainActor () async -> Void)?
@@ -222,8 +231,15 @@ final class DelegationModel: Identifiable {
     /// step and the run task's own unwinding can both land on the same terminal state.
     private var didAnnounceOutcome = false
 
-    /// One sheet per pull request.
+    /// One sheet per target — a pull request, an issue, or one repository task.
     nonisolated var id: String { context.id }
+
+    /// The order models were created in, for the lists that show a repository's tasks.
+    ///
+    /// A counter rather than a date: two sheets opened in the same millisecond still have an
+    /// order, and the rail and ⌘K list them the same way on every render.
+    let sequence: Int
+    private static var nextSequence = 0
 
     /// Creates a delegation.
     /// - Parameters:
@@ -240,6 +256,8 @@ final class DelegationModel: Identifiable {
     ///   - onDidStart: Called once when an issue-origin run is actually running (ADR 0032).
     ///   - brief: How the ✨ button drafts the task text (plan §3.E). Left out — and therefore
     ///     `nil` — for every run a rule started.
+    ///   - claimedTaskSlugs: The slugs the repository's other tasks have claimed, for a
+    ///     repository task's branch name.
     init(
         context: DelegationContext,
         configuration: AgentCLIConfiguration,
@@ -252,8 +270,12 @@ final class DelegationModel: Identifiable {
         onDidFinish: (@MainActor (DelegationOutcome) -> Void)? = nil,
         onDidBegin: (@MainActor () -> Void)? = nil,
         onDidStart: (@MainActor (DelegationStart) -> Void)? = nil,
-        brief: AgentBriefDrafter? = nil
+        brief: AgentBriefDrafter? = nil,
+        claimedTaskSlugs: (@MainActor () -> Set<String>)? = nil
     ) {
+        Self.nextSequence += 1
+        self.sequence = Self.nextSequence
+        self.claimedTaskSlugs = claimedTaskSlugs
         self.context = context
         self.configuration = configuration
         self.readiness = readiness
@@ -312,6 +334,75 @@ final class DelegationModel: Identifiable {
     /// task was given — empty for a repository task that has not started yet.
     var branchName: String {
         context.isRepositoryTask ? (taskBranch ?? "") : context.headRefName
+    }
+
+    /// The slug of ``taskBranch`` — `add-dark-mode` for `agent/add-dark-mode` — which is what
+    /// this task has claimed among the repository's tasks.
+    var taskSlug: String? {
+        taskBranch.map { String($0.dropFirst(RepositoryTaskBranch.prefix.count)) }
+    }
+
+    /// The task's first line, which is how a person tells two tasks on one repository apart in
+    /// the rail's submenu and in ⌘K — the same line the branch and the commit subject come from.
+    var taskTitle: String {
+        let firstLine = task
+            .split(whereSeparator: \.isNewline)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first { !$0.isEmpty } ?? ""
+        guard !firstLine.isEmpty else { return String(localized: "Agent task") }
+        return firstLine.count > 72 ? String(firstLine.prefix(71)) + "…" : firstLine
+    }
+
+    /// Where a task is, in the one word a list entry has room for.
+    enum Phase: Equatable {
+        /// Preparing the worktree, running, or publishing.
+        case running
+        /// The agent finished without reporting an error.
+        case finished
+        /// The agent reported an error, or Shepherd could not run it.
+        case failed
+        /// The user stopped it.
+        case cancelled
+        /// Not started, or discarded.
+        case idle
+
+        /// The word the rail and ⌘K show.
+        var title: String {
+            switch self {
+            case .running: return String(localized: "running")
+            case .finished: return String(localized: "finished")
+            case .failed: return String(localized: "failed")
+            case .cancelled: return String(localized: "stopped")
+            case .idle: return String(localized: "not started")
+            }
+        }
+    }
+
+    /// ``state`` folded to a ``Phase``.
+    ///
+    /// An agent that stopped with an error is *failed* here although the state machine calls it
+    /// `finished`, for the reason ``DelegationOutcome`` gives: what a reader of the list wants to
+    /// know is whether the work got done.
+    var phase: Phase {
+        if isBusy { return .running }
+        switch state {
+        case .idle: return .idle
+        case .preparingWorktree, .running: return .running
+        case .finished(let result, _): return result.isError ? .failed : .finished
+        case .failed: return .failed
+        case .cancelled: return .cancelled
+        }
+    }
+
+    /// A repository task's entry in the rail's *Agent tasks* submenu: `Add dark mode — running`.
+    var taskMenuTitle: String {
+        String(localized: "\(taskTitle) — \(phase.title)")
+    }
+
+    /// A repository task's ⌘K command, which has to name the repository too — the palette lists
+    /// every repository's tasks together.
+    var taskPaletteTitle: String {
+        String(localized: "Show agent task “\(taskTitle)” on \(context.repo.fullName) — \(phase.title)")
     }
 
     /// Whether ``worktree`` names the directory the run uses.
@@ -463,8 +554,9 @@ final class DelegationModel: Identifiable {
     /// Chooses a repository task's branch and adds its worktree.
     ///
     /// The first run picks a free slug from the task's first line
-    /// (``GitWorktree/freeTaskSlug(for:repo:suffix:)``), re-aims the handle at the directory of
-    /// that name and adds the worktree through the same ``GitWorktree/addForNewWork(branch:)``
+    /// (``GitWorktree/freeTaskSlug(for:repo:taken:suffix:)``) — free of git's branches, the
+    /// managed directories and the slugs the repository's other tasks have claimed — re-aims the
+    /// handle at the directory of that name and adds the worktree through the same ``GitWorktree/addForNewWork(branch:)``
     /// an issue uses — so the fetch, the default-branch lookup and its "git could not tell which
     /// branch" message are the issue path's, not a second copy. *Run again* in the same sheet
     /// continues in the worktree the first run left, on the same branch: the first run's work,
@@ -481,7 +573,17 @@ final class DelegationModel: Identifiable {
         if taskBranch != nil, FileManager.default.fileExists(atPath: worktree.directory.path) {
             return (worktree, nil)
         }
-        guard let slug = await worktree.freeTaskSlug(for: task, repo: context.repo) else {
+        let fromGit = await worktree.takenTaskSlugs()
+        // From here to `taskBranch = branch` there is no `await`, and that is the whole race
+        // guard: this runs on the main actor, so no other task on the repository can pick a name
+        // between this one reading the claims and making its own. A task started a moment ago
+        // that is still fetching has claimed nothing yet and will see this one's claim.
+        let claimed = claimedTaskSlugs?() ?? []
+        guard let slug = worktree.freeTaskSlug(
+            for: task,
+            repo: context.repo,
+            taken: fromGit.union(claimed)
+        ) else {
             throw GitWorktree.Failure.noFreeTaskBranch
         }
         let branch = RepositoryTaskBranch.branchName(slug: slug)
@@ -490,7 +592,7 @@ final class DelegationModel: Identifiable {
         )
         // Recorded before git runs, so a failure below still leaves the sheet naming the branch
         // and the directory it was trying to create — and a cancelled preparation's footer path
-        // is the one it would have used.
+        // is the one it would have used. It is also this task's claim on the slug.
         self.worktree = relocated
         taskBranch = branch
         let base = try await relocated.addForNewWork(branch: branch)
@@ -666,12 +768,7 @@ final class DelegationModel: Identifiable {
         case .repository:
             // The task's own first line: it is what the user wrote the work down as, and there is
             // no number or title to say it better. Cut at a commit subject's customary length.
-            let firstLine = task
-                .split(whereSeparator: \.isNewline)
-                .map { $0.trimmingCharacters(in: .whitespaces) }
-                .first { !$0.isEmpty } ?? ""
-            guard !firstLine.isEmpty else { return String(localized: "Agent task") }
-            return firstLine.count > 72 ? String(firstLine.prefix(71)) + "…" : firstLine
+            return taskTitle
         }
     }
 
@@ -725,7 +822,9 @@ final class DelegationModel: Identifiable {
                 self.worktreeStatus = nil
                 // A repository task's next run is a new task: it gets a branch and a directory
                 // of its own rather than resuming the branch this worktree was on, which is
-                // still in the clone with whatever the run committed to it.
+                // still in the clone with whatever the run committed to it. Clearing the branch
+                // also drops this task's claim and takes it off the rail's list; the
+                // repository's other tasks are not touched.
                 if self.context.isRepositoryTask {
                     self.taskBranch = nil
                     self.newWorkBase = nil

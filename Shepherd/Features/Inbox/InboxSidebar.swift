@@ -17,8 +17,13 @@ struct InboxSidebar: View {
     var onAddLocalRepository: () -> Void = {}
     /// Whether a repository has a linked local checkout, which is what lets an agent start in it.
     var hasLocalCheckout: (RepoRef) -> Bool = { _ in false }
-    /// Opens the delegation sheet for a free-text task on a repository.
+    /// Opens the delegation sheet for a new free-text task on a repository.
     var onStartAgent: (RepoRef) -> Void = { _ in }
+    /// A repository's agent tasks worth going back to, oldest first
+    /// (``DelegationCenter/repositoryTasks(for:)``).
+    var repositoryTasks: (RepoRef) -> [DelegationModel] = { _ in [] }
+    /// Puts one of those tasks back on screen.
+    var onReopenTask: (DelegationModel) -> Void = { _ in }
     /// Asks for a folder to link as a repository's local checkout.
     var onLinkCheckout: (RepoRef) -> Void = { _ in }
 
@@ -204,7 +209,21 @@ struct InboxSidebar: View {
                     : String(localized: "Watched: every open pull request in this repository reaches the inbox."))
                 .contextMenu {
                     if isLinked {
+                        // Always a new task: several run in one repository side by side, each on
+                        // its own branch (ADR 0011's 2026-09-23 amendment).
                         Button(String(localized: "Start an agent…")) { onStartAgent(facet.repo) }
+                        let tasks = repositoryTasks(facet.repo)
+                        if !tasks.isEmpty {
+                            // The way back to a task, one entry each with where it is — the
+                            // sheet a new task opens is not, because it would be a new task.
+                            Menu(String(localized: "Agent tasks")) {
+                                ForEach(tasks) { task in
+                                    Button(task.taskMenuTitle) { onReopenTask(task) }
+                                }
+                                Divider()
+                                Button(String(localized: "New task…")) { onStartAgent(facet.repo) }
+                            }
+                        }
                     } else {
                         // The picker first: a delegation needs a clone to build its worktree from,
                         // so "Start an agent…" is only offered once there is one.
