@@ -128,17 +128,19 @@ final class SignedInSession {
     ///   - account: The account to sign in as.
     ///   - tokenStore: The Keychain-backed token store.
     ///   - sweepInterval: How often the inbox sweep runs, in seconds.
+    ///   - transport: How the client reaches GitHub. `URLSessionTransport` everywhere except the
+    ///     Debug demo mode, whose transport refuses every request.
     /// - Returns: A fully wired session; the caller starts the loops.
     static func make(
         account: Account,
         tokenStore: KeychainTokenStore,
-        sweepInterval: TimeInterval
+        sweepInterval: TimeInterval,
+        transport: any HTTPTransport = URLSessionTransport()
     ) async throws -> SignedInSession {
         let database = try DatabaseManager(url: AppConfig.databaseURL)
         let overrides = (try? await database.agentRegistryOverrides()) ?? []
         let detector = try AgentDetector(extensions: overrides)
 
-        let transport = URLSessionTransport()
         let refresher: TokenRefresher? = account.authKind == .deviceFlow
             && AppConfig.isDeviceFlowConfigured
             ? TokenRefresher(clientID: AppConfig.githubAppClientID, transport: transport)
@@ -210,6 +212,9 @@ final class SignedInSession {
     /// - Parameters:
     ///   - settings: Used to decide which events become notifications.
     ///   - notifications: The notification manager.
+    ///   - runsSyncLoop: Whether to start the engine's sweep loop. `false` only in the Debug demo
+    ///     mode: its inbox is a seed, and the first sweep would either fail loudly or prune it.
+    ///     The observers start either way, because they are what puts the seed on screen.
     ///   - onEvent: Called on the main actor for every sync event, after notification mapping.
     ///   - onInboxRows: Called on the main actor every time the inbox observation speaks, with the
     ///     rows it just wrote to ``inboxRows``. This is the trigger automatic merging runs on
@@ -226,6 +231,7 @@ final class SignedInSession {
     func start(
         settings: AppSettings,
         notifications: NotificationManager,
+        runsSyncLoop: Bool = true,
         onEvent: @escaping @MainActor (SyncEvent) -> Void,
         onInboxRows: @escaping @MainActor ([PullRequestSummary]) -> Void = { _ in },
         onIssueRows: @escaping @MainActor ([IssueRowSummary]) -> Void = { _ in }
@@ -291,6 +297,7 @@ final class SignedInSession {
             }
         }
 
+        guard runsSyncLoop else { return }
         Task { [syncEngine] in
             await syncEngine.start()
         }

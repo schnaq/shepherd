@@ -27,15 +27,23 @@ enum KeychainError: LocalizedError, Equatable {
 /// the GitHub login, so multiple accounts can coexist even though v1 signs in one.
 final class KeychainTokenStore: TokenStore, Sendable {
     private let service: String
+    private let storage: any KeychainStoring
 
     /// Creates a store.
-    /// - Parameter service: The Keychain service name.
-    init(service: String = AppConfig.githubKeychainService) {
+    /// - Parameters:
+    ///   - service: The Keychain service name.
+    ///   - storage: Where the items are kept. The system Keychain everywhere except the Debug
+    ///     demo mode, which must never read or write the developer's real token.
+    init(
+        service: String = AppConfig.githubKeychainService,
+        storage: any KeychainStoring = SystemKeychain()
+    ) {
         self.service = service
+        self.storage = storage
     }
 
     func token(for login: String) async throws -> TokenSet? {
-        guard let data = try Keychain.readData(service: service, account: login) else { return nil }
+        guard let data = try storage.readData(service: service, account: login) else { return nil }
         do {
             return try JSONDecoder().decode(TokenSet.self, from: data)
         } catch {
@@ -45,11 +53,11 @@ final class KeychainTokenStore: TokenStore, Sendable {
 
     func setToken(_ token: TokenSet, for login: String) async throws {
         let data = try JSONEncoder().encode(token)
-        try Keychain.writeData(data, service: service, account: login)
+        try storage.writeData(data, service: service, account: login)
     }
 
     func deleteToken(for login: String) async throws {
-        try Keychain.delete(service: service, account: login)
+        try storage.delete(service: service, account: login)
     }
 }
 
@@ -79,18 +87,25 @@ struct KeychainSecretStore: Sendable {
     }
 
     private let service: String
+    private let storage: any KeychainStoring
 
     /// Creates a store.
-    /// - Parameter service: The Keychain service name.
-    init(service: String = AppConfig.secretsKeychainService) {
+    /// - Parameters:
+    ///   - service: The Keychain service name.
+    ///   - storage: Where the items are kept — see ``KeychainTokenStore/init(service:storage:)``.
+    init(
+        service: String = AppConfig.secretsKeychainService,
+        storage: any KeychainStoring = SystemKeychain()
+    ) {
         self.service = service
+        self.storage = storage
     }
 
     /// Reads a secret.
     /// - Parameter key: The secret's key.
     /// - Returns: The stored string, or `nil` when nothing is stored.
     func secret(for key: String) throws -> String? {
-        guard let data = try Keychain.readData(service: service, account: key) else { return nil }
+        guard let data = try storage.readData(service: service, account: key) else { return nil }
         guard let text = String(data: data, encoding: .utf8) else { throw KeychainError.malformedItem }
         return text
     }
@@ -101,10 +116,41 @@ struct KeychainSecretStore: Sendable {
     ///   - key: The secret's key.
     func setSecret(_ value: String?, for key: String) throws {
         guard let value, !value.isEmpty else {
-            try Keychain.delete(service: service, account: key)
+            try storage.delete(service: service, account: key)
             return
         }
-        try Keychain.writeData(Data(value.utf8), service: service, account: key)
+        try storage.writeData(Data(value.utf8), service: service, account: key)
+    }
+}
+
+/// Where the two stores above keep their items.
+///
+/// A seam with exactly two implementations: ``SystemKeychain`` in every build, and the Debug
+/// demo mode's in-memory stand-in (`DemoKeychain`, `Shepherd/Debug/DemoFakes.swift`). The second
+/// exists because a Debug build shares the installed app's bundle id *and* its Keychain services:
+/// the demo must never read or overwrite the developer's real token, and an ad-hoc-signed binary
+/// reading it would also put a Keychain prompt on top of the window being screenshotted.
+protocol KeychainStoring: Sendable {
+    /// Reads the data of a generic-password item, or `nil` when there is none.
+    func readData(service: String, account: String) throws -> Data?
+    /// Creates or replaces a generic-password item.
+    func writeData(_ data: Data, service: String, account: String) throws
+    /// Deletes a generic-password item if it exists.
+    func delete(service: String, account: String) throws
+}
+
+/// The macOS Keychain, through ``Keychain``'s raw calls.
+struct SystemKeychain: KeychainStoring {
+    func readData(service: String, account: String) throws -> Data? {
+        try Keychain.readData(service: service, account: account)
+    }
+
+    func writeData(_ data: Data, service: String, account: String) throws {
+        try Keychain.writeData(data, service: service, account: account)
+    }
+
+    func delete(service: String, account: String) throws {
+        try Keychain.delete(service: service, account: account)
     }
 }
 

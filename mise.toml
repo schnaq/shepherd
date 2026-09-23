@@ -129,6 +129,14 @@ description = "Build the dev-signed app and launch it — the one to use for QA 
 depends = ["qa"]
 run = 'Scripts/relaunch-app.sh "$SHEPHERD_DD_QA/Build/Products/Debug/Shepherd.app"'
 
+[tasks.demo-screenshots]
+description = "Screenshots of the Debug build's demo mode (sample data, no real account), light and dark"
+# Not `depends = ["build"]`: the script builds only when there is no Debug build yet (or with
+# SHEPHERD_DEMO_REBUILD=1), and it launches separate processes, so the installed Shepherd — same
+# bundle id — keeps running untouched. The output directory is the optional argument, which mise
+# appends to the end of this line.
+run = 'SHEPHERD_DEMO_DERIVED_DATA="$SHEPHERD_DD_APP" Scripts/demo-screenshots.sh'
+
 [tasks.link]
 description = "Send a shepherd:// deep link to the QA build, e.g. mise run link shepherd://sync"
 # mise appends whatever follows the task name to the end of this command line, which is exactly

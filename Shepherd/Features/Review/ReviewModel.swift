@@ -389,6 +389,11 @@ final class ReviewModel {
                ReviewModel.shouldApplyCached(shown: self.detail) {
                 self.apply(cached)
             }
+            #if DEBUG
+            // The demo mode's seed *is* the detail (`Shepherd/Debug/DemoMode.swift`), and its
+            // transport refuses every request: a refresh could only put a failure banner over it.
+            if DemoMode.isActive { return }
+            #endif
             self.isRefreshing = true
             defer { self.isRefreshing = false }
             do {
