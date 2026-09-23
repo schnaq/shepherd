@@ -983,15 +983,15 @@ final class ReviewModel {
 
     /// The freshest CI rollup Shepherd knows for this pull request.
     ///
-    /// The detail's own check runs when there are any, because they are what the header's
+    /// The detail's own check runs when there are any, because they are what the toolbar's
     /// "2/3 checks" is counting and they are re-read on every reload; the inbox row's rollup only
     /// while the detail is still loading. Derived with ``ShepherdCore/CheckRollup/init(runs:)``
     /// rather than by a second hand-rolled mapping — one definition of "red", "still running" and
-    /// "green" for the badge, the Merge button's colour and the merge sheet's warning.
+    /// "green" for the badge and the merge sheet's warning.
     ///
     /// The whole rollup rather than only its state, because the badge needs the counts and the
-    /// two callers that only want the verdict can ask for `.state`. One fallback chain, read
-    /// three ways — and it lives here rather than on ``ReviewScreen`` because nothing in it is
+    /// merge sheet, which only wants the verdict, can ask for `.state`. One fallback chain, read
+    /// two ways — and it lives here rather than on ``ReviewScreen`` because nothing in it is
     /// about the screen: it is the detail and the summary, which the model owns, answering a
     /// question about the pull request.
     ///

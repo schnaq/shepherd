@@ -1065,6 +1065,15 @@ takes a router.
   (`handle(.addComment(line:side:))`), and which round is showing (`roundView`); syntax
   highlighting, word-level diffs, side-by-side layout, folding and the minimap are free to differ,
   and stay Monaco-only (ADR 0034).
+- Liquid Glass (macOS 27) is the control layer's and only the control layer's (ADR 0040): the
+  window toolbar — including the review screen's, which is a real `ToolbarContent`
+  (`ReviewToolbar`) rather than a header band — the split views' sidebars, and the toasts, which
+  are the one surface that floats. Nothing opaque sits on a sidebar or reaches up into the toolbar
+  (a bar under the toolbar uses `background(_:ignoresSafeAreaEdges: [])`); content — lists, cards,
+  panels, sheets, the diff — stays opaque. Toolbar buttons use the system styles (default, and
+  `.glassProminent` for the one recommended action); buttons inside content keep the app's own
+  three styles in `DesignComponents.swift`. The prominent, green action is Merge on every surface;
+  Approve is secondary, and green means Merge and nothing else (ADR 0040's amendment).
 - Dark & light mode from day one: semantic color tokens only (`Color.shepherd*` asset
   catalog), theme piped into Monaco via `setTheme`.
 - Text sizes go through `Theme.type(_:weight:)` (or `Theme.mono(_:weight:)`), which name a

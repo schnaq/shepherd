@@ -103,20 +103,32 @@ struct BulkTriageSheet: View {
             Button(String(localized: "Cancel")) { dismiss() }
                 .buttonStyle(SecondaryButtonStyle())
                 .keyboardShortcut(.cancelAction)
-            Button {
-                queue()
-            } label: {
-                Text(plan.action.confirmButtonTitle)
+            // Green only when the plan merges (ADR 0040's 2026-09-23 amendment): green is
+            // Merge's colour on every surface, so "Approve 5" is the accent default action and
+            // "Approve & merge 5" / "Merge 5" are green. Two buttons because a `ButtonStyle` is a
+            // type and there is no value both fit in without erasing them.
+            if plan.action.includesMerge {
+                confirmButton.buttonStyle(SuccessButtonStyle())
+            } else {
+                confirmButton.buttonStyle(PrimaryButtonStyle())
             }
-            .buttonStyle(SuccessButtonStyle())
-            .keyboardShortcut(.defaultAction)
-            // ``isQueueing`` is this sheet's own press and stays: it covers the moment between
-            // the click and the funnel's first `await`. The second half is the funnel's, and is
-            // what a plan queued from anywhere else — or a run this sheet has already handed
-            // over — spins on.
-            .busy(isQueueing || isQueueingElsewhere)
-            .disabled(!plan.isActionable)
         }
+    }
+
+    /// The confirm button, unstyled: ``footer`` picks the style from the action.
+    private var confirmButton: some View {
+        Button {
+            queue()
+        } label: {
+            Text(plan.action.confirmButtonTitle)
+        }
+        .keyboardShortcut(.defaultAction)
+        // ``isQueueing`` is this sheet's own press and stays: it covers the moment between
+        // the click and the funnel's first `await`. The second half is the funnel's, and is
+        // what a plan queued from anywhere else — or a run this sheet has already handed
+        // over — spins on.
+        .busy(isQueueing || isQueueingElsewhere)
+        .disabled(!plan.isActionable)
     }
 
     /// Whether a bulk-triage run is already in flight (``ActionActivity/Kind/bulk``).

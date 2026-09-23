@@ -61,6 +61,6 @@ struct RailFleetRow: View {
             .help(RailFleetRow.help)
             .accessibilityHint(Text(RailFleetRow.help))
         }
-        .background(Theme.panel)
+        // No fill, for ``RailSettingsRow``'s reason: the sidebar's glass is the surface (ADR 0040).
     }
 }

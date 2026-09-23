@@ -146,7 +146,8 @@ struct FleetScreen: View {
                 }
             }
         }
-        .background(Theme.panel)
+        // The sidebar column of a `NavigationSplitView`, so the system's glass is its surface and
+        // an opaque ``Theme/panel`` would only cover it — the inbox rail's reason (ADR 0040).
         .focusable()
         .focusEffectDisabled()
         .focused($isListFocused)

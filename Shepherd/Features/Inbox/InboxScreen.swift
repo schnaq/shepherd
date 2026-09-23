@@ -281,7 +281,8 @@ struct InboxScreen: View {
                 )
             }
         }
-        .background(Theme.panel)
+        // Nothing behind the rail: the sidebar column is the system's Liquid Glass panel, and the
+        // rail's views each draw on it directly (ADR 0040).
     }
 
     @ViewBuilder
@@ -422,9 +423,14 @@ struct InboxScreen: View {
         // row that reads as one control. They are three unrelated things: where the data stands,
         // what to do with the selection, and whose account this is. The spacers give each its own
         // capsule and the system's own spacing between them.
+        //
+        // The sync status gives its capsule up, though (ADR 0040): it is a read-out, not a
+        // control, and a glass capsule is how the toolbar says "press me". The review screen's
+        // facts row makes the same choice.
         ToolbarItem(placement: .primaryAction) {
             SyncStatusView(session: session)
         }
+        .sharedBackgroundVisibility(.hidden)
 
         ToolbarSpacer(.fixed, placement: .primaryAction)
 
@@ -462,14 +468,22 @@ struct InboxScreen: View {
 
         ToolbarSpacer(.fixed, placement: .primaryAction)
 
+        // The account on its own, with the system's spacing before it and no capsule of its own
+        // (ADR 0040). Inside a capsule the avatar was drawn as the last member of the Sync group —
+        // the spacer above could not separate it, because a view that is not a control joins the
+        // glass group beside it — and read as a third button of that group. Bare, the round
+        // picture is its own shape, which is how an account reads in a macOS toolbar. It is the
+        // height of the toolbar's buttons (36 pt, measured against the Sync button's capsule), so
+        // the row's rhythm does not break at its last item.
         ToolbarItem(placement: .primaryAction) {
             AvatarView(
                 login: session.account.login,
                 url: session.account.avatarURL,
-                size: 22
+                size: 36
             )
             .help(Text(session.account.login))
         }
+        .sharedBackgroundVisibility(.hidden)
     }
 
     /// What the bulk-triage menu is called: on screen if it ever draws its title, and to

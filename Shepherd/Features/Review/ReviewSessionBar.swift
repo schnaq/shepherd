@@ -29,7 +29,8 @@ struct ReviewSessionBar: View {
             .frame(height: 38)
             Divider().overlay(Theme.border)
         }
-        .background(Theme.raised)
+        // Session state is content, not the toolbar's (``View/ownFrameBackground(_:)``).
+        .ownFrameBackground(Theme.raised)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(
             Text(String(localized: "Review session, \(session.position) of \(session.total)"))
