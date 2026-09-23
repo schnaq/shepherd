@@ -170,7 +170,27 @@ final class DelegationModel: Identifiable {
     private(set) var hasPushed = false
 
     /// The worktree, when a checkout is configured.
-    let worktree: GitWorktree?
+    ///
+    /// Settable for one origin only: a repository task learns its directory when it starts,
+    /// because the directory is named after the task text (``DelegationContext/Origin/repository``),
+    /// so the handle the centre built is re-aimed there. Every other origin's directory is known
+    /// when the sheet opens and never changes.
+    private(set) var worktree: GitWorktree?
+
+    /// The branch a repository task was given when it started, e.g. `agent/add-dark-mode`.
+    ///
+    /// `nil` before the first run and for every other origin, whose branch is the context's own.
+    /// Kept across *Run again*, which continues on the same branch in the same worktree rather
+    /// than starting a second one, and cleared by *Discard worktree*.
+    private(set) var taskBranch: String?
+
+    /// What a new-work run's branch was started from, e.g. `origin/main`.
+    ///
+    /// The diff the result card shows is taken against this rather than against `HEAD`, because
+    /// a new-work run is allowed to commit (ADR 0011's 2026-09-04 amendment) and a committed
+    /// change is invisible to `git diff HEAD` — the card would say "changed nothing" about a run
+    /// that did all its work.
+    private var newWorkBase: String?
 
     private let runner: any AgentRunning
     private let toasts: ToastCenter?
@@ -278,7 +298,29 @@ final class DelegationModel: Identifiable {
     }
 
     /// Whether the finished run left anything to commit.
-    var hasChanges: Bool { worktreeStatus?.isDirty ?? false }
+    ///
+    /// For new work that includes commits the run made itself: the diff stat is taken against the
+    /// branch's starting point, so a non-empty one means there is something to push even when the
+    /// worktree is clean.
+    var hasChanges: Bool {
+        if worktreeStatus?.isDirty == true { return true }
+        guard context.isNewWork, case .finished(_, let stat) = state else { return false }
+        return !stat.isEmpty
+    }
+
+    /// The branch the run works on: the pull request's, the issue's, or the one a repository
+    /// task was given — empty for a repository task that has not started yet.
+    var branchName: String {
+        context.isRepositoryTask ? (taskBranch ?? "") : context.headRefName
+    }
+
+    /// Whether ``worktree`` names the directory the run uses.
+    ///
+    /// False only for a repository task before its first run, whose handle still points at the
+    /// managed root because the directory's name is not known yet.
+    var isWorktreeDirectoryKnown: Bool {
+        worktree != nil && (!context.isRepositoryTask || taskBranch != nil)
+    }
 
     /// `1 m 12 s`, for the running header.
     var elapsedText: String { RelativeDate.duration(elapsed) }
@@ -337,16 +379,24 @@ final class DelegationModel: Identifiable {
         // before the work, so it does not depend on how the run ends (ADR 0036).
         onDidBegin?()
 
-        let prompt = DelegationPrompt.full(for: context, task: task)
+        let taskText = task
         runTask = Task { [weak self] in
             guard let self else { return }
             var startedFrom: String?
+            var worktree = worktree
             do {
-                if self.context.isIssue {
+                if self.context.isRepositoryTask {
+                    // New work whose branch is named after the task, so the name is chosen now
+                    // rather than when the sheet opened (ADR 0011's 2026-09-23 amendment).
+                    let prepared = try await self.prepareRepositoryTask(taskText, from: worktree)
+                    worktree = prepared.worktree
+                    startedFrom = prepared.startedFrom
+                } else if self.context.isIssue {
                     // New work, so there is no commit to stand on: the worktree is created on
                     // Shepherd's branch at the default branch's tip (ADR 0032's 2026-09-04
                     // amendment). The two pull-request origins keep the detached checkout.
                     startedFrom = try await worktree.addForNewWork(branch: self.context.headRefName)
+                    self.newWorkBase = startedFrom
                 } else {
                     try await worktree.prepare(
                         branch: self.context.headRefName,
@@ -361,15 +411,26 @@ final class DelegationModel: Identifiable {
             if let startedFrom {
                 // Which branch the work is on, and what it was started from. A pull-request run
                 // needs no such line — its branch and commit are the pull request's, and both
-                // are in the header — but for an issue both are Shepherd's own choice, so the
+                // are in the header — but for new work both are Shepherd's own choice, so the
                 // transcript is where they are recorded.
                 self.append(
                     .note,
                     String(
-                        localized: "Working on \(self.context.headRefName), started from \(startedFrom)."
+                        localized: "Working on \(self.branchName), started from \(startedFrom)."
                     )
                 )
+            } else if self.context.isRepositoryTask {
+                self.append(
+                    .note,
+                    String(localized: "Continuing on \(self.branchName) in the same worktree.")
+                )
             }
+
+            // Built after the worktree step rather than before it: a repository task's preamble
+            // names its branch, and the branch is only known once the step above has chosen it.
+            var promptContext = self.context
+            promptContext.headRefName = self.branchName
+            let prompt = DelegationPrompt.full(for: promptContext, task: taskText)
 
             let session: AgentSession
             do {
@@ -397,6 +458,44 @@ final class DelegationModel: Identifiable {
             let code = await session.exitCode()
             await self.finish(exitCode: code)
         }
+    }
+
+    /// Chooses a repository task's branch and adds its worktree.
+    ///
+    /// The first run picks a free slug from the task's first line
+    /// (``GitWorktree/freeTaskSlug(for:repo:suffix:)``), re-aims the handle at the directory of
+    /// that name and adds the worktree through the same ``GitWorktree/addForNewWork(branch:)``
+    /// an issue uses — so the fetch, the default-branch lookup and its "git could not tell which
+    /// branch" message are the issue path's, not a second copy. *Run again* in the same sheet
+    /// continues in the worktree the first run left, on the same branch: the first run's work,
+    /// committed or not, is what the second one is meant to build on.
+    /// - Parameters:
+    ///   - task: The task text the run was started with.
+    ///   - worktree: The handle as it is now.
+    /// - Returns: The handle the run uses, and the ref a fresh branch was started from — `nil`
+    ///   when the run continues in place.
+    private func prepareRepositoryTask(
+        _ task: String,
+        from worktree: GitWorktree
+    ) async throws -> (worktree: GitWorktree, startedFrom: String?) {
+        if taskBranch != nil, FileManager.default.fileExists(atPath: worktree.directory.path) {
+            return (worktree, nil)
+        }
+        guard let slug = await worktree.freeTaskSlug(for: task, repo: context.repo) else {
+            throw GitWorktree.Failure.noFreeTaskBranch
+        }
+        let branch = RepositoryTaskBranch.branchName(slug: slug)
+        let relocated = worktree.relocated(
+            to: GitWorktree.directory(repo: context.repo, taskSlug: slug, root: worktree.managedRoot)
+        )
+        // Recorded before git runs, so a failure below still leaves the sheet naming the branch
+        // and the directory it was trying to create — and a cancelled preparation's footer path
+        // is the one it would have used.
+        self.worktree = relocated
+        taskBranch = branch
+        let base = try await relocated.addForNewWork(branch: branch)
+        newWorkBase = base
+        return (relocated, base)
     }
 
     /// Stops the run: `SIGTERM`, then `SIGKILL` after a grace period.
@@ -451,7 +550,11 @@ final class DelegationModel: Identifiable {
         )
         var stat = ""
         if let worktree {
-            stat = (try? await worktree.diffStat()) ?? ""
+            if let newWorkBase {
+                stat = (try? await worktree.diffStat(since: newWorkBase)) ?? ""
+            } else {
+                stat = (try? await worktree.diffStat()) ?? ""
+            }
         }
         await refreshWorktreeStatus()
         state = .finished(result: result, diffStat: stat)
@@ -560,6 +663,15 @@ final class DelegationModel: Identifiable {
             // GitHub's own closing keyword, so the pull request this branch becomes closes the
             // issue it was assigned from without anybody having to remember to link them.
             return String(localized: "Fix #\(context.number): \(context.title)")
+        case .repository:
+            // The task's own first line: it is what the user wrote the work down as, and there is
+            // no number or title to say it better. Cut at a commit subject's customary length.
+            let firstLine = task
+                .split(whereSeparator: \.isNewline)
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .first { !$0.isEmpty } ?? ""
+            guard !firstLine.isEmpty else { return String(localized: "Agent task") }
+            return firstLine.count > 72 ? String(firstLine.prefix(71)) + "…" : firstLine
         }
     }
 
@@ -570,13 +682,18 @@ final class DelegationModel: Identifiable {
     func commitAndPush() {
         guard let worktree, !isPublishing, case .finished = state else { return }
         isPublishing = true
-        let branch = context.headRefName
+        let branch = branchName
         let message = commitMessage
+        // A new-work run may have committed everything itself, leaving a clean worktree and
+        // commits to publish; `git commit` would then fail with "nothing to commit".
+        let needsCommit = worktreeStatus?.isDirty ?? true
         actionTask = Task { [weak self] in
             guard let self else { return }
             defer { self.isPublishing = false }
             do {
-                try await worktree.commitAll(message: message)
+                if needsCommit {
+                    try await worktree.commitAll(message: message)
+                }
                 try await worktree.push(toBranch: branch)
                 self.hasPushed = true
                 self.append(.note, String(localized: "Pushed to \(branch)."))
@@ -594,7 +711,9 @@ final class DelegationModel: Identifiable {
 
     /// Deletes the worktree and resets the sheet.
     func discardWorktree() {
-        guard let worktree, !isPublishing else { return }
+        // A repository task stopped before its directory was chosen has nothing on disk yet, and
+        // its handle still names the managed root — which `remove()` refuses anyway.
+        guard isWorktreeDirectoryKnown, let worktree, !isPublishing else { return }
         isPublishing = true
         actionTask = Task { [weak self] in
             guard let self else { return }
@@ -604,6 +723,13 @@ final class DelegationModel: Identifiable {
                 self.state = .idle
                 self.transcript = []
                 self.worktreeStatus = nil
+                // A repository task's next run is a new task: it gets a branch and a directory
+                // of its own rather than resuming the branch this worktree was on, which is
+                // still in the clone with whatever the run committed to it.
+                if self.context.isRepositoryTask {
+                    self.taskBranch = nil
+                    self.newWorkBase = nil
+                }
                 self.toasts?.info(String(localized: "Removed the worktree."))
             } catch {
                 self.toasts?.failure(
@@ -616,7 +742,7 @@ final class DelegationModel: Identifiable {
 
     /// Shows the worktree in Finder.
     func revealWorktreeInFinder() {
-        guard let worktree else { return }
+        guard isWorktreeDirectoryKnown, let worktree else { return }
         NSWorkspace.shared.activateFileViewerSelecting([worktree.directory])
     }
 }

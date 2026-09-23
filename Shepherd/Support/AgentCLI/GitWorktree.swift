@@ -37,6 +37,8 @@ struct GitWorktree: Sendable {
         case noDefaultBranch
         /// A previous run left uncommitted work in the worktree this one wants.
         case worktreeHasUncommittedWork(String)
+        /// Every candidate name for a repository task's branch was already taken.
+        case noFreeTaskBranch
 
         var errorDescription: String? {
             switch self {
@@ -57,6 +59,10 @@ struct GitWorktree: Sendable {
             case .worktreeHasUncommittedWork(let path):
                 return String(
                     localized: "A previous run left changes in \(path) that were never committed. Commit or discard them from that delegation's sheet, then assign the issue again."
+                )
+            case .noFreeTaskBranch:
+                return String(
+                    localized: "Every branch name Shepherd tried for this task is already taken. Start the task with different first words."
                 )
             }
         }
@@ -155,6 +161,97 @@ struct GitWorktree: Sendable {
     /// find again when the same issue is handed over twice (ADR 0032's 2026-09-04 amendment).
     /// - Parameter number: The issue number.
     static func branchName(issueNumber number: Int) -> String { "agent/issue-\(number)" }
+
+    /// The directory name for a free-text task on a repository: `owner-repo-task-add-dark-mode`.
+    ///
+    /// The third vocabulary beside `-pr` and `-issue`, for the second one's reason: a task has no
+    /// number, so its directory is named after the same slug as its branch, and the two are
+    /// uniqued together (ADR 0011's 2026-09-23 amendment).
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - slug: The task's slug, from ``ShepherdCore/RepositoryTaskBranch``.
+    static func directoryName(repo: RepoRef, taskSlug slug: String) -> String {
+        "\(sanitize(repo.owner))-\(sanitize(repo.name))-task-\(sanitize(slug))"
+    }
+
+    /// The managed directory for a free-text task on a repository.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - slug: The task's slug.
+    ///   - root: The managed worktrees directory.
+    static func directory(
+        repo: RepoRef,
+        taskSlug slug: String,
+        root: URL = AppConfig.worktreesDirectory
+    ) -> URL {
+        root.appendingPathComponent(directoryName(repo: repo, taskSlug: slug), isDirectory: true)
+    }
+
+    /// The same clone, git and runner, pointed at another worktree directory.
+    ///
+    /// A repository task only learns its directory when it starts — the name comes from the task
+    /// text, which is typed in the sheet the handle was built for — so the handle is re-aimed
+    /// rather than rebuilt from settings.
+    /// - Parameter directory: The new worktree directory.
+    func relocated(to directory: URL) -> GitWorktree {
+        GitWorktree(
+            checkout: checkout,
+            directory: directory,
+            managedRoot: managedRoot,
+            git: git,
+            runner: runner
+        )
+    }
+
+    /// Picks a free slug for a new task on a repository.
+    ///
+    /// "Free" means three things at once, because a collision on any of them is a different
+    /// failure: no local branch `agent/<slug>` (``addForNewWork(branch:)`` would *resume* it and
+    /// land this task on another one's commits), no `origin/agent/<slug>` as of the last fetch (a
+    /// push from the button would collide), and no managed directory of that name (which
+    /// ``addForNewWork(branch:)`` would refuse or clear). One `for-each-ref` answers the first two,
+    /// after a fetch so that "on `origin`" means now rather than whenever the clone last fetched —
+    /// a branch pushed from another Mac this morning counts. The fetch is best-effort (an offline
+    /// Mac still gets a name, checked against what it knows), and the one
+    /// ``addForNewWork(branch:)`` makes straight after is then a cheap no-op.
+    /// - Parameters:
+    ///   - task: The task text, whose first line becomes the slug.
+    ///   - repo: The repository, for the directory name.
+    ///   - suffix: A fresh short suffix per call, for when the slug is taken.
+    /// - Returns: A free slug, or `nil` when five suffixed candidates were all taken.
+    func freeTaskSlug(
+        for task: String,
+        repo: RepoRef,
+        suffix: @Sendable () -> String = { RepositoryTaskBranch.randomSuffix() }
+    ) async -> String? {
+        _ = try? await run(["fetch", "origin"], in: checkout, label: "fetch")
+        let result = try? await runner.run(
+            executable: git,
+            arguments: [
+                "for-each-ref",
+                "--format=%(refname)",
+                "refs/heads/agent/",
+                "refs/remotes/origin/agent/",
+            ],
+            currentDirectory: checkout
+        )
+        var taken = Set<String>()
+        for line in (result?.standardOutput ?? "").split(whereSeparator: \.isNewline) {
+            for prefix in ["refs/heads/agent/", "refs/remotes/origin/agent/"] where line.hasPrefix(prefix) {
+                taken.insert(String(line.dropFirst(prefix.count)))
+            }
+        }
+        let root = managedRoot
+        return RepositoryTaskBranch.unique(
+            RepositoryTaskBranch.slug(from: task),
+            isTaken: { slug in
+                taken.contains(slug) || FileManager.default.fileExists(
+                    atPath: GitWorktree.directory(repo: repo, taskSlug: slug, root: root).path
+                )
+            },
+            suffix: suffix
+        )
+    }
 
     /// Replaces anything that would create a nested path or an odd file name.
     private static func sanitize(_ component: String) -> String {
@@ -322,6 +419,25 @@ struct GitWorktree: Sendable {
     /// `git diff --stat HEAD` inside the worktree — what the reviewer reads before pushing.
     func diffStat() async throws -> String {
         try await run(["diff", "--stat", "HEAD"], in: directory, label: "diff").trimmedOutput
+    }
+
+    /// `git diff --stat` from where new work started to the working tree — committed and
+    /// uncommitted changes together.
+    ///
+    /// For a run that may commit (an issue, a repository task): ``diffStat()`` compares against
+    /// `HEAD`, so a run that committed everything would read as one that changed nothing. The
+    /// comparison point is the merge base of `base` and `HEAD` rather than `base` itself, because
+    /// the run may have fetched and moved `origin/main` since, and a diff against the moved ref
+    /// would show upstream's new commits as if the agent had reverted them.
+    /// - Parameter base: The ref the branch was started from, e.g. `origin/main`.
+    func diffStat(since base: String) async throws -> String {
+        let mergeBase = try await run(
+            ["merge-base", base, "HEAD"],
+            in: directory,
+            label: "merge-base"
+        ).trimmedOutput
+        guard !mergeBase.isEmpty else { return try await diffStat() }
+        return try await run(["diff", "--stat", mergeBase], in: directory, label: "diff").trimmedOutput
     }
 
     // MARK: - Publishing

@@ -27,6 +27,17 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
         /// preamble, the default task, the commit message and the worktree's own shape — which
         /// is exactly the test for whether a case has earned itself.
         case issue
+        /// A free-text task on a repository, with no pull request or issue behind it (ADR 0011's
+        /// 2026-09-23 amendment).
+        ///
+        /// The fourth case, and it earns itself by the issue case's own test: it is new work
+        /// like an issue — a branch Shepherd names, started from the default branch's tip — but
+        /// there is no number, no title and no thread. Its branch is named after the *task
+        /// text*, which only exists once somebody has typed it into the sheet, so the context
+        /// leaves ``headRefName`` empty and ``DelegationModel`` picks the branch when the run
+        /// starts. There is nothing on GitHub to report back to either, which is why the
+        /// `delegation.finished` webhook is not sent for it (see ``AppEnvironment``).
+        case repository
     }
 
     /// The pull request's node id — also the identity that keeps one sheet per target.
@@ -94,8 +105,10 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
     /// One sheet per pull request.
     var id: String { prID }
 
-    /// `owner/name#123`.
-    var slug: String { "\(repo.fullName)#\(number)" }
+    /// `owner/name#123`, or just `owner/name` for a repository task, which has no number.
+    var slug: String {
+        isRepositoryTask ? repo.fullName : "\(repo.fullName)#\(number)"
+    }
 
     /// Whether this context is about an issue.
     ///
@@ -106,6 +119,20 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
         if case .issue = origin { return true }
         return false
     }
+
+    /// Whether this context is a free-text task on a repository.
+    var isRepositoryTask: Bool {
+        if case .repository = origin { return true }
+        return false
+    }
+
+    /// Whether the run starts new work on a branch of Shepherd's rather than standing on an
+    /// existing pull request's commit.
+    ///
+    /// The question the worktree entry point and the sheet's wording actually ask: an issue and
+    /// a repository task both start from the default branch's tip on an `agent/…` branch
+    /// (``GitWorktree/addForNewWork(branch:)``), and both may be finished by the run itself.
+    var isNewWork: Bool { isIssue || isRepositoryTask }
 
     /// Creates a context.
     init(
@@ -208,6 +235,37 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
         )
     }
 
+    /// A context for a free-text task on a repository (ADR 0011's 2026-09-23 amendment).
+    ///
+    /// Everything a pull request would fill in is empty, on purpose rather than for want of a
+    /// value: there is no number, no head commit and — until the run starts and the task text
+    /// names it — no branch. The identity is the repository, so a second "Start an agent…" on the
+    /// same repository while a run is going reveals that run instead of starting a rival one
+    /// (the one-run-per-target rule, ``DelegationCenter``). A finished run's branch and worktree
+    /// are left alone by the next task, which gets a slug of its own.
+    /// - Parameter repo: The repository, which must have a linked local checkout to run.
+    static func repository(_ repo: RepoRef) -> DelegationContext {
+        DelegationContext(
+            prID: repositoryID(repo),
+            repo: repo,
+            number: 0,
+            title: repo.fullName,
+            headRefName: "",
+            headRefOid: "",
+            origin: .repository
+        )
+    }
+
+    /// The identity a repository task is kept under: `repository:owner/name`, lowercased.
+    ///
+    /// Not a node id, and it cannot collide with one: GitHub's ids never contain a colon.
+    /// Lowercased because GitHub treats the two names case-insensitively, and a rail row and a
+    /// ⌘K command spelling the repository differently must still find the same run.
+    /// - Parameter repo: The repository.
+    static func repositoryID(_ repo: RepoRef) -> String {
+        "repository:\(repo.fullName.lowercased())"
+    }
+
     /// A context for a finding addressed to the session that wrote the code (ADR 0030).
     ///
     /// The finding is the reviewer's own text, which is why ``findingCommentAuthors`` stays
@@ -259,6 +317,7 @@ enum DelegationPrompt {
     /// - Parameter context: What the delegation is about.
     static func preamble(for context: DelegationContext) -> String {
         if context.isIssue { return issuePreamble(for: context) }
+        if context.isRepositoryTask { return repositoryPreamble(for: context) }
         let shortOid = String(context.headRefOid.prefix(12))
         return String(
             localized: """
@@ -314,6 +373,39 @@ enum DelegationPrompt {
         )
     }
 
+    /// The preamble for a free-text task on a repository (ADR 0011's 2026-09-23 amendment).
+    ///
+    /// The issue preamble's ground rules, word for word where they apply, because the situation
+    /// is the same one: new work on a branch Shepherd named, started from the default branch,
+    /// which the run may finish with its own credentials. Where the issue preamble names the
+    /// issue, this one names the repository and the branch; the task itself follows under "Task
+    /// from the reviewer", exactly as it does for the other origins.
+    /// - Parameter context: What the delegation is about, with ``DelegationContext/headRefName``
+    ///   set to the branch the run was given.
+    private static func repositoryPreamble(for context: DelegationContext) -> String {
+        String(
+            localized: """
+                You are running inside a git worktree that Shepherd created for a task on \
+                \(context.repo.fullName). It is checked out on a new branch, \
+                \(context.headRefName), started from the tip of the repository's default branch. \
+                Shepherd named that branch; do not rename it and do not switch to another one.
+
+                Ground rules:
+                - The work is yours to finish on this branch. When it is ready you may commit \
+                it, publish the branch and open a pull request, using the git and GitHub \
+                credentials you already have. If you cannot publish, commit anyway and say so \
+                in your final message: the reviewer can publish the worktree from Shepherd.
+                - Do what the task asks and nothing else. Do not reformat, rename or refactor \
+                anything the task does not ask for.
+                - Read the repository before you write: its tests, its conventions and its \
+                contribution notes are the specification, not a suggestion.
+                - Prefer the project's existing tests and tooling over adding new ones.
+                - If the task is unclear or you would have to guess at intent, say so in your \
+                final message instead of guessing.
+                """
+        )
+    }
+
     /// The editable text the sheet is prefilled with.
     /// - Parameter context: What the delegation is about.
     static func defaultTask(for context: DelegationContext) -> String {
@@ -343,6 +435,11 @@ enum DelegationPrompt {
                 repo: context.repo,
                 title: context.title
             )
+
+        case .repository:
+            // Nothing to prefill: the task *is* what the user types, and a placeholder sentence
+            // would have to be deleted before every run — or, worse, would be run.
+            return ""
 
         case .reviewFinding(let path, let line):
             var lines: [String] = []
