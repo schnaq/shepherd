@@ -623,8 +623,11 @@ or on `origin` — fetches, and creates the worktree on that branch from the tip
 branch. The agent is told the repository and the branch, may commit and open a pull request with
 its own credentials, and runs under the same turn cap (or *No limit*), spend cap and permission
 mode as every other delegation. Shepherd pushes nothing itself; *Commit & push branch* is your
-button. One task per repository at a time: reopening shows the last run until you discard its
-worktree. Automatic delegation rules never start one
+button. Several tasks can run in one repository at once, each on its own branch and worktree —
+two that start with the same words get two names. *Start an agent…* always starts a new one; the
+row's **Agent tasks** submenu (and ⌘K's *Show agent task "…"*) lists each task with whether it is
+running, finished or failed, and opening one shows that run. *Discard worktree* removes that task
+only. Automatic delegation rules never start one
 ([ADR 0011](adr/0011-delegate-to-local-agent-cli.md), [ADR 0039](adr/0039-open-in-editor.md)).
 
 ### Let Shepherd write the brief

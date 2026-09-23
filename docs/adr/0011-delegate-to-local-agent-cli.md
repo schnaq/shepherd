@@ -188,12 +188,25 @@ repository and the branch.
   asked to create anything. The worktree is `owner-repo-task-<slug>`. Because the name comes from the
   text, it is chosen when the run starts, not when the sheet opens, and the prompt is built after that
   step.
-- **One task per repository at a time.** The identity is `repository:owner/name`, so a second
-  "Start an agent…" while one runs reveals it, like a pull request's. A finished task is shown again
-  rather than replaced — its worktree, diff and push button would otherwise be orphaned — *Run again*
-  continues in the same worktree on the same branch, and *Discard worktree* makes room for the next
-  task. Concurrent tasks on one repository are left for later; the unique branch and directory
-  already allow them, the entry point is what would have to change.
+- **Several tasks per repository, side by side.** The identity is the task, not the repository —
+  `repository:owner/name#<uuid>`, minted when the sheet opens, because the slug only exists once the
+  text does — so "Start an agent…" always starts a **new** task, each with its own model, branch and
+  worktree, and a second never waits for, reveals or replaces the first. The two names are uniqued
+  against the other tasks too: picking a slug is split into the part that waits (the fetch and
+  `for-each-ref`, `GitWorktree.takenTaskSlugs()`) and the part that does not
+  (`freeTaskSlug(for:repo:taken:suffix:)`), and the model makes the pick and records it as its claim
+  on the main actor with no suspension in between, against the slugs its siblings have claimed
+  (`DelegationCenter.claimedTaskSlugs(in:excluding:)`). Two tasks with the same first line started
+  back to back therefore get `agent/<slug>` and `agent/<slug>-<hex>`, even though neither has created
+  a branch or a directory when the second one picks. The way back to a task is a list rather than
+  the entry point: the rail row's **Agent tasks** submenu names each one with where it is (running,
+  finished, failed, stopped) beside **New task…**, and ⌘K has *Show agent task "…" on owner/repo* per
+  task; reopening one shows that run — its transcript, diff and push button — rather than a fresh
+  sheet that would orphan its worktree. *Run again* in a task's sheet continues in its worktree on its
+  branch. *Discard worktree* frees that task only: its claim goes, it leaves the lists, and the
+  repository's other tasks carry on. A sheet opened and never run is not listed, and the next "Start
+  an agent…" on the repository clears it away. There was no cap on attended delegations before and
+  there is none now; ADR 0016's cap counts only rule-started runs, which this origin never is.
 - **Guardrails unchanged:** turn cap or *No limit*, spend cap, permission mode, allowed tools,
   transcript. **Shepherd pushes nothing** — still only the button, still the user's git credentials.
 - **Never automatic.** `DelegationCenter.startAutomatically` refuses the origin outright. No rule of
