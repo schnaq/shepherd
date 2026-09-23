@@ -157,6 +157,22 @@ final class DelegationCenter {
         presented = model
     }
 
+    /// The repository task to show again instead of opening a fresh one, if there is one.
+    ///
+    /// One worktree per repository at a time, like one per pull request: a previous task whose
+    /// worktree is on disk (``DelegationModel/isWorktreeDirectoryKnown``) and that is not running
+    /// is the one to show — its diff and its push button are the only way back to that
+    /// directory. A running one is revealed by ``open(context:settings:toasts:onDidPush:onDidFinish:onDidBegin:onDidStart:brief:)``
+    /// anyway, and one that never got a directory has nothing to keep.
+    /// - Parameter repo: The repository.
+    func finishedRepositoryTask(for repo: RepoRef) -> DelegationModel? {
+        guard let existing = models[DelegationContext.repositoryID(repo)],
+              !existing.isBusy,
+              existing.isWorktreeDirectoryKnown
+        else { return nil }
+        return existing
+    }
+
     /// Closes the sheet. A run keeps going in the background; re-opening shows it again.
     func dismiss() {
         presented = nil

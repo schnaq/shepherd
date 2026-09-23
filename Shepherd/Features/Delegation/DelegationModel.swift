@@ -742,7 +742,11 @@ final class DelegationModel: Identifiable {
 
     /// Shows the worktree in Finder.
     func revealWorktreeInFinder() {
-        guard isWorktreeDirectoryKnown, let worktree else { return }
+        // Known is not the same as created: a repository task that failed before `worktree add`
+        // names its directory without having one.
+        guard isWorktreeDirectoryKnown, let worktree,
+              FileManager.default.fileExists(atPath: worktree.directory.path)
+        else { return }
         NSWorkspace.shared.activateFileViewerSelecting([worktree.directory])
     }
 }

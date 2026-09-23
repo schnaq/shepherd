@@ -2056,7 +2056,11 @@ degradation ladder through `IntelligenceTiers`, the streaming ladder through its
 closures — first element, mid-stream failure, an empty answer stepping down a tier — and
 `AIDraftFieldState`'s replace/append/label rules for both a value and a stream);
 the delegation engine (stream-event fixtures, argv
-construction, template splitting, git command sequences, state transitions) and the app half of
+construction, template splitting, git command sequences, state transitions — and, in
+`RepositoryTaskTests`, the repository task's argv from slug to `worktree add -b`, *Run again*
+staying in place, the merge-base diff, a rule's refusal with a CLI present, the folder probe's
+findings and "Add a local repository…"'s idempotency; the remote grammar, the slug and the link
+state are `ShepherdCoreTests/LocalRepositoryTests`, on Linux) and the app half of
 auto-delegation (event → signal mapping, ledger persistence across a relaunch, cap notices —
 ADR 0016; the decision itself is tested in `ShepherdCoreTests`); the app half of auto-merge
 (one write request per eligible row and none for the others, the audit entry's contents, a second
