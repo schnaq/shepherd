@@ -27,17 +27,23 @@ never needs a redeploy.
 
 ## Deploy on Vercel
 
-Vercel's Git integration is connected to this repository: every push to `main` deploys to
-production, every pull request gets a preview. The project settings that make that work:
+`.github/workflows/site.yml` deploys: every push to `main` that touches `site/` is built,
+typechecked, built again as Vercel's production output (`vercel build --prod`) and shipped with
+`vercel deploy --prebuilt --prod`, so what goes live is what the workflow checked. Actions → Site →
+Run workflow redeploys `main` by hand. Pull requests get the build and typecheck, no deploy.
+
+This is the only deploy path. **Vercel's Git integration must stay disconnected** from this
+repository (Vercel → Project → Settings → Git), or every push deploys twice.
+
+The workflow needs three repository secrets: `VERCEL_TOKEN` (a token of an account that is a
+member of the team), `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` (both from `vercel link`, in
+`.vercel/project.json`). The project settings the CLI pulls:
 
 - **Root Directory:** `site`
 - **Framework preset:** Next.js (detected)
 - **Package manager:** Bun (detected from `bun.lock`)
 - **Domain:** `shepherd.schnaq.com`, with a `CNAME` record at the DNS provider pointing to
   `cname.vercel-dns.com`
-
-`.github/workflows/site.yml` builds and typechecks the page on every change under `site/` as the
-gate in front of that deploy; it deploys nothing itself.
 
 ## Where things live
 
