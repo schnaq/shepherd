@@ -476,6 +476,47 @@ final class AppSettings {
         return nil
     }
 
+    /// Where a repository and a folder stand before "Add a local repository…" changes anything.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - folder: The clone's root.
+    func localRepositoryLink(_ repo: RepoRef, folder: URL) -> LocalRepositoryLink {
+        LocalRepositoryLink.state(
+            repo: repo,
+            path: folder.path,
+            watched: watchedRepositories,
+            checkouts: localCheckouts,
+            maximumWatched: Self.maximumWatchedRepositories
+        )
+    }
+
+    /// Links a clone and watches its repository, in one step (the "Add a local repository…" sheet).
+    ///
+    /// Each half goes through the path that already owns it, so nothing about either is a second
+    /// spelling: the checkout through ``setLocalCheckout(_:forRepoNamed:)`` — the map delegation
+    /// and *Open in editor* read — and the watch through ``watchRepository(named:)``, whose cap
+    /// and "already watched" rule stay the only ones. The sweep picks the new watch up by itself:
+    /// `ShepherdApp` observes ``watchedRepositories`` and asks for a sweep on every change, which
+    /// is the same refresh the rail's `+` gets.
+    ///
+    /// Idempotent: a half that is already done is skipped rather than repeated, so adding the same
+    /// clone twice changes nothing and says so.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - folder: The clone's root.
+    ///   - link: Whether to link the folder as the checkout.
+    ///   - watch: Whether to watch the repository.
+    /// - Returns: `nil` when everything asked for is now true, or the sentence saying what was not
+    ///   done.
+    func addLocalRepository(_ repo: RepoRef, folder: URL, link: Bool, watch: Bool) -> String? {
+        let before = localRepositoryLink(repo, folder: folder)
+        if link, before.checkout != .linkedHere {
+            setLocalCheckout(folder, forRepoNamed: repo.fullName)
+        }
+        guard watch, before.watch != .watched else { return nil }
+        return watchRepository(named: repo.fullName)
+    }
+
     /// The merge method the merge sheet and the bulk-triage dialog open on.
     ///
     /// Written by both of them, so it is "the last method you chose" rather than a preference
@@ -577,8 +618,14 @@ final class AppSettings {
     /// The local clone configured for a repository, if any.
     /// - Parameter repo: The repository.
     /// - Returns: The checkout directory, or `nil` when none is configured.
+    ///
+    /// The exact `owner/name` first, then the same name in any case: GitHub treats the two
+    /// case-insensitively, and a clone linked as `Schnaq/Shepherd` (the casing its `origin` URL
+    /// happened to have) must still be found for a pull request whose row says `schnaq/shepherd`.
     func localCheckoutURL(for repo: RepoRef) -> URL? {
-        guard let path = localCheckouts[repo.fullName]?
+        let stored = localCheckouts[repo.fullName]
+            ?? localCheckouts.first { $0.key.lowercased() == repo.fullName.lowercased() }?.value
+        guard let path = stored?
             .trimmingCharacters(in: .whitespacesAndNewlines),
             !path.isEmpty
         else { return nil }
@@ -589,8 +636,14 @@ final class AppSettings {
     /// - Parameters:
     ///   - url: The checkout directory, or `nil` to forget it.
     ///   - fullName: The repository's `owner/name`.
+    ///
+    /// An entry that differs from `fullName` only in case is the same repository and is replaced
+    /// rather than kept beside the new one, so the map never holds two clones for one repository.
     func setLocalCheckout(_ url: URL?, forRepoNamed fullName: String) {
         var updated = localCheckouts
+        for key in updated.keys where key != fullName && key.lowercased() == fullName.lowercased() {
+            updated.removeValue(forKey: key)
+        }
         if let url {
             updated[fullName] = url.path
         } else {

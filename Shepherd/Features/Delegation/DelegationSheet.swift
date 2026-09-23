@@ -57,7 +57,11 @@ struct DelegationSheet: View {
     private var header: some View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(model.context.title)
+                // A repository task has no title of its own — its "title" is the repository,
+                // which the line below already shows — so the header says what the sheet is for.
+                Text(model.context.isRepositoryTask
+                    ? String(localized: "New agent task")
+                    : model.context.title)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.textStrong)
                     .lineLimit(1)
@@ -65,7 +69,19 @@ struct DelegationSheet: View {
                     Text(model.context.slug)
                         .font(Theme.mono(11))
                         .foregroundStyle(Theme.textMuted)
-                    ChipView(text: model.context.headRefName, color: Theme.accentText, size: 10.5)
+                    if model.branchName.isEmpty {
+                        // A repository task's branch is named after the task when the run starts.
+                        ChipView(
+                            text: String(localized: "new branch"),
+                            color: Theme.textMuted,
+                            size: 10.5
+                        )
+                        .help(String(
+                            localized: "Shepherd names the branch after the first line of the task when the run starts, and creates it from the tip of the default branch."
+                        ))
+                    } else {
+                        ChipView(text: model.branchName, color: Theme.accentText, size: 10.5)
+                    }
                     ChipView(text: model.agentName, color: Theme.agent, size: 10.5)
                     if model.isAutomatic {
                         // A run nobody pressed a button for has to say so wherever it shows up
@@ -172,14 +188,33 @@ struct DelegationSheet: View {
                     onAppend: { resolveBriefDraft(.append) },
                     onDiscard: { briefDraft.discardPendingDraft() }
                 )
-                Text(String(
-                    localized: "Shepherd prepends its own instructions: the agent is told it works in a detached worktree, must not push, and should keep the change minimal."
-                ))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
+                Text(promptFootnote)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    /// What Shepherd tells the agent before the task, in one sentence.
+    ///
+    /// Three answers because there are three preambles (``DelegationPrompt``), and the sentence
+    /// has to describe the one that will actually be sent: new work may be committed and
+    /// published by the run itself, which "must not push" would misstate.
+    private var promptFootnote: String {
+        if model.context.isRepositoryTask {
+            return String(
+                localized: "The first line names the branch. Shepherd prepends its own instructions: the agent works on a new branch from the default branch, may commit and open a pull request with its own credentials, and should keep the change minimal."
+            )
+        }
+        if model.context.isIssue {
+            return String(
+                localized: "Shepherd prepends its own instructions: the agent works on a new branch from the default branch, may commit and open a pull request with its own credentials, and should keep the change minimal."
+            )
+        }
+        return String(
+            localized: "Shepherd prepends its own instructions: the agent is told it works in a detached worktree, must not push, and should keep the change minimal."
+        )
     }
 
     private var guardrailRow: some View {
@@ -454,7 +489,7 @@ struct DelegationSheet: View {
 
     private var footer: some View {
         HStack(spacing: 8) {
-            if let worktree = model.worktree {
+            if model.isWorktreeDirectoryKnown, let worktree = model.worktree {
                 Text(worktree.directory.path)
                     .font(Theme.mono(10.5))
                     .foregroundStyle(Theme.textMuted)
@@ -499,28 +534,35 @@ struct DelegationSheet: View {
                 .buttonStyle(SecondaryButtonStyle(height: 30, tint: Theme.failure))
 
         case .finished, .cancelled:
+            // Both need a directory: a repository task cancelled before its branch was chosen
+            // has none yet.
             Button(String(localized: "Reveal in Finder")) { model.revealWorktreeInFinder() }
                 .buttonStyle(SecondaryButtonStyle(height: 30))
+                .disabled(!model.isWorktreeDirectoryKnown)
             Button(String(localized: "Discard worktree")) { model.discardWorktree() }
                 .buttonStyle(SecondaryButtonStyle(height: 30, tint: Theme.failure))
-                .disabled(model.isPublishing)
+                .disabled(model.isPublishing || !model.isWorktreeDirectoryKnown)
             Button(String(localized: "Run again")) { model.start() }
                 .buttonStyle(SecondaryButtonStyle(height: 30))
                 .disabled(!model.canStart)
             Button(
                 model.hasPushed
                     ? String(localized: "Pushed")
-                    : String(localized: "Commit & push to PR branch")
+                    : (model.context.isNewWork
+                        // New work has no pull request yet; the branch is Shepherd's.
+                        ? String(localized: "Commit & push branch")
+                        : String(localized: "Commit & push to PR branch"))
             ) {
                 model.commitAndPush()
             }
             .buttonStyle(SuccessButtonStyle(height: 30))
             .disabled(model.isPublishing || model.hasPushed || !model.hasChanges)
-            .help(String(localized: "Pushes with your own git credentials to \(model.context.headRefName)"))
+            .help(String(localized: "Pushes with your own git credentials to \(model.branchName)"))
 
         case .failed:
             Button(String(localized: "Reveal in Finder")) { model.revealWorktreeInFinder() }
                 .buttonStyle(SecondaryButtonStyle(height: 30))
+                .disabled(!model.isWorktreeDirectoryKnown)
             Button(String(localized: "Try again")) { model.start() }
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(!model.canStart)
@@ -656,7 +698,9 @@ struct DelegationSheet: View {
         environment.settings.setLocalCheckout(url, forRepoNamed: repo)
         // The model was built without a worktree, so it is rebuilt with one; nothing is
         // running (the sheet would not be showing this state otherwise).
-        environment.startDelegation(model.context)
+        // The typed task travels into the rebuilt model: a repository task's field starts empty,
+        // and whatever the user wrote before noticing the missing clone is theirs.
+        environment.startDelegation(model.context, task: model.task)
     }
 }
 

@@ -113,6 +113,12 @@ final class DelegationCenter {
         onDidFinish: (@MainActor (DelegationOutcome) -> Void)? = nil,
         onDidBegin: (@MainActor () -> Void)? = nil
     ) -> DelegationModel? {
+        // A free-text task on a repository is somebody's words typed into a sheet; no rule has
+        // a condition that could stand for them (ADR 0016's rules fire on a pull request's
+        // transitions). `AutoDelegationCoordinator` only ever builds a pull-request context, so
+        // this is belt and braces — but it makes "a rule never starts a repository task" a line
+        // of code rather than a property of today's callers (ADR 0011's 2026-09-23 amendment).
+        guard !context.isRepositoryTask else { return nil }
         // The one-per-pull-request rule, again from the one place that owns it.
         if let existing = models[context.prID], existing.isBusy { return nil }
 
@@ -142,6 +148,29 @@ final class DelegationCenter {
     /// Closes the sheet. A run keeps going in the background; re-opening shows it again.
     func dismiss() {
         presented = nil
+    }
+
+    /// Where a context's worktree lives, as far as it is known when the sheet opens.
+    ///
+    /// Issue 128 and pull request 128 are two different pieces of work in the same repository, so
+    /// they get two directories (ADR 0032's 2026-09-04 amendment). A repository task's directory
+    /// is named after its task text, which nobody has typed yet, so the handle starts out aimed at
+    /// the managed root itself and ``DelegationModel`` re-aims it when the run starts — the root is
+    /// also the one directory ``GitWorktree/remove()`` refuses to delete, so a stray *Discard*
+    /// before that point cannot take anything with it.
+    /// - Parameter context: What the delegation is about.
+    static func worktreeDirectory(
+        for context: DelegationContext,
+        root: URL = AppConfig.worktreesDirectory
+    ) -> URL {
+        switch context.origin {
+        case .issue:
+            return GitWorktree.directory(repo: context.repo, issueNumber: context.number, root: root)
+        case .repository:
+            return root
+        case .pullRequest, .reviewFinding:
+            return GitWorktree.directory(repo: context.repo, number: context.number, root: root)
+        }
     }
 
     /// Builds a model for a context, resolving the CLI and the worktree from settings.
@@ -174,9 +203,7 @@ final class DelegationCenter {
                 checkout: checkout,
                 // Issue 128 and pull request 128 are two different pieces of work in the same
                 // repository, so they get two directories (ADR 0032's 2026-09-04 amendment).
-                directory: context.isIssue
-                    ? GitWorktree.directory(repo: context.repo, issueNumber: context.number)
-                    : GitWorktree.directory(repo: context.repo, number: context.number)
+                directory: Self.worktreeDirectory(for: context)
             )
         }
 

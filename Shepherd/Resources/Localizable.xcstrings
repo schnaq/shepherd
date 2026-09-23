@@ -17480,6 +17480,106 @@
           }
         }
       }
+    },
+    "Agent task": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent-Aufgabe"
+          }
+        }
+      }
+    },
+    "Commit & push branch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Committen & Branch pushen"
+          }
+        }
+      }
+    },
+    "Continuing on %@ in the same worktree.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arbeitet weiter auf %@, im selben Worktree."
+          }
+        }
+      }
+    },
+    "Every branch name Shepherd tried for this task is already taken. Start the task with different first words.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Branch-Name, den Shepherd für diese Aufgabe probiert hat, ist schon vergeben. Beginne die Aufgabe mit anderen Worten."
+          }
+        }
+      }
+    },
+    "New agent task": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Agent-Aufgabe"
+          }
+        }
+      }
+    },
+    "Shepherd names the branch after the first line of the task when the run starts, and creates it from the tip of the default branch.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd benennt den Branch beim Start nach der ersten Zeile der Aufgabe und legt ihn an der Spitze des Standard-Branches an."
+          }
+        }
+      }
+    },
+    "Shepherd prepends its own instructions: the agent works on a new branch from the default branch, may commit and open a pull request with its own credentials, and should keep the change minimal.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd stellt seine eigenen Anweisungen davor: Der Agent arbeitet auf einem neuen Branch vom Standard-Branch, darf mit seinen eigenen Zugangsdaten committen und einen Pull Request öffnen und soll die Änderung minimal halten."
+          }
+        }
+      }
+    },
+    "The first line names the branch. Shepherd prepends its own instructions: the agent works on a new branch from the default branch, may commit and open a pull request with its own credentials, and should keep the change minimal.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die erste Zeile benennt den Branch. Shepherd stellt seine eigenen Anweisungen davor: Der Agent arbeitet auf einem neuen Branch vom Standard-Branch, darf mit seinen eigenen Zugangsdaten committen und einen Pull Request öffnen und soll die Änderung minimal halten."
+          }
+        }
+      }
+    },
+    "You are running inside a git worktree that Shepherd created for a task on %@. It is checked out on a new branch, %@, started from the tip of the repository's default branch. Shepherd named that branch; do not rename it and do not switch to another one.\n\nGround rules:\n- The work is yours to finish on this branch. When it is ready you may commit it, publish the branch and open a pull request, using the git and GitHub credentials you already have. If you cannot publish, commit anyway and say so in your final message: the reviewer can publish the worktree from Shepherd.\n- Do what the task asks and nothing else. Do not reformat, rename or refactor anything the task does not ask for.\n- Read the repository before you write: its tests, its conventions and its contribution notes are the specification, not a suggestion.\n- Prefer the project's existing tests and tooling over adding new ones.\n- If the task is unclear or you would have to guess at intent, say so in your final message instead of guessing.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du läufst in einem git-Worktree, den Shepherd für eine Aufgabe in %@ angelegt hat. Er ist auf einem neuen Branch ausgecheckt, %@, gestartet von der Spitze des Standard-Branches dieses Repositories. Shepherd hat diesen Branch benannt; benenne ihn nicht um und wechsle nicht auf einen anderen.\n\nGrundregeln:\n- Die Arbeit ist deine, und du darfst sie auf diesem Branch abschließen. Wenn sie fertig ist, darfst du committen, den Branch veröffentlichen und einen Pull Request öffnen – mit den git- und GitHub-Zugangsdaten, die du ohnehin hast. Wenn du nicht veröffentlichen kannst, committe trotzdem und sage es in deiner Abschlussnachricht: Der Reviewer kann den Worktree aus Shepherd veröffentlichen.\n- Tu, was die Aufgabe verlangt, und nichts sonst. Formatiere, benenne und refaktoriere nichts um, was die Aufgabe nicht verlangt.\n- Lies das Repository, bevor du schreibst: Seine Tests, seine Konventionen und seine Hinweise für Beitragende sind die Spezifikation, keine Anregung.\n- Nutze bevorzugt die bestehenden Tests und Werkzeuge des Projekts, statt neue hinzuzufügen.\n- Ist die Aufgabe unklar oder müsstest du die Absicht erraten, sage das in deiner Abschlussnachricht, statt zu raten."
+          }
+        }
+      }
+    },
+    "new branch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "neuer Branch"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

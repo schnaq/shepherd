@@ -783,6 +783,14 @@ final class AppEnvironment {
         task: String? = nil,
         automatic: Bool = false
     ) {
+        // A repository task has its own entry point (no webhook, no re-sync); routing it there
+        // from here means the sheet's "Choose folder…" rebuild, which calls this with whatever
+        // context it had, cannot accidentally give one the pull-request treatment.
+        if context.isRepositoryTask {
+            guard !automatic else { return }
+            startRepositoryDelegation(context.repo, task: task)
+            return
+        }
         let onDidPush: @MainActor () async -> Void = { [weak self] in
             // The agent's commits are on the pull request now; refresh so the review screen
             // shows the new head instead of the one the user delegated from.
@@ -829,6 +837,67 @@ final class AppEnvironment {
         if let task, !model.isBusy {
             model.task = task
         }
+    }
+
+    /// Opens the delegation sheet for a free-text task on a repository (ADR 0011's 2026-09-23
+    /// amendment).
+    ///
+    /// The same ``DelegationCenter`` every other delegation goes through, so the guardrails
+    /// (turn cap or *No limit*, spend cap, permission mode, allowed tools), the worktree
+    /// isolation, the transcript and "Shepherd itself pushes nothing" are the same code. Three
+    /// things are left out, each because there is nothing for it to talk about:
+    ///
+    /// - **No `delegation.finished` webhook.** Its payload is a pull request's identity
+    ///   (ADR 0012's envelope: node id, repository, number), and a task has no number; sending
+    ///   `0` would be a payload that lies. Telemetry's enum-only count still records the run.
+    /// - **No re-sync after a push.** The branch is new and no pull request carries it, so a sweep
+    ///   would find nothing that changed.
+    /// - **No brief drafter**, for the issue path's reason: the ✨ brief is built from a pull
+    ///   request's detail, and a repository task has none.
+    ///
+    /// Never automatic: ``DelegationCenter/startAutomatically(context:task:settings:toasts:onDidPush:onDidFinish:onDidBegin:)``
+    /// refuses the origin outright (ADR 0016).
+    /// - Parameters:
+    ///   - repo: The repository. Without a linked checkout the sheet opens on its "Choose
+    ///     folder…" state.
+    ///   - task: A prefilled task text, when the caller has one.
+    /// - Returns: The delegation now on screen.
+    @discardableResult
+    func startRepositoryDelegation(_ repo: RepoRef, task: String? = nil) -> DelegationModel {
+        let onDidFinish: @MainActor (DelegationOutcome) -> Void = { [weak self] outcome in
+            self?.telemetry?.record(.delegationFinished(outcome: Self.telemetryOutcome(outcome.status)))
+        }
+        let onDidBegin: @MainActor () -> Void = { [weak self] in
+            self?.telemetry?.record(.delegationStarted(trigger: .manual))
+        }
+        let model = delegation.open(
+            context: .repository(repo),
+            settings: settings,
+            toasts: toasts,
+            onDidFinish: onDidFinish,
+            onDidBegin: onDidBegin,
+            brief: nil
+        )
+        if let task, !model.isBusy {
+            model.task = task
+        }
+        return model
+    }
+
+    /// Asks for a folder and links it as a repository's local checkout (ADR 0039's map).
+    ///
+    /// The rail's "Link a local checkout…" on a watched repository that has none, and the step
+    /// "Start an agent…" offers first in that case. Only the checkout is written; the repository
+    /// is already watched, or the row would not be there.
+    /// - Parameter repo: The repository.
+    /// - Returns: Whether a folder was linked.
+    @discardableResult
+    func chooseLocalCheckout(for repo: RepoRef) -> Bool {
+        guard let url = FolderPicker.choose(
+            title: String(localized: "Choose the local clone of \(repo.fullName)")
+        ) else { return false }
+        settings.setLocalCheckout(url, forRepoNamed: repo.fullName)
+        return true
     }
 
     /// Hands an issue to the configured assistant (ADR 0032's 2026-09-04 amendment).
