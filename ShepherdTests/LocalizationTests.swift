@@ -80,11 +80,14 @@ final class LocalizationTests: XCTestCase {
         // (Scripts/check-localization.py rule 5).
         let number = 1024
         let composed = String(
-            localized: "\("shepherd") #\(String(number))",
+            localized: "#\(String(number)) is a pull request rather than an issue, so it has no acceptance criteria.",
             bundle: german,
             locale: Locale(identifier: "de_DE")
         )
-        XCTAssertEqual(composed, "shepherd #1024")
+        XCTAssertEqual(
+            composed,
+            "#1024 ist ein Pull Request und kein Issue, hat also keine Akzeptanzkriterien."
+        )
     }
 
     // MARK: - English

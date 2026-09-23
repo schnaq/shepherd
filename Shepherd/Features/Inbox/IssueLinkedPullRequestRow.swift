@@ -60,7 +60,7 @@ struct IssueLinkedPullRequestRow<Badge: View>: View {
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(stateColor)
                     .frame(width: 12)
-                Text("\(reference.repo.name) #\(String(reference.number))")
+                Text(verbatim: "\(reference.repo.name) #\(reference.number)")
                     .font(Theme.mono(11))
                     .foregroundStyle(Theme.textMuted)
                     .layoutPriority(1)

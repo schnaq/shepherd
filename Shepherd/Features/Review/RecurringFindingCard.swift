@@ -80,7 +80,7 @@ struct RecurringFindingCard: View {
         HStack(alignment: .top, spacing: 8) {
             // Not localised: a pull request number is a number with a `#` in front of it in every
             // language Shepherd speaks.
-            Text(verbatim: "#\(String(comment.number))")
+            Text(verbatim: "#\(comment.number)")
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .foregroundStyle(Theme.textMuted)
                 .frame(minWidth: 42, alignment: .leading)
