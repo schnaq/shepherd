@@ -190,6 +190,62 @@ final class RepositoryTaskTests: XCTestCase {
         )
     }
 
+    func testAMergeBaseGitCannotFindFallsBackToTheHeadDiff() async throws {
+        // A shallow clone, a rewritten default branch, a starting ref that is gone: git exits
+        // non-zero, and the card must still show what is in the worktree rather than nothing.
+        let git = RecordingProcessRunner { invocation in
+            switch invocation.arguments.first {
+            case "merge-base":
+                return ProcessResult(status: 1, standardOutput: "", standardError: "fatal: no merge base")
+            case "diff":
+                return ProcessResult(status: 0, standardOutput: " a.swift | 2 +-\n", standardError: "")
+            default:
+                return ProcessResult(status: 0, standardOutput: "", standardError: "")
+            }
+        }
+        let stat = try await handle(git).diffStat(since: "origin/main")
+        XCTAssertEqual(stat, "a.swift | 2 +-")
+        XCTAssertEqual(
+            git.arguments,
+            [["merge-base", "origin/main", "HEAD"], ["diff", "--stat", "HEAD"]]
+        )
+    }
+
+    func testAnIssueRunThatCommittedItsWorkCanStillBePushed() async throws {
+        let row = IssueRowSummary(
+            id: "I_128",
+            repo: repo,
+            number: 128,
+            title: "Sync stalls on a renamed branch",
+            author: ShepherdCore.Actor(login: "octocat", kind: .human),
+            createdAt: Date(timeIntervalSince1970: 1_788_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_788_100_000),
+            labels: ["bug"]
+        )
+        let git = taskGit(diffStat: " a.swift | 2 +-\n", porcelain: "")
+        let model = DelegationModel(
+            context: .issue(row),
+            configuration: AgentCLIConfiguration(),
+            readiness: .ready,
+            runner: ScriptedAgentRunner(
+                events: [.result(AgentRunResult(isError: false, subtype: "success"))]
+            ),
+            worktree: GitWorktree(
+                checkout: checkout,
+                directory: GitWorktree.directory(repo: repo, issueNumber: 128, root: root),
+                managedRoot: root,
+                git: URL(fileURLWithPath: "/usr/bin/git"),
+                runner: git
+            )
+        )
+        model.start()
+        await model.runTask?.value
+
+        XCTAssertEqual(model.worktreeStatus?.isDirty, false, "the run committed everything")
+        XCTAssertTrue(model.hasChanges, "committed work is still something to push")
+        XCTAssertTrue(git.arguments.contains(["merge-base", "origin/main", "HEAD"]))
+    }
+
     // MARK: - A run
 
     func testARunNamesItsBranchAfterTheTaskAndStartsItFromTheDefaultBranch() async throws {
@@ -424,6 +480,42 @@ final class RepositoryTaskTests: XCTestCase {
             settings.linkedRepositories.map(\.fullName),
             ["schnaq/alpha", "schnaq/zeta"]
         )
+    }
+
+    func testAWholesaleAssignmentWithCaseVariantsKeepsOneEntryPerRepository() throws {
+        // What `SettingsSyncApplier` does with a downloaded document.
+        let settings = try settings()
+        settings.localCheckouts = ["schnaq/review": "/b", "Schnaq/Review": "/a"]
+        XCTAssertEqual(settings.localCheckouts, ["Schnaq/Review": "/a"])
+        XCTAssertEqual(settings.localCheckoutURL(for: repo)?.path, "/a")
+
+        let names = settings.linkedRepositories.map { $0.fullName.lowercased() }
+        XCTAssertEqual(names, ["schnaq/review"], "one palette command, so one identity")
+    }
+
+    func testCaseVariantsInAnOldDefaultsFileAreCollapsedOnLoad() throws {
+        let suite = "shepherd.tests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.set(["schnaq/review": "/b", "Schnaq/Review": "/a"], forKey: "delegation.localCheckouts")
+        let settings = AppSettings(defaults: defaults)
+        XCTAssertEqual(settings.localCheckouts, ["Schnaq/Review": "/a"])
+        XCTAssertEqual(settings.linkedRepositories.count, 1)
+    }
+
+    func testAnUnreadableOriginIsShownWithoutItsCredentials() async throws {
+        let git = RecordingProcessRunner { invocation in
+            invocation.arguments.first == "rev-parse"
+                ? ProcessResult(status: 0, standardOutput: "/Users/dev/code/app\n", standardError: "")
+                : ProcessResult(
+                    status: 0,
+                    standardOutput: "https://me:ghp_secret@github.com/not a/repo?x=1\n",
+                    standardError: ""
+                )
+        }
+        let finding = try await LocalRepositoryProbe(runner: git).inspect(checkout)
+        guard case .repository(_, .unreadable(let shown)) = finding else { return XCTFail("\(finding)") }
+        XCTAssertEqual(shown, "https://github.com/not a/repo")
+        XCTAssertFalse(shown.contains("ghp_secret"))
     }
 
     func testACheckoutIsFoundWhateverCaseTheRepositoryIsSpelledIn() throws {

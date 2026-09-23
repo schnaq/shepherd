@@ -430,12 +430,16 @@ struct GitWorktree: Sendable {
     /// the run may have fetched and moved `origin/main` since, and a diff against the moved ref
     /// would show upstream's new commits as if the agent had reverted them.
     /// - Parameter base: The ref the branch was started from, e.g. `origin/main`.
+    ///
+    /// A merge base git cannot find — a shallow clone, a rewritten default branch, a starting ref
+    /// that no longer exists — falls back to ``diffStat()`` rather than failing: an empty stat
+    /// would read as "changed nothing" and disable the push button for work that is there.
     func diffStat(since base: String) async throws -> String {
-        let mergeBase = try await run(
+        let mergeBase = (try? await run(
             ["merge-base", base, "HEAD"],
             in: directory,
             label: "merge-base"
-        ).trimmedOutput
+        ))?.trimmedOutput ?? ""
         guard !mergeBase.isEmpty else { return try await diffStat() }
         return try await run(["diff", "--stat", mergeBase], in: directory, label: "diff").trimmedOutput
     }

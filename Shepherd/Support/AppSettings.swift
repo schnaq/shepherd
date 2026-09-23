@@ -137,8 +137,11 @@ final class AppSettings {
             Keys.agentCLI,
             default: AgentCLIConfiguration()
         )
-        self.localCheckouts = defaults.dictionary(forKey: Keys.localCheckouts) as? [String: String]
-            ?? [:]
+        // Collapsed on the way in as well as on every write: a defaults file written before
+        // lookups became case-insensitive may hold two spellings of one repository.
+        self.localCheckouts = LocalRepositoryLink.collapsingCaseVariants(
+            defaults.dictionary(forKey: Keys.localCheckouts) as? [String: String] ?? [:]
+        )
         self.autoDelegation = Self.readJSON(
             defaults,
             Keys.autoDelegation,
@@ -591,8 +594,18 @@ final class AppSettings {
     ///
     /// Delegation needs a checkout to build a worktree from; without one the sheet refuses and
     /// points at this setting.
+    ///
+    /// One entry per repository whatever the casing of its keys: every write — the Settings
+    /// card, a downloaded settings document (`SettingsSyncApplier` assigns the whole map) — is
+    /// collapsed by ``ShepherdCore/LocalRepositoryLink/collapsingCaseVariants(_:)``, so two
+    /// spellings of one repository can never both be here. Assigning inside `didSet` does not
+    /// re-enter it.
     var localCheckouts: [String: String] {
-        didSet { defaults.set(localCheckouts, forKey: Keys.localCheckouts) }
+        didSet {
+            let collapsed = LocalRepositoryLink.collapsingCaseVariants(localCheckouts)
+            if collapsed != localCheckouts { localCheckouts = collapsed }
+            defaults.set(localCheckouts, forKey: Keys.localCheckouts)
+        }
     }
 
     /// The opt-in rules that may start a delegation without being asked (ADR 0016).
@@ -636,10 +649,15 @@ final class AppSettings {
     ///
     /// Keys that are not a valid `owner/name` (a hand-edited defaults file) are skipped rather
     /// than offered as a command that could only fail.
+    /// Unique by case-insensitive name — the map already is, and this says so again because the
+    /// palette uses the name as a command's identity.
     var linkedRepositories: [RepoRef] {
-        localCheckouts
+        var seen = Set<String>()
+        return localCheckouts
             .filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .compactMap { RepoRef.parse(fullName: $0.key) }
+            .sorted { $0.fullName < $1.fullName }
+            .filter { seen.insert($0.fullName.lowercased()).inserted }
             .sorted()
     }
 
