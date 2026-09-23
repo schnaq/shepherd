@@ -247,7 +247,7 @@ export class MonacoDiffViewer implements ViewerPort {
   }
 
   /**
-   * Takes the app's language and words (ADR 0022's second amendment).
+   * Takes the app's language and words (ADR 0022's diff-viewer amendment).
    *
    * The app sends this before its first `loadFile`, so normally nothing is on screen yet; the
    * zones that are get redrawn anyway, because a card left in the previous language would stay

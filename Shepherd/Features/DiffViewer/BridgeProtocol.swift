@@ -243,7 +243,7 @@ struct BridgePaneLabels: Codable, Hashable, Sendable {
 ///
 /// Sent from here for the reason ``BridgePaneLabels`` is: the app is localised through its
 /// String Catalog and the bundle is not, so a German Mac must not get English pills in its diff
-/// (ADR 0022's second amendment). Every field is required and non-empty, because an empty pill
+/// (ADR 0022's diff-viewer amendment). Every field is required and non-empty, because an empty pill
 /// is worse than an English one.
 struct BridgeViewerStrings: Codable, Hashable, Sendable {
     /// A comment count as two whole phrases, one per plural category.
@@ -456,7 +456,7 @@ enum DiffViewerCommand: Hashable, Sendable, Codable {
     /// On the wire the side is optional, and absent means `.right` — the shape the command had
     /// before there was another pane to ask for.
     case focusEditor(side: BridgeSide)
-    /// The app's language, and the words the viewer draws itself (ADR 0022's second amendment).
+    /// The app's language, and the words the viewer draws itself (ADR 0022's diff-viewer amendment).
     ///
     /// `locale` is a BCP 47 language tag — the language the app's own strings resolved to, so the
     /// bundle's `Intl` relative times agree with the words around them. Sent once, before the
