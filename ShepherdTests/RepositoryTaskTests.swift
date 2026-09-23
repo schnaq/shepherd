@@ -484,12 +484,15 @@ final class RepositoryTaskTests: XCTestCase {
         let center = center(git: git, agents: [finishing])
         let settings = try readySettings()
 
+        // The order a person can actually produce: start the first task, open a second sheet and
+        // start it straight away — both before either has fetched, picked a name, created a branch
+        // or a directory. (Opening the second sheet *before* starting the first is not a sequence
+        // the app allows: the first sheet leaves the screen unstarted and is forgotten.)
         let first = center.open(context: .repository(repo), settings: settings, toasts: ToastCenter())
         first.task = "Add dark mode"
+        first.start()
         let second = center.open(context: .repository(repo), settings: settings, toasts: ToastCenter())
         second.task = "Add dark mode\nbut for the settings window"
-        // Both started before either has picked a name, created a branch or a directory.
-        first.start()
         second.start()
         await first.runTask?.value
         await second.runTask?.value
