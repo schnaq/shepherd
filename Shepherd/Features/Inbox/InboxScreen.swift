@@ -472,12 +472,14 @@ struct InboxScreen: View {
         // (ADR 0040). Inside a capsule the avatar was drawn as the last member of the Sync group —
         // the spacer above could not separate it, because a view that is not a control joins the
         // glass group beside it — and read as a third button of that group. Bare, the round
-        // picture is its own shape, which is how an account reads in a macOS toolbar.
+        // picture is its own shape, which is how an account reads in a macOS toolbar. It is the
+        // height of the toolbar's buttons (36 pt, measured against the Sync button's capsule), so
+        // the row's rhythm does not break at its last item.
         ToolbarItem(placement: .primaryAction) {
             AvatarView(
                 login: session.account.login,
                 url: session.account.avatarURL,
-                size: 24
+                size: 36
             )
             .help(Text(session.account.login))
         }

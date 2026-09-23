@@ -696,34 +696,7 @@ struct ReviewToolbar: ToolbarContent {
     /// `navigationSubtitle`), which is where macOS puts "which one, exactly"; what is left is what
     /// a reviewer looks at before pressing anything to the right of it.
     private var facts: some View {
-        HStack(spacing: 8) {
-            if let summary = model.summary {
-                ProvenanceChip(actor: summary.author)
-                HStack(spacing: 6) {
-                    Text("· \(summary.changedFiles) files ·")
-                        .lineLimit(1)
-                    DiffCountsView(
-                        additions: summary.additions,
-                        deletions: summary.deletions,
-                        size: 11
-                    )
-                }
-                .font(Theme.mono(11))
-                .foregroundStyle(Theme.textMuted)
-            }
-            // The inbox row's rollup stands in while the detail has no check runs of its own
-            // (``ReviewModel/checkRollup``). The sweep knows a suite is red long before the detail
-            // fetch lands, and hiding the badge until then said "no checks" when the truth was
-            // "not read yet". `total > 0` is the gate rather than the state, because a rollup
-            // that counted nothing has nothing to show.
-            if let checkRollup, checkRollup.total > 0 {
-                ChecksSummaryView(rollup: checkRollup)
-            }
-            if let write {
-                ChipView(text: write.text, color: write.color)
-                    .help(write.help)
-            }
-        }
+        ReviewToolbarFacts(model: model, checkRollup: checkRollup, write: write)
     }
 
     /// The Merge button: the toolbar's one prominent action, always (ADR 0040's 2026-09-23
@@ -835,5 +808,53 @@ struct ChecksSummaryView: View {
         String(
             localized: "\(rollup.successCount) passed, \(rollup.failureCount) failed, \(rollup.pendingCount) running"
         )
+    }
+}
+
+/// The read-out at the head of the review toolbar's trailing items: author, size, checks and what
+/// the outbox is doing.
+///
+/// A view of its own rather than a property of ``ReviewToolbar``, because the write chip appears
+/// and disappears as a merge goes out, and an entrance that pops in reads as a glitch — so it
+/// animates, and not at all when the system's Reduce Motion is on (ADR 0033), which needs the
+/// environment a `ToolbarContent` does not carry.
+private struct ReviewToolbarFacts: View {
+    let model: ReviewModel
+    let checkRollup: CheckRollup?
+    let write: RowWriteState?
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if let summary = model.summary {
+                ProvenanceChip(actor: summary.author)
+                HStack(spacing: 6) {
+                    Text("· \(summary.changedFiles) files ·")
+                        .lineLimit(1)
+                    DiffCountsView(
+                        additions: summary.additions,
+                        deletions: summary.deletions,
+                        size: 11
+                    )
+                }
+                .font(Theme.mono(11))
+                .foregroundStyle(Theme.textMuted)
+            }
+            // The inbox row's rollup stands in while the detail has no check runs of its own
+            // (``ReviewModel/checkRollup``). The sweep knows a suite is red long before the detail
+            // fetch lands, and hiding the badge until then said "no checks" when the truth was
+            // "not read yet". `total > 0` is the gate rather than the state, because a rollup
+            // that counted nothing has nothing to show.
+            if let checkRollup, checkRollup.total > 0 {
+                ChecksSummaryView(rollup: checkRollup)
+            }
+            if let write {
+                ChipView(text: write.text, color: write.color)
+                    .help(write.help)
+                    .transition(.opacity)
+            }
+        }
+        .animation(reduceMotion ? nil : .snappy, value: write)
     }
 }

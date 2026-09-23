@@ -95,7 +95,7 @@ struct ReviewComposerBar: View {
         actions.activity.isRunning(model.prID, .review)
     }
 
-    /// Which verdict the green button opens the sheet on.
+    /// Which verdict the composer's approve button opens the sheet on.
     ///
     /// Approve, unless GitHub would answer 422 to one — on your own pull request the same button
     /// still opens the sheet, on a plain comment, because a comment is a review GitHub accepts

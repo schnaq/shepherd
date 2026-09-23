@@ -56,10 +56,8 @@ struct ReviewUpdateBanner: View {
             .frame(height: 34)
             Divider().overlay(Theme.border)
         }
-        // Its own frame only (ADR 0040): during a focus session the banner is the first view of the
-        // review screen's content, under the session bar's safe-area inset and the toolbar, and a
-        // colour background left to its default reaches up through both.
-        .background(Theme.raised, ignoresSafeAreaEdges: [])
+        // Under the session bar and the toolbar (``View/ownFrameBackground(_:)``).
+        .ownFrameBackground(Theme.raised)
         // `.contain` rather than `.combine`: whichever button the notice carries — Reload for a
         // push, Try again for a failed refresh — has to stay its own element so the keyboard and
         // VoiceOver can reach it, and the label names the group they are in rather than replacing

@@ -762,3 +762,16 @@ extension PriorityBucket {
         }
     }
 }
+
+extension View {
+    /// A background that fills this view's own frame and nothing more (ADR 0040).
+    ///
+    /// A colour background reaches into every safe area its view touches by default. Under the
+    /// window's toolbar that means a bar at the top of the content — a file list, a session bar,
+    /// an update banner — paints an opaque band up behind the toolbar's glass. These surfaces are
+    /// content, not the toolbar, so they paint where they are and leave the toolbar strip alone.
+    /// - Parameter color: The fill.
+    func ownFrameBackground(_ color: Color) -> some View {
+        background(color, ignoresSafeAreaEdges: [])
+    }
+}
