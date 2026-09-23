@@ -405,14 +405,46 @@ struct GitWorktree: Sendable {
     ///
     /// Refuses any directory outside ``managedRoot`` — the path comes from settings the user
     /// can edit, and `git worktree remove --force` deletes files.
+    ///
+    /// A directory that is not there is not an error. `git worktree remove` fails on one ("is not
+    /// a working tree"), and a *Discard* that fails because there is nothing to discard leaves
+    /// the sheet with no way out — a run whose `worktree add` failed half-way, or a directory the
+    /// user deleted in Finder. The remove is skipped and the prune still runs, which is what
+    /// clears git's record of a worktree whose directory has gone.
     func remove() async throws {
         try ensureManaged()
-        try await run(
-            ["worktree", "remove", "--force", directory.path],
-            in: checkout,
-            label: "worktree remove"
-        )
+        if FileManager.default.fileExists(atPath: directory.path) {
+            try await run(
+                ["worktree", "remove", "--force", directory.path],
+                in: checkout,
+                label: "worktree remove"
+            )
+        }
         try await run(["worktree", "prune"], in: checkout, label: "worktree prune")
+    }
+
+    /// Deletes a local branch that exists and holds no work of its own; keeps any other.
+    ///
+    /// For a repository task discarded after its directory went missing: the branch is then the
+    /// leftover of a worktree that never really existed, and leaving it would take its name for
+    /// good. "Holds no work" is `git rev-list --count <base>..<branch>` answering `0` — a branch
+    /// with a commit on it is somebody's work, and Shepherd does not throw work away, so it stays.
+    /// Without a base there is no way to tell, and the branch stays too.
+    /// - Parameters:
+    ///   - branch: The branch, e.g. `agent/add-dark-mode`.
+    ///   - base: The ref the branch was started from, when known.
+    /// - Returns: Whether the branch was deleted.
+    @discardableResult
+    func deleteLocalBranchIfUnused(_ branch: String, since base: String?) async throws -> Bool {
+        guard await hasLocalBranch(branch), let base else { return false }
+        let count = try await run(
+            ["rev-list", "--count", "\(base)..refs/heads/\(branch)"],
+            in: checkout,
+            label: "rev-list"
+        )
+        guard count.trimmedOutput == "0" else { return false }
+        try await run(["branch", "-D", branch], in: checkout, label: "branch -D")
+        return true
     }
 
     /// Throws unless ``directory`` is a proper descendant of ``managedRoot``.

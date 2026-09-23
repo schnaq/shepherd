@@ -17950,6 +17950,26 @@
           }
         }
       }
+    },
+    "Dismiss task": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufgabe verwerfen"
+          }
+        }
+      }
+    },
+    "Git could not create %@. The name is free again; Try again picks a new one.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Git konnte %@ nicht anlegen. Der Name ist wieder frei; „Erneut versuchen“ wählt einen neuen."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

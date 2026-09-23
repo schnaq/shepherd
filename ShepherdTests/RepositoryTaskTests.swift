@@ -511,6 +511,7 @@ final class RepositoryTaskTests: XCTestCase {
         XCTAssertEqual(second.phase, .running)
 
         let firstDirectory = try XCTUnwrap(first.worktree?.directory)
+        try FileManager.default.createDirectory(at: firstDirectory, withIntermediateDirectories: true)
         first.discardWorktree()
         await first.actionTask?.value
 
@@ -578,6 +579,177 @@ final class RepositoryTaskTests: XCTestCase {
         model.start()
         await model.runTask?.value
         XCTAssertEqual(center.repositoryTasks(for: repo).map(\.phase), [.failed])
+    }
+
+    // MARK: - When git refuses, and when the directory is gone
+
+    /// A switch a git handler reads, so one test can make `worktree add` fail and then succeed.
+    private final class Switch: @unchecked Sendable {
+        private let lock = NSLock()
+        private var on: Bool
+        init(_ on: Bool) { self.on = on }
+        var isOn: Bool {
+            get { lock.withLock { on } }
+            set { lock.withLock { on = newValue } }
+        }
+    }
+
+    /// ``taskGit()``, except that `worktree add` fails while `refusing` is on.
+    private func refusingGit(_ refusing: Switch) -> RecordingProcessRunner {
+        RecordingProcessRunner { invocation in
+            if invocation.arguments.prefix(2) == ["worktree", "add"], refusing.isOn {
+                return ProcessResult(
+                    status: 128,
+                    standardOutput: "",
+                    standardError: "fatal: could not create leading directories"
+                )
+            }
+            switch invocation.arguments.first {
+            case "for-each-ref":
+                return ProcessResult(status: 0, standardOutput: "", standardError: "")
+            case "symbolic-ref":
+                return ProcessResult(status: 0, standardOutput: "origin/main\n", standardError: "")
+            case "rev-parse":
+                return ProcessResult(status: 1, standardOutput: "", standardError: "")
+            case "merge-base":
+                return ProcessResult(status: 0, standardOutput: "abc123\n", standardError: "")
+            default:
+                return ProcessResult(status: 0, standardOutput: "", standardError: "")
+            }
+        }
+    }
+
+    func testAWorktreeGitRefusesReleasesTheClaimAndFailsWithGitsError() async throws {
+        let refusing = Switch(true)
+        let center = center(git: refusingGit(refusing), agents: [finishing])
+        let settings = try readySettings()
+
+        let failed = center.open(context: .repository(repo), settings: settings, toasts: ToastCenter())
+        failed.task = "Add dark mode"
+        failed.start()
+        await failed.runTask?.value
+
+        // (b) Failed, with git's own words.
+        guard case .failed(let message) = failed.state else {
+            return XCTFail("expected a failed state, got \(failed.state)")
+        }
+        XCTAssertTrue(message.contains("could not create leading directories"), message)
+        XCTAssertEqual(failed.phase, .failed)
+        XCTAssertTrue(failed.transcript.contains { $0.text.contains("The name is free again") })
+
+        // (a) The claim is released: no branch, no directory, nothing held against the others.
+        XCTAssertNil(failed.taskSlug)
+        XCTAssertEqual(failed.branchName, "")
+        XCTAssertFalse(failed.isWorktreeDirectoryKnown)
+        XCTAssertEqual(center.claimedTaskSlugs(in: repo, excluding: "nobody"), [])
+        // Still listed, as failed, so its sheet — error, Try again, Dismiss — can be reopened.
+        XCTAssertEqual(center.repositoryTasks(for: repo).map(\.id), [failed.id])
+
+        // The same first line is free for the next task, unsuffixed.
+        refusing.isOn = false
+        let next = center.open(context: .repository(repo), settings: settings, toasts: ToastCenter())
+        XCTAssertNotNil(center.models[failed.id], "a failed task is not pruned like an unrun one")
+        next.task = "Add dark mode"
+        next.start()
+        await next.runTask?.value
+        XCTAssertEqual(next.branchName, "agent/add-dark-mode")
+    }
+
+    func testAFailedTaskCanBeRetriedOrDismissed() async throws {
+        let refusing = Switch(true)
+        let center = center(git: refusingGit(refusing), agents: [finishing])
+        let settings = try readySettings()
+
+        let retried = center.open(context: .repository(repo), settings: settings, toasts: ToastCenter())
+        retried.task = "Add dark mode"
+        retried.start()
+        await retried.runTask?.value
+        XCTAssertEqual(retried.phase, .failed)
+        XCTAssertTrue(retried.canStart, "Try again is enabled")
+
+        // Retry: git works now, and the task picks its name afresh.
+        refusing.isOn = false
+        retried.start()
+        await retried.runTask?.value
+        XCTAssertEqual(retried.phase, .finished)
+        XCTAssertEqual(retried.branchName, "agent/add-dark-mode")
+        XCTAssertFalse(center.canDismissTask(retried), "one with a worktree is discarded, not dismissed")
+
+        // Dismiss: a failed task with nothing on disk leaves the lists and closes its sheet.
+        refusing.isOn = true
+        let dismissed = center.open(context: .repository(repo), settings: settings, toasts: ToastCenter())
+        dismissed.task = "Fix the flaky login test"
+        dismissed.start()
+        await dismissed.runTask?.value
+        XCTAssertEqual(dismissed.phase, .failed)
+        XCTAssertTrue(center.presented === dismissed)
+        XCTAssertTrue(center.canDismissTask(dismissed))
+        center.dismissTask(dismissed)
+        XCTAssertNil(center.models[dismissed.id])
+        XCTAssertNil(center.presented)
+        XCTAssertEqual(center.repositoryTasks(for: repo).map(\.id), [retried.id])
+    }
+
+    /// A git whose branch `agent/add-dark-mode` exists and has `commits` of its own.
+    private func gitWithBranch(commits: Int?) -> RecordingProcessRunner {
+        RecordingProcessRunner { invocation in
+            switch invocation.arguments.first {
+            case "symbolic-ref":
+                return ProcessResult(status: 0, standardOutput: "origin/main\n", standardError: "")
+            case "rev-parse":
+                // `nil` commits: the branch does not exist.
+                return ProcessResult(status: commits == nil ? 1 : 0, standardOutput: "", standardError: "")
+            case "rev-list":
+                return ProcessResult(status: 0, standardOutput: "\(commits ?? 0)\n", standardError: "")
+            case "merge-base":
+                return ProcessResult(status: 0, standardOutput: "abc123\n", standardError: "")
+            default:
+                return ProcessResult(status: 0, standardOutput: "", standardError: "")
+            }
+        }
+    }
+
+    private func discardWithTheDirectoryGone(commits: Int?) async -> (DelegationModel, RecordingProcessRunner) {
+        let git = gitWithBranch(commits: commits)
+        let model = model(git: git)
+        model.task = "Add dark mode"
+        model.start()
+        await model.runTask?.value
+        // The recording runner creates no directory: the worktree is "gone", as after a
+        // half-finished `worktree add` or a delete in Finder.
+        XCTAssertFalse(FileManager.default.fileExists(atPath: model.worktree?.directory.path ?? "/"))
+        model.discardWorktree()
+        await model.actionTask?.value
+        return (model, git)
+    }
+
+    func testDiscardSucceedsWhenTheDirectoryIsGoneAndDeletesTheUnusedBranch() async {
+        let (model, git) = await discardWithTheDirectoryGone(commits: 0)
+        XCTAssertEqual(model.state, .idle, "the discard went through")
+        XCTAssertNil(model.taskSlug)
+        let afterRun = git.arguments.drop { $0.prefix(2) != ["worktree", "prune"] }
+        XCTAssertFalse(git.arguments.contains { $0.prefix(2) == ["worktree", "remove"] }, "nothing to remove")
+        XCTAssertEqual(
+            Array(afterRun),
+            [
+                ["worktree", "prune"],
+                ["rev-parse", "--verify", "--quiet", "refs/heads/agent/add-dark-mode"],
+                ["rev-list", "--count", "origin/main..refs/heads/agent/add-dark-mode"],
+                ["branch", "-D", "agent/add-dark-mode"],
+            ]
+        )
+    }
+
+    func testDiscardWithTheDirectoryGoneKeepsABranchWithCommitsOrNoBranchAtAll() async {
+        let (withWork, workGit) = await discardWithTheDirectoryGone(commits: 2)
+        XCTAssertEqual(withWork.state, .idle)
+        XCTAssertTrue(workGit.arguments.contains(["worktree", "prune"]))
+        XCTAssertFalse(workGit.arguments.contains { $0.first == "branch" }, "committed work is kept")
+
+        let (noBranch, noBranchGit) = await discardWithTheDirectoryGone(commits: nil)
+        XCTAssertEqual(noBranch.state, .idle)
+        XCTAssertTrue(noBranchGit.arguments.contains(["worktree", "prune"]))
+        XCTAssertFalse(noBranchGit.arguments.contains { $0.first == "rev-list" || $0.first == "branch" })
     }
 
     // MARK: - Probing a folder

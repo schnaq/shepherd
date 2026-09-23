@@ -193,11 +193,12 @@ final class DelegationCenter {
 
     /// A repository's tasks that are worth going back to, oldest first.
     ///
-    /// Worth going back to means running, or having a worktree on disk
-    /// (``DelegationModel/isWorktreeDirectoryKnown``) whichever way the run ended: its diff and its
-    /// push button are the only way back to that directory. A sheet opened and never run has
-    /// nothing to show, and a discarded task has given its directory up — neither is listed, and
-    /// neither affects the others.
+    /// Worth going back to means running, having a worktree on disk
+    /// (``DelegationModel/isWorktreeDirectoryKnown``) whichever way the run ended — its diff and
+    /// its push button are the only way back to that directory — or having **failed** before it
+    /// got one, whose sheet holds git's error, *Try again* and *Dismiss task*. A sheet opened and
+    /// never run has nothing to show, and a discarded task has given its directory up — neither
+    /// is listed, and neither affects the others.
     /// - Parameter repo: The repository, matched case-insensitively.
     func repositoryTasks(for repo: RepoRef) -> [DelegationModel] {
         repositoryTasks.filter { $0.context.repo.isSameRepository(as: repo) }
@@ -206,7 +207,10 @@ final class DelegationCenter {
     /// Every repository's listed tasks, by repository and then oldest first — what ⌘K offers.
     var repositoryTasks: [DelegationModel] {
         models.values
-            .filter { $0.context.isRepositoryTask && ($0.isBusy || $0.isWorktreeDirectoryKnown) }
+            .filter {
+                $0.context.isRepositoryTask
+                    && ($0.isBusy || $0.isWorktreeDirectoryKnown || $0.phase == .failed)
+            }
             .sorted {
                 let left = $0.context.repo.fullName.lowercased()
                 let right = $1.context.repo.fullName.lowercased()
@@ -230,10 +234,28 @@ final class DelegationCenter {
         )
     }
 
-    /// Whether a repository task's model can go: never run, nothing on disk, nothing claimed.
+    /// Whether a repository task's model can go: idle (never run, or discarded), nothing on disk,
+    /// nothing claimed. A failed one stays until it is retried or dismissed — its error is the
+    /// only record of what went wrong.
     private static func prunableRepositoryTask(_ model: DelegationModel) -> Bool {
-        model.context.isRepositoryTask && !model.isBusy && !model.isWorktreeDirectoryKnown
+        model.context.isRepositoryTask && model.phase == .idle && !model.isWorktreeDirectoryKnown
             && model.taskSlug == nil
+    }
+
+    /// Whether ``dismissTask(_:)`` would take a task away: a repository task that is not running
+    /// and has nothing on disk — a failed one whose worktree was never created, typically.
+    /// One with a worktree goes through *Discard worktree* first, so nothing is left behind.
+    func canDismissTask(_ model: DelegationModel) -> Bool {
+        models[model.id] === model && model.context.isRepositoryTask && !model.isBusy
+            && !model.isWorktreeDirectoryKnown
+    }
+
+    /// Forgets a repository task: off the lists, its sheet closed if it is up.
+    /// - Parameter model: A task for which ``canDismissTask(_:)`` holds; anything else is ignored.
+    func dismissTask(_ model: DelegationModel) {
+        guard canDismissTask(model) else { return }
+        models[model.id] = nil
+        if presented === model { presented = nil }
     }
 
     /// Closes the sheet. A run keeps going in the background; re-opening shows it again.

@@ -590,14 +590,29 @@ final class DelegationModel: Identifiable {
         let relocated = worktree.relocated(
             to: GitWorktree.directory(repo: context.repo, taskSlug: slug, root: worktree.managedRoot)
         )
-        // Recorded before git runs, so a failure below still leaves the sheet naming the branch
-        // and the directory it was trying to create — and a cancelled preparation's footer path
-        // is the one it would have used. It is also this task's claim on the slug.
+        // Recorded before git runs, so a cancelled preparation's footer path is the one it would
+        // have used. It is also this task's claim on the slug, which is what keeps a sibling
+        // started a moment later off the same name while git is still working.
         self.worktree = relocated
         taskBranch = branch
-        let base = try await relocated.addForNewWork(branch: branch)
-        newWorkBase = base
-        return (relocated, base)
+        do {
+            let base = try await relocated.addForNewWork(branch: branch)
+            newWorkBase = base
+            return (relocated, base)
+        } catch {
+            // git said no, so the task holds nothing: the claim is released — the slug is free
+            // for the next task and for *Try again*, which picks afresh — and the handle goes
+            // back to the managed root, so *Discard* and *Reveal* have nothing to aim at. The
+            // git error itself becomes the failed state's message (``fail(with:)``).
+            self.worktree = worktree.relocated(to: worktree.managedRoot)
+            taskBranch = nil
+            newWorkBase = nil
+            append(
+                .note,
+                String(localized: "Git could not create \(branch). The name is free again; Try again picks a new one.")
+            )
+            throw error
+        }
     }
 
     /// Stops the run: `SIGTERM`, then `SIGKILL` after a grace period.
@@ -807,16 +822,27 @@ final class DelegationModel: Identifiable {
     }
 
     /// Deletes the worktree and resets the sheet.
+    ///
+    /// A directory that has gone — deleted in Finder, or never finished — does not make this fail:
+    /// ``GitWorktree/remove()`` then only prunes. For a repository task the branch is then a
+    /// leftover too, and is deleted when it exists and holds no commit of its own
+    /// (``GitWorktree/deleteLocalBranchIfUnused(_:since:)``).
     func discardWorktree() {
         // A repository task stopped before its directory was chosen has nothing on disk yet, and
         // its handle still names the managed root — which `remove()` refuses anyway.
         guard isWorktreeDirectoryKnown, let worktree, !isPublishing else { return }
         isPublishing = true
+        let hadDirectory = FileManager.default.fileExists(atPath: worktree.directory.path)
+        let leftoverBranch = context.isRepositoryTask && !hadDirectory ? taskBranch : nil
+        let base = newWorkBase
         actionTask = Task { [weak self] in
             guard let self else { return }
             defer { self.isPublishing = false }
             do {
                 try await worktree.remove()
+                if let leftoverBranch {
+                    try await worktree.deleteLocalBranchIfUnused(leftoverBranch, since: base)
+                }
                 self.state = .idle
                 self.transcript = []
                 self.worktreeStatus = nil
