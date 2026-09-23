@@ -20,9 +20,10 @@ mise x node@22 -- bun run build
 
 Vercel has Node, so nothing changes there.
 
-There is no test suite and no analytics. The page fetches the latest release from the GitHub API
-once an hour (`lib/release.ts`) and falls back to a pinned version with a link to the release
-list when the API cannot be reached.
+There is no test suite and no analytics. No version is written into the page: the download
+buttons lead to GitHub's `releases/latest`, and a shields.io badge beside them
+(`components/LatestRelease.tsx`) shows the current version as GitHub reports it, so a release
+never needs a redeploy.
 
 ## Deploy on Vercel
 
@@ -42,6 +43,5 @@ gate in front of that deploy; it deploys nothing itself.
 
 - `app/` — layout, the single page, the Open Graph image
 - `components/` — one file per section; `InboxDemo` and `CopyButton` are the only client components
-- `lib/release.ts` — the release lookup
 - `public/` — the app icon and the screenshots, copied from `docs/assets`
 - `app/globals.css` — every style; the palette is Shepherd's own from `Theme.swift`

@@ -4,8 +4,9 @@
 
 # Shepherd
 
-**A native macOS review inbox for the age of AI coding agents.**
+**A native macOS review inbox for the pull request flood.**
 
+[![Latest release](https://img.shields.io/github/v/release/schnaq/shepherd?style=flat-square&label=release)](https://github.com/schnaq/shepherd/releases/latest)
 [![CI](https://img.shields.io/github/actions/workflow/status/schnaq/shepherd/ci.yml?style=flat-square&label=CI)](.github/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 [![Platform: macOS 27+](https://img.shields.io/badge/macOS-27%20Golden%20Gate-101116?style=flat-square)](docs/adr/0038-macos-27-floor.md)
@@ -38,10 +39,18 @@ on your Mac.
 <td>⌨️ <b>Focus session</b><br>⇧⌘⏎ walks you through every pull request waiting on you, one at a time, over a queue frozen at start. Twenty agent PRs, twenty keystrokes.</td>
 <td>📝 <b>Saved replies &amp; templates</b><br>Reusable snippets in every comment field, plus a per-repo review checklist that prefills a new, empty review — and never touches one you started.</td>
 </tr>
+<tr>
+<td>🧭 <b>Open in your editor</b><br>Link a repository to its local checkout and jump from a file, a finding or a CI failure straight to the line — in VS Code, IntelliJ IDEA, Cursor, the system default or a command of your own.</td>
+<td>📤 <b>Nothing out of sight</b><br>A merge on its way, a queued approval or a change GitHub refused shows on the row and in the review — <i>Merging…</i>, <i>Merge queued</i>, <i>Not sent</i> — with Retry right there. <i>Merged</i> appears only once GitHub confirms it.</td>
+</tr>
 <tr><th colspan="2" align="left">Triage</th></tr>
 <tr>
-<td>🤖 <b>Agent provenance</b><br>Claude Code, Copilot, Codex, Devin, Cursor or a human — detected, chipped, and groupable as a facet next to repository and review state.</td>
-<td>✅ <b>Bulk triage</b><br>Tick the green agent PRs, then approve or merge them behind one confirmation that lists what it will skip — red CI, conflicts, drafts, yours — and why.</td>
+<td>✅ <b>Bulk triage</b><br>Tick the green ones, then approve or merge them behind one confirmation that lists what it will skip — red CI, conflicts, drafts, yours — and why.</td>
+<td>🧾 <b>Claims beside the evidence</b><br>What the description says it did — tests added, nothing breaking, fixes #142 — next to what the diff and CI show. <i>Look closer</i> lets the on-device model point at the lines behind a claim; Shepherd finds every excerpt in the diff itself.</td>
+</tr>
+<tr>
+<td>🏷️ <b>Where it came from</b><br>Claude Code, Copilot, Codex, Devin, Cursor or a colleague — detected on every row and usable as a lens next to repository and review state. The rail keeps its places whichever view you pick, with your watched repositories always on top.</td>
+<td>📥 <b>Watch a repository</b><br>Every open pull request in a repository you watch reaches the inbox, even the ones nobody asked you to review.</td>
 </tr>
 <tr>
 <td>☀️ <b>Morning digest</b><br>An opt-in daily summary built from the local database alone: new requests, green PRs one keystroke from done, your red CI, reviews still parked.</td>
@@ -55,32 +64,35 @@ on your Mac.
 </tr>
 <tr><th colspan="2" align="left">Automate</th></tr>
 <tr>
-<td>🛠️ <b>Delegate to a local agent</b><br>Hand a PR or a single finding back to Claude Code in an isolated worktree with turn and budget caps. Optionally started for you when CI turns red.</td>
+<td>🛠️ <b>Delegate to a local agent</b><br>Hand a PR or a single finding back to Claude Code in an isolated worktree with a budget cap and a turn cap you can lift. Optionally started for you when CI turns red.</td>
 <td>🚦 <b>Auto-merge rules</b><br>Opt in, and an agent PR that is green, approved and mergeable gets its merge queued for you — narrowable by repo and label, never approving anything, every decision in a local audit log.</td>
 </tr>
 <tr>
 <td colspan="2">🔗 <b>Webhooks, deep links, CLI</b><br>Signed outbound events into n8n, <code>shepherd://</code> links, and a <code>shepherd</code> binary that drives the app from a terminal, Raycast or Shortcuts.</td>
 </tr>
 <tr>
-<td>🗣️ <b>Shortcuts &amp; Siri</b><br>App Intents with typed parameters: open a pull request, show a filtered inbox, sync, start a review session, or just ask how many need you. No write actions — nothing can approve or merge from a phrase.</td>
+<td>🗣️ <b>Shortcuts &amp; Siri</b><br>App Intents with typed parameters: open a pull request, show a filtered inbox, sync, start a review session, or just ask how many need you. Notifications name their pull request, so Siri can open or summarise the one it is about. No write actions — nothing can approve or merge from a phrase.</td>
 <td>🔦 <b>Spotlight</b><br>Your inbox in ⌘Space: title, <code>owner/repo#123 · author · CI state</code>, labels and agent as keywords. Titles and metadata only — never a description or a diff — and one toggle removes them all.</td>
 </tr>
 <tr><th colspan="2" align="left">Intelligence</th></tr>
 <tr>
 <td>✨ <b>Drafts, not submissions</b><br>Draft a review summary or an inline comment from the diff in front of you. It lands as editable text; nothing is ever submitted for you.</td>
-<td>🧠 <b>On-device first</b><br>Heuristics always, Apple Foundation Models where available, your own key optional — Anthropic, any OpenAI-compatible endpoint, Konduit (EU) or Ollama.</td>
+<td>🧠 <b>On-device first</b><br>Heuristics always, Apple Foundation Models where available, your own key optional — Claude through Apple's own model interface, any OpenAI-compatible endpoint, Konduit (EU) or Ollama.</td>
 </tr>
 <tr>
 <td>🌐 <b>Translate in place</b><br>A description or comment in a language you don't read gets an on-device translation <i>below</i> the original — never instead of it, never through a cloud endpoint.</td>
 <td>✍️ <b>Writing Tools everywhere</b><br>Apple's proofread, rewrite and tone tools in every field you write review text in — summary, inline comment, thread reply, saved reply.</td>
 </tr>
+<tr>
+<td colspan="2">🖼️ <b>Screenshots, read on this Mac</b><br>Switch it on, and a click lets the on-device model describe up to two screenshots from a pull request's description — what changed visually, next to the text summary. Off by default; the images come from GitHub's own upload host and never reach a cloud model.</td>
+</tr>
 <tr><th colspan="2" align="left">Sync &amp; privacy</th></tr>
 <tr>
 <td>🔐 <b>Sync you host</b><br>Every setting <i>and</i> every secret in one AES-256-GCM object in an S3 bucket you own. A new Mac plus the passphrase is a set-up Mac. No account, no server.</td>
-<td>🗄️ <b>Local-first by construction</b><br>SQLite is the source of truth, writes go through a persisted outbox, secrets live in the Keychain, and usage telemetry is anonymous, allow-listed and off in one click.</td>
+<td>🗄️ <b>Local-first by construction</b><br>SQLite is the source of truth, writes go through a persisted outbox, secrets live in the Keychain, and anonymous usage counts are off until you say yes.</td>
 </tr>
 <tr>
-<td colspan="2">🇩🇪 <b>Auf Deutsch</b><br>Set your Mac to German and the whole app is German — no language setting, it follows the system. GitHub's own review vocabulary stays English inside the German sentences (pull request, review, approve, request changes, merge, draft, CI), so what you read matches what the next window says.</td>
+<td colspan="2">🇩🇪 <b>Auf Deutsch</b><br>Set your Mac to German and the whole app is German — the diff viewer and GitHub's error messages included; no language setting, it follows the system. GitHub's own review vocabulary stays English inside the German sentences (pull request, review, approve, request changes, merge, draft, CI), so what you read matches what the next window says.</td>
 </tr>
 </table>
 
@@ -210,11 +222,11 @@ cp .build/cli/Build/Products/Release/shepherd /usr/local/bin/
 
 ## Status
 
-**Pre-alpha, under active development.** The v1 skeleton exists and builds: the
-domain/network/persistence/sync package (tested on macOS *and* Linux), the Monaco diff-viewer
-bundle, and the SwiftUI app — inbox, review flow, command palette, settings, on-device and BYOK
-intelligence. It has not yet been exercised against real repositories at scale, so expect rough
-edges. What is done, next and deliberately out of scope: [docs/ROADMAP.md](docs/ROADMAP.md).
+**Under active development, and in daily use by the people who build it.** Releases ship signed
+and notarized, update themselves through Sparkle and install through Homebrew — see
+[the latest release](https://github.com/schnaq/shepherd/releases/latest). It is young software, so
+expect rough edges and tell us about them. What is done, next and deliberately out of scope:
+[docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Architecture
 

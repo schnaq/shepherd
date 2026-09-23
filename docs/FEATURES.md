@@ -2,7 +2,7 @@
 
 The [README](../README.md) is the overview; this is the long form. Everything here describes
 behaviour that is implemented or specified in an ADR — where a decision explains *why* something
-works the way it does, the ADR is linked. Status of the whole thing: pre-alpha, see
+works the way it does, the ADR is linked. Status of the whole thing: released and under active development, see
 [ROADMAP.md](ROADMAP.md).
 
 ---

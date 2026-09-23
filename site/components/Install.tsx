@@ -1,9 +1,9 @@
-import type { Release } from "@/lib/release";
+import { LatestRelease, LATEST_RELEASE_URL } from "@/components/LatestRelease";
 import { CopyButton } from "@/components/CopyButton";
 
 const COMMAND = "brew install --cask schnaq/tap/shepherd";
 
-export function Install({ release }: { release: Release }) {
+export function Install() {
   return (
     <section className="section" id="install">
       <div className="wrap">
@@ -23,11 +23,14 @@ export function Install({ release }: { release: Release }) {
               Or download the DMG. Either way the app is notarized by Apple and keeps itself current
               through Sparkle, so you install once.
             </p>
-            <a className="button" href={release.dmgURL}>Download Shepherd {release.version}</a>
+            <div className="install-download">
+              <a className="button" href={LATEST_RELEASE_URL}>Download the latest release</a>
+              <LatestRelease />
+            </div>
             <p>
               Needs macOS 27 Golden Gate on Apple Silicon (on macOS 26, 1.3 keeps working). Sign in with GitHub through the device flow, or
               paste a fine-grained personal access token.{" "}
-              <a href={release.releaseURL}>Release notes</a>
+              <a href={LATEST_RELEASE_URL}>Release notes</a>
             </p>
           </div>
         </div>
