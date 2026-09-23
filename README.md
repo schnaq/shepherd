@@ -68,6 +68,9 @@ on your Mac.
 <td>🚦 <b>Auto-merge rules</b><br>Opt in, and an agent PR that is green, approved and mergeable gets its merge queued for you — narrowable by repo and label, never approving anything, every decision in a local audit log.</td>
 </tr>
 <tr>
+<td colspan="2">💻 <b>Your own clones</b><br>Pick a folder and Shepherd reads the repository from its <code>origin</code>, links the checkout and watches every pull request in it — one step. Then <i>Start an agent…</i> hands a task you type to Claude Code on a fresh <code>agent/…</code> branch off the default branch, with the same caps. Shepherd itself pushes nothing.</td>
+</tr>
+<tr>
 <td colspan="2">🔗 <b>Webhooks, deep links, CLI</b><br>Signed outbound events into n8n, <code>shepherd://</code> links, and a <code>shepherd</code> binary that drives the app from a terminal, Raycast or Shortcuts.</td>
 </tr>
 <tr>

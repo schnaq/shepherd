@@ -19,7 +19,8 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 27+)
                                #   focus review session (frozen queue + session bar)
     DiffViewer/                #   WKWebView host + bridge (Swift side)
     Delegation/                #   delegate-to-local-agent model + sheet (ADR 0011, 0016);
-                               #   session back-channel: decisions + confirmation (ADR 0030)
+                               #   session back-channel: decisions + confirmation (ADR 0030);
+                               #   free-text repository tasks (ADR 0011, 2026-09-23 amendment)
     Editor/                    #   "Open in editor": opener + menu item (ADR 0039)
     Search/                    #   ⌘K semantic search: on-device embedder, index coordinator,
                                #   result row (ADR 0019); the issue result row beside it, fed
@@ -1606,6 +1607,44 @@ own branch and its preamble says the run may finish the job with the credentials
 already has — which is this ADR's standing rule that the child inherits that tool's
 authentication, stated rather than changed. `DelegationPrompt` selects the preamble by
 `DelegationContext.Origin`, and no code path Shepherd added pushes or opens a pull request.
+
+#### Local repositories and free-text tasks (ADR 0011's 2026-09-23 amendment)
+
+**"Add a local repository…"** (the rail's `+` menu, ⌘K, the menu bar, Settings → Delegation) starts
+from a folder: `LocalRepositoryDraft.choose()` runs the open panel, then
+`Support/AgentCLI/LocalRepositoryProbe` asks git two things through the same `ProcessRunning` seam —
+`rev-parse --show-toplevel` (not a work tree → refused; otherwise the clone's root, which is what is
+linked even when a subfolder was picked) and `remote get-url origin` in that root. What the URL means
+is `ShepherdCore/Models/GitRemote.read(_:)`'s decision, pure and Linux-tested: a github.com
+`owner/name` (https, `ssh://`, scp-like, `.git`), a GitHub Enterprise-looking host (refused — Shepherd
+only talks to github.com), another host or no `origin` (the sheet asks for the name). The
+confirmation (`Features/Inbox/AddLocalRepositorySheet`) links the checkout through
+`AppSettings.setLocalCheckout` and watches through `watchRepository(named:)` in one
+`AppSettings.addLocalRepository(_:folder:link:watch:)`, idempotent by `ShepherdCore/LocalRepositoryLink`
+(case-insensitive on both maps); the sweep refresh is the `onChange(of: watchedRepositories)` in
+`ShepherdApp` every writer of the watch list already goes through. `localCheckoutURL(for:)` falls back
+to a case-insensitive key, and `setLocalCheckout` replaces an other-case key, so a clone linked as
+`Schnaq/Shepherd` serves rows spelled `schnaq/shepherd`.
+
+**"Start an agent…"** (the context menu of a watched rail row with a linked checkout — the row shows
+a laptop glyph — and one ⌘K command per `AppSettings.linkedRepositories`) opens
+`AppEnvironment.startRepositoryDelegation(_:)`: a `DelegationContext.repository(repo)` (origin
+`.repository`, identity `repository:owner/name`, no number, no commit, and no branch until the run
+starts). `DelegationModel.start()` then picks the branch from the task's first line —
+`GitWorktree.freeTaskSlug(for:repo:)` fetches, reads `refs/heads/agent/` and
+`refs/remotes/origin/agent/` with one `for-each-ref`, and uniques the `ShepherdCore/RepositoryTaskBranch`
+slug against those and against the managed directories — re-aims the handle at
+`owner-repo-task-<slug>` (`GitWorktree.relocated(to:)`; until then it names the managed root, which
+`remove()` refuses) and adds the worktree through the issue path's own `addForNewWork(branch:)`. The
+prompt is built after that step, because the third preamble names the branch. *Run again* continues
+in the same worktree; a finished task is re-presented rather than replaced
+(`DelegationCenter.present(_:)`), and *Discard worktree* makes room for the next one.
+`startAutomatically` refuses the origin outright, and the run sends no `delegation.finished` webhook
+(its envelope is a pull request's identity).
+
+New-work runs — issues and repository tasks — diff from the merge base of their starting ref
+(`GitWorktree.diffStat(since:)`) rather than from `HEAD`, since their preamble lets them commit; the
+push button then pushes committed work without trying an empty commit.
 
 #### The session back-channel (ADR 0030)
 

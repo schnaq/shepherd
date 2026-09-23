@@ -145,3 +145,73 @@ run the budget has to stop.
 
 The local-checkouts map this ADR introduced has a second reader since ADR 0039: *Open in editor*
 resolves a pull request's paths against the same clones.
+
+## Amendment (2026-09-23): a repository and a sentence, with no pull request or issue behind it
+
+The maintainer's question was whether he could add one of his own repositories to Shepherd, start
+agents in it directly, and watch every pull request that comes out of it. Everything needed was
+already there in pieces — the clone map this ADR introduced, the watch list (ADR 0005's 2026-09-16
+amendment), and the new-work worktree of the 2026-09-04 amendment above — but only a pull request or
+an issue could start a run, and linking a clone meant typing its `owner/repo` by hand. Two additions,
+both inside the decision above.
+
+**"Add a local repository…" starts from the folder.** The user picks a clone; Shepherd runs
+`git rev-parse --show-toplevel` in it (no work tree → refused; a picked subfolder links the clone's
+root) and `git remote get-url origin` in the root, through the same `ProcessRunning` seam and
+`/usr/bin/git` delegation uses — no shell, no request of Shepherd's own. `ShepherdCore/GitRemote`
+reads the URL: a github.com `owner/name` in any form git writes (https, `ssh://`, scp-like, `.git`);
+a GitHub Enterprise-looking host, **refused**, because Shepherd talks to github.com and nothing else
+(`AppConfig` has no configurable host, and CONTRIBUTING.md's host list is the reason); another host,
+an unreadable URL or no `origin`, for which the sheet says so and asks for the name. One confirmation
+then links the checkout — the same `AppSettings.localCheckouts` map, so *Open in editor* (ADR 0039)
+works for it too — and watches the repository through `watchRepository(named:)`, its cap and its
+"already watched" rule unchanged; the sweep's immediate refresh is the one every writer of the watch
+list gets. Both halves are ticked by default, either can be unticked, and a half already done shows as
+done (`ShepherdCore/LocalRepositoryLink`), so adding the same clone twice changes nothing. Checkout
+lookups became case-insensitive on the way, because a remote's casing and a row's casing need not
+agree.
+
+**A fourth origin, `.repository`: the task text is the prompt.** "Start an agent…" on a watched rail
+row with a linked checkout, or ⌘K's *Start an agent on owner/repo…*, opens the delegation sheet with
+an empty task field. It is new work in exactly the issue amendment's sense, so it takes that
+amendment's shape and a third preamble with its ground rules word for word: a branch **Shepherd**
+names, started from the tip of the default branch (the same `addForNewWork(branch:)`, the same
+`origin/HEAD` lookup and its "git could not tell which branch" message), which the run may commit to
+and publish with its own tool's credentials. What the preamble says instead of an issue number is the
+repository and the branch.
+
+- **The branch is named after the task**, because a sentence has no number: `agent/<slug>` from the
+  first line (lowercase ASCII, dashes, at most 40 characters, `ShepherdCore/RepositoryTaskBranch`).
+  Unlike an issue, a second task is never "the same work again", so where the issue path *resumes*
+  an existing branch this one **uniques** the name with a four-hex suffix — against local
+  `agent/*` branches, `origin/agent/*` after a fetch, and the managed directories — before git is
+  asked to create anything. The worktree is `owner-repo-task-<slug>`. Because the name comes from the
+  text, it is chosen when the run starts, not when the sheet opens, and the prompt is built after that
+  step.
+- **One task per repository at a time.** The identity is `repository:owner/name`, so a second
+  "Start an agent…" while one runs reveals it, like a pull request's. A finished task is shown again
+  rather than replaced — its worktree, diff and push button would otherwise be orphaned — *Run again*
+  continues in the same worktree on the same branch, and *Discard worktree* makes room for the next
+  task. Concurrent tasks on one repository are left for later; the unique branch and directory
+  already allow them, the entry point is what would have to change.
+- **Guardrails unchanged:** turn cap or *No limit*, spend cap, permission mode, allowed tools,
+  transcript. **Shepherd pushes nothing** — still only the button, still the user's git credentials.
+- **Never automatic.** `DelegationCenter.startAutomatically` refuses the origin outright. No rule of
+  ADR 0016 has a condition that could stand for somebody's typed sentence, and the coordinator only
+  ever builds a pull-request context, so this is a line of code making that structural rather than a
+  property of today's callers.
+- **No `delegation.finished` webhook** for it. ADR 0012's envelope identifies a pull request by node
+  id, repository and number, and a task has no number; sending `0` would be a payload that lies. The
+  enum-only telemetry count (ADR 0036) still records the run. No ✨ brief either, for the issue path's
+  reason: the drafter reads a pull request's detail.
+
+**A behaviour change on the issue path, named as such.** A new-work run is allowed to commit, and the
+result card compared against `HEAD` — so an issue run that committed everything read as "changed
+nothing", and its push button stayed disabled. Both new-work origins now diff from the merge base of
+the ref they started from (`GitWorktree.diffStat(since:)`; the merge base rather than the ref, since
+the run may have fetched and moved it), count committed work as something to push, and push without
+attempting an empty commit. The pull-request origins are untouched.
+
+No host is added: the only network traffic is the user's own git talking to the remote it already
+fetches from. No setting is added either — the checkout map and the watch list both existed — so ADR
+0014's sync obligation does not change.

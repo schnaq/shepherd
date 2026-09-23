@@ -602,6 +602,31 @@ turn and budget caps. The command template is configurable for other agent CLIs.
 touches agent auth and never pushes: you review the result and push it yourself
 ([ADR 0011](adr/0011-delegate-to-local-agent-cli.md)).
 
+### Your own clones: add a local repository, start an agent on it
+
+**Add a local repository…** — from the `+` beside the rail's REPOSITORIES heading, ⌘K, the menu
+bar or Settings → Delegation — asks for a folder, not a name. Shepherd asks git for the clone's top
+level and its `origin`, reads `owner/repo` out of any form git writes (`https://…`, `git@github.com:…`,
+`ssh://…`, with or without `.git`), and shows one confirmation: *schnaq/shepherd — ~/code/shepherd*,
+with **Link this folder as the local checkout** and **Watch the repository** both ticked. Untick
+either. Adding the same clone twice changes nothing and says so; a clone with no `origin`, or one on
+another host, gets a field for the name instead; a GitHub Enterprise remote is refused, because
+Shepherd only talks to github.com. The watch is the ordinary watch list, so the inbox fills
+straight away.
+
+A watched repository with a linked clone shows a small laptop in the rail, and its context menu
+offers **Start an agent…** (without a clone: **Link a local checkout…**). ⌘K has *Start an agent on
+owner/repo…* for every linked clone. The delegation sheet opens with an empty task field: what you
+type is the prompt. When you press Start, Shepherd names a branch after the first line —
+*"Add dark mode"* becomes `agent/add-dark-mode`, with a short suffix if that name is taken locally
+or on `origin` — fetches, and creates the worktree on that branch from the tip of the default
+branch. The agent is told the repository and the branch, may commit and open a pull request with
+its own credentials, and runs under the same turn cap (or *No limit*), spend cap and permission
+mode as every other delegation. Shepherd pushes nothing itself; *Commit & push branch* is your
+button. One task per repository at a time: reopening shows the last run until you discard its
+worktree. Automatic delegation rules never start one
+([ADR 0011](adr/0011-delegate-to-local-agent-cli.md), [ADR 0039](adr/0039-open-in-editor.md)).
+
 ### Let Shepherd write the brief
 
 The delegation sheet has a ✨ button next to the task field. Press it and Shepherd drafts the
