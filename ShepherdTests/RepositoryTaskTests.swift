@@ -272,6 +272,8 @@ final class RepositoryTaskTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: "shepherd.tests.\(UUID().uuidString)"))
         let settings = AppSettings(defaults: defaults)
         settings.setLocalCheckout(checkout, forRepoNamed: repo.fullName)
+        // A CLI that exists, so the refusal below is the origin guard and not a missing tool.
+        settings.agentCLI.executablePath = "/bin/echo"
         let center = DelegationCenter()
         let started = center.startAutomatically(
             context: .repository(repo),
@@ -281,6 +283,25 @@ final class RepositoryTaskTests: XCTestCase {
         )
         XCTAssertNil(started)
         XCTAssertTrue(center.models.isEmpty)
+
+        // The same repository, opened by hand, would be ready to run.
+        let manual = center.open(context: .repository(repo), settings: settings, toasts: ToastCenter())
+        XCTAssertEqual(manual.readiness, .ready)
+    }
+
+    func testAFinishedTaskIsShownAgainRatherThanReplaced() throws {
+        let center = DelegationCenter()
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "shepherd.tests.\(UUID().uuidString)"))
+        let settings = AppSettings(defaults: defaults)
+        let first = center.open(context: .repository(repo), settings: settings, toasts: ToastCenter())
+        center.dismiss()
+        center.present(first)
+        XCTAssertTrue(center.presented === first)
+
+        // A model the centre does not hold is not put on screen.
+        center.dismiss()
+        center.present(model(git: taskGit()))
+        XCTAssertNil(center.presented)
     }
 
     // MARK: - Probing a folder

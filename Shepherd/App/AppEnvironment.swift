@@ -870,6 +870,17 @@ final class AppEnvironment {
     /// - Returns: The delegation now on screen.
     @discardableResult
     func startRepositoryDelegation(_ repo: RepoRef, task: String? = nil) -> DelegationModel {
+        // One worktree per repository at a time, like one per pull request. A previous task whose
+        // worktree is still on disk is shown again rather than replaced: its diff and its push
+        // button are the only way back to that directory, and a fresh sheet would leave it
+        // orphaned under a slug nothing points at. *Discard worktree* in that sheet is what
+        // makes room for the next task.
+        if let existing = delegation.models[DelegationContext.repositoryID(repo)],
+           !existing.isBusy,
+           existing.isWorktreeDirectoryKnown {
+            delegation.present(existing)
+            return existing
+        }
         let onDidFinish: @MainActor (DelegationOutcome) -> Void = { [weak self] outcome in
             self?.telemetry?.record(.delegationFinished(outcome: Self.telemetryOutcome(outcome.status)))
         }

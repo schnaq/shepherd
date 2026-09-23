@@ -145,6 +145,18 @@ final class DelegationCenter {
         return model
     }
 
+    /// Puts a delegation this centre already holds back on screen, as it is.
+    ///
+    /// For the repository task's re-entry: ``open(context:settings:toasts:onDidPush:onDidFinish:onDidBegin:onDidStart:brief:)``
+    /// replaces a model that is not running, which for a pull request costs nothing — the next run
+    /// reuses the same directory — but for a repository task would orphan the finished run's
+    /// worktree under a slug nothing points at any more. The caller decides when to keep one.
+    /// - Parameter model: A model from ``models``.
+    func present(_ model: DelegationModel) {
+        guard models[model.id] === model else { return }
+        presented = model
+    }
+
     /// Closes the sheet. A run keeps going in the background; re-opening shows it again.
     func dismiss() {
         presented = nil
