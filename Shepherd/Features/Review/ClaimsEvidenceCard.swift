@@ -478,7 +478,7 @@ struct ClaimsEvidenceCard: View {
         case .noBreakingChanges:
             return String(localized: "No breaking changes")
         case .fixesIssue(let number):
-            return String(localized: "Fixes issue #\(number)")
+            return String(localized: "Fixes issue #\(String(number))")
         }
     }
 

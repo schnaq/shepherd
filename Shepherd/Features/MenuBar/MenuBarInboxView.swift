@@ -239,7 +239,7 @@ struct MenuBarInboxRow: View {
         Button(action: onOpen) {
             HStack(spacing: 8) {
                 CheckDotView(state: row.checkRollup?.state, size: 7)
-                Text("\(row.repo.name) #\(row.number)")
+                Text(verbatim: "\(row.repo.name) #\(row.number)")
                     .font(Theme.mono(11))
                     .foregroundStyle(Theme.textMuted)
                     .layoutPriority(1)

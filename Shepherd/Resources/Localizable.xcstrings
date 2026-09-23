@@ -21,12 +21,12 @@
         }
       }
     },
-    "#%lld is a pull request rather than an issue, so it has no acceptance criteria.": {
+    "#%@ is a pull request rather than an issue, so it has no acceptance criteria.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "#%lld ist ein Pull Request und kein Issue, hat also keine Akzeptanzkriterien."
+            "value": "#%@ ist ein Pull Request und kein Issue, hat also keine Akzeptanzkriterien."
           }
         }
       }
@@ -37,16 +37,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "max. $%@"
-          }
-        }
-      }
-    },
-    "%@ #%lld": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ #%lld"
           }
         }
       }
@@ -261,22 +251,22 @@
         }
       }
     },
-    "%@#%lld got new commits after you wrote your review, so your inline comments would land on the wrong lines. Your draft is kept — open the pull request again to check it against the new commit.": {
+    "%@#%@ got new commits after you wrote your review, so your inline comments would land on the wrong lines. Your draft is kept — open the pull request again to check it against the new commit.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@#%lld hat neue Commits bekommen, nachdem du dein Review geschrieben hast — deine Inline-Kommentare würden auf den falschen Zeilen landen. Dein Draft bleibt erhalten; öffne den Pull Request erneut und prüfe ihn gegen den neuen Commit."
+            "value": "%@#%@ hat neue Commits bekommen, nachdem du dein Review geschrieben hast — deine Inline-Kommentare würden auf den falschen Zeilen landen. Dein Draft bleibt erhalten; öffne den Pull Request erneut und prüfe ihn gegen den neuen Commit."
           }
         }
       }
     },
-    "%@#%lld is not an issue Shepherd can open.": {
+    "%@#%@ is not an issue Shepherd can open.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@#%lld ist kein Issue, das Shepherd öffnen kann."
+            "value": "%@#%@ ist kein Issue, das Shepherd öffnen kann."
           }
         }
       }
@@ -2821,12 +2811,12 @@
         }
       }
     },
-    "Address review feedback on #%lld": {
+    "Address review feedback on #%@": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Review-Feedback zu #%lld umsetzen"
+            "value": "Review-Feedback zu #%@ umsetzen"
           }
         }
       }
@@ -4461,12 +4451,12 @@
         }
       }
     },
-    "Closes #%lld": {
+    "Closes #%@": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Schließt #%lld"
+            "value": "Schließt #%@"
           }
         }
       }
@@ -4881,12 +4871,12 @@
         }
       }
     },
-    "Could not open %@#%lld": {
+    "Could not open %@#%@": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@#%lld konnte nicht geöffnet werden"
+            "value": "%@#%@ konnte nicht geöffnet werden"
           }
         }
       }
@@ -5871,12 +5861,12 @@
         }
       }
     },
-    "Fetching %@#%lld from GitHub…": {
+    "Fetching %@#%@ from GitHub…": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@#%lld wird von GitHub geladen…"
+            "value": "%@#%@ wird von GitHub geladen…"
           }
         }
       }
@@ -6041,12 +6031,12 @@
         }
       }
     },
-    "Fix #%lld: %@": {
+    "Fix #%@: %@": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fix #%lld: %@"
+            "value": "Fix #%@: %@"
           }
         }
       }
@@ -6061,12 +6051,12 @@
         }
       }
     },
-    "Fixes issue #%lld": {
+    "Fixes issue #%@": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Behebt Issue #%lld"
+            "value": "Behebt Issue #%@"
           }
         }
       }
@@ -6681,132 +6671,132 @@
         }
       }
     },
-    "Issue #%lld is closed and lists %lld acceptance bullets.": {
+    "Issue #%@ is closed and lists %lld acceptance bullets.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Issue #%lld ist geschlossen und nennt %lld Akzeptanzpunkte."
+            "value": "Issue #%@ ist geschlossen und nennt %lld Akzeptanzpunkte."
           }
         }
       }
     },
-    "Issue #%lld is closed and lists 1 acceptance bullet.": {
+    "Issue #%@ is closed and lists 1 acceptance bullet.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Issue #%lld ist geschlossen und nennt 1 Akzeptanzpunkt."
+            "value": "Issue #%@ ist geschlossen und nennt 1 Akzeptanzpunkt."
           }
         }
       }
     },
-    "Issue #%lld is open and lists %lld acceptance bullets.": {
+    "Issue #%@ is open and lists %lld acceptance bullets.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Issue #%lld ist offen und nennt %lld Akzeptanzpunkte."
+            "value": "Issue #%@ ist offen und nennt %lld Akzeptanzpunkte."
           }
         }
       }
     },
-    "Issue #%lld is open and lists 1 acceptance bullet.": {
+    "Issue #%@ is open and lists 1 acceptance bullet.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Issue #%lld ist offen und nennt 1 Akzeptanzpunkt."
+            "value": "Issue #%@ ist offen und nennt 1 Akzeptanzpunkt."
           }
         }
       }
     },
-    "Issue #%lld lists %lld acceptance bullets.": {
+    "Issue #%@ lists %lld acceptance bullets.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Issue #%lld nennt %lld Akzeptanzpunkte."
+            "value": "Issue #%@ nennt %lld Akzeptanzpunkte."
           }
         }
       }
     },
-    "Issue #%lld lists 1 acceptance bullet.": {
+    "Issue #%@ lists 1 acceptance bullet.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Issue #%lld nennt 1 Akzeptanzpunkt."
+            "value": "Issue #%@ nennt 1 Akzeptanzpunkt."
           }
         }
       }
     },
-    "Issue #%lld of %@ is referenced.": {
+    "Issue #%@ of %@ is referenced.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Issue #%lld von %@ ist referenziert."
+            "value": "Issue #%@ von %@ ist referenziert."
           }
         }
       }
     },
-    "Issue #%lld “%@” is closed and lists %lld acceptance bullets.": {
+    "Issue #%@ “%@” is closed and lists %lld acceptance bullets.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Issue #%lld „%@“ ist geschlossen und nennt %lld Akzeptanzpunkte."
+            "value": "Issue #%@ „%@“ ist geschlossen und nennt %lld Akzeptanzpunkte."
           }
         }
       }
     },
-    "Issue #%lld “%@” is closed and lists 1 acceptance bullet.": {
+    "Issue #%@ “%@” is closed and lists 1 acceptance bullet.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Issue #%lld „%@“ ist geschlossen und nennt 1 Akzeptanzpunkt."
+            "value": "Issue #%@ „%@“ ist geschlossen und nennt 1 Akzeptanzpunkt."
           }
         }
       }
     },
-    "Issue #%lld “%@” is open and lists %lld acceptance bullets.": {
+    "Issue #%@ “%@” is open and lists %lld acceptance bullets.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Issue #%lld „%@“ ist offen und nennt %lld Akzeptanzpunkte."
+            "value": "Issue #%@ „%@“ ist offen und nennt %lld Akzeptanzpunkte."
           }
         }
       }
     },
-    "Issue #%lld “%@” is open and lists 1 acceptance bullet.": {
+    "Issue #%@ “%@” is open and lists 1 acceptance bullet.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Issue #%lld „%@“ ist offen und nennt 1 Akzeptanzpunkt."
+            "value": "Issue #%@ „%@“ ist offen und nennt 1 Akzeptanzpunkt."
           }
         }
       }
     },
-    "Issue #%lld “%@” lists %lld acceptance bullets.": {
+    "Issue #%@ “%@” lists %lld acceptance bullets.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Issue #%lld „%@“ nennt %lld Akzeptanzpunkte."
+            "value": "Issue #%@ „%@“ nennt %lld Akzeptanzpunkte."
           }
         }
       }
     },
-    "Issue #%lld “%@” lists 1 acceptance bullet.": {
+    "Issue #%@ “%@” lists 1 acceptance bullet.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Issue #%lld „%@“ nennt 1 Akzeptanzpunkt."
+            "value": "Issue #%@ „%@“ nennt 1 Akzeptanzpunkt."
           }
         }
       }
@@ -10291,12 +10281,12 @@
         }
       }
     },
-    "Review not sent · %@#%lld": {
+    "Review not sent · %@#%@": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Review nicht gesendet · %@#%lld"
+            "value": "Review nicht gesendet · %@#%@"
           }
         }
       }
@@ -13991,22 +13981,22 @@
         }
       }
     },
-    "You are running inside a detached git worktree that Shepherd created for pull request #%lld of %@ — branch %@, checked out at commit %@.\n\nGround rules:\n- Do not push, do not create or switch branches, and do not open a pull request. The reviewer reads your diff and pushes it themselves.\n- Keep the change as small as it can be. Do not reformat, rename or refactor anything the task does not ask for.\n- Prefer the project's existing tests and tooling over adding new ones.\n- If the task is unclear or you would have to guess at intent, say so in your final message instead of guessing.": {
+    "You are running inside a detached git worktree that Shepherd created for pull request #%@ of %@ — branch %@, checked out at commit %@.\n\nGround rules:\n- Do not push, do not create or switch branches, and do not open a pull request. The reviewer reads your diff and pushes it themselves.\n- Keep the change as small as it can be. Do not reformat, rename or refactor anything the task does not ask for.\n- Prefer the project's existing tests and tooling over adding new ones.\n- If the task is unclear or you would have to guess at intent, say so in your final message instead of guessing.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du läufst in einem separaten Git-Worktree, den Shepherd für Pull Request #%lld von %@ erstellt hat — Branch %@, ausgecheckt auf Commit %@.\n\nGrundregeln:\n- Nicht pushen, keine Branches erstellen oder wechseln und keinen Pull Request öffnen. Der Reviewer liest deinen Diff und pusht ihn selbst.\n- Halte die Änderung so klein wie möglich. Formatiere, benenne und refaktoriere nichts um, was die Aufgabe nicht verlangt.\n- Nutze bevorzugt die bestehenden Tests und Werkzeuge des Projekts, statt neue hinzuzufügen.\n- Ist die Aufgabe unklar oder müsstest du die Absicht erraten, sage das in deiner Abschlussnachricht, statt zu raten."
+            "value": "Du läufst in einem separaten Git-Worktree, den Shepherd für Pull Request #%@ von %@ erstellt hat — Branch %@, ausgecheckt auf Commit %@.\n\nGrundregeln:\n- Nicht pushen, keine Branches erstellen oder wechseln und keinen Pull Request öffnen. Der Reviewer liest deinen Diff und pusht ihn selbst.\n- Halte die Änderung so klein wie möglich. Formatiere, benenne und refaktoriere nichts um, was die Aufgabe nicht verlangt.\n- Nutze bevorzugt die bestehenden Tests und Werkzeuge des Projekts, statt neue hinzuzufügen.\n- Ist die Aufgabe unklar oder müsstest du die Absicht erraten, sage das in deiner Abschlussnachricht, statt zu raten."
           }
         }
       }
     },
-    "You are running inside a git worktree that Shepherd created for issue #%lld of %@. It is checked out on a new branch, %@, started from the tip of the repository's default branch. Shepherd named that branch; do not rename it and do not switch to another one.\n\nGround rules:\n- The work is yours to finish on this branch. When it is ready you may commit it, publish the branch and open a pull request, using the git and GitHub credentials you already have. If you cannot publish, commit anyway and say so in your final message: the reviewer can publish the worktree from Shepherd.\n- Solve the issue and nothing else. Do not reformat, rename or refactor anything the issue does not ask for.\n- Read the repository before you write: its tests, its conventions and its contribution notes are the specification, not a suggestion.\n- Prefer the project's existing tests and tooling over adding new ones.\n- If the issue is unclear or you would have to guess at intent, say so in your final message instead of guessing.": {
+    "You are running inside a git worktree that Shepherd created for issue #%@ of %@. It is checked out on a new branch, %@, started from the tip of the repository's default branch. Shepherd named that branch; do not rename it and do not switch to another one.\n\nGround rules:\n- The work is yours to finish on this branch. When it is ready you may commit it, publish the branch and open a pull request, using the git and GitHub credentials you already have. If you cannot publish, commit anyway and say so in your final message: the reviewer can publish the worktree from Shepherd.\n- Solve the issue and nothing else. Do not reformat, rename or refactor anything the issue does not ask for.\n- Read the repository before you write: its tests, its conventions and its contribution notes are the specification, not a suggestion.\n- Prefer the project's existing tests and tooling over adding new ones.\n- If the issue is unclear or you would have to guess at intent, say so in your final message instead of guessing.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Du läufst in einem git-Worktree, den Shepherd für Issue #%lld von %@ angelegt hat. Er ist auf einem neuen Branch ausgecheckt, %@, gestartet von der Spitze des Standard-Branches dieses Repositories. Shepherd hat diesen Branch benannt; benenne ihn nicht um und wechsle nicht auf einen anderen.\n\nGrundregeln:\n- Die Arbeit ist deine, und du darfst sie auf diesem Branch abschließen. Wenn sie fertig ist, darfst du committen, den Branch veröffentlichen und einen Pull Request öffnen – mit den git- und GitHub-Zugangsdaten, die du ohnehin hast. Wenn du nicht veröffentlichen kannst, committe trotzdem und sage es in deiner Abschlussnachricht: die Person, die review macht, kann den Worktree aus Shepherd heraus veröffentlichen.\n- Löse das Issue und nichts anderes. Formatiere, benenne und refaktoriere nichts, wonach das Issue nicht fragt.\n- Lies das Repository, bevor du schreibst: seine Tests, seine Konventionen und seine Hinweise zum Beitragen sind die Spezifikation, kein Vorschlag.\n- Nutze die vorhandenen Tests und Werkzeuge des Projekts, statt neue hinzuzufügen.\n- Wenn das Issue unklar ist oder du die Absicht erraten müsstest, sage das in deiner Abschlussnachricht, statt zu raten."
+            "value": "Du läufst in einem git-Worktree, den Shepherd für Issue #%@ von %@ angelegt hat. Er ist auf einem neuen Branch ausgecheckt, %@, gestartet von der Spitze des Standard-Branches dieses Repositories. Shepherd hat diesen Branch benannt; benenne ihn nicht um und wechsle nicht auf einen anderen.\n\nGrundregeln:\n- Die Arbeit ist deine, und du darfst sie auf diesem Branch abschließen. Wenn sie fertig ist, darfst du committen, den Branch veröffentlichen und einen Pull Request öffnen – mit den git- und GitHub-Zugangsdaten, die du ohnehin hast. Wenn du nicht veröffentlichen kannst, committe trotzdem und sage es in deiner Abschlussnachricht: die Person, die review macht, kann den Worktree aus Shepherd heraus veröffentlichen.\n- Löse das Issue und nichts anderes. Formatiere, benenne und refaktoriere nichts, wonach das Issue nicht fragt.\n- Lies das Repository, bevor du schreibst: seine Tests, seine Konventionen und seine Hinweise zum Beitragen sind die Spezifikation, kein Vorschlag.\n- Nutze die vorhandenen Tests und Werkzeuge des Projekts, statt neue hinzuzufügen.\n- Wenn das Issue unklar ist oder du die Absicht erraten müsstest, sage das in deiner Abschlussnachricht, statt zu raten."
           }
         }
       }

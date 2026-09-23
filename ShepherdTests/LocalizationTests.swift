@@ -73,6 +73,23 @@ final class LocalizationTests: XCTestCase {
         XCTAssertEqual(composed, "Kommentar zu Zeile 42")
     }
 
+    func testAPullRequestNumberIsNotGroupedInGerman() throws {
+        let german = try germanTable()
+        // An integer specifier formats with the locale's grouping, which turned `#1024` into
+        // `#1.024` on a German Mac; the number after `#` is interpolated as a string instead
+        // (Scripts/check-localization.py rule 5).
+        let number = 1024
+        let composed = String(
+            localized: "#\(String(number)) is a pull request rather than an issue, so it has no acceptance criteria.",
+            bundle: german,
+            locale: Locale(identifier: "de_DE")
+        )
+        XCTAssertEqual(
+            composed,
+            "#1024 ist ein Pull Request und kein Issue, hat also keine Akzeptanzkriterien."
+        )
+    }
+
     // MARK: - English
 
     func testAMissingTableGivesTheKeyBack() {

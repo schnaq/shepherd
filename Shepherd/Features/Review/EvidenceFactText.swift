@@ -192,7 +192,7 @@ extension EvidenceFact.Kind {
         // MARK: - The referenced issue
 
         case .issueReferenced(let number, let repo):
-            return String(localized: "Issue #\(number) of \(repo) is referenced.", bundle: bundle)
+            return String(localized: "Issue #\(String(number)) of \(repo) is referenced.", bundle: bundle)
         case .issueNotFetched:
             return String(
                 localized: "Acceptance criteria not checked — the issue is not fetched.",
@@ -203,7 +203,7 @@ extension EvidenceFact.Kind {
         case .referenceIsPullRequest(let number):
             return String(
                 localized:
-                    "#\(number) is a pull request rather than an issue, so it has no acceptance criteria.",
+                    "#\(String(number)) is a pull request rather than an issue, so it has no acceptance criteria.",
                 bundle: bundle
             )
         case .noAcceptanceChecklist:
@@ -311,67 +311,67 @@ extension EvidenceFact.Kind {
             if title.isEmpty {
                 return count == 1
                     ? String(
-                        localized: "Issue #\(number) is open and lists 1 acceptance bullet.",
+                        localized: "Issue #\(String(number)) is open and lists 1 acceptance bullet.",
                         bundle: bundle
                     )
                     : String(
-                        localized: "Issue #\(number) is open and lists \(count) acceptance bullets.",
+                        localized: "Issue #\(String(number)) is open and lists \(count) acceptance bullets.",
                         bundle: bundle
                     )
             }
             return count == 1
                 ? String(
-                    localized: "Issue #\(number) “\(title)” is open and lists 1 acceptance bullet.",
+                    localized: "Issue #\(String(number)) “\(title)” is open and lists 1 acceptance bullet.",
                     bundle: bundle
                 )
                 : String(
                     localized:
-                        "Issue #\(number) “\(title)” is open and lists \(count) acceptance bullets.",
+                        "Issue #\(String(number)) “\(title)” is open and lists \(count) acceptance bullets.",
                     bundle: bundle
                 )
         case .closed:
             if title.isEmpty {
                 return count == 1
                     ? String(
-                        localized: "Issue #\(number) is closed and lists 1 acceptance bullet.",
+                        localized: "Issue #\(String(number)) is closed and lists 1 acceptance bullet.",
                         bundle: bundle
                     )
                     : String(
                         localized:
-                            "Issue #\(number) is closed and lists \(count) acceptance bullets.",
+                            "Issue #\(String(number)) is closed and lists \(count) acceptance bullets.",
                         bundle: bundle
                     )
             }
             return count == 1
                 ? String(
                     localized:
-                        "Issue #\(number) “\(title)” is closed and lists 1 acceptance bullet.",
+                        "Issue #\(String(number)) “\(title)” is closed and lists 1 acceptance bullet.",
                     bundle: bundle
                 )
                 : String(
                     localized:
-                        "Issue #\(number) “\(title)” is closed and lists \(count) acceptance bullets.",
+                        "Issue #\(String(number)) “\(title)” is closed and lists \(count) acceptance bullets.",
                     bundle: bundle
                 )
         case .unknown:
             if title.isEmpty {
                 return count == 1
                     ? String(
-                        localized: "Issue #\(number) lists 1 acceptance bullet.",
+                        localized: "Issue #\(String(number)) lists 1 acceptance bullet.",
                         bundle: bundle
                     )
                     : String(
-                        localized: "Issue #\(number) lists \(count) acceptance bullets.",
+                        localized: "Issue #\(String(number)) lists \(count) acceptance bullets.",
                         bundle: bundle
                     )
             }
             return count == 1
                 ? String(
-                    localized: "Issue #\(number) “\(title)” lists 1 acceptance bullet.",
+                    localized: "Issue #\(String(number)) “\(title)” lists 1 acceptance bullet.",
                     bundle: bundle
                 )
                 : String(
-                    localized: "Issue #\(number) “\(title)” lists \(count) acceptance bullets.",
+                    localized: "Issue #\(String(number)) “\(title)” lists \(count) acceptance bullets.",
                     bundle: bundle
                 )
         }

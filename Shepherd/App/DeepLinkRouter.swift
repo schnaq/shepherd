@@ -148,7 +148,7 @@ extension AppEnvironment {
                 return
             }
             // The fetch can take a second or two and there is no screen to spin on yet.
-            toasts.info(String(localized: "Fetching \(repo.fullName)#\(number) from GitHub…"))
+            toasts.info(String(localized: "Fetching \(repo.fullName)#\(String(number)) from GitHub…"))
             do {
                 let detail = try await session.github.pullRequestDetail(repo: repo, number: number)
                 try? await session.database.savePullRequestDetail(detail)
@@ -156,7 +156,7 @@ extension AppEnvironment {
             } catch {
                 toasts.failure(
                     error,
-                    context: String(localized: "Could not open \(repo.fullName)#\(number)")
+                    context: String(localized: "Could not open \(repo.fullName)#\(String(number))")
                 )
             }
         }
@@ -182,14 +182,14 @@ extension AppEnvironment {
                 return
             }
             // The fetch can take a second or two and there is no row to select yet.
-            toasts.info(String(localized: "Fetching \(repo.fullName)#\(number) from GitHub…"))
+            toasts.info(String(localized: "Fetching \(repo.fullName)#\(String(number)) from GitHub…"))
             do {
                 guard let row = try await session.github.issueRow(repo: repo, number: number)
                 else {
                     toasts.show(
                         Toast(
                             message: String(
-                                localized: "\(repo.fullName)#\(number) is not an issue Shepherd can open."
+                                localized: "\(repo.fullName)#\(String(number)) is not an issue Shepherd can open."
                             ),
                             kind: .warning
                         )
@@ -201,7 +201,7 @@ extension AppEnvironment {
             } catch {
                 toasts.failure(
                     error,
-                    context: String(localized: "Could not open \(repo.fullName)#\(number)")
+                    context: String(localized: "Could not open \(repo.fullName)#\(String(number))")
                 )
             }
         }

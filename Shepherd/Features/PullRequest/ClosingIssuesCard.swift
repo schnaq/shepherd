@@ -122,7 +122,7 @@ struct ClosingIssuesCard: View {
     /// - Returns: The label.
     static func label(for issue: LinkedIssueReference) -> String {
         let number = issue.number
-        return String(localized: "Closes #\(number)")
+        return String(localized: "Closes #\(String(number))")
     }
 
     /// The whole row as one sentence, for the screen reader.

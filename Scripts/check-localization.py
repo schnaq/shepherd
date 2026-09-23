@@ -31,7 +31,9 @@ What it reports (any finding is a non-zero exit)
 2. a catalog entry with no German value, or an empty one;
 3. a German value whose ``%`` specifiers differ from the key's, in count, order or type — at best
    a wrong number in the UI, at worst a crash inside ``String(format:)``;
-4. a catalog key no call site produces any more (stale), which is how a catalog rots.
+4. a catalog key no call site produces any more (stale), which is how a catalog rots;
+5. a pull-request or issue number after ``#`` formatted as an integer, which a German Mac groups
+   into ``#1.024``.
 
 Run it from anywhere: ``python3 Scripts/check-localization.py``.
 """
@@ -609,6 +611,16 @@ def main() -> int:
         if key not in entries:
             problems.append(
                 "missing from the catalog: %r (%s)" % (key, ", ".join(sites[key][:3]))
+            )
+
+    # 5 — a number after `#` is a pull request's or an issue's number, and an integer
+    # specifier formats it with the locale's grouping: `#1024` becomes `#1.024` on a German Mac.
+    # Such numbers are interpolated as `String(number)`, so their specifier is `%@`.
+    for key in sorted(sites):
+        if "#%lld" in key:
+            problems.append(
+                "a number after '#' is formatted with thousands separators; interpolate "
+                "String(number): %r (%s)" % (key, ", ".join(sites[key][:3]))
             )
 
     # 2 + 3 — every entry needs a usable German value with the key's own specifiers.

@@ -73,7 +73,7 @@ struct SearchResultRowView: View {
                 .frame(width: 15)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 8) {
-                    Text("\(result.summary.repo.name) #\(result.summary.number)")
+                    Text(verbatim: "\(result.summary.repo.name) #\(result.summary.number)")
                         .font(Theme.mono(11))
                         .foregroundStyle(Theme.textMuted)
                         .layoutPriority(1)
