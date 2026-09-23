@@ -46,6 +46,12 @@ enum DemoSeed {
         // The system Spotlight index is the installed app's; ``DemoSpotlightIndex`` backs this up.
         settings.spotlightExportEnabled = false
         settings.webhooksEnabled = false
+        // No path raises one today — the sweep that emits these events never runs here — but a
+        // notification is the one side effect with a real, bundle-id-scoped permission prompt on
+        // the developer's Mac, so the demo does not leave it to that reasoning.
+        settings.notifyOnReviewRequest = false
+        settings.notifyOnChecksFailed = false
+        settings.notifyOnDraftConflict = false
         settings.settingsSyncEnabled = false
         settings.diagnosticsEnabled = false
         // A second Shepherd icon in the menu bar would only confuse whoever is running the demo.

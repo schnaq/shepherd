@@ -144,8 +144,15 @@ shoot() {
 
     kill "$PID" 2>/dev/null || true
     for _ in $(seq 1 50); do kill -0 "$PID" 2>/dev/null || break; sleep 0.1; done
+    # The next launch wipes the scratch directory; a demo that ignored the polite signal must not
+    # still be writing into it then. Only ever this run's own PID — never the installed app.
+    kill -9 "$PID" 2>/dev/null || true
     PID=""
 }
+
+# A sleeping display makes `screencapture` fail with "could not create image from window". Keep it
+# awake for the length of the run.
+caffeinate -d -u -w $$ &
 
 for appearance in light dark; do
     shoot inbox "shepherd://inbox" largest "$appearance"
