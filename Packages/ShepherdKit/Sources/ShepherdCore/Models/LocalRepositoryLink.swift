@@ -81,6 +81,33 @@ public struct LocalRepositoryLink: Sendable, Equatable {
         return LocalRepositoryLink(checkout: checkout, watch: watch)
     }
 
+    /// The checkout map with one entry per repository, whatever the casing of its keys.
+    ///
+    /// GitHub treats `Schnaq/Shepherd` and `schnaq/shepherd` as one repository, so the map may
+    /// hold only one of them — two would give two "Start an agent on …" commands with one
+    /// identity and a lookup whose answer depends on dictionary order. Linking through the app
+    /// never creates a second spelling, but a settings document from another Mac or an older
+    /// defaults file can, which is why the rule lives here and is applied at the storage boundary.
+    ///
+    /// The rule is stable rather than "most recent", because a dictionary has no order to read
+    /// recency from: an entry with a path beats an empty one, and among those the key that sorts
+    /// first in plain code-point order wins (`Schnaq/…` before `schnaq/…`).
+    /// - Parameter checkouts: `owner/name` → path, possibly with case variants.
+    public static func collapsingCaseVariants(_ checkouts: [String: String]) -> [String: String] {
+        var chosen: [String: (key: String, path: String)] = [:]
+        for key in checkouts.keys.sorted() {
+            let path = checkouts[key] ?? ""
+            let folded = key.lowercased()
+            if let current = chosen[folded] {
+                let currentIsEmpty = current.path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                let thisIsEmpty = path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                guard currentIsEmpty, !thisIsEmpty else { continue }
+            }
+            chosen[folded] = (key, path)
+        }
+        return Dictionary(uniqueKeysWithValues: chosen.values.map { ($0.key, $0.path) })
+    }
+
     /// Whether there is anything left to do at all.
     public var isComplete: Bool { checkout == .linkedHere && watch == .watched }
 

@@ -60,6 +60,26 @@ public enum GitRemote {
         return .github(repo)
     }
 
+    /// A remote URL fit to show on screen: without credentials, a query or a fragment.
+    ///
+    /// Remotes carry secrets more often than they should — `https://user:ghp_…@github.com/o/r`
+    /// is what some tutorials still tell people to write — and a remote Shepherd could not read
+    /// is exactly the one the sheet quotes back to the user. So the userinfo of a `scheme://` URL
+    /// is dropped (all of it: a username alone can be a token), and so is anything after `?` or
+    /// `#`. The scp-like form has no password field, and its `git@` is left alone.
+    /// - Parameter remoteURL: What `git remote get-url origin` printed.
+    public static func redacted(_ remoteURL: String) -> String {
+        var text = remoteURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let cut = text.firstIndex(where: { $0 == "?" || $0 == "#" }) {
+            text = String(text[..<cut])
+        }
+        guard let schemeEnd = text.range(of: "://") else { return text }
+        let rest = text[schemeEnd.upperBound...]
+        let authorityEnd = rest.firstIndex(of: "/") ?? rest.endIndex
+        guard let at = rest[..<authorityEnd].lastIndex(of: "@") else { return text }
+        return String(text[..<schemeEnd.upperBound]) + String(rest[rest.index(after: at)...])
+    }
+
     /// Splits a remote into its host and its path, or `nil` when it has no host.
     private static func split(_ text: String) -> (host: String, path: String)? {
         guard !text.isEmpty else { return nil }

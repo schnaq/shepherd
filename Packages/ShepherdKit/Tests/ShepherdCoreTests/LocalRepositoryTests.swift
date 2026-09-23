@@ -230,3 +230,50 @@ final class LocalRepositoryLinkTests: XCTestCase {
         XCTAssertTrue(result.isComplete)
     }
 }
+
+/// What of a remote URL may be shown, and how case variants of one repository are collapsed.
+final class LocalRepositoryHygieneTests: XCTestCase {
+    func testRedactionDropsCredentialsQueryAndFragment() {
+        XCTAssertEqual(
+            GitRemote.redacted("https://me:ghp_secret@github.com/a b/c?x=1#y"),
+            "https://github.com/a b/c"
+        )
+        XCTAssertEqual(
+            GitRemote.redacted("https://ghp_token@example.com/team/app"),
+            "https://example.com/team/app",
+            "a username alone can be a token"
+        )
+    }
+
+    func testRedactionLeavesCredentialFreeURLsAlone() {
+        XCTAssertEqual(GitRemote.redacted("git@github.com:a/b.git"), "git@github.com:a/b.git")
+        XCTAssertEqual(GitRemote.redacted("/srv/git/app.git\n"), "/srv/git/app.git")
+        XCTAssertEqual(
+            GitRemote.redacted("https://github.com/a/b/c@d"),
+            "https://github.com/a/b/c@d",
+            "an @ in the path is not userinfo"
+        )
+    }
+
+    func testCaseVariantsCollapseToOneStableEntry() {
+        let collapsed = LocalRepositoryLink.collapsingCaseVariants([
+            "schnaq/review": "/b",
+            "Schnaq/Review": "/a",
+            "other/repo": "/c",
+        ])
+        XCTAssertEqual(collapsed, ["Schnaq/Review": "/a", "other/repo": "/c"])
+    }
+
+    func testAPathBeatsAnEmptyVariant() {
+        let collapsed = LocalRepositoryLink.collapsingCaseVariants([
+            "Schnaq/Review": "  ",
+            "schnaq/review": "/b",
+        ])
+        XCTAssertEqual(collapsed, ["schnaq/review": "/b"])
+    }
+
+    func testAMapWithoutVariantsIsUnchanged() {
+        let map = ["a/b": "/x", "c/d": "/y"]
+        XCTAssertEqual(LocalRepositoryLink.collapsingCaseVariants(map), map)
+    }
+}
