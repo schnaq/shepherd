@@ -1,6 +1,8 @@
 # Apple Intelligence in Shepherd — the v2 plan
 
-Status: Proposed · Date: 2026-09-02 · Owner: maintainer · Scope: after v1.0 ships
+Status: done (v1.0.0), see ROADMAP's Intelligence v2 section, all items ticked — except §I's
+Private Cloud Compute rung, which stays parked (ADR 0025) · Date: 2026-09-02 · Owner: maintainer ·
+Scope: after v1.0 ships
 
 This is the engineering plan behind the *Intelligence v2* section of [`docs/ROADMAP.md`](../ROADMAP.md).
 The roadmap says **what** was kept from the interview; this document says **in which order, on

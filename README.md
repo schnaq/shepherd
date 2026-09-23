@@ -20,11 +20,11 @@
 
 Coding agents open pull requests faster than any human can keep up with — across *all* of your
 repositories at once, and in a study of 33,596 agent-authored pull requests, 61% carried no
-recorded human review at all ([the numbers](docs/research/research-landscape.md)). Shepherd herds
-them into one place: a fast, local-first, keyboard-driven inbox where you triage, review and merge
-every pull request from every repository without opening a browser tab. It is open source, your
-data stays on your Mac, and "who wrote this — an agent or a person?" is a first-class fact rather
-than a guess.
+recorded human review at all ([the numbers](docs/research/research-landscape.md)). Review tools
+were built for a handful of pull requests a week; Shepherd is built for the flood. It herds every
+pull request from every repository into one place: a fast, local-first, keyboard-driven inbox where
+you triage, review and merge without opening a browser tab. It is open source, and your data stays
+on your Mac.
 
 ## What it does
 
@@ -91,10 +91,10 @@ The long form — every feature, with the decisions behind it — is in
 
 <img src="docs/assets/screenshots/inbox.png" width="100%" alt="Shepherd's inbox: three pull requests grouped under a Humans heading, each row with its CI state, labels, risk lane and diff size; a left rail counts Needs my review, My pull requests, Involved, Watched and Approved by me; the right pane shows the selected pull request's checks, the files worth reading first, and an on-device summary">
 
-The inbox. One row per pull request across every repository, grouped by who wrote it — a person,
-a bot, or a named coding agent — with the checks, the review state and the size of the diff on
-the row itself. The right pane is the pull request without leaving the list: its CI, the files
-worth opening first, and a summary written by the on-device model.
+The inbox. One row per pull request across every repository, with its CI state, review state and
+diff size on the row itself — grouped by repository, review state or author (person, bot, or named
+coding agent), whichever lens you reach for. The right pane is the pull request without leaving
+the list: its CI, the files worth opening first, and a summary written by the on-device model.
 
 <img src="docs/assets/screenshots/diff.png" width="100%" alt="A side-by-side diff of an Objective-C file: three collapsed bars reading 18 hidden lines, 10 hidden lines and 39 hidden lines stand in for the unchanged parts, changed lines are highlighted down to the individual word, and the file list on the left orders the two changed files by what deserves attention first">
 

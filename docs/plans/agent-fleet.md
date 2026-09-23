@@ -1,6 +1,7 @@
 # Managing the herd — reviewing a fleet of coding agents
 
-Status: Proposed · Date: 2026-09-03 · Source: maintainer interview 2026-09-03 · Scope: v1.2
+Status: done (v1.0.0), see ADR 0026–0030 and ROADMAP v1.2, all items ticked · Date: 2026-09-03 ·
+Source: maintainer interview 2026-09-03 · Scope: v1.2
 
 Shepherd v1 reviews **one** pull request well. The interview that produced this plan was about
 the next problem: a solo maintainer whose pull requests come from **Claude Code sessions, local

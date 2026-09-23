@@ -2,7 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-Status: plan · Date: 2026-09-22
+Status: done — Look closer landed 2026-09-22, PRs #4 and #5, see
+[ADR 0026](../adr/0026-claims-vs-evidence.md)'s 2026-09-22 amendment · Date: 2026-09-22
 
 **Goal:** A reviewer clicks *Look closer* on a ✗ or ? line of the claims card, and the on-device
 model reads the diff with tools and comes back with **places in the diff**, each one a verbatim

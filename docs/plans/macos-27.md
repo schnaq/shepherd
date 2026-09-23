@@ -1,8 +1,9 @@
 # macOS 27 — raising the target, and what it buys a review tool
 
-Status: plan · Date: 2026-09-03 · Corrected: 2026-09-06 · Owner decision: Shepherd targets macOS 27
-as soon as the build can be verified against the macOS 27 SDK, and **assumes macOS 27 as the target
-in every decision** until then (2026-09-06).
+Status: superseded by [ADR 0038](../adr/0038-macos-27-floor.md) (the floor decision and programme);
+items 1–3 landed 2026-09-22, items 4–5 in progress · Date: 2026-09-03 · Corrected: 2026-09-06 ·
+Owner decision: Shepherd targets macOS 27 as soon as the build can be verified against the macOS 27
+SDK, and **assumes macOS 27 as the target in every decision** until then (2026-09-06).
 
 This plan grounds that decision in what was verified against Apple's documentation and the WWDC26
 sessions on 2026-09-03 (see `docs/research/research-ai.md` for the corrections it caused, and

@@ -1,6 +1,9 @@
 # Usage telemetry: anonymous by default, reach by consent
 
-Status: Proposed · Date: 2026-09-18 · Source: maintainer decision 2026-09-18 · Scope: v1.2
+Status: done (v1.2.0), see [ADR 0036](../adr/0036-usage-telemetry.md) and
+[docs/PRIVACY.md](../PRIVACY.md) — amended 2026-09-22: the anonymous level is now off until asked,
+not on by default as this plan's title still reads · Date: 2026-09-18 · Source: maintainer decision
+2026-09-18 · Scope: v1.2
 
 Shepherd ships a badge that says `telemetry: none`, a `CONTRIBUTING.md` bullet that says "No
 telemetry, ever", and an ADR (0017) that turned down a crash-reporting SDK on the strength of both.

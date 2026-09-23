@@ -1,5 +1,8 @@
 # Usage Telemetry Implementation Plan
 
+Status: done (v1.2.0), see [ADR 0036](../adr/0036-usage-telemetry.md) and
+[docs/PRIVACY.md](../PRIVACY.md)
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship allow-listed, anonymous usage telemetry that is off in one click, plus a consented second level whose monthly UUID is the only thing that can recognise a Mac twice.

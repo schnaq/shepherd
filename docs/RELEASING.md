@@ -4,9 +4,13 @@ How a Shepherd release is made: a Developer-ID-signed, notarized DMG on GitHub R
 appcast Sparkle reads from that same release, and a Homebrew cask that points at it
 ([ADR 0010](adr/0010-distribution-dmg-homebrew.md)).
 
-Everything is already committed and wired up. What is **not** here — and cannot be, because it is
-personal to the maintainer — is an Apple Developer ID certificate and a Sparkle signing key.
-Until those exist:
+Everything is already committed and wired up, and it has been exercised: v1.0.0 through v1.4.0 are
+on GitHub Releases, each Developer-ID-signed, notarized, and fed through Sparkle
+(`gh release list`). The certificate and the signing key are personal to the maintainer, so they are
+not in the repository — what follows is the one-time setup that produced them, kept here for a new
+maintainer taking over releases, or for rebuilding a runner from scratch.
+
+Without those secrets (a source build, a fork, or a runner that has not been set up yet):
 
 - the app builds and runs normally,
 - "Check for Updates…" is disabled, and Settings → Account says in one line why,
@@ -21,7 +25,13 @@ afterwards.
 
 ## One-time setup
 
-Six steps. Steps 1–2 need an Apple Developer Program membership; steps 3–6 do not.
+Six steps, already done once for this repository — this section exists for a new maintainer taking
+over releases, or for setting up a runner from scratch, not because anything here is missing today.
+Steps 1–2 need an Apple Developer Program membership; steps 3–6 do not. Step 5's public key is
+already committed, at `project.yml:150`. Step 3's private key is the one that must never be
+regenerated while installs of an earlier version exist — see the warning under it — so a new
+maintainer inherits it from wherever it is kept (a password manager), rather than running
+`generate_keys` again.
 
 ### 1. Developer ID Application certificate
 
@@ -184,7 +194,7 @@ is what makes `brew tap schnaq/tap` work), then:
 ```sh
 git clone https://github.com/schnaq/homebrew-tap.git && cd homebrew-tap
 mkdir -p Casks
-cp /path/to/review/Scripts/homebrew/shepherd.rb Casks/shepherd.rb
+cp /path/to/shepherd/Scripts/homebrew/shepherd.rb Casks/shepherd.rb
 # fill in version + sha256 (see § Making a release, step 5)
 brew audit --cask --online Casks/shepherd.rb
 git add Casks/shepherd.rb && git commit -m "shepherd 0.1.0" && git push
@@ -341,10 +351,12 @@ SKIP_NOTARIZATION=1 ./Scripts/release.sh   # sign and package, skip the trip to 
 ALLOW_UNSIGNED=1    ./Scripts/release.sh   # no identity, no keys, no notarization at all
 ```
 
-**`ALLOW_UNSIGNED=1` is the one to run today.** It exercises every step of the pipeline —
-build, DMG, ZIP, appcast — with no Apple account and with the `SUPublicEDKey` placeholder still
-in place, and it prints loud warnings that the artefacts must not be published. It is the way to
-find out that the pipeline works before spending money on a membership.
+**`ALLOW_UNSIGNED=1` is the one to run without the maintainer's credentials in hand** — on a fork, on
+a fresh runner before step 1–2 are done, or just to check the pipeline itself. It exercises every
+step of the pipeline — build, DMG, ZIP, appcast — with no Apple account and with the
+`SUPublicEDKey` placeholder still in place, and it prints loud warnings that the artefacts must not
+be published. It is the way to find out that the pipeline works before spending money on a
+membership.
 
 ---
 

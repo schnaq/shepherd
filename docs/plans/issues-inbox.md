@@ -1,6 +1,7 @@
 # The issues inbox and agent assignment
 
-Status: Proposed · Date: 2026-09-03 · Source: founder interview 2026-09-02, `docs/ROADMAP.md`
+Status: done (v1.0.0), see [ADR 0032](../adr/0032-issues-inbox.md) and ROADMAP v1.1, all items
+ticked · Date: 2026-09-03 · Source: founder interview 2026-09-02, `docs/ROADMAP.md`
 v1.1 · Scope: v1.1
 
 Shepherd v1 starts at the pull request. The founder's day starts one step earlier, at the issue an
