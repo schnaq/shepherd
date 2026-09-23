@@ -99,7 +99,8 @@ struct ContentKindPicker: View {
             .padding(.bottom, 10)
             Divider().overlay(Theme.hairline)
         }
-        .background(Theme.panel)
+        // On the sidebar's glass rather than on a ``Theme/panel`` slab over it (ADR 0040). The
+        // segmented control is a system control and draws its own track.
     }
 }
 
@@ -139,8 +140,9 @@ struct IssueSidebar: View {
         }
         .columnHeight()
         .scrollContentBackground(.hidden)
-        .background(Theme.panel)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        // ``InboxSidebar``'s reasons, both of them (ADR 0040): no opaque fill over the system
+        // sidebar's glass, and a safe-area bar so the pinned rows get the scroll edge effect.
+        .safeAreaBar(edge: .bottom, spacing: 0) {
             // Two pinned rows, the fleet above Settings. Above, because the fleet is a place a
             // reviewer goes *while* triaging and Settings is where they go when they have
             // stopped — and the bottom edge is the one anchor in this rail that does not move as

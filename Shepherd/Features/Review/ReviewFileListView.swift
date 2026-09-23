@@ -32,7 +32,11 @@ struct ReviewFileListView: View {
             }
             focusHintFooter
         }
-        .background(Theme.panel)
+        // Its own frame only (ADR 0040): the review screen now sits under the window's toolbar,
+        // and a colour background reaches into every safe area its view touches — during a focus
+        // session this column would otherwise paint ``Theme/panel`` up through the session bar
+        // and into the left end of the toolbar.
+        .background(Theme.panel, ignoresSafeAreaEdges: [])
     }
 
     /// What an empty file list means, in the order ``ReviewScreen/diffOrPlaceholder`` uses.
@@ -311,7 +315,9 @@ struct ReviewFileHeader: View {
         }
         .padding(.horizontal, 14)
         .frame(height: 38)
-        .background(Theme.panel)
+        // Its own frame only, for ``ReviewFileListView``'s reason (ADR 0040): this bar is the top
+        // of the diff column, directly under the toolbar.
+        .background(Theme.panel, ignoresSafeAreaEdges: [])
     }
 
     /// The header's "Open in …": an icon, because the bar already carries a path, a chip and two

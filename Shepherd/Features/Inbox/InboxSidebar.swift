@@ -42,8 +42,16 @@ struct InboxSidebar: View {
         }
         .columnHeight()
         .scrollContentBackground(.hidden)
-        .background(Theme.panel)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        // No ``Theme/panel`` behind the rail any more (ADR 0040). This is the sidebar column of a
+        // `NavigationSplitView`, which macOS 27 draws as a floating Liquid Glass panel of its own;
+        // an opaque fill here covered it with a white (or near-black) slab and made the one
+        // system-glass surface in the window look like a custom one.
+        //
+        // `safeAreaBar` rather than `safeAreaInset` for the pinned rows, for the same reason: with
+        // the fill gone, the rows of a long rail scroll underneath the footer, and a safe-area
+        // *bar* is the kind that gets the system's scroll edge effect — the soft fade that keeps
+        // the pinned rows legible over whatever is passing under them — where an inset gets none.
+        .safeAreaBar(edge: .bottom, spacing: 0) {
             // Two pinned rows, the fleet above Settings. Above, because the fleet is a place a
             // reviewer goes *while* triaging and Settings is where they go when they have
             // stopped — and the bottom edge is the one anchor in this rail that does not move as
@@ -349,7 +357,8 @@ struct RailSettingsRow: View {
             }
             .buttonStyle(.plain)
         }
-        .background(Theme.panel)
+        // No fill of its own: it sits on the sidebar's glass, in the rail's safe-area bar, and the
+        // bar's scroll edge effect is what separates it from the rows passing under (ADR 0040).
     }
 }
 

@@ -103,9 +103,16 @@ struct ToastStackView: View {
         // Centred with the stack's own alignment, to match where ``RootView`` places it: two
         // toasts of different widths right-aligned against each other under a centred anchor
         // read as one of them being indented.
-        VStack(alignment: .center, spacing: 8) {
-            ForEach(center.toasts) { toast in
-                toastRow(toast)
+        //
+        // In a `GlassEffectContainer` because each toast is a piece of glass (ADR 0040) and two
+        // of them are routinely on screen at once: glass cannot sample glass, so separate pieces
+        // stacked 8 pt apart would each blur the other's edge. The container renders them as one
+        // group, and lets a toast that arrives or leaves merge into its neighbour rather than pop.
+        GlassEffectContainer(spacing: 8) {
+            VStack(alignment: .center, spacing: 8) {
+                ForEach(center.toasts) { toast in
+                    toastRow(toast)
+                }
             }
         }
         .padding(16)
@@ -144,12 +151,13 @@ struct ToastStackView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .frame(maxWidth: 420, alignment: .leading)
-        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Theme.border, lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.25), radius: 12, y: 4)
+        // Liquid Glass rather than a ``Theme/raised`` card with a border and a drop shadow
+        // (ADR 0040). A toast is the one thing in the app that genuinely floats: it sits over
+        // whatever the window happens to be showing — a list mid-scroll, a diff — and belongs to
+        // none of it, which is exactly the control layer glass is for. The glass brings its own
+        // edge and its own depth, so the stroke and the shadow went with the fill, and it follows
+        // Reduce Transparency and Increase Contrast by itself, which the hand-drawn card did not.
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 

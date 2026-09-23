@@ -983,7 +983,7 @@ final class ReviewModel {
 
     /// The freshest CI rollup Shepherd knows for this pull request.
     ///
-    /// The detail's own check runs when there are any, because they are what the header's
+    /// The detail's own check runs when there are any, because they are what the toolbar's
     /// "2/3 checks" is counting and they are re-read on every reload; the inbox row's rollup only
     /// while the detail is still loading. Derived with ``ShepherdCore/CheckRollup/init(runs:)``
     /// rather than by a second hand-rolled mapping — one definition of "red", "still running" and

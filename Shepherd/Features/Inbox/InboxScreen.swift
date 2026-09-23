@@ -281,7 +281,8 @@ struct InboxScreen: View {
                 )
             }
         }
-        .background(Theme.panel)
+        // Nothing behind the rail: the sidebar column is the system's Liquid Glass panel, and the
+        // rail's views each draw on it directly (ADR 0040).
     }
 
     @ViewBuilder
@@ -422,9 +423,14 @@ struct InboxScreen: View {
         // row that reads as one control. They are three unrelated things: where the data stands,
         // what to do with the selection, and whose account this is. The spacers give each its own
         // capsule and the system's own spacing between them.
+        //
+        // The sync status gives its capsule up, though (ADR 0040): it is a read-out, not a
+        // control, and a glass capsule is how the toolbar says "press me". The review screen's
+        // facts row makes the same choice.
         ToolbarItem(placement: .primaryAction) {
             SyncStatusView(session: session)
         }
+        .sharedBackgroundVisibility(.hidden)
 
         ToolbarSpacer(.fixed, placement: .primaryAction)
 

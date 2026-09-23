@@ -265,6 +265,26 @@ extension View {
     }
 }
 
+// MARK: - Buttons: which style goes where (ADR 0040)
+//
+// Two families, and the line between them is the line between the control layer and the content.
+//
+// **In a toolbar, or floating over content** — the window's toolbar, anything in a
+// `GlassEffectContainer` — a button is the system's: the toolbar's default style for an ordinary
+// item (a toolbar item *is* already Liquid Glass, so an explicit `.buttonStyle(.glass)` inside one
+// nests a second capsule in the first), `.glassProminent` tinted with a theme colour for the one
+// recommended action in the bar (the review toolbar's green Merge), and `.glass` only for a
+// button that floats on its own outside a toolbar. The system then does what these styles cannot:
+// Reduce Transparency, Increase Contrast, the press and hover response of the glass itself.
+//
+// **Inside content** — a card, a sheet, a panel, a list header, an empty state — a button is one
+// of the three styles below. Content is opaque by rule (ADR 0040), and a glass button on an
+// opaque card is glass with nothing behind it to refract. Do not mass-replace these with glass.
+//
+// One thing a system style does not inherit: ``SwiftUI/View/busy(_:)``'s spinner is drawn by the
+// three styles here, so a write button on a system style must put
+// ``SwiftUI/View/busyLabel(isBusy:tint:)`` on its own label, as the review toolbar's Merge does.
+
 /// The filled accent button.
 struct PrimaryButtonStyle: ButtonStyle {
     /// The control height.

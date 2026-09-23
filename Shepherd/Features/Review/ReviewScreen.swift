@@ -1,7 +1,7 @@
 import ShepherdCore
 import SwiftUI
 
-/// The full-window review screen: header, priority-bucketed file list, diff, composer.
+/// The full-window review screen: toolbar, priority-bucketed file list, diff, composer.
 struct ReviewScreen: View {
     @Environment(AppEnvironment.self) private var environment
     @Environment(\.colorScheme) private var colorScheme
@@ -17,7 +17,7 @@ struct ReviewScreen: View {
     @State private var model: ReviewModel
     /// Whether "end the session with pull requests still in it?" is being asked.
     @State private var isEndSessionConfirmationPresented = false
-    /// This pull request's outbox rows, observed, for the header's write state.
+    /// This pull request's outbox rows, observed, for the toolbar's write state.
     @State private var outboxItems: [OutboxItem] = []
     @FocusState private var isFileListFocused: Bool
 
@@ -36,22 +36,15 @@ struct ReviewScreen: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ReviewHeaderView(
-                model: model,
-                checkRollup: model.checkRollup,
-                write: writeState,
-                onBack: leaveReview,
-                onMerge: { model.isMergeSheetPresented = true },
-                onReview: { model.isSubmitSheetPresented = true },
-                onDelegate: delegate,
-                onRetry: { Task { await session.retryFailedWrites(for: prID) } }
-            )
-            .task(id: prID) {
-                for await items in session.database.observeOutboxItems() {
-                    outboxItems = items.filter { $0.prID == prID }
-                }
+            // The line where the toolbar's glass ends and the review begins. Kept although a
+            // macOS 27 toolbar usually has none, because nothing here scrolls *under* the
+            // toolbar to draw that edge with a scroll edge effect: the file list and the diff
+            // start below it, and the diff is a `WKWebView` that must not have glass over it
+            // (ADR 0040). Not during a focus session: the session bar is then the first thing
+            // under the toolbar, draws its own line underneath, and two would stack.
+            if environment.reviewSession == nil {
+                Divider().overlay(Theme.border)
             }
-            Divider().overlay(Theme.border)
             // Above everything the review is made of, because it is about all of it: the file
             // list, the diff and the composer are all showing a head commit that GitHub may have
             // moved past.
@@ -86,6 +79,30 @@ struct ReviewScreen: View {
                     onDoneAndNext: { environment.completeCurrentReviewSessionItem() },
                     onEnd: leaveReview
                 )
+            }
+        }
+        // The header, as the window's toolbar (ADR 0040). The title and subtitle are the window's
+        // own: macOS lays them out and truncates them beside the back button, and hands the title
+        // to the Window menu and Mission Control.
+        .navigationTitle(model.summary?.title ?? String(localized: "Loading pull request…"))
+        .navigationSubtitle(subtitle)
+        .toolbar {
+            ReviewToolbar(
+                model: model,
+                checkRollup: model.checkRollup,
+                write: writeState,
+                onBack: leaveReview,
+                onMerge: { model.isMergeSheetPresented = true },
+                onReview: { model.isSubmitSheetPresented = true },
+                onDelegate: delegate,
+                onRetry: { Task { await session.retryFailedWrites(for: prID) } }
+            )
+        }
+        // Here rather than on the header it used to hang off: a toolbar item is not a view with
+        // a lifetime of its own to hang a `.task` on, and this screen is the one that has the id.
+        .task(id: prID) {
+            for await items in session.database.observeOutboxItems() {
+                outboxItems = items.filter { $0.prID == prID }
             }
         }
         .task {
@@ -357,6 +374,17 @@ struct ReviewScreen: View {
         .background(Theme.background)
     }
 
+    /// The window subtitle under the pull request's title: which one, and between which branches.
+    ///
+    /// Verbatim, because every part of it is an identifier — a repository, a number, two branch
+    /// names — and an arrow; there is nothing in it a translator could change. Empty while the
+    /// summary is still loading, so the subtitle line does not flash a placeholder of its own
+    /// under the title's "Loading pull request…".
+    private var subtitle: Text {
+        guard let summary = model.summary else { return Text(verbatim: "") }
+        return Text(verbatim: "\(summary.slug) · \(summary.headRefName) → \(summary.baseRefName)")
+    }
+
     // MARK: - Actions
 
     /// What the outbox is doing for this pull request (``RowWriteState``), the same state its
@@ -559,8 +587,25 @@ struct ReviewScreen: View {
     }
 }
 
-/// The review screen's header bar.
-struct ReviewHeaderView: View {
+/// The review screen's controls, in the window's own toolbar (ADR 0040).
+///
+/// They were a 52 pt `HStack` of custom buttons on an opaque ``Theme/panel`` band, drawn *under*
+/// an empty title bar — two bars' worth of height, and the one screen of the app that ignored the
+/// system toolbar the inbox already uses. On macOS 27 the toolbar is Liquid Glass: its items float
+/// as glass capsules over the content, the system answers Reduce Transparency, Increase Contrast
+/// and Reduce Motion for them, and the window's title and subtitle carry the pull request's name
+/// into the Window menu and Mission Control. So the header is the toolbar now, and everything it
+/// did moved across: the help texts, the spoken labels, the disable rules, the write chip and its
+/// Retry.
+///
+/// No `.buttonStyle(.glass)` on the ordinary items, on purpose: a toolbar item already *is*
+/// system glass, and an explicit glass style inside one nests a second capsule in the first. The
+/// one exception is the recommended action — Merge while it is green — which is
+/// `.glassProminent`, the system's way of saying "this one" (ADR 0040's button rule).
+///
+/// Only one screen is in the window at a time (``SignedInRootView`` switches on the route), so
+/// this and the inbox's toolbar never coexist and nothing has to be merged or hidden.
+struct ReviewToolbar: ToolbarContent {
     /// The review model.
     let model: ReviewModel
     /// The freshest CI rollup, from the model (``ReviewModel/checkRollup``).
@@ -578,138 +623,159 @@ struct ReviewHeaderView: View {
     /// Sends this pull request's failed writes again.
     var onRetry: () -> Void = {}
 
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    var body: some View {
-        HStack(spacing: 12) {
-            // A real button with a word on it, the height of the header's other buttons. It was a
-            // bare 13 pt chevron — a target you had to aim for, and one that gave no feedback.
+    var body: some ToolbarContent {
+        // The navigation slot, leading, where macOS puts "back". A real button with a word on
+        // it: it was a bare 13 pt chevron once, a target you had to aim for, and the word stays.
+        ToolbarItem(placement: .navigation) {
             Button(action: onBack) {
                 Label(String(localized: "Inbox"), systemImage: "chevron.left")
                     .labelStyle(.titleAndIcon)
             }
-            .buttonStyle(SecondaryButtonStyle(height: 30))
             .help(String(localized: "Back to the inbox (esc)"))
             .accessibilityLabel(Text(String(localized: "Back to the inbox")))
+        }
 
-            if let summary = model.summary {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 8) {
-                        Text(summary.title)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Theme.textStrong)
-                            .lineLimit(1)
-                        Text(summary.slug)
-                            .font(Theme.mono(12))
-                            .foregroundStyle(Theme.textMuted)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        ProvenanceChip(actor: summary.author)
-                    }
-                    HStack(spacing: 6) {
-                        Text("\(summary.headRefName) → \(summary.baseRefName)")
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Text("· \(summary.changedFiles) files ·")
-                        DiffCountsView(
-                            additions: summary.additions,
-                            deletions: summary.deletions,
-                            size: 11
-                        )
-                    }
-                    .font(Theme.mono(11))
-                    .foregroundStyle(Theme.textMuted)
-                }
-            } else {
-                Text(String(localized: "Loading pull request…"))
-                    .font(.system(size: 13))
-                    .foregroundStyle(Theme.textMuted)
+        // What the pull request *is*: who wrote it, how big it is, where CI stands. Read-only
+        // facts, so the item gives up its shared glass capsule — a capsule is what a toolbar
+        // says a control looks like, and chips inside one read as a button that does nothing.
+        ToolbarItem(placement: .primaryAction) {
+            facts
+        }
+        .sharedBackgroundVisibility(.hidden)
+
+        // Only while there is something to retry, and as an item of its own so it gets the
+        // toolbar's button treatment rather than a custom style inside the facts row.
+        if case .failed = write {
+            ToolbarItem(placement: .primaryAction) {
+                Button(String(localized: "Retry"), action: onRetry)
+                    .help(String(localized: "Send the failed changes to GitHub again"))
             }
+        }
 
-            Spacer(minLength: 8)
+        // Three groups, as on the inbox's toolbar: the facts, the hand-off to an agent, and the
+        // two verdicts. One capsule around all of it would read as one control.
+        ToolbarSpacer(.fixed, placement: .primaryAction)
 
-            // The inbox row's rollup stands in while the detail has no check runs of its own
-            // (``ReviewModel/checkRollup``). The sweep knows a suite is red long before
-            // the detail fetch lands, and hiding the badge until then said "no checks" when the
-            // truth was "not read yet". `total > 0` is the gate rather than the state, because a
-            // rollup that counted nothing has nothing to show.
-            if let checkRollup, checkRollup.total > 0 {
-                ChecksSummaryView(rollup: checkRollup)
-            }
-
-            if let write {
-                HStack(spacing: 6) {
-                    ChipView(text: write.text, color: write.color)
-                        .help(write.help)
-                    if case .failed = write {
-                        Button(String(localized: "Retry"), action: onRetry)
-                            .buttonStyle(SecondaryButtonStyle(height: 24, tint: Theme.accentText))
-                            .help(String(localized: "Send the failed changes to GitHub again"))
-                    }
-                }
-                .transition(.opacity)
-            }
-
+        ToolbarItem(placement: .primaryAction) {
             Button(action: onDelegate) {
-                HStack(spacing: 6) {
-                    Image(systemName: "arrow.uturn.backward.badge.clock")
-                        .font(.system(size: 11))
-                    Text(String(localized: "Delegate…"))
-                }
+                Label(
+                    String(localized: "Delegate…"),
+                    systemImage: "arrow.uturn.backward.badge.clock"
+                )
+                .labelStyle(.titleAndIcon)
+                // The agent colour the header's button had, on the label only: the capsule is
+                // the system's, and a tinted capsule is reserved for the one recommended action.
+                .foregroundStyle(Theme.agent)
             }
-            .buttonStyle(SecondaryButtonStyle(height: 30, tint: Theme.agent))
             .disabled(model.summary == nil)
             .help(String(localized: "Hand this pull request to your local coding agent"))
+        }
 
+        ToolbarSpacer(.fixed, placement: .primaryAction)
+
+        ToolbarItemGroup(placement: .primaryAction) {
             Button(action: onReview) {
-                HStack(spacing: 6) {
-                    Image(systemName: "square.and.pencil")
-                        .font(.system(size: 11))
-                    Text(
-                        model.pendingCommentCount > 0
-                            ? String(localized: "Review · \(model.pendingCommentCount) pending")
-                            : String(localized: "Review")
-                    )
-                }
+                Label(
+                    model.pendingCommentCount > 0
+                        ? String(localized: "Review · \(model.pendingCommentCount) pending")
+                        : String(localized: "Review"),
+                    systemImage: "square.and.pencil"
+                )
+                .labelStyle(.titleAndIcon)
+                .foregroundStyle(Theme.accentText)
             }
-            .buttonStyle(SecondaryButtonStyle(height: 30, tint: Theme.accentText))
             .disabled(model.hasEndedOnGitHub)
 
             mergeButton
         }
-        .padding(.horizontal, 16)
-        .frame(height: 52)
-        .background(Theme.panel)
-        .animation(reduceMotion ? nil : .snappy, value: write)
     }
 
-    /// The Merge button, green only when merging is the next thing to do.
+    /// The facts row: provenance, size, checks, and the outbox's state for this pull request.
+    ///
+    /// The slug and the branch line went to the window subtitle (``ReviewScreen``'s
+    /// `navigationSubtitle`), which is where macOS puts "which one, exactly"; what is left is what
+    /// a reviewer looks at before pressing anything to the right of it.
+    private var facts: some View {
+        HStack(spacing: 8) {
+            if let summary = model.summary {
+                ProvenanceChip(actor: summary.author)
+                HStack(spacing: 6) {
+                    Text("· \(summary.changedFiles) files ·")
+                        .lineLimit(1)
+                    DiffCountsView(
+                        additions: summary.additions,
+                        deletions: summary.deletions,
+                        size: 11
+                    )
+                }
+                .font(Theme.mono(11))
+                .foregroundStyle(Theme.textMuted)
+            }
+            // The inbox row's rollup stands in while the detail has no check runs of its own
+            // (``ReviewModel/checkRollup``). The sweep knows a suite is red long before the detail
+            // fetch lands, and hiding the badge until then said "no checks" when the truth was
+            // "not read yet". `total > 0` is the gate rather than the state, because a rollup
+            // that counted nothing has nothing to show.
+            if let checkRollup, checkRollup.total > 0 {
+                ChecksSummaryView(rollup: checkRollup)
+            }
+            if let write {
+                ChipView(text: write.text, color: write.color)
+                    .help(write.help)
+            }
+        }
+    }
+
+    /// The Merge button, prominent and green only when merging is the next thing to do.
     ///
     /// Green is a recommendation, and the header used to make it on nothing at all: a draft or a
-    /// red suite got the same success-green button as a pull request waiting to land, and the
-    /// only thing that dimmed it was a conflict. Now it is green when nothing blocks the merge
-    /// *and* CI is green, and neutral otherwise. No chevron on the label either — it opens a
-    /// confirmation sheet, not a menu, and the arrow promised one.
+    /// red suite got the same success-green button as a pull request waiting to land. It is
+    /// `.glassProminent` tinted ``Theme/success`` when nothing blocks the merge *and* CI is
+    /// green, and the toolbar's ordinary glass otherwise. No chevron on the label — it opens a
+    /// confirmation sheet, not a menu.
+    ///
+    /// The spinner is on the label itself (``SwiftUI/View/busyLabel(isBusy:tint:)``), because
+    /// ``SwiftUI/View/busy(_:)`` only raises a flag that the app's *own* three styles draw, and a
+    /// system style never reads it. And the button is not `.disabled` while the merge is being
+    /// sent — only once it is queued or done: the system dims a disabled toolbar item, spinner and
+    /// all, and a spinner at half strength is the bug ``SwiftUI/View/busy(_:)``'s arrangement
+    /// exists to prevent. The press is refused by the guard instead, the same rule `m` meets in
+    /// ``ReviewScreen``'s `perform(_:)`, so neither can open a second merge sheet.
     ///
     /// Written as two buttons rather than one with a computed style because a `ButtonStyle` is a
-    /// type: there is no value both styles fit in without erasing them.
+    /// type: there is no value `.glassProminent` and `.automatic` both fit in without erasing them.
     @ViewBuilder
     private var mergeButton: some View {
-        // A merge that is on its way, queued or confirmed is not a merge to press again.
         let isOnItsWay = write?.isMergeOnItsWay ?? false
-        let isDisabled = model.summary?.mergeBlocker != nil || model.hasEndedOnGitHub || isOnItsWay
+        let isMerging = write == .merging
+        let isDisabled = model.summary?.mergeBlocker != nil || model.hasEndedOnGitHub
+            || (isOnItsWay && !isMerging)
         if model.summary?.mergeBlocker == nil, checkRollup?.state == .success {
-            Button(action: onMerge) { Text(String(localized: "Merge")) }
-                .buttonStyle(SuccessButtonStyle(height: 30))
-                .busy(write == .merging)
-                .disabled(isDisabled)
-                .help(mergeHelp)
+            Button {
+                guard !isOnItsWay else { return }
+                onMerge()
+            } label: {
+                Text(String(localized: "Merge"))
+                    // No tint: the spinner takes the label colour the prominent style picks for its
+                // own fill, which is not necessarily ``Theme/textOnFilled``.
+                .busyLabel(isBusy: isMerging)
+            }
+            .buttonStyle(.glassProminent)
+            .tint(Theme.success)
+            .disabled(isDisabled)
+            .help(mergeHelp)
+            .accessibilityValue(isMerging ? Text(write?.text ?? "") : Text(verbatim: ""))
         } else {
-            Button(action: onMerge) { Text(String(localized: "Merge")) }
-                .buttonStyle(SecondaryButtonStyle(height: 30))
-                .busy(write == .merging)
-                .disabled(isDisabled)
-                .help(mergeHelp)
+            Button {
+                guard !isOnItsWay else { return }
+                onMerge()
+            } label: {
+                Text(String(localized: "Merge"))
+                    .busyLabel(isBusy: isMerging)
+            }
+            .disabled(isDisabled)
+            .help(mergeHelp)
+            .accessibilityValue(isMerging ? Text(write?.text ?? "") : Text(verbatim: ""))
         }
     }
 
@@ -727,7 +793,7 @@ struct ReviewHeaderView: View {
     }
 }
 
-/// The "2/3 checks" summary in the review header.
+/// The "2/3 checks" summary in the review toolbar.
 struct ChecksSummaryView: View {
     /// The rolled-up state of the head commit's checks.
     ///

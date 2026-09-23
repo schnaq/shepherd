@@ -29,7 +29,12 @@ struct ReviewSessionBar: View {
             .frame(height: 38)
             Divider().overlay(Theme.border)
         }
-        .background(Theme.raised)
+        // Painted on the bar's own frame and not up into the toolbar above it (ADR 0040). The bar
+        // is a top safe-area inset directly under the window's toolbar, and a colour background
+        // reaches into every safe area its view touches by default — which would tint the
+        // toolbar strip ``Theme/raised`` for as long as a session ran, an opaque band behind the
+        // toolbar's glass. The session is content state, not the toolbar's.
+        .background(Theme.raised, ignoresSafeAreaEdges: [])
         .accessibilityElement(children: .contain)
         .accessibilityLabel(
             Text(String(localized: "Review session, \(session.position) of \(session.total)"))
