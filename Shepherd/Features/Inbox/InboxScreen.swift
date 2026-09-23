@@ -262,6 +262,8 @@ struct InboxScreen: View {
                     // anywhere — the sheet, Settings, the review screen — updates the glyph.
                     hasLocalCheckout: { environment.settings.localCheckoutURL(for: $0) != nil },
                     onStartAgent: { environment.startRepositoryDelegation($0) },
+                    repositoryTasks: { environment.delegation.repositoryTasks(for: $0) },
+                    onReopenTask: { environment.reopenRepositoryTask($0) },
                     onLinkCheckout: { repo in
                         // Only what the item says: the row's menu offers "Start an agent…" from
                         // now on, and a delegation sheet appearing unasked would be a surprise.

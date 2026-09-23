@@ -791,10 +791,12 @@ final class AppEnvironment {
     ) {
         // A repository task has its own entry point (no webhook, no re-sync); routing it there
         // from here means the sheet's "Choose folder…" rebuild, which calls this with whatever
-        // context it had, cannot accidentally give one the pull-request treatment.
+        // context it had, cannot accidentally give one the pull-request treatment. The context
+        // travels as it is, so the rebuild replaces that task's sheet rather than adding a second
+        // task beside it.
         if context.isRepositoryTask {
             guard !automatic else { return }
-            startRepositoryDelegation(context.repo, task: task)
+            openRepositoryTask(context, task: task)
             return
         }
         let onDidPush: @MainActor () async -> Void = { [weak self] in
@@ -845,8 +847,12 @@ final class AppEnvironment {
         }
     }
 
-    /// Opens the delegation sheet for a free-text task on a repository (ADR 0011's 2026-09-23
-    /// amendment).
+    /// Opens the delegation sheet for a **new** free-text task on a repository (ADR 0011's
+    /// 2026-09-23 amendment).
+    ///
+    /// Always a new task, whatever else is running or finished in the repository: each task has
+    /// its own identity, branch and worktree, so a second one never waits for, reveals or replaces
+    /// the first. Going back to an existing task is ``reopenRepositoryTask(_:)``.
     ///
     /// The same ``DelegationCenter`` every other delegation goes through, so the guardrails
     /// (turn cap or *No limit*, spend cap, permission mode, allowed tools), the worktree
@@ -870,13 +876,20 @@ final class AppEnvironment {
     /// - Returns: The delegation now on screen.
     @discardableResult
     func startRepositoryDelegation(_ repo: RepoRef, task: String? = nil) -> DelegationModel {
-        // A previous task whose worktree is still on disk is shown again rather than replaced: a
-        // fresh sheet would leave that directory orphaned under a slug nothing points at.
-        // *Discard worktree* in that sheet is what makes room for the next task.
-        if let existing = delegation.finishedRepositoryTask(for: repo) {
-            delegation.present(existing)
-            return existing
-        }
+        openRepositoryTask(.repository(repo), task: task)
+    }
+
+    /// Puts one of a repository's tasks back on screen as it is — running, finished or failed —
+    /// from the rail's *Agent tasks* submenu or ⌘K.
+    /// - Parameter model: A task from ``DelegationCenter/repositoryTasks(for:)``.
+    func reopenRepositoryTask(_ model: DelegationModel) {
+        delegation.present(model)
+    }
+
+    /// Opens a repository task's sheet under a given identity: a fresh one for a new task, the
+    /// sheet's own for the "Choose folder…" rebuild.
+    @discardableResult
+    private func openRepositoryTask(_ context: DelegationContext, task: String?) -> DelegationModel {
         let onDidFinish: @MainActor (DelegationOutcome) -> Void = { [weak self] outcome in
             self?.telemetry?.record(.delegationFinished(outcome: Self.telemetryOutcome(outcome.status)))
         }
@@ -884,7 +897,7 @@ final class AppEnvironment {
             self?.telemetry?.record(.delegationStarted(trigger: .manual))
         }
         let model = delegation.open(
-            context: .repository(repo),
+            context: context,
             settings: settings,
             toasts: toasts,
             onDidFinish: onDidFinish,

@@ -58,9 +58,11 @@ struct DelegationSheet: View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 4) {
                 // A repository task has no title of its own — its "title" is the repository,
-                // which the line below already shows — so the header says what the sheet is for.
+                // which the line below already shows — so the header says what the sheet is for,
+                // and once the task has a branch, which task it is: two reopened sheets on one
+                // repository must not look alike.
                 Text(model.context.isRepositoryTask
-                    ? String(localized: "New agent task")
+                    ? (model.taskSlug == nil ? String(localized: "New agent task") : model.taskTitle)
                     : model.context.title)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Theme.textStrong)
