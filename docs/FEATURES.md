@@ -627,7 +627,9 @@ button. Several tasks can run in one repository at once, each on its own branch 
 two that start with the same words get two names. *Start an agent…* always starts a new one; the
 row's **Agent tasks** submenu (and ⌘K's *Show agent task "…"*) lists each task with whether it is
 running, finished or failed, and opening one shows that run. *Discard worktree* removes that task
-only. Automatic delegation rules never start one
+only, and works even when its folder has already gone. If git cannot create a task's worktree,
+the task shows git's error with *Try again* and *Dismiss task*, and its branch name is free again.
+Automatic delegation rules never start one
 ([ADR 0011](adr/0011-delegate-to-local-agent-cli.md), [ADR 0039](adr/0039-open-in-editor.md)).
 
 ### Let Shepherd write the brief

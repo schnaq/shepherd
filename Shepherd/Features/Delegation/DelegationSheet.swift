@@ -565,6 +565,12 @@ struct DelegationSheet: View {
             Button(String(localized: "Reveal in Finder")) { model.revealWorktreeInFinder() }
                 .buttonStyle(SecondaryButtonStyle(height: 30))
                 .disabled(!model.isWorktreeDirectoryKnown)
+            if environment.delegation.canDismissTask(model) {
+                // A repository task git refused to create holds nothing on disk; this is how it
+                // leaves the rail's list without being retried.
+                Button(String(localized: "Dismiss task")) { environment.delegation.dismissTask(model) }
+                    .buttonStyle(SecondaryButtonStyle(height: 30))
+            }
             Button(String(localized: "Try again")) { model.start() }
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(!model.canStart)

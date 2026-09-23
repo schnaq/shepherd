@@ -191,6 +191,7 @@ final class GitWorktreeTests: XCTestCase {
     func testRemoveForcesThenPrunes() async throws {
         let runner = RecordingProcessRunner()
         let tree = worktree(runner: runner)
+        try FileManager.default.createDirectory(at: tree.directory, withIntermediateDirectories: true)
         try await tree.remove()
         XCTAssertEqual(
             runner.arguments,
@@ -199,6 +200,15 @@ final class GitWorktreeTests: XCTestCase {
                 ["worktree", "prune"],
             ]
         )
+    }
+
+    func testRemovingADirectoryThatHasGoneOnlyPrunes() async throws {
+        // `git worktree remove` fails on a path that is not there; the prune is what clears
+        // git's record of it, and a Discard must not fail for want of something to discard.
+        let runner = RecordingProcessRunner()
+        let tree = worktree(runner: runner)
+        try await tree.remove()
+        XCTAssertEqual(runner.arguments, [["worktree", "prune"]])
     }
 
     func testRemoveRefusesAnyPathOutsideTheManagedDirectory() async {

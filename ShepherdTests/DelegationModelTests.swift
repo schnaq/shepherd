@@ -555,6 +555,12 @@ final class DelegationModelTests: XCTestCase {
         )
         model.start()
         await model.runTask?.value
+        // git would have created it; the recording runner does not, and a missing directory is
+        // the prune-only path (`RepositoryTaskTests`).
+        try FileManager.default.createDirectory(
+            at: XCTUnwrap(model.worktree?.directory),
+            withIntermediateDirectories: true
+        )
 
         model.discardWorktree()
         await model.actionTask?.value

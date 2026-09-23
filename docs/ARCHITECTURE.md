@@ -1647,7 +1647,12 @@ rail row's *Agent tasks* submenu and one ⌘K command per task (`repositoryTasks
 (`DelegationCenter.present(_:)`). *Discard worktree* clears that task's branch, which drops its claim
 and its list entry and touches no other task; a sheet opened and never run is pruned when the next
 one opens. The sheet's "Choose folder…" rebuild passes its own context back in, so it replaces that
-sheet instead of adding a task.
+sheet instead of adding a task. A failed `addForNewWork` releases the claim (branch cleared, handle
+back at the managed root) and the task stays listed as failed with git's error, *Try again* and
+*Dismiss task* (`DelegationCenter.dismissTask(_:)`, only with nothing on disk). `GitWorktree.remove()`
+skips `worktree remove` when the directory has gone and still prunes; a repository task's discard
+then deletes its branch via `deleteLocalBranchIfUnused(_:since:)` when it exists and has no commits
+past its base.
 `startAutomatically` refuses the origin outright, and the run sends no `delegation.finished` webhook
 (its envelope is a pull request's identity).
 
@@ -2069,7 +2074,8 @@ construction, template splitting, git command sequences, state transitions — a
 `RepositoryTaskTests`, the repository task's argv from slug to `worktree add -b`, *Run again*
 staying in place, two tasks in one repository with their own identity, branch and worktree, the same
 first line started back to back getting two branches, a discard that leaves the other task running
-and listed, the rail's and ⌘K's lists and reopening the task named, the merge-base diff, a rule's refusal with a CLI present, the folder probe's
+and listed, a refused `worktree add` releasing its claim and failing with git's error, retry and
+dismiss, a discard whose directory is gone (prune only; unused branch deleted, one with commits kept), the rail's and ⌘K's lists and reopening the task named, the merge-base diff, a rule's refusal with a CLI present, the folder probe's
 findings and "Add a local repository…"'s idempotency; the remote grammar, the slug and the link
 state are `ShepherdCoreTests/LocalRepositoryTests`, on Linux) and the app half of
 auto-delegation (event → signal mapping, ledger persistence across a relaunch, cap notices —

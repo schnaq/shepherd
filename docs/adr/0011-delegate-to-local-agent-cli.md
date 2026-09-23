@@ -205,7 +205,16 @@ repository and the branch.
   sheet that would orphan its worktree. *Run again* in a task's sheet continues in its worktree on its
   branch. *Discard worktree* frees that task only: its claim goes, it leaves the lists, and the
   repository's other tasks carry on. A sheet opened and never run is not listed, and the next "Start
-  an agent…" on the repository clears it away. There was no cap on attended delegations before and
+  an agent…" on the repository clears it away.
+- **When git refuses, the task holds nothing.** A claim is made before `worktree add` runs, so a
+  failure there (or in its fetch) releases it again: the branch name is free for the next task and
+  for *Try again*, which picks afresh, and the handle goes back to the managed root. The task stays
+  listed as *failed*, its sheet showing git's error, *Try again* and **Dismiss task** (only for a
+  task with nothing on disk; one with a worktree is discarded instead). *Discard worktree* no longer
+  fails on a directory that has gone — half-created, or deleted in Finder: `GitWorktree.remove()`
+  skips `git worktree remove` and still runs `git worktree prune`, and for a repository task the
+  local branch is then deleted when it exists and `rev-list --count <base>..<branch>` says it holds
+  no commit of its own. A branch with commits is kept: Shepherd does not throw work away. There was no cap on attended delegations before and
   there is none now; ADR 0016's cap counts only rule-started runs, which this origin never is.
 - **Guardrails unchanged:** turn cap or *No limit*, spend cap, permission mode, allowed tools,
   transcript. **Shepherd pushes nothing** — still only the button, still the user's git credentials.
