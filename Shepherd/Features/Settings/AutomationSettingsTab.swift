@@ -198,9 +198,11 @@ struct AutomationSettingsTab: View {
         Section {
             Toggle(isOn: autoMergeEnabledBinding) {
                 Text(String(localized: "Merge green, approved agent pull requests automatically"))
-                Text(String(
-                    localized: "No confirmation click: pull requests already waiting can merge on the next sweep."
-                ))
+                Label(
+                    String(localized: "No confirmation click: pull requests already waiting can merge on the next sweep."),
+                    systemImage: "exclamationmark.triangle"
+                )
+                .foregroundStyle(Theme.pending)
             }
             LabeledContent {
                 TextField(

@@ -192,6 +192,7 @@ struct InfoButton: View {
         .popover(isPresented: $isShowing, arrowEdge: .trailing) {
             Text(text)
                 .font(Theme.type(.callout))
+                .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(width: 320, alignment: .leading)
                 .padding(14)

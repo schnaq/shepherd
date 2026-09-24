@@ -49,6 +49,8 @@ MIGRATED = (
     "Shepherd/Features/Settings/SyncSettingsTab.swift",
     "Shepherd/Features/Settings/SettingsSyncSection.swift",
     "Shepherd/Features/Settings/DelegationSettingsTab.swift",
+    "Shepherd/Features/Settings/AppearanceSettingsTab.swift",
+    "Shepherd/Features/Settings/SettingsView.swift",
     "Shepherd/Features/PullRequest/MergeSheet.swift",
     "Shepherd/Features/PullRequest/ClosingIssuesCard.swift",
     "Shepherd/Features/Inbox/BulkTriageSheet.swift",

@@ -1,5 +1,4 @@
 import ShepherdCore
-import ShepherdPersistence
 import SwiftUI
 
 /// Dark, light or system, the diff viewer's chrome, whether the menu-bar quick inbox is inserted,

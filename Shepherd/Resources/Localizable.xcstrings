@@ -17191,46 +17191,6 @@
         }
       }
     },
-    "Fires when GitHub confirmed the close, with the reason.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Feuert, wenn GitHub das Schließen bestätigt hat, mit dem Grund."
-          }
-        }
-      }
-    },
-    "Fires when a local agent run ends, including runs a rule started.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Feuert, wenn ein lokaler Agentenlauf endet, auch bei Läufen, die eine Regel gestartet hat."
-          }
-        }
-      }
-    },
-    "Fires when a rule queues a merge, before GitHub confirms it.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Feuert, wenn eine Regel einen Merge einreiht, bevor GitHub ihn bestätigt."
-          }
-        }
-      }
-    },
-    "Fires when an agent is actually running on an issue you assigned it.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Feuert, wenn ein Agent tatsächlich an einem Issue arbeitet, das du ihm übergeben hast."
-          }
-        }
-      }
-    },
     "Fires when the outbox has sent the review, not when you press the key.": {
       "localizations": {
         "de": {
@@ -18211,16 +18171,6 @@
         }
       }
     },
-    "Runs your own installed CLI with its own login; Shepherd holds no token for it and never pushes what the session changes. {message} is always exactly one argument, {sessionID} and {sessionURL} come from the trailer, {worktree} is the worktree path. Write a full path unless the command is the CLI above, or leave a field empty to switch that button off.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Führt deine eigene installierte CLI mit ihrer eigenen Anmeldung aus; Shepherd besitzt dafür kein Token und pusht nie, was die Session ändert. {message} wird immer genau ein Argument, {sessionID} und {sessionURL} kommen aus dem Trailer, {worktree} ist der Pfad des Worktrees. Schreibe den vollen Pfad, außer der Befehl ist die CLI von oben, oder lass ein Feld leer, um den jeweiligen Knopf abzuschalten."
-          }
-        }
-      }
-    },
     "{file} is the path, {line} the line (or 1).": {
       "localizations": {
         "de": {
@@ -18237,6 +18187,56 @@
           "stringUnit": {
             "state": "translated",
             "value": "{prompt} ist die Aufgabe, {worktree} der Pfad."
+          }
+        }
+      }
+    },
+    "Runs your own installed CLI with its own login; Shepherd holds no token for it and never pushes what the session changes. {message} is always exactly one argument, {sessionID} and {sessionURL} come from the trailer, {worktree} is the worktree path. Write a full path unless the command is the CLI above, or leave a field empty to switch that button off.\n\nGuardrails do not apply to a resumed session: add --max-turns and --max-budget-usd to cap it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Führt deine eigene installierte CLI mit ihrer eigenen Anmeldung aus; Shepherd besitzt dafür kein Token und pusht nie, was die Session ändert. {message} wird immer genau ein Argument, {sessionID} und {sessionURL} kommen aus dem Trailer, {worktree} ist der Pfad des Worktrees. Schreibe den vollen Pfad, außer der Befehl ist die CLI von oben, oder lass ein Feld leer, um den jeweiligen Knopf abzuschalten.\n\nDie Leitlinien gelten nicht für eine fortgesetzte Session: Begrenze sie mit --max-turns und --max-budget-usd."
+          }
+        }
+      }
+    },
+    "Fires when a local agent run finishes, fails or is cancelled.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird gesendet, wenn ein lokaler Agent-Lauf endet, fehlschlägt oder abgebrochen wird."
+          }
+        }
+      }
+    },
+    "Fires when a rule queues a merge; the merge itself sends its own event.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird gesendet, wenn eine Regel einen Merge einreiht; der Merge selbst sendet ein eigenes Ereignis."
+          }
+        }
+      }
+    },
+    "Fires when GitHub confirmed the close. The payload describes the issue.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird gesendet, wenn GitHub das Schließen bestätigt hat. Die Nutzdaten beschreibt das Issue."
+          }
+        }
+      }
+    },
+    "Fires when an agent runs on an issue you assigned. The payload describes the issue.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird gesendet, wenn ein Agent an einem zugewiesenen Issue arbeitet. Die Nutzdaten beschreibt das Issue."
           }
         }
       }

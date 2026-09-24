@@ -88,15 +88,15 @@ enum WebhookEventKind: String, CaseIterable, Sendable, Codable, Hashable, Identi
         case .pullRequestMerged:
             return String(localized: "Fires when GitHub confirmed the merge, with the method used.")
         case .delegationFinished:
-            return String(localized: "Fires when a local agent run ends, including runs a rule started.")
+            return String(localized: "Fires when a local agent run finishes, fails or is cancelled.")
         case .newReviewRequest:
             return String(localized: "Fires when a sweep finds a pull request waiting for your review.")
         case .autoMergeQueued:
-            return String(localized: "Fires when a rule queues a merge, before GitHub confirms it.")
+            return String(localized: "Fires when a rule queues a merge; the merge itself sends its own event.")
         case .issueClosed:
-            return String(localized: "Fires when GitHub confirmed the close, with the reason.")
+            return String(localized: "Fires when GitHub confirmed the close. The payload describes the issue.")
         case .issueAssignedToAgent:
-            return String(localized: "Fires when an agent is actually running on an issue you assigned it.")
+            return String(localized: "Fires when an agent runs on an issue you assigned. The payload describes the issue.")
         case .test:
             return String(localized: "Sent only when you press the button below.")
         }

@@ -157,7 +157,9 @@ struct IntelligenceSettingsTab: View {
             }
 
             modelListResult
-            testResult
+            if model.testState != .idle && model.testState != .running {
+                testResult
+            }
             if let saveError {
                 Text(saveError)
                     .font(Theme.type(.caption))

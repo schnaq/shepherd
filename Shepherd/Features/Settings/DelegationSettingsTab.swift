@@ -158,6 +158,7 @@ struct DelegationSettingsTab: View {
                 HStack(spacing: 12) {
                     StepperValue(value: turnsBinding, range: 1...200)
                         .disabled(isTurnLimitOff)
+                        .opacity(isTurnLimitOff ? 0.5 : 1)
                     Toggle(String(localized: "No limit"), isOn: noTurnLimitBinding)
                         .toggleStyle(.checkbox)
                         .help(String(
@@ -221,7 +222,7 @@ struct DelegationSettingsTab: View {
             HStack(spacing: 4) {
                 Text(String(localized: "Session back-channel"))
                 InfoButton(String(
-                    localized: "Runs your own installed CLI with its own login; Shepherd holds no token for it and never pushes what the session changes. {message} is always exactly one argument, {sessionID} and {sessionURL} come from the trailer, {worktree} is the worktree path. Write a full path unless the command is the CLI above, or leave a field empty to switch that button off."
+                    localized: "Runs your own installed CLI with its own login; Shepherd holds no token for it and never pushes what the session changes. {message} is always exactly one argument, {sessionID} and {sessionURL} come from the trailer, {worktree} is the worktree path. Write a full path unless the command is the CLI above, or leave a field empty to switch that button off.\n\nGuardrails do not apply to a resumed session: add --max-turns and --max-budget-usd to cap it."
                 ))
             }
         } footer: {
