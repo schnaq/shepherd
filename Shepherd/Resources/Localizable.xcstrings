@@ -5151,16 +5151,6 @@
         }
       }
     },
-    "DIAGNOSTICS": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "DIAGNOSE"
-          }
-        }
-      }
-    },
     "Dark": {
       "localizations": {
         "de": {
@@ -5717,16 +5707,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Jedes erlaubte Werkzeug läuft unbeaufsichtigt, auch Shell-Befehle."
-          }
-        }
-      }
-    },
-    "Everything Shepherd has fetched lives in a SQLite file in Application Support. Your token lives in the Keychain and nowhere else.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Alles, was Shepherd geladen hat, liegt in einer SQLite-Datei in „Application Support“. Dein Token liegt im Schlüsselbund und nirgends sonst."
           }
         }
       }
@@ -6491,16 +6471,6 @@
         }
       }
     },
-    "INBOX SWEEP": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "INBOX-SWEEP"
-          }
-        }
-      }
-    },
     "Id": {
       "localizations": {
         "de": {
@@ -6791,16 +6761,6 @@
         }
       }
     },
-    "It is built from the local database only — no GitHub call, no AI, nothing sent anywhere — because it runs while you are not watching. If your Mac was asleep at that time, the digest arrives when it wakes up, and only if that is still the same day. A quiet night produces nothing at all.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Er wird ausschließlich aus der lokalen Datenbank gebaut — kein GitHub-Aufruf, keine KI, nichts wird irgendwohin gesendet —, denn er läuft, während du nicht hinsiehst. War dein Mac zu dieser Zeit im Ruhezustand, kommt der Digest beim Aufwachen, und nur wenn es noch derselbe Tag ist. Eine ruhige Nacht ergibt gar nichts."
-          }
-        }
-      }
-    },
     "It needs the on-device model, so with the provider above set to Off nothing is classified. The inbox keeps the risk hints it works out without a model — “touches auth”, “deletes tests” — either way.": {
       "localizations": {
         "de": {
@@ -6987,16 +6947,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "LOKALE CHECKOUTS"
-          }
-        }
-      }
-    },
-    "LOCAL DATA": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "LOKALE DATEN"
           }
         }
       }
@@ -7287,16 +7237,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Wird gemerged, sobald die Checks grün sind"
-          }
-        }
-      }
-    },
-    "MORNING DIGEST": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "MORGEN-DIGEST"
           }
         }
       }
@@ -7657,16 +7597,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nicht gemerged · %@"
-          }
-        }
-      }
-    },
-    "NOTIFICATIONS": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "MITTEILUNGEN"
           }
         }
       }
@@ -8471,16 +8401,6 @@
         }
       }
     },
-    "Notifications are polled at the interval GitHub asks for; this slider only controls the full search sweep. It takes effect the next time you sign in.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mitteilungen werden in dem Intervall abgefragt, das GitHub vorgibt; dieser Regler steuert nur den vollen Such-Sweep. Er greift, wenn du dich das nächste Mal anmeldest."
-          }
-        }
-      }
-    },
     "ON-DEVICE SUMMARY": {
       "localizations": {
         "de": {
@@ -8511,16 +8431,6 @@
         }
       }
     },
-    "OUTBOX": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "OUTBOX"
-          }
-        }
-      }
-    },
     "Off": {
       "localizations": {
         "de": {
@@ -8537,26 +8447,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Standardmäßig aus. Eine Regel startet immer nur die Delegation, die du auch selbst hättest starten können: Sie läuft in einem isolierten Worktree mit den Leitlinien von oben und pusht, approvt und mergt nie etwas."
-          }
-        }
-      }
-    },
-    "Off by default. One notification a day summarising what came in since the last one: new review requests, green agent pull requests that only need an approval or a merge, your own pull requests with red CI or a change request, and reviews the outbox could not send. Clicking it opens the inbox, and the same summary sits above the list as a card you can dismiss.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Standardmäßig aus. Eine Mitteilung pro Tag mit allem, was seit der letzten hereinkam: neue Review-Anfragen, grüne Agent-Pull-Requests, die nur noch ein Approval oder einen Merge brauchen, deine eigenen Pull Requests mit roter CI oder angeforderten Änderungen, und Reviews, die die Outbox nicht senden konnte. Ein Klick öffnet die Inbox, und dieselbe Übersicht sitzt als ausblendbare Karte über der Liste."
-          }
-        }
-      }
-    },
-    "Off by default. With this on, macOS hands Shepherd the crash, hang and CPU-exception reports of previous runs and Shepherd writes each one as a JSON file in the folder below. They are stored only on this Mac and are never sent anywhere — there is no crash service and no upload. Reports appear after the next launch following a crash, not while it happens.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Standardmäßig aus. Ist das eingeschaltet, übergibt macOS Shepherd die Crash-, Hang- und CPU-Ausnahmeberichte früherer Läufe, und Shepherd schreibt jeden als JSON-Datei in den Ordner unten. Sie liegen nur auf diesem Mac und werden nie irgendwohin gesendet — es gibt keinen Crash-Dienst und keinen Upload. Berichte erscheinen beim nächsten Start nach einem Crash, nicht währenddessen."
           }
         }
       }
@@ -9127,16 +9017,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pfad-Stil"
-          }
-        }
-      }
-    },
-    "Path style works with every S3-compatible provider and is the safe default. https only: the object carries your tokens, so plain HTTP is refused even on this machine.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Pfad-Stil funktioniert mit jedem S3-kompatiblen Anbieter und ist die sichere Vorgabe. Nur https: Das Objekt enthält deine Tokens, deshalb wird einfaches HTTP auch auf diesem Rechner abgelehnt."
           }
         }
       }
@@ -10577,16 +10457,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "ZUSAMMENFASSUNG"
-          }
-        }
-      }
-    },
-    "SYNC ACROSS MACS (ENCRYPTED)": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "SYNC ZWISCHEN MACS (VERSCHLÜSSELT)"
           }
         }
       }
@@ -12631,16 +12501,6 @@
         }
       }
     },
-    "The passphrase is never uploaded and never written to preferences. It is what turns into the encryption key, so if you lose it the object in the bucket is unreadable — there is no recovery and no reset. Use the same passphrase on every Mac.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Passphrase wird nie hochgeladen und nie in die Einstellungen geschrieben. Sie ist es, was zum Schlüssel wird — verlierst du sie, ist das Objekt im Bucket unlesbar. Es gibt keine Wiederherstellung und kein Zurücksetzen. Nutze auf jedem Mac dieselbe Passphrase."
-          }
-        }
-      }
-    },
     "The payload says what happened — repository, number, title, author, provenance, verdict — and nothing more. No review text, no comment bodies, no diffs and no agent output leave your Mac. Events fire only after the action really succeeded, and only while the toggle above is on.": {
       "localizations": {
         "de": {
@@ -12877,16 +12737,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Es gibt keinen Bestätigungsklick. Ist das eingeschaltet, reiht Shepherd den Merge ein, sobald ein Sweep einen Pull Request sieht, der jede Regel unten erfüllt — denselben Merge, den du aus dem Merge-Fenster eingereiht hättest, gesendet über dieselbe Outbox. Das gilt auch für Pull Requests, die schon warten: Einschalten kann also beim nächsten Sweep mehrere davon mergen."
-          }
-        }
-      }
-    },
-    "These only need read and write access to this one object. The keys never leave your Keychain and are used to sign requests, not sent as data.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sie brauchen nur Lese- und Schreibzugriff auf dieses eine Objekt. Die Schlüssel verlassen deinen Schlüsselbund nie und werden zum Signieren von Anfragen genutzt, nicht als Daten gesendet."
           }
         }
       }
@@ -13321,16 +13171,6 @@
         }
       }
     },
-    "UPDATES": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "UPDATES"
-          }
-        }
-      }
-    },
     "URL": {
       "localizations": {
         "de": {
@@ -13437,16 +13277,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Auf GitHub aktualisiert — neue Commits."
-          }
-        }
-      }
-    },
-    "Updates are downloaded from GitHub Releases and are only installed after you confirm — never in the background, so an unsent review draft can never be interrupted.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Updates werden von GitHub Releases geladen und erst nach deiner Bestätigung installiert — nie im Hintergrund, damit ein nicht gesendeter Review-Draft nie unterbrochen wird."
           }
         }
       }
@@ -14561,16 +14391,6 @@
         }
       }
     },
-    "macOS asks for permission the first time Shepherd actually needs to post one.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "macOS fragt beim ersten Mal um Erlaubnis, wenn Shepherd wirklich eine senden muss."
-          }
-        }
-      }
-    },
     "macOS cannot translate %@ into %@ on this Mac.": {
       "localizations": {
         "de": {
@@ -15561,16 +15381,6 @@
         }
       }
     },
-    "HIDDEN PULL REQUESTS": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "AUSGEBLENDETE PULL REQUESTS"
-          }
-        }
-      }
-    },
     "Hide this pull request": {
       "localizations": {
         "de": {
@@ -15587,16 +15397,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Alle wieder anzeigen"
-          }
-        }
-      }
-    },
-    "These are left out of the inbox. A pull request comes back by itself as soon as a review is requested from you on it.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Diese lässt der Posteingang aus. Ein Pull Request kommt von selbst zurück, sobald eine Review von dir angefragt wird."
           }
         }
       }
@@ -15661,16 +15461,6 @@
         }
       }
     },
-    "WATCHED REPOSITORIES": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BEOBACHTETE REPOSITORIES"
-          }
-        }
-      }
-    },
     "Watch": {
       "localizations": {
         "de": {
@@ -15707,16 +15497,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dieser Build hat noch keinen Update-Signierschlüssel, deshalb sind Updates aus statt unverifiziert. Releases von github.com/schnaq/shepherd sind signiert."
-          }
-        }
-      }
-    },
-    "If macOS asks for your Keychain password, it is because a different build of Shepherd than the one that saved the token is asking for it — a copy you built yourself beside the installed one, for example. Always Allow answers it once for that build.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wenn macOS nach deinem Schlüsselbund-Passwort fragt, dann weil ein anderer Build von Shepherd danach fragt als der, der den Token gespeichert hat — etwa eine selbst gebaute Kopie neben der installierten. „Immer erlauben“ beantwortet das für diesen Build ein für alle Mal."
           }
         }
       }
@@ -15847,16 +15627,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Fügt eine zufällige Kennung hinzu, die jeden Monat verworfen wird, damit wir zählen können, wie viele Menschen Shepherd nutzen. Wer dies abschaltet, löscht sie."
-          }
-        }
-      }
-    },
-    "USAGE STATISTICS": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "NUTZUNGSSTATISTIK"
           }
         }
       }
@@ -17947,6 +17717,416 @@
           "stringUnit": {
             "state": "translated",
             "value": "Der Diff ist einen Tastendruck entfernt (t)."
+          }
+        }
+      }
+    },
+    "A report appears at the next launch after a crash.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Bericht erscheint beim nächsten Start nach einem Crash."
+          }
+        }
+      }
+    },
+    "Access keys": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zugangsschlüssel"
+          }
+        }
+      }
+    },
+    "Access keys are not saved yet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zugangsschlüssel sind noch nicht gespeichert."
+          }
+        }
+      }
+    },
+    "Add repository": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository hinzufügen"
+          }
+        }
+      }
+    },
+    "Applies from the next sign-in.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gilt ab der nächsten Anmeldung."
+          }
+        }
+      }
+    },
+    "Built from the local database only — no GitHub call, no AI, nothing sent anywhere. If your Mac was asleep, the digest arrives when it wakes, if that is still the same day. A quiet night produces nothing.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Er entsteht nur aus der lokalen Datenbank — kein GitHub-Aufruf, keine KI, nichts wird irgendwohin gesendet. War dein Mac im Ruhezustand, kommt der Digest beim Aufwachen, sofern es noch derselbe Tag ist. Eine ruhige Nacht ergibt nichts."
+          }
+        }
+      }
+    },
+    "Diagnostics": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagnose"
+          }
+        }
+      }
+    },
+    "Encrypted on this Mac; the bucket only ever sees ciphertext.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf diesem Mac verschlüsselt; der Bucket sieht nur Chiffretext."
+          }
+        }
+      }
+    },
+    "Every open pull request in these reaches the inbox, under Watched.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder offene Pull Request darin landet in der Inbox, unter „Beobachtet“."
+          }
+        }
+      }
+    },
+    "Feed: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Feed: %@"
+          }
+        }
+      }
+    },
+    "Fetched data stays in a local database, your token in the Keychain.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geladene Daten bleiben in einer lokalen Datenbank, dein Token im Schlüsselbund."
+          }
+        }
+      }
+    },
+    "Full search every": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volle Suche alle"
+          }
+        }
+      }
+    },
+    "HTTPS only: the object carries your tokens.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur HTTPS: Das Objekt enthält deine Tokens."
+          }
+        }
+      }
+    },
+    "Hidden pull requests": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausgeblendete Pull Requests"
+          }
+        }
+      }
+    },
+    "If macOS asks for your Keychain password, a different build of Shepherd than the one that saved the token is asking — a copy you built yourself, for example. Always Allow answers it once for that build.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wenn macOS nach deinem Schlüsselbund-Passwort fragt, fragt ein anderer Build von Shepherd als der, der den Token gespeichert hat — etwa eine selbst gebaute Kopie. „Immer erlauben“ beantwortet das für diesen Build ein für alle Mal."
+          }
+        }
+      }
+    },
+    "If you lose it, there is no recovery. Use the same one on every Mac.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verlierst du sie, gibt es keine Wiederherstellung. Nutze auf jedem Mac dieselbe."
+          }
+        }
+      }
+    },
+    "Inbox sweep": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inbox-Sweep"
+          }
+        }
+      }
+    },
+    "Installed only after you confirm, never in the background.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erst nach deiner Bestätigung installiert, nie im Hintergrund."
+          }
+        }
+      }
+    },
+    "Level": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stufe"
+          }
+        }
+      }
+    },
+    "Local data": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokale Daten"
+          }
+        }
+      }
+    },
+    "Morning digest": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Morgen-Digest"
+          }
+        }
+      }
+    },
+    "New review requests, green agent pull requests that only need an approval or a merge, your own pull requests with red CI or a change request, and reviews the outbox could not send.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Review-Anfragen, grüne Agent-Pull-Requests, die nur noch ein Approval oder einen Merge brauchen, deine eigenen Pull Requests mit roter CI oder angeforderten Änderungen, und Reviews, die die Outbox nicht senden konnte."
+          }
+        }
+      }
+    },
+    "No repositories watched.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Repositories beobachtet."
+          }
+        }
+      }
+    },
+    "Not checked yet": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch nicht geprüft"
+          }
+        }
+      }
+    },
+    "Notifications": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mitteilungen"
+          }
+        }
+      }
+    },
+    "Notifications are polled at the interval GitHub asks for; this slider only controls the full search sweep.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mitteilungen werden in dem Intervall abgefragt, das GitHub vorgibt; dieser Regler steuert nur den vollen Such-Sweep."
+          }
+        }
+      }
+    },
+    "One comes back by itself when a review is requested from you.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einer kommt von selbst zurück, sobald ein Review von dir angefragt wird."
+          }
+        }
+      }
+    },
+    "One notification a day with what came in since the last.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Mitteilung pro Tag mit allem, was seit der letzten hereinkam."
+          }
+        }
+      }
+    },
+    "Outbox": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Outbox"
+          }
+        }
+      }
+    },
+    "Path style works with every provider.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Pfad-Stil funktioniert mit jedem Anbieter."
+          }
+        }
+      }
+    },
+    "Queue": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warteschlange"
+          }
+        }
+      }
+    },
+    "Read and write on this one object is enough. Keys never leave your Keychain.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lesen und Schreiben auf diesem einen Objekt genügt. Die Schlüssel verlassen deinen Schlüsselbund nie."
+          }
+        }
+      }
+    },
+    "Stored only on this Mac and never sent anywhere.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur auf diesem Mac gespeichert und nie irgendwohin gesendet."
+          }
+        }
+      }
+    },
+    "Sync across Macs": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sync zwischen Macs"
+          }
+        }
+      }
+    },
+    "The database is at %@. Your token is kept in the Keychain and nowhere else.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Datenbank liegt unter %@. Dein Token liegt im Schlüsselbund und nirgends sonst."
+          }
+        }
+      }
+    },
+    "The passphrase is never uploaded and never written to preferences. It becomes the encryption key, so without it the object in the bucket cannot be read.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Passphrase wird nie hochgeladen und nie in die Einstellungen geschrieben. Aus ihr wird der Schlüssel — ohne sie ist das Objekt im Bucket nicht lesbar."
+          }
+        }
+      }
+    },
+    "Updates": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updates"
+          }
+        }
+      }
+    },
+    "Updates are downloaded from GitHub Releases and installed only after you confirm — never in the background, so an unsent review draft is never interrupted.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updates werden von GitHub Releases geladen und erst nach deiner Bestätigung installiert — nie im Hintergrund, damit ein nicht gesendeter Review-Draft nie unterbrochen wird."
+          }
+        }
+      }
+    },
+    "Version": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version"
+          }
+        }
+      }
+    },
+    "Watched repositories": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beobachtete Repositories"
+          }
+        }
+      }
+    },
+    "macOS asks for permission the first time one is posted.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS fragt beim ersten Mal nach der Erlaubnis."
           }
         }
       }
