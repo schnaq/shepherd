@@ -36,7 +36,7 @@ export function Privacy() {
     <section className="section" id="privacy">
       <div className="wrap">
         <div className="section-head">
-          <h2>What leaves your Mac, and what never does.</h2>
+          <h2>What the app talks to, and what you decide.</h2>
         </div>
         <div className="privacy-intro">
           <p>
