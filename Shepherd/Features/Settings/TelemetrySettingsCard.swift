@@ -44,12 +44,9 @@ struct TelemetrySettingsCard: View {
             Link(String(localized: "Privacy statement"), destination: AppConfig.privacyPolicyURL)
                 .help(String(localized: "What Shepherd stores, what leaves your Mac, and to whom"))
         } header: {
-            HStack(spacing: 4) {
-                Text(String(localized: "Usage statistics"))
-                InfoButton(String(
-                    localized: "Counts leave this Mac about once a day, to eu.i.posthog.com. Your IP address is discarded and no profile is kept. schnaq GmbH is responsible for the data."
-                ))
-            }
+            SettingsSectionHeader(String(localized: "Usage statistics"), info: String(
+                localized: "Counts leave this Mac about once a day, to eu.i.posthog.com. Your IP address is discarded and no profile is kept. schnaq GmbH is responsible for the data."
+            ))
         } footer: {
             SettingsNote(environment.settings.telemetryLevel.explanation)
         }

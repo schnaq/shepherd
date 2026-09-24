@@ -99,12 +99,9 @@ struct RepliesSettingsTab: View {
                 editingTemplate = ReviewTemplate(pattern: "", body: "")
             }
         } header: {
-            HStack(spacing: 4) {
-                Text(String(localized: "Review templates"))
-                InfoButton(String(
-                    localized: "Match one repository with schnaq/review or a whole owner with schnaq/* — * and ? are the wildcards. An exact pattern wins over a wildcard, a longer wildcard over a shorter one; on a tie, the one listed first wins."
-                ))
-            }
+            SettingsSectionHeader(String(localized: "Review templates"), info: String(
+                localized: "Match one repository with schnaq/review or a whole owner with schnaq/* — * and ? are the wildcards. An exact pattern wins over a wildcard, a longer wildcard over a shorter one; on a tie, the one listed first wins."
+            ))
         } footer: {
             SettingsNote(String(
                 localized: "The summary a new review starts from. A review you already started is never touched."
@@ -138,12 +135,9 @@ struct RepliesSettingsTab: View {
                 findingRow(finding)
             }
         } header: {
-            HStack(spacing: 4) {
-                Text(String(localized: "Recurring findings"))
-                InfoButton(String(
-                    localized: "A comment you wrote at least three times in thirty days, on at least two pull requests of the same repository. On the review screen each one offers to draft a rule for that repository's agent instructions."
-                ))
-            }
+            SettingsSectionHeader(String(localized: "Recurring findings"), info: String(
+                localized: "A comment you wrote at least three times in thirty days, on at least two pull requests of the same repository. On the review screen each one offers to draft a rule for that repository's agent instructions."
+            ))
         } footer: {
             SettingsNote(String(
                 localized: "Found on this Mac from your own comments; never sent anywhere."
@@ -283,8 +277,8 @@ struct RepliesSettingsTab: View {
 
 /// The sheet that edits one saved reply: a name and a Markdown body.
 ///
-/// A grouped `Form` like the pane it opens from, so ``LabeledField`` — a form row — shows its
-/// label, and the Cancel/Save bar sits under it outside the scrolling area.
+/// A grouped `Form` like the pane it opens from, so its `TextField` shows its label the way a
+/// form row does, and the Cancel/Save bar sits under it outside the scrolling area.
 struct SavedReplyEditor: View {
     @Environment(\.dismiss) private var dismiss
     /// The reply being edited — an existing row, or a fresh one that is only stored on save.
@@ -311,10 +305,10 @@ struct SavedReplyEditor: View {
         VStack(spacing: 0) {
             Form {
                 Section {
-                    LabeledField(
-                        label: String(localized: "Name"),
-                        placeholder: String(localized: "Needs a test"),
-                        text: $name
+                    TextField(
+                        String(localized: "Name"),
+                        text: $name,
+                        prompt: Text(String(localized: "Needs a test"))
                     )
                     // A saved reply's name is one line the user has to recognise in a menu, so
                     // Writing Tools is `.limited` here: proofreading yes, a rewrite panel over a
@@ -380,10 +374,10 @@ struct ReviewTemplateEditor: View {
         VStack(spacing: 0) {
             Form {
                 Section {
-                    LabeledField(
-                        label: String(localized: "Repos"),
-                        placeholder: "schnaq/*",
-                        text: $pattern
+                    TextField(
+                        String(localized: "Repos"),
+                        text: $pattern,
+                        prompt: Text(verbatim: "schnaq/*")
                     )
                     // `owner/name` with `*`/`?` wildcards is not language, and a proofreader that
                     // "corrected" it would break the match rule that decides which template a

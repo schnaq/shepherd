@@ -83,15 +83,6 @@ struct IntelligenceSettingsTab: View {
         )
     }
 
-    /// A section title with an ⓘ beside it, for the sections whose privacy story is longer than
-    /// one subtitle.
-    private func sectionHeader(_ title: String, info: String) -> some View {
-        HStack(spacing: 4) {
-            Text(title)
-            InfoButton(info)
-        }
-    }
-
     // MARK: - Bring your own key (ADR 0007, tier 3)
 
     /// The endpoint, model and key rows, on screen only while the API-key tier is chosen.
@@ -109,17 +100,17 @@ struct IntelligenceSettingsTab: View {
                 if let url = preset.consoleURL, let title = preset.consoleLinkTitle {
                     Link(title, destination: url)
                 }
-                LabeledField(
-                    label: String(localized: "Base URL"),
-                    placeholder: "https://api.example.eu/v1",
-                    text: baseURLBinding
+                TextField(
+                    String(localized: "Base URL"),
+                    text: baseURLBinding,
+                    prompt: Text(verbatim: "https://api.example.eu/v1")
                 )
                 modelField
             } else {
-                LabeledField(
-                    label: String(localized: "Model"),
-                    placeholder: ClaudeProvider.defaultModelID,
-                    text: anthropicModelBinding
+                TextField(
+                    String(localized: "Model"),
+                    text: anthropicModelBinding,
+                    prompt: Text(verbatim: ClaudeProvider.defaultModelID)
                 )
             }
 
@@ -157,7 +148,7 @@ struct IntelligenceSettingsTab: View {
             }
 
             modelListResult
-            if model.testState != .idle && model.testState != .running {
+            if model.testState.hasResult {
                 testResult
             }
             if let saveError {
@@ -188,7 +179,7 @@ struct IntelligenceSettingsTab: View {
             }
             .disabled(environment.settings.intelligenceMode == .off)
         } header: {
-            sectionHeader(
+            SettingsSectionHeader(
                 String(localized: "Screenshots"),
                 info: String(
                     localized: "Adds a button to the summary card. Pressing it downloads up to two of the description's screenshots from GitHub's upload host (private-user-images.githubusercontent.com) and reads them with the model on this Mac. The images are never sent anywhere else, and nothing is downloaded until you press it."
@@ -232,7 +223,7 @@ struct IntelligenceSettingsTab: View {
                 Text(searchIndexStatusLine)
             }
         } header: {
-            sectionHeader(
+            SettingsSectionHeader(
                 String(localized: "Semantic search"),
                 info: String(
                     localized: "The index is built on this Mac with Apple's on-device embeddings and kept in the local database. It never uses an AI endpoint, even when you have configured one. Switched off, the index is emptied and ⌘K matches words only."
@@ -288,7 +279,7 @@ struct IntelligenceSettingsTab: View {
                 Text(String(localized: "Kind of change and risk, to sort the inbox by. Stays on this Mac."))
             }
         } header: {
-            sectionHeader(
+            SettingsSectionHeader(
                 String(localized: "Structured triage"),
                 info: String(
                     localized: "Each pull request gets a kind, a risk and a one-sentence reason from the on-device model. Nothing acts on it: it never approves, merges or comments. With the provider set to Off nothing is classified, and the inbox keeps its risk hints either way."
@@ -351,7 +342,7 @@ struct IntelligenceSettingsTab: View {
                 Text(String(localized: "Find inbox pull requests with ⌘Space. Only titles and metadata go there."))
             }
         } header: {
-            sectionHeader(
+            SettingsSectionHeader(
                 String(localized: "Spotlight"),
                 info: String(
                     localized: "Spotlight's index is macOS's, not Shepherd's — so only the title, owner/repo#number, labels, repository and agent are exported. Descriptions, diffs, review comments and your drafts never leave the local database. Switching this off deletes every pull request Shepherd put there."
@@ -428,10 +419,10 @@ struct IntelligenceSettingsTab: View {
     @ViewBuilder
     private var modelField: some View {
         if modelOptions.isEmpty {
-            LabeledField(
-                label: String(localized: "Model"),
-                placeholder: preset.modelPlaceholder,
-                text: openAIModelBinding
+            TextField(
+                String(localized: "Model"),
+                text: openAIModelBinding,
+                prompt: Text(verbatim: preset.modelPlaceholder)
             )
         } else {
             LabeledContent {
@@ -476,7 +467,7 @@ struct IntelligenceSettingsTab: View {
             )
             Toggle(String(localized: "Require zero retention"), isOn: zeroRetentionBinding)
         } header: {
-            sectionHeader(String(localized: "Where the model runs"), info: sovereigntyDetail)
+            SettingsSectionHeader(String(localized: "Where the model runs"), info: sovereigntyDetail)
         } footer: {
             SettingsNote(String(localized: "Optional. Two-letter country codes, comma-separated."))
         }

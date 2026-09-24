@@ -200,16 +200,59 @@ struct InfoButton: View {
     }
 }
 
-/// A labelled text field: the label in the form's left column, the field on the right.
-struct LabeledField: View {
-    /// The field's label.
-    let label: String
-    /// The placeholder text.
-    let placeholder: String
-    /// The bound value.
-    let text: Binding<String>
+/// A section header with an ⓘ beside its title, for the sections whose story is longer than one
+/// subtitle can carry.
+///
+/// Pulled out once here rather than left as the per-tab helper it started as: nearly every tab
+/// needed exactly this shape, and a header retyped at each call site cannot be told apart from
+/// one defined once and reused — until one of the copies drifts.
+struct SettingsSectionHeader: View {
+    /// The header's title.
+    private let title: String
+    /// The explanation behind the ⓘ.
+    private let info: String
+
+    /// Creates the header.
+    /// - Parameters:
+    ///   - title: The header's title.
+    ///   - info: The explanation behind the ⓘ.
+    init(_ title: String, info: String) {
+        self.title = title
+        self.info = info
+    }
 
     var body: some View {
-        TextField(label, text: text, prompt: Text(placeholder))
+        HStack(spacing: 4) {
+            Text(title)
+            InfoButton(info)
+        }
+    }
+}
+
+/// A form row's control half: the current value beside a stepper that edits it, for the caller's
+/// own `LabeledContent(title) { StepperValue(...) }`.
+///
+/// The value is read back out of the binding rather than passed separately, so the number on
+/// screen cannot drift from the one the stepper is editing. Shared across tabs rather than a
+/// per-tab twin: every settings row that is "a number with a stepper" wants the same two widgets
+/// in the same order — only the font differs, for a row that sits among smaller text.
+struct StepperValue: View {
+    /// The value the stepper edits and the row displays.
+    let value: Binding<Int>
+    /// The permitted range.
+    let range: ClosedRange<Int>
+    /// The font the current value is drawn in.
+    var font: Font = Theme.mono(.body)
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(verbatim: "\(value.wrappedValue)")
+                .font(font)
+                .monospacedDigit()
+            Stepper(value: value, in: range) {
+                Text(verbatim: "\(value.wrappedValue)")
+            }
+            .labelsHidden()
+        }
     }
 }

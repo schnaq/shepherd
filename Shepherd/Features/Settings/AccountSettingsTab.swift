@@ -249,10 +249,7 @@ struct AccountSettingsTab: View {
                 }
             }
         } header: {
-            HStack(spacing: 4) {
-                Text(String(localized: "Updates"))
-                InfoButton(updatesDetail)
-            }
+            SettingsSectionHeader(String(localized: "Updates"), info: updatesDetail)
         }
     }
 

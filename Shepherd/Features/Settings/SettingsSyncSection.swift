@@ -30,12 +30,9 @@ struct SettingsSyncSection: View {
                 Text(String(localized: "Encrypted on this Mac; the bucket only ever sees ciphertext."))
             }
         } header: {
-            HStack(spacing: 4) {
-                Text(String(localized: "Sync across Macs"))
-                InfoButton(String(
-                    localized: "Your settings and your secrets are encrypted on this Mac with a passphrase you choose, then stored as one object in a bucket you own. The bucket operator — and anyone who can read the bucket — sees ciphertext only."
-                ))
-            }
+            SettingsSectionHeader(String(localized: "Sync across Macs"), info: String(
+                localized: "Your settings and your secrets are encrypted on this Mac with a passphrase you choose, then stored as one object in a bucket you own. The bucket operator — and anyone who can read the bucket — sees ciphertext only."
+            ))
         }
         .task {
             model.load(context: environment.settingsSyncContext())
@@ -67,25 +64,25 @@ struct SettingsSyncSection: View {
 
     private var bucketSection: some View {
         Section {
-            LabeledField(
-                label: String(localized: "Endpoint"),
-                placeholder: "https://object.storage.eu01.onstackit.cloud",
-                text: endpointBinding
+            TextField(
+                String(localized: "Endpoint"),
+                text: endpointBinding,
+                prompt: Text(verbatim: "https://object.storage.eu01.onstackit.cloud")
             )
-            LabeledField(
-                label: String(localized: "Bucket"),
-                placeholder: "my-shepherd-settings",
-                text: bucketBinding
+            TextField(
+                String(localized: "Bucket"),
+                text: bucketBinding,
+                prompt: Text(verbatim: "my-shepherd-settings")
             )
-            LabeledField(
-                label: String(localized: "Region"),
-                placeholder: "eu01",
-                text: regionBinding
+            TextField(
+                String(localized: "Region"),
+                text: regionBinding,
+                prompt: Text(verbatim: "eu01")
             )
-            LabeledField(
-                label: String(localized: "Prefix"),
-                placeholder: S3ObjectLocation.defaultPrefix,
-                text: prefixBinding
+            TextField(
+                String(localized: "Prefix"),
+                text: prefixBinding,
+                prompt: Text(verbatim: S3ObjectLocation.defaultPrefix)
             )
             Picker(selection: addressingBinding) {
                 ForEach(S3AddressingStyle.allCases) { style in
@@ -119,10 +116,10 @@ struct SettingsSyncSection: View {
 
     private var credentialSection: some View {
         Section {
-            LabeledField(
-                label: String(localized: "Key id"),
-                placeholder: "…",
-                text: accessKeyBinding
+            TextField(
+                String(localized: "Key id"),
+                text: accessKeyBinding,
+                prompt: Text(verbatim: "…")
             )
             SecureField(
                 String(localized: "Secret"),
@@ -163,12 +160,9 @@ struct SettingsSyncSection: View {
             )
             Toggle(String(localized: "Remember passphrase in Keychain"), isOn: rememberBinding)
         } header: {
-            HStack(spacing: 4) {
-                Text(String(localized: "Passphrase"))
-                InfoButton(String(
-                    localized: "The passphrase is never uploaded and never written to preferences. It becomes the encryption key, so without it the object in the bucket cannot be read."
-                ))
-            }
+            SettingsSectionHeader(String(localized: "Passphrase"), info: String(
+                localized: "The passphrase is never uploaded and never written to preferences. It becomes the encryption key, so without it the object in the bucket cannot be read."
+            ))
         } footer: {
             SettingsNote(String(localized: "If you lose it, there is no recovery. Use the same one on every Mac."))
         }
@@ -202,7 +196,7 @@ struct SettingsSyncSection: View {
                 }
                 .disabled(!canAct)
             }
-            if model.state != .idle && model.state != .running {
+            if model.state.hasResult {
                 AsyncActionStatusLine(state: model.state)
             }
         } footer: {

@@ -349,14 +349,11 @@ struct SyncSettingsTab: View {
             }
             .disabled(!environment.settings.digest.isEnabled)
         } header: {
-            HStack(spacing: 4) {
-                Text(String(localized: "Morning digest"))
-                InfoButton(String(
-                    localized: "New review requests, green agent pull requests that only need an approval or a merge, your own pull requests with red CI or a change request, and reviews the outbox could not send."
-                ) + "\n\n" + String(
-                    localized: "Built from the local database only — no GitHub call, no AI, nothing sent anywhere. If your Mac was asleep, the digest arrives when it wakes, if that is still the same day. A quiet night produces nothing."
-                ))
-            }
+            SettingsSectionHeader(String(localized: "Morning digest"), info: String(
+                localized: "New review requests, green agent pull requests that only need an approval or a merge, your own pull requests with red CI or a change request, and reviews the outbox could not send."
+            ) + "\n\n" + String(
+                localized: "Built from the local database only — no GitHub call, no AI, nothing sent anywhere. If your Mac was asleep, the digest arrives when it wakes, if that is still the same day. A quiet night produces nothing."
+            ))
         } footer: {
             SettingsNote(digestStatusLine)
         }

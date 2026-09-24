@@ -17,4 +17,17 @@ enum AsyncActionState: Equatable {
     case success(String)
     /// It failed, with a line to show.
     case failure(String)
+
+    /// Whether the run has a finished line to show.
+    ///
+    /// ``AsyncActionStatusLine`` already renders nothing for `.idle`/`.running`, but a `Form` row
+    /// is not: an empty row still reserves the row's own padding and divider, so a caller inside
+    /// one still has to guard the row itself rather than lean on the child resolving to
+    /// `EmptyView()`. One predicate rather than the same `switch` re-spelled at every call site.
+    var hasResult: Bool {
+        switch self {
+        case .idle, .running: return false
+        case .success, .failure: return true
+        }
+    }
 }

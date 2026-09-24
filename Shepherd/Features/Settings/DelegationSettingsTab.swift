@@ -219,12 +219,9 @@ struct DelegationSettingsTab: View {
                 prompt: Text(String(localized: "empty — the button opens the session instead"))
             )
         } header: {
-            HStack(spacing: 4) {
-                Text(String(localized: "Session back-channel"))
-                InfoButton(String(
-                    localized: "Runs your own installed CLI with its own login; Shepherd holds no token for it and never pushes what the session changes. {message} is always exactly one argument, {sessionID} and {sessionURL} come from the trailer, {worktree} is the worktree path. Write a full path unless the command is the CLI above, or leave a field empty to switch that button off.\n\nGuardrails do not apply to a resumed session: add --max-turns and --max-budget-usd to cap it."
-                ))
-            }
+            SettingsSectionHeader(String(localized: "Session back-channel"), info: String(
+                localized: "Runs your own installed CLI with its own login; Shepherd holds no token for it and never pushes what the session changes. {message} is always exactly one argument, {sessionID} and {sessionURL} come from the trailer, {worktree} is the worktree path. Write a full path unless the command is the CLI above, or leave a field empty to switch that button off.\n\nGuardrails do not apply to a resumed session: add --max-turns and --max-budget-usd to cap it."
+            ))
         } footer: {
             SettingsNote(String(
                 localized: "Sends a review finding to the session named in a commit's Claude-Session: trailer."
@@ -338,12 +335,9 @@ struct DelegationSettingsTab: View {
                 }
             }
         } header: {
-            HStack(spacing: 4) {
-                Text(String(localized: "Editor"))
-                InfoButton(String(
-                    localized: "Lines are counted on the pull request's head, so they match when your checkout is on that commit."
-                ))
-            }
+            SettingsSectionHeader(String(localized: "Editor"), info: String(
+                localized: "Lines are counted on the pull request's head, so they match when your checkout is on that commit."
+            ))
         }
         .onAppear { installedEditors = EditorOpener.installedKinds() }
     }
@@ -373,12 +367,9 @@ struct DelegationSettingsTab: View {
                 isOn: triggerBinding(.changesRequested)
             )
         } header: {
-            HStack(spacing: 4) {
-                Text(String(localized: "Run on my pull requests when"))
-                InfoButton(String(
-                    localized: "“Turns” is meant literally: Shepherd has to have seen the change happen. A pull request that was already red when Shepherd first saw it never starts anything, and each pull request starts at most one run per commit."
-                ))
-            }
+            SettingsSectionHeader(String(localized: "Run on my pull requests when"), info: String(
+                localized: "“Turns” is meant literally: Shepherd has to have seen the change happen. A pull request that was already red when Shepherd first saw it never starts anything, and each pull request starts at most one run per commit."
+            ))
         }
     }
 
@@ -627,29 +618,5 @@ struct DelegationSettingsTab: View {
             get: { environment.settings.autoDelegation.dailyCap },
             set: { environment.settings.autoDelegation.maxPerDay = max(1, $0) }
         )
-    }
-}
-
-/// The control half of a numeric row — a stepper with its value beside it — for this tab's three
-/// caps, which sit in a `LabeledContent` that supplies the label.
-///
-/// The value is read back out of the binding rather than passed separately, so the number on
-/// screen cannot drift from the one the stepper is editing.
-private struct StepperValue: View {
-    /// The value the stepper edits and the row displays.
-    let value: Binding<Int>
-    /// The permitted range.
-    let range: ClosedRange<Int>
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Text(verbatim: "\(value.wrappedValue)")
-                .font(Theme.mono(.body))
-                .monospacedDigit()
-            Stepper(value: value, in: range) {
-                Text(verbatim: "\(value.wrappedValue)")
-            }
-            .labelsHidden()
-        }
     }
 }

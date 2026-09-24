@@ -91,12 +91,9 @@ struct AutomationSettingsTab: View {
                 }
             }
         } header: {
-            HStack(spacing: 4) {
-                Text(String(localized: "Events"))
-                InfoButton(String(
-                    localized: "Each event says what happened — repository, number, title, author, provenance, verdict — and nothing more. It fires only after the action really succeeded."
-                ))
-            }
+            SettingsSectionHeader(String(localized: "Events"), info: String(
+                localized: "Each event says what happened — repository, number, title, author, provenance, verdict — and nothing more. It fires only after the action really succeeded."
+            ))
         } footer: {
             SettingsNote(String(
                 localized: "Webhooks never carry review text, comments, diffs or agent output."
@@ -122,12 +119,9 @@ struct AutomationSettingsTab: View {
                     }
                 }
             } label: {
-                HStack(spacing: 4) {
-                    Text(String(localized: "Secret"))
-                    InfoButton(String(
-                        localized: "With a secret set, every request carries X-Shepherd-Signature: sha256=<HMAC-SHA256 of the body> — the same shape as GitHub's X-Hub-Signature-256. The secret is stored in your Keychain."
-                    ))
-                }
+                SettingsSectionHeader(String(localized: "Secret"), info: String(
+                    localized: "With a secret set, every request carries X-Shepherd-Signature: sha256=<HMAC-SHA256 of the body> — the same shape as GitHub's X-Hub-Signature-256. The secret is stored in your Keychain."
+                ))
                 if model.hasStoredWebhookSecret {
                     Text(String(localized: "A secret is stored."))
                 }
@@ -171,7 +165,7 @@ struct AutomationSettingsTab: View {
                     .foregroundStyle(delivery.isSuccess ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.pending))
                 }
             }
-            if hasTestResult {
+            if model.webhookTestState.hasResult {
                 AsyncActionStatusLine(state: model.webhookTestState)
             }
         } header: {
@@ -180,15 +174,6 @@ struct AutomationSettingsTab: View {
             SettingsNote(String(
                 localized: "A failing webhook never blocks a review, merge or sync: Shepherd tries twice, then gives up quietly."
             ))
-        }
-    }
-
-    /// Whether the last test has a finished result to show. Idle and running show nothing — the
-    /// spinner sits beside the button — and a form must not get an empty row for them.
-    private var hasTestResult: Bool {
-        switch model.webhookTestState {
-        case .idle, .running: return false
-        case .success, .failure: return true
         }
     }
 
@@ -230,12 +215,9 @@ struct AutomationSettingsTab: View {
             }
             MergeMethodPicker(settings: environment.settings)
         } header: {
-            HStack(spacing: 4) {
-                Text(String(localized: "Automatic merging"))
-                InfoButton(String(
-                    localized: "Shepherd queues the same merge the merge sheet would, through the same outbox, pinned to the commit it checked. Each pull request is queued at most once per commit; one that could not be sent waits for you in Settings → Sync. The method is shared with the merge sheet and bulk triage."
-                ))
-            }
+            SettingsSectionHeader(String(localized: "Automatic merging"), info: String(
+                localized: "Shepherd queues the same merge the merge sheet would, through the same outbox, pinned to the commit it checked. Each pull request is queued at most once per commit; one that could not be sent waits for you in Settings → Sync. The method is shared with the merge sheet and bulk triage."
+            ))
         } footer: {
             SettingsNote(autoMergeSentence)
         }
@@ -341,27 +323,36 @@ struct AutomationSettingsTab: View {
 
     private var trustLaneSection: some View {
         Section {
-            TrustThresholdRow(
-                title: String(localized: "Files"),
-                value: trustLaneFilesBinding,
-                range: TrustThresholdRow.fileRange
-            )
-            TrustThresholdRow(
-                title: String(localized: "Lines"),
-                value: trustLaneLinesBinding,
-                range: TrustThresholdRow.lineRange
-            )
-        } header: {
-            HStack(spacing: 4) {
-                Text(String(localized: "Trust lanes"))
-                InfoButton(String(
-                    localized: "Sensitive means a workflow, auth, secret, migration or deleted-test file. A track record never moves a pull request between the lanes; it only colours the chip and orders rows. Both limits travel to your other Macs."
-                ))
+            LabeledContent(String(localized: "Files")) {
+                StepperValue(value: trustLaneFilesBinding, range: Self.fileRange, font: Theme.mono(.callout))
             }
+            LabeledContent(String(localized: "Lines")) {
+                StepperValue(value: trustLaneLinesBinding, range: Self.lineRange, font: Theme.mono(.callout))
+            }
+        } header: {
+            SettingsSectionHeader(String(localized: "Trust lanes"), info: String(
+                localized: "Sensitive means a workflow, auth, secret, migration or deleted-test file. A track record never moves a pull request between the lanes; it only colours the chip and orders rows. Both limits travel to your other Macs."
+            ))
         } footer: {
             SettingsNote(trustLaneSentence)
         }
     }
+
+    /// The range the file stepper may move in — the configuration's own clamp, so the control
+    /// cannot produce a value the pure type would then silently change.
+    private static let fileRange = ClosedRange(
+        uncheckedBounds: (
+            lower: TrustLaneConfiguration.minimumThreshold,
+            upper: TrustLaneConfiguration.maximumFiles
+        )
+    )
+    /// The same for the changed-lines stepper.
+    private static let lineRange = ClosedRange(
+        uncheckedBounds: (
+            lower: TrustLaneConfiguration.minimumThreshold,
+            upper: TrustLaneConfiguration.maximumChangedLines
+        )
+    )
 
     private var trackRecordSection: some View {
         Section {
@@ -505,48 +496,6 @@ struct AutomationSettingsTab: View {
             get: { environment.settings.autoMerge.isEnabled },
             set: { environment.settings.autoMerge.isEnabled = $0 }
         )
-    }
-}
-
-/// One trust-lane threshold as a form row: the label on the left, the number and its stepper on
-/// the right.
-///
-/// A private twin of the Delegation tab's row rather than a shared component: each tab owns its
-/// own pane, and a shared row would need a home neither tab owns.
-private struct TrustThresholdRow: View {
-    /// The range the file stepper may move in — the configuration's own clamp, so the control
-    /// cannot produce a value the pure type would then silently change.
-    static let fileRange = ClosedRange(
-        uncheckedBounds: (
-            lower: TrustLaneConfiguration.minimumThreshold,
-            upper: TrustLaneConfiguration.maximumFiles
-        )
-    )
-    /// The same for the changed-lines stepper.
-    static let lineRange = ClosedRange(
-        uncheckedBounds: (
-            lower: TrustLaneConfiguration.minimumThreshold,
-            upper: TrustLaneConfiguration.maximumChangedLines
-        )
-    )
-
-    /// The row's label.
-    let title: String
-    /// The value the stepper edits and the row displays.
-    let value: Binding<Int>
-    /// The permitted range.
-    let range: ClosedRange<Int>
-
-    var body: some View {
-        LabeledContent(title) {
-            HStack(spacing: 6) {
-                Text(verbatim: "\(value.wrappedValue)")
-                    .font(Theme.mono(.callout))
-                    .monospacedDigit()
-                Stepper(title, value: value, in: range)
-                    .labelsHidden()
-            }
-        }
     }
 }
 
