@@ -29,13 +29,16 @@ struct DelegationSettingsTab: View {
 
     var body: some View {
         SettingsPage {
-            agentCard
-            guardrailCard
-            sessionCard
-            checkoutCard
-            editorCard
-            automaticCard
-            policyCard
+            agentSection
+            guardrailSection
+            sessionSection
+            checkoutSection
+            addCheckoutSection
+            editorSection
+            automaticSection
+            triggerSection
+            taskSection
+            capSection
         }
         .sheet(item: $localRepositoryDraft) { draft in
             AddLocalRepositorySheet(
@@ -56,52 +59,63 @@ struct DelegationSettingsTab: View {
 
     // MARK: - Agent CLI
 
-    private var agentCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                CardTitle(String(localized: "AGENT CLI"))
-                Picker(String(localized: "Kind"), selection: kindBinding) {
-                    ForEach(AgentCLIKindTag.allCases) { tag in
-                        Text(tag.title).tag(tag)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-
-                switch environment.settings.agentCLI.kind {
-                case .claudeCode:
-                    HStack(spacing: 8) {
-                        LabeledField(
-                            label: String(localized: "Path"),
-                            placeholder: "/opt/homebrew/bin/claude",
-                            text: executablePathBinding
-                        )
-                        Button(String(localized: "Detect")) { detect() }
-                            .buttonStyle(SecondaryButtonStyle(height: 28))
-                            .disabled(detectState == .searching)
-                    }
-                    detectResult
-                    Text(String(
-                        localized: "Leave the path empty to let Shepherd look in the usual places. Not installed? `npm install -g @anthropic-ai/claude-code`."
-                    ))
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                case .custom:
-                    LabeledField(
-                        label: String(localized: "Command"),
-                        placeholder: "/usr/local/bin/my-agent --cwd {worktree} --task {prompt}",
-                        text: templateBinding
-                    )
-                    Text(String(
-                        localized: "The template is split like a shell would, but no shell ever runs it: {prompt} always becomes exactly one argument, so a prompt cannot turn into a second command. {worktree} becomes the worktree path."
-                    ))
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
+    /// The CLI, and — as its footer — the promise the whole pane rests on: Shepherd runs the
+    /// user's own installation untouched and never pushes.
+    private var agentSection: some View {
+        Section {
+            Picker(String(localized: "Agent"), selection: kindBinding) {
+                ForEach(AgentCLIKindTag.allCases) { tag in
+                    Text(tag.title).tag(tag)
                 }
             }
+            .pickerStyle(.segmented)
+
+            switch environment.settings.agentCLI.kind {
+            case .claudeCode:
+                LabeledContent {
+                    HStack(spacing: 8) {
+                        TextField(
+                            String(localized: "Path"),
+                            text: executablePathBinding,
+                            prompt: Text(verbatim: "/opt/homebrew/bin/claude")
+                        )
+                        .labelsHidden()
+                        Button(String(localized: "Detect")) { detect() }
+                            .disabled(detectState == .searching)
+                        InfoButton(String(
+                            localized: "Not installed? Run npm install -g @anthropic-ai/claude-code in Terminal."
+                        ))
+                    }
+                } label: {
+                    Text(String(localized: "Path"))
+                    Text(String(localized: "Leave empty to look in the usual places."))
+                }
+                detectResult
+
+            case .custom:
+                LabeledContent {
+                    HStack(spacing: 8) {
+                        TextField(
+                            String(localized: "Command"),
+                            text: templateBinding,
+                            prompt: Text(verbatim: "/usr/local/bin/my-agent --task {prompt}")
+                        )
+                        .labelsHidden()
+                        InfoButton(String(
+                            localized: "The template is split like a shell would, but no shell ever runs it: {prompt} always becomes exactly one argument, so a prompt cannot turn into a second command."
+                        ))
+                    }
+                } label: {
+                    Text(String(localized: "Command"))
+                    Text(String(localized: "{prompt} is the task, {worktree} the path."))
+                }
+            }
+        } header: {
+            Text(String(localized: "Agent CLI"))
+        } footer: {
+            SettingsNote(String(
+                localized: "Shepherd runs your installed CLI with your environment untouched and holds no login for it. It never pushes: you decide what is committed."
+            ))
         }
     }
 
@@ -114,7 +128,7 @@ struct DelegationSettingsTab: View {
             ProgressView().controlSize(.small)
         case .found(let path):
             Label(path, systemImage: "checkmark.circle")
-                .font(Theme.mono(11))
+                .font(Theme.mono(.caption))
                 .foregroundStyle(Theme.success)
                 .textSelection(.enabled)
         case .notFound:
@@ -122,228 +136,212 @@ struct DelegationSettingsTab: View {
                 String(localized: "Not found. Enter the full path to the executable."),
                 systemImage: "exclamationmark.triangle"
             )
-            .font(.system(size: 11))
+            .font(Theme.type(.caption))
             .foregroundStyle(Theme.pending)
         }
     }
 
     // MARK: - Guardrails
 
-    private var guardrailCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                CardTitle(String(localized: "GUARDRAILS"))
-                Picker(String(localized: "Permission mode"), selection: permissionBinding) {
-                    ForEach(AgentPermissionMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
-                    }
+    private var guardrailSection: some View {
+        Section(String(localized: "Guardrails")) {
+            Picker(selection: permissionBinding) {
+                ForEach(AgentPermissionMode.allCases) { mode in
+                    Text(mode.title).tag(mode)
                 }
-                .pickerStyle(.radioGroup)
-                .labelsHidden()
+            } label: {
+                Text(String(localized: "Permission mode"))
                 Text(environment.settings.agentCLI.permissionMode.explanation)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
+            }
 
+            LabeledContent(String(localized: "Max turns")) {
                 HStack(spacing: 12) {
-                    LabeledStepperRow(
-                        title: String(localized: "Max turns"),
-                        value: turnsBinding,
-                        range: 1...200
-                    )
-                    .disabled(isTurnLimitOff)
-                    .opacity(isTurnLimitOff ? 0.5 : 1)
+                    StepperValue(value: turnsBinding, range: 1...200)
+                        .disabled(isTurnLimitOff)
                     Toggle(String(localized: "No limit"), isOn: noTurnLimitBinding)
                         .toggleStyle(.checkbox)
                         .help(String(
                             localized: "Runs until the agent is done. The spend cap below still applies when it is on."
                         ))
                 }
+            }
 
-                HStack(spacing: 12) {
-                    Text(String(localized: "Budget"))
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 74, alignment: .leading)
+            LabeledContent(String(localized: "Budget")) {
+                HStack(spacing: 8) {
+                    if environment.settings.agentCLI.maxBudgetUSD != nil {
+                        TextField(
+                            String(localized: "Budget"),
+                            value: budgetBinding,
+                            format: .number,
+                            prompt: Text(verbatim: "5")
+                        )
+                        .labelsHidden()
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 70)
+                        Text(String(localized: "USD"))
+                            .foregroundStyle(.secondary)
+                    }
                     Toggle(String(localized: "Cap spend"), isOn: budgetEnabledBinding)
                         .toggleStyle(.checkbox)
-                    if environment.settings.agentCLI.maxBudgetUSD != nil {
-                        TextField("5", value: budgetBinding, format: .number)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 80)
-                        Text(String(localized: "USD"))
-                            .font(.system(size: 11))
-                            .foregroundStyle(Theme.textMuted)
-                    }
                 }
+            }
 
-                LabeledField(
-                    label: String(localized: "Tools"),
-                    placeholder: AgentCLIConfiguration.defaultAllowedTools,
-                    text: allowedToolsBinding
+            LabeledContent {
+                TextField(
+                    String(localized: "Tools"),
+                    text: allowedToolsBinding,
+                    prompt: Text(verbatim: AgentCLIConfiguration.defaultAllowedTools)
                 )
-                Text(String(
+                .labelsHidden()
+                .help(String(
                     localized: "Passed to --allowedTools. The default allows reading, editing and git, but no other shell command."
                 ))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
+            } label: {
+                Text(String(localized: "Tools"))
+                Text(String(localized: "Passed to --allowedTools."))
             }
         }
     }
 
     // MARK: - The session back-channel (ADR 0030)
 
-    private var sessionCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                CardTitle(String(localized: "SESSION BACK-CHANNEL"))
-                Text(String(
-                    localized: "When a pull request's commits carry a `Claude-Session:` trailer, every review finding gains a second button that sends it to that session. The command below is what runs: your own installed CLI, with its own login. Shepherd holds no account, no API key and no token for it, and it never pushes what the session changes."
+    private var sessionSection: some View {
+        Section {
+            TextField(
+                String(localized: "Local"),
+                text: sessionResumeBinding,
+                prompt: Text(verbatim: AgentCLIConfiguration.defaultSessionResumeTemplate)
+            )
+            TextField(
+                String(localized: "Remote"),
+                text: remoteSessionBinding,
+                prompt: Text(String(localized: "empty — the button opens the session instead"))
+            )
+        } header: {
+            HStack(spacing: 4) {
+                Text(String(localized: "Session back-channel"))
+                InfoButton(String(
+                    localized: "Runs your own installed CLI with its own login; Shepherd holds no token for it and never pushes what the session changes. {message} is always exactly one argument, {sessionID} and {sessionURL} come from the trailer, {worktree} is the worktree path. Write a full path unless the command is the CLI above, or leave a field empty to switch that button off."
                 ))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-
-                LabeledField(
-                    label: String(localized: "Local"),
-                    placeholder: AgentCLIConfiguration.defaultSessionResumeTemplate,
-                    text: sessionResumeBinding
-                )
-                LabeledField(
-                    label: String(localized: "Remote"),
-                    placeholder: String(localized: "empty — the button opens the session instead"),
-                    text: remoteSessionBinding
-                )
-                Text(String(
-                    localized: "{message} becomes exactly one argument, {sessionID} and {sessionURL} come from the trailer, {worktree} is the worktree path — split like a shell would, but no shell ever runs it. A bare command name is only resolved when it is the CLI above; write a full path otherwise. Leave a field empty to switch that button off; the remote field is empty by default, because whether the CLI can address a remote session at all is still an open question (docs/plans/session-back-channel-spike.md)."
-                ))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                Text(String(
-                    localized: "Add --output-format stream-json --verbose to see the run line by line in the delegation panel; add --max-turns and --max-budget-usd to cap it like a task run."
-                ))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
             }
+        } footer: {
+            SettingsNote(String(
+                localized: "Sends a review finding to the session named in a commit's Claude-Session: trailer."
+            ))
         }
     }
 
     // MARK: - Local checkouts
 
-    private var checkoutCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                CardTitle(String(localized: "LOCAL CHECKOUTS"))
-                Text(String(
-                    localized: "A delegation runs in a detached git worktree built from your own clone. Shepherd never clones anything itself."
-                ))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
+    private var checkoutSection: some View {
+        Section {
+            if environment.settings.localCheckouts.isEmpty {
+                Text(String(localized: "None configured yet."))
+                    .foregroundStyle(.secondary)
+            }
 
-                // The one-step way first: the repository is read from the clone's `origin`, and
-                // watching it comes in the same confirmation. The typed row below stays for a
-                // clone whose remote does not say (ADR 0011's 2026-09-23 amendment).
-                HStack(spacing: 8) {
-                    Button(String(localized: "Add a local repository…")) { chooseLocalRepository() }
-                        .buttonStyle(SecondaryButtonStyle(height: 28))
-                    Text(String(
-                        localized: "Pick the folder; Shepherd reads the repository from its origin and can watch it too."
-                    ))
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-
-                if environment.settings.localCheckouts.isEmpty {
-                    Text(String(localized: "None configured yet."))
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.textMuted)
-                }
-
-                ForEach(sortedCheckouts, id: \.key) { entry in
+            ForEach(sortedCheckouts, id: \.key) { entry in
+                LabeledContent {
                     HStack(spacing: 8) {
-                        Text(entry.key)
-                            .font(.system(size: 12))
-                            .foregroundStyle(Theme.text)
-                            .frame(width: 170, alignment: .leading)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                        Text(entry.value)
-                            .font(Theme.mono(10.5))
-                            .foregroundStyle(Theme.textMuted)
-                            .lineLimit(1)
-                            .truncationMode(.head)
-                            .help(entry.value)
-                        Spacer(minLength: 6)
                         Button(String(localized: "Change")) { choose(repo: entry.key) }
-                            .buttonStyle(.plain)
-                            .font(.system(size: 11))
-                            .foregroundStyle(Theme.accentText)
+                            .buttonStyle(.borderless)
                         Button(String(localized: "Remove")) {
                             environment.settings.setLocalCheckout(nil, forRepoNamed: entry.key)
                         }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 11))
+                        .buttonStyle(.borderless)
                         .foregroundStyle(Theme.failure)
                     }
+                } label: {
+                    Text(entry.key)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text(entry.value)
+                        .font(Theme.mono(.caption))
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                        .help(entry.value)
                 }
+            }
+        } header: {
+            Text(String(localized: "Local checkouts"))
+        } footer: {
+            SettingsNote(String(
+                localized: "A delegation runs in a git worktree of your own clone. Shepherd never clones anything itself."
+            ))
+        }
+    }
 
-                Divider().overlay(Theme.hairline)
+    /// The two ways to add a checkout. The one-step way first: the repository is read from the
+    /// clone's `origin`, and watching it comes in the same confirmation. The typed row stays for
+    /// a clone whose remote does not say (ADR 0011's 2026-09-23 amendment).
+    private var addCheckoutSection: some View {
+        Section {
+            LabeledContent {
+                Button(String(localized: "Add a local repository…")) { chooseLocalRepository() }
+            } label: {
+                Text(String(localized: "From a folder"))
+                Text(String(localized: "Reads the repository from the clone's origin; can watch it too."))
+            }
 
+            LabeledContent {
                 HStack(spacing: 8) {
-                    TextField("owner/repo", text: $newRepoFullName)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.system(size: 12))
+                    TextField(
+                        String(localized: "Repository"),
+                        text: $newRepoFullName,
+                        prompt: Text(verbatim: "owner/repo")
+                    )
+                    .labelsHidden()
                     Button(String(localized: "Choose folder…")) { addRepository() }
-                        .buttonStyle(SecondaryButtonStyle(height: 28))
                 }
-                if let repoError {
-                    Text(repoError)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.failure)
-                }
+            } label: {
+                Text(String(localized: "By name"))
+                Text(String(localized: "For a clone whose origin does not say."))
+            }
+
+            if let repoError {
+                Text(repoError)
+                    .foregroundStyle(Theme.failure)
             }
         }
     }
 
     // MARK: - Editor (ADR 0039)
 
-    private var editorCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                CardTitle(String(localized: "EDITOR"))
-                Text(String(
-                    localized: "“Open in editor” on a file in the review opens it in the checkout above, at the line when there is one. Lines are counted on the pull request's head, so they match when your checkout is on that commit."
-                ))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
+    private var editorSection: some View {
+        Section {
+            Picker(selection: editorKindBinding) {
+                ForEach(EditorKind.allCases) { kind in
+                    Text(editorTitle(kind)).tag(kind)
+                }
+            } label: {
+                Text(String(localized: "Open in editor"))
+                Text(String(localized: "Opens a review's file in your checkout, at the line."))
+            }
 
-                Picker(String(localized: "Editor"), selection: editorKindBinding) {
-                    ForEach(EditorKind.allCases) { kind in
-                        Text(editorTitle(kind)).tag(kind)
+            if environment.settings.editor.kind == .custom {
+                LabeledContent {
+                    HStack(spacing: 8) {
+                        TextField(
+                            String(localized: "Command"),
+                            text: editorCommandBinding,
+                            prompt: Text(verbatim: EditorConfiguration.exampleCustomCommandTemplate)
+                        )
+                        .labelsHidden()
+                        InfoButton(String(
+                            localized: "Split like a shell would, but no shell ever runs it; {file} is always exactly one argument. Start with the full path to the program: apps opened from the Dock do not see your shell's PATH."
+                        ))
                     }
+                } label: {
+                    Text(String(localized: "Command"))
+                    Text(String(localized: "{file} is the path, {line} the line (or 1)."))
                 }
-                .pickerStyle(.radioGroup)
-                .labelsHidden()
-
-                if environment.settings.editor.kind == .custom {
-                    LabeledField(
-                        label: String(localized: "Command"),
-                        placeholder: EditorConfiguration.exampleCustomCommandTemplate,
-                        text: editorCommandBinding
-                    )
-                    Text(String(
-                        localized: "{file} becomes the file's full path and always exactly one argument, {line} the line (1 when none is known). Split like a shell would, but no shell ever runs it. Start with the full path to the program: apps opened from the Dock do not see your shell's PATH."
-                    ))
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
+            }
+        } header: {
+            HStack(spacing: 4) {
+                Text(String(localized: "Editor"))
+                InfoButton(String(
+                    localized: "Lines are counted on the pull request's head, so they match when your checkout is on that commit."
+                ))
             }
         }
         .onAppear { installedEditors = EditorOpener.installedKinds() }
@@ -357,122 +355,70 @@ struct DelegationSettingsTab: View {
 
     // MARK: - Automatic delegation (ADR 0016)
 
-    private var automaticCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                automaticSwitch
-                Divider().overlay(Theme.hairline)
-                automaticConditions
-                Divider().overlay(Theme.hairline)
-                automaticTemplate
-                Divider().overlay(Theme.hairline)
-                automaticCaps
+    private var automaticSection: some View {
+        Section(String(localized: "Automatic delegation")) {
+            Toggle(isOn: autoEnabledBinding) {
+                Text(String(localized: "Start a delegation on its own when a rule matches"))
+                Text(String(localized: "Same worktree and guardrails; never pushes, approves or merges."))
             }
         }
     }
 
-    private var automaticSwitch: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            CardTitle(String(localized: "AUTOMATIC DELEGATION"))
-            Toggle(
-                String(localized: "Start a delegation on its own when a rule matches"),
-                isOn: autoEnabledBinding
-            )
-            Text(String(
-                localized: "Off by default. A rule only ever starts the delegation you could have started yourself: it runs in an isolated worktree with the guardrails above, and it never pushes, approves or merges anything."
-            ))
-            .font(.system(size: 11))
-            .foregroundStyle(Theme.textMuted)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private var automaticConditions: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(String(localized: "Run when, on a pull request of mine:"))
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.textSecondary)
+    private var triggerSection: some View {
+        Section {
             Toggle(String(localized: "CI turns red"), isOn: triggerBinding(.checksFailed))
-                .toggleStyle(.checkbox)
             Toggle(
-                String(localized: "a reviewer requests changes"),
+                String(localized: "A reviewer requests changes"),
                 isOn: triggerBinding(.changesRequested)
             )
-            .toggleStyle(.checkbox)
-            Text(String(
-                localized: "\"Turns\" is meant literally: Shepherd has to have seen the change happen. A pull request that was already red when Shepherd first saw it never starts anything, and each pull request starts at most one run per commit."
-            ))
-            .font(.system(size: 11))
-            .foregroundStyle(Theme.textMuted)
-            .fixedSize(horizontal: false, vertical: true)
+        } header: {
+            HStack(spacing: 4) {
+                Text(String(localized: "Run on my pull requests when"))
+                InfoButton(String(
+                    localized: "“Turns” is meant literally: Shepherd has to have seen the change happen. A pull request that was already red when Shepherd first saw it never starts anything, and each pull request starts at most one run per commit."
+                ))
+            }
         }
     }
 
-    private var automaticTemplate: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(String(localized: "Task for the agent"))
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.textSecondary)
+    private var taskSection: some View {
+        Section {
             TextEditor(text: promptTemplateBinding)
-                .font(Theme.mono(11.5))
+                .font(Theme.mono(.callout))
                 // `.limited`, not `.complete`: this is a template with `{{…}}` placeholders that
                 // `AutoDelegationPrompt` substitutes, and a rewrite that "improved" a placeholder
                 // away would break the automatic run silently. Proofreading is welcome; a full
                 // rewrite panel is not (ADR 0020).
                 .writingToolsBehavior(.limited)
                 .scrollContentBackground(.hidden)
-                .padding(8)
                 .frame(minHeight: 84, maxHeight: 120)
-                .background(
-                    Theme.control,
-                    in: RoundedRectangle(cornerRadius: 6, style: .continuous)
-                )
-            Text(String(
-                localized: "Placeholders: \(AutoDelegationPrompt.placeholders.joined(separator: " ")). Shepherd's own instructions — detached worktree, do not push, keep the change small — are prepended as usual."
-            ))
-            .font(.system(size: 11))
-            .foregroundStyle(Theme.textMuted)
-            .fixedSize(horizontal: false, vertical: true)
             Button(String(localized: "Reset to the default task")) {
                 environment.settings.autoDelegation.promptTemplate =
                     AutoDelegationRules.defaultPromptTemplate
             }
-            .buttonStyle(SecondaryButtonStyle(height: 26))
-        }
-    }
-
-    private var automaticCaps: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            LabeledStepperRow(
-                title: String(localized: "At once"),
-                value: concurrencyBinding,
-                range: 1...5
-            )
-            LabeledStepperRow(
-                title: String(localized: "Per day"),
-                value: dailyBinding,
-                range: 1...50
-            )
-            Text(String(
-                localized: "\(environment.autoDelegation.startsToday) of \(environment.autoDelegation.dailyCap) used today · \(environment.autoDelegation.runningCount) running now. When a cap is reached Shepherd notifies you instead of starting anything."
+        } header: {
+            Text(String(localized: "Task for the agent"))
+        } footer: {
+            SettingsNote(String(
+                localized: "Placeholders: \(AutoDelegationPrompt.placeholders.joined(separator: " ")). Shepherd's own rules (worktree, no push) come first."
             ))
-            .font(.system(size: 11))
-            .foregroundStyle(Theme.textMuted)
-            .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    private var policyCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 6) {
-                CardTitle(String(localized: "WHAT DELEGATION NEVER DOES"))
-                Text(String(
-                    localized: "Shepherd never handles the agent's authentication: it runs your installed CLI and passes your environment through untouched, adding nothing and removing nothing. It never pushes on its own either — the agent works in an isolated worktree and you decide what is committed."
-                ))
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
+    private var capSection: some View {
+        Section {
+            LabeledContent(String(localized: "At once")) {
+                StepperValue(value: concurrencyBinding, range: 1...5)
             }
+            LabeledContent(String(localized: "Per day")) {
+                StepperValue(value: dailyBinding, range: 1...50)
+            }
+        } header: {
+            Text(String(localized: "Limits"))
+        } footer: {
+            SettingsNote(String(
+                localized: "\(environment.autoDelegation.startsToday) of \(environment.autoDelegation.dailyCap) used today · \(environment.autoDelegation.runningCount) running now. At a cap, Shepherd notifies you instead."
+            ))
         }
     }
 
@@ -683,33 +629,26 @@ struct DelegationSettingsTab: View {
     }
 }
 
-/// One "label · stepper · monospaced number" row, as this tab's three numeric caps all are.
+/// The control half of a numeric row — a stepper with its value beside it — for this tab's three
+/// caps, which sit in a `LabeledContent` that supplies the label.
 ///
 /// The value is read back out of the binding rather than passed separately, so the number on
 /// screen cannot drift from the one the stepper is editing.
-private struct LabeledStepperRow: View {
-    /// The row's label.
-    let title: String
+private struct StepperValue: View {
     /// The value the stepper edits and the row displays.
     let value: Binding<Int>
     /// The permitted range.
     let range: ClosedRange<Int>
 
-    /// The label column width, so the three rows' steppers line up.
-    private static let labelWidth: CGFloat = 74
-
     var body: some View {
-        HStack(spacing: 12) {
-            Text(title)
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.textSecondary)
-                .frame(width: LabeledStepperRow.labelWidth, alignment: .leading)
+        HStack(spacing: 6) {
+            Text(verbatim: "\(value.wrappedValue)")
+                .font(Theme.mono(.body))
+                .monospacedDigit()
             Stepper(value: value, in: range) {
-                Text("\(value.wrappedValue)")
-                    .font(Theme.mono(12))
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.text)
+                Text(verbatim: "\(value.wrappedValue)")
             }
+            .labelsHidden()
         }
     }
 }

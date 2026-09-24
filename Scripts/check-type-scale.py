@@ -43,6 +43,7 @@ ROOT = Path(__file__).resolve().parent.parent
 MIGRATED = (
     "Shepherd/Features/Settings/AutomationSettingsTab.swift",
     "Shepherd/Features/Settings/RepliesSettingsTab.swift",
+    "Shepherd/Features/Settings/DelegationSettingsTab.swift",
     "Shepherd/Features/PullRequest/MergeSheet.swift",
     "Shepherd/Features/PullRequest/ClosingIssuesCard.swift",
     "Shepherd/Features/Inbox/BulkTriageSheet.swift",

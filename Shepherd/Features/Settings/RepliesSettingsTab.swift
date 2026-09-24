@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Settings → Replies: the reusable review text — saved replies and per-repository templates.
 ///
-/// A tab of its own rather than a card on an existing one, for two reasons. It is the only place in
+/// A tab of its own rather than a section on an existing one, for two reasons. It is the only place in
 /// Settings where the user *authors* something instead of configuring it, so it needs list rows,
 /// an editor sheet and room to type; and it belongs to the review path, which the other tabs do not
 /// cover — Sync is about staying in step with GitHub, Agents/Intelligence/Delegation are the AI
@@ -17,11 +17,12 @@ struct RepliesSettingsTab: View {
     /// The template the editor sheet is open on, if any.
     @State private var editingTemplate: ReviewTemplate?
 
+
     var body: some View {
         SettingsPage {
-            repliesCard
-            templatesCard
-            recurringFindingsCard
+            repliesSection
+            templatesSection
+            recurringFindingsSection
         }
         .sheet(item: $editingReply) { reply in
             SavedReplyEditor(reply: reply) { edited in
@@ -37,94 +38,77 @@ struct RepliesSettingsTab: View {
 
     // MARK: - Saved replies
 
-    private var repliesCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                CardTitle(String(localized: "SAVED REPLIES"))
-                Text(String(
-                    localized: "Named pieces of Markdown you can drop into any comment field: the inline comment composer, the review summary, and a thread reply. The insert button next to each field lists them in this order, so put the ones you use most at the top."
-                ))
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-
-                if environment.settings.savedReplies.isEmpty {
-                    Text(String(localized: "None yet."))
-                        .font(Theme.type(.callout))
-                        .foregroundStyle(Theme.textMuted)
-                }
-
-                ForEach(environment.settings.savedReplies) { reply in
-                    row(
-                        title: reply.trimmedName.isEmpty
-                            ? String(localized: "Unnamed reply")
-                            : reply.trimmedName,
-                        detail: preview(of: reply.body),
-                        isUsable: reply.isUsable,
-                        onUp: { environment.settings.moveSavedReply(id: reply.id, by: -1) },
-                        onDown: { environment.settings.moveSavedReply(id: reply.id, by: 1) },
-                        onEdit: { editingReply = reply },
-                        onRemove: { environment.settings.deleteSavedReply(id: reply.id) }
-                    )
-                }
-
-                Divider().overlay(Theme.hairline)
-
-                Button(String(localized: "Add a saved reply")) {
-                    editingReply = SavedReply(name: "", body: "")
-                }
-                .buttonStyle(SecondaryButtonStyle(height: 28))
+    private var repliesSection: some View {
+        Section {
+            if environment.settings.savedReplies.isEmpty {
+                Text(String(localized: "None yet."))
+                    .foregroundStyle(.secondary)
             }
+
+            ForEach(environment.settings.savedReplies) { reply in
+                row(
+                    title: reply.trimmedName.isEmpty
+                        ? String(localized: "Unnamed reply")
+                        : reply.trimmedName,
+                    detail: preview(of: reply.body),
+                    isUsable: reply.isUsable,
+                    onUp: { environment.settings.moveSavedReply(id: reply.id, by: -1) },
+                    onDown: { environment.settings.moveSavedReply(id: reply.id, by: 1) },
+                    onEdit: { editingReply = reply },
+                    onRemove: { environment.settings.deleteSavedReply(id: reply.id) }
+                )
+            }
+
+            addRow(String(localized: "Add a saved reply")) {
+                editingReply = SavedReply(name: "", body: "")
+            }
+        } header: {
+            Text(String(localized: "Saved replies"))
+        } footer: {
+            SettingsNote(String(
+                localized: "Markdown for any comment field. The insert menu lists them in this order."
+            ))
         }
     }
 
     // MARK: - Review templates
 
-    private var templatesCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                CardTitle(String(localized: "REVIEW TEMPLATES"))
-                Text(String(
-                    localized: "A summary a new review starts from, per repository. Match one repository with schnaq/review or a whole owner with schnaq/* — * and ? are the wildcards. An exact pattern wins over a wildcard, a longer wildcard wins over a shorter one, and if two are equally specific the one listed first wins."
-                ))
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                Text(String(
-                    localized: "A template only ever fills an empty review. A pull request you have already written a comment, a summary or a verdict for is never touched."
-                ))
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-
-                if environment.settings.reviewTemplates.isEmpty {
-                    Text(String(localized: "None yet."))
-                        .font(Theme.type(.callout))
-                        .foregroundStyle(Theme.textMuted)
-                }
-
-                ForEach(environment.settings.reviewTemplates) { template in
-                    row(
-                        title: template.trimmedPattern.isEmpty
-                            ? String(localized: "No pattern")
-                            : template.trimmedPattern,
-                        detail: preview(of: template.body),
-                        isUsable: template.isUsable,
-                        isTitleMonospaced: true,
-                        onUp: { environment.settings.moveReviewTemplate(id: template.id, by: -1) },
-                        onDown: { environment.settings.moveReviewTemplate(id: template.id, by: 1) },
-                        onEdit: { editingTemplate = template },
-                        onRemove: { environment.settings.deleteReviewTemplate(id: template.id) }
-                    )
-                }
-
-                Divider().overlay(Theme.hairline)
-
-                Button(String(localized: "Add a template")) {
-                    editingTemplate = ReviewTemplate(pattern: "", body: "")
-                }
-                .buttonStyle(SecondaryButtonStyle(height: 28))
+    private var templatesSection: some View {
+        Section {
+            if environment.settings.reviewTemplates.isEmpty {
+                Text(String(localized: "None yet."))
+                    .foregroundStyle(.secondary)
             }
+
+            ForEach(environment.settings.reviewTemplates) { template in
+                row(
+                    title: template.trimmedPattern.isEmpty
+                        ? String(localized: "No pattern")
+                        : template.trimmedPattern,
+                    detail: preview(of: template.body),
+                    isUsable: template.isUsable,
+                    isTitleMonospaced: true,
+                    onUp: { environment.settings.moveReviewTemplate(id: template.id, by: -1) },
+                    onDown: { environment.settings.moveReviewTemplate(id: template.id, by: 1) },
+                    onEdit: { editingTemplate = template },
+                    onRemove: { environment.settings.deleteReviewTemplate(id: template.id) }
+                )
+            }
+
+            addRow(String(localized: "Add a template")) {
+                editingTemplate = ReviewTemplate(pattern: "", body: "")
+            }
+        } header: {
+            HStack(spacing: 4) {
+                Text(String(localized: "Review templates"))
+                InfoButton(String(
+                    localized: "Match one repository with schnaq/review or a whole owner with schnaq/* — * and ? are the wildcards. An exact pattern wins over a wildcard, a longer wildcard over a shorter one; on a tie, the one listed first wins."
+                ))
+            }
+        } footer: {
+            SettingsNote(String(
+                localized: "The summary a new review starts from. A review you already started is never touched."
+            ))
         }
     }
 
@@ -134,7 +118,7 @@ struct RepliesSettingsTab: View {
     ///
     /// It belongs on this tab rather than on Delegation or Intelligence for the reason the tab
     /// exists at all: these are the reviewer's own review sentences, which is what every other
-    /// card here is about. It is a *list*, not a setting — there is nothing to configure, the
+    /// section here is about. It is a *list*, not a setting — there is nothing to configure, the
     /// thresholds are documented constants in `ShepherdCore`, and the only control is the one that
     /// undoes a dismissal.
     ///
@@ -142,28 +126,28 @@ struct RepliesSettingsTab: View {
     /// the review screen, where the pull request that becomes the agent's worktree is on screen.
     /// Settings has no pull request, so a *Draft a rule* here would have nothing to delegate
     /// against.
-    private var recurringFindingsCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                CardTitle(String(localized: "RECURRING FINDINGS"))
-                Text(String(
-                    localized: "A review comment you have written at least three times in the last thirty days, on at least two pull requests of the same repository. Shepherd finds these on this Mac, from your own comments only, and never sends them anywhere. On the review screen each one offers to draft a rule for that repository's agent instructions."
-                ))
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-
-                let findings = environment.recurringFindings.everyFinding
-                if findings.isEmpty {
-                    Text(String(localized: "Nothing yet."))
-                        .font(Theme.type(.callout))
-                        .foregroundStyle(Theme.textMuted)
-                }
-
-                ForEach(findings) { finding in
-                    findingRow(finding)
-                }
+    private var recurringFindingsSection: some View {
+        Section {
+            let findings = environment.recurringFindings.everyFinding
+            if findings.isEmpty {
+                Text(String(localized: "Nothing yet."))
+                    .foregroundStyle(.secondary)
             }
+
+            ForEach(findings) { finding in
+                findingRow(finding)
+            }
+        } header: {
+            HStack(spacing: 4) {
+                Text(String(localized: "Recurring findings"))
+                InfoButton(String(
+                    localized: "A comment you wrote at least three times in thirty days, on at least two pull requests of the same repository. On the review screen each one offers to draft a rule for that repository's agent instructions."
+                ))
+            }
+        } footer: {
+            SettingsNote(String(
+                localized: "Found on this Mac from your own comments; never sent anywhere."
+            ))
         }
     }
 
@@ -176,7 +160,6 @@ struct RepliesSettingsTab: View {
                 HStack(spacing: 6) {
                     Text(finding.repo.fullName)
                         .font(Theme.mono(.callout))
-                        .foregroundStyle(Theme.text)
                         .lineLimit(1)
                         .truncationMode(.middle)
                     // Not localised: a count and a multiplication sign read the same in every
@@ -198,7 +181,7 @@ struct RepliesSettingsTab: View {
                 // The reviewer's own sentence, so the non-localising `Text` overload.
                 Text(finding.exemplar)
                     .font(Theme.type(.subheadline))
-                    .foregroundStyle(Theme.textMuted)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
@@ -207,27 +190,23 @@ struct RepliesSettingsTab: View {
                 Button(String(localized: "Show again")) {
                     environment.recurringFindings.showAgain(finding)
                 }
-                .buttonStyle(.plain)
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.accentText)
+                .buttonStyle(.borderless)
             } else {
                 Button(String(localized: "Hide")) {
                     environment.recurringFindings.dismiss(finding)
                 }
-                .buttonStyle(.plain)
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.textSecondary)
+                .buttonStyle(.borderless)
             }
         }
     }
 
-    // MARK: - Shared row
+    // MARK: - Shared rows
 
     /// One list row: name, a one-line preview, reorder, edit, remove.
     ///
-    /// Reordering is two arrow buttons rather than drag-and-drop: the rows live in a `Card` inside a
-    /// `ScrollView`, not in a `List`, so `onMove` has nothing to hang off — and a keyboard-reachable
-    /// button pair is the cheaper *and* the more accessible of the two.
+    /// Reordering is two arrow buttons rather than drag-and-drop: the rows are a `ForEach` in a
+    /// grouped `Form`, not in a `List`, so `onMove` has nothing to hang off — and a
+    /// keyboard-reachable button pair is the cheaper *and* the more accessible of the two.
     @ViewBuilder
     private func row(
         title: String,
@@ -243,8 +222,7 @@ struct RepliesSettingsTab: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(title)
-                        .font(isTitleMonospaced ? Theme.mono(.callout) : Theme.type(.callout, weight: .medium))
-                        .foregroundStyle(Theme.text)
+                        .font(isTitleMonospaced ? Theme.mono(.body) : Theme.type(.body))
                         .lineLimit(1)
                         .truncationMode(.middle)
                     if !isUsable {
@@ -257,31 +235,36 @@ struct RepliesSettingsTab: View {
                 }
                 Text(detail)
                     .font(Theme.type(.subheadline))
-                    .foregroundStyle(Theme.textMuted)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
             Spacer(minLength: 6)
             Button(action: onUp) {
-                Image(systemName: "chevron.up").font(Theme.type(.footnote, weight: .bold))
+                Image(systemName: "chevron.up")
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(Theme.textSecondary)
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
             .help(String(localized: "Move up"))
             Button(action: onDown) {
-                Image(systemName: "chevron.down").font(Theme.type(.footnote, weight: .bold))
+                Image(systemName: "chevron.down")
             }
-            .buttonStyle(.plain)
-            .foregroundStyle(Theme.textSecondary)
+            .buttonStyle(.borderless)
+            .foregroundStyle(.secondary)
             .help(String(localized: "Move down"))
             Button(String(localized: "Edit"), action: onEdit)
-                .buttonStyle(.plain)
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.accentText)
+                .buttonStyle(.borderless)
             Button(String(localized: "Remove"), action: onRemove)
-                .buttonStyle(.plain)
-                .font(Theme.type(.subheadline))
+                .buttonStyle(.borderless)
                 .foregroundStyle(Theme.failure)
+        }
+    }
+
+    /// The last row of a list section: the button that opens the editor on a fresh item.
+    private func addRow(_ title: String, action: @escaping () -> Void) -> some View {
+        HStack {
+            Spacer()
+            Button(title, action: action)
         }
     }
 
@@ -299,6 +282,9 @@ struct RepliesSettingsTab: View {
 // MARK: - Editors
 
 /// The sheet that edits one saved reply: a name and a Markdown body.
+///
+/// A grouped `Form` like the pane it opens from, so ``LabeledField`` — a form row — shows its
+/// label, and the Cancel/Save bar sits under it outside the scrolling area.
 struct SavedReplyEditor: View {
     @Environment(\.dismiss) private var dismiss
     /// The reply being edited — an existing row, or a fresh one that is only stored on save.
@@ -322,51 +308,41 @@ struct SavedReplyEditor: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(String(localized: "Saved reply"))
-                .font(Theme.type(.title3, weight: .semibold))
-                .foregroundStyle(Theme.textStrong)
-
-            LabeledField(
-                label: String(localized: "Name"),
-                placeholder: String(localized: "Needs a test"),
-                text: $name
-            )
-            // A saved reply's name is one line the user has to recognise in a menu, so Writing
-            // Tools is `.limited` here: proofreading yes, a rewrite panel over a three-word label
-            // no (ADR 0020). The body below is the prose, and it is a `ComposerTextEditor`, which
-            // is where `.complete` lives.
-            .writingToolsBehavior(.limited)
-
-            VStack(alignment: .leading, spacing: 6) {
-                CardTitle(String(localized: "BODY"))
-                ComposerTextEditor(text: $text, height: 200)
-            }
-
-            Text(String(
-                localized: "Markdown, inserted exactly as typed. It is appended to whatever the comment field already holds, after a blank line."
-            ))
-            .font(Theme.type(.subheadline))
-            .foregroundStyle(Theme.textMuted)
-            .fixedSize(horizontal: false, vertical: true)
-
-            HStack {
-                Spacer()
-                Button(String(localized: "Cancel")) { dismiss() }
-                    .buttonStyle(SecondaryButtonStyle())
-                    .keyboardShortcut(.cancelAction)
-                Button(String(localized: "Save")) {
-                    onSave(SavedReply(id: reply.id, name: name, body: text))
-                    dismiss()
+        VStack(spacing: 0) {
+            Form {
+                Section {
+                    LabeledField(
+                        label: String(localized: "Name"),
+                        placeholder: String(localized: "Needs a test"),
+                        text: $name
+                    )
+                    // A saved reply's name is one line the user has to recognise in a menu, so
+                    // Writing Tools is `.limited` here: proofreading yes, a rewrite panel over a
+                    // three-word label no (ADR 0020). The body below is the prose, and it is a
+                    // `ComposerTextEditor`, which is where `.complete` lives.
+                    .writingToolsBehavior(.limited)
+                } header: {
+                    Text(String(localized: "Saved reply"))
                 }
-                .buttonStyle(PrimaryButtonStyle())
-                .keyboardShortcut(.defaultAction)
-                .disabled(!canSave)
+
+                Section {
+                    ComposerTextEditor(text: $text, height: 180)
+                } header: {
+                    Text(String(localized: "Body"))
+                } footer: {
+                    SettingsNote(String(
+                        localized: "Markdown, appended to the comment field after a blank line."
+                    ))
+                }
+            }
+            .formStyle(.grouped)
+
+            EditorButtonBar(canSave: canSave) {
+                onSave(SavedReply(id: reply.id, name: name, body: text))
+                dismiss()
             }
         }
-        .padding(20)
-        .frame(width: 460)
-        .background(Theme.panel)
+        .frame(width: 480, height: 440)
     }
 
     /// A reply needs both halves: a name to recognise in the menu and something to insert.
@@ -377,6 +353,8 @@ struct SavedReplyEditor: View {
 }
 
 /// The sheet that edits one review template: an `owner/name` pattern and a Markdown summary.
+///
+/// A grouped `Form` for the reason ``SavedReplyEditor`` is one.
 struct ReviewTemplateEditor: View {
     @Environment(\.dismiss) private var dismiss
     /// The template being edited — an existing row, or a fresh one that is only stored on save.
@@ -399,65 +377,55 @@ struct ReviewTemplateEditor: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(String(localized: "Review template"))
-                .font(Theme.type(.title3, weight: .semibold))
-                .foregroundStyle(Theme.textStrong)
-
-            LabeledField(
-                label: String(localized: "Repos"),
-                placeholder: "schnaq/*",
-                text: $pattern
-            )
-            // `owner/name` with `*`/`?` wildcards is not language, and a proofreader that
-            // "corrected" it would break the match rule that decides which template a repository
-            // gets. Writing Tools is off here on purpose (ADR 0020).
-            .writingToolsBehavior(.disabled)
-
-            if !patternLooksLikeARepository {
-                Text(String(
-                    localized: "Patterns are matched against owner/name, so a pattern without a “/” never matches anything."
-                ))
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.pending)
-                .fixedSize(horizontal: false, vertical: true)
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                CardTitle(String(localized: "SUMMARY"))
-                ComposerTextEditor(text: $text, height: 200)
-            }
-
-            Text(String(
-                localized: "Used as the summary of a new review on a matching repository. An existing draft — a comment, a summary, a verdict — is never overwritten."
-            ))
-            .font(Theme.type(.subheadline))
-            .foregroundStyle(Theme.textMuted)
-            .fixedSize(horizontal: false, vertical: true)
-
-            HStack {
-                Spacer()
-                Button(String(localized: "Cancel")) { dismiss() }
-                    .buttonStyle(SecondaryButtonStyle())
-                    .keyboardShortcut(.cancelAction)
-                Button(String(localized: "Save")) {
-                    onSave(
-                        ReviewTemplate(
-                            id: template.id,
-                            pattern: pattern.trimmingCharacters(in: .whitespacesAndNewlines),
-                            body: text
-                        )
+        VStack(spacing: 0) {
+            Form {
+                Section {
+                    LabeledField(
+                        label: String(localized: "Repos"),
+                        placeholder: "schnaq/*",
+                        text: $pattern
                     )
-                    dismiss()
+                    // `owner/name` with `*`/`?` wildcards is not language, and a proofreader that
+                    // "corrected" it would break the match rule that decides which template a
+                    // repository gets. Writing Tools is off here on purpose (ADR 0020).
+                    .writingToolsBehavior(.disabled)
+
+                    if !patternLooksLikeARepository {
+                        Text(String(
+                            localized: "Patterns are matched against owner/name, so a pattern without a “/” never matches anything."
+                        ))
+                        .font(Theme.type(.caption))
+                        .foregroundStyle(Theme.pending)
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+                } header: {
+                    Text(String(localized: "Review template"))
                 }
-                .buttonStyle(PrimaryButtonStyle())
-                .keyboardShortcut(.defaultAction)
-                .disabled(!canSave)
+
+                Section {
+                    ComposerTextEditor(text: $text, height: 180)
+                } header: {
+                    Text(String(localized: "Summary"))
+                } footer: {
+                    SettingsNote(String(
+                        localized: "Starts a new review on a matching repository. A draft is never overwritten."
+                    ))
+                }
+            }
+            .formStyle(.grouped)
+
+            EditorButtonBar(canSave: canSave) {
+                onSave(
+                    ReviewTemplate(
+                        id: template.id,
+                        pattern: pattern.trimmingCharacters(in: .whitespacesAndNewlines),
+                        body: text
+                    )
+                )
+                dismiss()
             }
         }
-        .padding(20)
-        .frame(width: 460)
-        .background(Theme.panel)
+        .frame(width: 480, height: 500)
     }
 
     private var canSave: Bool {
@@ -468,5 +436,28 @@ struct ReviewTemplateEditor: View {
     private var patternLooksLikeARepository: Bool {
         let trimmed = pattern.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty || trimmed.contains("/") || trimmed == "*"
+    }
+}
+
+/// Cancel and Save under an editor sheet's form, as a native sheet puts them: trailing, with
+/// Return and Escape bound.
+private struct EditorButtonBar: View {
+    @Environment(\.dismiss) private var dismiss
+    /// Whether Save is enabled.
+    let canSave: Bool
+    /// Runs on Save; the caller stores the edit and dismisses.
+    let onSave: () -> Void
+
+    var body: some View {
+        HStack {
+            Spacer()
+            Button(String(localized: "Cancel")) { dismiss() }
+                .keyboardShortcut(.cancelAction)
+            Button(String(localized: "Save"), action: onSave)
+                .keyboardShortcut(.defaultAction)
+                .disabled(!canSave)
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 16)
     }
 }

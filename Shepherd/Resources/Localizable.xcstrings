@@ -11,16 +11,6 @@
         }
       }
     },
-    "\"Turns\" is meant literally: Shepherd has to have seen the change happen. A pull request that was already red when Shepherd first saw it never starts anything, and each pull request starts at most one run per commit.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "„Turns“ ist wörtlich gemeint: Shepherd muss die Änderung selbst gesehen haben. Ein Pull Request, der schon rot war, als Shepherd ihn zum ersten Mal sah, startet nie etwas, und jeder Pull Request startet höchstens einen Lauf pro Commit."
-          }
-        }
-      }
-    },
     "#%@ is a pull request rather than an issue, so it has no acceptance criteria.": {
       "localizations": {
         "de": {
@@ -1341,16 +1331,6 @@
         }
       }
     },
-    "%lld of %lld used today · %lld running now. When a cap is reached Shepherd notifies you instead of starting anything.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld von %lld heute genutzt · %lld laufen gerade. Ist ein Limit erreicht, benachrichtigt Shepherd dich, statt etwas zu starten."
-          }
-        }
-      }
-    },
     "%lld of %lld words in this bullet appear in the pull request: %@.": {
       "localizations": {
         "de": {
@@ -2271,16 +2251,6 @@
         }
       }
     },
-    "5": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "5"
-          }
-        }
-      }
-    },
     "A new push or a failing check cancels it, with a notification.": {
       "localizations": {
         "de": {
@@ -2307,16 +2277,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Eine Delegation ist fertig"
-          }
-        }
-      }
-    },
-    "A delegation runs in a detached git worktree built from your own clone. Shepherd never clones anything itself.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Eine Delegation läuft in einem separaten Git-Worktree, der aus deinem eigenen Clone gebaut wird. Shepherd klont selbst nie etwas."
           }
         }
       }
@@ -2411,16 +2371,6 @@
         }
       }
     },
-    "A review comment you have written at least three times in the last thirty days, on at least two pull requests of the same repository. Shepherd finds these on this Mac, from your own comments only, and never sends them anywhere. On the review screen each one offers to draft a rule for that repository's agent instructions.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ein Review-Kommentar, den du in den letzten dreißig Tagen mindestens dreimal geschrieben hast, auf mindestens zwei Pull Requests desselben Repositories. Shepherd findet das auf diesem Mac, nur aus deinen eigenen Kommentaren, und sendet nichts irgendwohin. Im Review-Screen bietet jeder davon an, eine Regel für die Agent-Anweisungen dieses Repositories zu entwerfen."
-          }
-        }
-      }
-    },
     "A review was submitted": {
       "localizations": {
         "de": {
@@ -2461,26 +2411,6 @@
         }
       }
     },
-    "A summary a new review starts from, per repository. Match one repository with schnaq/review or a whole owner with schnaq/* — * and ? are the wildcards. An exact pattern wins over a wildcard, a longer wildcard wins over a shorter one, and if two are equally specific the one listed first wins.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Eine Zusammenfassung, mit der ein neues Review startet — pro Repository. Ein einzelnes Repository trifft schnaq/review, einen ganzen Owner schnaq/* — * und ? sind die Platzhalter. Ein exaktes Muster gewinnt gegen ein Wildcard-Muster, ein längeres Wildcard-Muster gegen ein kürzeres, und sind zwei gleich genau, gewinnt das zuerst gelistete."
-          }
-        }
-      }
-    },
-    "A template only ever fills an empty review. A pull request you have already written a comment, a summary or a verdict for is never touched.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Eine Vorlage füllt immer nur ein leeres Review. Ein Pull Request, für den du schon einen Kommentar, eine Zusammenfassung oder eine Bewertung geschrieben hast, wird nie angetastet."
-          }
-        }
-      }
-    },
     "ACROSS EVERY REPOSITORY": {
       "localizations": {
         "de": {
@@ -2507,16 +2437,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "ALTER"
-          }
-        }
-      }
-    },
-    "AGENT CLI": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "AGENT-CLI"
           }
         }
       }
@@ -2581,16 +2501,6 @@
         }
       }
     },
-    "AUTOMATIC DELEGATION": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "AUTOMATISCHE DELEGATION"
-          }
-        }
-      }
-    },
     "AUTOMATIC MERGING": {
       "localizations": {
         "de": {
@@ -2647,16 +2557,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Account"
-          }
-        }
-      }
-    },
-    "Add --output-format stream-json --verbose to see the run line by line in the delegation panel; add --max-turns and --max-budget-usd to cap it like a task run.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mit --output-format stream-json --verbose erscheint der Lauf Zeile für Zeile im Delegationsfenster; mit --max-turns und --max-budget-usd wird er begrenzt wie ein Aufgabenlauf."
           }
         }
       }
@@ -3457,16 +3357,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Automatisierung"
-          }
-        }
-      }
-    },
-    "BODY": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "TEXT"
           }
         }
       }
@@ -6071,16 +5961,6 @@
         }
       }
     },
-    "GUARDRAILS": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "LEITLINIEN"
-          }
-        }
-      }
-    },
     "Generated": {
       "localizations": {
         "de": {
@@ -6981,16 +6861,6 @@
         }
       }
     },
-    "LOCAL CHECKOUTS": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "LOKALE CHECKOUTS"
-          }
-        }
-      }
-    },
     "LOCAL DATA": {
       "localizations": {
         "de": {
@@ -7097,16 +6967,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Layout"
-          }
-        }
-      }
-    },
-    "Leave the path empty to let Shepherd look in the usual places. Not installed? `npm install -g @anthropic-ai/claude-code`.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lass den Pfad leer, damit Shepherd an den üblichen Orten sucht. Nicht installiert? `npm install -g @anthropic-ai/claude-code`."
           }
         }
       }
@@ -7317,16 +7177,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Als gesehen"
-          }
-        }
-      }
-    },
-    "Markdown, inserted exactly as typed. It is appended to whatever the comment field already holds, after a blank line.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Markdown, genau so eingefügt, wie du es schreibst. Es wird an den bestehenden Inhalt des Kommentarfelds angehängt, nach einer Leerzeile."
           }
         }
       }
@@ -7677,16 +7527,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Name"
-          }
-        }
-      }
-    },
-    "Named pieces of Markdown you can drop into any comment field: the inline comment composer, the review summary, and a thread reply. The insert button next to each field lists them in this order, so put the ones you use most at the top.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Benannte Markdown-Bausteine, die du in jedes Kommentarfeld einsetzen kannst: den Inline-Kommentar, die Review-Zusammenfassung und eine Thread-Antwort. Die Einfügen-Taste neben jedem Feld listet sie in dieser Reihenfolge — stelle die am häufigsten genutzten also nach oben."
           }
         }
       }
@@ -8531,16 +8371,6 @@
         }
       }
     },
-    "Off by default. A rule only ever starts the delegation you could have started yourself: it runs in an isolated worktree with the guardrails above, and it never pushes, approves or merges anything.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Standardmäßig aus. Eine Regel startet immer nur die Delegation, die du auch selbst hättest starten können: Sie läuft in einem isolierten Worktree mit den Leitlinien von oben und pusht, approvt und mergt nie etwas."
-          }
-        }
-      }
-    },
     "Off by default. One notification a day summarising what came in since the last one: new review requests, green agent pull requests that only need an approval or a merge, your own pull requests with red CI or a change request, and reviews the outbox could not send. Clicking it opens the inbox, and the same summary sits above the list as a card you can dismiss.": {
       "localizations": {
         "de": {
@@ -9201,16 +9031,6 @@
         }
       }
     },
-    "Placeholders: %@. Shepherd's own instructions — detached worktree, do not push, keep the change small — are prepended as usual.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Platzhalter: %@. Die eigenen Anweisungen von Shepherd — separater Worktree, nicht pushen, die Änderung klein halten — werden wie immer davorgestellt."
-          }
-        }
-      }
-    },
     "Plan only": {
       "localizations": {
         "de": {
@@ -9561,16 +9381,6 @@
         }
       }
     },
-    "RECURRING FINDINGS": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "WIEDERKEHRENDE BEFUNDE"
-          }
-        }
-      }
-    },
     "REPOSITORIES": {
       "localizations": {
         "de": {
@@ -9597,16 +9407,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "REVIEW-PRIORITÄT"
-          }
-        }
-      }
-    },
-    "REVIEW TEMPLATES": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "REVIEW-VORLAGEN"
           }
         }
       }
@@ -10421,16 +10221,6 @@
         }
       }
     },
-    "Run when, on a pull request of mine:": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ausführen, wenn auf einem Pull Request von mir:"
-          }
-        }
-      }
-    },
     "Running %@ in %@": {
       "localizations": {
         "de": {
@@ -10441,32 +10231,12 @@
         }
       }
     },
-    "SAVED REPLIES": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GESPEICHERTE ANTWORTEN"
-          }
-        }
-      }
-    },
     "SEMANTIC SEARCH": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "SEMANTISCHE SUCHE"
-          }
-        }
-      }
-    },
-    "SESSION BACK-CHANNEL": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "RÜCKKANAL ZUR SESSION"
           }
         }
       }
@@ -11067,16 +10837,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Shepherd erkennt einen Autor an seinem Login, seinem Branch-Präfix oder einem Commit-Trailer als Agent."
-          }
-        }
-      }
-    },
-    "Shepherd never handles the agent's authentication: it runs your installed CLI and passes your environment through untouched, adding nothing and removing nothing. It never pushes on its own either — the agent works in an isolated worktree and you decide what is committed.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Shepherd kümmert sich nie um die Anmeldung des Agenten: Es führt deine installierte CLI aus und gibt deine Umgebung unverändert weiter — es ergänzt nichts und entfernt nichts. Es pusht auch nie von selbst: Der Agent arbeitet in einem isolierten Worktree, und du entscheidest, was committet wird."
           }
         }
       }
@@ -12821,16 +12581,6 @@
         }
       }
     },
-    "The template is split like a shell would, but no shell ever runs it: {prompt} always becomes exactly one argument, so a prompt cannot turn into a second command. {worktree} becomes the worktree path.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Vorlage wird zerlegt, wie eine Shell es täte — aber keine Shell führt sie je aus: {prompt} wird immer genau ein Argument, ein Prompt kann also nie zu einem zweiten Befehl werden. {worktree} wird der Pfad des Worktrees."
-          }
-        }
-      }
-    },
     "The updater could not start: %@": {
       "localizations": {
         "de": {
@@ -13511,16 +13261,6 @@
         }
       }
     },
-    "Used as the summary of a new review on a matching repository. An existing draft — a comment, a summary, a verdict — is never overwritten.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wird als Zusammenfassung eines neuen Reviews auf einem passenden Repository genutzt. Ein bestehender Draft — ein Kommentar, eine Zusammenfassung, eine Bewertung — wird nie überschrieben."
-          }
-        }
-      }
-    },
     "Verdict": {
       "localizations": {
         "de": {
@@ -13567,16 +13307,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "WAS KI NIE TUT"
-          }
-        }
-      }
-    },
-    "WHAT DELEGATION NEVER DOES": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "WAS DIE DELEGATION NIE TUT"
           }
         }
       }
@@ -13707,16 +13437,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Was diese Zeilen ändern"
-          }
-        }
-      }
-    },
-    "When a pull request's commits carry a `Claude-Session:` trailer, every review finding gains a second button that sends it to that session. The command below is what runs: your own installed CLI, with its own login. Shepherd holds no account, no API key and no token for it, and it never pushes what the session changes.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tragen die Commits eines Pull Requests einen `Claude-Session:`-Trailer, bekommt jeder Befund einen zweiten Knopf, der ihn an diese Session schickt. Ausgeführt wird der Befehl unten: deine eigene installierte CLI mit ihrer eigenen Anmeldung. Shepherd besitzt dafür kein Konto, keinen API-Schlüssel und kein Token und pusht nie, was die Session ändert."
           }
         }
       }
@@ -14047,16 +13767,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "ein erkannter Agent ihn geöffnet hat"
-          }
-        }
-      }
-    },
-    "a reviewer requests changes": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ein Reviewer Änderungen anfordert"
           }
         }
       }
@@ -14841,16 +14551,6 @@
         }
       }
     },
-    "owner/repo": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "owner/repo"
-          }
-        }
-      }
-    },
     "rebase and merge": {
       "localizations": {
         "de": {
@@ -15257,16 +14957,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "keine Speicherung"
-          }
-        }
-      }
-    },
-    "{message} becomes exactly one argument, {sessionID} and {sessionURL} come from the trailer, {worktree} is the worktree path — split like a shell would, but no shell ever runs it. A bare command name is only resolved when it is the CLI above; write a full path otherwise. Leave a field empty to switch that button off; the remote field is empty by default, because whether the CLI can address a remote session at all is still an open question (docs/plans/session-back-channel-spike.md).": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "{message} wird immer genau ein Argument, {sessionID} und {sessionURL} kommen aus dem Trailer, {worktree} ist der Pfad des Worktrees – zerlegt wie eine Shell es täte, ausgeführt aber ohne jede Shell. Ein bloßer Befehlsname wird nur aufgelöst, wenn es die CLI von oben ist; sonst schreibe den vollen Pfad. Ein leeres Feld schaltet den jeweiligen Knopf ab; das Remote-Feld ist standardmäßig leer, weil noch offen ist, ob die CLI eine Remote-Session überhaupt ansprechen kann (docs/plans/session-back-channel-spike.md)."
           }
         }
       }
@@ -16601,16 +16291,6 @@
         }
       }
     },
-    "EDITOR": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "EDITOR"
-          }
-        }
-      }
-    },
     "Editor": {
       "localizations": {
         "de": {
@@ -16797,26 +16477,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "keine Turn-Grenze"
-          }
-        }
-      }
-    },
-    "{file} becomes the file's full path and always exactly one argument, {line} the line (1 when none is known). Split like a shell would, but no shell ever runs it. Start with the full path to the program: apps opened from the Dock do not see your shell's PATH.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "{file} wird zum vollständigen Pfad der Datei und immer zu genau einem Argument, {line} zur Zeile (1, wenn keine bekannt ist). Aufgeteilt wie von einer Shell, aber nie von einer ausgeführt. Beginne mit dem vollständigen Pfad zum Programm: Aus dem Dock gestartete Apps sehen den PATH deiner Shell nicht."
-          }
-        }
-      }
-    },
-    "“Open in editor” on a file in the review opens it in the checkout above, at the line when there is one. Lines are counted on the pull request's head, so they match when your checkout is on that commit.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "„Im Editor öffnen“ auf einer Datei im Review öffnet sie im Checkout oben, an der Zeile, wenn es eine gibt. Zeilen zählen ab dem Head des pull requests und stimmen, wenn dein Checkout auf diesem Commit steht."
           }
         }
       }
@@ -17641,16 +17301,6 @@
         }
       }
     },
-    "Pick the folder; Shepherd reads the repository from its origin and can watch it too.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wähle den Ordner; Shepherd liest das Repository aus seinem origin und kann es auch beobachten."
-          }
-        }
-      }
-    },
     "Replaces the folder linked now: %@": {
       "localizations": {
         "de": {
@@ -17947,6 +17597,426 @@
           "stringUnit": {
             "state": "translated",
             "value": "Der Diff ist einen Tastendruck entfernt (t)."
+          }
+        }
+      }
+    },
+    "%lld of %lld used today · %lld running now. At a cap, Shepherd notifies you instead.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %lld heute genutzt · %lld laufen gerade. Am Limit benachrichtigt Shepherd dich stattdessen."
+          }
+        }
+      }
+    },
+    "A comment you wrote at least three times in thirty days, on at least two pull requests of the same repository. On the review screen each one offers to draft a rule for that repository's agent instructions.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Kommentar, den du in dreißig Tagen mindestens dreimal geschrieben hast, auf mindestens zwei Pull Requests desselben Repositories. Im Review-Screen bietet jeder davon an, eine Regel für die Agent-Anweisungen dieses Repositories zu entwerfen."
+          }
+        }
+      }
+    },
+    "A delegation runs in a git worktree of your own clone. Shepherd never clones anything itself.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Delegation läuft in einem Git-Worktree deines eigenen Clones. Shepherd klont selbst nie etwas."
+          }
+        }
+      }
+    },
+    "A reviewer requests changes": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Reviewer Änderungen anfordert"
+          }
+        }
+      }
+    },
+    "Agent CLI": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent-CLI"
+          }
+        }
+      }
+    },
+    "Automatic delegation": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatische Delegation"
+          }
+        }
+      }
+    },
+    "Body": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text"
+          }
+        }
+      }
+    },
+    "By name": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Per Name"
+          }
+        }
+      }
+    },
+    "For a clone whose origin does not say.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für einen Clone, dessen origin es nicht verrät."
+          }
+        }
+      }
+    },
+    "Found on this Mac from your own comments; never sent anywhere.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf diesem Mac aus deinen eigenen Kommentaren gefunden; nie irgendwohin gesendet."
+          }
+        }
+      }
+    },
+    "From a folder": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aus einem Ordner"
+          }
+        }
+      }
+    },
+    "Guardrails": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leitlinien"
+          }
+        }
+      }
+    },
+    "Leave empty to look in the usual places.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leer lassen, um an den üblichen Orten zu suchen."
+          }
+        }
+      }
+    },
+    "Limits": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Limits"
+          }
+        }
+      }
+    },
+    "Local checkouts": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokale Checkouts"
+          }
+        }
+      }
+    },
+    "Markdown for any comment field. The insert menu lists them in this order.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markdown für jedes Kommentarfeld. Das Einfügen-Menü listet sie in dieser Reihenfolge."
+          }
+        }
+      }
+    },
+    "Markdown, appended to the comment field after a blank line.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markdown, nach einer Leerzeile an das Kommentarfeld angehängt."
+          }
+        }
+      }
+    },
+    "Match one repository with schnaq/review or a whole owner with schnaq/* — * and ? are the wildcards. An exact pattern wins over a wildcard, a longer wildcard over a shorter one; on a tie, the one listed first wins.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein einzelnes Repository trifft schnaq/review, einen ganzen Owner schnaq/* — * und ? sind die Platzhalter. Ein exaktes Muster gewinnt gegen ein Wildcard-Muster, ein längeres Wildcard-Muster gegen ein kürzeres; bei Gleichstand gewinnt das zuerst gelistete."
+          }
+        }
+      }
+    },
+    "Not installed? Run npm install -g @anthropic-ai/claude-code in Terminal.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht installiert? Führe npm install -g @anthropic-ai/claude-code im Terminal aus."
+          }
+        }
+      }
+    },
+    "Open in editor": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Im Editor öffnen"
+          }
+        }
+      }
+    },
+    "Opens a review's file in your checkout, at the line.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnet eine Datei aus dem Review in deinem Checkout, an der Zeile."
+          }
+        }
+      }
+    },
+    "Passed to --allowedTools.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird an --allowedTools übergeben."
+          }
+        }
+      }
+    },
+    "Placeholders: %@. Shepherd's own rules (worktree, no push) come first.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Platzhalter: %@. Shepherds eigene Regeln (Worktree, kein Push) stehen davor."
+          }
+        }
+      }
+    },
+    "Reads the repository from the clone's origin; can watch it too.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liest das Repository aus dem origin des Clones; kann es auch beobachten."
+          }
+        }
+      }
+    },
+    "Recurring findings": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wiederkehrende Befunde"
+          }
+        }
+      }
+    },
+    "Review templates": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review-Vorlagen"
+          }
+        }
+      }
+    },
+    "Run on my pull requests when": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf meinen Pull Requests ausführen, wenn"
+          }
+        }
+      }
+    },
+    "Same worktree and guardrails; never pushes, approves or merges.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gleicher Worktree, gleiche Leitlinien; pusht, approvt und mergt nie."
+          }
+        }
+      }
+    },
+    "Saved replies": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gespeicherte Antworten"
+          }
+        }
+      }
+    },
+    "Sends a review finding to the session named in a commit's Claude-Session: trailer.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schickt einen Befund an die Session aus dem Claude-Session:-Trailer eines Commits."
+          }
+        }
+      }
+    },
+    "Session back-channel": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rückkanal zur Session"
+          }
+        }
+      }
+    },
+    "Shepherd runs your installed CLI with your environment untouched and holds no login for it. It never pushes: you decide what is committed.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd führt deine installierte CLI mit unveränderter Umgebung aus und besitzt keine Anmeldung dafür. Es pusht nie: Du entscheidest, was committet wird."
+          }
+        }
+      }
+    },
+    "Split like a shell would, but no shell ever runs it; {file} is always exactly one argument. Start with the full path to the program: apps opened from the Dock do not see your shell's PATH.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufgeteilt wie von einer Shell, aber nie von einer ausgeführt; {file} ist immer genau ein Argument. Beginne mit dem vollständigen Pfad zum Programm: Aus dem Dock gestartete Apps sehen den PATH deiner Shell nicht."
+          }
+        }
+      }
+    },
+    "Starts a new review on a matching repository. A draft is never overwritten.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Startet ein neues Review auf einem passenden Repository. Ein Draft wird nie überschrieben."
+          }
+        }
+      }
+    },
+    "Summary": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zusammenfassung"
+          }
+        }
+      }
+    },
+    "The summary a new review starts from. A review you already started is never touched.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Zusammenfassung, mit der ein neues Review startet. Ein schon begonnenes Review wird nie angetastet."
+          }
+        }
+      }
+    },
+    "The template is split like a shell would, but no shell ever runs it: {prompt} always becomes exactly one argument, so a prompt cannot turn into a second command.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Vorlage wird zerlegt, wie eine Shell es täte — aber keine Shell führt sie je aus: {prompt} wird immer genau ein Argument, ein Prompt kann also nie zu einem zweiten Befehl werden."
+          }
+        }
+      }
+    },
+    "“Turns” is meant literally: Shepherd has to have seen the change happen. A pull request that was already red when Shepherd first saw it never starts anything, and each pull request starts at most one run per commit.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„Turns“ ist wörtlich gemeint: Shepherd muss die Änderung selbst gesehen haben. Ein Pull Request, der schon rot war, als Shepherd ihn zum ersten Mal sah, startet nie etwas, und jeder Pull Request startet höchstens einen Lauf pro Commit."
+          }
+        }
+      }
+    },
+    "Lines are counted on the pull request's head, so they match when your checkout is on that commit.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeilen zählen ab dem Head des Pull Requests und stimmen, wenn dein Checkout auf diesem Commit steht."
+          }
+        }
+      }
+    },
+    "Runs your own installed CLI with its own login; Shepherd holds no token for it and never pushes what the session changes. {message} is always exactly one argument, {sessionID} and {sessionURL} come from the trailer, {worktree} is the worktree path. Write a full path unless the command is the CLI above, or leave a field empty to switch that button off.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Führt deine eigene installierte CLI mit ihrer eigenen Anmeldung aus; Shepherd besitzt dafür kein Token und pusht nie, was die Session ändert. {message} wird immer genau ein Argument, {sessionID} und {sessionURL} kommen aus dem Trailer, {worktree} ist der Pfad des Worktrees. Schreibe den vollen Pfad, außer der Befehl ist die CLI von oben, oder lass ein Feld leer, um den jeweiligen Knopf abzuschalten."
+          }
+        }
+      }
+    },
+    "{file} is the path, {line} the line (or 1).": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{file} ist der Pfad, {line} die Zeile (oder 1)."
+          }
+        }
+      }
+    },
+    "{prompt} is the task, {worktree} the path.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{prompt} ist die Aufgabe, {worktree} der Pfad."
           }
         }
       }
