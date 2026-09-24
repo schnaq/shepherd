@@ -13,9 +13,9 @@ import SwiftUI
 ///
 /// Automatic merging sits below it rather than beside auto-delegation on the Delegation tab,
 /// because it is not a delegation: it writes to GitHub, it never runs an agent, and the event it
-/// emits is one of the webhook events listed above. It is also the only card in Settings that
-/// carries a warning rather than an explanation, which is why it is last: everything above it can
-/// be misconfigured, this one can merge.
+/// emits is one of the webhook events listed above. It is also the only section in Settings whose
+/// subtitle is a warning rather than an explanation: everything above it can be misconfigured,
+/// this one can merge.
 struct AutomationSettingsTab: View {
     @Environment(AppEnvironment.self) private var environment
     /// The settings model, which owns the secret editor and the test state.
@@ -34,15 +34,14 @@ struct AutomationSettingsTab: View {
 
     var body: some View {
         SettingsPage {
-            webhookCard
-            eventsCard
-            signingCard
-            deliveryCard
-            policyCard
-            autoMergeCard
-            autoMergeLogCard
-            trustLaneCard
-            trackRecordCard
+            webhookSection
+            eventsSection
+            signingSection
+            deliverySection
+            autoMergeSection
+            autoMergeLogSection
+            trustLaneSection
+            trackRecordSection
         }
         .task {
             model.loadWebhookSecret(store: environment.secretStore)
@@ -59,109 +58,109 @@ struct AutomationSettingsTab: View {
 
     // MARK: - Destination
 
-    private var webhookCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                CardTitle(String(localized: "OUTBOUND WEBHOOK"))
-                Toggle(String(localized: "Send events to a webhook"), isOn: enabledBinding)
-                LabeledField(
-                    label: String(localized: "URL"),
-                    placeholder: "https://n8n.example.com/webhook/shepherd",
-                    text: urlBinding
-                )
-                if let problem = urlProblem {
-                    Label(problem, systemImage: "exclamationmark.triangle")
-                        .font(Theme.type(.subheadline))
-                        .foregroundStyle(Theme.pending)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Text(String(
-                    localized: "Paste an n8n Webhook node's URL (or any endpoint that accepts a JSON POST). https everywhere, or http for a server on this machine. Nothing is ever sent anywhere else."
-                ))
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
+    private var webhookSection: some View {
+        Section {
+            Toggle(String(localized: "Send events to a webhook"), isOn: enabledBinding)
+            TextField(
+                String(localized: "URL"),
+                text: urlBinding,
+                prompt: Text(verbatim: "https://n8n.example.com/webhook/shepherd")
+            )
+            if let problem = urlProblem {
+                Label(problem, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(Theme.pending)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+        } header: {
+            Text(String(localized: "Outbound webhook"))
+        } footer: {
+            SettingsNote(String(
+                localized: "Any endpoint that takes a JSON POST, such as n8n. https, or http on this Mac. Nothing is sent anywhere else."
+            ))
         }
     }
 
     // MARK: - Events
 
-    private var eventsCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                CardTitle(String(localized: "EVENTS"))
-                ForEach(WebhookEventKind.userSelectable) { kind in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Toggle(kind.title, isOn: eventBinding(kind))
-                        Text(kind.explanation)
-                            .font(Theme.type(.subheadline))
-                            .foregroundStyle(Theme.textMuted)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+    private var eventsSection: some View {
+        Section {
+            ForEach(WebhookEventKind.userSelectable) { kind in
+                Toggle(isOn: eventBinding(kind)) {
+                    Text(kind.title)
+                    Text(kind.explanation)
                 }
             }
+        } header: {
+            HStack(spacing: 4) {
+                Text(String(localized: "Events"))
+                InfoButton(String(
+                    localized: "Each event says what happened — repository, number, title, author, provenance, verdict — and nothing more. It fires only after the action really succeeded."
+                ))
+            }
+        } footer: {
+            SettingsNote(String(
+                localized: "Webhooks never carry review text, comments, diffs or agent output."
+            ))
         }
     }
 
     // MARK: - Signing
 
-    private var signingCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 8) {
-                CardTitle(String(localized: "SIGNING SECRET (OPTIONAL)"))
+    private var signingSection: some View {
+        Section {
+            LabeledContent {
                 HStack(spacing: 8) {
-                    Text(String(localized: "Secret"))
-                        .font(Theme.type(.callout))
-                        .foregroundStyle(Theme.textSecondary)
-                        .frame(width: 74, alignment: .leading)
-                    SecureField(String(localized: "leave empty for unsigned"), text: secretBinding)
-                        .textFieldStyle(.roundedBorder)
-                }
-                Text(String(
-                    localized: "With a secret set, every request carries X-Shepherd-Signature: sha256=<HMAC-SHA256 of the body>. That is the same shape as GitHub's X-Hub-Signature-256, so a verification step built for GitHub works unchanged. The secret is stored in your Keychain, next to the GitHub token."
-                ))
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 8) {
+                    SecureField(
+                        String(localized: "Secret"),
+                        text: secretBinding,
+                        prompt: Text(String(localized: "leave empty for unsigned"))
+                    )
+                    .labelsHidden()
+                    .frame(maxWidth: 240)
                     Button(String(localized: "Save secret")) {
                         saveError = model.saveWebhookSecret(store: environment.secretStore)
                     }
-                    .buttonStyle(SecondaryButtonStyle(height: 28))
-                    if model.hasStoredWebhookSecret {
-                        Text(String(localized: "A secret is stored."))
-                            .font(Theme.type(.subheadline))
-                            .foregroundStyle(Theme.textMuted)
-                    }
                 }
-                if let saveError {
-                    Text(saveError)
-                        .font(Theme.type(.subheadline))
-                        .foregroundStyle(Theme.failure)
+            } label: {
+                HStack(spacing: 4) {
+                    Text(String(localized: "Secret"))
+                    InfoButton(String(
+                        localized: "With a secret set, every request carries X-Shepherd-Signature: sha256=<HMAC-SHA256 of the body> — the same shape as GitHub's X-Hub-Signature-256. The secret is stored in your Keychain."
+                    ))
+                }
+                if model.hasStoredWebhookSecret {
+                    Text(String(localized: "A secret is stored."))
                 }
             }
+            if let saveError {
+                Text(saveError)
+                    .foregroundStyle(Theme.failure)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } header: {
+            Text(String(localized: "Signing secret"))
+        } footer: {
+            SettingsNote(String(localized: "Optional. Lets the receiver check that a request came from Shepherd."))
         }
     }
 
     // MARK: - Delivery
 
-    private var deliveryCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 8) {
-                CardTitle(String(localized: "DELIVERY"))
+    private var deliverySection: some View {
+        Section {
+            LabeledContent {
                 HStack(spacing: 8) {
+                    if model.webhookTestState == .running {
+                        ProgressView().controlSize(.small)
+                    }
                     Button(String(localized: "Send test event")) {
                         let coordinator = environment.webhookCoordinator
                         Task { await model.sendTestWebhook(coordinator: coordinator) }
                     }
-                    .buttonStyle(SecondaryButtonStyle(height: 28))
                     .disabled(model.webhookTestState == .running || !isURLUsable)
-                    if model.webhookTestState == .running {
-                        ProgressView().controlSize(.small)
-                    }
                 }
-                testResult
+            } label: {
+                Text(String(localized: "Test event"))
                 if let delivery = environment.webhooks.lastDelivery {
                     Label(
                         delivery.summary,
@@ -169,97 +168,74 @@ struct AutomationSettingsTab: View {
                             ? "checkmark.circle"
                             : "exclamationmark.triangle"
                     )
-                    .font(Theme.type(.subheadline))
-                    .foregroundStyle(delivery.isSuccess ? Theme.textMuted : Theme.pending)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(delivery.isSuccess ? AnyShapeStyle(.secondary) : AnyShapeStyle(Theme.pending))
                 }
-                Text(String(
-                    localized: "A failing webhook never interrupts a review, a merge or a sync: Shepherd tries twice, then gives up quietly and says so here."
-                ))
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
             }
+            if hasTestResult {
+                AsyncActionStatusLine(state: model.webhookTestState)
+            }
+        } header: {
+            Text(String(localized: "Delivery"))
+        } footer: {
+            SettingsNote(String(
+                localized: "A failing webhook never blocks a review, merge or sync: Shepherd tries twice, then gives up quietly."
+            ))
         }
     }
 
-    private var policyCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 6) {
-                CardTitle(String(localized: "WHAT WEBHOOKS NEVER SEND"))
-                Text(String(
-                    localized: "The payload says what happened — repository, number, title, author, provenance, verdict — and nothing more. No review text, no comment bodies, no diffs and no agent output leave your Mac. Events fire only after the action really succeeded, and only while the toggle above is on."
-                ))
-                .font(Theme.type(.callout))
-                .foregroundStyle(Theme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            }
+    /// Whether the last test has a finished result to show. Idle and running show nothing — the
+    /// spinner sits beside the button — and a form must not get an empty row for them.
+    private var hasTestResult: Bool {
+        switch model.webhookTestState {
+        case .idle, .running: return false
+        case .success, .failure: return true
         }
-    }
-
-    private var testResult: some View {
-        AsyncActionStatusLine(state: model.webhookTestState)
     }
 
     // MARK: - Automatic merging (ADR 0018)
 
-    private var autoMergeCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                autoMergeSwitch
-                Divider().overlay(Theme.hairline)
-                autoMergeNarrowing
-                Divider().overlay(Theme.hairline)
-                autoMergeMethodSection
-                Divider().overlay(Theme.hairline)
-                autoMergeSummary
+    private var autoMergeSection: some View {
+        Section {
+            Toggle(isOn: autoMergeEnabledBinding) {
+                Text(String(localized: "Merge green, approved agent pull requests automatically"))
+                Text(String(
+                    localized: "No confirmation click: pull requests already waiting can merge on the next sweep."
+                ))
             }
-        }
-    }
-
-    private var autoMergeSwitch: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            CardTitle(String(localized: "AUTOMATIC MERGING"))
-            Toggle(
-                String(localized: "Merge green, approved agent pull requests by myself"),
-                isOn: autoMergeEnabledBinding
-            )
-            Label(
-                String(
-                    localized: "There is no confirmation click. With this on, Shepherd queues the merge as soon as a sweep sees a pull request that satisfies every rule below — the same merge you would have queued from the merge sheet, sent through the same outbox. That includes pull requests that are already waiting, so switching this on can merge several of them on the next sweep."
-                ),
-                systemImage: "exclamationmark.triangle"
-            )
-            .font(Theme.type(.subheadline))
-            .foregroundStyle(Theme.pending)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private var autoMergeNarrowing: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            LabeledField(
-                label: String(localized: "Repos"),
-                placeholder: "schnaq/review, schnaq/*",
-                text: $repositoryField
-            )
-            Text(String(
-                localized: "Comma-separated, with * and ? as wildcards. Leave it empty for every repository in your inbox."
-            ))
-            .font(Theme.type(.subheadline))
-            .foregroundStyle(Theme.textMuted)
-            .fixedSize(horizontal: false, vertical: true)
-            LabeledField(
-                label: String(localized: "Labels"),
-                placeholder: "automerge",
-                text: $labelField
-            )
-            Text(String(
-                localized: "Comma-separated. A pull request has to carry every label listed here, which is how you opt single pull requests in instead of whole repositories. Leave it empty to require none."
-            ))
-            .font(Theme.type(.subheadline))
-            .foregroundStyle(Theme.textMuted)
-            .fixedSize(horizontal: false, vertical: true)
+            LabeledContent {
+                TextField(
+                    String(localized: "Repos"),
+                    text: $repositoryField,
+                    prompt: Text(verbatim: "schnaq/review, schnaq/*")
+                )
+                .labelsHidden()
+                .frame(maxWidth: 240)
+            } label: {
+                Text(String(localized: "Repos"))
+                Text(String(localized: "Comma-separated, * and ? as wildcards. Empty means all."))
+            }
+            LabeledContent {
+                TextField(
+                    String(localized: "Labels"),
+                    text: $labelField,
+                    prompt: Text(verbatim: "automerge")
+                )
+                .labelsHidden()
+                .frame(maxWidth: 240)
+            } label: {
+                Text(String(localized: "Labels"))
+                Text(String(localized: "A pull request must carry all of them. Empty means none."))
+            }
+            MergeMethodPicker(settings: environment.settings)
+        } header: {
+            HStack(spacing: 4) {
+                Text(String(localized: "Automatic merging"))
+                InfoButton(String(
+                    localized: "Shepherd queues the same merge the merge sheet would, through the same outbox, pinned to the commit it checked. Each pull request is queued at most once per commit; one that could not be sent waits for you in Settings → Sync. The method is shared with the merge sheet and bulk triage."
+                ))
+            }
+        } footer: {
+            SettingsNote(autoMergeSentence)
         }
         .onChange(of: repositoryField) { _, text in
             environment.settings.autoMerge.allowedRepositories = AutoMergeRules.list(from: text)
@@ -269,61 +245,27 @@ struct AutomationSettingsTab: View {
         }
     }
 
-    private var autoMergeMethodSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            MergeMethodPicker(settings: environment.settings)
-            Text(String(
-                localized: "The same method the merge sheet and bulk triage use — whichever you merged with last. Changing it here changes it there."
-            ))
-            .font(Theme.type(.subheadline))
-            .foregroundStyle(Theme.textMuted)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private var autoMergeSummary: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(autoMergeSentence)
-                .font(Theme.type(.callout))
-                .foregroundStyle(Theme.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(String(
-                localized: "Each pull request is queued at most once per commit: a merge Shepherd could not send — because somebody pushed in between — waits for you in Settings → Sync rather than being tried again against the new commit."
-            ))
-            .font(Theme.type(.subheadline))
-            .foregroundStyle(Theme.textMuted)
-            .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private var autoMergeLogCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    CardTitle(String(localized: "WHAT SHEPHERD MERGED"))
-                    Spacer(minLength: 8)
-                    if environment.autoMerge.auditEntryCount > 0 {
-                        Button(String(localized: "Clear")) {
-                            environment.autoMergeStore.clear()
-                        }
-                        .buttonStyle(.plain)
-                        .font(Theme.type(.subheadline))
-                        .foregroundStyle(Theme.accentText)
-                    }
-                }
-                if environment.autoMerge.auditEntries.isEmpty {
-                    Text(String(localized: "Nothing yet. Every automatic merge is recorded here, on this Mac only."))
-                        .font(Theme.type(.callout))
-                        .foregroundStyle(Theme.textMuted)
+    private var autoMergeLogSection: some View {
+        Section {
+            if environment.autoMerge.auditEntries.isEmpty {
+                Text(String(localized: "Nothing yet. The log stays on this Mac."))
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(environment.autoMerge.auditEntries) { entry in
+                    Text(auditLine(for: entry))
+                        .textSelection(.enabled)
                         .fixedSize(horizontal: false, vertical: true)
-                } else {
-                    ForEach(environment.autoMerge.auditEntries) { entry in
-                        Text(auditLine(for: entry))
-                            .font(Theme.type(.subheadline))
-                            .foregroundStyle(Theme.textSecondary)
-                            .textSelection(.enabled)
-                            .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        } header: {
+            HStack {
+                Text(String(localized: "What Shepherd merged"))
+                Spacer(minLength: 8)
+                if environment.autoMerge.auditEntryCount > 0 {
+                    Button(String(localized: "Clear")) {
+                        environment.autoMergeStore.clear()
                     }
+                    .buttonStyle(.borderless)
                 }
             }
         }
@@ -373,7 +315,7 @@ struct AutomationSettingsTab: View {
         }
         let joined = conditions.joined(separator: ", ")
         return String(
-            localized: "In plain words: Shepherd will \(autoMergeMethodName) a pull request by itself when \(joined). Anything else — a human's pull request, a red check, a pull request nobody approved — is left for you."
+            localized: "Shepherd will \(autoMergeMethodName) a pull request by itself only when \(joined). Everything else is left for you."
         )
     }
 
@@ -395,99 +337,88 @@ struct AutomationSettingsTab: View {
 
     // MARK: - Trust lanes (ADR 0027)
 
-    private var trustLaneCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                CardTitle(String(localized: "TRUST LANES"))
-                Text(String(
-                    localized: "The inbox splits into Short look and Full review. A pull request is a short look only when CI is green, the diff is within both numbers below, and it touches no workflow, auth, secret, migration or deleted-test file."
+    private var trustLaneSection: some View {
+        Section {
+            TrustThresholdRow(
+                title: String(localized: "Files"),
+                value: trustLaneFilesBinding,
+                range: TrustThresholdRow.fileRange
+            )
+            TrustThresholdRow(
+                title: String(localized: "Lines"),
+                value: trustLaneLinesBinding,
+                range: TrustThresholdRow.lineRange
+            )
+        } header: {
+            HStack(spacing: 4) {
+                Text(String(localized: "Trust lanes"))
+                InfoButton(String(
+                    localized: "Sensitive means a workflow, auth, secret, migration or deleted-test file. A track record never moves a pull request between the lanes; it only colours the chip and orders rows. Both limits travel to your other Macs."
                 ))
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                TrustThresholdRow(
-                    title: String(localized: "Files"),
-                    value: trustLaneFilesBinding,
-                    range: TrustThresholdRow.fileRange
-                )
-                TrustThresholdRow(
-                    title: String(localized: "Lines"),
-                    value: trustLaneLinesBinding,
-                    range: TrustThresholdRow.lineRange
-                )
-                Text(trustLaneSentence)
-                    .font(Theme.type(.callout))
-                    .foregroundStyle(Theme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(String(
-                    localized: "Both numbers travel to your other Macs. A track record never moves a pull request between the lanes — it only colours the chip and orders rows inside a lane."
-                ))
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
             }
+        } footer: {
+            SettingsNote(trustLaneSentence)
         }
     }
 
-    private var trackRecordCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                CardTitle(String(localized: "TRACK RECORD"))
-                Text(String(
-                    localized: "Loads the pull requests your repositories closed in the last 90 days, so each agent's chip can say how much of its work was merged and how much came back out. At most 500 per repository, read once and kept up to date by the sync from then on."
-                ))
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
+    private var trackRecordSection: some View {
+        Section {
+            LabeledContent {
                 trackRecordButtons
-                if let progress = environment.trackRecord.progress {
-                    Text(TrackRecordProgressLine.text(for: progress))
-                        .font(Theme.type(.subheadline))
-                        .foregroundStyle(Theme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if let result = environment.trackRecord.lastResult {
-                    Text(TrackRecordProgressLine.text(for: result))
-                        .font(Theme.type(.subheadline))
-                        .foregroundStyle(Theme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    // Every failure as one line, in the words the server gave: a run over six
-                    // repositories that could not search the third has still imported five.
-                    ForEach(result.failures, id: \.repo) { failure in
-                        Label(
-                            TrackRecordProgressLine.text(for: failure),
-                            systemImage: "exclamationmark.triangle"
-                        )
-                        .font(Theme.type(.subheadline))
-                        .foregroundStyle(Theme.failure)
-                        .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
+            } label: {
+                Text(String(localized: "History"))
                 Text(String(
                     localized: "\(environment.trackRecord.storedOutcomeCount) closed pull requests stored on this Mac. This history is not synced."
                 ))
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
             }
+            if let progress = environment.trackRecord.progress {
+                Text(TrackRecordProgressLine.text(for: progress))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let result = environment.trackRecord.lastResult {
+                Text(TrackRecordProgressLine.text(for: result))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                // Every failure as one line, in the words the server gave: a run over six
+                // repositories that could not search the third has still imported five.
+                ForEach(result.failures, id: \.repo) { failure in
+                    Label(
+                        TrackRecordProgressLine.text(for: failure),
+                        systemImage: "exclamationmark.triangle"
+                    )
+                    .foregroundStyle(Theme.failure)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        } header: {
+            Text(String(localized: "Track record"))
+        } footer: {
+            SettingsNote(String(
+                localized: "The last 90 days of closed pull requests, up to 500 per repository, for each agent's chip."
+            ))
         }
     }
 
     @ViewBuilder
     private var trackRecordButtons: some View {
         HStack(spacing: 8) {
+            if environment.trackRecord.storedOutcomeCount > 0 {
+                Button(String(localized: "Clear history")) {
+                    guard let database = environment.session?.database else { return }
+                    environment.trackRecord.clearHistory(database: database)
+                }
+            }
             if environment.trackRecord.isRunning {
+                ProgressView()
+                    .controlSize(.small)
                 Button(String(localized: "Stop")) {
                     environment.trackRecord.cancel()
                 }
-                .buttonStyle(SecondaryButtonStyle(height: 28))
-                ProgressView()
-                    .controlSize(.small)
             } else {
                 Button(String(localized: "Load track record")) {
                     environment.startTrackRecordBackfill()
                 }
-                .buttonStyle(SecondaryButtonStyle(height: 28))
                 .disabled(environment.trackRecordBackfillRepositories.isEmpty)
                 .help(
                     environment.trackRecordBackfillRepositories.isEmpty
@@ -495,16 +426,6 @@ struct AutomationSettingsTab: View {
                         : String(localized: "Reads the last 90 days of closed pull requests, one repository at a time.")
                 )
             }
-            if environment.trackRecord.storedOutcomeCount > 0 {
-                Button(String(localized: "Clear history")) {
-                    guard let database = environment.session?.database else { return }
-                    environment.trackRecord.clearHistory(database: database)
-                }
-                .buttonStyle(.plain)
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.accentText)
-            }
-            Spacer(minLength: 0)
         }
     }
 
@@ -512,7 +433,7 @@ struct AutomationSettingsTab: View {
     private var trustLaneSentence: String {
         let configuration = environment.settings.trustLaneConfiguration
         return String(
-            localized: "In plain words: a green pull request touching at most \(configuration.maxFiles) files and \(configuration.maxChangedLines) changed lines, with nothing sensitive in it, is a short look. Everything else is a full review."
+            localized: "Short look: CI green, at most \(configuration.maxFiles) files and \(configuration.maxChangedLines) changed lines, nothing sensitive. Everything else is a full review."
         )
     }
 
@@ -585,11 +506,11 @@ struct AutomationSettingsTab: View {
     }
 }
 
-/// One "label · stepper · number" row, as both trust-lane thresholds are.
+/// One trust-lane threshold as a form row: the label on the left, the number and its stepper on
+/// the right.
 ///
-/// A private twin of the Delegation tab's row rather than a shared component: the two tabs' rows
-/// differ in label width and in nothing else, and a shared one would need a parameter for that
-/// and a home neither tab owns.
+/// A private twin of the Delegation tab's row rather than a shared component: each tab owns its
+/// own pane, and a shared row would need a home neither tab owns.
 private struct TrustThresholdRow: View {
     /// The range the file stepper may move in — the configuration's own clamp, so the control
     /// cannot produce a value the pure type would then silently change.
@@ -615,22 +536,19 @@ private struct TrustThresholdRow: View {
     let range: ClosedRange<Int>
 
     var body: some View {
-        HStack(spacing: 12) {
-            Text(title)
-                .font(Theme.type(.callout))
-                .foregroundStyle(Theme.textSecondary)
-                .frame(width: 74, alignment: .leading)
-            Stepper(value: value, in: range) {
-                Text("\(value.wrappedValue)")
+        LabeledContent(title) {
+            HStack(spacing: 6) {
+                Text(verbatim: "\(value.wrappedValue)")
                     .font(Theme.mono(.callout))
                     .monospacedDigit()
-                    .foregroundStyle(Theme.text)
+                Stepper(title, value: value, in: range)
+                    .labelsHidden()
             }
         }
     }
 }
 
-/// The lines the track-record card shows about a run (ADR 0027).
+/// The lines the track-record section shows about a run (ADR 0027).
 ///
 /// Static functions on a type of their own rather than methods on the view, so an app test can
 /// assert the sentences a user reads without building a Settings tab.
