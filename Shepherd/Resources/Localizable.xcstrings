@@ -3471,26 +3471,6 @@
         }
       }
     },
-    "BRING YOUR OWN KEY": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "EIGENEN SCHLÜSSEL VERWENDEN"
-          }
-        }
-      }
-    },
-    "BUNDLED REGISTRY": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "MITGELIEFERTE REGISTRY"
-          }
-        }
-      }
-    },
     "Back to the inbox": {
       "localizations": {
         "de": {
@@ -3617,16 +3597,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sammel-Triage: die ausgewählten Pull Requests approven oder mergen"
-          }
-        }
-      }
-    },
-    "Bundled entries ship with Shepherd. Add your own below — an entry with the same id replaces the bundled one.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mitgelieferte Einträge kommen mit Shepherd. Ergänze unten eigene — ein Eintrag mit derselben ID ersetzt den mitgelieferten."
           }
         }
       }
@@ -4207,16 +4177,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Auf diesem Mac eingeordnet. Nichts wurde irgendwohin gesendet."
-          }
-        }
-      }
-    },
-    "Classifies each pull request on this Mac — what kind of change it is and how much it can hurt, with a one-sentence reason — so the inbox can sort and filter by it. Nothing leaves this Mac, and nothing acts on it: it never approves, merges or comments.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ordnet jeden Pull Request auf diesem Mac ein — welche Art von Änderung er ist und wie viel Schaden er anrichten kann, mit einer Begründung in einem Satz — damit die Inbox danach sortieren und filtern kann. Nichts verlässt diesen Mac, und nichts handelt danach: Es approvt nichts, mergt nichts und kommentiert nichts."
           }
         }
       }
@@ -6801,26 +6761,6 @@
         }
       }
     },
-    "It needs the on-device model, so with the provider above set to Off nothing is classified. The inbox keeps the risk hints it works out without a model — “touches auth”, “deletes tests” — either way.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dafür braucht es das On-Device-Modell: Steht der Anbieter oben auf „Aus“, wird nichts eingeordnet. Die Risikohinweise, die Shepherd ohne Modell ermittelt — „betrifft Auth-Code“, „löscht Tests“ —, bleiben so oder so."
-          }
-        }
-      }
-    },
-    "It never uses an AI endpoint, even when you have configured one: search runs on every keystroke and over every pull request, so it stays on this Mac. Switching it off leaves ⌘K searching titles, labels, repositories, branches and authors, and empties the index.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sie nutzt nie einen KI-Endpunkt, auch wenn du einen konfiguriert hast: Die Suche läuft bei jedem Tastendruck und über jeden Pull Request, also bleibt sie auf diesem Mac. Ausgeschaltet sucht ⌘K weiter in Titeln, Labels, Repositorys, Branches und Autoren — und der Index wird geleert."
-          }
-        }
-      }
-    },
     "It reads the pull requests your repositories closed in the last 90 days, at most 500 per repository, and the sync keeps it current from then on.": {
       "localizations": {
         "de": {
@@ -8991,16 +8931,6 @@
         }
       }
     },
-    "Optional. Two-letter country codes, comma-separated. Both fields are sent as part of the request — only endpoints that understand them can act on them, and an endpoint that cannot meet them refuses the request rather than answering from somewhere else. Left empty and off, nothing extra is sent.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Optional. Zweibuchstabige Ländercodes, durch Kommas getrennt. Beide Felder werden als Teil der Anfrage mitgesendet — nur Endpunkte, die sie kennen, können sie umsetzen, und ein Endpunkt, der sie nicht erfüllen kann, lehnt die Anfrage ab, statt sie von anderswo zu beantworten. Leer und ausgeschaltet wird nichts zusätzlich gesendet."
-          }
-        }
-      }
-    },
     "Original, %@": {
       "localizations": {
         "de": {
@@ -9057,16 +8987,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "PERSONAL ACCESS TOKEN"
-          }
-        }
-      }
-    },
-    "PROVIDER": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ANBIETER"
           }
         }
       }
@@ -10451,16 +10371,6 @@
         }
       }
     },
-    "SEMANTIC SEARCH": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "SEMANTISCHE SUCHE"
-          }
-        }
-      }
-    },
     "SESSION BACK-CHANNEL": {
       "localizations": {
         "de": {
@@ -10511,16 +10421,6 @@
         }
       }
     },
-    "SPOTLIGHT": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "SPOTLIGHT"
-          }
-        }
-      }
-    },
     "squash-merge": {
       "localizations": {
         "de": {
@@ -10557,16 +10457,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nicht mehr warten"
-          }
-        }
-      }
-    },
-    "STRUCTURED TRIAGE": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "STRUKTURIERTE TRIAGE"
           }
         }
       }
@@ -11611,16 +11501,6 @@
         }
       }
     },
-    "Spotlight's index is macOS's, not Shepherd's — so only the title and that metadata are exported. Descriptions, diffs, review comments and your drafts never leave the local database. Switching this off deletes every pull request Shepherd put there.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Index von Spotlight gehört macOS, nicht Shepherd — deshalb werden nur der Titel und diese Metadaten exportiert. Beschreibungen, Diffs, Review-Kommentare und deine Drafts verlassen die lokale Datenbank nie. Ausgeschaltet löscht das jeden Pull Request, den Shepherd dort abgelegt hat."
-          }
-        }
-      }
-    },
     "Source file": {
       "localizations": {
         "de": {
@@ -12447,16 +12327,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Das Issue konnte nicht gelesen werden: Dieser Account kann es nicht sehen."
-          }
-        }
-      }
-    },
-    "The key is stored in your Keychain, next to the GitHub token, and is sent only to the endpoint above.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Schlüssel liegt in deinem Schlüsselbund, neben dem GitHub-Token, und wird nur an den Endpunkt oben gesendet."
           }
         }
       }
@@ -13561,16 +13431,6 @@
         }
       }
     },
-    "WHAT AI NEVER DOES": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "WAS KI NIE TUT"
-          }
-        }
-      }
-    },
     "WHAT DELEGATION NEVER DOES": {
       "localizations": {
         "de": {
@@ -13881,16 +13741,6 @@
         }
       }
     },
-    "YOUR EXTENSIONS": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "DEINE ERWEITERUNGEN"
-          }
-        }
-      }
-    },
     "You are caught up.": {
       "localizations": {
         "de": {
@@ -13987,16 +13837,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Deine Anmerkungen"
-          }
-        }
-      }
-    },
-    "Your issues are indexed the same way and answer the same ⌘K: the same on-device embeddings, over the title, the labels and the body of what Shepherd already downloaded.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deine Issues werden genauso indexiert und antworten im selben ⌘K: dieselben Embeddings auf dem Gerät, über Titel, Labels und Beschreibung von allem, was Shepherd schon heruntergeladen hat."
           }
         }
       }
@@ -15527,26 +15367,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "−%lld"
-          }
-        }
-      }
-    },
-    "⌘K searches your pull requests by what they are about — the title, the description, the labels, the branch, the changed files and the diff of anything you have opened — not just by exact words. The index is built on this Mac from what Shepherd already downloaded, with Apple's on-device embeddings, and it is stored in the local database.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "⌘K sucht deine Pull Requests danach, worum sie gehen — Titel, Beschreibung, Labels, Branch, geänderte Dateien und der Diff von allem, was du geöffnet hast —, nicht nur nach exakten Wörtern. Der Index wird auf diesem Mac aus dem gebaut, was Shepherd schon geladen hat, mit Apples On-Device-Embeddings, und liegt in der lokalen Datenbank."
-          }
-        }
-      }
-    },
-    "⌘Space finds the pull requests in your inbox by title, by owner/repo#number, by label, by repository and by the agent that wrote them. Opening a result opens the review screen, exactly as a shepherd:// link does.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "⌘Space findet die Pull Requests in deiner Inbox über Titel, owner/repo#Nummer, Label, Repository und den Agenten, der sie geschrieben hat. Ein Treffer öffnet den Review-Bildschirm, genau wie ein shepherd://-Link."
           }
         }
       }
@@ -17351,16 +17171,6 @@
         }
       }
     },
-    "SCREENSHOTS": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "SCREENSHOTS"
-          }
-        }
-      }
-    },
     "Read screenshots in descriptions on this Mac": {
       "localizations": {
         "de": {
@@ -17947,6 +17757,226 @@
           "stringUnit": {
             "state": "translated",
             "value": "Der Diff ist einen Tastendruck entfernt (t)."
+          }
+        }
+      }
+    },
+    "An extension with the same id replaces the bundled entry.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Erweiterung mit derselben ID ersetzt den mitgelieferten Eintrag."
+          }
+        }
+      }
+    },
+    "Both are sent as part of the request. An endpoint that cannot meet them refuses the request rather than answering from somewhere else. Left empty and off, nothing extra is sent.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beide werden als Teil der Anfrage mitgesendet. Ein Endpunkt, der sie nicht erfüllen kann, lehnt die Anfrage ab, statt sie von anderswo zu beantworten. Leer und ausgeschaltet wird nichts zusätzlich gesendet."
+          }
+        }
+      }
+    },
+    "Bring your own key": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eigener Schlüssel"
+          }
+        }
+      }
+    },
+    "Bundled registry": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mitgelieferte Registry"
+          }
+        }
+      }
+    },
+    "Classify pull requests": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pull Requests einordnen"
+          }
+        }
+      }
+    },
+    "Downloaded only when you ask, and never sent anywhere else.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur auf deinen Wunsch geladen und nie anderswohin gesendet."
+          }
+        }
+      }
+    },
+    "Each pull request gets a kind, a risk and a one-sentence reason from the on-device model. Nothing acts on it: it never approves, merges or comments. With the provider set to Off nothing is classified, and the inbox keeps its risk hints either way.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Pull Request bekommt vom Modell auf dem Gerät eine Art, ein Risiko und eine Begründung in einem Satz. Nichts handelt danach: Es approvt nichts, mergt nichts und kommentiert nichts. Steht der Anbieter auf Aus, wird nichts eingeordnet — die Risikohinweise der Inbox bleiben so oder so."
+          }
+        }
+      }
+    },
+    "Find inbox pull requests with ⌘Space. Only titles and metadata go there.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finde Pull Requests der Inbox mit ⌘Leertaste. Dorthin gehen nur Titel und Metadaten."
+          }
+        }
+      }
+    },
+    "Index": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Index"
+          }
+        }
+      }
+    },
+    "Kind of change and risk, to sort the inbox by. Stays on this Mac.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Art der Änderung und Risiko, zum Sortieren der Inbox. Bleibt auf diesem Mac."
+          }
+        }
+      }
+    },
+    "New entry": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neuer Eintrag"
+          }
+        }
+      }
+    },
+    "Optional. Two-letter country codes, comma-separated.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optional. Zweibuchstabige Ländercodes, durch Kommas getrennt."
+          }
+        }
+      }
+    },
+    "Screenshots": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshots"
+          }
+        }
+      }
+    },
+    "Semantic search": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Semantische Suche"
+          }
+        }
+      }
+    },
+    "Shepherd never reviews, approves, merges or comments for you.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd reviewt, approvt, mergt und kommentiert nie für dich."
+          }
+        }
+      }
+    },
+    "Spotlight": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spotlight"
+          }
+        }
+      }
+    },
+    "Spotlight's index is macOS's, not Shepherd's — so only the title, owner/repo#number, labels, repository and agent are exported. Descriptions, diffs, review comments and your drafts never leave the local database. Switching this off deletes every pull request Shepherd put there.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Index von Spotlight gehört macOS, nicht Shepherd — deshalb werden nur Titel, owner/repo#Nummer, Labels, Repository und Agent exportiert. Beschreibungen, Diffs, Review-Kommentare und deine Drafts verlassen die lokale Datenbank nie. Ausgeschaltet löscht das jeden Pull Request, den Shepherd dort abgelegt hat."
+          }
+        }
+      }
+    },
+    "The index is built on this Mac with Apple's on-device embeddings and kept in the local database. It never uses an AI endpoint, even when you have configured one. Switched off, the index is emptied and ⌘K matches words only.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Index entsteht auf diesem Mac mit Apples Embeddings auf dem Gerät und liegt in der lokalen Datenbank. Er nutzt nie einen KI-Endpunkt, auch wenn du einen konfiguriert hast. Ausgeschaltet wird der Index geleert, und ⌘K findet nur noch Wörter."
+          }
+        }
+      }
+    },
+    "The key stays in your Keychain and is sent only to this endpoint.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Schlüssel bleibt in deinem Schlüsselbund und geht nur an diesen Endpunkt."
+          }
+        }
+      }
+    },
+    "Where the model runs": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wo das Modell läuft"
+          }
+        }
+      }
+    },
+    "Your extensions": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Erweiterungen"
+          }
+        }
+      }
+    },
+    "⌘K finds pull requests and issues by meaning, on this Mac.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌘K findet Pull Requests und Issues nach Bedeutung, auf diesem Mac."
           }
         }
       }
