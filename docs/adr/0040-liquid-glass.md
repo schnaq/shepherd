@@ -112,8 +112,10 @@ type-scale gate (`Scripts/check-type-scale.py`) is unchanged and green.
 - The window title is the pull request's title while a review is open, and is expected to revert
   when the review screen leaves the hierarchy; a stale title on the inbox after leaving a review
   is one of the screenshot checks.
-- The fleet screen keeps its back button inside the agent list rather than in a toolbar. Moving it
-  is the same change the review screen got and is left for its own pass.
+- The fleet screen's back button is the toolbar's navigation item too (2026-09-24): "‹ Inbox",
+  labelled like the review toolbar's, in every state of the screen. Escape is the button's own
+  key equivalent here, since the no-agents state has no list to take the key. The chevron in
+  the agent list's header and its copy over the no-agents state are gone.
 - Anything new follows the rules above: a new bar under the toolbar paints its own frame only; a
   new toolbar item uses the default style; a new sheet uses the app's styles.
 

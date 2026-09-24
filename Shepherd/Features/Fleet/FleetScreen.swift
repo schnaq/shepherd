@@ -39,6 +39,13 @@ struct FleetScreen: View {
     var body: some View {
         content
             .background(Theme.background)
+            // The way back, as the window's toolbar (ADR 0040) — on `content`, so it is there in
+            // every state of the screen, the one with no agents and no list included.
+            .toolbar {
+                ToolbarItem(placement: .navigation) {
+                    backButton
+                }
+            }
             .task {
                 // The ask first, so a link that opened the window is already waiting when the
                 // first snapshot lands; then the counting; then the registry, which only the
@@ -115,14 +122,11 @@ struct FleetScreen: View {
 
     private var agentList: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                backButton
-                Text(String(localized: "Agents"))
-                    .font(Theme.type(.body, weight: .semibold))
-                    .foregroundStyle(Theme.textStrong)
-                Spacer(minLength: 8)
-            }
-            .padding(.horizontal, 14)
+            Text(String(localized: "Agents"))
+                .font(Theme.type(.body, weight: .semibold))
+                .foregroundStyle(Theme.textStrong)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14)
             .frame(height: 42)
             Divider().overlay(Theme.hairline)
             ScrollViewReader { proxy in
@@ -159,8 +163,9 @@ struct FleetScreen: View {
 
     private func handle(_ press: KeyPress) -> KeyPress.Result {
         // No Escape branch: ``backButton`` carries it as a key equivalent, which is offered the
-        // key before this handler is, and is on screen in both states of the screen — which this
-        // list is not. Two answers to one key, one of them unreachable, is how they drift apart.
+        // key before this handler is, and is in the toolbar in every state of the screen — which
+        // this list is not. Two answers to one key, one of them unreachable, is how they drift
+        // apart.
         if press.matches(.downArrow) {
             model.moveSelection(by: 1)
             return .handled
@@ -215,14 +220,6 @@ struct FleetScreen: View {
             )
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // The list — and with it the header's chevron and the key handler Escape used to go
-        // through — is not drawn in this state, so the way back is drawn here. It carries the
-        // Escape shortcut itself, which is what makes the key work on this side of the switch.
-        .overlay(alignment: .topLeading) {
-            backButton
-                .padding(.horizontal, 14)
-                .padding(.top, 12)
-        }
     }
 
     /// One line about a link that named an agent this fleet does not have.
@@ -244,38 +241,31 @@ struct FleetScreen: View {
 
     // MARK: - Shared pieces
 
-    /// The way back, in the screen's own header rather than the window's toolbar.
+    /// The way back: the toolbar's navigation item, with ``ReviewToolbar``'s label, help and
+    /// accessibility label — but not its Escape, which the review screen answers from its file
+    /// list's key handler.
     ///
-    /// ``ReviewHeader``'s arrangement, and its reason: this is a full-window screen the user
-    /// arrived at from the inbox, so the control that returns them belongs where they are looking
-    /// — and a toolbar declared outside a `NavigationSplitView` is a placement question this does
-    /// not have to ask. Escape does the same thing; the chevron is what makes that discoverable.
+    /// It used to be a bare chevron in the agent list's header — about eleven points across, a
+    /// hard thing to hit — and a second copy over the empty state, because the list is not drawn
+    /// when there are no agents. The toolbar is drawn in every state, so one button covers both,
+    /// and the word makes it a target rather than a glyph (ADR 0040).
     ///
-    /// Escape is *this button's* shortcut rather than the list's key handler, because this button
-    /// is drawn in both states of the screen and the list is not: with no agents there is no list
-    /// to focus, and the reader who pressed Escape got nothing back. The shortcut steps aside
-    /// while ⌘K is up — a key equivalent is offered the key before the palette's own handler sees
-    /// it, and Escape over an open palette means "close the palette".
+    /// Escape is *this button's* shortcut rather than the list's key handler, because the list is
+    /// not always there to be focused. The shortcut steps aside while ⌘K is up — a key equivalent
+    /// is offered the key before the palette's own handler sees it, and Escape over an open
+    /// palette means "close the palette".
     ///
     /// It goes to ``AppEnvironment/route`` directly and deliberately **not** through
     /// ``AppEnvironment/closeReview()``: that method exists to end a focus session, and there is
     /// no session here to end. A fleet that ended one on Escape would quietly cancel a queue the
     /// reader had merely stepped away from to look something up.
-    ///
-    /// A chevron glyph is about eleven points across, which is a hard thing to hit. The frame is
-    /// what the pointer actually aims at, and the shape is what makes the whole of it clickable
-    /// rather than only the strokes.
     private var backButton: some View {
         Button {
             environment.route = .inbox
         } label: {
-            Image(systemName: "chevron.left")
-                .font(Theme.type(.body, weight: .semibold))
-                .foregroundStyle(Theme.textSecondary)
-                .frame(width: 28, height: 28)
-                .contentShape(Rectangle())
+            Label(String(localized: "Inbox"), systemImage: "chevron.left")
+                .labelStyle(.titleAndIcon)
         }
-        .buttonStyle(.plain)
         .keyboardShortcut(environment.isCommandPaletteVisible ? nil : KeyboardShortcut.cancelAction)
         .help(String(localized: "Back to the inbox (esc)"))
         .accessibilityLabel(Text(String(localized: "Back to the inbox")))
