@@ -2581,16 +2581,6 @@
         }
       }
     },
-    "APPEARANCE": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "DARSTELLUNG"
-          }
-        }
-      }
-    },
     "AUTOMATIC DELEGATION": {
       "localizations": {
         "de": {
@@ -3457,16 +3447,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Automatisch"
-          }
-        }
-      }
-    },
-    "Automatic switches to the line list while VoiceOver is running, and uses the rich viewer otherwise. Choose Rich viewer or Line list to always use that one, screen reader or not.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "„Automatisch“ wechselt zur Zeilenliste, solange VoiceOver läuft, und nutzt sonst die erweiterte Ansicht. Wähle „Erweiterte Ansicht“ oder „Zeilenliste“, um immer bei dieser zu bleiben – mit oder ohne Screenreader."
           }
         }
       }
@@ -5177,16 +5157,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "DIAGNOSE"
-          }
-        }
-      }
-    },
-    "DIFF VIEWER": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "DIFF-ANSICHT"
           }
         }
       }
@@ -7301,16 +7271,6 @@
         }
       }
     },
-    "MENU BAR": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "MENÜLEISTE"
-          }
-        }
-      }
-    },
     "Merge when checks pass": {
       "localizations": {
         "de": {
@@ -8661,16 +8621,6 @@
         }
       }
     },
-    "On by default. The menu-bar item shows how many pull requests are waiting for your review and opens a short list of them; clicking one opens it in the main window. Switching this off removes the item — nothing else changes, and no sync of its own runs either way.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Standardmäßig ein. Das Menüleisten-Symbol zeigt, wie viele Pull Requests auf dein Review warten, und öffnet eine kurze Liste davon; ein Klick öffnet einen im Hauptfenster. Ausgeschaltet verschwindet das Symbol — sonst ändert sich nichts, und eine eigene Synchronisierung läuft so oder so nicht."
-          }
-        }
-      }
-    },
     "On-device": {
       "localizations": {
         "de": {
@@ -9647,16 +9597,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "REVIEW-PRIORITÄT"
-          }
-        }
-      }
-    },
-    "REVIEW SCREEN": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "REVIEW-ANSICHT"
           }
         }
       }
@@ -11771,16 +11711,6 @@
         }
       }
     },
-    "Starts on the claims and evidence when an agent wrote the description; the diff is one keystroke away (t).": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Beginnt bei den Behauptungen und Belegen, wenn ein Agent die Beschreibung geschrieben hat; der Diff ist einen Tastendruck entfernt (t)."
-          }
-        }
-      }
-    },
     "State unknown": {
       "localizations": {
         "de": {
@@ -12427,16 +12357,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Die eigene Befehlsvorlage muss {prompt} enthalten, damit Shepherd weiß, wohin der Prompt gehört."
-          }
-        }
-      }
-    },
-    "The diff viewer follows the same setting: the theme is pushed into Monaco over the bridge.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Diff-Ansicht folgt derselben Einstellung: Das Thema wird über die Bridge in Monaco geschoben."
           }
         }
       }
@@ -17967,6 +17887,66 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nach dem Anlegen des Worktrees gestoppt. Er liegt unter %@; verwirf ihn oder starte erneut."
+          }
+        }
+      }
+    },
+    "Automatic uses the line list while VoiceOver is running.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„Automatisch“ nutzt die Zeilenliste, solange VoiceOver läuft."
+          }
+        }
+      }
+    },
+    "Diff viewer": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diff-Ansicht"
+          }
+        }
+      }
+    },
+    "How many reviews are waiting, and a short list of them.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie viele Reviews warten, mit einer kurzen Liste."
+          }
+        }
+      }
+    },
+    "More information": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weitere Informationen"
+          }
+        }
+      }
+    },
+    "Review screen": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review-Ansicht"
+          }
+        }
+      }
+    },
+    "The diff is one keystroke away (t).": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Diff ist einen Tastendruck entfernt (t)."
           }
         }
       }

@@ -130,6 +130,11 @@ struct ShepherdApp: App {
                 .environment(environment)
                 .preferredColorScheme(environment.settings.appearance.colorScheme)
         }
+        // Resizable down to the panes' minimum, and opening at a size where the tallest pane
+        // needs little scrolling. A `Settings` window is otherwise sized to its content and
+        // cannot be dragged at all.
+        .defaultSize(width: 820, height: 660)
+        .windowResizability(.contentMinSize)
 
         // The quick inbox (`Features/MenuBar`). `isInserted` is bound straight to the Settings
         // toggle, so switching it off *removes* the item from the menu bar instead of leaving a
