@@ -2331,16 +2331,6 @@
         }
       }
     },
-    "A failing webhook never interrupts a review, a merge or a sync: Shepherd tries twice, then gives up quietly and says so here.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ein fehlschlagender Webhook unterbricht nie ein Review, einen Merge oder eine Synchronisierung: Shepherd versucht es zweimal, gibt dann still auf und sagt es hier."
-          }
-        }
-      }
-    },
     "A fine-grained token with “Pull requests: Read & write”. Stored in your Keychain, never on disk.": {
       "localizations": {
         "de": {
@@ -2587,16 +2577,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "AUTOMATISCHE DELEGATION"
-          }
-        }
-      }
-    },
-    "AUTOMATIC MERGING": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "AUTOMATISCHES MERGEN"
           }
         }
       }
@@ -3541,16 +3521,6 @@
         }
       }
     },
-    "Both numbers travel to your other Macs. A track record never moves a pull request between the lanes — it only colours the chip and orders rows inside a lane.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Beide Zahlen werden auf deine anderen Macs übertragen. Eine Erfolgsbilanz verschiebt einen Pull Request nie zwischen den Spuren — sie färbt nur den Chip und sortiert Zeilen innerhalb einer Spur."
-          }
-        }
-      }
-    },
     "Bots": {
       "localizations": {
         "de": {
@@ -4461,26 +4431,6 @@
         }
       }
     },
-    "Comma-separated, with * and ? as wildcards. Leave it empty for every repository in your inbox.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kommagetrennt, mit * und ? als Platzhaltern. Leer lassen für jedes Repository in deiner Inbox."
-          }
-        }
-      }
-    },
-    "Comma-separated. A pull request has to carry every label listed here, which is how you opt single pull requests in instead of whole repositories. Leave it empty to require none.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kommagetrennt. Ein Pull Request muss jedes hier gelistete Label tragen — so nimmst du einzelne Pull Requests auf statt ganzer Repositorys. Leer lassen, um keins zu verlangen."
-          }
-        }
-      }
-    },
     "Command": {
       "localizations": {
         "de": {
@@ -5131,16 +5081,6 @@
         }
       }
     },
-    "DELIVERY": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "AUSLIEFERUNG"
-          }
-        }
-      }
-    },
     "DESCRIPTION": {
       "localizations": {
         "de": {
@@ -5551,26 +5491,6 @@
         }
       }
     },
-    "EVENTS": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "EREIGNISSE"
-          }
-        }
-      }
-    },
-    "Each pull request is queued at most once per commit: a merge Shepherd could not send — because somebody pushed in between — waits for you in Settings → Sync rather than being tried again against the new commit.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Jeder Pull Request wird höchstens einmal pro Commit eingereiht: Einen Merge, den Shepherd nicht senden konnte — weil zwischenzeitlich jemand gepusht hat —, findest du in Einstellungen → Sync, statt dass er gegen den neuen Commit erneut versucht wird."
-          }
-        }
-      }
-    },
     "Each pull request is queued separately in the outbox and sent one by one, with the same staleness check as a single review. A pull request whose head moved on is parked as a conflict instead of being written blind.": {
       "localizations": {
         "de": {
@@ -5921,16 +5841,6 @@
         }
       }
     },
-    "Fires when GitHub confirmed the close, with the reason. The payload describes the issue, not a pull request.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wird gesendet, wenn GitHub das Schließen bestätigt hat, mit dem Grund. Die Nutzdaten beschreiben das Issue, nicht einen Pull Request."
-          }
-        }
-      }
-    },
     "Fires when GitHub confirmed the merge, with the method used.": {
       "localizations": {
         "de": {
@@ -5941,52 +5851,12 @@
         }
       }
     },
-    "Fires when a local agent run ends: finished, failed or cancelled — including runs an automatic rule started.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Feuert, wenn ein lokaler Agentenlauf endet: fertig, fehlgeschlagen oder abgebrochen — auch bei Läufen, die eine automatische Regel gestartet hat."
-          }
-        }
-      }
-    },
     "Fires when a sweep finds a pull request waiting for your review.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Feuert, wenn ein Sweep einen Pull Request findet, der auf dein Review wartet."
-          }
-        }
-      }
-    },
-    "Fires when an agent is actually running on an issue you assigned it — not when you pressed the button. The payload describes the issue, not a pull request.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wird ausgelöst, wenn ein Agent tatsächlich an einem Issue arbeitet, das du ihm übergeben hast – nicht wenn du den Knopf gedrückt hast. Die Nutzlast beschreibt das Issue, nicht einen Pull Request."
-          }
-        }
-      }
-    },
-    "Fires when an auto-merge rule queued a merge — at the moment Shepherd decided, not when GitHub confirmed. The merge itself still sends \"A pull request was merged\".": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Feuert, wenn eine Auto-Merge-Regel einen Merge eingereiht hat — in dem Moment, in dem Shepherd entschieden hat, nicht wenn GitHub bestätigt. Der Merge selbst sendet weiterhin „Ein Pull Request wurde gemergt“."
-          }
-        }
-      }
-    },
-    "Fires when the outbox has actually sent the review, not when you press the key.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Feuert, wenn die Outbox das Review wirklich gesendet hat, nicht wenn du die Taste drückst."
           }
         }
       }
@@ -6517,26 +6387,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "In %@ wurden %lld von %@s %lld Merges zurückgenommen; %lld von %@s %lld."
-          }
-        }
-      }
-    },
-    "In plain words: Shepherd will %@ a pull request by itself when %@. Anything else — a human's pull request, a red check, a pull request nobody approved — is left for you.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Klartext: Shepherd erledigt einen Pull Request von selbst per %@, wenn %@. Alles andere — der Pull Request eines Menschen, ein roter Check, ein Pull Request, den niemand approved hat — bleibt bei dir."
-          }
-        }
-      }
-    },
-    "In plain words: a green pull request touching at most %lld files and %lld changed lines, with nothing sensitive in it, is a short look. Everything else is a full review.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Im Klartext: Ein grüner Pull Request mit höchstens %lld Dateien und %lld geänderten Zeilen, in dem nichts Sensibles steckt, ist ein kurzer Blick. Alles andere ist ein vollständiges Review."
           }
         }
       }
@@ -7231,16 +7081,6 @@
         }
       }
     },
-    "Loads the pull requests your repositories closed in the last 90 days, so each agent's chip can say how much of its work was merged and how much came back out. At most 500 per repository, read once and kept up to date by the sync from then on.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lädt die Pull Requests, die deine Repositories in den letzten 90 Tagen geschlossen haben, damit der Chip jedes Agents sagen kann, wie viel seiner Arbeit gemergt wurde und wie viel wieder herausgeflogen ist. Höchstens 500 pro Repository, einmal gelesen und danach von der Synchronisierung aktuell gehalten."
-          }
-        }
-      }
-    },
     "Local": {
       "localizations": {
         "de": {
@@ -7457,16 +7297,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Merge-Commit"
-          }
-        }
-      }
-    },
-    "Merge green, approved agent pull requests by myself": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Grüne, approved Agent-Pull-Requests selbst mergen"
           }
         }
       }
@@ -8451,16 +8281,6 @@
         }
       }
     },
-    "Nothing yet. Every automatic merge is recorded here, on this Mac only.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Noch nichts. Jeder automatische Merge wird hier festgehalten, nur auf diesem Mac."
-          }
-        }
-      }
-    },
     "Nothing you reviewed is still open.": {
       "localizations": {
         "de": {
@@ -8497,16 +8317,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "JETZT OFFEN"
-          }
-        }
-      }
-    },
-    "OUTBOUND WEBHOOK": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "AUSGEHENDER WEBHOOK"
           }
         }
       }
@@ -9097,16 +8907,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Füge zuerst ein Token ein."
-          }
-        }
-      }
-    },
-    "Paste an n8n Webhook node's URL (or any endpoint that accepts a JSON POST). https everywhere, or http for a server on this machine. Nothing is ever sent anywhere else.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Füge die URL eines n8n-Webhook-Knotens ein (oder eines anderen Endpunkts, der einen JSON-POST annimmt). Überall https, oder http für einen Server auf diesem Rechner. Es wird nie irgendwohin sonst gesendet."
           }
         }
       }
@@ -10487,16 +10287,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "MIT GITHUB ANMELDEN"
-          }
-        }
-      }
-    },
-    "SIGNING SECRET (OPTIONAL)": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "SIGNIER-SECRET (OPTIONAL)"
           }
         }
       }
@@ -12051,16 +11841,6 @@
         }
       }
     },
-    "TRUST LANES": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "VERTRAUENSSPUREN"
-          }
-        }
-      }
-    },
     "Tab": {
       "localizations": {
         "de": {
@@ -12401,16 +12181,6 @@
         }
       }
     },
-    "The inbox splits into Short look and Full review. A pull request is a short look only when CI is green, the diff is within both numbers below, and it touches no workflow, auth, secret, migration or deleted-test file.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Eingang teilt sich in Kurzer Blick und Vollständiges Review. Ein Pull Request ist nur dann ein kurzer Blick, wenn die CI grün ist, das Diff innerhalb der beiden Zahlen unten liegt und er keine Workflow-, Auth-, Secret-, Migrations- oder gelöschte Testdatei berührt."
-          }
-        }
-      }
-    },
     "The issue could not be read.": {
       "localizations": {
         "de": {
@@ -12641,16 +12411,6 @@
         }
       }
     },
-    "The payload says what happened — repository, number, title, author, provenance, verdict — and nothing more. No review text, no comment bodies, no diffs and no agent output leave your Mac. Events fire only after the action really succeeded, and only while the toggle above is on.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Nutzlast sagt, was passiert ist — Repository, Nummer, Titel, Autor, Herkunft, Bewertung — und nichts weiter. Kein Review-Text, keine Kommentartexte, keine Diffs und keine Agentenausgabe verlassen deinen Mac. Ereignisse feuern erst, wenn die Aktion wirklich geklappt hat, und nur solange der Schalter oben an ist."
-          }
-        }
-      }
-    },
     "The pull request got new commits. Re-review before submitting.": {
       "localizations": {
         "de": {
@@ -12727,16 +12487,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Das Review wird in der lokalen Outbox eingereiht und von der Sync-Engine gesendet — so übersteht es einen Absturz oder eine abgebrochene Verbindung."
-          }
-        }
-      }
-    },
-    "The same method the merge sheet and bulk triage use — whichever you merged with last. Changing it here changes it there.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dieselbe Methode, die auch das Merge-Fenster und die Sammel-Triage nutzen — die, mit der du zuletzt gemergt hast. Änderst du sie hier, ändert sie sich auch dort."
           }
         }
       }
@@ -12867,16 +12617,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Der Webhook war nicht erreichbar: %@"
-          }
-        }
-      }
-    },
-    "There is no confirmation click. With this on, Shepherd queues the merge as soon as a sweep sees a pull request that satisfies every rule below — the same merge you would have queued from the merge sheet, sent through the same outbox. That includes pull requests that are already waiting, so switching this on can merge several of them on the next sweep.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Es gibt keinen Bestätigungsklick. Ist das eingeschaltet, reiht Shepherd den Merge ein, sobald ein Sweep einen Pull Request sieht, der jede Regel unten erfüllt — denselben Merge, den du aus dem Merge-Fenster eingereiht hättest, gesendet über dieselbe Outbox. Das gilt auch für Pull Requests, die schon warten: Einschalten kann also beim nächsten Sweep mehrere davon mergen."
           }
         }
       }
@@ -13601,32 +13341,12 @@
         }
       }
     },
-    "WHAT SHEPHERD MERGED": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "WAS SHEPHERD GEMERGT HAT"
-          }
-        }
-      }
-    },
     "WHAT THE COUNTS SAY": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "WAS DIE ZAHLEN SAGEN"
-          }
-        }
-      }
-    },
-    "WHAT WEBHOOKS NEVER SEND": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "WAS WEBHOOKS NIE SENDEN"
           }
         }
       }
@@ -13767,16 +13487,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Warum?"
-          }
-        }
-      }
-    },
-    "With a secret set, every request carries X-Shepherd-Signature: sha256=<HMAC-SHA256 of the body>. That is the same shape as GitHub's X-Hub-Signature-256, so a verification step built for GitHub works unchanged. The secret is stored in your Keychain, next to the GitHub token.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ist ein Secret gesetzt, trägt jede Anfrage X-Shepherd-Signature: sha256=<HMAC-SHA256 des Bodys>. Das ist dieselbe Form wie GitHubs X-Hub-Signature-256, ein für GitHub gebauter Prüfschritt funktioniert also unverändert. Das Secret liegt in deinem Schlüsselbund, neben dem GitHub-Token."
           }
         }
       }
@@ -17947,6 +17657,306 @@
           "stringUnit": {
             "state": "translated",
             "value": "Der Diff ist einen Tastendruck entfernt (t)."
+          }
+        }
+      }
+    },
+    "A failing webhook never blocks a review, merge or sync: Shepherd tries twice, then gives up quietly.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein fehlschlagender Webhook blockiert nie ein Review, einen Merge oder eine Synchronisierung: Shepherd versucht es zweimal, dann gibt es still auf."
+          }
+        }
+      }
+    },
+    "A pull request must carry all of them. Empty means none.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Pull Request muss alle tragen. Leer heißt: keine."
+          }
+        }
+      }
+    },
+    "Any endpoint that takes a JSON POST, such as n8n. https, or http on this Mac. Nothing is sent anywhere else.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Endpunkt, der einen JSON-POST annimmt, etwa n8n. https, oder http auf diesem Mac. Es wird nie irgendwohin sonst gesendet."
+          }
+        }
+      }
+    },
+    "Automatic merging": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatisches Mergen"
+          }
+        }
+      }
+    },
+    "Comma-separated, * and ? as wildcards. Empty means all.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommagetrennt, * und ? als Platzhalter. Leer heißt: alle."
+          }
+        }
+      }
+    },
+    "Delivery": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auslieferung"
+          }
+        }
+      }
+    },
+    "Each event says what happened — repository, number, title, author, provenance, verdict — and nothing more. It fires only after the action really succeeded.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jedes Ereignis sagt, was passiert ist — Repository, Nummer, Titel, Autor, Herkunft, Bewertung — und nichts weiter. Es feuert erst, wenn die Aktion wirklich geklappt hat."
+          }
+        }
+      }
+    },
+    "Events": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ereignisse"
+          }
+        }
+      }
+    },
+    "Fires when GitHub confirmed the close, with the reason.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Feuert, wenn GitHub das Schließen bestätigt hat, mit dem Grund."
+          }
+        }
+      }
+    },
+    "Fires when a local agent run ends, including runs a rule started.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Feuert, wenn ein lokaler Agentenlauf endet, auch bei Läufen, die eine Regel gestartet hat."
+          }
+        }
+      }
+    },
+    "Fires when a rule queues a merge, before GitHub confirms it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Feuert, wenn eine Regel einen Merge einreiht, bevor GitHub ihn bestätigt."
+          }
+        }
+      }
+    },
+    "Fires when an agent is actually running on an issue you assigned it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Feuert, wenn ein Agent tatsächlich an einem Issue arbeitet, das du ihm übergeben hast."
+          }
+        }
+      }
+    },
+    "Fires when the outbox has sent the review, not when you press the key.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Feuert, wenn die Outbox das Review gesendet hat, nicht wenn du die Taste drückst."
+          }
+        }
+      }
+    },
+    "History": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historie"
+          }
+        }
+      }
+    },
+    "Merge green, approved agent pull requests automatically": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grüne, approved Agent-Pull-Requests automatisch mergen"
+          }
+        }
+      }
+    },
+    "No confirmation click: pull requests already waiting can merge on the next sweep.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ohne Bestätigungsklick: Schon wartende Pull Requests können beim nächsten Sweep gemergt werden."
+          }
+        }
+      }
+    },
+    "Nothing yet. The log stays on this Mac.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch nichts. Das Protokoll bleibt auf diesem Mac."
+          }
+        }
+      }
+    },
+    "Optional. Lets the receiver check that a request came from Shepherd.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optional. Damit kann der Empfänger prüfen, dass eine Anfrage von Shepherd kommt."
+          }
+        }
+      }
+    },
+    "Outbound webhook": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausgehender Webhook"
+          }
+        }
+      }
+    },
+    "Sensitive means a workflow, auth, secret, migration or deleted-test file. A track record never moves a pull request between the lanes; it only colours the chip and orders rows. Both limits travel to your other Macs.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sensibel heißt: eine Workflow-, Auth-, Secret-, Migrations- oder gelöschte Testdatei. Eine Erfolgsbilanz verschiebt nie einen Pull Request zwischen den Spuren; sie färbt nur den Chip und ordnet die Zeilen. Beide Grenzen wandern mit auf deine anderen Macs."
+          }
+        }
+      }
+    },
+    "Shepherd queues the same merge the merge sheet would, through the same outbox, pinned to the commit it checked. Each pull request is queued at most once per commit; one that could not be sent waits for you in Settings → Sync. The method is shared with the merge sheet and bulk triage.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd reiht denselben Merge ein wie das Merge-Fenster, über dieselbe Outbox, festgelegt auf den geprüften Commit. Jeder Pull Request wird höchstens einmal pro Commit eingereiht; einen, der nicht gesendet werden konnte, findest du in Einstellungen → Sync. Die Methode teilt sich die Einstellung mit dem Merge-Fenster und der Sammel-Triage."
+          }
+        }
+      }
+    },
+    "Shepherd will %@ a pull request by itself only when %@. Everything else is left for you.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd erledigt einen Pull Request nur dann von selbst per %@, wenn %@. Alles andere bleibt bei dir."
+          }
+        }
+      }
+    },
+    "Short look: CI green, at most %lld files and %lld changed lines, nothing sensitive. Everything else is a full review.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kurzer Blick: CI grün, höchstens %lld Dateien und %lld geänderte Zeilen, nichts Sensibles. Alles andere ist ein vollständiges Review."
+          }
+        }
+      }
+    },
+    "Signing secret": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signier-Secret"
+          }
+        }
+      }
+    },
+    "Track record": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erfolgsbilanz"
+          }
+        }
+      }
+    },
+    "Trust lanes": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vertrauensspuren"
+          }
+        }
+      }
+    },
+    "What Shepherd merged": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was Shepherd gemergt hat"
+          }
+        }
+      }
+    },
+    "With a secret set, every request carries X-Shepherd-Signature: sha256=<HMAC-SHA256 of the body> — the same shape as GitHub's X-Hub-Signature-256. The secret is stored in your Keychain.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ist ein Secret gesetzt, trägt jede Anfrage X-Shepherd-Signature: sha256=<HMAC-SHA256 des Bodys> — dieselbe Form wie GitHubs X-Hub-Signature-256. Das Secret liegt in deinem Schlüsselbund."
+          }
+        }
+      }
+    },
+    "The last 90 days of closed pull requests, up to 500 per repository, for each agent's chip.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die geschlossenen Pull Requests der letzten 90 Tage, bis zu 500 pro Repository, für den Chip jedes Agents."
+          }
+        }
+      }
+    },
+    "Webhooks never carry review text, comments, diffs or agent output.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Webhooks tragen nie Review-Text, Kommentare, Diffs oder Agentenausgaben."
           }
         }
       }
