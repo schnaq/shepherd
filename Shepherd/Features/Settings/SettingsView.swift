@@ -235,7 +235,9 @@ struct SettingsSectionHeader: View {
 /// The value is read back out of the binding rather than passed separately, so the number on
 /// screen cannot drift from the one the stepper is editing. Shared across tabs rather than a
 /// per-tab twin: every settings row that is "a number with a stepper" wants the same two widgets
-/// in the same order — only the font differs, for a row that sits among smaller text.
+/// in the same order — only the font differs, for a row that sits among smaller text, and only
+/// the stepper's spoken name differs, for a row whose `LabeledContent` title should be what
+/// VoiceOver reads too rather than the number that is already read out loud as it changes.
 struct StepperValue: View {
     /// The value the stepper edits and the row displays.
     let value: Binding<Int>
@@ -243,6 +245,9 @@ struct StepperValue: View {
     let range: ClosedRange<Int>
     /// The font the current value is drawn in.
     var font: Font = Theme.mono(.body)
+    /// The stepper's accessibility name. `nil` reads the number, as the caps on the Delegation
+    /// tab always have.
+    var label: String?
 
     var body: some View {
         HStack(spacing: 6) {
@@ -250,7 +255,11 @@ struct StepperValue: View {
                 .font(font)
                 .monospacedDigit()
             Stepper(value: value, in: range) {
-                Text(verbatim: "\(value.wrappedValue)")
+                if let label {
+                    Text(label)
+                } else {
+                    Text(verbatim: "\(value.wrappedValue)")
+                }
             }
             .labelsHidden()
         }

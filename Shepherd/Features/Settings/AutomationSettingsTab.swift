@@ -324,10 +324,20 @@ struct AutomationSettingsTab: View {
     private var trustLaneSection: some View {
         Section {
             LabeledContent(String(localized: "Files")) {
-                StepperValue(value: trustLaneFilesBinding, range: Self.fileRange, font: Theme.mono(.callout))
+                StepperValue(
+                    value: trustLaneFilesBinding,
+                    range: Self.fileRange,
+                    font: Theme.mono(.callout),
+                    label: String(localized: "Files")
+                )
             }
             LabeledContent(String(localized: "Lines")) {
-                StepperValue(value: trustLaneLinesBinding, range: Self.lineRange, font: Theme.mono(.callout))
+                StepperValue(
+                    value: trustLaneLinesBinding,
+                    range: Self.lineRange,
+                    font: Theme.mono(.callout),
+                    label: String(localized: "Lines")
+                )
             }
         } header: {
             SettingsSectionHeader(String(localized: "Trust lanes"), info: String(
