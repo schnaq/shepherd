@@ -105,23 +105,21 @@ struct FleetScreen: View {
             agentList
                 .navigationSplitViewColumnWidth(min: 260, ideal: 320, max: 420)
         } detail: {
-            // The card and the note sit at the top of the detail column, not above the split view.
-            // Above it, the split view started below the window's top edge, but its detail column
-            // still kept a toolbar's height clear at its own top and faded its content there,
-            // which painted a blank band over the agent's name. The inbox's cards sit inside a
-            // column for the same reason. Neither may use `.fixedSize(vertical:)` in here: in a
-            // column it makes the split view lay every column out far taller than the window, and
-            // with the card's long sentence both columns ended up off screen — the measurement is
-            // on ``EmptyStateView``.
-            VStack(spacing: 0) {
-                if model.emptyState == .noHistory {
-                    FleetHistoryCard()
+            // The card and the note as a top inset of the detail column, the inbox's arrangement
+            // for its own cards. Stacked above the split view instead, they pushed it below the
+            // window's top edge while the detail column still kept a toolbar's height clear and
+            // faded its content there: a blank band over the agent's name.
+            detail
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    VStack(spacing: 0) {
+                        if model.emptyState == .noHistory {
+                            FleetHistoryCard()
+                        }
+                        if let unknown = model.unknownAgentID {
+                            unknownAgentNote(unknown)
+                        }
+                    }
                 }
-                if let unknown = model.unknownAgentID {
-                    unknownAgentNote(unknown)
-                }
-                detail
-            }
         }
         .navigationSplitViewStyle(.balanced)
     }
@@ -240,6 +238,7 @@ struct FleetScreen: View {
         Text(String(localized: "Shepherd has no agent with the id \(id). Showing the whole fleet."))
             .font(Theme.type(.subheadline))
             .foregroundStyle(Theme.textMuted)
+            // Not vertically fixed: it sits in a split-view column — see ``EmptyStateView``.
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
@@ -306,6 +305,7 @@ struct FleetHistoryCard: View {
                 ))
                 .font(Theme.type(.callout))
                 .foregroundStyle(Theme.text)
+                // Not vertically fixed: it sits in a split-view column — see ``EmptyStateView``.
                 controls
             }
         }
