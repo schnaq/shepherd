@@ -95,15 +95,7 @@ struct FleetScreen: View {
             case .noAgents:
                 noAgentsState
             case .noHistory, .counted:
-                VStack(spacing: 0) {
-                    if model.emptyState == .noHistory {
-                        FleetHistoryCard()
-                    }
-                    if let unknown = model.unknownAgentID {
-                        unknownAgentNote(unknown)
-                    }
-                    splitView
-                }
+                splitView
             }
         }
     }
@@ -113,7 +105,21 @@ struct FleetScreen: View {
             agentList
                 .navigationSplitViewColumnWidth(min: 260, ideal: 320, max: 420)
         } detail: {
+            // The card and the note as a top inset of the detail column, the inbox's arrangement
+            // for its own cards. Stacked above the split view instead, they pushed it below the
+            // window's top edge while the detail column still kept a toolbar's height clear and
+            // faded its content there: a blank band over the agent's name.
             detail
+                .safeAreaInset(edge: .top, spacing: 0) {
+                    VStack(spacing: 0) {
+                        if model.emptyState == .noHistory {
+                            FleetHistoryCard()
+                        }
+                        if let unknown = model.unknownAgentID {
+                            unknownAgentNote(unknown)
+                        }
+                    }
+                }
         }
         .navigationSplitViewStyle(.balanced)
     }
@@ -232,7 +238,7 @@ struct FleetScreen: View {
         Text(String(localized: "Shepherd has no agent with the id \(id). Showing the whole fleet."))
             .font(Theme.type(.subheadline))
             .foregroundStyle(Theme.textMuted)
-            .fixedSize(horizontal: false, vertical: true)
+            // Not vertically fixed: it sits in a split-view column — see ``EmptyStateView``.
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
@@ -299,7 +305,7 @@ struct FleetHistoryCard: View {
                 ))
                 .font(Theme.type(.callout))
                 .foregroundStyle(Theme.text)
-                .fixedSize(horizontal: false, vertical: true)
+                // Not vertically fixed: it sits in a split-view column — see ``EmptyStateView``.
                 controls
             }
         }
