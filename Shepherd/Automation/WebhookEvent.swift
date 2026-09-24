@@ -84,19 +84,19 @@ enum WebhookEventKind: String, CaseIterable, Sendable, Codable, Hashable, Identi
     var explanation: String {
         switch self {
         case .reviewSubmitted:
-            return String(localized: "Fires when the outbox has actually sent the review, not when you press the key.")
+            return String(localized: "Fires when the outbox has sent the review, not when you press the key.")
         case .pullRequestMerged:
             return String(localized: "Fires when GitHub confirmed the merge, with the method used.")
         case .delegationFinished:
-            return String(localized: "Fires when a local agent run ends: finished, failed or cancelled — including runs an automatic rule started.")
+            return String(localized: "Fires when a local agent run finishes, fails or is cancelled.")
         case .newReviewRequest:
             return String(localized: "Fires when a sweep finds a pull request waiting for your review.")
         case .autoMergeQueued:
-            return String(localized: "Fires when an auto-merge rule queued a merge — at the moment Shepherd decided, not when GitHub confirmed. The merge itself still sends \"A pull request was merged\".")
+            return String(localized: "Fires when a rule queues a merge; the merge itself sends its own event.")
         case .issueClosed:
-            return String(localized: "Fires when GitHub confirmed the close, with the reason. The payload describes the issue, not a pull request.")
+            return String(localized: "Fires when GitHub confirmed the close. The payload describes the issue.")
         case .issueAssignedToAgent:
-            return String(localized: "Fires when an agent is actually running on an issue you assigned it — not when you pressed the button. The payload describes the issue, not a pull request.")
+            return String(localized: "Fires when an agent runs on an issue you assigned. The payload describes the issue.")
         case .test:
             return String(localized: "Sent only when you press the button below.")
         }

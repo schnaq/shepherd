@@ -1,55 +1,54 @@
 import SwiftUI
 
-/// Settings → Account: the level, what is queued, and a way to throw it away (ADR 0036).
+/// Settings → Account → Usage statistics: the level, what is queued, and a way to throw it away
+/// (ADR 0036).
 ///
-/// It sits directly below the diagnostics card because the two answer the same question from
+/// It sits directly below the diagnostics section because the two answer the same question from
 /// opposite ends — what this Mac keeps about itself, and what it says about itself — and because
 /// a user looking for either will look in the same place.
+///
+/// The three levels are a radio group, every option on screen at once and none louder than the
+/// others: since the 2026-09-22 amendment the anonymous level rests on consent, and this switch is
+/// how that consent is withdrawn. Where the counts go and who is responsible for them is one click
+/// away in the header's ⓘ, and the exact bytes one more click away in the payload sheet.
 struct TelemetrySettingsCard: View {
     @Environment(AppEnvironment.self) private var environment
     @State private var isShowingPayload = false
 
     var body: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 8) {
-                CardTitle(String(localized: "USAGE STATISTICS"))
-                Picker(String(localized: "Usage statistics"), selection: levelBinding) {
-                    ForEach(TelemetryLevel.allCases) { level in
-                        Text(level.title).tag(level)
-                    }
+        Section {
+            Picker(String(localized: "Level"), selection: levelBinding) {
+                ForEach(TelemetryLevel.allCases) { level in
+                    Text(level.title).tag(level)
                 }
-                .pickerStyle(.radioGroup)
-                .labelsHidden()
+            }
+            .pickerStyle(.radioGroup)
 
-                Text(environment.settings.telemetryLevel.explanation)
-                    .font(Theme.type(.subheadline))
-                    .foregroundStyle(Theme.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text(String(
-                    localized: "Counts leave this Mac about once a day, to eu.i.posthog.com. Your IP address is discarded and no profile is kept. schnaq GmbH is responsible for the data."
-                ))
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-
-                if let telemetry = environment.telemetry {
-                    Text(telemetry.queueFileURL.path)
-                        .font(Theme.mono(.subheadline))
-                        .foregroundStyle(Theme.textMuted)
-                        .textSelection(.enabled)
-                        .lineLimit(2)
-                }
-
+            LabeledContent {
                 HStack(spacing: 8) {
                     Button(String(localized: "Show what would be sent")) { isShowingPayload = true }
                     Button(String(localized: "Clear queue")) { environment.telemetry?.clearQueue() }
                         .disabled(environment.telemetry == nil)
-                    Spacer(minLength: 0)
-                    Link(String(localized: "Privacy statement"), destination: AppConfig.privacyPolicyURL)
-                        .help(String(localized: "What Shepherd stores, what leaves your Mac, and to whom"))
+                }
+            } label: {
+                Text(String(localized: "Queue"))
+                if let telemetry = environment.telemetry {
+                    Text(verbatim: telemetry.queueFileURL.path)
+                        .font(Theme.mono(.caption))
+                        .textSelection(.enabled)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
             }
+
+            Link(String(localized: "Privacy statement"), destination: AppConfig.privacyPolicyURL)
+                .help(String(localized: "What Shepherd stores, what leaves your Mac, and to whom"))
+        } header: {
+            SettingsSectionHeader(String(localized: "Usage statistics"), info: String(
+                localized: "Counts leave this Mac about once a day, to eu.i.posthog.com. Your IP address is discarded and no profile is kept. schnaq GmbH is responsible for the data."
+            ))
+        } footer: {
+            SettingsNote(environment.settings.telemetryLevel.explanation)
         }
         .sheet(isPresented: $isShowingPayload) {
             TelemetryPayloadSheet(events: environment.telemetry?.pendingEvents ?? [])

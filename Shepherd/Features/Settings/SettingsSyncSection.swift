@@ -2,47 +2,37 @@ import GitHubKit
 import ShepherdCore
 import SwiftUI
 
-/// Settings → Sync → "Sync across Macs (encrypted)" (ADR 0014).
+/// Settings → Sync → "Sync across Macs" (ADR 0014).
 ///
 /// The whole feature in one place: where the bucket is, who may write to it, what protects the
 /// contents, and three buttons. Everything is behind an enable toggle that is off on a fresh
 /// install, so a user who never wants this never sees a field they have to reason about.
 ///
-/// The section is deliberately wordy about the one thing that cannot be undone — a lost
-/// passphrase is lost data — because there is no recovery path by design and a user has to learn
-/// that *before* they upload, not after.
+/// Several sections from one view, so the pane's `Form` groups them like any other. The task, the
+/// download observation and the confirmation dialog hang off the first section — the only one
+/// that is always there — because a modifier on the whole would be copied onto every section.
+///
+/// The one thing that cannot be undone — a lost passphrase is lost data — stays on the page as the
+/// passphrase section's footer, because there is no recovery path by design and a user has to
+/// learn that *before* they upload, not after.
 struct SettingsSyncSection: View {
     @Environment(AppEnvironment.self) private var environment
-    /// The sync model, owned by the tab so the fields survive a tab switch.
+    /// The sync model, owned by ``SettingsView`` so the fields survive a pane switch.
     let model: SettingsSyncModel
 
     @State private var saveError: String?
     @State private var isConfirmingDownload = false
 
     var body: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 10) {
-                CardTitle(String(localized: "SYNC ACROSS MACS (ENCRYPTED)"))
-                Toggle(String(localized: "Keep settings in an S3-compatible bucket"), isOn: enabledBinding)
-                Text(String(
-                    localized: "Your settings and your secrets are encrypted on this Mac with a passphrase you choose, then stored as one object in a bucket you own. The bucket operator — and anyone who can read the bucket — sees ciphertext only."
-                ))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-
-                if environment.settings.settingsSyncEnabled {
-                    Divider().overlay(Theme.hairline)
-                    bucketFields
-                    Divider().overlay(Theme.hairline)
-                    credentialFields
-                    Divider().overlay(Theme.hairline)
-                    passphraseFields
-                    Divider().overlay(Theme.hairline)
-                    actions
-                    status
-                }
+        Section {
+            Toggle(isOn: enabledBinding) {
+                Text(String(localized: "Keep settings in an S3-compatible bucket"))
+                Text(String(localized: "Encrypted on this Mac; the bucket only ever sees ciphertext."))
             }
+        } header: {
+            SettingsSectionHeader(String(localized: "Sync across Macs"), info: String(
+                localized: "Your settings and your secrets are encrypted on this Mac with a passphrase you choose, then stored as one object in a bucket you own. The bucket operator — and anyone who can read the bucket — sees ciphertext only."
+            ))
         }
         .task {
             model.load(context: environment.settingsSyncContext())
@@ -61,168 +51,158 @@ struct SettingsSyncSection: View {
         } message: {
             Text(downloadPrompt)
         }
+
+        if environment.settings.settingsSyncEnabled {
+            bucketSection
+            credentialSection
+            passphraseSection
+            actionSection
+        }
     }
 
     // MARK: - Where the object lives
 
-    @ViewBuilder
-    private var bucketFields: some View {
-        LabeledField(
-            label: String(localized: "Endpoint"),
-            placeholder: "https://object.storage.eu01.onstackit.cloud",
-            text: endpointBinding
-        )
-        LabeledField(
-            label: String(localized: "Bucket"),
-            placeholder: "my-shepherd-settings",
-            text: bucketBinding
-        )
-        LabeledField(
-            label: String(localized: "Region"),
-            placeholder: "eu01",
-            text: regionBinding
-        )
-        LabeledField(
-            label: String(localized: "Prefix"),
-            placeholder: S3ObjectLocation.defaultPrefix,
-            text: prefixBinding
-        )
-        HStack(spacing: 8) {
-            Text(String(localized: "Addressing"))
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.textSecondary)
-                .frame(width: 74, alignment: .leading)
-            Picker(String(localized: "Addressing"), selection: addressingBinding) {
+    private var bucketSection: some View {
+        Section {
+            TextField(
+                String(localized: "Endpoint"),
+                text: endpointBinding,
+                prompt: Text(verbatim: "https://object.storage.eu01.onstackit.cloud")
+            )
+            TextField(
+                String(localized: "Bucket"),
+                text: bucketBinding,
+                prompt: Text(verbatim: "my-shepherd-settings")
+            )
+            TextField(
+                String(localized: "Region"),
+                text: regionBinding,
+                prompt: Text(verbatim: "eu01")
+            )
+            TextField(
+                String(localized: "Prefix"),
+                text: prefixBinding,
+                prompt: Text(verbatim: S3ObjectLocation.defaultPrefix)
+            )
+            Picker(selection: addressingBinding) {
                 ForEach(S3AddressingStyle.allCases) { style in
                     Text(style.title).tag(style)
                 }
+            } label: {
+                Text(String(localized: "Addressing"))
+                Text(String(localized: "Path style works with every provider."))
             }
-            .labelsHidden()
+            if let location = environment.settings.settingsSyncLocation, let url = location.url {
+                Text(verbatim: url.absoluteString)
+                    .font(Theme.mono(.caption))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            } else if let problem = configurationProblem {
+                Label(problem, systemImage: "exclamationmark.triangle")
+                    .font(Theme.type(.caption))
+                    .foregroundStyle(Theme.pending)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } header: {
+            Text(String(localized: "Bucket"))
+        } footer: {
+            SettingsNote(String(localized: "HTTPS only: the object carries your tokens."))
         }
-        if let location = environment.settings.settingsSyncLocation, let url = location.url {
-            Text(url.absoluteString)
-                .font(Theme.mono(10.5))
-                .foregroundStyle(Theme.textMuted)
-                .textSelection(.enabled)
-                .lineLimit(1)
-                .truncationMode(.middle)
-        } else if let problem = configurationProblem {
-            Label(problem, systemImage: "exclamationmark.triangle")
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.pending)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        Text(String(
-            localized: "Path style works with every S3-compatible provider and is the safe default. https only: the object carries your tokens, so plain HTTP is refused even on this machine."
-        ))
-        .font(.system(size: 11))
-        .foregroundStyle(Theme.textMuted)
-        .fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: - Who may write to it
 
-    @ViewBuilder
-    private var credentialFields: some View {
-        LabeledField(
-            label: String(localized: "Key id"),
-            placeholder: "…",
-            text: accessKeyBinding
-        )
-        HStack(spacing: 8) {
-            Text(String(localized: "Secret"))
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.textSecondary)
-                .frame(width: 74, alignment: .leading)
-            SecureField(String(localized: "secret access key"), text: secretKeyBinding)
-                .textFieldStyle(.roundedBorder)
-        }
-        HStack(spacing: 8) {
-            Button(String(localized: "Save keys")) {
-                saveError = model.saveCredentials(context: environment.settingsSyncContext())
+    private var credentialSection: some View {
+        Section {
+            TextField(
+                String(localized: "Key id"),
+                text: accessKeyBinding,
+                prompt: Text(verbatim: "…")
+            )
+            SecureField(
+                String(localized: "Secret"),
+                text: secretKeyBinding,
+                prompt: Text(String(localized: "secret access key"))
+            )
+            LabeledContent {
+                Button(String(localized: "Save keys")) {
+                    saveError = model.saveCredentials(context: environment.settingsSyncContext())
+                }
+            } label: {
+                if model.hasStoredCredentials {
+                    Text(String(localized: "Access keys are stored in your Keychain."))
+                } else {
+                    Text(String(localized: "Access keys are not saved yet."))
+                }
             }
-            .buttonStyle(SecondaryButtonStyle(height: 28))
-            if model.hasStoredCredentials {
-                Text(String(localized: "Access keys are stored in your Keychain."))
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textMuted)
+            if let saveError {
+                Text(saveError)
+                    .font(Theme.type(.caption))
+                    .foregroundStyle(Theme.failure)
             }
+        } header: {
+            Text(String(localized: "Access keys"))
+        } footer: {
+            SettingsNote(String(localized: "Read and write on this one object is enough. Keys never leave your Keychain."))
         }
-        if let saveError {
-            Text(saveError)
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.failure)
-        }
-        Text(String(
-            localized: "These only need read and write access to this one object. The keys never leave your Keychain and are used to sign requests, not sent as data."
-        ))
-        .font(.system(size: 11))
-        .foregroundStyle(Theme.textMuted)
-        .fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: - What protects the contents
 
-    @ViewBuilder
-    private var passphraseFields: some View {
-        HStack(spacing: 8) {
-            Text(String(localized: "Passphrase"))
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.textSecondary)
-                .frame(width: 74, alignment: .leading)
-            SecureField(String(localized: "at least 12 characters"), text: passphraseBinding)
-                .textFieldStyle(.roundedBorder)
+    private var passphraseSection: some View {
+        Section {
+            SecureField(
+                String(localized: "Passphrase"),
+                text: passphraseBinding,
+                prompt: Text(String(localized: "at least 12 characters"))
+            )
+            Toggle(String(localized: "Remember passphrase in Keychain"), isOn: rememberBinding)
+        } header: {
+            SettingsSectionHeader(String(localized: "Passphrase"), info: String(
+                localized: "The passphrase is never uploaded and never written to preferences. It becomes the encryption key, so without it the object in the bucket cannot be read."
+            ))
+        } footer: {
+            SettingsNote(String(localized: "If you lose it, there is no recovery. Use the same one on every Mac."))
         }
-        Toggle(String(localized: "Remember passphrase in Keychain"), isOn: rememberBinding)
-            .toggleStyle(.checkbox)
-        Text(String(
-            localized: "The passphrase is never uploaded and never written to preferences. It is what turns into the encryption key, so if you lose it the object in the bucket is unreadable — there is no recovery and no reset. Use the same passphrase on every Mac."
-        ))
-        .font(.system(size: 11))
-        .foregroundStyle(Theme.textMuted)
-        .fixedSize(horizontal: false, vertical: true)
     }
 
     // MARK: - Actions
 
-    @ViewBuilder
-    private var actions: some View {
-        HStack(spacing: 8) {
-            Button(String(localized: "Upload settings")) {
-                let context = environment.settingsSyncContext()
-                Task { await model.upload(context: context) }
-            }
-            .buttonStyle(SecondaryButtonStyle(height: 28))
-            .disabled(!canAct)
+    private var actionSection: some View {
+        Section {
+            HStack(spacing: 8) {
+                if model.state == .running {
+                    ProgressView().controlSize(.small)
+                }
+                Spacer(minLength: 0)
+                Button(String(localized: "Check remote")) {
+                    let context = environment.settingsSyncContext()
+                    Task { await model.checkRemote(context: context) }
+                }
+                .disabled(environment.settings.settingsSyncLocation == nil
+                    || model.state == .running)
 
-            Button(String(localized: "Download settings")) {
-                let context = environment.settingsSyncContext()
-                Task { await model.prepareDownload(context: context) }
-            }
-            .buttonStyle(SecondaryButtonStyle(height: 28))
-            .disabled(!canAct)
+                Button(String(localized: "Download settings")) {
+                    let context = environment.settingsSyncContext()
+                    Task { await model.prepareDownload(context: context) }
+                }
+                .disabled(!canAct)
 
-            Button(String(localized: "Check remote")) {
-                let context = environment.settingsSyncContext()
-                Task { await model.checkRemote(context: context) }
+                Button(String(localized: "Upload settings")) {
+                    let context = environment.settingsSyncContext()
+                    Task { await model.upload(context: context) }
+                }
+                .disabled(!canAct)
             }
-            .buttonStyle(SecondaryButtonStyle(height: 28))
-            .disabled(environment.settings.settingsSyncLocation == nil
-                || model.state == .running)
-
-            if model.state == .running {
-                ProgressView().controlSize(.small)
+            if model.state.hasResult {
+                AsyncActionStatusLine(state: model.state)
             }
-        }
-    }
-
-    @ViewBuilder
-    private var status: some View {
-        AsyncActionStatusLine(state: model.state)
-        if let line = historyLine {
-            Text(line)
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
+        } footer: {
+            if let line = historyLine {
+                SettingsNote(line)
+            }
         }
     }
 

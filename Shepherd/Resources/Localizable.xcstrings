@@ -11,16 +11,6 @@
         }
       }
     },
-    "\"Turns\" is meant literally: Shepherd has to have seen the change happen. A pull request that was already red when Shepherd first saw it never starts anything, and each pull request starts at most one run per commit.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "„Turns“ ist wörtlich gemeint: Shepherd muss die Änderung selbst gesehen haben. Ein Pull Request, der schon rot war, als Shepherd ihn zum ersten Mal sah, startet nie etwas, und jeder Pull Request startet höchstens einen Lauf pro Commit."
-          }
-        }
-      }
-    },
     "#%@ is a pull request rather than an issue, so it has no acceptance criteria.": {
       "localizations": {
         "de": {
@@ -1341,16 +1331,6 @@
         }
       }
     },
-    "%lld of %lld used today · %lld running now. When a cap is reached Shepherd notifies you instead of starting anything.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld von %lld heute genutzt · %lld laufen gerade. Ist ein Limit erreicht, benachrichtigt Shepherd dich, statt etwas zu starten."
-          }
-        }
-      }
-    },
     "%lld of %lld words in this bullet appear in the pull request: %@.": {
       "localizations": {
         "de": {
@@ -2271,16 +2251,6 @@
         }
       }
     },
-    "5": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "5"
-          }
-        }
-      }
-    },
     "A new push or a failing check cancels it, with a notification.": {
       "localizations": {
         "de": {
@@ -2311,32 +2281,12 @@
         }
       }
     },
-    "A delegation runs in a detached git worktree built from your own clone. Shepherd never clones anything itself.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Eine Delegation läuft in einem separaten Git-Worktree, der aus deinem eigenen Clone gebaut wird. Shepherd klont selbst nie etwas."
-          }
-        }
-      }
-    },
     "A draft pull request is not ready to be reviewed or merged.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Ein Draft-Pull-Request ist nicht bereit für Review oder Merge."
-          }
-        }
-      }
-    },
-    "A failing webhook never interrupts a review, a merge or a sync: Shepherd tries twice, then gives up quietly and says so here.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ein fehlschlagender Webhook unterbricht nie ein Review, einen Merge oder eine Synchronisierung: Shepherd versucht es zweimal, gibt dann still auf und sagt es hier."
           }
         }
       }
@@ -2411,16 +2361,6 @@
         }
       }
     },
-    "A review comment you have written at least three times in the last thirty days, on at least two pull requests of the same repository. Shepherd finds these on this Mac, from your own comments only, and never sends them anywhere. On the review screen each one offers to draft a rule for that repository's agent instructions.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ein Review-Kommentar, den du in den letzten dreißig Tagen mindestens dreimal geschrieben hast, auf mindestens zwei Pull Requests desselben Repositories. Shepherd findet das auf diesem Mac, nur aus deinen eigenen Kommentaren, und sendet nichts irgendwohin. Im Review-Screen bietet jeder davon an, eine Regel für die Agent-Anweisungen dieses Repositories zu entwerfen."
-          }
-        }
-      }
-    },
     "A review was submitted": {
       "localizations": {
         "de": {
@@ -2461,26 +2401,6 @@
         }
       }
     },
-    "A summary a new review starts from, per repository. Match one repository with schnaq/review or a whole owner with schnaq/* — * and ? are the wildcards. An exact pattern wins over a wildcard, a longer wildcard wins over a shorter one, and if two are equally specific the one listed first wins.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Eine Zusammenfassung, mit der ein neues Review startet — pro Repository. Ein einzelnes Repository trifft schnaq/review, einen ganzen Owner schnaq/* — * und ? sind die Platzhalter. Ein exaktes Muster gewinnt gegen ein Wildcard-Muster, ein längeres Wildcard-Muster gegen ein kürzeres, und sind zwei gleich genau, gewinnt das zuerst gelistete."
-          }
-        }
-      }
-    },
-    "A template only ever fills an empty review. A pull request you have already written a comment, a summary or a verdict for is never touched.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Eine Vorlage füllt immer nur ein leeres Review. Ein Pull Request, für den du schon einen Kommentar, eine Zusammenfassung oder eine Bewertung geschrieben hast, wird nie angetastet."
-          }
-        }
-      }
-    },
     "ACROSS EVERY REPOSITORY": {
       "localizations": {
         "de": {
@@ -2507,16 +2427,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "ALTER"
-          }
-        }
-      }
-    },
-    "AGENT CLI": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "AGENT-CLI"
           }
         }
       }
@@ -2581,36 +2491,6 @@
         }
       }
     },
-    "APPEARANCE": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "DARSTELLUNG"
-          }
-        }
-      }
-    },
-    "AUTOMATIC DELEGATION": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "AUTOMATISCHE DELEGATION"
-          }
-        }
-      }
-    },
-    "AUTOMATIC MERGING": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "AUTOMATISCHES MERGEN"
-          }
-        }
-      }
-    },
     "Accept edits": {
       "localizations": {
         "de": {
@@ -2657,16 +2537,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Account"
-          }
-        }
-      }
-    },
-    "Add --output-format stream-json --verbose to see the run line by line in the delegation panel; add --max-turns and --max-budget-usd to cap it like a task run.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mit --output-format stream-json --verbose erscheint der Lauf Zeile für Zeile im Delegationsfenster; mit --max-turns und --max-budget-usd wird er begrenzt wie ein Aufgabenlauf."
           }
         }
       }
@@ -3461,52 +3331,12 @@
         }
       }
     },
-    "Automatic switches to the line list while VoiceOver is running, and uses the rich viewer otherwise. Choose Rich viewer or Line list to always use that one, screen reader or not.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "„Automatisch“ wechselt zur Zeilenliste, solange VoiceOver läuft, und nutzt sonst die erweiterte Ansicht. Wähle „Erweiterte Ansicht“ oder „Zeilenliste“, um immer bei dieser zu bleiben – mit oder ohne Screenreader."
-          }
-        }
-      }
-    },
     "Automation": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Automatisierung"
-          }
-        }
-      }
-    },
-    "BODY": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "TEXT"
-          }
-        }
-      }
-    },
-    "BRING YOUR OWN KEY": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "EIGENEN SCHLÜSSEL VERWENDEN"
-          }
-        }
-      }
-    },
-    "BUNDLED REGISTRY": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "MITGELIEFERTE REGISTRY"
           }
         }
       }
@@ -3557,16 +3387,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Blockiert"
-          }
-        }
-      }
-    },
-    "Both numbers travel to your other Macs. A track record never moves a pull request between the lanes — it only colours the chip and orders rows inside a lane.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Beide Zahlen werden auf deine anderen Macs übertragen. Eine Erfolgsbilanz verschiebt einen Pull Request nie zwischen den Spuren — sie färbt nur den Chip und sortiert Zeilen innerhalb einer Spur."
           }
         }
       }
@@ -3637,16 +3457,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sammel-Triage: die ausgewählten Pull Requests approven oder mergen"
-          }
-        }
-      }
-    },
-    "Bundled entries ship with Shepherd. Add your own below — an entry with the same id replaces the bundled one.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mitgelieferte Einträge kommen mit Shepherd. Ergänze unten eigene — ein Eintrag mit derselben ID ersetzt den mitgelieferten."
           }
         }
       }
@@ -4231,16 +4041,6 @@
         }
       }
     },
-    "Classifies each pull request on this Mac — what kind of change it is and how much it can hurt, with a one-sentence reason — so the inbox can sort and filter by it. Nothing leaves this Mac, and nothing acts on it: it never approves, merges or comments.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ordnet jeden Pull Request auf diesem Mac ein — welche Art von Änderung er ist und wie viel Schaden er anrichten kann, mit einer Begründung in einem Satz — damit die Inbox danach sortieren und filtern kann. Nichts verlässt diesen Mac, und nichts handelt danach: Es approvt nichts, mergt nichts und kommentiert nichts."
-          }
-        }
-      }
-    },
     "Classifying %lld pull requests…": {
       "localizations": {
         "de": {
@@ -4477,26 +4277,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Co-Authored-By: My Agent"
-          }
-        }
-      }
-    },
-    "Comma-separated, with * and ? as wildcards. Leave it empty for every repository in your inbox.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kommagetrennt, mit * und ? als Platzhaltern. Leer lassen für jedes Repository in deiner Inbox."
-          }
-        }
-      }
-    },
-    "Comma-separated. A pull request has to carry every label listed here, which is how you opt single pull requests in instead of whole repositories. Leave it empty to require none.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kommagetrennt. Ein Pull Request muss jedes hier gelistete Label tragen — so nimmst du einzelne Pull Requests auf statt ganzer Repositorys. Leer lassen, um keins zu verlangen."
           }
         }
       }
@@ -5151,42 +4931,12 @@
         }
       }
     },
-    "DELIVERY": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "AUSLIEFERUNG"
-          }
-        }
-      }
-    },
     "DESCRIPTION": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "BESCHREIBUNG"
-          }
-        }
-      }
-    },
-    "DIAGNOSTICS": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "DIAGNOSE"
-          }
-        }
-      }
-    },
-    "DIFF VIEWER": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "DIFF-ANSICHT"
           }
         }
       }
@@ -5581,26 +5331,6 @@
         }
       }
     },
-    "EVENTS": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "EREIGNISSE"
-          }
-        }
-      }
-    },
-    "Each pull request is queued at most once per commit: a merge Shepherd could not send — because somebody pushed in between — waits for you in Settings → Sync rather than being tried again against the new commit.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Jeder Pull Request wird höchstens einmal pro Commit eingereiht: Einen Merge, den Shepherd nicht senden konnte — weil zwischenzeitlich jemand gepusht hat —, findest du in Einstellungen → Sync, statt dass er gegen den neuen Commit erneut versucht wird."
-          }
-        }
-      }
-    },
     "Each pull request is queued separately in the outbox and sent one by one, with the same staleness check as a single review. A pull request whose head moved on is parked as a conflict instead of being written blind.": {
       "localizations": {
         "de": {
@@ -5747,16 +5477,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Jedes erlaubte Werkzeug läuft unbeaufsichtigt, auch Shell-Befehle."
-          }
-        }
-      }
-    },
-    "Everything Shepherd has fetched lives in a SQLite file in Application Support. Your token lives in the Keychain and nowhere else.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Alles, was Shepherd geladen hat, liegt in einer SQLite-Datei in „Application Support“. Dein Token liegt im Schlüsselbund und nirgends sonst."
           }
         }
       }
@@ -5951,16 +5671,6 @@
         }
       }
     },
-    "Fires when GitHub confirmed the close, with the reason. The payload describes the issue, not a pull request.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wird gesendet, wenn GitHub das Schließen bestätigt hat, mit dem Grund. Die Nutzdaten beschreiben das Issue, nicht einen Pull Request."
-          }
-        }
-      }
-    },
     "Fires when GitHub confirmed the merge, with the method used.": {
       "localizations": {
         "de": {
@@ -5971,52 +5681,12 @@
         }
       }
     },
-    "Fires when a local agent run ends: finished, failed or cancelled — including runs an automatic rule started.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Feuert, wenn ein lokaler Agentenlauf endet: fertig, fehlgeschlagen oder abgebrochen — auch bei Läufen, die eine automatische Regel gestartet hat."
-          }
-        }
-      }
-    },
     "Fires when a sweep finds a pull request waiting for your review.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Feuert, wenn ein Sweep einen Pull Request findet, der auf dein Review wartet."
-          }
-        }
-      }
-    },
-    "Fires when an agent is actually running on an issue you assigned it — not when you pressed the button. The payload describes the issue, not a pull request.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wird ausgelöst, wenn ein Agent tatsächlich an einem Issue arbeitet, das du ihm übergeben hast – nicht wenn du den Knopf gedrückt hast. Die Nutzlast beschreibt das Issue, nicht einen Pull Request."
-          }
-        }
-      }
-    },
-    "Fires when an auto-merge rule queued a merge — at the moment Shepherd decided, not when GitHub confirmed. The merge itself still sends \"A pull request was merged\".": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Feuert, wenn eine Auto-Merge-Regel einen Merge eingereiht hat — in dem Moment, in dem Shepherd entschieden hat, nicht wenn GitHub bestätigt. Der Merge selbst sendet weiterhin „Ein Pull Request wurde gemergt“."
-          }
-        }
-      }
-    },
-    "Fires when the outbox has actually sent the review, not when you press the key.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Feuert, wenn die Outbox das Review wirklich gesendet hat, nicht wenn du die Taste drückst."
           }
         }
       }
@@ -6097,16 +5767,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vollständiges Review"
-          }
-        }
-      }
-    },
-    "GUARDRAILS": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "LEITLINIEN"
           }
         }
       }
@@ -6521,16 +6181,6 @@
         }
       }
     },
-    "INBOX SWEEP": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "INBOX-SWEEP"
-          }
-        }
-      }
-    },
     "Id": {
       "localizations": {
         "de": {
@@ -6547,26 +6197,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "In %@ wurden %lld von %@s %lld Merges zurückgenommen; %lld von %@s %lld."
-          }
-        }
-      }
-    },
-    "In plain words: Shepherd will %@ a pull request by itself when %@. Anything else — a human's pull request, a red check, a pull request nobody approved — is left for you.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Klartext: Shepherd erledigt einen Pull Request von selbst per %@, wenn %@. Alles andere — der Pull Request eines Menschen, ein roter Check, ein Pull Request, den niemand approved hat — bleibt bei dir."
-          }
-        }
-      }
-    },
-    "In plain words: a green pull request touching at most %lld files and %lld changed lines, with nothing sensitive in it, is a short look. Everything else is a full review.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Im Klartext: Ein grüner Pull Request mit höchstens %lld Dateien und %lld geänderten Zeilen, in dem nichts Sensibles steckt, ist ein kurzer Blick. Alles andere ist ein vollständiges Review."
           }
         }
       }
@@ -6821,36 +6451,6 @@
         }
       }
     },
-    "It is built from the local database only — no GitHub call, no AI, nothing sent anywhere — because it runs while you are not watching. If your Mac was asleep at that time, the digest arrives when it wakes up, and only if that is still the same day. A quiet night produces nothing at all.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Er wird ausschließlich aus der lokalen Datenbank gebaut — kein GitHub-Aufruf, keine KI, nichts wird irgendwohin gesendet —, denn er läuft, während du nicht hinsiehst. War dein Mac zu dieser Zeit im Ruhezustand, kommt der Digest beim Aufwachen, und nur wenn es noch derselbe Tag ist. Eine ruhige Nacht ergibt gar nichts."
-          }
-        }
-      }
-    },
-    "It needs the on-device model, so with the provider above set to Off nothing is classified. The inbox keeps the risk hints it works out without a model — “touches auth”, “deletes tests” — either way.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dafür braucht es das On-Device-Modell: Steht der Anbieter oben auf „Aus“, wird nichts eingeordnet. Die Risikohinweise, die Shepherd ohne Modell ermittelt — „betrifft Auth-Code“, „löscht Tests“ —, bleiben so oder so."
-          }
-        }
-      }
-    },
-    "It never uses an AI endpoint, even when you have configured one: search runs on every keystroke and over every pull request, so it stays on this Mac. Switching it off leaves ⌘K searching titles, labels, repositories, branches and authors, and empties the index.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sie nutzt nie einen KI-Endpunkt, auch wenn du einen konfiguriert hast: Die Suche läuft bei jedem Tastendruck und über jeden Pull Request, also bleibt sie auf diesem Mac. Ausgeschaltet sucht ⌘K weiter in Titeln, Labels, Repositorys, Branches und Autoren — und der Index wird geleert."
-          }
-        }
-      }
-    },
     "It reads the pull requests your repositories closed in the last 90 days, at most 500 per repository, and the sync keeps it current from then on.": {
       "localizations": {
         "de": {
@@ -7011,26 +6611,6 @@
         }
       }
     },
-    "LOCAL CHECKOUTS": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "LOKALE CHECKOUTS"
-          }
-        }
-      }
-    },
-    "LOCAL DATA": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "LOKALE DATEN"
-          }
-        }
-      }
-    },
     "Label": {
       "localizations": {
         "de": {
@@ -7127,16 +6707,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Layout"
-          }
-        }
-      }
-    },
-    "Leave the path empty to let Shepherd look in the usual places. Not installed? `npm install -g @anthropic-ai/claude-code`.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lass den Pfad leer, damit Shepherd an den üblichen Orten sucht. Nicht installiert? `npm install -g @anthropic-ai/claude-code`."
           }
         }
       }
@@ -7261,16 +6831,6 @@
         }
       }
     },
-    "Loads the pull requests your repositories closed in the last 90 days, so each agent's chip can say how much of its work was merged and how much came back out. At most 500 per repository, read once and kept up to date by the sync from then on.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lädt die Pull Requests, die deine Repositories in den letzten 90 Tagen geschlossen haben, damit der Chip jedes Agents sagen kann, wie viel seiner Arbeit gemergt wurde und wie viel wieder herausgeflogen ist. Höchstens 500 pro Repository, einmal gelesen und danach von der Synchronisierung aktuell gehalten."
-          }
-        }
-      }
-    },
     "Local": {
       "localizations": {
         "de": {
@@ -7301,16 +6861,6 @@
         }
       }
     },
-    "MENU BAR": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "MENÜLEISTE"
-          }
-        }
-      }
-    },
     "Merge when checks pass": {
       "localizations": {
         "de": {
@@ -7331,16 +6881,6 @@
         }
       }
     },
-    "MORNING DIGEST": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "MORGEN-DIGEST"
-          }
-        }
-      }
-    },
     "Mark ready for review": {
       "localizations": {
         "de": {
@@ -7357,16 +6897,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Als gesehen"
-          }
-        }
-      }
-    },
-    "Markdown, inserted exactly as typed. It is appended to whatever the comment field already holds, after a blank line.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Markdown, genau so eingefügt, wie du es schreibst. Es wird an den bestehenden Inhalt des Kommentarfelds angehängt, nach einer Leerzeile."
           }
         }
       }
@@ -7497,16 +7027,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Merge-Commit"
-          }
-        }
-      }
-    },
-    "Merge green, approved agent pull requests by myself": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Grüne, approved Agent-Pull-Requests selbst mergen"
           }
         }
       }
@@ -7701,32 +7221,12 @@
         }
       }
     },
-    "NOTIFICATIONS": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "MITTEILUNGEN"
-          }
-        }
-      }
-    },
     "Name": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Name"
-          }
-        }
-      }
-    },
-    "Named pieces of Markdown you can drop into any comment field: the inline comment composer, the review summary, and a thread reply. The insert button next to each field lists them in this order, so put the ones you use most at the top.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Benannte Markdown-Bausteine, die du in jedes Kommentarfeld einsetzen kannst: den Inline-Kommentar, die Review-Zusammenfassung und eine Thread-Antwort. Die Einfügen-Taste neben jedem Feld listet sie in dieser Reihenfolge — stelle die am häufigsten genutzten also nach oben."
           }
         }
       }
@@ -8491,32 +7991,12 @@
         }
       }
     },
-    "Nothing yet. Every automatic merge is recorded here, on this Mac only.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Noch nichts. Jeder automatische Merge wird hier festgehalten, nur auf diesem Mac."
-          }
-        }
-      }
-    },
     "Nothing you reviewed is still open.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Nichts, was du gereviewt hast, ist noch offen."
-          }
-        }
-      }
-    },
-    "Notifications are polled at the interval GitHub asks for; this slider only controls the full search sweep. It takes effect the next time you sign in.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mitteilungen werden in dem Intervall abgefragt, das GitHub vorgibt; dieser Regler steuert nur den vollen Such-Sweep. Er greift, wenn du dich das nächste Mal anmeldest."
           }
         }
       }
@@ -8541,62 +8021,12 @@
         }
       }
     },
-    "OUTBOUND WEBHOOK": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "AUSGEHENDER WEBHOOK"
-          }
-        }
-      }
-    },
-    "OUTBOX": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "OUTBOX"
-          }
-        }
-      }
-    },
     "Off": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Aus"
-          }
-        }
-      }
-    },
-    "Off by default. A rule only ever starts the delegation you could have started yourself: it runs in an isolated worktree with the guardrails above, and it never pushes, approves or merges anything.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Standardmäßig aus. Eine Regel startet immer nur die Delegation, die du auch selbst hättest starten können: Sie läuft in einem isolierten Worktree mit den Leitlinien von oben und pusht, approvt und mergt nie etwas."
-          }
-        }
-      }
-    },
-    "Off by default. One notification a day summarising what came in since the last one: new review requests, green agent pull requests that only need an approval or a merge, your own pull requests with red CI or a change request, and reviews the outbox could not send. Clicking it opens the inbox, and the same summary sits above the list as a card you can dismiss.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Standardmäßig aus. Eine Mitteilung pro Tag mit allem, was seit der letzten hereinkam: neue Review-Anfragen, grüne Agent-Pull-Requests, die nur noch ein Approval oder einen Merge brauchen, deine eigenen Pull Requests mit roter CI oder angeforderten Änderungen, und Reviews, die die Outbox nicht senden konnte. Ein Klick öffnet die Inbox, und dieselbe Übersicht sitzt als ausblendbare Karte über der Liste."
-          }
-        }
-      }
-    },
-    "Off by default. With this on, macOS hands Shepherd the crash, hang and CPU-exception reports of previous runs and Shepherd writes each one as a JSON file in the folder below. They are stored only on this Mac and are never sent anywhere — there is no crash service and no upload. Reports appear after the next launch following a crash, not while it happens.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Standardmäßig aus. Ist das eingeschaltet, übergibt macOS Shepherd die Crash-, Hang- und CPU-Ausnahmeberichte früherer Läufe, und Shepherd schreibt jeden als JSON-Datei in den Ordner unten. Sie liegen nur auf diesem Mac und werden nie irgendwohin gesendet — es gibt keinen Crash-Dienst und keinen Upload. Berichte erscheinen beim nächsten Start nach einem Crash, nicht währenddessen."
           }
         }
       }
@@ -8657,16 +8087,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ollama (lokal)"
-          }
-        }
-      }
-    },
-    "On by default. The menu-bar item shows how many pull requests are waiting for your review and opens a short list of them; clicking one opens it in the main window. Switching this off removes the item — nothing else changes, and no sync of its own runs either way.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Standardmäßig ein. Das Menüleisten-Symbol zeigt, wie viele Pull Requests auf dein Review warten, und öffnet eine kurze Liste davon; ein Klick öffnet einen im Hauptfenster. Ausgeschaltet verschwindet das Symbol — sonst ändert sich nichts, und eine eigene Synchronisierung läuft so oder so nicht."
           }
         }
       }
@@ -9041,16 +8461,6 @@
         }
       }
     },
-    "Optional. Two-letter country codes, comma-separated. Both fields are sent as part of the request — only endpoints that understand them can act on them, and an endpoint that cannot meet them refuses the request rather than answering from somewhere else. Left empty and off, nothing extra is sent.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Optional. Zweibuchstabige Ländercodes, durch Kommas getrennt. Beide Felder werden als Teil der Anfrage mitgesendet — nur Endpunkte, die sie kennen, können sie umsetzen, und ein Endpunkt, der sie nicht erfüllen kann, lehnt die Anfrage ab, statt sie von anderswo zu beantworten. Leer und ausgeschaltet wird nichts zusätzlich gesendet."
-          }
-        }
-      }
-    },
     "Original, %@": {
       "localizations": {
         "de": {
@@ -9111,16 +8521,6 @@
         }
       }
     },
-    "PROVIDER": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ANBIETER"
-          }
-        }
-      }
-    },
     "Passed to --allowedTools. The default allows reading, editing and git, but no other shell command.": {
       "localizations": {
         "de": {
@@ -9151,16 +8551,6 @@
         }
       }
     },
-    "Paste an n8n Webhook node's URL (or any endpoint that accepts a JSON POST). https everywhere, or http for a server on this machine. Nothing is ever sent anywhere else.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Füge die URL eines n8n-Webhook-Knotens ein (oder eines anderen Endpunkts, der einen JSON-POST annimmt). Überall https, oder http für einen Server auf diesem Rechner. Es wird nie irgendwohin sonst gesendet."
-          }
-        }
-      }
-    },
     "Path": {
       "localizations": {
         "de": {
@@ -9177,16 +8567,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pfad-Stil"
-          }
-        }
-      }
-    },
-    "Path style works with every S3-compatible provider and is the safe default. https only: the object carries your tokens, so plain HTTP is refused even on this machine.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Pfad-Stil funktioniert mit jedem S3-kompatiblen Anbieter und ist die sichere Vorgabe. Nur https: Das Objekt enthält deine Tokens, deshalb wird einfaches HTTP auch auf diesem Rechner abgelehnt."
           }
         }
       }
@@ -9247,16 +8627,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Wähle eine Zeile mit j / k, oder klicke eine an."
-          }
-        }
-      }
-    },
-    "Placeholders: %@. Shepherd's own instructions — detached worktree, do not push, keep the change small — are prepended as usual.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Platzhalter: %@. Die eigenen Anweisungen von Shepherd — separater Worktree, nicht pushen, die Änderung klein halten — werden wie immer davorgestellt."
           }
         }
       }
@@ -9611,16 +8981,6 @@
         }
       }
     },
-    "RECURRING FINDINGS": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "WIEDERKEHRENDE BEFUNDE"
-          }
-        }
-      }
-    },
     "REPOSITORIES": {
       "localizations": {
         "de": {
@@ -9647,26 +9007,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "REVIEW-PRIORITÄT"
-          }
-        }
-      }
-    },
-    "REVIEW SCREEN": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "REVIEW-ANSICHT"
-          }
-        }
-      }
-    },
-    "REVIEW TEMPLATES": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "REVIEW-VORLAGEN"
           }
         }
       }
@@ -10481,52 +9821,12 @@
         }
       }
     },
-    "Run when, on a pull request of mine:": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ausführen, wenn auf einem Pull Request von mir:"
-          }
-        }
-      }
-    },
     "Running %@ in %@": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ läuft in %@"
-          }
-        }
-      }
-    },
-    "SAVED REPLIES": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GESPEICHERTE ANTWORTEN"
-          }
-        }
-      }
-    },
-    "SEMANTIC SEARCH": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "SEMANTISCHE SUCHE"
-          }
-        }
-      }
-    },
-    "SESSION BACK-CHANNEL": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "RÜCKKANAL ZUR SESSION"
           }
         }
       }
@@ -10551,32 +9851,12 @@
         }
       }
     },
-    "SIGNING SECRET (OPTIONAL)": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "SIGNIER-SECRET (OPTIONAL)"
-          }
-        }
-      }
-    },
     "SKIPPED (%lld)": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "ÜBERSPRUNGEN (%lld)"
-          }
-        }
-      }
-    },
-    "SPOTLIGHT": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "SPOTLIGHT"
           }
         }
       }
@@ -10621,32 +9901,12 @@
         }
       }
     },
-    "STRUCTURED TRIAGE": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "STRUKTURIERTE TRIAGE"
-          }
-        }
-      }
-    },
     "SUMMARY": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "ZUSAMMENFASSUNG"
-          }
-        }
-      }
-    },
-    "SYNC ACROSS MACS (ENCRYPTED)": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "SYNC ZWISCHEN MACS (VERSCHLÜSSELT)"
           }
         }
       }
@@ -11127,16 +10387,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Shepherd erkennt einen Autor an seinem Login, seinem Branch-Präfix oder einem Commit-Trailer als Agent."
-          }
-        }
-      }
-    },
-    "Shepherd never handles the agent's authentication: it runs your installed CLI and passes your environment through untouched, adding nothing and removing nothing. It never pushes on its own either — the agent works in an isolated worktree and you decide what is committed.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Shepherd kümmert sich nie um die Anmeldung des Agenten: Es führt deine installierte CLI aus und gibt deine Umgebung unverändert weiter — es ergänzt nichts und entfernt nichts. Es pusht auch nie von selbst: Der Agent arbeitet in einem isolierten Worktree, und du entscheidest, was committet wird."
           }
         }
       }
@@ -11671,16 +10921,6 @@
         }
       }
     },
-    "Spotlight's index is macOS's, not Shepherd's — so only the title and that metadata are exported. Descriptions, diffs, review comments and your drafts never leave the local database. Switching this off deletes every pull request Shepherd put there.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Index von Spotlight gehört macOS, nicht Shepherd — deshalb werden nur der Titel und diese Metadaten exportiert. Beschreibungen, Diffs, Review-Kommentare und deine Drafts verlassen die lokale Datenbank nie. Ausgeschaltet löscht das jeden Pull Request, den Shepherd dort abgelegt hat."
-          }
-        }
-      }
-    },
     "Source file": {
       "localizations": {
         "de": {
@@ -11767,16 +11007,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Von einer automatischen Delegationsregel gestartet. Es wird nichts gepusht — du reviewst und pushst den Diff weiterhin selbst."
-          }
-        }
-      }
-    },
-    "Starts on the claims and evidence when an agent wrote the description; the diff is one keystroke away (t).": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Beginnt bei den Behauptungen und Belegen, wenn ein Agent die Beschreibung geschrieben hat; der Diff ist einen Tastendruck entfernt (t)."
           }
         }
       }
@@ -12121,16 +11351,6 @@
         }
       }
     },
-    "TRUST LANES": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "VERTRAUENSSPUREN"
-          }
-        }
-      }
-    },
     "Tab": {
       "localizations": {
         "de": {
@@ -12431,16 +11651,6 @@
         }
       }
     },
-    "The diff viewer follows the same setting: the theme is pushed into Monaco over the bridge.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Diff-Ansicht folgt derselben Einstellung: Das Thema wird über die Bridge in Monaco geschoben."
-          }
-        }
-      }
-    },
     "The endpoint did not list any models. Type the model name instead.": {
       "localizations": {
         "de": {
@@ -12481,16 +11691,6 @@
         }
       }
     },
-    "The inbox splits into Short look and Full review. A pull request is a short look only when CI is green, the diff is within both numbers below, and it touches no workflow, auth, secret, migration or deleted-test file.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Eingang teilt sich in Kurzer Blick und Vollständiges Review. Ein Pull Request ist nur dann ein kurzer Blick, wenn die CI grün ist, das Diff innerhalb der beiden Zahlen unten liegt und er keine Workflow-, Auth-, Secret-, Migrations- oder gelöschte Testdatei berührt."
-          }
-        }
-      }
-    },
     "The issue could not be read.": {
       "localizations": {
         "de": {
@@ -12527,16 +11727,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Das Issue konnte nicht gelesen werden: Dieser Account kann es nicht sehen."
-          }
-        }
-      }
-    },
-    "The key is stored in your Keychain, next to the GitHub token, and is sent only to the endpoint above.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Schlüssel liegt in deinem Schlüsselbund, neben dem GitHub-Token, und wird nur an den Endpunkt oben gesendet."
           }
         }
       }
@@ -12711,26 +11901,6 @@
         }
       }
     },
-    "The passphrase is never uploaded and never written to preferences. It is what turns into the encryption key, so if you lose it the object in the bucket is unreadable — there is no recovery and no reset. Use the same passphrase on every Mac.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Passphrase wird nie hochgeladen und nie in die Einstellungen geschrieben. Sie ist es, was zum Schlüssel wird — verlierst du sie, ist das Objekt im Bucket unlesbar. Es gibt keine Wiederherstellung und kein Zurücksetzen. Nutze auf jedem Mac dieselbe Passphrase."
-          }
-        }
-      }
-    },
-    "The payload says what happened — repository, number, title, author, provenance, verdict — and nothing more. No review text, no comment bodies, no diffs and no agent output leave your Mac. Events fire only after the action really succeeded, and only while the toggle above is on.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Nutzlast sagt, was passiert ist — Repository, Nummer, Titel, Autor, Herkunft, Bewertung — und nichts weiter. Kein Review-Text, keine Kommentartexte, keine Diffs und keine Agentenausgabe verlassen deinen Mac. Ereignisse feuern erst, wenn die Aktion wirklich geklappt hat, und nur solange der Schalter oben an ist."
-          }
-        }
-      }
-    },
     "The pull request got new commits. Re-review before submitting.": {
       "localizations": {
         "de": {
@@ -12807,16 +11977,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Das Review wird in der lokalen Outbox eingereiht und von der Sync-Engine gesendet — so übersteht es einen Absturz oder eine abgebrochene Verbindung."
-          }
-        }
-      }
-    },
-    "The same method the merge sheet and bulk triage use — whichever you merged with last. Changing it here changes it there.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dieselbe Methode, die auch das Merge-Fenster und die Sammel-Triage nutzen — die, mit der du zuletzt gemergt hast. Änderst du sie hier, ändert sie sich auch dort."
           }
         }
       }
@@ -12901,16 +12061,6 @@
         }
       }
     },
-    "The template is split like a shell would, but no shell ever runs it: {prompt} always becomes exactly one argument, so a prompt cannot turn into a second command. {worktree} becomes the worktree path.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Vorlage wird zerlegt, wie eine Shell es täte — aber keine Shell führt sie je aus: {prompt} wird immer genau ein Argument, ein Prompt kann also nie zu einem zweiten Befehl werden. {worktree} wird der Pfad des Worktrees."
-          }
-        }
-      }
-    },
     "The updater could not start: %@": {
       "localizations": {
         "de": {
@@ -12947,26 +12097,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Der Webhook war nicht erreichbar: %@"
-          }
-        }
-      }
-    },
-    "There is no confirmation click. With this on, Shepherd queues the merge as soon as a sweep sees a pull request that satisfies every rule below — the same merge you would have queued from the merge sheet, sent through the same outbox. That includes pull requests that are already waiting, so switching this on can merge several of them on the next sweep.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Es gibt keinen Bestätigungsklick. Ist das eingeschaltet, reiht Shepherd den Merge ein, sobald ein Sweep einen Pull Request sieht, der jede Regel unten erfüllt — denselben Merge, den du aus dem Merge-Fenster eingereiht hättest, gesendet über dieselbe Outbox. Das gilt auch für Pull Requests, die schon warten: Einschalten kann also beim nächsten Sweep mehrere davon mergen."
-          }
-        }
-      }
-    },
-    "These only need read and write access to this one object. The keys never leave your Keychain and are used to sign requests, not sent as data.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sie brauchen nur Lese- und Schreibzugriff auf dieses eine Objekt. Die Schlüssel verlassen deinen Schlüsselbund nie und werden zum Signieren von Anfragen genutzt, nicht als Daten gesendet."
           }
         }
       }
@@ -13401,16 +12531,6 @@
         }
       }
     },
-    "UPDATES": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "UPDATES"
-          }
-        }
-      }
-    },
     "URL": {
       "localizations": {
         "de": {
@@ -13521,16 +12641,6 @@
         }
       }
     },
-    "Updates are downloaded from GitHub Releases and are only installed after you confirm — never in the background, so an unsent review draft can never be interrupted.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Updates werden von GitHub Releases geladen und erst nach deiner Bestätigung installiert — nie im Hintergrund, damit ein nicht gesendeter Review-Draft nie unterbrochen wird."
-          }
-        }
-      }
-    },
     "Upload settings": {
       "localizations": {
         "de": {
@@ -13591,16 +12701,6 @@
         }
       }
     },
-    "Used as the summary of a new review on a matching repository. An existing draft — a comment, a summary, a verdict — is never overwritten.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wird als Zusammenfassung eines neuen Reviews auf einem passenden Repository genutzt. Ein bestehender Draft — ein Kommentar, eine Zusammenfassung, eine Bewertung — wird nie überschrieben."
-          }
-        }
-      }
-    },
     "Verdict": {
       "localizations": {
         "de": {
@@ -13641,26 +12741,6 @@
         }
       }
     },
-    "WHAT AI NEVER DOES": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "WAS KI NIE TUT"
-          }
-        }
-      }
-    },
-    "WHAT DELEGATION NEVER DOES": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "WAS DIE DELEGATION NIE TUT"
-          }
-        }
-      }
-    },
     "WHAT IT READ · %lld": {
       "localizations": {
         "de": {
@@ -13681,32 +12761,12 @@
         }
       }
     },
-    "WHAT SHEPHERD MERGED": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "WAS SHEPHERD GEMERGT HAT"
-          }
-        }
-      }
-    },
     "WHAT THE COUNTS SAY": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "WAS DIE ZAHLEN SAGEN"
-          }
-        }
-      }
-    },
-    "WHAT WEBHOOKS NEVER SEND": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "WAS WEBHOOKS NIE SENDEN"
           }
         }
       }
@@ -13791,16 +12851,6 @@
         }
       }
     },
-    "When a pull request's commits carry a `Claude-Session:` trailer, every review finding gains a second button that sends it to that session. The command below is what runs: your own installed CLI, with its own login. Shepherd holds no account, no API key and no token for it, and it never pushes what the session changes.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tragen die Commits eines Pull Requests einen `Claude-Session:`-Trailer, bekommt jeder Befund einen zweiten Knopf, der ihn an diese Session schickt. Ausgeführt wird der Befehl unten: deine eigene installierte CLI mit ihrer eigenen Anmeldung. Shepherd besitzt dafür kein Konto, keinen API-Schlüssel und kein Token und pusht nie, was die Session ändert."
-          }
-        }
-      }
-    },
     "When the model looks something up, it can only read — the checks, a log, a file. It cannot comment, approve, merge or start an agent.": {
       "localizations": {
         "de": {
@@ -13847,16 +12897,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Warum?"
-          }
-        }
-      }
-    },
-    "With a secret set, every request carries X-Shepherd-Signature: sha256=<HMAC-SHA256 of the body>. That is the same shape as GitHub's X-Hub-Signature-256, so a verification step built for GitHub works unchanged. The secret is stored in your Keychain, next to the GitHub token.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ist ein Secret gesetzt, trägt jede Anfrage X-Shepherd-Signature: sha256=<HMAC-SHA256 des Bodys>. Das ist dieselbe Form wie GitHubs X-Hub-Signature-256, ein für GitHub gebauter Prüfschritt funktioniert also unverändert. Das Secret liegt in deinem Schlüsselbund, neben dem GitHub-Token."
           }
         }
       }
@@ -13961,16 +13001,6 @@
         }
       }
     },
-    "YOUR EXTENSIONS": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "DEINE ERWEITERUNGEN"
-          }
-        }
-      }
-    },
     "You are caught up.": {
       "localizations": {
         "de": {
@@ -14071,16 +13101,6 @@
         }
       }
     },
-    "Your issues are indexed the same way and answer the same ⌘K: the same on-device embeddings, over the title, the labels and the body of what Shepherd already downloaded.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deine Issues werden genauso indexiert und antworten im selben ⌘K: dieselben Embeddings auf dem Gerät, über Titel, Labels und Beschreibung von allem, was Shepherd schon heruntergeladen hat."
-          }
-        }
-      }
-    },
     "Your settings and your secrets are encrypted on this Mac with a passphrase you choose, then stored as one object in a bucket you own. The bucket operator — and anyone who can read the bucket — sees ciphertext only.": {
       "localizations": {
         "de": {
@@ -14127,16 +13147,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "ein erkannter Agent ihn geöffnet hat"
-          }
-        }
-      }
-    },
-    "a reviewer requests changes": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ein Reviewer Änderungen anfordert"
           }
         }
       }
@@ -14641,16 +13651,6 @@
         }
       }
     },
-    "macOS asks for permission the first time Shepherd actually needs to post one.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "macOS fragt beim ersten Mal um Erlaubnis, wenn Shepherd wirklich eine senden muss."
-          }
-        }
-      }
-    },
     "macOS cannot translate %@ into %@ on this Mac.": {
       "localizations": {
         "de": {
@@ -14917,16 +13917,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "veraltet"
-          }
-        }
-      }
-    },
-    "owner/repo": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "owner/repo"
           }
         }
       }
@@ -15341,16 +14331,6 @@
         }
       }
     },
-    "{message} becomes exactly one argument, {sessionID} and {sessionURL} come from the trailer, {worktree} is the worktree path — split like a shell would, but no shell ever runs it. A bare command name is only resolved when it is the CLI above; write a full path otherwise. Leave a field empty to switch that button off; the remote field is empty by default, because whether the CLI can address a remote session at all is still an open question (docs/plans/session-back-channel-spike.md).": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "{message} wird immer genau ein Argument, {sessionID} und {sessionURL} kommen aus dem Trailer, {worktree} ist der Pfad des Worktrees – zerlegt wie eine Shell es täte, ausgeführt aber ohne jede Shell. Ein bloßer Befehlsname wird nur aufgelöst, wenn es die CLI von oben ist; sonst schreibe den vollen Pfad. Ein leeres Feld schaltet den jeweiligen Knopf ab; das Remote-Feld ist standardmäßig leer, weil noch offen ist, ob die CLI eine Remote-Session überhaupt ansprechen kann (docs/plans/session-back-channel-spike.md)."
-          }
-        }
-      }
-    },
     "· %@": {
       "localizations": {
         "de": {
@@ -15611,42 +14591,12 @@
         }
       }
     },
-    "⌘K searches your pull requests by what they are about — the title, the description, the labels, the branch, the changed files and the diff of anything you have opened — not just by exact words. The index is built on this Mac from what Shepherd already downloaded, with Apple's on-device embeddings, and it is stored in the local database.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "⌘K sucht deine Pull Requests danach, worum sie gehen — Titel, Beschreibung, Labels, Branch, geänderte Dateien und der Diff von allem, was du geöffnet hast —, nicht nur nach exakten Wörtern. Der Index wird auf diesem Mac aus dem gebaut, was Shepherd schon geladen hat, mit Apples On-Device-Embeddings, und liegt in der lokalen Datenbank."
-          }
-        }
-      }
-    },
-    "⌘Space finds the pull requests in your inbox by title, by owner/repo#number, by label, by repository and by the agent that wrote them. Opening a result opens the review screen, exactly as a shepherd:// link does.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "⌘Space findet die Pull Requests in deiner Inbox über Titel, owner/repo#Nummer, Label, Repository und den Agenten, der sie geschrieben hat. Ein Treffer öffnet den Review-Bildschirm, genau wie ein shepherd://-Link."
-          }
-        }
-      }
-    },
     "%@ hidden. A review request brings it back.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ ausgeblendet. Bei einer Review-Anfrage taucht der Pull Request wieder auf."
-          }
-        }
-      }
-    },
-    "HIDDEN PULL REQUESTS": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "AUSGEBLENDETE PULL REQUESTS"
           }
         }
       }
@@ -15667,16 +14617,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Alle wieder anzeigen"
-          }
-        }
-      }
-    },
-    "These are left out of the inbox. A pull request comes back by itself as soon as a review is requested from you on it.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Diese lässt der Posteingang aus. Ein Pull Request kommt von selbst zurück, sobald eine Review von dir angefragt wird."
           }
         }
       }
@@ -15741,16 +14681,6 @@
         }
       }
     },
-    "WATCHED REPOSITORIES": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BEOBACHTETE REPOSITORIES"
-          }
-        }
-      }
-    },
     "Watch": {
       "localizations": {
         "de": {
@@ -15787,16 +14717,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dieser Build hat noch keinen Update-Signierschlüssel, deshalb sind Updates aus statt unverifiziert. Releases von github.com/schnaq/shepherd sind signiert."
-          }
-        }
-      }
-    },
-    "If macOS asks for your Keychain password, it is because a different build of Shepherd than the one that saved the token is asking for it — a copy you built yourself beside the installed one, for example. Always Allow answers it once for that build.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wenn macOS nach deinem Schlüsselbund-Passwort fragt, dann weil ein anderer Build von Shepherd danach fragt als der, der den Token gespeichert hat — etwa eine selbst gebaute Kopie neben der installierten. „Immer erlauben“ beantwortet das für diesen Build ein für alle Mal."
           }
         }
       }
@@ -15927,16 +14847,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Fügt eine zufällige Kennung hinzu, die jeden Monat verworfen wird, damit wir zählen können, wie viele Menschen Shepherd nutzen. Wer dies abschaltet, löscht sie."
-          }
-        }
-      }
-    },
-    "USAGE STATISTICS": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "NUTZUNGSSTATISTIK"
           }
         }
       }
@@ -16681,16 +15591,6 @@
         }
       }
     },
-    "EDITOR": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "EDITOR"
-          }
-        }
-      }
-    },
     "Editor": {
       "localizations": {
         "de": {
@@ -16877,26 +15777,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "keine Turn-Grenze"
-          }
-        }
-      }
-    },
-    "{file} becomes the file's full path and always exactly one argument, {line} the line (1 when none is known). Split like a shell would, but no shell ever runs it. Start with the full path to the program: apps opened from the Dock do not see your shell's PATH.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "{file} wird zum vollständigen Pfad der Datei und immer zu genau einem Argument, {line} zur Zeile (1, wenn keine bekannt ist). Aufgeteilt wie von einer Shell, aber nie von einer ausgeführt. Beginne mit dem vollständigen Pfad zum Programm: Aus dem Dock gestartete Apps sehen den PATH deiner Shell nicht."
-          }
-        }
-      }
-    },
-    "“Open in editor” on a file in the review opens it in the checkout above, at the line when there is one. Lines are counted on the pull request's head, so they match when your checkout is on that commit.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "„Im Editor öffnen“ auf einer Datei im Review öffnet sie im Checkout oben, an der Zeile, wenn es eine gibt. Zeilen zählen ab dem Head des pull requests und stimmen, wenn dein Checkout auf diesem Commit steht."
           }
         }
       }
@@ -17431,16 +16311,6 @@
         }
       }
     },
-    "SCREENSHOTS": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "SCREENSHOTS"
-          }
-        }
-      }
-    },
     "Read screenshots in descriptions on this Mac": {
       "localizations": {
         "de": {
@@ -17721,16 +16591,6 @@
         }
       }
     },
-    "Pick the folder; Shepherd reads the repository from its origin and can watch it too.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wähle den Ordner; Shepherd liest das Repository aus seinem origin und kann es auch beobachten."
-          }
-        }
-      }
-    },
     "Replaces the folder linked now: %@": {
       "localizations": {
         "de": {
@@ -17967,6 +16827,1416 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nach dem Anlegen des Worktrees gestoppt. Er liegt unter %@; verwirf ihn oder starte erneut."
+          }
+        }
+      }
+    },
+    "Automatic uses the line list while VoiceOver is running.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„Automatisch“ nutzt die Zeilenliste, solange VoiceOver läuft."
+          }
+        }
+      }
+    },
+    "Diff viewer": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diff-Ansicht"
+          }
+        }
+      }
+    },
+    "How many reviews are waiting, and a short list of them.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie viele Reviews warten, mit einer kurzen Liste."
+          }
+        }
+      }
+    },
+    "More information": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weitere Informationen"
+          }
+        }
+      }
+    },
+    "Review screen": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review-Ansicht"
+          }
+        }
+      }
+    },
+    "The diff is one keystroke away (t).": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Diff ist einen Tastendruck entfernt (t)."
+          }
+        }
+      }
+    },
+    "An extension with the same id replaces the bundled entry.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Erweiterung mit derselben ID ersetzt den mitgelieferten Eintrag."
+          }
+        }
+      }
+    },
+    "Both are sent as part of the request. An endpoint that cannot meet them refuses the request rather than answering from somewhere else. Left empty and off, nothing extra is sent.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beide werden als Teil der Anfrage mitgesendet. Ein Endpunkt, der sie nicht erfüllen kann, lehnt die Anfrage ab, statt sie von anderswo zu beantworten. Leer und ausgeschaltet wird nichts zusätzlich gesendet."
+          }
+        }
+      }
+    },
+    "Bring your own key": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eigener Schlüssel"
+          }
+        }
+      }
+    },
+    "Bundled registry": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mitgelieferte Registry"
+          }
+        }
+      }
+    },
+    "Classify pull requests": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pull Requests einordnen"
+          }
+        }
+      }
+    },
+    "Downloaded only when you ask, and never sent anywhere else.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur auf deinen Wunsch geladen und nie anderswohin gesendet."
+          }
+        }
+      }
+    },
+    "Each pull request gets a kind, a risk and a one-sentence reason from the on-device model. Nothing acts on it: it never approves, merges or comments. With the provider set to Off nothing is classified, and the inbox keeps its risk hints either way.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Pull Request bekommt vom Modell auf dem Gerät eine Art, ein Risiko und eine Begründung in einem Satz. Nichts handelt danach: Es approvt nichts, mergt nichts und kommentiert nichts. Steht der Anbieter auf Aus, wird nichts eingeordnet — die Risikohinweise der Inbox bleiben so oder so."
+          }
+        }
+      }
+    },
+    "Find inbox pull requests with ⌘Space. Only titles and metadata go there.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Finde Pull Requests der Inbox mit ⌘Leertaste. Dorthin gehen nur Titel und Metadaten."
+          }
+        }
+      }
+    },
+    "Index": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Index"
+          }
+        }
+      }
+    },
+    "Kind of change and risk, to sort the inbox by. Stays on this Mac.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Art der Änderung und Risiko, zum Sortieren der Inbox. Bleibt auf diesem Mac."
+          }
+        }
+      }
+    },
+    "New entry": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neuer Eintrag"
+          }
+        }
+      }
+    },
+    "Optional. Two-letter country codes, comma-separated.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optional. Zweibuchstabige Ländercodes, durch Kommas getrennt."
+          }
+        }
+      }
+    },
+    "Screenshots": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshots"
+          }
+        }
+      }
+    },
+    "Semantic search": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Semantische Suche"
+          }
+        }
+      }
+    },
+    "Shepherd never reviews, approves, merges or comments for you.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd reviewt, approvt, mergt und kommentiert nie für dich."
+          }
+        }
+      }
+    },
+    "Spotlight": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spotlight"
+          }
+        }
+      }
+    },
+    "Spotlight's index is macOS's, not Shepherd's — so only the title, owner/repo#number, labels, repository and agent are exported. Descriptions, diffs, review comments and your drafts never leave the local database. Switching this off deletes every pull request Shepherd put there.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Index von Spotlight gehört macOS, nicht Shepherd — deshalb werden nur Titel, owner/repo#Nummer, Labels, Repository und Agent exportiert. Beschreibungen, Diffs, Review-Kommentare und deine Drafts verlassen die lokale Datenbank nie. Ausgeschaltet löscht das jeden Pull Request, den Shepherd dort abgelegt hat."
+          }
+        }
+      }
+    },
+    "The index is built on this Mac with Apple's on-device embeddings and kept in the local database. It never uses an AI endpoint, even when you have configured one. Switched off, the index is emptied and ⌘K matches words only.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Index entsteht auf diesem Mac mit Apples Embeddings auf dem Gerät und liegt in der lokalen Datenbank. Er nutzt nie einen KI-Endpunkt, auch wenn du einen konfiguriert hast. Ausgeschaltet wird der Index geleert, und ⌘K findet nur noch Wörter."
+          }
+        }
+      }
+    },
+    "The key stays in your Keychain and is sent only to this endpoint.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Schlüssel bleibt in deinem Schlüsselbund und geht nur an diesen Endpunkt."
+          }
+        }
+      }
+    },
+    "Where the model runs": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wo das Modell läuft"
+          }
+        }
+      }
+    },
+    "Your extensions": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Erweiterungen"
+          }
+        }
+      }
+    },
+    "⌘K finds pull requests and issues by meaning, on this Mac.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⌘K findet Pull Requests und Issues nach Bedeutung, auf diesem Mac."
+          }
+        }
+      }
+    },
+    "A failing webhook never blocks a review, merge or sync: Shepherd tries twice, then gives up quietly.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein fehlschlagender Webhook blockiert nie ein Review, einen Merge oder eine Synchronisierung: Shepherd versucht es zweimal, dann gibt es still auf."
+          }
+        }
+      }
+    },
+    "A pull request must carry all of them. Empty means none.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Pull Request muss alle tragen. Leer heißt: keine."
+          }
+        }
+      }
+    },
+    "Any endpoint that takes a JSON POST, such as n8n. https, or http on this Mac. Nothing is sent anywhere else.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Endpunkt, der einen JSON-POST annimmt, etwa n8n. https, oder http auf diesem Mac. Es wird nie irgendwohin sonst gesendet."
+          }
+        }
+      }
+    },
+    "Automatic merging": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatisches Mergen"
+          }
+        }
+      }
+    },
+    "Comma-separated, * and ? as wildcards. Empty means all.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommagetrennt, * und ? als Platzhalter. Leer heißt: alle."
+          }
+        }
+      }
+    },
+    "Delivery": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auslieferung"
+          }
+        }
+      }
+    },
+    "Each event says what happened — repository, number, title, author, provenance, verdict — and nothing more. It fires only after the action really succeeded.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jedes Ereignis sagt, was passiert ist — Repository, Nummer, Titel, Autor, Herkunft, Bewertung — und nichts weiter. Es feuert erst, wenn die Aktion wirklich geklappt hat."
+          }
+        }
+      }
+    },
+    "Events": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ereignisse"
+          }
+        }
+      }
+    },
+    "Fires when the outbox has sent the review, not when you press the key.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Feuert, wenn die Outbox das Review gesendet hat, nicht wenn du die Taste drückst."
+          }
+        }
+      }
+    },
+    "History": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Historie"
+          }
+        }
+      }
+    },
+    "Merge green, approved agent pull requests automatically": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grüne, approved Agent-Pull-Requests automatisch mergen"
+          }
+        }
+      }
+    },
+    "No confirmation click: pull requests already waiting can merge on the next sweep.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ohne Bestätigungsklick: Schon wartende Pull Requests können beim nächsten Sweep gemergt werden."
+          }
+        }
+      }
+    },
+    "Nothing yet. The log stays on this Mac.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch nichts. Das Protokoll bleibt auf diesem Mac."
+          }
+        }
+      }
+    },
+    "Optional. Lets the receiver check that a request came from Shepherd.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optional. Damit kann der Empfänger prüfen, dass eine Anfrage von Shepherd kommt."
+          }
+        }
+      }
+    },
+    "Outbound webhook": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausgehender Webhook"
+          }
+        }
+      }
+    },
+    "Sensitive means a workflow, auth, secret, migration or deleted-test file. A track record never moves a pull request between the lanes; it only colours the chip and orders rows. Both limits travel to your other Macs.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sensibel heißt: eine Workflow-, Auth-, Secret-, Migrations- oder gelöschte Testdatei. Eine Erfolgsbilanz verschiebt nie einen Pull Request zwischen den Spuren; sie färbt nur den Chip und ordnet die Zeilen. Beide Grenzen wandern mit auf deine anderen Macs."
+          }
+        }
+      }
+    },
+    "Shepherd queues the same merge the merge sheet would, through the same outbox, pinned to the commit it checked. Each pull request is queued at most once per commit; one that could not be sent waits for you in Settings → Sync. The method is shared with the merge sheet and bulk triage.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd reiht denselben Merge ein wie das Merge-Fenster, über dieselbe Outbox, festgelegt auf den geprüften Commit. Jeder Pull Request wird höchstens einmal pro Commit eingereiht; einen, der nicht gesendet werden konnte, findest du in Einstellungen → Sync. Die Methode teilt sich die Einstellung mit dem Merge-Fenster und der Sammel-Triage."
+          }
+        }
+      }
+    },
+    "Shepherd will %@ a pull request by itself only when %@. Everything else is left for you.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd erledigt einen Pull Request nur dann von selbst per %@, wenn %@. Alles andere bleibt bei dir."
+          }
+        }
+      }
+    },
+    "Short look: CI green, at most %lld files and %lld changed lines, nothing sensitive. Everything else is a full review.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kurzer Blick: CI grün, höchstens %lld Dateien und %lld geänderte Zeilen, nichts Sensibles. Alles andere ist ein vollständiges Review."
+          }
+        }
+      }
+    },
+    "Signing secret": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signier-Secret"
+          }
+        }
+      }
+    },
+    "Track record": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erfolgsbilanz"
+          }
+        }
+      }
+    },
+    "Trust lanes": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vertrauensspuren"
+          }
+        }
+      }
+    },
+    "What Shepherd merged": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was Shepherd gemergt hat"
+          }
+        }
+      }
+    },
+    "With a secret set, every request carries X-Shepherd-Signature: sha256=<HMAC-SHA256 of the body> — the same shape as GitHub's X-Hub-Signature-256. The secret is stored in your Keychain.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ist ein Secret gesetzt, trägt jede Anfrage X-Shepherd-Signature: sha256=<HMAC-SHA256 des Bodys> — dieselbe Form wie GitHubs X-Hub-Signature-256. Das Secret liegt in deinem Schlüsselbund."
+          }
+        }
+      }
+    },
+    "The last 90 days of closed pull requests, up to 500 per repository, for each agent's chip.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die geschlossenen Pull Requests der letzten 90 Tage, bis zu 500 pro Repository, für den Chip jedes Agents."
+          }
+        }
+      }
+    },
+    "Webhooks never carry review text, comments, diffs or agent output.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Webhooks tragen nie Review-Text, Kommentare, Diffs oder Agentenausgaben."
+          }
+        }
+      }
+    },
+    "A report appears at the next launch after a crash.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Bericht erscheint beim nächsten Start nach einem Crash."
+          }
+        }
+      }
+    },
+    "Access keys": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zugangsschlüssel"
+          }
+        }
+      }
+    },
+    "Access keys are not saved yet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zugangsschlüssel sind noch nicht gespeichert."
+          }
+        }
+      }
+    },
+    "Add repository": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repository hinzufügen"
+          }
+        }
+      }
+    },
+    "Applies from the next sign-in.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gilt ab der nächsten Anmeldung."
+          }
+        }
+      }
+    },
+    "Built from the local database only — no GitHub call, no AI, nothing sent anywhere. If your Mac was asleep, the digest arrives when it wakes, if that is still the same day. A quiet night produces nothing.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Er entsteht nur aus der lokalen Datenbank — kein GitHub-Aufruf, keine KI, nichts wird irgendwohin gesendet. War dein Mac im Ruhezustand, kommt der Digest beim Aufwachen, sofern es noch derselbe Tag ist. Eine ruhige Nacht ergibt nichts."
+          }
+        }
+      }
+    },
+    "Diagnostics": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagnose"
+          }
+        }
+      }
+    },
+    "Encrypted on this Mac; the bucket only ever sees ciphertext.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf diesem Mac verschlüsselt; der Bucket sieht nur Chiffretext."
+          }
+        }
+      }
+    },
+    "Every open pull request in these reaches the inbox, under Watched.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder offene Pull Request darin landet in der Inbox, unter „Beobachtet“."
+          }
+        }
+      }
+    },
+    "Feed: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Feed: %@"
+          }
+        }
+      }
+    },
+    "Fetched data stays in a local database, your token in the Keychain.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geladene Daten bleiben in einer lokalen Datenbank, dein Token im Schlüsselbund."
+          }
+        }
+      }
+    },
+    "Full search every": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volle Suche alle"
+          }
+        }
+      }
+    },
+    "HTTPS only: the object carries your tokens.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur HTTPS: Das Objekt enthält deine Tokens."
+          }
+        }
+      }
+    },
+    "Hidden pull requests": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausgeblendete Pull Requests"
+          }
+        }
+      }
+    },
+    "If macOS asks for your Keychain password, a different build of Shepherd than the one that saved the token is asking — a copy you built yourself, for example. Always Allow answers it once for that build.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wenn macOS nach deinem Schlüsselbund-Passwort fragt, fragt ein anderer Build von Shepherd als der, der den Token gespeichert hat — etwa eine selbst gebaute Kopie. „Immer erlauben“ beantwortet das für diesen Build ein für alle Mal."
+          }
+        }
+      }
+    },
+    "If you lose it, there is no recovery. Use the same one on every Mac.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verlierst du sie, gibt es keine Wiederherstellung. Nutze auf jedem Mac dieselbe."
+          }
+        }
+      }
+    },
+    "Inbox sweep": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inbox-Sweep"
+          }
+        }
+      }
+    },
+    "Installed only after you confirm, never in the background.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erst nach deiner Bestätigung installiert, nie im Hintergrund."
+          }
+        }
+      }
+    },
+    "Level": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stufe"
+          }
+        }
+      }
+    },
+    "Local data": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokale Daten"
+          }
+        }
+      }
+    },
+    "Morning digest": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Morgen-Digest"
+          }
+        }
+      }
+    },
+    "New review requests, green agent pull requests that only need an approval or a merge, your own pull requests with red CI or a change request, and reviews the outbox could not send.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Review-Anfragen, grüne Agent-Pull-Requests, die nur noch ein Approval oder einen Merge brauchen, deine eigenen Pull Requests mit roter CI oder angeforderten Änderungen, und Reviews, die die Outbox nicht senden konnte."
+          }
+        }
+      }
+    },
+    "No repositories watched.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keine Repositories beobachtet."
+          }
+        }
+      }
+    },
+    "Not checked yet": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch nicht geprüft"
+          }
+        }
+      }
+    },
+    "Notifications": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mitteilungen"
+          }
+        }
+      }
+    },
+    "Notifications are polled at the interval GitHub asks for; this slider only controls the full search sweep.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mitteilungen werden in dem Intervall abgefragt, das GitHub vorgibt; dieser Regler steuert nur den vollen Such-Sweep."
+          }
+        }
+      }
+    },
+    "One comes back by itself when a review is requested from you.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einer kommt von selbst zurück, sobald ein Review von dir angefragt wird."
+          }
+        }
+      }
+    },
+    "One notification a day with what came in since the last.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Mitteilung pro Tag mit allem, was seit der letzten hereinkam."
+          }
+        }
+      }
+    },
+    "Outbox": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Outbox"
+          }
+        }
+      }
+    },
+    "Path style works with every provider.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Pfad-Stil funktioniert mit jedem Anbieter."
+          }
+        }
+      }
+    },
+    "Queue": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warteschlange"
+          }
+        }
+      }
+    },
+    "Read and write on this one object is enough. Keys never leave your Keychain.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lesen und Schreiben auf diesem einen Objekt genügt. Die Schlüssel verlassen deinen Schlüsselbund nie."
+          }
+        }
+      }
+    },
+    "Stored only on this Mac and never sent anywhere.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nur auf diesem Mac gespeichert und nie irgendwohin gesendet."
+          }
+        }
+      }
+    },
+    "Sync across Macs": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sync zwischen Macs"
+          }
+        }
+      }
+    },
+    "The database is at %@. Your token is kept in the Keychain and nowhere else.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Datenbank liegt unter %@. Dein Token liegt im Schlüsselbund und nirgends sonst."
+          }
+        }
+      }
+    },
+    "The passphrase is never uploaded and never written to preferences. It becomes the encryption key, so without it the object in the bucket cannot be read.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Passphrase wird nie hochgeladen und nie in die Einstellungen geschrieben. Aus ihr wird der Schlüssel — ohne sie ist das Objekt im Bucket nicht lesbar."
+          }
+        }
+      }
+    },
+    "Updates": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updates"
+          }
+        }
+      }
+    },
+    "Updates are downloaded from GitHub Releases and installed only after you confirm — never in the background, so an unsent review draft is never interrupted.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Updates werden von GitHub Releases geladen und erst nach deiner Bestätigung installiert — nie im Hintergrund, damit ein nicht gesendeter Review-Draft nie unterbrochen wird."
+          }
+        }
+      }
+    },
+    "Version": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version"
+          }
+        }
+      }
+    },
+    "Watched repositories": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beobachtete Repositories"
+          }
+        }
+      }
+    },
+    "macOS asks for permission the first time one is posted.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS fragt beim ersten Mal nach der Erlaubnis."
+          }
+        }
+      }
+    },
+    "%lld of %lld used today · %lld running now. At a cap, Shepherd notifies you instead.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %lld heute genutzt · %lld laufen gerade. Am Limit benachrichtigt Shepherd dich stattdessen."
+          }
+        }
+      }
+    },
+    "A comment you wrote at least three times in thirty days, on at least two pull requests of the same repository. On the review screen each one offers to draft a rule for that repository's agent instructions.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Kommentar, den du in dreißig Tagen mindestens dreimal geschrieben hast, auf mindestens zwei Pull Requests desselben Repositories. Im Review-Screen bietet jeder davon an, eine Regel für die Agent-Anweisungen dieses Repositories zu entwerfen."
+          }
+        }
+      }
+    },
+    "A delegation runs in a git worktree of your own clone. Shepherd never clones anything itself.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Delegation läuft in einem Git-Worktree deines eigenen Clones. Shepherd klont selbst nie etwas."
+          }
+        }
+      }
+    },
+    "A reviewer requests changes": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Reviewer Änderungen anfordert"
+          }
+        }
+      }
+    },
+    "Agent CLI": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent-CLI"
+          }
+        }
+      }
+    },
+    "Automatic delegation": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatische Delegation"
+          }
+        }
+      }
+    },
+    "Body": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Text"
+          }
+        }
+      }
+    },
+    "By name": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Per Name"
+          }
+        }
+      }
+    },
+    "For a clone whose origin does not say.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für einen Clone, dessen origin es nicht verrät."
+          }
+        }
+      }
+    },
+    "Found on this Mac from your own comments; never sent anywhere.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf diesem Mac aus deinen eigenen Kommentaren gefunden; nie irgendwohin gesendet."
+          }
+        }
+      }
+    },
+    "From a folder": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aus einem Ordner"
+          }
+        }
+      }
+    },
+    "Guardrails": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leitlinien"
+          }
+        }
+      }
+    },
+    "Leave empty to look in the usual places.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Leer lassen, um an den üblichen Orten zu suchen."
+          }
+        }
+      }
+    },
+    "Limits": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Limits"
+          }
+        }
+      }
+    },
+    "Local checkouts": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokale Checkouts"
+          }
+        }
+      }
+    },
+    "Markdown for any comment field. The insert menu lists them in this order.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markdown für jedes Kommentarfeld. Das Einfügen-Menü listet sie in dieser Reihenfolge."
+          }
+        }
+      }
+    },
+    "Markdown, appended to the comment field after a blank line.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markdown, nach einer Leerzeile an das Kommentarfeld angehängt."
+          }
+        }
+      }
+    },
+    "Match one repository with schnaq/review or a whole owner with schnaq/* — * and ? are the wildcards. An exact pattern wins over a wildcard, a longer wildcard over a shorter one; on a tie, the one listed first wins.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein einzelnes Repository trifft schnaq/review, einen ganzen Owner schnaq/* — * und ? sind die Platzhalter. Ein exaktes Muster gewinnt gegen ein Wildcard-Muster, ein längeres Wildcard-Muster gegen ein kürzeres; bei Gleichstand gewinnt das zuerst gelistete."
+          }
+        }
+      }
+    },
+    "Not installed? Run npm install -g @anthropic-ai/claude-code in Terminal.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht installiert? Führe npm install -g @anthropic-ai/claude-code im Terminal aus."
+          }
+        }
+      }
+    },
+    "Open in editor": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Im Editor öffnen"
+          }
+        }
+      }
+    },
+    "Opens a review's file in your checkout, at the line.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnet eine Datei aus dem Review in deinem Checkout, an der Zeile."
+          }
+        }
+      }
+    },
+    "Passed to --allowedTools.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird an --allowedTools übergeben."
+          }
+        }
+      }
+    },
+    "Placeholders: %@. Shepherd's own rules (worktree, no push) come first.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Platzhalter: %@. Shepherds eigene Regeln (Worktree, kein Push) stehen davor."
+          }
+        }
+      }
+    },
+    "Reads the repository from the clone's origin; can watch it too.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liest das Repository aus dem origin des Clones; kann es auch beobachten."
+          }
+        }
+      }
+    },
+    "Recurring findings": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wiederkehrende Befunde"
+          }
+        }
+      }
+    },
+    "Review templates": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review-Vorlagen"
+          }
+        }
+      }
+    },
+    "Run on my pull requests when": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf meinen Pull Requests ausführen, wenn"
+          }
+        }
+      }
+    },
+    "Same worktree and guardrails; never pushes, approves or merges.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gleicher Worktree, gleiche Leitlinien; pusht, approvt und mergt nie."
+          }
+        }
+      }
+    },
+    "Saved replies": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gespeicherte Antworten"
+          }
+        }
+      }
+    },
+    "Sends a review finding to the session named in a commit's Claude-Session: trailer.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schickt einen Befund an die Session aus dem Claude-Session:-Trailer eines Commits."
+          }
+        }
+      }
+    },
+    "Session back-channel": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rückkanal zur Session"
+          }
+        }
+      }
+    },
+    "Shepherd runs your installed CLI with your environment untouched and holds no login for it. It never pushes: you decide what is committed.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd führt deine installierte CLI mit unveränderter Umgebung aus und besitzt keine Anmeldung dafür. Es pusht nie: Du entscheidest, was committet wird."
+          }
+        }
+      }
+    },
+    "Split like a shell would, but no shell ever runs it; {file} is always exactly one argument. Start with the full path to the program: apps opened from the Dock do not see your shell's PATH.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufgeteilt wie von einer Shell, aber nie von einer ausgeführt; {file} ist immer genau ein Argument. Beginne mit dem vollständigen Pfad zum Programm: Aus dem Dock gestartete Apps sehen den PATH deiner Shell nicht."
+          }
+        }
+      }
+    },
+    "Starts a new review on a matching repository. A draft is never overwritten.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Startet ein neues Review auf einem passenden Repository. Ein Draft wird nie überschrieben."
+          }
+        }
+      }
+    },
+    "Summary": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zusammenfassung"
+          }
+        }
+      }
+    },
+    "The summary a new review starts from. A review you already started is never touched.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Zusammenfassung, mit der ein neues Review startet. Ein schon begonnenes Review wird nie angetastet."
+          }
+        }
+      }
+    },
+    "The template is split like a shell would, but no shell ever runs it: {prompt} always becomes exactly one argument, so a prompt cannot turn into a second command.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Vorlage wird zerlegt, wie eine Shell es täte — aber keine Shell führt sie je aus: {prompt} wird immer genau ein Argument, ein Prompt kann also nie zu einem zweiten Befehl werden."
+          }
+        }
+      }
+    },
+    "“Turns” is meant literally: Shepherd has to have seen the change happen. A pull request that was already red when Shepherd first saw it never starts anything, and each pull request starts at most one run per commit.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„Turns“ ist wörtlich gemeint: Shepherd muss die Änderung selbst gesehen haben. Ein Pull Request, der schon rot war, als Shepherd ihn zum ersten Mal sah, startet nie etwas, und jeder Pull Request startet höchstens einen Lauf pro Commit."
+          }
+        }
+      }
+    },
+    "Lines are counted on the pull request's head, so they match when your checkout is on that commit.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeilen zählen ab dem Head des Pull Requests und stimmen, wenn dein Checkout auf diesem Commit steht."
+          }
+        }
+      }
+    },
+    "{file} is the path, {line} the line (or 1).": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{file} ist der Pfad, {line} die Zeile (oder 1)."
+          }
+        }
+      }
+    },
+    "{prompt} is the task, {worktree} the path.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "{prompt} ist die Aufgabe, {worktree} der Pfad."
+          }
+        }
+      }
+    },
+    "Runs your own installed CLI with its own login; Shepherd holds no token for it and never pushes what the session changes. {message} is always exactly one argument, {sessionID} and {sessionURL} come from the trailer, {worktree} is the worktree path. Write a full path unless the command is the CLI above, or leave a field empty to switch that button off.\n\nGuardrails do not apply to a resumed session: add --max-turns and --max-budget-usd to cap it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Führt deine eigene installierte CLI mit ihrer eigenen Anmeldung aus; Shepherd besitzt dafür kein Token und pusht nie, was die Session ändert. {message} wird immer genau ein Argument, {sessionID} und {sessionURL} kommen aus dem Trailer, {worktree} ist der Pfad des Worktrees. Schreibe den vollen Pfad, außer der Befehl ist die CLI von oben, oder lass ein Feld leer, um den jeweiligen Knopf abzuschalten.\n\nDie Leitlinien gelten nicht für eine fortgesetzte Session: Begrenze sie mit --max-turns und --max-budget-usd."
+          }
+        }
+      }
+    },
+    "Fires when a local agent run finishes, fails or is cancelled.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird gesendet, wenn ein lokaler Agent-Lauf endet, fehlschlägt oder abgebrochen wird."
+          }
+        }
+      }
+    },
+    "Fires when a rule queues a merge; the merge itself sends its own event.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird gesendet, wenn eine Regel einen Merge einreiht; der Merge selbst sendet ein eigenes Ereignis."
+          }
+        }
+      }
+    },
+    "Fires when GitHub confirmed the close. The payload describes the issue.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird gesendet, wenn GitHub das Schließen bestätigt hat. Die Nutzdaten beschreibt das Issue."
+          }
+        }
+      }
+    },
+    "Fires when an agent runs on an issue you assigned. The payload describes the issue.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird gesendet, wenn ein Agent an einem zugewiesenen Issue arbeitet. Die Nutzdaten beschreibt das Issue."
           }
         }
       }
