@@ -113,7 +113,8 @@ type-scale gate (`Scripts/check-type-scale.py`) is unchanged and green.
   when the review screen leaves the hierarchy; a stale title on the inbox after leaving a review
   is one of the screenshot checks.
 - The fleet screen's back button is the toolbar's navigation item too (2026-09-24): "‹ Inbox",
-  the review toolbar's button, in every state of the screen, with Escape on it. The chevron in
+  labelled like the review toolbar's, in every state of the screen. Escape is the button's own
+  key equivalent here, since the no-agents state has no list to take the key. The chevron in
   the agent list's header and its copy over the no-agents state are gone.
 - Anything new follows the rules above: a new bar under the toolbar paints its own frame only; a
   new toolbar item uses the default style; a new sheet uses the app's styles.

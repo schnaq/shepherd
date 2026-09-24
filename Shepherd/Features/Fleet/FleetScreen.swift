@@ -122,13 +122,11 @@ struct FleetScreen: View {
 
     private var agentList: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Text(String(localized: "Agents"))
-                    .font(Theme.type(.body, weight: .semibold))
-                    .foregroundStyle(Theme.textStrong)
-                Spacer(minLength: 8)
-            }
-            .padding(.horizontal, 14)
+            Text(String(localized: "Agents"))
+                .font(Theme.type(.body, weight: .semibold))
+                .foregroundStyle(Theme.textStrong)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14)
             .frame(height: 42)
             Divider().overlay(Theme.hairline)
             ScrollViewReader { proxy in
@@ -243,7 +241,9 @@ struct FleetScreen: View {
 
     // MARK: - Shared pieces
 
-    /// The way back: the toolbar's navigation item, ``ReviewToolbar``'s button word for word.
+    /// The way back: the toolbar's navigation item, with ``ReviewToolbar``'s label, help and
+    /// accessibility label — but not its Escape, which the review screen answers from its file
+    /// list's key handler.
     ///
     /// It used to be a bare chevron in the agent list's header — about eleven points across, a
     /// hard thing to hit — and a second copy over the empty state, because the list is not drawn
