@@ -18240,6 +18240,36 @@
           }
         }
       }
+    },
+    "Language": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sprache"
+          }
+        }
+      }
+    },
+    "Applies after Shepherd restarts.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gilt nach einem Neustart von Shepherd."
+          }
+        }
+      }
+    },
+    "Restart Now": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jetzt neu starten"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

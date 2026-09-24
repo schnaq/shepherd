@@ -11,6 +11,8 @@ import SwiftUI
 /// front of the reviewer, not about how a review is submitted.
 struct AppearanceSettingsTab: View {
     @Environment(AppEnvironment.self) private var environment
+    /// The language picked here; written straight to the defaults, read by the next launch.
+    @State private var language = AppLanguage.current
 
     var body: some View {
         SettingsPage {
@@ -21,6 +23,18 @@ struct AppearanceSettingsTab: View {
                     }
                 }
                 .pickerStyle(.segmented)
+                Picker(String(localized: "Language"), selection: $language) {
+                    ForEach(AppLanguage.allCases) { language in
+                        Text(language.title).tag(language)
+                    }
+                }
+                .onChange(of: language) { _, newValue in newValue.apply() }
+                if language != AppLanguage.atLaunch {
+                    LabeledContent(String(localized: "Applies after Shepherd restarts.")) {
+                        Button(String(localized: "Restart Now")) { AppLanguage.relaunch() }
+                    }
+                    .foregroundStyle(.secondary)
+                }
                 Toggle(isOn: menuBarBinding) {
                     Text(String(localized: "Show in menu bar"))
                     Text(String(localized: "How many reviews are waiting, and a short list of them."))
