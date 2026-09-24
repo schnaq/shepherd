@@ -11,148 +11,43 @@ struct IntelligenceSettingsTab: View {
 
     var body: some View {
         SettingsPage {
-            Card {
-                VStack(alignment: .leading, spacing: 8) {
-                    CardTitle(String(localized: "PROVIDER"))
-                    Picker(String(localized: "Provider"), selection: modeBinding) {
-                        ForEach(IntelligenceMode.allCases) { mode in
-                            Text(mode.title).tag(mode)
-                        }
+            Section {
+                Picker(selection: modeBinding) {
+                    ForEach(IntelligenceMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
                     }
-                    .pickerStyle(.radioGroup)
-                    .labelsHidden()
+                } label: {
+                    Text(String(localized: "Provider"))
                     Text(environment.settings.intelligenceMode.explanation)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textMuted)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if environment.settings.intelligenceMode != .off,
-                       let reason = OnDeviceProvider.unavailabilityReason() {
-                        Text(String(localized: "On-device model: \(reason)"))
-                            .font(.system(size: 11))
-                            .foregroundStyle(Theme.pending)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                }
+                if environment.settings.intelligenceMode != .off,
+                   let reason = OnDeviceProvider.unavailabilityReason() {
+                    Text(String(localized: "On-device model: \(reason)"))
+                        .foregroundStyle(Theme.pending)
+                }
+            } footer: {
+                // What AI never does: the promise stays on the page, and what a model's look-ups
+                // may do is one click away.
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    SettingsNote(String(localized: "Shepherd never reviews, approves, merges or comments for you."))
+                    InfoButton(neverDoesDetail)
                 }
             }
 
             if environment.settings.intelligenceMode == .onDeviceAndCloud {
-                Card {
-                    VStack(alignment: .leading, spacing: 8) {
-                        CardTitle(String(localized: "BRING YOUR OWN KEY"))
-                        Picker(String(localized: "Kind"), selection: kindBinding) {
-                            ForEach(CloudProviderKind.allCases) { kind in
-                                Text(kind.title).tag(kind)
-                            }
-                        }
-                        .pickerStyle(.segmented)
-                        .labelsHidden()
-
-                        if environment.settings.cloudProviderKind == .openAICompatible {
-                            endpointPresetPicker
-                            LabeledField(
-                                label: String(localized: "Base URL"),
-                                placeholder: "https://api.example.eu/v1",
-                                text: baseURLBinding
-                            )
-                            modelField
-                            endpointNote
-                            sovereigntyPolicyFields
-                        } else {
-                            LabeledField(
-                                label: String(localized: "Model"),
-                                placeholder: ClaudeProvider.defaultModelID,
-                                text: anthropicModelBinding
-                            )
-                        }
-
-                        HStack(spacing: 8) {
-                            Text(String(localized: "API key"))
-                                .font(.system(size: 12))
-                                .foregroundStyle(Theme.textSecondary)
-                                .frame(width: 74, alignment: .leading)
-                            SecureField(apiKeyPlaceholder, text: keyBinding)
-                                .textFieldStyle(.roundedBorder)
-                        }
-
-                        Text(String(
-                            localized: "The key is stored in your Keychain, next to the GitHub token, and is sent only to the endpoint above."
-                        ))
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textMuted)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                        HStack(spacing: 8) {
-                            Button(String(localized: "Save key")) {
-                                saveError = model.saveKey(
-                                    kind: environment.settings.cloudProviderKind,
-                                    store: environment.secretStore
-                                )
-                                environment.refreshIntelligence()
-                            }
-                            .buttonStyle(SecondaryButtonStyle(height: 28))
-
-                            if environment.settings.cloudProviderKind == .openAICompatible {
-                                Button(String(localized: "Load models")) {
-                                    Task { await model.loadModels(settings: environment.settings) }
-                                }
-                                .buttonStyle(SecondaryButtonStyle(height: 28))
-                                .disabled(
-                                    model.modelListState == .loading
-                                        || !model.canLoadModels(settings: environment.settings)
-                                )
-                            }
-
-                            Button(String(localized: "Test connection")) {
-                                Task { await model.testConnection(settings: environment.settings) }
-                            }
-                            .buttonStyle(SecondaryButtonStyle(height: 28))
-                            .disabled(model.testState == .running)
-
-                            if model.testState == .running || model.modelListState == .loading {
-                                ProgressView().controlSize(.small)
-                            }
-                        }
-
-                        modelListResult
-                        testResult
-                        if let saveError {
-                            Text(saveError)
-                                .font(.system(size: 11))
-                                .foregroundStyle(Theme.failure)
-                        }
-                    }
+                bringYourOwnKeySection
+                if environment.settings.cloudProviderKind == .openAICompatible {
+                    sovereigntyPolicySection
                 }
             }
 
-            semanticSearchCard
+            semanticSearchSection
 
-            structuredTriageCard
+            structuredTriageSection
 
-            spotlightCard
+            spotlightSection
 
-            screenshotCard
-
-            Card {
-                VStack(alignment: .leading, spacing: 6) {
-                    CardTitle(String(localized: "WHAT AI NEVER DOES"))
-                    Text(String(
-                        localized: "AI output is only ever shown as a dismissible hint. Shepherd never submits a review, approves, merges or comments on your behalf."
-                    ))
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                    // The second sentence is about the *tools* a model may call (plan §0.3): the
-                    // registry is three reads, fixed at compile time, and the promise above would
-                    // be worth less if the model could look things up without the reader knowing
-                    // what "look up" is allowed to mean.
-                    Text(String(
-                        localized: "When the model looks something up, it can only read — the checks, a log, a file. It cannot comment, approve, merge or start an agent."
-                    ))
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-            }
+            screenshotSection
         }
         .task {
             model.loadKey(
@@ -175,28 +70,128 @@ struct IntelligenceSettingsTab: View {
         }
     }
 
+    /// The long form of the provider section's footer.
+    ///
+    /// The second paragraph is about the *tools* a model may call (plan §0.3): the registry is
+    /// three reads, fixed at compile time, and the promise would be worth less if the model could
+    /// look things up without the reader knowing what "look up" is allowed to mean.
+    private var neverDoesDetail: String {
+        String(
+            localized: "AI output is only ever shown as a dismissible hint. Shepherd never submits a review, approves, merges or comments on your behalf."
+        ) + "\n\n" + String(
+            localized: "When the model looks something up, it can only read — the checks, a log, a file. It cannot comment, approve, merge or start an agent."
+        )
+    }
+
+    /// A section title with an ⓘ beside it, for the sections whose privacy story is longer than
+    /// one subtitle.
+    private func sectionHeader(_ title: String, info: String) -> some View {
+        HStack(spacing: 4) {
+            Text(title)
+            InfoButton(info)
+        }
+    }
+
+    // MARK: - Bring your own key (ADR 0007, tier 3)
+
+    /// The endpoint, model and key rows, on screen only while the API-key tier is chosen.
+    private var bringYourOwnKeySection: some View {
+        Section {
+            Picker(String(localized: "Kind"), selection: kindBinding) {
+                ForEach(CloudProviderKind.allCases) { kind in
+                    Text(kind.title).tag(kind)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            if environment.settings.cloudProviderKind == .openAICompatible {
+                endpointPresetPicker
+                if let url = preset.consoleURL, let title = preset.consoleLinkTitle {
+                    Link(title, destination: url)
+                }
+                LabeledField(
+                    label: String(localized: "Base URL"),
+                    placeholder: "https://api.example.eu/v1",
+                    text: baseURLBinding
+                )
+                modelField
+            } else {
+                LabeledField(
+                    label: String(localized: "Model"),
+                    placeholder: ClaudeProvider.defaultModelID,
+                    text: anthropicModelBinding
+                )
+            }
+
+            SecureField(
+                String(localized: "API key"),
+                text: keyBinding,
+                prompt: Text(apiKeyPlaceholder)
+            )
+
+            HStack(spacing: 8) {
+                if model.testState == .running || model.modelListState == .loading {
+                    ProgressView().controlSize(.small)
+                }
+                Spacer()
+                if environment.settings.cloudProviderKind == .openAICompatible {
+                    Button(String(localized: "Load models")) {
+                        Task { await model.loadModels(settings: environment.settings) }
+                    }
+                    .disabled(
+                        model.modelListState == .loading
+                            || !model.canLoadModels(settings: environment.settings)
+                    )
+                }
+                Button(String(localized: "Test connection")) {
+                    Task { await model.testConnection(settings: environment.settings) }
+                }
+                .disabled(model.testState == .running)
+                Button(String(localized: "Save key")) {
+                    saveError = model.saveKey(
+                        kind: environment.settings.cloudProviderKind,
+                        store: environment.secretStore
+                    )
+                    environment.refreshIntelligence()
+                }
+            }
+
+            modelListResult
+            testResult
+            if let saveError {
+                Text(saveError)
+                    .font(Theme.type(.caption))
+                    .foregroundStyle(Theme.failure)
+            }
+        } header: {
+            Text(String(localized: "Bring your own key"))
+        } footer: {
+            SettingsNote(String(localized: "The key stays in your Keychain and is sent only to this endpoint."))
+        }
+    }
+
     // MARK: - Screenshots (ADR 0038 item 4)
 
     /// The switch for the one host this feature adds, off by default (CONTRIBUTING.md).
-    private var screenshotCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 8) {
-                CardTitle(String(localized: "SCREENSHOTS"))
-                Toggle(
-                    String(localized: "Read screenshots in descriptions on this Mac"),
-                    isOn: Binding(
-                        get: { environment.settings.screenshotReadingEnabled },
-                        set: { environment.settings.screenshotReadingEnabled = $0 }
-                    )
+    private var screenshotSection: some View {
+        Section {
+            Toggle(
+                isOn: Binding(
+                    get: { environment.settings.screenshotReadingEnabled },
+                    set: { environment.settings.screenshotReadingEnabled = $0 }
                 )
-                .disabled(environment.settings.intelligenceMode == .off)
-                Text(String(
-                    localized: "Adds a button to the summary card. Pressing it downloads up to two of the description's screenshots from GitHub's upload host (private-user-images.githubusercontent.com) and reads them with the model on this Mac. The images are never sent anywhere else, and nothing is downloaded until you press it."
-                ))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
+            ) {
+                Text(String(localized: "Read screenshots in descriptions on this Mac"))
+                Text(String(localized: "Downloaded only when you ask, and never sent anywhere else."))
             }
+            .disabled(environment.settings.intelligenceMode == .off)
+        } header: {
+            sectionHeader(
+                String(localized: "Screenshots"),
+                info: String(
+                    localized: "Adds a button to the summary card. Pressing it downloads up to two of the description's screenshots from GitHub's upload host (private-user-images.githubusercontent.com) and reads them with the model on this Mac. The images are never sent anywhere else, and nothing is downloaded until you press it."
+                )
+            )
         }
     }
 
@@ -205,57 +200,42 @@ struct IntelligenceSettingsTab: View {
     /// The one toggle, one status line and one button the search index needs.
     ///
     /// It sits on the Intelligence tab because that is where a user looks for "how does Shepherd
-    /// understand my pull requests", and it sits *below* the provider card with its own copy
-    /// because the answer for this feature is different from the answer for every other one on the
-    /// tab: it never uses a provider. The two sentences below are the whole privacy story, and they
-    /// are in the UI rather than only in the ADR because "does typing in ⌘K send my diffs
-    /// somewhere" is a question a user is entitled to have answered where they are standing.
+    /// understand my pull requests", and it states its own privacy answer because that answer is
+    /// different from every other one on the tab: it never uses a provider. "Does typing in ⌘K
+    /// send my diffs somewhere" is a question a user is entitled to have answered where they are
+    /// standing, so the short form is the toggle's subtitle and the long form is behind the ⓘ.
     ///
     /// On by default, which no other intelligence-shaped setting is (ADR 0019 argues it).
-    private var semanticSearchCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 8) {
-                CardTitle(String(localized: "SEMANTIC SEARCH"))
-                Toggle(
-                    String(localized: "Semantic search index"),
-                    isOn: semanticSearchBinding
-                )
-                Text(String(
-                    localized: "⌘K searches your pull requests by what they are about — the title, the description, the labels, the branch, the changed files and the diff of anything you have opened — not just by exact words. The index is built on this Mac from what Shepherd already downloaded, with Apple's on-device embeddings, and it is stored in the local database."
-                ))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                Text(String(
-                    localized: "Your issues are indexed the same way and answer the same ⌘K: the same on-device embeddings, over the title, the labels and the body of what Shepherd already downloaded."
-                ))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                Text(String(
-                    localized: "It never uses an AI endpoint, even when you have configured one: search runs on every keystroke and over every pull request, so it stays on this Mac. Switching it off leaves ⌘K searching titles, labels, repositories, branches and authors, and empties the index."
-                ))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                Text(searchIndexStatusLine)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+    private var semanticSearchSection: some View {
+        Section {
+            Toggle(isOn: semanticSearchBinding) {
+                Text(String(localized: "Semantic search index"))
+                Text(String(localized: "⌘K finds pull requests and issues by meaning, on this Mac."))
+            }
+            LabeledContent {
                 HStack(spacing: 8) {
+                    if environment.search.status.isIndexing {
+                        ProgressView().controlSize(.small)
+                    }
                     Button(String(localized: "Rebuild index")) {
                         environment.rebuildSearchIndex()
                     }
-                    .buttonStyle(SecondaryButtonStyle(height: 28))
                     .disabled(
                         !environment.settings.semanticSearchEnabled
                             || environment.session == nil
                     )
-                    if environment.search.status.isIndexing {
-                        ProgressView().controlSize(.small)
-                    }
                 }
+            } label: {
+                Text(String(localized: "Index"))
+                Text(searchIndexStatusLine)
             }
+        } header: {
+            sectionHeader(
+                String(localized: "Semantic search"),
+                info: String(
+                    localized: "The index is built on this Mac with Apple's on-device embeddings and kept in the local database. It never uses an AI endpoint, even when you have configured one. Switched off, the index is emptied and ⌘K matches words only."
+                )
+            )
         }
     }
 
@@ -263,7 +243,7 @@ struct IntelligenceSettingsTab: View {
     ///
     /// Assembled from ``SearchIndexStatus`` rather than from the database directly, so the line
     /// says what the *running* index holds. The two states worth naming are switched-off and
-    /// "no model on this Mac": both leave search working on words, and a card that showed a size
+    /// "no model on this Mac": both leave search working on words, and a row that showed a size
     /// of zero without saying why would read as a bug.
     private var searchIndexStatusLine: String {
         let status = environment.search.status
@@ -290,47 +270,37 @@ struct IntelligenceSettingsTab: View {
 
     /// The toggle and the status line the on-device classifier needs.
     ///
-    /// Directly under the search card because it is the same promise about the same kind of work:
-    /// on-device, over rows Shepherd already has, going nowhere. The difference is stated rather
-    /// than implied — this one *needs a model*, so with the provider above switched off it can do
-    /// nothing, and the card says so instead of leaving a toggle that looks broken.
+    /// Directly under the search section because it is the same promise about the same kind of
+    /// work: on-device, over rows Shepherd already has, going nowhere. The difference is stated
+    /// rather than implied — this one *needs a model*, so with the provider switched off it can do
+    /// nothing, and the ⓘ says so instead of leaving a toggle that looks broken.
     ///
-    /// There is deliberately no *Rebuild* button beside the search card's: a verdict is
+    /// There is deliberately no *Rebuild* button beside the search index's: a verdict is
     /// invalidated by the document hash exactly as a vector is, so the only way to want one
     /// rebuilt is to want them all rebuilt — which is what switching the toggle off and on does,
     /// in two clicks, without a third control that means the same thing.
-    private var structuredTriageCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 8) {
-                CardTitle(String(localized: "STRUCTURED TRIAGE"))
-                Toggle(
-                    String(localized: "Structured triage"),
-                    isOn: structuredTriageBinding
-                )
-                Text(String(
-                    localized: "Classifies each pull request on this Mac — what kind of change it is and how much it can hurt, with a one-sentence reason — so the inbox can sort and filter by it. Nothing leaves this Mac, and nothing acts on it: it never approves, merges or comments."
-                ))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                Text(String(
-                    localized: "It needs the on-device model, so with the provider above set to Off nothing is classified. The inbox keeps the risk hints it works out without a model — “touches auth”, “deletes tests” — either way."
-                ))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                Text(structuredTriageStatusLine)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+    private var structuredTriageSection: some View {
+        Section {
+            Toggle(isOn: structuredTriageBinding) {
+                Text(String(localized: "Classify pull requests"))
+                Text(String(localized: "Kind of change and risk, to sort the inbox by. Stays on this Mac."))
             }
+        } header: {
+            sectionHeader(
+                String(localized: "Structured triage"),
+                info: String(
+                    localized: "Each pull request gets a kind, a risk and a one-sentence reason from the on-device model. Nothing acts on it: it never approves, merges or comments. With the provider set to Off nothing is classified, and the inbox keeps its risk hints either way."
+                )
+            )
+        } footer: {
+            SettingsNote(structuredTriageStatusLine)
         }
     }
 
     /// "142 of 210 pull requests classified", and the honest variants.
     ///
     /// Assembled from ``TriageStatus`` rather than from the database, so the line says what the
-    /// *running* classifier holds — the search card's arrangement. Three states are worth naming
+    /// *running* classifier holds — the search index's arrangement. Three states are worth naming
     /// and each one leaves the inbox usable: switched off, no model (or the tiers off), and a
     /// pass in progress. The unavailability reason is shown in the model's own words, because
     /// "Apple Intelligence is turned off in System Settings" is a sentence the user can act on
@@ -366,37 +336,27 @@ struct IntelligenceSettingsTab: View {
 
     /// The one toggle and one status line the Spotlight export needs.
     ///
-    /// A card of its own, directly under the search-index card, because it answers the question
-    /// that card raises next: the index above is work Shepherd does *inside* its own database, and
-    /// this is the only thing on the tab that puts pull-request data **outside** it. The two
-    /// sentences say exactly what leaves and what does not, in the UI rather than only in ADR 0021,
-    /// for the same reason the search card's do — "what of mine ends up in the system index" is a
-    /// question a user is entitled to have answered where they are standing.
-    private var spotlightCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 8) {
-                CardTitle(String(localized: "SPOTLIGHT"))
-                Toggle(
-                    String(localized: "Show pull requests in Spotlight"),
-                    isOn: spotlightBinding
-                )
-                Text(String(
-                    localized: "⌘Space finds the pull requests in your inbox by title, by owner/repo#number, by label, by repository and by the agent that wrote them. Opening a result opens the review screen, exactly as a shepherd:// link does."
-                ))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                Text(String(
-                    localized: "Spotlight's index is macOS's, not Shepherd's — so only the title and that metadata are exported. Descriptions, diffs, review comments and your drafts never leave the local database. Switching this off deletes every pull request Shepherd put there."
-                ))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                Text(spotlightStatusLine)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+    /// A section of its own, directly under the search index, because it answers the question
+    /// that one raises next: the index is work Shepherd does *inside* its own database, and this
+    /// is the only thing on the tab that puts pull-request data **outside** it. The subtitle and
+    /// the ⓘ say exactly what leaves and what does not, in the UI rather than only in ADR 0021 —
+    /// "what of mine ends up in the system index" is a question a user is entitled to have
+    /// answered where they are standing.
+    private var spotlightSection: some View {
+        Section {
+            Toggle(isOn: spotlightBinding) {
+                Text(String(localized: "Show pull requests in Spotlight"))
+                Text(String(localized: "Find inbox pull requests with ⌘Space. Only titles and metadata go there."))
             }
+        } header: {
+            sectionHeader(
+                String(localized: "Spotlight"),
+                info: String(
+                    localized: "Spotlight's index is macOS's, not Shepherd's — so only the title, owner/repo#number, labels, repository and agent are exported. Descriptions, diffs, review comments and your drafts never leave the local database. Switching this off deletes every pull request Shepherd put there."
+                )
+            )
+        } footer: {
+            SettingsNote(spotlightStatusLine)
         }
     }
 
@@ -441,44 +401,28 @@ struct IntelligenceSettingsTab: View {
 
     // MARK: - OpenAI-compatible endpoint (ADR 0007, tier 3b)
 
-    /// The preset picker. Selecting a preset fills in its base URL; "Custom" keeps the typed one.
+    /// The preset picker, with the endpoint's own note as its subtitle. Selecting a preset fills
+    /// in its base URL; "Custom" keeps the typed one.
     private var endpointPresetPicker: some View {
-        HStack(spacing: 8) {
-            Text(String(localized: "Endpoint"))
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.textSecondary)
-                .frame(width: 74, alignment: .leading)
-            Picker(String(localized: "Endpoint"), selection: presetBinding) {
-                ForEach(IntelligenceEndpointPreset.allCases) { option in
-                    Text(option.title).tag(option)
-                }
+        Picker(selection: presetBinding) {
+            ForEach(IntelligenceEndpointPreset.allCases) { option in
+                Text(option.title).tag(option)
             }
-            .labelsHidden()
-        }
-    }
-
-    /// The endpoint's note plus, where the endpoint issues keys, a link to its console.
-    @ViewBuilder
-    private var endpointNote: some View {
-        if let note = preset.note {
-            Text(note)
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        if let url = preset.consoleURL, let title = preset.consoleLinkTitle {
-            Link(title, destination: url)
-                .font(.system(size: 11))
+        } label: {
+            Text(String(localized: "Endpoint"))
+            if let note = preset.note {
+                Text(note)
+            }
         }
     }
 
     /// The model row: a picker once the endpoint's list is loaded, the free-text field otherwise.
     ///
     /// A picker row carries the endpoint's own sovereignty badge when it published one —
-    /// `FR · zero retention · eu` — because "where does this model run" is the question somebody
-    /// on this tier is most likely picking a model *by*, and it is published per model rather
-    /// than per endpoint (plan §3.K). A plain OpenAI endpoint publishes nothing and the row is
-    /// the id, exactly as before.
+    /// `FR · zero retention · eu` — as its subtitle, because "where does this model run" is the
+    /// question somebody on this tier is most likely picking a model *by*, and it is published
+    /// per model rather than per endpoint (plan §3.K). A plain OpenAI endpoint publishes nothing
+    /// and the row is the id, exactly as before.
     @ViewBuilder
     private var modelField: some View {
         if modelOptions.isEmpty {
@@ -488,27 +432,22 @@ struct IntelligenceSettingsTab: View {
                 text: openAIModelBinding
             )
         } else {
-            HStack(spacing: 8) {
-                Text(String(localized: "Model"))
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.textSecondary)
-                    .frame(width: 74, alignment: .leading)
-                Picker(String(localized: "Model"), selection: openAIModelBinding) {
-                    ForEach(modelOptions, id: \.self) { option in
-                        Text(model.modelPickerLabel(for: option)).tag(option)
+            LabeledContent {
+                HStack(spacing: 8) {
+                    Picker(String(localized: "Model"), selection: openAIModelBinding) {
+                        ForEach(modelOptions, id: \.self) { option in
+                            Text(model.modelPickerLabel(for: option)).tag(option)
+                        }
                     }
+                    .labelsHidden()
+                    Button(String(localized: "Type a name")) { model.forgetLoadedModels() }
+                        .buttonStyle(.link)
                 }
-                .labelsHidden()
-                Button(String(localized: "Type a name")) { model.forgetLoadedModels() }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.accentText)
-            }
-            if let badge = model.sovereigntyBadge(for: environment.settings.openAICompatibleModel) {
-                Text(badge)
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
+            } label: {
+                Text(String(localized: "Model"))
+                if let badge = model.sovereigntyBadge(for: environment.settings.openAICompatibleModel) {
+                    Text(badge)
+                }
             }
         }
     }
@@ -517,36 +456,37 @@ struct IntelligenceSettingsTab: View {
 
     /// The two fields that pin a request to a country set and to a zero-retention operator.
     ///
-    /// Under the endpoint section, because that is what they are about — and with the copy that
-    /// makes them honest: they are **part of the request body**, so an endpoint that understands
-    /// them honours them and an endpoint that does not refuses the request in its own words.
-    /// There is no probing, no capability list and no per-endpoint behaviour behind them; the one
-    /// endpoint-specific thing on screen is the preset's own sentence saying what it does with
-    /// them, which is copy rather than a code path (ADR 0007's 2026-09-03 amendment).
+    /// Directly under the endpoint, because that is what they are about — and with the copy that
+    /// makes them honest behind the ⓘ: they are **part of the request body**, so an endpoint that
+    /// understands them honours them and an endpoint that does not refuses the request in its own
+    /// words. There is no probing, no capability list and no per-endpoint behaviour behind them;
+    /// the one endpoint-specific thing on screen is the preset's own sentence saying what it does
+    /// with them, which is copy rather than a code path (ADR 0007's 2026-09-03 amendment).
     ///
     /// Both fields ship empty and off, and in that state nothing about the request changes at
     /// all — which is why they can sit here without an opt-in toggle above them.
-    @ViewBuilder
-    private var sovereigntyPolicyFields: some View {
-        Divider().padding(.vertical, 2)
-        LabeledField(
-            label: String(localized: "Countries"),
-            placeholder: "DE, FR",
-            text: sovereigntyCountriesBinding
-        )
-        Toggle(String(localized: "Require zero retention"), isOn: zeroRetentionBinding)
-        Text(String(
-            localized: "Optional. Two-letter country codes, comma-separated. Both fields are sent as part of the request — only endpoints that understand them can act on them, and an endpoint that cannot meet them refuses the request rather than answering from somewhere else. Left empty and off, nothing extra is sent."
-        ))
-        .font(.system(size: 11))
-        .foregroundStyle(Theme.textMuted)
-        .fixedSize(horizontal: false, vertical: true)
-        if let note = preset.sovereigntyNote {
-            Text(note)
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
+    private var sovereigntyPolicySection: some View {
+        Section {
+            TextField(
+                String(localized: "Countries"),
+                text: sovereigntyCountriesBinding,
+                prompt: Text(verbatim: "DE, FR")
+            )
+            Toggle(String(localized: "Require zero retention"), isOn: zeroRetentionBinding)
+        } header: {
+            sectionHeader(String(localized: "Where the model runs"), info: sovereigntyDetail)
+        } footer: {
+            SettingsNote(String(localized: "Optional. Two-letter country codes, comma-separated."))
         }
+    }
+
+    /// What the two policy fields do to the request, plus the selected endpoint's own sentence.
+    private var sovereigntyDetail: String {
+        let general = String(
+            localized: "Both are sent as part of the request. An endpoint that cannot meet them refuses the request rather than answering from somewhere else. Left empty and off, nothing extra is sent."
+        )
+        guard let note = preset.sovereigntyNote else { return general }
+        return general + "\n\n" + note
     }
 
     /// The country list as the comma-separated text the field edits.
@@ -582,14 +522,14 @@ struct IntelligenceSettingsTab: View {
             EmptyView()
         case .loaded(let models):
             Text(String(localized: "\(models.count) models offered by this endpoint."))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
+                .font(Theme.type(.caption))
+                .foregroundStyle(.secondary)
         case .failed(let message):
             Label(
                 String(localized: "Could not load models: \(message)"),
                 systemImage: "exclamationmark.triangle"
             )
-            .font(.system(size: 11))
+            .font(Theme.type(.caption))
             .foregroundStyle(Theme.pending)
             .fixedSize(horizontal: false, vertical: true)
         }
@@ -674,4 +614,3 @@ struct IntelligenceSettingsTab: View {
         Binding(get: { model.apiKeyField }, set: { model.apiKeyField = $0 })
     }
 }
-
