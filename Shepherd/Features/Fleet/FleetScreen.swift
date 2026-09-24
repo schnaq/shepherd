@@ -127,7 +127,7 @@ struct FleetScreen: View {
                 .foregroundStyle(Theme.textStrong)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 14)
-            .frame(height: 42)
+                .frame(height: 42)
             Divider().overlay(Theme.hairline)
             ScrollViewReader { proxy in
                 ScrollView {
