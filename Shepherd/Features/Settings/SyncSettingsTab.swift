@@ -4,15 +4,15 @@ import SwiftUI
 
 /// Sweep interval, notification toggles, and settings sync across Macs (ADR 0014).
 ///
-/// The encrypted sync belongs here rather than in its own tab because it is the same subject as
+/// The encrypted sync belongs here rather than in its own pane because it is the same subject as
 /// the rest of the page — keeping things in step — just with a different peer: the sweep keeps
-/// this Mac in step with GitHub, the section at the bottom keeps it in step with the user's other
+/// this Mac in step with GitHub, the sections at the bottom keep it in step with the user's other
 /// Macs.
 struct SyncSettingsTab: View {
     @Environment(AppEnvironment.self) private var environment
     /// The encrypted settings-sync model, owned by ``SettingsView``.
     let syncModel: SettingsSyncModel
-    /// The outbox rows the drain gave up on, listed one by one in the OUTBOX card.
+    /// The outbox rows the drain gave up on, listed one by one in the Outbox section.
     ///
     /// Fetched rather than observed, and keyed on ``SignedInSession/failedOutboxCount``, which is
     /// observed: the count is the thing that changes, and re-reading a table of tens of rows when
@@ -27,82 +27,80 @@ struct SyncSettingsTab: View {
 
     var body: some View {
         SettingsPage {
-            Card {
-                VStack(alignment: .leading, spacing: 10) {
-                    CardTitle(String(localized: "INBOX SWEEP"))
-                    HStack(spacing: 12) {
+            Section(String(localized: "Inbox sweep")) {
+                LabeledContent {
+                    HStack(spacing: 10) {
                         Slider(value: intervalBinding, in: 1...10, step: 1)
+                            .labelsHidden()
+                            .frame(maxWidth: 220)
                         Text(String(localized: "\(Int(environment.settings.sweepIntervalMinutes)) min"))
-                            .font(Theme.mono(12))
-                            .foregroundStyle(Theme.textSecondary)
-                            .frame(width: 60, alignment: .trailing)
+                            .font(Theme.mono(.callout))
+                            .foregroundStyle(.secondary)
+                            .frame(width: 56, alignment: .trailing)
                     }
-                    Text(String(
-                        localized: "Notifications are polled at the interval GitHub asks for; this slider only controls the full search sweep. It takes effect the next time you sign in."
-                    ))
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
+                } label: {
+                    Text(String(localized: "Full search every"))
+                    Text(String(localized: "Applies from the next sign-in."))
                 }
+                .help(String(
+                    localized: "Notifications are polled at the interval GitHub asks for; this slider only controls the full search sweep."
+                ))
             }
 
-            Card {
-                VStack(alignment: .leading, spacing: 8) {
-                    CardTitle(String(localized: "NOTIFICATIONS"))
-                    Toggle(String(localized: "A new review is requested from me"), isOn: reviewBinding)
-                    Toggle(String(localized: "Checks fail on a pull request I opened"), isOn: checksBinding)
-                    Toggle(String(localized: "A queued review could not be sent"), isOn: conflictBinding)
-                    Text(String(
-                        localized: "macOS asks for permission the first time Shepherd actually needs to post one."
-                    ))
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textMuted)
-                }
+            Section {
+                Toggle(String(localized: "A new review is requested from me"), isOn: reviewBinding)
+                Toggle(String(localized: "Checks fail on a pull request I opened"), isOn: checksBinding)
+                Toggle(String(localized: "A queued review could not be sent"), isOn: conflictBinding)
+            } header: {
+                Text(String(localized: "Notifications"))
+            } footer: {
+                SettingsNote(String(localized: "macOS asks for permission the first time one is posted."))
             }
 
-            digestCard
+            digestSection
 
             if let session = environment.session {
-                Card {
-                    VStack(alignment: .leading, spacing: 6) {
-                        CardTitle(String(localized: "OUTBOX"))
-                        Text(session.pendingOutboxCount == 0
-                            ? String(localized: "Nothing waiting to be sent.")
-                            : String(localized: "\(session.pendingOutboxCount) mutations waiting to be sent."))
-                            .font(.system(size: 12))
-                            .foregroundStyle(Theme.textSecondary)
-                        // A parked mutation is never retried on its own (ADR 0006), so it stays
-                        // on screen until someone acts on it — the alert it raised was a moment,
-                        // this is the standing reminder.
-                        if session.conflictedOutboxCount > 0 {
-                            HStack(spacing: 6) {
-                                Image(systemName: "exclamationmark.triangle.fill")
-                                Text(String(
-                                    localized: "\(session.conflictedOutboxCount) conflicted — needs your attention."
-                                ))
-                            }
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundStyle(Theme.pending)
-                            .help(String(
-                                localized: "These pull requests got new commits after the review was queued, so nothing was sent. Open each one and check your draft against the new commit."
-                            ))
-                        }
-                        failedOutboxGroup(session)
-                        Button(String(localized: "Sync now")) {
-                            Task { await environment.syncNow() }
-                        }
-                        .buttonStyle(SecondaryButtonStyle(height: 28))
-                    }
-                }
-                .task(id: session.failedOutboxCount) { await reloadFailedRows(session) }
+                outboxSection(session)
             }
 
-            watchedRepositoriesCard
+            watchedRepositoriesSection
 
-            hiddenPullRequestsCard
+            hiddenPullRequestsSection
 
             SettingsSyncSection(model: syncModel)
         }
+    }
+
+    // MARK: - Outbox
+
+    /// What is waiting, what is parked, and what was given up on.
+    private func outboxSection(_ session: SignedInSession) -> some View {
+        Section(String(localized: "Outbox")) {
+            LabeledContent {
+                Button(String(localized: "Sync now")) {
+                    Task { await environment.syncNow() }
+                }
+            } label: {
+                Text(session.pendingOutboxCount == 0
+                    ? String(localized: "Nothing waiting to be sent.")
+                    : String(localized: "\(session.pendingOutboxCount) mutations waiting to be sent."))
+            }
+            // A parked mutation is never retried on its own (ADR 0006), so it stays on screen
+            // until someone acts on it — the alert it raised was a moment, this is the standing
+            // reminder.
+            if session.conflictedOutboxCount > 0 {
+                Label(
+                    String(localized: "\(session.conflictedOutboxCount) conflicted — needs your attention."),
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .foregroundStyle(Theme.pending)
+                .help(String(
+                    localized: "These pull requests got new commits after the review was queued, so nothing was sent. Open each one and check your draft against the new commit."
+                ))
+            }
+            failedOutboxGroup(session)
+        }
+        .task(id: session.failedOutboxCount) { await reloadFailedRows(session) }
     }
 
     // MARK: - Repositories swept whole
@@ -115,56 +113,57 @@ struct SyncSettingsTab: View {
     /// of a small team's own repositories. Each entry costs one search per sweep, so the list is
     /// capped rather than left to grow into the rate limit.
     @ViewBuilder
-    private var watchedRepositoriesCard: some View {
+    private var watchedRepositoriesSection: some View {
         let watched = environment.settings.watchedRepositories
-        Card {
-            VStack(alignment: .leading, spacing: 8) {
-                CardTitle(String(localized: "WATCHED REPOSITORIES"))
-                Text(String(
-                    localized: "Every open pull request in these repositories reaches the inbox, even the ones nobody asked you about. They appear under Watched until you are involved in one."
-                ))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                ForEach(watched, id: \.fullName) { repo in
-                    HStack(spacing: 8) {
-                        Text(verbatim: repo.fullName)
-                            .font(Theme.mono(12))
-                            .foregroundStyle(Theme.textSecondary)
-                        Spacer(minLength: 8)
-                        Button(String(localized: "Stop watching")) {
-                            environment.settings.watchedRepositories
-                                .removeAll { $0.isSameRepository(as: repo) }
-                        }
-                        .buttonStyle(SecondaryButtonStyle(height: 24))
+        let isFull = watched.count >= AppSettings.maximumWatchedRepositories
+        Section {
+            if watched.isEmpty {
+                Text(String(localized: "No repositories watched."))
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(watched, id: \.fullName) { repo in
+                LabeledContent {
+                    Button(String(localized: "Stop watching")) {
+                        environment.settings.watchedRepositories
+                            .removeAll { $0.isSameRepository(as: repo) }
                     }
+                } label: {
+                    Text(verbatim: repo.fullName)
+                        .font(Theme.mono(.callout))
                 }
+            }
+        } header: {
+            Text(String(localized: "Watched repositories"))
+        } footer: {
+            SettingsNote(String(localized: "Every open pull request in these reaches the inbox, under Watched."))
+        }
+
+        Section {
+            LabeledContent(String(localized: "Add repository")) {
                 HStack(spacing: 8) {
                     TextField(
-                        String(localized: "owner/repository or a GitHub URL"),
-                        text: $watchedRepositoryDraft
+                        String(localized: "Add repository"),
+                        text: $watchedRepositoryDraft,
+                        prompt: Text(String(localized: "owner/repository or a GitHub URL"))
                     )
-                    .textFieldStyle(.roundedBorder)
+                    .labelsHidden()
                     .onSubmit { addWatchedRepository() }
                     Button(String(localized: "Watch")) { addWatchedRepository() }
-                        .buttonStyle(SecondaryButtonStyle(height: 28))
                         .disabled(watchedRepositoryDraft.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
-                .disabled(watched.count >= AppSettings.maximumWatchedRepositories)
-                if let watchedRepositoryError {
-                    Text(watchedRepositoryError)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.failure)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if watched.count >= AppSettings.maximumWatchedRepositories {
-                    Text(String(
-                        localized: "\(AppSettings.maximumWatchedRepositories) is the maximum — each repository is one more search on every sweep."
-                    ))
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textMuted)
+            }
+            .disabled(isFull)
+            if let watchedRepositoryError {
+                Text(watchedRepositoryError)
+                    .font(Theme.type(.caption))
+                    .foregroundStyle(Theme.failure)
                     .fixedSize(horizontal: false, vertical: true)
-                }
+            }
+        } footer: {
+            if isFull {
+                SettingsNote(String(
+                    localized: "\(AppSettings.maximumWatchedRepositories) is the maximum — each repository is one more search on every sweep."
+                ))
             }
         }
     }
@@ -189,45 +188,32 @@ struct SyncSettingsTab: View {
     /// Hiding happens in the list, one right-click at a time, and the undo for it is the toast
     /// that follows. This is where it goes once that toast is gone: without it the list would be
     /// the only irreversible thing in an app whose architecture asks for an undo instead of a
-    /// confirmation. The card is omitted entirely when nothing is hidden — an empty list here
+    /// confirmation. The section is omitted entirely when nothing is hidden — an empty list here
     /// would be a permanent reminder of a feature nobody used.
     @ViewBuilder
-    private var hiddenPullRequestsCard: some View {
+    private var hiddenPullRequestsSection: some View {
         let hidden = environment.settings.ignoredPullRequests
         if !hidden.entries.isEmpty {
-            Card {
-                VStack(alignment: .leading, spacing: 8) {
-                    CardTitle(String(localized: "HIDDEN PULL REQUESTS"))
-                    Text(String(
-                        localized: "These are left out of the inbox. A pull request comes back by itself as soon as a review is requested from you on it."
-                    ))
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textMuted)
-                    .fixedSize(horizontal: false, vertical: true)
-                    ForEach(hidden.entries) { entry in
-                        HStack(alignment: .top, spacing: 8) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(verbatim: "\(entry.repo.fullName)#\(entry.number)")
-                                    .font(Theme.mono(11))
-                                    .foregroundStyle(Theme.textMuted)
-                                Text(entry.title)
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(Theme.textSecondary)
-                                    .lineLimit(2)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            Spacer(minLength: 8)
-                            Button(String(localized: "Show again")) {
-                                environment.settings.ignoredPullRequests.show(id: entry.id)
-                            }
-                            .buttonStyle(SecondaryButtonStyle(height: 24))
+            Section {
+                ForEach(hidden.entries) { entry in
+                    LabeledContent {
+                        Button(String(localized: "Show again")) {
+                            environment.settings.ignoredPullRequests.show(id: entry.id)
                         }
+                    } label: {
+                        Text(entry.title)
+                            .lineLimit(2)
+                        Text(verbatim: "\(entry.repo.fullName)#\(entry.number)")
+                            .font(Theme.mono(.caption))
                     }
-                    Button(String(localized: "Show all again")) {
-                        environment.settings.ignoredPullRequests.showAll()
-                    }
-                    .buttonStyle(SecondaryButtonStyle(height: 28))
                 }
+                Button(String(localized: "Show all again")) {
+                    environment.settings.ignoredPullRequests.showAll()
+                }
+            } header: {
+                Text(String(localized: "Hidden pull requests"))
+            } footer: {
+                SettingsNote(String(localized: "One comes back by itself when a review is requested from you."))
             }
         }
     }
@@ -236,7 +222,7 @@ struct SyncSettingsTab: View {
 
     /// The failed rows, named one by one, each with Retry and Discard.
     ///
-    /// The third outbox state and the only one this card can *do* anything about. A pending row
+    /// The third outbox state and the only one this section can *do* anything about. A pending row
     /// needs nothing but time and a parked one needs the pull request it was queued against — but
     /// a failed row was refused in a way retrying cannot fix (a 4xx from GitHub, a port the app
     /// never wired up), so it sits in the queue for ever and the click that produced it looked as
@@ -251,58 +237,42 @@ struct SyncSettingsTab: View {
     @ViewBuilder
     private func failedOutboxGroup(_ session: SignedInSession) -> some View {
         if session.failedOutboxCount > 0 {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    Image(systemName: "xmark.octagon.fill")
-                    Text(String(
-                        localized: "\(session.failedOutboxCount) given up on — they will not be retried."
-                    ))
-                }
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Theme.failure)
-                .help(String(
-                    localized: "GitHub refused these writes, or Shepherd could not make them at all. Nothing about them changes by itself: retry one once you have fixed what stopped it, or discard it."
-                ))
-                ForEach(failedRows) { item in
-                    failedOutboxRow(item, session: session)
-                }
+            Label(
+                String(localized: "\(session.failedOutboxCount) given up on — they will not be retried."),
+                systemImage: "xmark.octagon.fill"
+            )
+            .foregroundStyle(Theme.failure)
+            .help(String(
+                localized: "GitHub refused these writes, or Shepherd could not make them at all. Nothing about them changes by itself: retry one once you have fixed what stopped it, or discard it."
+            ))
+            ForEach(failedRows) { item in
+                failedOutboxRow(item, session: session)
             }
         }
     }
 
     private func failedOutboxRow(_ item: OutboxItem, session: SignedInSession) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: "\(item.repo.fullName)#\(item.number) · \(Self.actionName(item.action))")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Theme.textSecondary)
-                Text(item.localizedLastError ?? String(localized: "No reason was recorded."))
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textMuted)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 8)
-            Button(String(localized: "Retry")) {
-                Task {
-                    try? await session.database.retryOutboxItem(id: item.id)
-                    await reloadFailedRows(session)
-                    await session.drainOutbox()
-                    await reloadFailedRows(session)
+        LabeledContent {
+            HStack(spacing: 8) {
+                Button(String(localized: "Retry")) {
+                    Task {
+                        try? await session.database.retryOutboxItem(id: item.id)
+                        await reloadFailedRows(session)
+                        await session.drainOutbox()
+                        await reloadFailedRows(session)
+                    }
+                }
+                Button(String(localized: "Discard")) {
+                    Task {
+                        try? await session.database.deleteOutboxItem(id: item.id)
+                        await reloadFailedRows(session)
+                    }
                 }
             }
-            .buttonStyle(.plain)
-            .font(.system(size: 11))
-            .foregroundStyle(Theme.accentText)
-            Button(String(localized: "Discard")) {
-                Task {
-                    try? await session.database.deleteOutboxItem(id: item.id)
-                    await reloadFailedRows(session)
-                }
-            }
-            .buttonStyle(.plain)
-            .font(.system(size: 11))
-            .foregroundStyle(Theme.accentText)
+        } label: {
+            Text(verbatim: "\(item.repo.fullName)#\(item.number) · \(Self.actionName(item.action))")
+            Text(item.localizedLastError ?? String(localized: "No reason was recorded."))
+                .textSelection(.enabled)
         }
     }
 
@@ -354,46 +324,41 @@ struct SyncSettingsTab: View {
 
     /// The opt-in, the time, the weekday switch, and what the digest actually reports.
     ///
-    /// It sits on this tab, under the notification toggles, rather than on a tab of its own: it *is*
-    /// a notification preference — a scheduled one — and the two things it reports on that are not
-    /// pull requests, the outbox and its parked reviews, are counted in the card directly below.
-    /// A tab of its own would be three controls in an empty room.
+    /// It sits on this pane, under the notification toggles, rather than on a pane of its own: it
+    /// *is* a notification preference — a scheduled one — and the two things it reports on that
+    /// are not pull requests, the outbox and its parked reviews, are counted in the section
+    /// directly below. A pane of its own would be three controls in an empty room.
     ///
-    /// The wording carries the two facts the user cannot check for themselves: nothing is fetched or
-    /// sent when the digest is built, and a Mac that was asleep still gets its digest — once — when
-    /// it wakes up on the same day.
-    private var digestCard: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 8) {
-                CardTitle(String(localized: "MORNING DIGEST"))
-                Toggle(String(localized: "Send me a morning digest"), isOn: digestEnabledBinding)
-                HStack(spacing: 12) {
-                    DatePicker(
-                        String(localized: "At"),
-                        selection: digestTimeBinding,
-                        displayedComponents: .hourAndMinute
-                    )
-                    .datePickerStyle(.field)
-                    .fixedSize()
-                    Toggle(String(localized: "Weekdays only"), isOn: digestWeekdaysBinding)
-                }
-                .disabled(!environment.settings.digest.isEnabled)
-                Text(String(
-                    localized: "Off by default. One notification a day summarising what came in since the last one: new review requests, green agent pull requests that only need an approval or a merge, your own pull requests with red CI or a change request, and reviews the outbox could not send. Clicking it opens the inbox, and the same summary sits above the list as a card you can dismiss."
-                ))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                Text(String(
-                    localized: "It is built from the local database only — no GitHub call, no AI, nothing sent anywhere — because it runs while you are not watching. If your Mac was asleep at that time, the digest arrives when it wakes up, and only if that is still the same day. A quiet night produces nothing at all."
-                ))
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-                Text(digestStatusLine)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.textSecondary)
+    /// The header's ⓘ carries the facts the user cannot check for themselves: nothing is fetched
+    /// or sent when the digest is built, and a Mac that was asleep still gets its digest — once —
+    /// when it wakes up on the same day.
+    private var digestSection: some View {
+        Section {
+            Toggle(isOn: digestEnabledBinding) {
+                Text(String(localized: "Send me a morning digest"))
+                Text(String(localized: "One notification a day with what came in since the last."))
             }
+            Group {
+                DatePicker(
+                    String(localized: "At"),
+                    selection: digestTimeBinding,
+                    displayedComponents: .hourAndMinute
+                )
+                .datePickerStyle(.field)
+                Toggle(String(localized: "Weekdays only"), isOn: digestWeekdaysBinding)
+            }
+            .disabled(!environment.settings.digest.isEnabled)
+        } header: {
+            HStack(spacing: 4) {
+                Text(String(localized: "Morning digest"))
+                InfoButton(String(
+                    localized: "New review requests, green agent pull requests that only need an approval or a merge, your own pull requests with red CI or a change request, and reviews the outbox could not send."
+                ) + "\n\n" + String(
+                    localized: "Built from the local database only — no GitHub call, no AI, nothing sent anywhere. If your Mac was asleep, the digest arrives when it wakes, if that is still the same day. A quiet night produces nothing."
+                ))
+            }
+        } footer: {
+            SettingsNote(digestStatusLine)
         }
     }
 
@@ -484,4 +449,3 @@ struct SyncSettingsTab: View {
         )
     }
 }
-
