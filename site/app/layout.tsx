@@ -12,7 +12,7 @@ const display = Bricolage_Grotesque({
 const SITE = "https://shepherd.schnaq.com";
 const TITLE = "Shepherd";
 const DESCRIPTION =
-  "A native macOS inbox for the pull request flood. Triage, review and merge from the keyboard, across every repository, with your data on your Mac.";
+  "A native macOS inbox for the pull request flood. Triage, review and merge from the keyboard, across every repository.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE),

@@ -24,8 +24,8 @@ repositories at once, and in a study of 33,596 agent-authored pull requests, 61%
 recorded human review at all ([the numbers](docs/research/research-landscape.md)). Review tools
 were built for a handful of pull requests a week; Shepherd is built for the flood. It herds every
 pull request from every repository into one place: a fast, local-first, keyboard-driven inbox where
-you triage, review and merge without opening a browser tab. It is open source, and your data stays
-on your Mac.
+you triage, review and merge without opening a browser tab. It is open source, and
+[docs/PRIVACY.md](docs/PRIVACY.md) lists everything it sends and where.
 
 ## What it does
 

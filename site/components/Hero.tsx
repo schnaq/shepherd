@@ -17,7 +17,7 @@ export function Hero() {
             <LatestRelease />
           </div>
           <p className="hero-meta">
-            macOS 27 Golden Gate on Apple Silicon. Open source under the MIT licence. Your data stays on your Mac.
+            macOS 27 Golden Gate on Apple Silicon. Open source under the MIT licence.
           </p>
         </div>
         <InboxDemo />
