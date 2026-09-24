@@ -160,5 +160,6 @@ for appearance in light dark; do
     shoot review-files "shepherd://pr/schnaq/shepherd/412" largest "$appearance" \
         SHEPHERD_DEMO_REVIEW_TAB=files
     shoot issues "shepherd://inbox?filter=issues" largest "$appearance"
+    shoot fleet "shepherd://fleet" largest "$appearance"
     shoot settings-delegation "shepherd://settings/delegation" front "$appearance"
 done
