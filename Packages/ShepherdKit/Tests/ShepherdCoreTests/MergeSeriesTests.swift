@@ -184,15 +184,63 @@ final class MergeSeriesTests: XCTestCase {
             ]
         )
         XCTAssertFalse(series.remove("A"))
-        XCTAssertTrue(series.remove("A", mergingIsRemovable: true))
+        XCTAssertTrue(series.remove("A", hasNoUnsentWrite: true))
         XCTAssertEqual(series.entry(for: "A")?.state, .skipped(.removedByUser))
 
-        series.cancel(removableMerging: [])
+        series.cancel(withoutUnsentWrites: [])
         XCTAssertEqual(series.entry(for: "B")?.state, .merging)
         XCTAssertEqual(series.entry(for: "C")?.state, .skipped(.removedByUser))
-        series.cancel(removableMerging: ["B"])
+        series.cancel(withoutUnsentWrites: ["B"])
         XCTAssertEqual(series.entry(for: "B")?.state, .skipped(.removedByUser))
         XCTAssertTrue(series.isFinished)
+    }
+
+    func testAnEntryUpdatingItsBranchIsRemovableOnlyWhenTheCallerSaysItsRowIsGone() {
+        var series = MergeSeries(
+            repository: RepoRef(owner: "schnaq", name: "review"),
+            mergeMethod: "squash",
+            deletesHeadBranch: false,
+            createdAt: Date(timeIntervalSince1970: 0),
+            entries: [
+                MergeSeriesEntry(prID: "A", slug: "s#1", number: 1, title: "A", pinnedHeadOid: "a", state: .updatingBranch(from: "a")),
+            ]
+        )
+        XCTAssertFalse(series.remove("A"), "its update is still to go out, and the entry keeps the alert down")
+        XCTAssertEqual(series.entry(for: "A")?.state, .updatingBranch(from: "a"))
+        XCTAssertTrue(series.remove("A", hasNoUnsentWrite: true))
+        XCTAssertEqual(series.entry(for: "A")?.state, .skipped(.removedByUser))
+    }
+
+    func testCancelLetsAnUnsentUpdateGoOutAndThenRemovesItsEntryInsteadOfMergingIt() {
+        var series = MergeSeries(
+            repository: RepoRef(owner: "schnaq", name: "review"),
+            mergeMethod: "squash",
+            deletesHeadBranch: false,
+            createdAt: Date(timeIntervalSince1970: 0),
+            entries: [
+                MergeSeriesEntry(prID: "A", slug: "s#1", number: 1, title: "A", pinnedHeadOid: "a", state: .updatingBranch(from: "a")),
+                MergeSeriesEntry(prID: "B", slug: "s#2", number: 2, title: "B", pinnedHeadOid: "b"),
+            ]
+        )
+        series.cancel()
+        XCTAssertEqual(series.entry(for: "A")?.state, .updatingBranch(from: "a"), "still waiting for its update")
+        XCTAssertEqual(series.entry(for: "A")?.removalRequested, true)
+        XCTAssertEqual(series.entry(for: "B")?.state, .skipped(.removedByUser))
+
+        XCTAssertTrue(series.markBranchUpdated("A"))
+        XCTAssertEqual(series.entry(for: "A")?.state, .skipped(.removedByUser), "no merge after a Cancel")
+        XCTAssertTrue(series.isFinished)
+    }
+
+    func testTheRemovalRequestSurvivesARoundTripAndDefaultsToNo() throws {
+        let entry = MergeSeriesEntry(
+            prID: "A", slug: "s#1", number: 1, title: "A", pinnedHeadOid: "a",
+            state: .updatingBranch(from: "a"), removalRequested: true
+        )
+        let decoded = try JSONDecoder().decode(MergeSeriesEntry.self, from: JSONEncoder().encode(entry))
+        XCTAssertEqual(decoded, entry)
+        let older = #"{"prID":"A","slug":"s#1","number":1,"title":"A","pinnedHeadOid":"a","state":{"kind":"pending"}}"#
+        XCTAssertFalse(try JSONDecoder().decode(MergeSeriesEntry.self, from: Data(older.utf8)).removalRequested)
     }
 
     func testAnEntryFromAnOlderBuildDecodesWithoutAMergeTimestamp() throws {

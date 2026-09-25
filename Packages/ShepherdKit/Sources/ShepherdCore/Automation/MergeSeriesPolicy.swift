@@ -85,18 +85,20 @@ public enum MergeSeriesPolicy {
     /// 7. **Checks failed** or none at all: skipped. "None at all" on a head Shepherd's own
     ///    update produced waits instead, up to `updateQueuedAt + gracePeriod`: GitHub has often
     ///    not registered any check suite on a commit that is seconds old.
-    /// 8. **Behind its base** (`mergeStateStatus == .behind`): queue the branch update — even
+    /// 8. **A merge or branch update for it is still in the outbox:** wait. Never a second write
+    ///    on top of one in flight, a branch update included.
+    /// 9. **Behind its base** (`mergeStateStatus == .behind`): queue the branch update — even
     ///    while checks are still running. The update gives the pull request a new head whose
     ///    checks run anyway, so waiting for the old head's checks first would run CI twice.
-    /// 9. **Checks running** or **mergeability unknown:** wait.
-    /// 10. **A write for it is still in the outbox:** wait.
+    /// 10. **Checks running** or **mergeability unknown:** wait.
     /// 11. Otherwise: queue the merge.
     ///
     /// - Parameters:
     ///   - series: The series as stored.
     ///   - rows: The inbox rows the last sweep wrote, keyed by node id.
-    ///   - existingOutbox: Node ids of pull requests the outbox still holds a write for.
-    ///   - failedWrites: Node ids of pull requests with a failed or parked outbox row.
+    ///   - existingOutbox: Node ids of pull requests the outbox still holds an unsent merge or
+    ///     branch update for.
+    ///   - failedWrites: Node ids of pull requests with a failed or parked merge or branch update.
     ///   - now: The sweep's time.
     ///   - gracePeriod: How long a missing row or an unanswered branch update is waited for.
     /// - Returns: The updated series and the one write to queue, if any.
@@ -232,14 +234,20 @@ public enum MergeSeriesPolicy {
             pullRequest: row,
             existingOutbox: existingOutbox
         )
+        //
+        // One switch, in that order. The three facts that outrank *changes requested* come first
+        // and unguarded; the guarded arm then catches changes requested on whatever is left, and
+        // the compiler still checks that every decision has an arm of its own.
+        let behind = row.mergeStateStatus == .behind
+        // A merge or update of this pull request already in the outbox: never a second write on
+        // top of it. Checked here and not only through `.writeInFlight`, because merge-when-green
+        // looks at the outbox last and answers `.checksPending` first.
+        let inFlight = existingOutbox.contains(entry.prID)
         switch decision {
         case .abandon(.headMoved): return .skip(.headMoved)
         case .abandon(.draft): return .skip(.draft)
         case .abandon(.conflicting): return .skip(.conflicting)
-        default: break
-        }
-        if row.reviewDecision == .changesRequested { return .skip(.changesRequested) }
-        switch decision {
+        case _ where row.reviewDecision == .changesRequested: return .skip(.changesRequested)
         case .abandon(.checksFailed): return .skip(.checksFailed)
         case .abandon(.noChecks):
             // A head Shepherd's own update produced is seconds old when the sweep first sees it,
@@ -249,17 +257,19 @@ public enum MergeSeriesPolicy {
                 return .wait
             }
             return .skip(.noChecks)
-        case .abandon(.headMoved), .abandon(.draft), .abandon(.conflicting): return .wait // handled above
+        case .wait(.writeInFlight):
+            return .wait
         case .wait(.checksPending):
             // Behind and still building: update now. The old head's checks are about a commit
             // that will never be merged, and waiting for them only to start a second run on the
             // updated head would double the wait for every pull request in the series.
-            return row.mergeStateStatus == .behind ? .updateBranch : .wait
-        case .wait(.mergeabilityUnknown), .wait(.writeInFlight), .merge:
-            // Everything below here has green checks on the pinned head.
-            if row.mergeStateStatus == .behind { return .updateBranch }
-            if case .wait = decision { return .wait }
-            return .merge
+            return behind && !inFlight ? .updateBranch : .wait
+        case .wait(.mergeabilityUnknown):
+            // Green checks on the pinned head; GitHub has not worked out the merge yet.
+            return behind && !inFlight ? .updateBranch : .wait
+        case .merge:
+            // Green checks, mergeability known, nothing of this pull request in the outbox.
+            return behind ? .updateBranch : .merge
         }
     }
 }

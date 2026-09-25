@@ -24,7 +24,8 @@ public enum MergeSeriesSkipReason: String, Sendable, Codable, Hashable, CaseIter
     /// GitHub refused the merge the series queued.
     case mergeRefused
     /// The row left the inbox without a confirmed merge and did not come back within the grace
-    /// period. Also the fallback for an entry whose stored state this build cannot read.
+    /// period — or, for a queued merge whose outbox row is gone too, GitHub says it is not merged.
+    /// Also the fallback for an entry whose stored state this build cannot read.
     case disappeared
     /// The user took the entry out of the series, or cancelled the series.
     case removedByUser
@@ -150,6 +151,11 @@ public struct MergeSeriesEntry: Sendable, Codable, Hashable, Identifiable {
     /// `merging` entry waits for a confirmation whose outbox row is gone (ADR 0041's
     /// 2026-09-25 amendment).
     public var mergeQueuedAt: Date?
+    /// Whether **Cancel** asked for this entry to be taken out while its branch update was still
+    /// in the outbox. The update cannot be taken back and still goes out; once it is settled the
+    /// entry is *removed by user* instead of going on to a merge nobody wants any more, and until
+    /// then it stays `updatingBranch`, so a parked update still keeps its alert down.
+    public var removalRequested: Bool
 
     /// Creates an entry.
     public init(
@@ -161,7 +167,8 @@ public struct MergeSeriesEntry: Sendable, Codable, Hashable, Identifiable {
         state: MergeSeriesEntryState = .pending,
         activeSince: Date? = nil,
         updateQueuedAt: Date? = nil,
-        mergeQueuedAt: Date? = nil
+        mergeQueuedAt: Date? = nil,
+        removalRequested: Bool = false
     ) {
         self.prID = prID
         self.slug = slug
@@ -172,6 +179,7 @@ public struct MergeSeriesEntry: Sendable, Codable, Hashable, Identifiable {
         self.activeSince = activeSince
         self.updateQueuedAt = updateQueuedAt
         self.mergeQueuedAt = mergeQueuedAt
+        self.removalRequested = removalRequested
     }
 
     /// Creates a pending entry pinned to the row's current head.
@@ -191,6 +199,7 @@ public struct MergeSeriesEntry: Sendable, Codable, Hashable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case prID, slug, number, title, pinnedHeadOid, state, activeSince, updateQueuedAt, mergeQueuedAt
+        case removalRequested
     }
 
     /// Decodes tolerantly, like every persisted value in this folder. A missing pin decodes as
@@ -211,6 +220,8 @@ public struct MergeSeriesEntry: Sendable, Codable, Hashable, Identifiable {
             .flatMap { $0 }
         mergeQueuedAt = (try? container.decodeIfPresent(Date.self, forKey: .mergeQueuedAt))
             .flatMap { $0 }
+        removalRequested = (try? container.decodeIfPresent(Bool.self, forKey: .removalRequested))
+            .flatMap { $0 } ?? false
     }
 }
 
@@ -346,7 +357,8 @@ public struct MergeSeries: Sendable, Codable, Hashable, Identifiable {
 
     /// Records the drain's confirmation of the branch update the series queued
     /// (`mutationSent(.branchUpdated)`). Only an entry that is waiting for its update moves;
-    /// a confirmation for anything else is ignored.
+    /// a confirmation for anything else is ignored. An entry **Cancel** asked to take out
+    /// (``MergeSeriesEntry/removalRequested``) is removed now instead of going on to its merge.
     /// - Parameter prID: The pull request's node id.
     /// - Returns: Whether anything changed.
     @discardableResult
@@ -354,46 +366,56 @@ public struct MergeSeries: Sendable, Codable, Hashable, Identifiable {
         guard let index = entries.firstIndex(where: { $0.prID == prID }),
               case .updatingBranch(let from) = entries[index].state
         else { return false }
-        entries[index].state = .branchUpdated(from: from)
+        entries[index].state = entries[index].removalRequested
+            ? .skipped(.removedByUser)
+            : .branchUpdated(from: from)
         return true
     }
 
     /// Takes a pull request out of the series (**Remove from series**).
     ///
-    /// A queued merge cannot be taken back out of the outbox, so a `merging` entry stays and
-    /// the confirmation decides — unless the caller has checked that the outbox holds no
-    /// unsent row for it any more (`mergingIsRemovable`), in which case there is nothing left to
-    /// wait for. Finished entries stay as they are.
+    /// A queued merge or branch update cannot be taken back out of the outbox, so a `merging`
+    /// or `updatingBranch` entry stays and the drain's outcome decides — unless the caller has
+    /// checked that the outbox holds no unsent row for it any more (`hasNoUnsentWrite`), in
+    /// which case there is nothing left to wait for. An update that is still to go out must keep
+    /// its entry, too: the entry is what tells a parked update's conflict apart from a review
+    /// draft's, and without it the user would get the "review not sent" alert for a review they
+    /// never wrote. Finished entries stay as they are.
     /// - Parameters:
     ///   - prID: The pull request's node id.
-    ///   - mergingIsRemovable: Whether a `merging` entry may be removed too.
+    ///   - hasNoUnsentWrite: Whether the outbox is known to hold no unsent row for it.
     /// - Returns: Whether anything changed.
     @discardableResult
-    public mutating func remove(_ prID: String, mergingIsRemovable: Bool = false) -> Bool {
+    public mutating func remove(_ prID: String, hasNoUnsentWrite: Bool = false) -> Bool {
         guard let index = entries.firstIndex(where: { $0.prID == prID }),
-              Self.isRemovable(entries[index].state, mergingIsRemovable: mergingIsRemovable)
+              Self.isRemovable(entries[index].state, hasNoUnsentWrite: hasNoUnsentWrite)
         else { return false }
         entries[index].state = .skipped(.removedByUser)
         return true
     }
 
-    /// Cancels the series: every entry that is pending, updating its branch or re-pinning
-    /// becomes *removed by user*. A `merging` entry stays — see ``remove(_:mergingIsRemovable:)``
-    /// — unless it is named in `removableMerging`; finished entries are untouched.
-    /// - Parameter removableMerging: `merging` entries whose outbox row is gone.
-    public mutating func cancel(removableMerging: Set<String> = []) {
-        for index in entries.indices where Self.isRemovable(
-            entries[index].state,
-            mergingIsRemovable: removableMerging.contains(entries[index].prID)
-        ) {
-            entries[index].state = .skipped(.removedByUser)
+    /// Cancels the series: every entry that is pending or re-pinning becomes *removed by user*,
+    /// and so does a `merging` or `updatingBranch` entry named in `withoutUnsentWrites` — see
+    /// ``remove(_:hasNoUnsentWrite:)``. A `merging` entry with its merge still in the outbox
+    /// stays, and the confirmation decides. An `updatingBranch` one stays too, until its update
+    /// is settled, but is marked (``MergeSeriesEntry/removalRequested``) so that it is removed
+    /// then rather than merged. Finished entries are untouched.
+    /// - Parameter withoutUnsentWrites: Entries whose outbox row is known to be gone.
+    public mutating func cancel(withoutUnsentWrites: Set<String> = []) {
+        for index in entries.indices {
+            let hasNoUnsentWrite = withoutUnsentWrites.contains(entries[index].prID)
+            if Self.isRemovable(entries[index].state, hasNoUnsentWrite: hasNoUnsentWrite) {
+                entries[index].state = .skipped(.removedByUser)
+            } else if case .updatingBranch = entries[index].state {
+                entries[index].removalRequested = true
+            }
         }
     }
 
-    private static func isRemovable(_ state: MergeSeriesEntryState, mergingIsRemovable: Bool) -> Bool {
+    private static func isRemovable(_ state: MergeSeriesEntryState, hasNoUnsentWrite: Bool) -> Bool {
         switch state {
-        case .pending, .updatingBranch, .branchUpdated: return true
-        case .merging: return mergingIsRemovable
+        case .pending, .branchUpdated: return true
+        case .updatingBranch, .merging: return hasNoUnsentWrite
         case .merged, .skipped: return false
         }
     }

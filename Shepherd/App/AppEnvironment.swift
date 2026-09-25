@@ -859,7 +859,10 @@ final class AppEnvironment {
         }
     }
 
-    /// The outbox and the confirmed merges, as a series reads them; `nil` without a session.
+    /// The outbox and the confirmed merges, as a series reads them — for a pass and for Remove
+    /// and Cancel alike. `nil` without a session, and `nil` when the outbox cannot be read: an
+    /// unreadable outbox is not an empty one, so a pass is skipped and a `merging` or
+    /// `updatingBranch` entry is left to its outcome.
     private func mergeSeriesOutbox() async -> MergeSeriesOutboxSnapshot? {
         guard let session else { return nil }
         guard let items = try? await session.database.allOutboxItems() else { return nil }
@@ -889,15 +892,15 @@ final class AppEnvironment {
         await mergeSeries.run(
             rows: rows,
             alsoQueued: alsoQueued,
-            readOutbox: {
-                MergeSeriesOutboxSnapshot(
-                    // A read failure answers "nothing is queued and nothing failed" — the
-                    // policy then acts on the rows alone, and the funnel's own
-                    // `hasMergeOnItsWay` still refuses a second merge.
-                    items: (try? await session.database.allOutboxItems()) ?? [],
-                    mergedIDs: session.mergedPullRequestIDs
-                )
+            readOutbox: { [weak self] in
+                await self?.mergeSeriesOutbox()
             },
+            isMerged: { repository, number in
+                // "Could not ask" is `nil`, never `false`: the entry then waits for the next pass
+                // instead of being skipped over a network hiccup.
+                try? await session.github.isPullRequestMerged(repo: repository, number: number)
+            },
+            confirmedMerges: { session.mergedPullRequestIDs },
             write: { request in
                 switch request {
                 case .merge(let summary, let method, let deletesHeadBranch):

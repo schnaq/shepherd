@@ -117,13 +117,17 @@ it simply never triggers an update.
   `405` from an earlier bulk merge does not skip it, and a failed row never counts as a write in
   flight.
 - **Outcomes are also read off the outbox.** A `merging` entry whose row left the outbox without a
-  failure and whose pull request left the inbox is merged; an `updatingBranch` entry whose row
-  left without a failure was accepted. The events are the fast path, not the only one.
+  failure and whose pull request left the inbox is asked about once per pass on GitHub
+  (`GET …/pulls/{number}/merge`): merged → merged, not merged → skipped as *left the inbox*, no
+  answer → asked again next pass. An `updatingBranch` entry whose row left without a failure was
+  accepted. Only merge and update-branch rows count; an outbox that cannot be read skips the pass
+  instead of reading as empty. The events are the fast path, not the only one.
 - **A `merging` entry is bounded.** With no outbox row, no failure, no confirmation and the pull
   request still open for an hour after the merge was queued (`mergeQueuedAt`), it is skipped as
   *merge refused*: the merge was never written or its row was discarded. For the same reason
-  *Remove from series* and *Cancel* take out a `merging` entry once the outbox holds no unsent row
-  for it.
+  *Remove from series* and *Cancel* take out a `merging` or `updatingBranch` entry once the outbox
+  holds no unsent row for it. While an update is still unsent, Remove is not offered, and Cancel
+  lets the update go out and removes the entry once it is settled, never merging it.
 - **No draft-conflict alert or notification for a series' update.** A stale pin on a branch update
   parks the row as a conflict, and the drain raises `draftConflict`. For an entry the series is
   updating from exactly that pin, the "review not sent" alert and notification are suppressed;

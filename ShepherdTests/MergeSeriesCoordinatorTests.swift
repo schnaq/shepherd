@@ -42,6 +42,16 @@ final class MergeSeriesCoordinatorTests: XCTestCase {
         /// What the store said about the written entry at the moment the write was made.
         var stateAtWrite: [MergeSeriesEntryState?] = []
         var accepts = true
+        /// Whether the outbox can be read; `false` answers `nil`, like a failed database read.
+        var outboxReadable = true
+        /// GitHub's answer to "is it merged?"; `nil` is "could not ask".
+        var mergedOnGitHub: Bool?
+        /// The pull request numbers GitHub was asked about, in order.
+        var probes: [Int] = []
+        /// The session's confirmed merges as the coordinator reads them after a write.
+        var confirmed: Set<String> = []
+        /// Runs inside the write, before it answers — where an event can land in the app.
+        var duringWrite: (@MainActor () -> Void)?
 
         init(clock: Date) {
             self.clock = clock
@@ -120,11 +130,17 @@ final class MergeSeriesCoordinatorTests: XCTestCase {
     ) async -> MergeSeriesPassResult {
         await coordinator.run(
             rows: rows,
-            readOutbox: { harness.outbox },
+            readOutbox: { harness.outboxReadable ? harness.outbox : nil },
+            isMerged: { _, number in
+                harness.probes.append(number)
+                return harness.mergedOnGitHub
+            },
+            confirmedMerges: { harness.confirmed },
             write: { request in
                 harness.writes.append(request)
                 let prID = request.pullRequest.id
                 harness.stateAtWrite.append(store.series(containing: prID)?.entry(for: prID)?.state)
+                harness.duringWrite?()
                 return harness.accepts
             }
         )
@@ -209,13 +225,88 @@ final class MergeSeriesCoordinatorTests: XCTestCase {
         await run(coordinator, store: store, rows: [row("A"), row("B")], harness: harness)
         XCTAssertEqual(entryState(store, "A"), .merging)
 
-        // No `mutationSent` arrives. The merge row is gone and so is the pull request.
+        // No `mutationSent` arrives. The merge row is gone and so is the pull request; GitHub
+        // says it is merged.
         harness.clock = start.addingTimeInterval(60)
         harness.outbox = MergeSeriesOutboxSnapshot()
+        harness.mergedOnGitHub = true
         await run(coordinator, store: store, rows: [row("B")], harness: harness)
 
+        XCTAssertEqual(harness.probes, [1], "asked once")
         XCTAssertEqual(entryState(store, "A"), .merged)
         XCTAssertEqual(harness.writes.last, .merge(row("B"), method: .squash, deletesHeadBranch: false))
+    }
+
+    func testAMergeWhoseRowLeftTheOutboxAndTheInboxButIsNotMergedOnGitHubIsSkipped() async {
+        let harness = Harness(clock: start)
+        let store = makeStore()
+        let coordinator = makeCoordinator(store: store, harness: harness)
+        coordinator.start([(repository: repo, pullRequests: [row("A"), row("B")])], method: .squash, deletesHeadBranch: false)
+        await run(coordinator, store: store, rows: [row("A"), row("B")], harness: harness)
+
+        // The row was discarded by hand and the pull request closed.
+        harness.outbox = MergeSeriesOutboxSnapshot()
+        harness.mergedOnGitHub = false
+        await run(coordinator, store: store, rows: [row("B")], harness: harness)
+
+        XCTAssertEqual(entryState(store, "A"), .skipped(.disappeared), "never counted as merged")
+        XCTAssertEqual(harness.writes.last?.pullRequest.id, "B", "the series goes on")
+    }
+
+    func testAMergeGitHubCouldNotBeAskedAboutWaitsAndIsAskedAgainNextPass() async {
+        let harness = Harness(clock: start)
+        let store = makeStore()
+        let coordinator = makeCoordinator(store: store, harness: harness)
+        coordinator.start([(repository: repo, pullRequests: [row("A"), row("B")])], method: .squash, deletesHeadBranch: false)
+        await run(coordinator, store: store, rows: [row("A"), row("B")], harness: harness)
+
+        harness.outbox = MergeSeriesOutboxSnapshot()
+        harness.mergedOnGitHub = nil
+        await run(coordinator, store: store, rows: [row("B")], harness: harness)
+        XCTAssertEqual(entryState(store, "A"), .merging, "no answer is not a no")
+        XCTAssertEqual(harness.writes.count, 1)
+
+        harness.mergedOnGitHub = true
+        await run(coordinator, store: store, rows: [row("B")], harness: harness)
+        XCTAssertEqual(harness.probes, [1, 1], "once per pass")
+        XCTAssertEqual(entryState(store, "A"), .merged)
+        XCTAssertEqual(harness.writes.last?.pullRequest.id, "B")
+    }
+
+    func testGitHubIsNotAskedWhileTheMergeIsQueuedOrThePullRequestIsStillInTheInbox() async {
+        let harness = Harness(clock: start)
+        let store = makeStore()
+        let coordinator = makeCoordinator(store: store, harness: harness)
+        coordinator.start([(repository: repo, pullRequests: [row("A"), row("B")])], method: .squash, deletesHeadBranch: false)
+        harness.mergedOnGitHub = true
+        await run(coordinator, store: store, rows: [row("A"), row("B")], harness: harness)
+
+        harness.outbox = MergeSeriesOutboxSnapshot(items: [outboxRow("A", state: .pending, createdAt: start)])
+        await run(coordinator, store: store, rows: [row("B")], harness: harness)
+        harness.outbox = MergeSeriesOutboxSnapshot()
+        await run(coordinator, store: store, rows: [row("A"), row("B")], harness: harness)
+
+        XCTAssertEqual(harness.probes, [])
+        XCTAssertEqual(entryState(store, "A"), .merging)
+    }
+
+    func testAnOutboxThatCannotBeReadSkipsThePass() async {
+        let harness = Harness(clock: start)
+        let store = makeStore()
+        let coordinator = makeCoordinator(store: store, harness: harness)
+        coordinator.start([(repository: repo, pullRequests: [row("A"), row("B")])], method: .squash, deletesHeadBranch: false)
+        await run(coordinator, store: store, rows: [row("A"), row("B")], harness: harness)
+        let before = store.series
+
+        // Were it read as empty, A's merge would count as landed and B's would go out.
+        harness.outboxReadable = false
+        harness.mergedOnGitHub = true
+        let result = await run(coordinator, store: store, rows: [row("B")], harness: harness)
+
+        XCTAssertEqual(result, MergeSeriesPassResult())
+        XCTAssertEqual(store.series, before, "nothing stepped, nothing reconciled")
+        XCTAssertEqual(harness.probes, [])
+        XCTAssertEqual(harness.writes.count, 1)
     }
 
     func testAMergeStillQueuedKeepsWaiting() async {
@@ -308,6 +399,71 @@ final class MergeSeriesCoordinatorTests: XCTestCase {
         await run(coordinator, store: store, rows: [row("A"), row("B", checkState: .pending)], harness: harness)
 
         XCTAssertEqual(entryState(store, "A"), .skipped(.mergeRefused), "an entry waiting for a row nobody wrote would wait for ever")
+    }
+
+    func testAMergeConfirmedWhileTheRefusedWriteWasAwaitedStaysMerged() async {
+        let harness = Harness(clock: start)
+        harness.accepts = false
+        let store = makeStore()
+        let coordinator = makeCoordinator(store: store, harness: harness)
+        coordinator.start([(repository: repo, pullRequests: [row("A"), row("B")])], method: .squash, deletesHeadBranch: false)
+        // The funnel refuses ("already on its way") while the drain confirms that very merge.
+        harness.duringWrite = { coordinator.noteMerged("A") }
+
+        await run(coordinator, store: store, rows: [row("A"), row("B", checkState: .pending)], harness: harness)
+
+        XCTAssertEqual(entryState(store, "A"), .merged, "the confirmation is not overwritten with a refusal")
+        XCTAssertEqual(entryState(store, "B"), .pending)
+    }
+
+    func testAMergeTheSessionConfirmedDuringTheRefusedWriteCountsAsMerged() async {
+        let harness = Harness(clock: start)
+        harness.accepts = false
+        let store = makeStore()
+        let coordinator = makeCoordinator(store: store, harness: harness)
+        coordinator.start([(repository: repo, pullRequests: [row("A"), row("B")])], method: .squash, deletesHeadBranch: false)
+        // The pass's own snapshot predates it; only the live set knows.
+        harness.duringWrite = { harness.confirmed = ["A"] }
+
+        await run(coordinator, store: store, rows: [row("A"), row("B", checkState: .pending)], harness: harness)
+
+        XCTAssertEqual(entryState(store, "A"), .merged)
+    }
+
+    // MARK: - Rows that are not the series' own
+
+    func testAFailedCommentForThePullRequestDoesNotSkipTheEntry() async {
+        let harness = Harness(clock: start)
+        let store = makeStore()
+        let coordinator = makeCoordinator(store: store, harness: harness)
+        coordinator.start([(repository: repo, pullRequests: [row("A")])], method: .squash, deletesHeadBranch: false)
+        harness.outbox = MergeSeriesOutboxSnapshot(items: [
+            outboxRow("A", .addPullRequestComment(body: "LGTM"), state: .failed, createdAt: start.addingTimeInterval(1)),
+        ])
+
+        await run(coordinator, store: store, rows: [row("A")], harness: harness)
+
+        XCTAssertEqual(entryState(store, "A"), .merging)
+        XCTAssertEqual(harness.writes.count, 1)
+    }
+
+    func testAQueuedCommentForThePullRequestDoesNotHoldTheMergeBack() async {
+        let harness = Harness(clock: start)
+        let store = makeStore()
+        let coordinator = makeCoordinator(store: store, harness: harness)
+        coordinator.start([(repository: repo, pullRequests: [row("A")])], method: .squash, deletesHeadBranch: false)
+        let comment = outboxRow("A", .addPullRequestComment(body: "LGTM"), state: .pending, createdAt: start)
+        harness.outbox = MergeSeriesOutboxSnapshot(items: [comment])
+
+        await run(coordinator, store: store, rows: [row("A")], harness: harness)
+        XCTAssertEqual(harness.writes, [.merge(row("A"), method: .squash, deletesHeadBranch: false)])
+
+        // Nor does it count as the merge's row: gone from the outbox and the inbox, GitHub is asked.
+        XCTAssertTrue(harness.outbox.hasNoUnsentRow(for: "A"))
+        harness.mergedOnGitHub = true
+        await run(coordinator, store: store, rows: [], harness: harness)
+        XCTAssertEqual(harness.probes, [1])
+        XCTAssertTrue(store.series.isEmpty, "merged, and the series is done")
     }
 
     // MARK: - Fresh rows after a merge
@@ -456,6 +612,48 @@ final class MergeSeriesCoordinatorTests: XCTestCase {
         await run(coordinator, store: store, rows: [row("A")], harness: harness)
 
         XCTAssertEqual(entryState(store, "A"), .merging, "an offline Mac's merge is still on its way")
+    }
+
+    func testAnEntryWhoseUpdateIsStillQueuedCannotBeRemoved() async {
+        let harness = Harness(clock: start)
+        let store = makeStore()
+        let coordinator = makeCoordinator(store: store, harness: harness)
+        coordinator.start([(repository: repo, pullRequests: [row("A"), row("B")])], method: .squash, deletesHeadBranch: false)
+        await run(coordinator, store: store, rows: [row("A", mergeStateStatus: .behind), row("B")], harness: harness)
+        let update = outboxRow("A", .updateBranch(expectedHeadOid: "head-A"), state: .pending, createdAt: start)
+
+        XCTAssertFalse(coordinator.canRemove("A", hasUnsentWrite: true))
+        coordinator.remove("A", outbox: MergeSeriesOutboxSnapshot(items: [update]))
+        XCTAssertEqual(entryState(store, "A"), .updatingBranch(from: "head-A"))
+        let conflict = DraftConflict(prID: "A", repo: repo, number: 1, expectedHeadOid: "head-A", actualHeadOid: "pushed")
+        XCTAssertTrue(coordinator.handlesConflict(conflict), "a parked update still keeps the review alert down")
+
+        XCTAssertTrue(coordinator.canRemove("A", hasUnsentWrite: false))
+        coordinator.remove("A", outbox: MergeSeriesOutboxSnapshot())
+        XCTAssertEqual(entryState(store, "A"), .skipped(.removedByUser), "an update whose row is gone can go")
+    }
+
+    func testCancellingWhileAnUpdateIsQueuedLetsItGoOutButNeverMergesTheEntry() async {
+        let harness = Harness(clock: start)
+        let store = makeStore()
+        let coordinator = makeCoordinator(store: store, harness: harness)
+        let series = coordinator.start([(repository: repo, pullRequests: [row("A"), row("B")])], method: .squash, deletesHeadBranch: false)
+        await run(coordinator, store: store, rows: [row("A", mergeStateStatus: .behind), row("B")], harness: harness)
+        let update = outboxRow("A", .updateBranch(expectedHeadOid: "head-A"), state: .pending, createdAt: start)
+
+        coordinator.cancel(seriesID: series[0].id, outbox: MergeSeriesOutboxSnapshot(items: [update]))
+        XCTAssertEqual(entryState(store, "A"), .updatingBranch(from: "head-A"))
+        XCTAssertEqual(entryState(store, "B"), .skipped(.removedByUser))
+        let conflict = DraftConflict(prID: "A", repo: repo, number: 1, expectedHeadOid: "head-A", actualHeadOid: "pushed")
+        XCTAssertTrue(coordinator.handlesConflict(conflict))
+
+        // The update goes out; a green new head follows. No merge.
+        coordinator.noteBranchUpdated("A")
+        harness.outbox = MergeSeriesOutboxSnapshot()
+        await run(coordinator, store: store, rows: [row("A", head: "head-A2")], harness: harness)
+        XCTAssertEqual(harness.writes.count, 1, "only the update")
+        XCTAssertTrue(store.series.isEmpty)
+        XCTAssertTrue(harness.notices.isEmpty, "every entry was taken out by the user")
     }
 
     func testCancellingASeriesBeforeAnythingHappenedEndsItQuietly() {

@@ -142,6 +142,19 @@ final class MergeSeriesPolicyTests: XCTestCase {
         XCTAssertEqual(state(result, "A"), .pending)
     }
 
+    func testABehindEntryWithAWriteStillInTheOutboxWaitsInsteadOfQueuingAnUpdate() {
+        // Green checks: merge-when-green answers "write in flight".
+        let ready = step(series([entry("A")]), rows: [green("A", mergeStateStatus: .behind)], existingOutbox: ["A"])
+        XCTAssertEqual(ready.action, .none)
+        XCTAssertEqual(state(ready, "A"), .pending)
+        // Running checks: merge-when-green answers "checks pending" before it looks at the outbox.
+        let running = green("A", checkRollup: CheckRollup(state: .pending, total: 1, pendingCount: 1), mergeStateStatus: .behind)
+        XCTAssertEqual(step(series([entry("A")]), rows: [running], existingOutbox: ["A"]).action, .none)
+        // Unknown mergeability.
+        let unknown = green("A", mergeable: .unknown, mergeStateStatus: .behind)
+        XCTAssertEqual(step(series([entry("A")]), rows: [unknown], existingOutbox: ["A"]).action, .none)
+    }
+
     func testAWriteForAnotherPullRequestDoesNotBlock() {
         let result = step(series([entry("A")]), rows: [green("A")], existingOutbox: ["B"])
         XCTAssertEqual(result.action.entry?.prID, "A")
@@ -608,7 +621,7 @@ final class MergeSeriesPolicyTests: XCTestCase {
         XCTAssertEqual(step(current, rows: [green("A"), green("B")]).action.entry?.prID, "B")
     }
 
-    func testCancelRemovesEveryUnfinishedEntryExceptAQueuedMerge() {
+    func testCancelRemovesEveryUnfinishedEntryExceptAQueuedMergeOrUpdate() {
         var current = series([
             entry("A", state: .merged),
             entry("B", state: .merging),
@@ -621,11 +634,12 @@ final class MergeSeriesPolicyTests: XCTestCase {
         XCTAssertEqual(current.entries.map(\.state), [
             .merged,
             .merging,
-            .skipped(.removedByUser),
+            .updatingBranch(from: "h"),
             .skipped(.removedByUser),
             .skipped(.removedByUser),
             .skipped(.draft),
         ])
+        XCTAssertEqual(current.entries.map(\.removalRequested), [false, false, true, false, false, false])
         XCTAssertEqual(current.activeEntry?.prID, "B")
     }
 }
