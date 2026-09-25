@@ -34,6 +34,7 @@ final class OutboxSurfacesTests: XCTestCase {
             .unresolveThread(threadID: "PRRT_1"),
             .merge(method: "squash", expectedHeadOid: "abc123"),
             .markReadyForReview,
+            .updateBranch(expectedHeadOid: "abc123"),
             .addIssueComment(body: "on it", basedOnUpdatedAt: moment),
             .addIssueLabel(name: "needs-triage", basedOnUpdatedAt: moment),
             .addIssueAssignee(login: "octocat", basedOnUpdatedAt: moment),

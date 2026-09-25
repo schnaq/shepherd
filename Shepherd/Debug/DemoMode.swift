@@ -123,6 +123,8 @@ enum DemoMode {
         } catch {
             environment.toasts.failure(error, context: "Demo mode could not seed its database")
         }
+        // Straight into the store: Start would run a pass, and the demo must write nothing.
+        environment.mergeSeriesStore.save(DemoSeed.mergeSeries(now: Date()))
         if let link = linkToOpen {
             // The phase is still `.launching`, so this parks the link in `pendingDeepLink` and the
             // session start replays it — the same path a link clicked during launch takes.

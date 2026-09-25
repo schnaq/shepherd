@@ -24,9 +24,99 @@ final class RowWriteStateTests: XCTestCase {
     private func state(
         _ items: [OutboxItem],
         isMerging: Bool = false,
-        wasMerged: Bool = false
+        wasMerged: Bool = false,
+        series: MergeSeriesChip? = nil
     ) -> RowWriteState? {
-        RowWriteState.make(items: items, for: "PR_1", isMerging: isMerging, wasMerged: wasMerged)
+        RowWriteState.make(
+            items: items,
+            for: "PR_1",
+            isMerging: isMerging,
+            wasMerged: wasMerged,
+            series: series
+        )
+    }
+
+    // MARK: - Merge series (ADR 0041)
+
+    private let seriesChip = MergeSeriesChip(position: 2, total: 5, phase: .merging)
+
+    func testAFailedOrParkedWriteOutranksTheSeriesChip() {
+        XCTAssertEqual(state([item(merge, state: .failed)], series: seriesChip), .failed(1))
+        XCTAssertEqual(state([item(merge, state: .conflicted)], series: seriesChip), .parked(1))
+    }
+
+    func testTheSeriesChipOutranksAQueuedMergeAndAMergeInFlight() {
+        XCTAssertEqual(state([item(merge)], series: seriesChip), .series(seriesChip))
+        XCTAssertEqual(state([], isMerging: true, series: seriesChip), .series(seriesChip))
+    }
+
+    func testAMergeOnItsWayForAWaitingEntryStillBlocksASecondMerge() {
+        // Merged by hand while the series had not got to it yet.
+        let waiting = MergeSeriesChip(position: 3, total: 5, phase: .waiting)
+        let queued = state([item(merge)], series: waiting)
+        XCTAssertEqual(queued, .series(MergeSeriesChip(position: 3, total: 5, phase: .merging)))
+        XCTAssertEqual(queued?.isMergeOnItsWay, true)
+        XCTAssertEqual(state([], isMerging: true, series: waiting)?.isMergeOnItsWay, true)
+        XCTAssertEqual(state([item(comment)], series: waiting), .series(waiting))
+    }
+
+    func testAConfirmedMergeFallsThroughToMerged() {
+        XCTAssertEqual(state([], wasMerged: true, series: seriesChip), .merged)
+    }
+
+    func testOnlyASeriesMergeCountsAsAMergeOnItsWay() {
+        XCTAssertTrue(RowWriteState.series(seriesChip).isMergeOnItsWay)
+        let waiting = MergeSeriesChip(position: 2, total: 5, phase: .waiting)
+        XCTAssertFalse(RowWriteState.series(waiting).isMergeOnItsWay)
+    }
+
+    func testTheSeriesChipNamesItsPlaceAndPhase() {
+        XCTAssertEqual(seriesChip.text, String(localized: "Series 2/5 · merging"))
+        let skipped = MergeSeriesChip(position: 3, total: 5, phase: .skipped(.checksFailed))
+        XCTAssertEqual(
+            skipped.text,
+            String(localized: "Series 3/5 · skipped: \(MergeSeriesSkipReason.checksFailed.title)")
+        )
+    }
+
+    func testTheChipReadsThePhaseOffTheEntryAndTheRow() {
+        let row = PullRequestSummary(
+            id: "A",
+            repo: repo,
+            number: 1,
+            title: "A",
+            author: ShepherdCore.Actor(login: "octocat", kind: .human),
+            updatedAt: Date(timeIntervalSince1970: 0),
+            createdAt: Date(timeIntervalSince1970: 0),
+            isDraft: false,
+            headRefName: "a",
+            headRefOid: "head-A",
+            baseRefName: "main",
+            checkRollup: CheckRollup(state: .pending, total: 1, pendingCount: 1),
+            myRelation: [.reviewRequested]
+        )
+        func entry(_ id: String, _ state: MergeSeriesEntryState) -> MergeSeriesEntry {
+            MergeSeriesEntry(prID: id, slug: "schnaq/review#1", number: 1, title: id, pinnedHeadOid: "head-\(id)", state: state)
+        }
+        var series = MergeSeries(
+            repository: repo,
+            mergeMethod: "squash",
+            deletesHeadBranch: false,
+            createdAt: Date(timeIntervalSince1970: 0),
+            entries: [entry("A", .pending), entry("B", .pending)]
+        )
+        XCTAssertEqual(MergeSeriesChip.make(series: series, prID: "A", row: row)?.phase, .waitingForChecks)
+        XCTAssertEqual(MergeSeriesChip.make(series: series, prID: "B", row: nil)?.phase, .waiting)
+        XCTAssertEqual(MergeSeriesChip.make(series: series, prID: "B", row: nil)?.position, 2)
+
+        series.entries[0].state = .branchUpdated(from: "head-A")
+        XCTAssertEqual(
+            MergeSeriesChip.make(series: series, prID: "A", row: row)?.phase,
+            .updatingBranch,
+            "GitHub has not made the new commit yet"
+        )
+        series.entries[0].state = .merged
+        XCTAssertNil(MergeSeriesChip.make(series: series, prID: "A", row: row))
     }
 
     func testNothingOnItsWayShowsNothing() {

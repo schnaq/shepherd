@@ -239,6 +239,7 @@ public enum GraphQLDocuments {
             headRefOid
             baseRefName
             mergeable
+            mergeStateStatus
             reviewDecision
             repository { name owner { login } }
             author { __typename login avatarUrl }

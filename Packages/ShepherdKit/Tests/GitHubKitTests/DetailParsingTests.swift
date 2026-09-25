@@ -42,6 +42,18 @@ final class DetailParsingTests: XCTestCase {
         XCTAssertEqual(detail.timeline.count, 5)
     }
 
+    func testTheDetailFetchReadsMergeStateStatusFromRESTsMergeableState() async throws {
+        // REST's `mergeable_state` carries the same values as GraphQL's `mergeStateStatus`, so a
+        // detail fetch does not wipe the `behind` the sweep stored (ADR 0041).
+        let transport = try await makeTransport()
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let detail = try await client.pullRequestDetail(repo: repo, number: 128)
+
+        XCTAssertEqual(detail.summary.mergeStateStatus, .behind)
+        XCTAssertEqual(detail.summary.mergeable, .mergeable, "the boolean still decides mergeable")
+    }
+
     func testChangedFilesArePreservedIncludingRenamesAndBinaries() async throws {
         let transport = try await makeTransport()
         let client = GitHubClient.makeForTesting(transport: transport)

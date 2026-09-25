@@ -143,6 +143,8 @@ struct PullRequestRecord: Codable, FetchableRecord, PersistableRecord {
     var relations: String
     var labels: String
     var mergeable: String?
+    /// `MergeStateStatus.rawValue`, or `NULL` when GitHub did not send one (v9, ADR 0041).
+    var mergeStateStatus: String?
     var bodyMarkdown: String?
     var commitsJSON: String?
     var timelineJSON: String?
@@ -180,6 +182,7 @@ struct PullRequestRecord: Codable, FetchableRecord, PersistableRecord {
         self.relations = ColumnCoding.encodeRelations(summary.myRelation)
         self.labels = ColumnCoding.encodeJSON(summary.labels)
         self.mergeable = summary.mergeable?.rawValue
+        self.mergeStateStatus = summary.mergeStateStatus?.rawValue
         self.bodyMarkdown = existing?.bodyMarkdown
         self.commitsJSON = existing?.commitsJSON
         self.timelineJSON = existing?.timelineJSON
@@ -230,7 +233,8 @@ struct PullRequestRecord: Codable, FetchableRecord, PersistableRecord {
             checkRollup: rollup,
             myRelation: ColumnCoding.decodeRelations(relations),
             labels: ColumnCoding.decodeJSON([String].self, from: labels) ?? [],
-            mergeable: mergeable.flatMap { Mergeable(rawValue: $0) }
+            mergeable: mergeable.flatMap { Mergeable(rawValue: $0) },
+            mergeStateStatus: mergeStateStatus.flatMap { MergeStateStatus(rawValue: $0) }
         )
     }
 

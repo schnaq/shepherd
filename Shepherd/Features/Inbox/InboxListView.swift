@@ -190,7 +190,8 @@ struct InboxListView: View {
                                             items: model.outboxItems,
                                             for: row.id,
                                             isMerging: environment.activity.isRunning(row.id, .merge),
-                                            wasMerged: environment.session?.mergedPullRequestIDs.contains(row.id) ?? false
+                                            wasMerged: environment.session?.mergedPullRequestIDs.contains(row.id) ?? false,
+                                            series: environment.mergeSeries.chip(for: row.id, row: row)
                                         ),
                                         onToggleMark: { model.toggleMark(row.id) }
                                     )
@@ -269,6 +270,9 @@ struct InboxListView: View {
                 Button(action.commandTitle) {
                     environment.request(.bulkTriage(action))
                 }
+            }
+            Button(MergeSeriesSheet.commandTitle) {
+                environment.request(.mergeSeries)
             }
         }
     }

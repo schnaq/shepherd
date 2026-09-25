@@ -54,6 +54,7 @@ MIGRATED = (
     "Shepherd/Features/PullRequest/MergeSheet.swift",
     "Shepherd/Features/PullRequest/ClosingIssuesCard.swift",
     "Shepherd/Features/Inbox/BulkTriageSheet.swift",
+    "Shepherd/Features/Inbox/MergeSeriesSheet.swift",
     "Shepherd/Features/Inbox/IssueCommentSheet.swift",
     "Shepherd/Features/Review/ReviewUpdateBanner.swift",
     "Shepherd/Features/Inbox/TrackRecordNoticeView.swift",

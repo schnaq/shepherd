@@ -49,6 +49,19 @@ public protocol PullRequestFetching: Sendable {
     func isPullRequestMerged(repo: RepoRef, number: Int) async throws -> Bool
     /// Takes a pull request out of draft state.
     func markReadyForReview(pullRequestID: String) async throws
+    /// Brings a pull request's head branch up to date with its base, pinned to a head (ADR 0041).
+    ///
+    /// Here rather than on a port of its own, unlike ``BranchDeleting``: that port is optional
+    /// because a merge whose tidying-up cannot run is still a merge, so an engine without it
+    /// loses nothing that was asked for. An update-branch row *is* the write, like a merge or
+    /// ``markReadyForReview(pullRequestID:)`` beside it, and an optional port would need a
+    /// "cannot send this" branch for a row the engine was always meant to send. The cost is one
+    /// more method on the one test double.
+    func updatePullRequestBranch(
+        repo: RepoRef,
+        number: Int,
+        expectedHeadOid: String?
+    ) async throws
 }
 
 /// `GitHubClient` already has exactly this shape; the conformance is the contract check.

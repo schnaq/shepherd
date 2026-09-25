@@ -7,7 +7,7 @@
   "draft": false,
   "merged": false,
   "mergeable": true,
-  "mergeable_state": "clean",
+  "mergeable_state": "behind",
   "additions": 240,
   "deletions": 96,
   "changed_files": 2,

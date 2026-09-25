@@ -183,7 +183,7 @@ enum MergeMethodChoice: String, TelemetryChoice {
 }
 
 enum MergeSource: String, TelemetryChoice {
-    case detail, bulk, autoRule = "auto_rule", whenChecksPass = "when_checks_pass"
+    case detail, bulk, autoRule = "auto_rule", whenChecksPass = "when_checks_pass", series
 }
 
 /// What a bulk-triage run did, mirroring `BulkTriageAction` one for one.

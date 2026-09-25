@@ -560,6 +560,16 @@ struct CommandPaletteView: View {
             }
             result.append(
                 PaletteCommand(
+                    id: "merge-series",
+                    section: triage,
+                    title: MergeSeriesSheet.commandTitle,
+                    systemImage: "list.number"
+                ) {
+                    environment.request(.mergeSeries)
+                }
+            )
+            result.append(
+                PaletteCommand(
                     id: "toggle-mark",
                     section: triage,
                     title: String(localized: "Select or deselect this pull request"),

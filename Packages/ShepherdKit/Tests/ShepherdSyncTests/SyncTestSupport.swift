@@ -25,6 +25,8 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
     var detailError: GitHubError?
     var submitError: GitHubError?
     var mergeError: GitHubError?
+    /// What every update-branch call throws, when a test wants GitHub to refuse it (ADR 0041).
+    var updateBranchError: GitHubError?
     /// What the already-merged probe answers, keyed by number. A missing key answers `false` —
     /// "GitHub has not merged this", which is what every test that never scripts it means.
     var mergedPullRequests: [Int: Bool] = [:]
@@ -40,6 +42,8 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
     private(set) var unresolvedThreads: [String] = []
     private(set) var replies: [(commentID: Int, body: String)] = []
     private(set) var merges: [(number: Int, method: MergeMethod, sha: String?)] = []
+    /// Every update-branch call that got through, with the head it was pinned to.
+    private(set) var branchUpdates: [(number: Int, sha: String?)] = []
     private(set) var branchContextRequests: [String] = []
     /// `owner/name#number` for every already-merged probe, in order. The claim worth asserting is
     /// that it is made *only* when a merge came back refused.
@@ -123,6 +127,10 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
 
     func setMergeError(_ error: GitHubError?) {
         mergeError = error
+    }
+
+    func setUpdateBranchError(_ error: GitHubError?) {
+        updateBranchError = error
     }
 
     /// Scripts what the already-merged probe answers for one pull request.
@@ -242,6 +250,16 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
 
     func markReadyForReview(pullRequestID: String) async throws {
         readyForReview.append(pullRequestID)
+    }
+
+    func updatePullRequestBranch(
+        repo: RepoRef,
+        number: Int,
+        expectedHeadOid: String?
+    ) async throws {
+        if let updateBranchError { throw updateBranchError }
+        branchUpdates.append((number: number, sha: expectedHeadOid))
+        writeLog.append("update branch #\(number)")
     }
 
     // MARK: - BranchDeleting

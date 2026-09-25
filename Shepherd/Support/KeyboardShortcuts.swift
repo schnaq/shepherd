@@ -40,11 +40,14 @@ enum ShortcutAction: Equatable, Sendable {
     /// Open the bulk-triage confirmation for the ticked pull requests (ADR 0015). Menu/palette
     /// only — like ``merge`` it opens a dialog rather than writing anything.
     case bulkTriage(BulkTriageAction)
+    /// Open the merge-series sheet for the ticked pull requests (ADR 0041). Menu/palette only,
+    /// like ``bulkTriage(_:)``: it opens a dialog.
+    case mergeSeries
 
     /// The key hint shown in the shortcut bar and the command palette.
     var keyHint: String {
         switch self {
-        case .delegate, .markGreenAgentPullRequests, .bulkTriage: return ""
+        case .delegate, .markGreenAgentPullRequests, .bulkTriage, .mergeSeries: return ""
         case .toggleMark: return "x"
         case .selectNext: return "j"
         case .selectPrevious: return "k"

@@ -1048,6 +1048,54 @@ public actor GitHubClient {
         }
     }
 
+    /// Brings a pull request's head branch up to date with its base: GitHub's *Update branch*
+    /// button (ADR 0041).
+    ///
+    /// `PUT /repos/{owner}/{repo}/pulls/{number}/update-branch`. GitHub makes the merge commit on
+    /// the head branch itself; Shepherd sends one API call through the outbox and pushes nothing
+    /// (ADR 0006). The answer is a `202`: the update has been *accepted*, not finished, so the
+    /// new head only arrives with a later sweep.
+    ///
+    /// Pinned like ``mergePullRequest(repo:number:method:expectedHeadOid:commitTitle:)``, and for
+    /// the same reason: building on a head nobody has seen would carry an unreviewed push into
+    /// the next merge. Where the merge endpoint says so with a `409`, this one says it with a
+    /// `422` and a sentence, so the sentence is what tells the two kinds of `422` apart.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - number: The pull request number.
+    ///   - expectedHeadOid: The head SHA the update is pinned to, sent as `expected_head_sha`.
+    ///     `nil` omits the key and lets GitHub update whatever the head is now.
+    /// - Throws: ``GitHubError/staleHead(expected:actual:)`` when the head moved on,
+    ///   ``GitHubError/validationFailed(message:)`` for any other refusal (a conflict with the
+    ///   base, an update that is not needed), and whatever else the status maps to.
+    public func updatePullRequestBranch(
+        repo: RepoRef,
+        number: Int,
+        expectedHeadOid: String?
+    ) async throws {
+        let encodedBody = try RESTJSON.encode(UpdateBranchBody(expectedHeadSha: expectedHeadOid))
+        do {
+            _ = try await performREST(
+                method: "PUT",
+                path: "/repos/\(repo.owner)/\(repo.name)/pulls/\(number)/update-branch",
+                queryItems: [],
+                body: encodedBody,
+                useCache: false,
+                resource: "\(repo.fullName)#\(number) update branch"
+            )
+        } catch GitHubError.validationFailed(let message) where Self.isHeadMismatch(message) {
+            throw GitHubError.staleHead(expected: expectedHeadOid ?? "", actual: nil)
+        }
+    }
+
+    /// Whether a `422` from the update-branch endpoint is the `expected_head_sha` precondition
+    /// failing. GitHub's sentence is "expected head sha didn't match current head ref."; it is
+    /// matched on its stable prefix, ignoring case, so a changed full stop does not turn a moved
+    /// head into a plain failure.
+    static func isHeadMismatch(_ message: String) -> Bool {
+        message.range(of: "expected head sha", options: .caseInsensitive) != nil
+    }
+
     /// Whether a pull request has already been merged.
     ///
     /// `GET /repos/{owner}/{repo}/pulls/{number}/merge` — the same path
@@ -1674,6 +1722,12 @@ struct MergeBody: Encodable {
     var commitTitle: String?
     var sha: String?
     var mergeMethod: String
+}
+
+/// The body of `PUT /repos/{owner}/{repo}/pulls/{number}/update-branch` (ADR 0041). A `nil`
+/// SHA is omitted rather than sent as a null.
+struct UpdateBranchBody: Encodable {
+    var expectedHeadSha: String?
 }
 
 /// A GraphQL request body.

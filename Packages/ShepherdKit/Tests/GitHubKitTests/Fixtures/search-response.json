@@ -19,6 +19,7 @@
           "headRefOid": "3f1a9c0d5b7e2a4c6d8f0b1a2c3e4d5f60718293",
           "baseRefName": "main",
           "mergeable": "MERGEABLE",
+          "mergeStateStatus": "BEHIND",
           "reviewDecision": "REVIEW_REQUIRED",
           "repository": { "name": "review", "owner": { "login": "schnaq" } },
           "author": {
@@ -56,6 +57,7 @@
           "headRefOid": "aa11bb22cc33dd44ee55ff6677889900aabbccdd",
           "baseRefName": "main",
           "mergeable": "CONFLICTING",
+          "mergeStateStatus": "DIRTY",
           "reviewDecision": null,
           "repository": { "name": "review", "owner": { "login": "schnaq" } },
           "author": {

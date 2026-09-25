@@ -73,7 +73,7 @@ could hold free text, so sending a repository name is a compile error rather tha
 |---|---|
 | `app_active_day` | repository count and inbox size as buckets (`0` / `1-3` / `4-10` / `11+`), diff renderer, intelligence mode, and on/off flags for webhooks, settings sync, auto-merge, auto-delegation, digest, menu bar, diagnostics |
 | `review_submitted` | verdict (`approve` / `request_changes` / `comment`), inline-comment count as a bucket |
-| `pull_request_merged` | method (`merge` / `squash` / `rebase`), source (`detail` / `bulk` / `auto_rule` / `when_checks_pass`) |
+| `pull_request_merged` | method (`merge` / `squash` / `rebase`), source (`detail` / `bulk` / `auto_rule` / `when_checks_pass` / `series`) |
 | `focus_session_completed` | queue size as a bucket, whether it ran to the end |
 | `bulk_triage_performed` | action, size as a bucket |
 | `search_used` | kind (`semantic` / `reference`), whether a result was opened |

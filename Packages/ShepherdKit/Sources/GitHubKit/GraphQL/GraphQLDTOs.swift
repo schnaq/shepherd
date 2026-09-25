@@ -97,6 +97,7 @@ struct SearchNodeDTO: Decodable {
     var headRefOid: String?
     var baseRefName: String?
     var mergeable: String?
+    var mergeStateStatus: String?
     var reviewDecision: String?
     var repository: GraphQLRepositoryDTO?
     var author: GraphQLActorDTO?
@@ -107,6 +108,7 @@ struct SearchNodeDTO: Decodable {
         case typename = "__typename"
         case id, number, title, createdAt, updatedAt, isDraft, additions, deletions
         case changedFiles, headRefName, headRefOid, baseRefName, mergeable, reviewDecision
+        case mergeStateStatus
         case repository, author, labels, commits
     }
 }

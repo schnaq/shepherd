@@ -143,6 +143,10 @@ final class AppEnvironment {
     let mergeWhenGreenStore: MergeWhenGreenStore
     /// Fires an armed merge on the sweep that sees its checks go green (ADR 0037).
     let mergeWhenGreen: MergeWhenGreenCoordinator
+    /// Remembers the merge series the user started (ADR 0041).
+    let mergeSeriesStore: MergeSeriesStore
+    /// Merges each series' pull requests one after another, one step per sweep (ADR 0041).
+    let mergeSeries: MergeSeriesCoordinator
     /// Owns the track-record backfill and the stored history (ADR 0027).
     ///
     /// Created inert, like the two coordinators below it: it reads nothing and asks GitHub
@@ -355,6 +359,25 @@ final class AppEnvironment {
                 }
             }
         )
+        let mergeSeriesStore = MergeSeriesStore(defaults: defaults)
+        self.mergeSeriesStore = mergeSeriesStore
+        let mergeSeries = MergeSeriesCoordinator(
+            settings: settings,
+            store: mergeSeriesStore,
+            notify: { payload in
+                // Detached, for the same reason as the notices above it.
+                Task { [notifications] in
+                    await notifications.present(payload)
+                }
+            }
+        )
+        self.mergeSeries = mergeSeries
+        // The draft-conflict notice has the same problem the alert has for a series' parked
+        // branch update (see `handle(_:)`), and it is posted before `handle(_:)` runs.
+        notifications.suppresses = { [weak mergeSeries] event in
+            guard case .draftConflict(let conflict) = event else { return false }
+            return mergeSeries?.handlesConflict(conflict) ?? false
+        }
         self.search = SearchIndexCoordinator(settings: settings)
         self.triage = TriageCoordinator(settings: settings)
         self.spotlight = SpotlightIndexer(settings: settings, index: spotlightIndex)
@@ -474,6 +497,9 @@ final class AppEnvironment {
         // account, and a decision made about one account's commit must not fire on another's
         // (ADR 0037).
         mergeWhenGreen.reset()
+        // And the merge series, for the same reason: each entry is a decision about one of the
+        // leaving account's pull requests (ADR 0041).
+        mergeSeries.reset()
         // Same argument for the digest's device state: the card names the leaving account's pull
         // requests, and "already delivered today" belongs to that account's morning.
         digest.reset()
@@ -578,10 +604,15 @@ final class AppEnvironment {
     }
 
     private func handle(_ event: SyncEvent) {
-        if case .draftConflict(let conflict) = event {
+        // A branch update a merge series queued has no draft to re-apply, and the series skips
+        // the entry and says why in its own chip and summary (ADR 0041) — so its parked row must
+        // not pop the draft-conflict alert as well.
+        if case .draftConflict(let conflict) = event, !mergeSeries.handlesConflict(conflict) {
             draftConflicts.raise(conflict)
         }
         confirmMerge(event)
+        followBranchUpdate(event)
+        advanceMergeSeries(event)
         // Fire-and-forget by construction: the coordinator spawns its own task and swallows
         // every failure, so a broken webhook cannot slow down or break the sync (ADR 0012).
         webhookCoordinator.handle(event, database: session?.database)
@@ -626,6 +657,35 @@ final class AppEnvironment {
         toasts.success(String(localized: "Merged \(slug)."))
         session?.noteMerged(sent.prID)
         scheduleSyncAfterMerge()
+    }
+
+    /// Sweeps soon after GitHub accepted an *Update branch* (ADR 0041).
+    ///
+    /// GitHub answers the update with a `202` and makes the merge commit a moment later, so the
+    /// new head only reaches Shepherd with a sweep, and a merge series waits on that head before
+    /// it can merge. Waiting for the scheduled sweep would add minutes per pull request to a
+    /// series; the merge's own coalesced sweep, a few seconds out, is the same need. No toast:
+    /// the update is a step of something the user started, not news of its own.
+    /// - Parameter event: The event the sync engine emitted.
+    private func followBranchUpdate(_ event: SyncEvent) {
+        guard case .mutationSent(let sent) = event, case .branchUpdated = sent.kind else { return }
+        scheduleSyncAfterMerge()
+    }
+
+    /// Tells the merge series what the drain just confirmed (ADR 0041).
+    ///
+    /// The fast path only: the coordinator also reads the same outcomes off the outbox on every
+    /// pass, so a missed event costs a sweep, not a stuck series. No pass is run from here — the
+    /// inbox rows at this moment still show the next pull request as it was before its base
+    /// moved, and the sweep ``confirmMerge(_:)`` schedules is what brings the fresh ones.
+    /// - Parameter event: The event the sync engine emitted.
+    private func advanceMergeSeries(_ event: SyncEvent) {
+        guard case .mutationSent(let sent) = event else { return }
+        switch sent.kind {
+        case .merged: mergeSeries.noteMerged(sent.prID)
+        case .branchUpdated: mergeSeries.noteBranchUpdated(sent.prID)
+        default: break
+        }
     }
 
     /// The sweep a confirmed merge asks for, coalesced.
@@ -674,12 +734,17 @@ final class AppEnvironment {
     private func considerAutoMerge(rows: [PullRequestSummary]) {
         let rulesArmed = settings.autoMerge.isEnabled
         let decisionsArmed = mergeWhenGreen.armedCount > 0
-        guard rulesArmed || decisionsArmed, let session else { return }
+        let seriesRunning = mergeSeries.hasRunningSeries
+        guard rulesArmed || decisionsArmed || seriesRunning, let session else { return }
         Task { [weak self] in
             // Read before either pass rather than per row: one query for the whole batch, and
             // each coordinator adds its own queued ids as it goes.
             var inFlight = await session.pullRequestIDsWithQueuedWrites()
             guard let self else { return }
+            // What the passes below queue, apart from what the outbox read already held. The
+            // series reads the outbox itself and must not count a failed or parked row as a write
+            // in flight (``MergeSeriesOutboxSnapshot/queuedIDs``), so it gets only these.
+            var queuedThisSweep = Set<String>()
 
             if rulesArmed {
                 // `announcesSuccess: false` — the pass announces itself once, as a notification,
@@ -715,6 +780,7 @@ final class AppEnvironment {
                     self.telemetry?.record(.autoMergeRuleFired(outcome: .merged))
                 }
                 inFlight.formUnion(queued.map(\.pullRequest.id))
+                queuedThisSweep.formUnion(queued.map(\.pullRequest.id))
             }
 
             if decisionsArmed {
@@ -728,7 +794,7 @@ final class AppEnvironment {
                     telemetry: self.telemetry,
                     mergeSource: .whenChecksPass
                 )
-                await self.mergeWhenGreen.run(
+                let result = await self.mergeWhenGreen.run(
                     rows: rows,
                     existingOutbox: inFlight,
                     write: { summary, method, deletesHeadBranch in
@@ -739,8 +805,110 @@ final class AppEnvironment {
                         )
                     }
                 )
+                queuedThisSweep.formUnion(result.queued.map(\.pullRequest.id))
+            }
+
+            // Third and last, so it sees what the two passes above queued as in flight — a pull
+            // request that satisfies a rule *and* sits in a series gets one merge, not two.
+            if seriesRunning {
+                await self.runMergeSeriesPass(rows: rows, alsoQueued: queuedThisSweep)
             }
         }
+    }
+
+    // MARK: - Merge series (ADR 0041)
+
+    /// Starts one merge series per repository and takes the first step at once.
+    ///
+    /// The first step runs on the rows the inbox holds now rather than waiting for a sweep: the
+    /// sheet was built from these rows a moment ago, and the first entry is often ready.
+    /// - Parameters:
+    ///   - groups: Each repository with its pull requests, in the order the sheet showed.
+    ///   - method: The merge method on the sheet.
+    ///   - deletesHeadBranch: The branch box on the sheet.
+    func startMergeSeries(
+        _ groups: [(repository: RepoRef, pullRequests: [PullRequestSummary])],
+        method: MergeMethod,
+        deletesHeadBranch: Bool
+    ) {
+        let started = mergeSeries.start(groups, method: method, deletesHeadBranch: deletesHeadBranch)
+        guard !started.isEmpty, let session else { return }
+        let rows = session.inboxRows
+        Task { [weak self] in
+            await self?.runMergeSeriesPass(rows: rows)
+        }
+    }
+
+    /// **Remove from series**, with the outbox read so a `merging` entry whose row is gone can
+    /// be taken out too.
+    /// - Parameter prID: The pull request's node id.
+    func removeFromMergeSeries(_ prID: String) {
+        Task { [weak self] in
+            let outbox = await self?.mergeSeriesOutbox()
+            self?.mergeSeries.remove(prID, outbox: outbox)
+        }
+    }
+
+    /// **Cancel** on a running series, with the outbox read for the same reason.
+    /// - Parameter id: The series id.
+    func cancelMergeSeries(_ id: String) {
+        Task { [weak self] in
+            let outbox = await self?.mergeSeriesOutbox()
+            self?.mergeSeries.cancel(seriesID: id, outbox: outbox)
+        }
+    }
+
+    /// The outbox and the confirmed merges, as a series reads them — for a pass and for Remove
+    /// and Cancel alike. `nil` without a session, and `nil` when the outbox cannot be read: an
+    /// unreadable outbox is not an empty one, so a pass is skipped and a `merging` or
+    /// `updatingBranch` entry is left to its outcome.
+    private func mergeSeriesOutbox() async -> MergeSeriesOutboxSnapshot? {
+        guard let session else { return nil }
+        guard let items = try? await session.database.allOutboxItems() else { return nil }
+        return MergeSeriesOutboxSnapshot(items: items, mergedIDs: session.mergedPullRequestIDs)
+    }
+
+    /// One pass of every running series, through the same funnel a click uses.
+    ///
+    /// `announcesSuccess: false`: the series has its chip and its one summary notice, and a
+    /// toast per step would be noise nobody is watching. A refusal still toasts. No webhook call
+    /// here, exactly like merge when checks pass (ADR 0037): the `pr.merged` delivery hangs off
+    /// the drain's `mutationSent`, which a series merge reaches like every other merge; only the
+    /// auto-merge rules announce a *queued* merge, because a rule is not a person's decision.
+    /// - Parameters:
+    ///   - rows: Every inbox row the local database holds.
+    ///   - alsoQueued: What earlier passes of the same sweep queued.
+    private func runMergeSeriesPass(rows: [PullRequestSummary], alsoQueued: Set<String> = []) async {
+        guard let session else { return }
+        let actions = PullRequestActions(
+            session: session,
+            toasts: toasts,
+            activity: activity,
+            announcesSuccess: false,
+            telemetry: telemetry,
+            mergeSource: .series
+        )
+        await mergeSeries.run(
+            rows: rows,
+            alsoQueued: alsoQueued,
+            readOutbox: { [weak self] in
+                await self?.mergeSeriesOutbox()
+            },
+            isMerged: { repository, number in
+                // "Could not ask" is `nil`, never `false`: the entry then waits for the next pass
+                // instead of being skipped over a network hiccup.
+                try? await session.github.isPullRequestMerged(repo: repository, number: number)
+            },
+            confirmedMerges: { session.mergedPullRequestIDs },
+            write: { request in
+                switch request {
+                case .merge(let summary, let method, let deletesHeadBranch):
+                    return await actions.merge(summary, method: method, deletesHeadBranch: deletesHeadBranch)
+                case .updateBranch(let summary):
+                    return await actions.updateBranch(summary)
+                }
+            }
+        )
     }
 
     // MARK: - The track record (ADR 0027)

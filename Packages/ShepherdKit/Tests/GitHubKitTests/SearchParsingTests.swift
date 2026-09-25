@@ -26,6 +26,7 @@ final class SearchParsingTests: XCTestCase {
         XCTAssertEqual(agentPR.baseRefName, "main")
         XCTAssertEqual(agentPR.reviewDecision, .reviewRequired)
         XCTAssertEqual(agentPR.mergeable, .mergeable)
+        XCTAssertEqual(agentPR.mergeStateStatus, .behind)
         XCTAssertEqual(agentPR.labels, ["agent", "refactor"])
         XCTAssertFalse(agentPR.isDraft)
         XCTAssertEqual(agentPR.checkRollup?.state, .failure)
@@ -65,6 +66,7 @@ final class SearchParsingTests: XCTestCase {
         XCTAssertNil(humanPR?.checkRollup)
         XCTAssertNil(humanPR?.reviewDecision)
         XCTAssertEqual(humanPR?.mergeable, .conflicting)
+        XCTAssertEqual(humanPR?.mergeStateStatus, .dirty)
     }
 
     func testRelationsComeFromTheFacetQueryAndAreUnioned() async throws {
@@ -145,5 +147,29 @@ final class SearchParsingTests: XCTestCase {
             XCTAssertEqual(messages.count, 1)
             XCTAssertTrue(messages[0].contains("Could not resolve"))
         }
+    }
+
+    func testTheSweepAsksForMergeStateStatusNextToMergeable() {
+        // The merge series (ADR 0041) reads `BEHIND` from every sweep; without the field in the
+        // query nothing would ever bring a branch up to date.
+        XCTAssertTrue(GraphQLDocuments.searchPullRequests.contains("mergeStateStatus"))
+    }
+
+    func testMergeStateStatusMapsEveryGitHubSpellingAndDropsUnknownValues() {
+        let graphQL: [String: MergeStateStatus] = [
+            "BEHIND": .behind, "BLOCKED": .blocked, "CLEAN": .clean, "DIRTY": .dirty,
+            "DRAFT": .draft, "HAS_HOOKS": .hasHooks, "UNSTABLE": .unstable, "UNKNOWN": .unknown,
+        ]
+        for (raw, expected) in graphQL {
+            XCTAssertEqual(ResponseMapping.mergeStateStatus(raw), expected, raw)
+            // REST's `mergeable_state` spells the same values in lower case.
+            XCTAssertEqual(ResponseMapping.mergeStateStatus(raw.lowercased()), expected, raw)
+        }
+        XCTAssertEqual(Set(graphQL.values), Set(MergeStateStatus.allCases))
+        XCTAssertNil(ResponseMapping.mergeStateStatus(nil))
+        XCTAssertNil(
+            ResponseMapping.mergeStateStatus("QUEUED_SOMEWHERE"),
+            "a value GitHub adds later reads as absent, never as a state the series acts on"
+        )
     }
 }

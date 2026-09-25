@@ -47,6 +47,10 @@ struct InboxScreen: View {
     /// Whether the bulk-triage confirmation is up, and what it is confirming (ADR 0015).
     @State private var isBulkSheetPresented = false
     @State private var bulkAction: BulkTriageAction = .approve
+    /// The merge-series plan the sheet confirms, frozen when it opened (ADR 0041). Frozen rather
+    /// than rebuilt like the bulk plan: the user drags an order on it, and a sweep landing
+    /// mid-drag must not reset that order.
+    @State private var mergeSeriesPlan: MergeSeriesPlan?
 
     /// Creates the screen for a session.
     /// - Parameters:
@@ -152,6 +156,19 @@ struct InboxScreen: View {
             // One indexed `SELECT COUNT(*)`, and the notice's third condition: an inbox that
             // already has a history must not be offered one.
             await environment.refreshTrackRecordCount()
+            #if DEBUG
+            // `SHEPHERD_DEMO_MERGE_SERIES=1`: tick a few rows and open the merge-series sheet, for
+            // `Scripts/demo-screenshots.sh`. After a moment, so the seeded rows have arrived.
+            if DemoMode.isActive, ProcessInfo.processInfo.environment["SHEPHERD_DEMO_MERGE_SERIES"] == "1" {
+                try? await Task.sleep(for: .seconds(1.5))
+                for id in ["PR_demo_schnaq_unlock_229", "PR_demo_schnaq_unlock_231", "PR_demo_schnaq_unlock_233",
+                           "PR_demo_schnaq_konduit_88", "PR_demo_schnaq_shepherd_409", "PR_demo_schnaq_shepherd_405",
+                           "PR_demo_schnaq_shepherd_412", "PR_demo_acme_api_619"] {
+                    model.toggleMark(id)
+                }
+                presentMergeSeries()
+            }
+            #endif
         }
         .onChange(of: environment.intelligence.configuration) { _, _ in
             model.intelligence = environment.intelligence
@@ -207,6 +224,14 @@ struct InboxScreen: View {
                     settings: environment.settings,
                     mergeWhenGreen: environment.mergeWhenGreen
                 )
+            }
+        }
+        .sheet(isPresented: mergeSeriesSheetBinding) {
+            if let plan = mergeSeriesPlan {
+                MergeSeriesSheet(plan: plan, settings: environment.settings) { [model] groups, method, deletes in
+                    environment.startMergeSeries(groups, method: method, deletesHeadBranch: deletes)
+                    model.clearMarks()
+                }
             }
         }
         .sheet(isPresented: $isBulkSheetPresented) {
@@ -444,6 +469,10 @@ struct InboxScreen: View {
                     Button(action.commandTitle) { presentBulkTriage(action) }
                         .disabled(!model.hasMarks)
                 }
+                // Beside the bulk actions but not one of them: a series is not *n* writes at
+                // once, it is an order (ADR 0041).
+                Button(MergeSeriesSheet.commandTitle) { presentMergeSeries() }
+                    .disabled(!model.hasMarks)
                 Divider()
                 Button(String(localized: "Clear the selection")) { model.clearMarks() }
                     .disabled(!model.hasMarks)
@@ -574,6 +603,8 @@ struct InboxScreen: View {
             markGreenAgentRows()
         case .bulkTriage(let bulk):
             presentBulkTriage(bulk)
+        case .mergeSeries:
+            presentMergeSeries()
         }
     }
 
@@ -609,6 +640,37 @@ struct InboxScreen: View {
             await model.loadMarkedDrafts()
             isBulkSheetPresented = true
         }
+    }
+
+    /// Opens the merge-series sheet for the ticked rows (ADR 0041).
+    ///
+    /// "Already on its way" is every source of a merge Shepherd knows about: a merge row waiting
+    /// in the outbox, one GitHub confirmed this session, an armed merge-when-green, and a pull
+    /// request that is already part of a running series — so no pull request gets two.
+    private func presentMergeSeries() {
+        guard model.hasMarks else {
+            environment.toasts.info(
+                String(localized: "Select pull requests first — press x, or ⌘-click rows.")
+            )
+            return
+        }
+        let rows = model.markedRows
+        var onTheirWay = environment.mergeSeries.pullRequestIDsInSeries
+        onTheirWay.formUnion(environment.session?.mergedPullRequestIDs ?? [])
+        for item in model.outboxItems where item.state == .pending || item.state == .sending {
+            if case .merge = item.action { onTheirWay.insert(item.prID) }
+        }
+        for row in rows where environment.mergeWhenGreen.request(forPullRequestID: row.id) != nil {
+            onTheirWay.insert(row.id)
+        }
+        mergeSeriesPlan = MergeSeriesPlan.make(pullRequests: rows, mergesOnTheirWay: onTheirWay)
+    }
+
+    private var mergeSeriesSheetBinding: Binding<Bool> {
+        Binding(
+            get: { mergeSeriesPlan != nil },
+            set: { if !$0 { mergeSeriesPlan = nil } }
+        )
     }
 
     private func queueReview(_ verdict: ReviewVerdict) {

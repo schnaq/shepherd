@@ -95,7 +95,13 @@ struct ReviewScreen: View {
                 onMerge: { model.isMergeSheetPresented = true },
                 onReview: { model.isSubmitSheetPresented = true },
                 onDelegate: delegate,
-                onRetry: { Task { await session.retryFailedWrites(for: prID) } }
+                onRetry: { Task { await session.retryFailedWrites(for: prID) } },
+                onRemoveFromSeries: environment.mergeSeries.canRemove(
+                    prID,
+                    hasUnsentWrite: outboxItems.contains { $0.state == .pending || $0.state == .sending }
+                )
+                    ? { environment.removeFromMergeSeries(prID) }
+                    : nil
             )
         }
         // Here rather than on the header it used to hang off: a toolbar item is not a view with
@@ -394,7 +400,8 @@ struct ReviewScreen: View {
             items: outboxItems,
             for: prID,
             isMerging: environment.activity.isRunning(prID, .merge),
-            wasMerged: session.mergedPullRequestIDs.contains(prID)
+            wasMerged: session.mergedPullRequestIDs.contains(prID),
+            series: environment.mergeSeries.chip(for: prID, row: model.summary)
         )
     }
 
@@ -464,7 +471,7 @@ struct ReviewScreen: View {
             delegate()
         case .groupBy:
             break
-        case .toggleMark, .markGreenAgentPullRequests, .bulkTriage:
+        case .toggleMark, .markGreenAgentPullRequests, .bulkTriage, .mergeSeries:
             // Bulk triage acts on the inbox's selection, which does not exist here (ADR 0015).
             // The palette hides these commands while the review screen is up; a stray `x`
             // arriving from the key handler is simply ignored.
@@ -622,6 +629,9 @@ struct ReviewToolbar: ToolbarContent {
     var onDelegate: () -> Void
     /// Sends this pull request's failed writes again.
     var onRetry: () -> Void = {}
+    /// Takes this pull request out of its merge series, or `nil` when it is in none or its merge
+    /// is already queued (ADR 0041).
+    var onRemoveFromSeries: (() -> Void)?
 
     var body: some ToolbarContent {
         // The navigation slot, leading, where macOS puts "back". A real button with a word on
@@ -649,6 +659,15 @@ struct ReviewToolbar: ToolbarContent {
             ToolbarItem(placement: .primaryAction) {
                 Button(String(localized: "Retry"), action: onRetry)
                     .help(String(localized: "Send the failed changes to GitHub again"))
+            }
+        }
+
+        // The merge-when-green arm is cancelled from the merge sheet; a series entry is taken
+        // out here, next to the chip that says it is in one, for the same reason Retry is here.
+        if let onRemoveFromSeries {
+            ToolbarItem(placement: .primaryAction) {
+                Button(String(localized: "Remove from series"), action: onRemoveFromSeries)
+                    .help(String(localized: "Take this pull request out of its merge series. The series goes on with the next one."))
             }
         }
 

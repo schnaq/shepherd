@@ -269,7 +269,7 @@ final class WebhookCoordinator {
                     occurredAt: sent.sentAt
                 )
             case .replyPosted, .threadResolved, .threadUnresolved, .markedReadyForReview,
-                 .issueCommentAdded, .issueLabelAdded, .issueAssigneeAdded, .issueReopened,
+                 .branchUpdated, .issueCommentAdded, .issueLabelAdded, .issueAssigneeAdded, .issueReopened,
                  .pullRequestCommentAdded, .pullRequestClosed:
                 // Sent, and deliberately not events this version promises. A comment, a label,
                 // an assignee and a reopen are the issue-side twins of the four pull-request
