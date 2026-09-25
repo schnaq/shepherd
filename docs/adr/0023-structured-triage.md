@@ -202,3 +202,22 @@ does not silently re-enable a classifier the user turned off.
 - Adding a `kind` or a risk level is a case in the twin, a case in the `@Generable` mirror, a token
   spelling and a catalog row. Adding a *reader* that is not a sort or a filter needs a new ADR, and
   it would have to overturn this one's central claim rather than quietly widen it.
+
+## Amendment 2026-09-25: a failure is remembered, the open pull request goes first
+
+"Retried on the next pass" turned out to mean *on every inbox write*. That is every sweep and
+every detail save, and a refusal refuses again every time. Two things now bound it:
+
+- **A failure is remembered per pull request**, keyed by the document hash and the model.
+  - A content failure (guardrail refusal, digest or context too large, tools unsupported) is not
+    asked again until the text or the model changes.
+  - A transient failure (model unavailable, HTTP, a malformed response) is asked again after five
+    minutes.
+- **A pull request whose detail has just loaded goes to the front of the waiting queue**, because it
+  is the one on screen. A pass that is already running is not interrupted.
+
+The trigger for most repeats was not the model at all. The inbox sweep mapped the author without
+commit trailers, while the detail fetch mapped it with them. So a Claude pull request on an ordinary
+branch changed between *human* and *Claude Code* every two minutes, changing its document hash, and
+therefore its verdict, each time. A trailer-detected agent now survives a sweep that sees no agent
+of its own (`PullRequestRecord.keepTrailerAgent(from:)`).
