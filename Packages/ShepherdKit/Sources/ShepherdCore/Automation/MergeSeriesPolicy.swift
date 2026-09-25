@@ -82,9 +82,11 @@ public enum MergeSeriesPolicy {
     /// 4. **Updating branch or merging:** wait for the drain's confirmation.
     /// 5. **Head moved** off the pin: skipped.
     /// 6. **Draft**, then **conflicting**, then **changes requested**: skipped.
-    /// 7. **Checks:** failed or none at all → skipped; running → wait.
-    /// 8. **Behind its base** (`mergeStateStatus == .behind`): queue the branch update.
-    /// 9. **Mergeability unknown:** wait.
+    /// 7. **Checks failed** or none at all: skipped.
+    /// 8. **Behind its base** (`mergeStateStatus == .behind`): queue the branch update — even
+    ///    while checks are still running. The update gives the pull request a new head whose
+    ///    checks run anyway, so waiting for the old head's checks first would run CI twice.
+    /// 9. **Checks running** or **mergeability unknown:** wait.
     /// 10. **A write for it is still in the outbox:** wait.
     /// 11. Otherwise: queue the merge.
     ///
@@ -212,7 +214,8 @@ public enum MergeSeriesPolicy {
 
         // 5–11, with merge-when-green's own decision pinned to the entry's head. Its order is
         // head → draft → conflicting → checks → mergeability → outbox; a series slots *changes
-        // requested* in after conflicting and *behind* in once the checks are known green.
+        // requested* in after conflicting and *behind* in once the checks are known not to have
+        // failed — before "checks running", because an update restarts them anyway.
         let decision = MergeWhenGreenPolicy.decide(
             request: MergeWhenGreenRequest(
                 prID: entry.prID,
@@ -237,7 +240,11 @@ public enum MergeSeriesPolicy {
         case .abandon(.checksFailed): return .skip(.checksFailed)
         case .abandon(.noChecks): return .skip(.noChecks)
         case .abandon(.headMoved), .abandon(.draft), .abandon(.conflicting): return .wait // handled above
-        case .wait(.checksPending): return .wait
+        case .wait(.checksPending):
+            // Behind and still building: update now. The old head's checks are about a commit
+            // that will never be merged, and waiting for them only to start a second run on the
+            // updated head would double the wait for every pull request in the series.
+            return row.mergeStateStatus == .behind ? .updateBranch : .wait
         case .wait(.mergeabilityUnknown), .wait(.writeInFlight), .merge:
             // Everything below here has green checks on the pinned head.
             if row.mergeStateStatus == .behind { return .updateBranch }

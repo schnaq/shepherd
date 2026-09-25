@@ -165,13 +165,26 @@ final class MergeSeriesPolicyTests: XCTestCase {
         XCTAssertEqual(result.series.entry(for: "A")?.updateQueuedAt, clock)
     }
 
-    func testABehindEntryWithRunningChecksWaitsForTheChecksFirst() {
-        // The task's fixed order: checks are read before BEHIND (ADR 0041 lists the update as
-        // step 1; see the report's open questions).
+    func testABehindEntryWithRunningChecksIsUpdatedWithoutWaitingForThem() {
+        // The update restarts the checks on a new head anyway; waiting for the old head's run
+        // first would run CI twice for every entry that fell behind.
         let row = green(
             "A",
             checkRollup: CheckRollup(state: .pending, total: 1, pendingCount: 1),
             mergeStateStatus: .behind
+        )
+        let result = step(series([entry("A")]), rows: [row])
+        guard case .updateBranch(_, "head-A") = result.action else {
+            return XCTFail("expected an update, got \(result.action)")
+        }
+        XCTAssertEqual(state(result, "A"), .updatingBranch(from: "head-A"))
+    }
+
+    func testARunningEntryThatIsNotBehindStillWaitsForItsChecks() {
+        let row = green(
+            "A",
+            checkRollup: CheckRollup(state: .pending, total: 1, pendingCount: 1),
+            mergeStateStatus: .blocked
         )
         XCTAssertEqual(step(series([entry("A")]), rows: [row]).action, .none)
     }
