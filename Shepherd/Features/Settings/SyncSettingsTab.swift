@@ -63,6 +63,8 @@ struct SyncSettingsTab: View {
                 outboxSection(session)
             }
 
+            mergeSeriesSection
+
             watchedRepositoriesSection
 
             hiddenPullRequestsSection
@@ -101,6 +103,42 @@ struct SyncSettingsTab: View {
             failedOutboxGroup(session)
         }
         .task(id: session.failedOutboxCount) { await reloadFailedRows(session) }
+    }
+
+    // MARK: - Merge series
+
+    /// The running merge series, each with Cancel (ADR 0041). Omitted when none runs, like the
+    /// hidden pull requests below: an empty list would advertise a feature from a settings pane.
+    @ViewBuilder
+    private var mergeSeriesSection: some View {
+        let running = environment.mergeSeries.runningSeries
+        if !running.isEmpty {
+            Section {
+                ForEach(running) { series in
+                    LabeledContent {
+                        Button(String(localized: "Cancel")) {
+                            environment.mergeSeries.cancel(seriesID: series.id)
+                        }
+                        .help(String(localized: "Stop the series. A merge already queued still goes out."))
+                    } label: {
+                        Text(verbatim: series.repository.fullName)
+                            .font(Theme.mono(.callout))
+                        Text(Self.progress(of: series))
+                    }
+                }
+            } header: {
+                SettingsSectionHeader(String(localized: "Merge series"), info: String(
+                    localized: "Started with “Merge one after another…” on ticked pull requests. Shepherd merges each repository's list in order, waits for the checks, brings a branch that fell behind up to date, and skips what cannot be merged. Series live on this Mac only."
+                ))
+            }
+        }
+    }
+
+    /// "2 of 5 merged · #42 Bump the client", for one series' row.
+    static func progress(of series: MergeSeries) -> String {
+        let merged = String(localized: "\(series.mergedCount) of \(series.entries.count) merged")
+        guard let active = series.activeEntry else { return merged }
+        return "\(merged) · #\(active.number) \(active.title)"
     }
 
     // MARK: - Repositories swept whole

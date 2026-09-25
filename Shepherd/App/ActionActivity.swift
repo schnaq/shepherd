@@ -35,6 +35,8 @@ final class ActionActivity {
         case review
         /// A merge.
         case merge
+        /// A branch update a merge series queued (ADR 0041).
+        case updateBranch
         /// A reply to a review comment, and the inline composer that writes one.
         case reply
         /// A review thread resolved or reopened. Keyed by the **thread's** id, not the pull

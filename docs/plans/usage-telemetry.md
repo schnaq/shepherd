@@ -119,7 +119,7 @@ are bucketed because "37 repositories" identifies better than "21+".
 |---|---|---|
 | `app_active_day` | `repo_count`, `inbox_size` (buckets `1-2 / 3-5 / 6-20 / 21+`), `diff_renderer` (`monaco / native`), `intelligence` (`none / on_device / cloud / both`), flags `webhooks`, `settings_sync`, `auto_merge`, `auto_delegation`, `digest`, `menu_bar`, `diagnostics` | Daily active installations (§ 1.1), version spread, **which features are enabled at all** |
 | `review_submitted` | `kind` (`approve / request_changes / comment`), `inline_comments` (`0 / 1-3 / 4-10 / 11+`), `used_template`, `used_saved_reply` | Whether reviewing happens or waving-through does |
-| `pull_request_merged` | `method` (`merge / squash / rebase`), `source` (`detail / bulk / auto_rule / when_checks_pass`) | How merging happens |
+| `pull_request_merged` | `method` (`merge / squash / rebase`), `source` (`detail / bulk / auto_rule / when_checks_pass / series`) | How merging happens |
 | `focus_session_completed` | `queue_size` (bucket), `completed` | Whether the headline feature carries |
 | `bulk_triage_performed` | `action` (`approve / merge`), `size` (bucket) | |
 | `search_used` | `kind` (`semantic / reference`), `opened_result` | Whether ⌘K earns the embedding work |

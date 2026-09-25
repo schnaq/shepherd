@@ -18280,6 +18280,576 @@
           }
         }
       }
+    },
+    "%@: %lld merged": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: %lld gemergt"
+          }
+        }
+      }
+    },
+    "%@: %lld merged, %lld skipped": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: %lld gemergt, %lld übersprungen"
+          }
+        }
+      }
+    },
+    "%lld of %lld merged": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %lld gemergt"
+          }
+        }
+      }
+    },
+    "A merge is already queued, armed or part of another series.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Merge ist schon eingereiht, vorgemerkt oder Teil einer anderen Serie."
+          }
+        }
+      }
+    },
+    "A reviewer asked for changes. A series will not overrule that.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Reviewer hat Änderungen angefordert. Eine Serie setzt sich darüber nicht hinweg."
+          }
+        }
+      }
+    },
+    "Branch update held back — %@ changed since the series started.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Branch-Update zurückgehalten – %@ hat sich seit dem Start der Serie geändert."
+          }
+        }
+      }
+    },
+    "Branch update queued for %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Branch-Update für %@ eingereiht."
+          }
+        }
+      }
+    },
+    "Could not queue the branch update": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Branch-Update konnte nicht eingereiht werden"
+          }
+        }
+      }
+    },
+    "Could not update the branch of %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Branch von %@ konnte nicht aktualisiert werden"
+          }
+        }
+      }
+    },
+    "Drag to change the order. Smallest first causes the fewest conflicts.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zieh die Einträge, um die Reihenfolge zu ändern. Die kleinsten zuerst verursachen die wenigsten Konflikte."
+          }
+        }
+      }
+    },
+    "Excluded": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausgeschlossen"
+          }
+        }
+      }
+    },
+    "Merge one after another…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nacheinander mergen…"
+          }
+        }
+      }
+    },
+    "Merge series": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge-Serien"
+          }
+        }
+      }
+    },
+    "Nothing asks again after Start. A new push, a failed check or a conflict skips that pull request.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nach dem Start fragt nichts mehr nach. Ein neuer Push, ein fehlgeschlagener Check oder ein Konflikt überspringt den jeweiligen Pull Request."
+          }
+        }
+      }
+    },
+    "Part of a merge series. Shepherd asked GitHub to bring the branch up to date with its base.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teil einer Merge-Serie. Shepherd hat GitHub gebeten, den Branch auf den Stand seiner Basis zu bringen."
+          }
+        }
+      }
+    },
+    "Part of a merge series. Shepherd merges it once its checks pass.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teil einer Merge-Serie. Shepherd mergt ihn, sobald seine Checks grün sind."
+          }
+        }
+      }
+    },
+    "Part of a merge series. Shepherd merges it when its turn comes.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teil einer Merge-Serie. Shepherd mergt ihn, wenn er an der Reihe ist."
+          }
+        }
+      }
+    },
+    "Part of a merge series. The merge is queued.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teil einer Merge-Serie. Der Merge ist eingereiht."
+          }
+        }
+      }
+    },
+    "Remove from series": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aus der Serie nehmen"
+          }
+        }
+      }
+    },
+    "Removes each head branch once its merge has landed.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Löscht jeden Head-Branch, sobald sein Merge durch ist."
+          }
+        }
+      }
+    },
+    "Series %lld/%lld · merging": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serie %lld/%lld · wird gemergt"
+          }
+        }
+      }
+    },
+    "Series %lld/%lld · skipped: %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serie %lld/%lld · übersprungen: %@"
+          }
+        }
+      }
+    },
+    "Series %lld/%lld · updating branch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serie %lld/%lld · Branch wird aktualisiert"
+          }
+        }
+      }
+    },
+    "Series %lld/%lld · waiting": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serie %lld/%lld · wartet"
+          }
+        }
+      }
+    },
+    "Series %lld/%lld · waiting for checks": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serie %lld/%lld · wartet auf Checks"
+          }
+        }
+      }
+    },
+    "Shepherd merges these one at a time. Before each merge it waits for the checks, and brings a branch that fell behind up to date first. Whatever cannot be merged is skipped, and the series goes on with the next.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd mergt diese nacheinander. Vor jedem Merge wartet es auf die Checks und bringt einen zurückgefallenen Branch zuerst auf den neuesten Stand. Was sich nicht mergen lässt, wird übersprungen, und die Serie macht mit dem nächsten weiter."
+          }
+        }
+      }
+    },
+    "Skipped: GitHub did not bring the branch up to date.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Übersprungen: GitHub hat den Branch nicht auf den neuesten Stand gebracht."
+          }
+        }
+      }
+    },
+    "Skipped: GitHub refused the merge.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Übersprungen: GitHub hat den Merge abgelehnt."
+          }
+        }
+      }
+    },
+    "Skipped: GitHub reports conflicts with the base branch.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Übersprungen: GitHub meldet Konflikte mit dem Basis-Branch."
+          }
+        }
+      }
+    },
+    "Skipped: a change for this pull request could not be sent to GitHub.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Übersprungen: Eine Änderung an diesem Pull Request konnte nicht an GitHub gesendet werden."
+          }
+        }
+      }
+    },
+    "Skipped: a check failed on the commit the series was about to merge.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Übersprungen: Ein Check ist auf dem Commit fehlgeschlagen, den die Serie mergen wollte."
+          }
+        }
+      }
+    },
+    "Skipped: a reviewer asked for changes.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Übersprungen: Ein Reviewer hat Änderungen angefordert."
+          }
+        }
+      }
+    },
+    "Skipped: new commits arrived that nobody reviewed in this series.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Übersprungen: Es kamen neue Commits dazu, die in dieser Serie niemand gesehen hat."
+          }
+        }
+      }
+    },
+    "Skipped: the commit has no checks to wait for.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Übersprungen: Der Commit hat keine Checks, auf die gewartet werden könnte."
+          }
+        }
+      }
+    },
+    "Skipped: the pull request left the inbox without being merged.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Übersprungen: Der Pull Request hat die Inbox verlassen, ohne gemergt zu werden."
+          }
+        }
+      }
+    },
+    "Skipped: the pull request was turned back into a draft.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Übersprungen: Der Pull Request wurde wieder zum Draft."
+          }
+        }
+      }
+    },
+    "Started with “Merge one after another…” on ticked pull requests. Shepherd merges each repository's list in order, waits for the checks, brings a branch that fell behind up to date, and skips what cannot be merged. Series live on this Mac only.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gestartet mit „Nacheinander mergen…“ auf markierten Pull Requests. Shepherd mergt die Liste jedes Repositorys der Reihe nach, wartet auf die Checks, bringt einen zurückgefallenen Branch auf den neuesten Stand und überspringt, was sich nicht mergen lässt. Serien gibt es nur auf diesem Mac."
+          }
+        }
+      }
+    },
+    "Stop the series. A merge already queued still goes out.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beendet die Serie. Ein bereits eingereihter Merge geht trotzdem raus."
+          }
+        }
+      }
+    },
+    "Take this pull request out of its merge series. The series goes on with the next one.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nimmt diesen Pull Request aus seiner Merge-Serie. Die Serie macht mit dem nächsten weiter."
+          }
+        }
+      }
+    },
+    "Taken out of the series.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aus der Serie genommen."
+          }
+        }
+      }
+    },
+    "The merge series is done. Every pull request in it was merged.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Merge-Serie ist fertig. Jeder Pull Request darin wurde gemergt."
+          }
+        }
+      }
+    },
+    "Updated the branch of %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Branch von %@ aktualisiert."
+          }
+        }
+      }
+    },
+    "Your own pull request is not merged by a series. Merge it yourself.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deinen eigenen Pull Request mergt keine Serie. Merge ihn selbst."
+          }
+        }
+      }
+    },
+    "a write failed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schreiben fehlgeschlagen"
+          }
+        }
+      }
+    },
+    "and %lld more": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "und %lld weitere"
+          }
+        }
+      }
+    },
+    "changes requested": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Änderungen angefordert"
+          }
+        }
+      }
+    },
+    "checks failed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checks fehlgeschlagen"
+          }
+        }
+      }
+    },
+    "checks failing": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checks fehlgeschlagen"
+          }
+        }
+      }
+    },
+    "conflicts": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konflikte"
+          }
+        }
+      }
+    },
+    "draft": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Draft"
+          }
+        }
+      }
+    },
+    "left the inbox": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inbox verlassen"
+          }
+        }
+      }
+    },
+    "merge already on its way": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge schon unterwegs"
+          }
+        }
+      }
+    },
+    "merge refused": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge abgelehnt"
+          }
+        }
+      }
+    },
+    "new commits": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "neue Commits"
+          }
+        }
+      }
+    },
+    "removed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "herausgenommen"
+          }
+        }
+      }
+    },
+    "update refused": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update abgelehnt"
+          }
+        }
+      }
+    },
+    "your own": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "eigener"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -353,6 +353,52 @@ final class NotificationManager {
         )
     }
 
+    // MARK: - Merge series (ADR 0041)
+
+    /// How many skipped entries the summary notice names one by one; the rest are counted.
+    static let mergeSeriesSkipsNamed = 3
+
+    /// The one notice a finished merge series posts: "schnaq/shepherd: 4 merged, 1 skipped", and
+    /// the first few skips with their reason.
+    ///
+    /// One per series rather than one per merge: every merge already toasts when it lands
+    /// (``AppEnvironment``'s confirmation), and what the user is waiting for is "done, and here
+    /// is what did not make it". No notice for a series the user cancelled before anything
+    /// happened — they know, they pressed Cancel.
+    /// - Parameter series: The finished series.
+    /// - Returns: The notice, or `nil` when every entry was taken out by the user.
+    static func payload(forFinishedMergeSeries series: MergeSeries) -> NotificationPayload? {
+        let skipped = series.entries.compactMap { entry in
+            entry.state.skipReason.map { (entry: entry, reason: $0) }
+        }
+        guard !series.entries.isEmpty,
+              !skipped.allSatisfy({ $0.reason == .removedByUser }) || series.mergedCount > 0
+        else { return nil }
+        let repository = series.repository.fullName
+        let mergedCount = series.mergedCount
+        // The participles do not inflect for number in either language, so one key per shape is
+        // plural-safe without a plural variation.
+        let title = skipped.isEmpty
+            ? String(localized: "\(repository): \(mergedCount) merged")
+            : String(localized: "\(repository): \(mergedCount) merged, \(skipped.count) skipped")
+        var lines = skipped.prefix(mergeSeriesSkipsNamed).map { skip in
+            "#\(skip.entry.number) \(skip.entry.title) — \(skip.reason.title)"
+        }
+        let remainingSkips = skipped.count - mergeSeriesSkipsNamed
+        if remainingSkips > 0 {
+            lines.append(String(localized: "and \(remainingSkips) more"))
+        }
+        let body = lines.isEmpty
+            ? String(localized: "The merge series is done. Every pull request in it was merged.")
+            : lines.joined(separator: "\n")
+        return NotificationPayload(
+            identifier: "merge-series-finished-\(series.id)",
+            title: title,
+            body: body,
+            pullRequestIDs: series.entries.map(\.prID)
+        )
+    }
+
     // MARK: - Morning digest
 
     /// The notice the morning digest posts, or `nil` when there is nothing to report.

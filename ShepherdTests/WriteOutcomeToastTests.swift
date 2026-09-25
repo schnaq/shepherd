@@ -39,6 +39,7 @@ final class WriteOutcomeToastTests: XCTestCase {
             .comment,
             .close(withComment: true),
             .close(withComment: false),
+            .updateBranch,
         ]
     }
 

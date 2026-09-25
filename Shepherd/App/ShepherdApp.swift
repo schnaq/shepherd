@@ -249,6 +249,11 @@ struct ShepherdCommands: Commands {
                 }
                 .disabled(!isTriageAvailable)
             }
+
+            Button(MergeSeriesSheet.commandTitle) {
+                environment.request(.mergeSeries)
+            }
+            .disabled(!isTriageAvailable)
         }
 
         CommandGroup(after: .toolbar) {

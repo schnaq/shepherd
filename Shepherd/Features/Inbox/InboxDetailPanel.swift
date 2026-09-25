@@ -358,6 +358,37 @@ struct InboxDetailPanel: View {
         if environment.mergeWhenGreen.isArmed(row) {
             mergeWhenGreenStatus
         }
+        if let chip = environment.mergeSeries.chip(for: row.id, row: row) {
+            mergeSeriesStatus(chip, row: row)
+        }
+    }
+
+    /// Where the pull request stands in its merge series, and the way out of it (ADR 0041).
+    ///
+    /// Beside the merge-when-green line for that line's reason: a series is a decision that
+    /// has been made and has not reached the outbox yet, so the queue status above cannot say
+    /// it. **Remove from series** lives here because this is the surface the reviewer is on when
+    /// they change their mind about one pull request; the whole series is cancelled in
+    /// Settings → Sync.
+    private func mergeSeriesStatus(_ chip: MergeSeriesChip, row: PullRequestSummary) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "list.number")
+                .font(Theme.type(.caption2))
+                .foregroundStyle(chip.color)
+            Text(chip.text)
+                .font(Theme.type(.caption))
+                .foregroundStyle(Theme.textSecondary)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            if environment.mergeSeries.canRemove(row.id) {
+                Button(String(localized: "Remove from series")) {
+                    environment.mergeSeries.remove(row.id)
+                }
+                .buttonStyle(.link)
+                .font(Theme.type(.caption))
+            }
+        }
+        .help(chip.help)
     }
 
     /// The one line about a merge that is waiting for this commit's checks (ADR 0037).

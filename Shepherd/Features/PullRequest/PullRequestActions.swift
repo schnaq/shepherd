@@ -260,19 +260,24 @@ struct PullRequestActions {
     ///     (ADR 0005's 2026-09-05 amendment). Defaults to `false`, which is what the automatic
     ///     rules get: ADR 0018 lets a rule *record* a decision a human made, and a deletion
     ///     nobody ticked would be a wider decision than the approval it stands on.
+    /// - Returns: Whether a row reached the outbox. `false` when the merge was refused before
+    ///   anything was written — a blocker, a merge already on its way, a second press while the
+    ///   first runs, a local write error. Only a merge series reads it (ADR 0041): an entry
+    ///   waiting for a row that was never written would wait for ever.
+    @discardableResult
     func merge(
         _ summary: PullRequestSummary,
         method: MergeMethod,
         deletesHeadBranch: Bool = false
-    ) async {
-        await activity.run(summary.id, .merge) {
+    ) async -> Bool {
+        await activity.run(summary.id, .merge) { () async -> Bool in
             // Same refusal, before the row is written rather than after the drain has been told
             // "Pull Request is still a draft" — the outbox was carrying exactly that failure.
             if let blocker = summary.mergeBlocker {
                 toasts.show(
                     Toast(message: Self.blockerMessage(blocker, slug: summary.slug), kind: .warning)
                 )
-                return
+                return false
             }
             // One merge per pull request. The sheet, the `m` key, the inbox's bulk action and the
             // automatic rules all end here, so this is the one place a second merge behind a
@@ -285,7 +290,7 @@ struct PullRequestActions {
                         kind: .info
                     )
                 )
-                return
+                return false
             }
             do {
                 let outcome = try await enqueue(
@@ -301,10 +306,44 @@ struct PullRequestActions {
                 telemetry?.record(
                     .pullRequestMerged(method: Self.telemetryMethod(method), source: mergeSource)
                 )
+                return true
             } catch {
                 toasts.failure(error, context: String(localized: "Could not queue the merge"))
+                return false
             }
-        }
+        } ?? false
+    }
+
+    /// Brings a pull request's branch up to date with its base: GitHub's *Update branch*
+    /// (ADR 0041).
+    ///
+    /// Only a merge series calls this, for a pull request that fell behind while the one before
+    /// it was merged. Pinned to the summary's head exactly like a merge — the drain sends it as
+    /// `expected_head_sha`, and a head that moved in between parks the row instead of updating a
+    /// commit nobody saw. No success toast whatever ``announcesSuccess`` says: the update is a
+    /// step of the series, whose chip shows it; a refusal still toasts, like every refusal.
+    /// - Parameter summary: The pull request, at the head the series pinned.
+    /// - Returns: Whether a row reached the outbox.
+    @discardableResult
+    func updateBranch(_ summary: PullRequestSummary) async -> Bool {
+        await activity.run(summary.id, .updateBranch) { () async -> Bool in
+            do {
+                let outcome = try await enqueue(
+                    .updateBranch(expectedHeadOid: summary.headRefOid),
+                    on: summary
+                )
+                switch outcome {
+                case .sent, .queued:
+                    break
+                case .parked, .failed:
+                    announce(outcome, of: .updateBranch, on: summary)
+                }
+                return true
+            } catch {
+                toasts.failure(error, context: String(localized: "Could not queue the branch update"))
+                return false
+            }
+        } ?? false
     }
 
     // MARK: - Bulk triage (ADR 0015)
@@ -538,6 +577,8 @@ struct PullRequestActions {
         case comment
         /// Closing the pull request, with or without a comment.
         case close(withComment: Bool)
+        /// Bringing the head branch up to date with its base (a merge series' step, ADR 0041).
+        case updateBranch
     }
 
     /// Why this verdict would be refused on this pull request, or `nil` when it would not.
@@ -674,6 +715,8 @@ struct PullRequestActions {
             return withComment
                 ? String(localized: "Commented and closed \(slug).")
                 : String(localized: "Closed \(slug).")
+        case .updateBranch:
+            return String(localized: "Updated the branch of \(slug).")
         }
     }
 
@@ -706,6 +749,8 @@ struct PullRequestActions {
             // is the part that changes what the pull request *is*, and the comment goes with it
             // in the same row either way.
             return String(localized: "Close queued for \(slug).")
+        case .updateBranch:
+            return String(localized: "Branch update queued for \(slug).")
         }
     }
 
@@ -720,6 +765,10 @@ struct PullRequestActions {
             return String(
                 localized: "Merge held back — \(slug) changed since you started. See the alert."
             )
+        case .updateBranch:
+            // No alert to point at: a series handles its own parked update and skips the entry
+            // (``MergeSeriesCoordinator/handlesConflict(_:)``).
+            return String(localized: "Branch update held back — \(slug) changed since the series started.")
         case .comment, .close:
             // Nothing parks these two either: neither is pinned to the head commit, and a
             // comment says what it says however the pull request has moved since.
@@ -750,6 +799,8 @@ struct PullRequestActions {
             return String(localized: "Could not comment on \(slug)")
         case .close:
             return String(localized: "Could not close \(slug)")
+        case .updateBranch:
+            return String(localized: "Could not update the branch of \(slug)")
         }
     }
 
