@@ -697,6 +697,8 @@ final class WebhookTests: XCTestCase {
             .mutationSent(mutation(.threadResolved)),
             .mutationSent(mutation(.threadUnresolved)),
             .mutationSent(mutation(.markedReadyForReview)),
+            // A step of a merge series (ADR 0041); the merge that follows is the event.
+            .mutationSent(mutation(.branchUpdated)),
         ]
         for event in ignored {
             XCTAssertNil(WebhookCoordinator.plan(for: event), "this event must not be a webhook")
