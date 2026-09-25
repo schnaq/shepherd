@@ -303,6 +303,32 @@ final class MergeSeriesPolicyTests: XCTestCase {
         XCTAssertEqual(state(result, "A"), .updatingBranch(from: "new"))
     }
 
+    func testAFreshlyUpdatedHeadWithoutChecksYetWaitsForThem() {
+        // GitHub has made the update's commit but not registered its check suites yet.
+        let result = step(
+            series([entry("A", state: .branchUpdated(from: "head-A"), updateQueuedAt: clock)]),
+            rows: [green("A", head: "new", checkRollup: nil)],
+            at: clock.addingTimeInterval(5)
+        )
+        XCTAssertEqual(result.action, .none)
+        XCTAssertEqual(state(result, "A"), .pending)
+        XCTAssertEqual(result.series.entry(for: "A")?.pinnedHeadOid, "new", "re-pinned all the same")
+    }
+
+    func testAnUpdatedHeadThatNeverGetsChecksIsSkippedAfterTheGracePeriod() {
+        let result = step(
+            series([entry("A", head: "new", updateQueuedAt: clock)]),
+            rows: [green("A", head: "new", checkRollup: CheckRollup(state: .none, total: 0))],
+            at: clock.addingTimeInterval(grace)
+        )
+        XCTAssertEqual(state(result, "A"), .skipped(.noChecks))
+    }
+
+    func testAHeadWithoutChecksThatShepherdNeverUpdatedIsSkippedAtOnce() {
+        let result = step(series([entry("A")]), rows: [green("A", checkRollup: nil)])
+        XCTAssertEqual(state(result, "A"), .skipped(.noChecks))
+    }
+
     func testTheFullUpdateCycleEndsInAMergeOnTheUpdatedHead() {
         var current = series([entry("A")])
         // Sweep 1: behind → update.

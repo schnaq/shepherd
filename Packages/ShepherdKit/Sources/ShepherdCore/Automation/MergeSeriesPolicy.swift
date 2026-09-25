@@ -82,7 +82,9 @@ public enum MergeSeriesPolicy {
     /// 4. **Updating branch or merging:** wait for the drain's confirmation.
     /// 5. **Head moved** off the pin: skipped.
     /// 6. **Draft**, then **conflicting**, then **changes requested**: skipped.
-    /// 7. **Checks failed** or none at all: skipped.
+    /// 7. **Checks failed** or none at all: skipped. "None at all" on a head Shepherd's own
+    ///    update produced waits instead, up to `updateQueuedAt + gracePeriod`: GitHub has often
+    ///    not registered any check suite on a commit that is seconds old.
     /// 8. **Behind its base** (`mergeStateStatus == .behind`): queue the branch update — even
     ///    while checks are still running. The update gives the pull request a new head whose
     ///    checks run anyway, so waiting for the old head's checks first would run CI twice.
@@ -238,7 +240,14 @@ public enum MergeSeriesPolicy {
         if row.reviewDecision == .changesRequested { return .skip(.changesRequested) }
         switch decision {
         case .abandon(.checksFailed): return .skip(.checksFailed)
-        case .abandon(.noChecks): return .skip(.noChecks)
+        case .abandon(.noChecks):
+            // A head Shepherd's own update produced is seconds old when the sweep first sees it,
+            // and GitHub often reports no check suites on it yet. That is "not started", not "no
+            // checks": wait, up to the grace period after the update, before believing it.
+            if let queuedAt = entry.updateQueuedAt, now < queuedAt.addingTimeInterval(gracePeriod) {
+                return .wait
+            }
+            return .skip(.noChecks)
         case .abandon(.headMoved), .abandon(.draft), .abandon(.conflicting): return .wait // handled above
         case .wait(.checksPending):
             // Behind and still building: update now. The old head's checks are about a commit
