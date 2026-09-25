@@ -718,6 +718,24 @@ inbox. It fires while Shepherd is running, on the next sweep, through the same o
 produces. This is your decision on one commit, not a rule, so it asks for no approval and no agent
 author, and it never travels to another Mac ([ADR 0037](adr/0037-merge-when-checks-pass.md)).
 
+### Merge a series, one after another
+
+Five green agent pull requests in one repository, and merging them all at once leaves four of them
+behind their base — refused on any repository that requires branches to be up to date. Tick them
+and choose **Merge one after another…** instead. The sheet groups them by repository in an order you
+can drag, smallest first, leaves out what could never merge (drafts, conflicts, red checks,
+changes requested, your own, a merge already on its way) with the reason, and asks for one merge
+method and one delete-branch answer. **Start** is the only confirmation.
+
+From then on each repository works through its list: bring a branch that fell behind up to date
+(GitHub's *Update branch*, through the outbox), wait for its checks, merge it, wait for GitHub to
+confirm, go on with the next. Whatever cannot become a merge by waiting — a new push nobody
+reviewed, a red check, a refused merge — is skipped with the reason, and the series carries on.
+Every row says where it stands (*Series 2/5 · waiting for checks*), the review screen and the
+detail panel offer *Remove from series*, Settings → Sync lists running series with *Cancel*, and a
+finished series posts one notification: *schnaq/shepherd: 4 merged, 1 skipped*. Series live on this
+Mac only ([ADR 0041](adr/0041-merge-series.md)).
+
 ### Outbound webhooks for your own automation
 
 Point Shepherd at an n8n Webhook node (or any JSON endpoint) and get a versioned event when a

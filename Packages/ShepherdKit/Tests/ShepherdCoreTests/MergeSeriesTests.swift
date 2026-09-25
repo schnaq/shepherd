@@ -170,4 +170,35 @@ final class MergeSeriesTests: XCTestCase {
         XCTAssertEqual(entries.entries, [])
         XCTAssertTrue(entries.isFinished)
     }
+
+    func testAMergingEntryIsRemovableOnlyWhenTheCallerSaysItsRowIsGone() {
+        var series = MergeSeries(
+            repository: RepoRef(owner: "schnaq", name: "review"),
+            mergeMethod: "squash",
+            deletesHeadBranch: false,
+            createdAt: Date(timeIntervalSince1970: 0),
+            entries: [
+                MergeSeriesEntry(prID: "A", slug: "s#1", number: 1, title: "A", pinnedHeadOid: "a", state: .merging),
+                MergeSeriesEntry(prID: "B", slug: "s#2", number: 2, title: "B", pinnedHeadOid: "b", state: .merging),
+                MergeSeriesEntry(prID: "C", slug: "s#3", number: 3, title: "C", pinnedHeadOid: "c"),
+            ]
+        )
+        XCTAssertFalse(series.remove("A"))
+        XCTAssertTrue(series.remove("A", mergingIsRemovable: true))
+        XCTAssertEqual(series.entry(for: "A")?.state, .skipped(.removedByUser))
+
+        series.cancel(removableMerging: [])
+        XCTAssertEqual(series.entry(for: "B")?.state, .merging)
+        XCTAssertEqual(series.entry(for: "C")?.state, .skipped(.removedByUser))
+        series.cancel(removableMerging: ["B"])
+        XCTAssertEqual(series.entry(for: "B")?.state, .skipped(.removedByUser))
+        XCTAssertTrue(series.isFinished)
+    }
+
+    func testAnEntryFromAnOlderBuildDecodesWithoutAMergeTimestamp() throws {
+        let json = #"{"prID":"A","slug":"s#1","number":1,"title":"A","pinnedHeadOid":"a","state":{"kind":"merging"}}"#
+        let entry = try JSONDecoder().decode(MergeSeriesEntry.self, from: Data(json.utf8))
+        XCTAssertEqual(entry.state, .merging)
+        XCTAssertNil(entry.mergeQueuedAt)
+    }
 }

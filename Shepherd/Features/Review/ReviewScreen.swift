@@ -96,8 +96,11 @@ struct ReviewScreen: View {
                 onReview: { model.isSubmitSheetPresented = true },
                 onDelegate: delegate,
                 onRetry: { Task { await session.retryFailedWrites(for: prID) } },
-                onRemoveFromSeries: environment.mergeSeries.canRemove(prID)
-                    ? { environment.mergeSeries.remove(prID) }
+                onRemoveFromSeries: environment.mergeSeries.canRemove(
+                    prID,
+                    hasUnsentWrite: outboxItems.contains { $0.state == .pending || $0.state == .sending }
+                )
+                    ? { environment.removeFromMergeSeries(prID) }
                     : nil
             )
         }

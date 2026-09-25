@@ -384,13 +384,78 @@ final class MergeSeriesCoordinatorTests: XCTestCase {
         let coordinator = makeCoordinator(store: store, harness: harness)
         coordinator.start([(repository: repo, pullRequests: [row("A"), row("B")])], method: .squash, deletesHeadBranch: false)
 
-        XCTAssertTrue(coordinator.canRemove("A"))
+        XCTAssertTrue(coordinator.canRemove("A", hasUnsentWrite: false))
         coordinator.remove("A")
         XCTAssertEqual(entryState(store, "A"), .skipped(.removedByUser))
 
         await run(coordinator, store: store, rows: [row("A"), row("B")], harness: harness)
         XCTAssertEqual(harness.writes.map(\.pullRequest.id), ["B"])
-        XCTAssertFalse(coordinator.canRemove("B"), "a queued merge cannot be taken back")
+        XCTAssertFalse(coordinator.canRemove("B", hasUnsentWrite: true), "a queued merge cannot be taken back")
+        XCTAssertTrue(coordinator.canRemove("B", hasUnsentWrite: false), "a merge whose row is gone can")
+    }
+
+    func testRemovingAMergingEntryNeedsItsOutboxRowToBeGone() async {
+        let harness = Harness(clock: start)
+        let store = makeStore()
+        let coordinator = makeCoordinator(store: store, harness: harness)
+        coordinator.start([(repository: repo, pullRequests: [row("A"), row("B")])], method: .squash, deletesHeadBranch: false)
+        await run(coordinator, store: store, rows: [row("A"), row("B")], harness: harness)
+
+        coordinator.remove("A", outbox: MergeSeriesOutboxSnapshot(items: [outboxRow("A", state: .pending, createdAt: start)]))
+        XCTAssertEqual(entryState(store, "A"), .merging, "the queued merge still decides")
+        coordinator.remove("A")
+        XCTAssertEqual(entryState(store, "A"), .merging, "without an outbox read nothing is assumed")
+
+        coordinator.remove("A", outbox: MergeSeriesOutboxSnapshot())
+        XCTAssertEqual(entryState(store, "A"), .skipped(.removedByUser))
+    }
+
+    func testCancellingRemovesAMergingEntryWhoseRowIsGone() async {
+        let harness = Harness(clock: start)
+        let store = makeStore()
+        let coordinator = makeCoordinator(store: store, harness: harness)
+        let series = coordinator.start([(repository: repo, pullRequests: [row("A"), row("B")])], method: .squash, deletesHeadBranch: false)
+        await run(coordinator, store: store, rows: [row("A"), row("B")], harness: harness)
+
+        coordinator.cancel(seriesID: series[0].id, outbox: MergeSeriesOutboxSnapshot())
+
+        XCTAssertTrue(store.series.isEmpty, "nothing is left to wait for, so the series is over")
+        XCTAssertTrue(harness.notices.isEmpty, "every entry was taken out by the user")
+    }
+
+    // MARK: - A merge that can never be confirmed
+
+    func testAMergingEntryWithNoOutboxRowIsLetGoAfterTheGracePeriod() async {
+        let harness = Harness(clock: start)
+        let store = makeStore()
+        let coordinator = makeCoordinator(store: store, harness: harness)
+        coordinator.start([(repository: repo, pullRequests: [row("A"), row("B")])], method: .squash, deletesHeadBranch: false)
+        await run(coordinator, store: store, rows: [row("A"), row("B")], harness: harness)
+        XCTAssertEqual(store.series.first?.entry(for: "A")?.mergeQueuedAt, start)
+
+        // No row, no failure, no confirmation, and A is still open.
+        harness.clock = start.addingTimeInterval(MergeSeriesCoordinator.missingRowGracePeriod - 1)
+        await run(coordinator, store: store, rows: [row("A"), row("B")], harness: harness)
+        XCTAssertEqual(entryState(store, "A"), .merging, "a sweep behind the merge gets its hour")
+
+        harness.clock = start.addingTimeInterval(MergeSeriesCoordinator.missingRowGracePeriod)
+        await run(coordinator, store: store, rows: [row("A"), row("B")], harness: harness)
+        XCTAssertEqual(entryState(store, "A"), .skipped(.mergeRefused))
+        XCTAssertEqual(harness.writes.last?.pullRequest.id, "B", "the series goes on")
+    }
+
+    func testAMergingEntryWhoseRowIsStillQueuedWaitsPastTheGracePeriod() async {
+        let harness = Harness(clock: start)
+        let store = makeStore()
+        let coordinator = makeCoordinator(store: store, harness: harness)
+        coordinator.start([(repository: repo, pullRequests: [row("A")])], method: .squash, deletesHeadBranch: false)
+        await run(coordinator, store: store, rows: [row("A")], harness: harness)
+
+        harness.clock = start.addingTimeInterval(3 * MergeSeriesCoordinator.missingRowGracePeriod)
+        harness.outbox = MergeSeriesOutboxSnapshot(items: [outboxRow("A", state: .pending, createdAt: start)])
+        await run(coordinator, store: store, rows: [row("A")], harness: harness)
+
+        XCTAssertEqual(entryState(store, "A"), .merging, "an offline Mac's merge is still on its way")
     }
 
     func testCancellingASeriesBeforeAnythingHappenedEndsItQuietly() {

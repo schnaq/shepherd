@@ -142,6 +142,7 @@ public enum MergeSeriesPolicy {
                 )
             case .merge:
                 entry.state = .merging
+                entry.mergeQueuedAt = now
                 series.entries[index] = entry
                 return MergeSeriesStep(
                     series: series,

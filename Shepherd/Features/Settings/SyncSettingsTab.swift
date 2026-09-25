@@ -117,7 +117,7 @@ struct SyncSettingsTab: View {
                 ForEach(running) { series in
                     LabeledContent {
                         Button(String(localized: "Cancel")) {
-                            environment.mergeSeries.cancel(seriesID: series.id)
+                            environment.cancelMergeSeries(series.id)
                         }
                         .help(String(localized: "Stop the series. A merge already queued still goes out."))
                     } label: {

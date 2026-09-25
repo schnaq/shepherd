@@ -96,3 +96,35 @@ it simply never triggers an update.
 - Stacks (GitHub's native stacked pull requests) are not handled here. A stacked pull request
   can be merged only through GitHub's asynchronous merge API, which the outbox does not speak yet.
   Until that ADR exists, a series skips such a merge as *refused by GitHub* instead of retrying it.
+
+## Amendment 2026-09-25: what implementation taught
+
+- **Grace period is one hour**, not ADR 0037's seven days, for a missing row and for an update
+  whose commit does not appear. A series is being waited on, and one stuck entry holds every
+  entry behind it.
+- **Behind comes before running checks.** A behind entry whose checks have not failed is updated
+  at once; waiting for the old head's checks first would run CI twice per entry.
+- **Checks may take a moment to register on an updated head.** A head produced by Shepherd's own
+  update that shows no checks waits (up to `updateQueuedAt` + grace) instead of being skipped as
+  *no checks*.
+- **Fresh rows after a merge.** Once GitHub confirms entry *n* while its row is still in the
+  inbox, entry *n + 1* is not stepped until a sweep shows the merged pull request gone (at most ten
+  minutes): the rows until then show *n + 1* as it was before its base moved, typically `CLEAN`,
+  which would queue a merge GitHub refuses. The gate is kept in memory only; after a relaunch the
+  first sweep runs at once.
+- **Failed writes count only from the entry's own turn**: a failed or parked outbox row counts
+  against an entry only if it was created at or after the entry's `activeSince`. An old parked
+  `405` from an earlier bulk merge does not skip it, and a failed row never counts as a write in
+  flight.
+- **Outcomes are also read off the outbox.** A `merging` entry whose row left the outbox without a
+  failure and whose pull request left the inbox is merged; an `updatingBranch` entry whose row
+  left without a failure was accepted. The events are the fast path, not the only one.
+- **A `merging` entry is bounded.** With no outbox row, no failure, no confirmation and the pull
+  request still open for an hour after the merge was queued (`mergeQueuedAt`), it is skipped as
+  *merge refused*: the merge was never written or its row was discarded. For the same reason
+  *Remove from series* and *Cancel* take out a `merging` entry once the outbox holds no unsent row
+  for it.
+- **No draft-conflict alert or notification for a series' update.** A stale pin on a branch update
+  parks the row as a conflict, and the drain raises `draftConflict`. For an entry the series is
+  updating from exactly that pin, the "review not sent" alert and notification are suppressed;
+  the series skips the entry as *update refused* and says so in its chip and summary.

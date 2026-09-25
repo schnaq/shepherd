@@ -840,6 +840,32 @@ final class AppEnvironment {
         }
     }
 
+    /// **Remove from series**, with the outbox read so a `merging` entry whose row is gone can
+    /// be taken out too.
+    /// - Parameter prID: The pull request's node id.
+    func removeFromMergeSeries(_ prID: String) {
+        Task { [weak self] in
+            let outbox = await self?.mergeSeriesOutbox()
+            self?.mergeSeries.remove(prID, outbox: outbox)
+        }
+    }
+
+    /// **Cancel** on a running series, with the outbox read for the same reason.
+    /// - Parameter id: The series id.
+    func cancelMergeSeries(_ id: String) {
+        Task { [weak self] in
+            let outbox = await self?.mergeSeriesOutbox()
+            self?.mergeSeries.cancel(seriesID: id, outbox: outbox)
+        }
+    }
+
+    /// The outbox and the confirmed merges, as a series reads them; `nil` without a session.
+    private func mergeSeriesOutbox() async -> MergeSeriesOutboxSnapshot? {
+        guard let session else { return nil }
+        guard let items = try? await session.database.allOutboxItems() else { return nil }
+        return MergeSeriesOutboxSnapshot(items: items, mergedIDs: session.mergedPullRequestIDs)
+    }
+
     /// One pass of every running series, through the same funnel a click uses.
     ///
     /// `announcesSuccess: false`: the series has its chip and its one summary notice, and a

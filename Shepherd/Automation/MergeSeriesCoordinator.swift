@@ -43,6 +43,12 @@ struct MergeSeriesOutboxSnapshot: Sendable, Equatable {
         self.mergedIDs = mergedIDs
     }
 
+    /// Whether the outbox holds no unsent row for this pull request — a `merging` entry that
+    /// has none has nothing left to wait for in the outbox.
+    func hasNoUnsentRow(for prID: String) -> Bool {
+        !queuedIDs.contains(prID)
+    }
+
     /// Pull requests with a row still waiting to be sent or being sent.
     ///
     /// Deliberately **not** every row: a failed or parked row stays in the outbox until somebody
@@ -185,14 +191,18 @@ final class MergeSeriesCoordinator {
 
     /// Whether **Remove from series** can still take this pull request out.
     ///
-    /// Not once its merge is queued: the outbox row cannot be taken back, so the confirmation
-    /// decides (``ShepherdCore/MergeSeries/remove(_:)``).
-    /// - Parameter prID: The pull request's node id.
-    func canRemove(_ prID: String) -> Bool {
+    /// Not while its merge is in the outbox: the row cannot be taken back, so the confirmation
+    /// decides. A `merging` entry whose row is gone without a confirmation, though, is waiting
+    /// for nothing, and may go.
+    /// - Parameters:
+    ///   - prID: The pull request's node id.
+    ///   - hasUnsentWrite: Whether the outbox holds a pending or sending row for it.
+    func canRemove(_ prID: String, hasUnsentWrite: Bool) -> Bool {
         guard let entry = store.series(containing: prID)?.entry(for: prID) else { return false }
         switch entry.state {
         case .pending, .updatingBranch, .branchUpdated: return true
-        case .merging, .merged, .skipped: return false
+        case .merging: return !hasUnsentWrite
+        case .merged, .skipped: return false
         }
     }
 
@@ -231,20 +241,27 @@ final class MergeSeriesCoordinator {
     }
 
     /// **Remove from series**: the entry is skipped as *removed by user*, and the series goes on.
-    /// - Parameter prID: The pull request's node id.
-    func remove(_ prID: String) {
+    /// - Parameters:
+    ///   - prID: The pull request's node id.
+    ///   - outbox: The outbox as it stands, so a `merging` entry whose row is gone can be
+    ///     removed too. `nil` leaves every `merging` entry to its confirmation.
+    func remove(_ prID: String, outbox: MergeSeriesOutboxSnapshot? = nil) {
         guard let series = store.series(containing: prID) else { return }
-        store.update(series.id) { $0.remove(prID) }
+        let mergingIsRemovable = outbox?.hasNoUnsentRow(for: prID) ?? false
+        store.update(series.id) { $0.remove(prID, mergingIsRemovable: mergingIsRemovable) }
         finishIfDone(series.id)
     }
 
     /// **Cancel** in Settings: every entry that has not been queued yet is removed. A merge that
-    /// is already in the outbox still lands, and the series finishes when it does.
-    /// - Parameter id: The series id.
-    func cancel(seriesID id: String) {
+    /// is still in the outbox still lands, and the series finishes when it does.
+    /// - Parameters:
+    ///   - id: The series id.
+    ///   - outbox: The outbox as it stands; see ``remove(_:outbox:)``.
+    func cancel(seriesID id: String, outbox: MergeSeriesOutboxSnapshot? = nil) {
         store.update(id) { series in
             let before = series
-            series.cancel()
+            let removable = Set(series.entries.map(\.prID).filter { outbox?.hasNoUnsentRow(for: $0) ?? false })
+            series.cancel(removableMerging: removable)
             return series != before
         }
         finishIfDone(id)
@@ -434,6 +451,16 @@ final class MergeSeriesCoordinator {
                 // The row left the outbox without a failure — it was sent — and the pull request
                 // left the inbox: merged, and the rows are already from after the merge.
                 series.markMerged(entry.prID)
+            case .merging where !isQueued && !hasFailed:
+                // No row, no failure, no confirmation, and the pull request is still open: the
+                // merge was never written (a crash between save and enqueue) or its row was
+                // discarded by hand. Waiting for a confirmation that cannot come would hold every
+                // entry behind it, so after the grace period the entry is let go.
+                let since = entry.mergeQueuedAt ?? entry.activeSince ?? moment
+                if moment >= since.addingTimeInterval(Self.missingRowGracePeriod),
+                   let index = series.entries.firstIndex(where: { $0.prID == entry.prID }) {
+                    series.entries[index].state = .skipped(.mergeRefused)
+                }
             case .updatingBranch where !isQueued && !hasFailed:
                 series.markBranchUpdated(entry.prID)
             default:

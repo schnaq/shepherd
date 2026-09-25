@@ -380,9 +380,9 @@ struct InboxDetailPanel: View {
                 .foregroundStyle(Theme.textSecondary)
                 .lineLimit(1)
             Spacer(minLength: 0)
-            if environment.mergeSeries.canRemove(row.id) {
+            if environment.mergeSeries.canRemove(row.id, hasUnsentWrite: model.queuedWriteCount(for: row) > 0) {
                 Button(String(localized: "Remove from series")) {
-                    environment.mergeSeries.remove(row.id)
+                    environment.removeFromMergeSeries(row.id)
                 }
                 .buttonStyle(.link)
                 .font(Theme.type(.caption))

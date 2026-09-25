@@ -98,6 +98,7 @@ final class MergeSeriesPolicyTests: XCTestCase {
         XCTAssertEqual(entry.prID, "A")
         XCTAssertEqual(entry.state, .merging)
         XCTAssertEqual(state(result, "A"), .merging)
+        XCTAssertEqual(result.series.entry(for: "A")?.mergeQueuedAt, clock)
     }
 
     func testOnlyTheFirstUnfinishedEntryIsActedOn() {

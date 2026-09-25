@@ -146,6 +146,10 @@ public struct MergeSeriesEntry: Sendable, Codable, Hashable, Identifiable {
     /// bounded by the grace period counted from here rather than from ``activeSince``, which may
     /// lie long before (the checks can take hours).
     public var updateQueuedAt: Date?
+    /// When the series queued the merge for this entry — the start of the bound on how long a
+    /// `merging` entry waits for a confirmation whose outbox row is gone (ADR 0041's
+    /// 2026-09-25 amendment).
+    public var mergeQueuedAt: Date?
 
     /// Creates an entry.
     public init(
@@ -156,7 +160,8 @@ public struct MergeSeriesEntry: Sendable, Codable, Hashable, Identifiable {
         pinnedHeadOid: String,
         state: MergeSeriesEntryState = .pending,
         activeSince: Date? = nil,
-        updateQueuedAt: Date? = nil
+        updateQueuedAt: Date? = nil,
+        mergeQueuedAt: Date? = nil
     ) {
         self.prID = prID
         self.slug = slug
@@ -166,6 +171,7 @@ public struct MergeSeriesEntry: Sendable, Codable, Hashable, Identifiable {
         self.state = state
         self.activeSince = activeSince
         self.updateQueuedAt = updateQueuedAt
+        self.mergeQueuedAt = mergeQueuedAt
     }
 
     /// Creates a pending entry pinned to the row's current head.
@@ -184,7 +190,7 @@ public struct MergeSeriesEntry: Sendable, Codable, Hashable, Identifiable {
     public var id: String { prID }
 
     private enum CodingKeys: String, CodingKey {
-        case prID, slug, number, title, pinnedHeadOid, state, activeSince, updateQueuedAt
+        case prID, slug, number, title, pinnedHeadOid, state, activeSince, updateQueuedAt, mergeQueuedAt
     }
 
     /// Decodes tolerantly, like every persisted value in this folder. A missing pin decodes as
@@ -202,6 +208,8 @@ public struct MergeSeriesEntry: Sendable, Codable, Hashable, Identifiable {
             .flatMap { $0 } ?? .skipped(.disappeared)
         activeSince = (try? container.decodeIfPresent(Date.self, forKey: .activeSince)).flatMap { $0 }
         updateQueuedAt = (try? container.decodeIfPresent(Date.self, forKey: .updateQueuedAt))
+            .flatMap { $0 }
+        mergeQueuedAt = (try? container.decodeIfPresent(Date.self, forKey: .mergeQueuedAt))
             .flatMap { $0 }
     }
 }
@@ -353,31 +361,40 @@ public struct MergeSeries: Sendable, Codable, Hashable, Identifiable {
     /// Takes a pull request out of the series (**Remove from series**).
     ///
     /// A queued merge cannot be taken back out of the outbox, so a `merging` entry stays and
-    /// the confirmation decides. Finished entries stay as they are.
-    /// - Parameter prID: The pull request's node id.
+    /// the confirmation decides — unless the caller has checked that the outbox holds no
+    /// unsent row for it any more (`mergingIsRemovable`), in which case there is nothing left to
+    /// wait for. Finished entries stay as they are.
+    /// - Parameters:
+    ///   - prID: The pull request's node id.
+    ///   - mergingIsRemovable: Whether a `merging` entry may be removed too.
     /// - Returns: Whether anything changed.
     @discardableResult
-    public mutating func remove(_ prID: String) -> Bool {
+    public mutating func remove(_ prID: String, mergingIsRemovable: Bool = false) -> Bool {
         guard let index = entries.firstIndex(where: { $0.prID == prID }),
-              Self.isRemovable(entries[index].state)
+              Self.isRemovable(entries[index].state, mergingIsRemovable: mergingIsRemovable)
         else { return false }
         entries[index].state = .skipped(.removedByUser)
         return true
     }
 
     /// Cancels the series: every entry that is pending, updating its branch or re-pinning
-    /// becomes *removed by user*. A `merging` entry stays — see ``remove(_:)`` — and finished
-    /// entries are untouched.
-    public mutating func cancel() {
-        for index in entries.indices where Self.isRemovable(entries[index].state) {
+    /// becomes *removed by user*. A `merging` entry stays — see ``remove(_:mergingIsRemovable:)``
+    /// — unless it is named in `removableMerging`; finished entries are untouched.
+    /// - Parameter removableMerging: `merging` entries whose outbox row is gone.
+    public mutating func cancel(removableMerging: Set<String> = []) {
+        for index in entries.indices where Self.isRemovable(
+            entries[index].state,
+            mergingIsRemovable: removableMerging.contains(entries[index].prID)
+        ) {
             entries[index].state = .skipped(.removedByUser)
         }
     }
 
-    private static func isRemovable(_ state: MergeSeriesEntryState) -> Bool {
+    private static func isRemovable(_ state: MergeSeriesEntryState, mergingIsRemovable: Bool) -> Bool {
         switch state {
         case .pending, .updatingBranch, .branchUpdated: return true
-        case .merging, .merged, .skipped: return false
+        case .merging: return mergingIsRemovable
+        case .merged, .skipped: return false
         }
     }
 }
