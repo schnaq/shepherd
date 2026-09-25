@@ -46,6 +46,11 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
     private(set) var asyncMerges: [(number: Int, method: MergeMethod, sha: String?)] = []
     /// The uuid of every status poll, in order.
     private(set) var asyncMergePolls: [String] = []
+    /// What the "is it stacked now?" read answers, keyed by number (ADR 0042). A missing key
+    /// answers `false`.
+    var stackedOnGitHub: [Int: Bool] = [:]
+    /// The number of every "is it stacked now?" read, in order.
+    private(set) var stackProbes: [Int] = []
 
     private(set) var searchCallCount = 0
     private(set) var detailRequests: [String] = []
@@ -291,6 +296,15 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
         if let asyncMergeStatusError { throw asyncMergeStatusError }
         guard !asyncMergeStatuses.isEmpty else { return AsyncMergeResult(status: .pending, uuid: uuid) }
         return asyncMergeStatuses.count > 1 ? asyncMergeStatuses.removeFirst() : asyncMergeStatuses[0]
+    }
+
+    func pullRequestIsStacked(repo: RepoRef, number: Int) async throws -> Bool {
+        stackProbes.append(number)
+        return stackedOnGitHub[number] ?? false
+    }
+
+    func setStackedOnGitHub(_ stacked: Bool, number: Int) {
+        stackedOnGitHub[number] = stacked
     }
 
     func scriptAsyncMerge(

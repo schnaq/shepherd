@@ -560,6 +560,58 @@ final class MergeSeriesPolicyTests: XCTestCase {
         }
     }
 
+    func testARestackOutsideTheSeriesIsTakenOnceWhenTheRowSitsLowerInTheStack() {
+        // The pull request below was merged on github.com, not by this series: no entry says so,
+        // but the row's place in the stack does.
+        let result = step(
+            series([stackEntry("U", position: 2)]),
+            rows: [stackRow("U", position: 1, head: "rebased", checkRollup: nil)]
+        )
+        XCTAssertEqual(result.action, .none, "the rebased head's checks have not started yet")
+        let entry = result.series.entry(for: "U")
+        XCTAssertEqual(entry?.state, .pending)
+        XCTAssertEqual(entry?.pinnedHeadOid, "rebased")
+        XCTAssertEqual(entry?.repinnedAfterStackMerge, true)
+        XCTAssertEqual(entry?.updateQueuedAt, clock)
+    }
+
+    func testARestackOutsideTheSeriesIsTakenWhenTheRowLeftItsStack() {
+        let result = step(
+            series([stackEntry("U", position: 2)]),
+            rows: [stackRow("U", position: nil, head: "rebased")]
+        )
+        XCTAssertEqual(result.action.expectedHeadOid, "rebased")
+        XCTAssertEqual(result.series.entry(for: "U")?.repinnedAfterStackMerge, true)
+    }
+
+    func testABottomThatLeftItsStackAndWasPushedToStillSkips() {
+        // Nothing below the bottom can have merged: leaving the stack is an unstack or a closed
+        // pull request above it, and the new head is somebody's push.
+        let result = step(
+            series([stackEntry("B", position: 1)]),
+            rows: [stackRow("B", position: nil, head: "pushed")]
+        )
+        XCTAssertEqual(state(result, "B"), .skipped(.headMoved))
+    }
+
+    func testAPushAfterARestackOutsideTheSeriesStillSkips() {
+        let result = step(
+            series([stackEntry("U", position: 2, head: "rebased", repinned: true)]),
+            rows: [stackRow("U", position: 1, head: "pushed")]
+        )
+        XCTAssertEqual(state(result, "U"), .skipped(.headMoved))
+    }
+
+    func testAMovedHeadAtTheSameOrAHigherStackPlaceIsAPush() {
+        for position in [2, 3] {
+            let result = step(
+                series([stackEntry("U", position: 2)]),
+                rows: [stackRow("U", position: position, head: "pushed")]
+            )
+            XCTAssertEqual(state(result, "U"), .skipped(.headMoved), "position \(position)")
+        }
+    }
+
     func testAnEntryInNoStackIsNeverRePinnedByAStackMerge() {
         let result = step(
             series([stackEntry("L", position: 1, state: .merged), entry("A")]),

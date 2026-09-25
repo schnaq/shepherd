@@ -269,6 +269,25 @@ final class MergeSeriesTests: XCTestCase {
         XCTAssertNil(series.entries[1].stackPosition)
     }
 
+    func testANewSeriesNeverMergesAStackTopFirstWhateverOrderItWasGiven() {
+        // The user dragged the top of the stack ahead of its bottom, with a loose pull request in
+        // between. Merging the top first would take the bottom along unchecked.
+        var top = Fixtures.summary(id: "TOP", headRefOid: "t")
+        top.stack = PullRequestStack(number: 7, size: 2, position: 2, baseRefName: "main")
+        let loose = Fixtures.summary(id: "LOOSE", headRefOid: "l")
+        var bottom = Fixtures.summary(id: "BOTTOM", headRefOid: "b")
+        bottom.stack = PullRequestStack(number: 7, size: 2, position: 1, baseRefName: "main")
+        let series = MergeSeries(
+            repository: Fixtures.repo,
+            pullRequests: [top, loose, bottom],
+            mergeMethod: "squash",
+            deletesHeadBranch: false,
+            now: clock
+        )
+        XCTAssertEqual(series.entries.map(\.prID), ["BOTTOM", "LOOSE", "TOP"])
+        XCTAssertEqual(series.entries.map(\.pinnedHeadOid), ["b", "l", "t"])
+    }
+
     func testTheStackFieldsSurviveARoundTrip() throws {
         let entry = MergeSeriesEntry(
             prID: "A", slug: "s#1", number: 1, title: "A", pinnedHeadOid: "a",
@@ -322,6 +341,19 @@ final class MergeSeriesTests: XCTestCase {
         XCTAssertEqual(
             entry.unconfirmedMergeDeadline(gracePeriod: 3_600, now: Fixtures.date(999)),
             Fixtures.date(130 + 24 * 3_600)
+        )
+    }
+
+    func testAStackedMergeIsWaitedForADayEvenWhenTheAcceptanceWasNeverSeen() {
+        // The acceptance event lives in memory only; an app that quit before it arrived still
+        // knows from the entry that this merge went through GitHub's asynchronous path.
+        let entry = MergeSeriesEntry(
+            prID: "A", slug: "s#1", number: 1, title: "A", pinnedHeadOid: "a",
+            state: .merging, mergeQueuedAt: Fixtures.date(100), stackNumber: 7, stackPosition: 1
+        )
+        XCTAssertEqual(
+            entry.unconfirmedMergeDeadline(gracePeriod: 3_600, now: Fixtures.date(999)),
+            Fixtures.date(100 + 24 * 3_600)
         )
     }
 

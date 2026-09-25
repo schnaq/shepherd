@@ -19010,6 +19010,46 @@
           }
         }
       }
+    },
+    "Removes each head branch once its merge has landed. Branches of stacked pull requests are left to GitHub.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Löscht jeden Head-Branch, sobald sein Merge durch ist. Die Branches von Pull Requests in einem Stack überlässt Shepherd GitHub."
+          }
+        }
+      }
+    },
+    "Drag to change the order. Smallest first causes the fewest conflicts. Pull requests of one stack always merge bottom first.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zieh die Einträge, um die Reihenfolge zu ändern. Die kleinsten zuerst verursachen die wenigsten Konflikte. Pull Requests eines Stacks werden immer von unten nach oben gemergt."
+          }
+        }
+      }
+    },
+    "one below it is excluded": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "einer darunter ist ausgeschlossen"
+          }
+        }
+      }
+    },
+    "A pull request below it in the stack can't be merged. Merging this one would merge that one too.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Pull Request darunter im Stack kann nicht gemergt werden. Ein Merge dieses Pull Requests würde ihn mitmergen."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

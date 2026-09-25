@@ -80,7 +80,8 @@ public enum MergeSeriesPolicy {
     ///    wait, never queue a second update, and after `updateQueuedAt + gracePeriod` skip as
     ///    *update refused*.
     ///    **After a lower stack member merged** (an entry of the same stack, below this one when
-    ///    the series started, is merged — ADR 0042): a head that differs from the pin becomes the
+    ///    the series started, is merged; or the row's stack position is lower than when the series
+    ///    started, or the row left its stack — ADR 0042): a head that differs from the pin becomes the
     ///    new pin, once, because GitHub re-targets and rebases the pull requests above a merged
     ///    one itself. Not waited for: the head may also stay as it was.
     /// 4. **Updating branch or merging:** wait for the drain's confirmation.
@@ -125,7 +126,8 @@ public enum MergeSeriesPolicy {
             let verdict = evaluate(
                 &entry,
                 row: rows[entry.prID],
-                lowerStackMemberMerged: hasMergedLowerStackMember(of: entry, in: series),
+                lowerStackMemberMerged: hasMergedLowerStackMember(of: entry, in: series)
+                    || wasRestacked(entry, row: rows[entry.prID]),
                 existingOutbox: existingOutbox,
                 failedWrites: failedWrites,
                 now: now,
@@ -177,6 +179,22 @@ public enum MergeSeriesPolicy {
                 && (other.stackPosition ?? .max) < position
                 && other.state == .merged
         }
+    }
+
+    /// Whether the row shows that something below the entry in its stack merged since the series
+    /// started, although no entry of the series did (ADR 0042): merged by hand on github.com, or
+    /// by another series. The row's stack sits lower than the place recorded at Start, or the row
+    /// is in no stack any more while the entry was in one — GitHub re-numbers or dissolves a
+    /// stack once its lower pull requests merge. The stack *number* is not compared, because
+    /// that re-numbering is exactly what happens.
+    ///
+    /// Never for an entry that was the bottom: nothing below it can have merged, and a bottom
+    /// that left its stack (unstacked, or the ones above it closed) and was then pushed to is a
+    /// push, which rule 5 skips.
+    private static func wasRestacked(_ entry: MergeSeriesEntry, row: PullRequestSummary?) -> Bool {
+        guard let row, let recorded = entry.stackPosition, recorded > 1 else { return false }
+        guard let current = row.stack else { return true }
+        return current.position < recorded
     }
 
     private enum Verdict {

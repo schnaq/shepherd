@@ -25,6 +25,11 @@ struct RESTPullRequestBodyHTMLDTO: Decodable {
     var bodyHtml: String?
 }
 
+/// `GET /repos/{owner}/{repo}/pulls/{number}`, read for its `stack` alone (ADR 0042).
+struct RESTPullRequestStackDTO: Decodable {
+    var stack: RESTPullRequestDTO.Stack?
+}
+
 /// `GET /repos/{owner}/{repo}/pulls/{number}`.
 struct RESTPullRequestDTO: Decodable {
     struct Ref: Decodable {

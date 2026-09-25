@@ -261,8 +261,9 @@ public struct MergeSeriesEntry: Sendable, Codable, Hashable, Identifiable {
     ///
     /// A merge GitHub accepted (``mergeAcceptedAt``) gets ``acceptedMergeGracePeriod`` from the
     /// acceptance: the pull request stays open while GitHub's merge queue works, and skipping it
-    /// as *merge refused* after an hour would be wrong about a merge that is running. Any other
-    /// gets `gracePeriod` from when the merge was queued.
+    /// as *merge refused* after an hour would be wrong about a merge that is running. An entry
+    /// with a recorded stack gets the same 24 hours from when the merge was queued, acceptance
+    /// seen or not. Any other gets `gracePeriod` from when the merge was queued.
     /// - Parameters:
     ///   - gracePeriod: The ordinary bound (`MergeSeriesCoordinator.missingRowGracePeriod`).
     ///   - now: The fallback start for an entry without any timestamp.
@@ -270,7 +271,15 @@ public struct MergeSeriesEntry: Sendable, Codable, Hashable, Identifiable {
         if let mergeAcceptedAt {
             return mergeAcceptedAt.addingTimeInterval(Self.acceptedMergeGracePeriod)
         }
-        return (mergeQueuedAt ?? activeSince ?? now).addingTimeInterval(gracePeriod)
+        let queued = mergeQueuedAt ?? activeSince ?? now
+        // A stacked pull request is always merged through GitHub's asynchronous API, so it gets
+        // the long wait whether or not the acceptance event was seen: that event lives only in
+        // memory, and an app that quit before it arrived must not skip a running merge after an
+        // hour. Stored with the entry, the stack survives the restart the event does not.
+        if stackNumber != nil {
+            return queued.addingTimeInterval(Self.acceptedMergeGracePeriod)
+        }
+        return queued.addingTimeInterval(gracePeriod)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -347,6 +356,13 @@ public struct MergeSeries: Sendable, Codable, Hashable, Identifiable {
     }
 
     /// Creates a series over these rows, in this order, each pinned to its current head.
+    ///
+    /// With one exception to "in this order": members of one GitHub stack are put back into
+    /// position order, bottom first, within the slots they occupy
+    /// (``MergeSeriesPlan/stacksBottomFirst(_:)``, ADR 0042). An upper member merged first would
+    /// take the lower ones along before the series had checked them, and the lower entries would
+    /// then wait for a row that is gone. The sheet already keeps its order that way; this is the
+    /// backstop for any caller that does not.
     /// - Parameters:
     ///   - repository: The repository.
     ///   - pullRequests: The rows, in merge order.
@@ -368,7 +384,7 @@ public struct MergeSeries: Sendable, Codable, Hashable, Identifiable {
             mergeMethod: mergeMethod,
             deletesHeadBranch: deletesHeadBranch,
             createdAt: now,
-            entries: pullRequests.map(MergeSeriesEntry.init(pullRequest:))
+            entries: MergeSeriesPlan.stacksBottomFirst(pullRequests).map(MergeSeriesEntry.init(pullRequest:))
         )
     }
 

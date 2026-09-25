@@ -625,7 +625,10 @@ final class WriteRequestTests: XCTestCase {
         let transport = MockTransport()
         await transport.route(
             "/merge-async",
-            Fixture.response(json: #"{"message":"Merge already requested"}"#, status: 409)
+            Fixture.response(
+                json: #"{"message":"A merge request is already enqueued for this pull request"}"#,
+                status: 409
+            )
         )
         let client = GitHubClient.makeForTesting(transport: transport)
 
@@ -638,8 +641,66 @@ final class WriteRequestTests: XCTestCase {
             )
             XCTFail("expected a conflict")
         } catch let error as GitHubError {
-            XCTAssertEqual(error, .conflict(message: "Merge already requested"))
+            XCTAssertEqual(
+                error,
+                .conflict(message: "A merge request is already enqueued for this pull request")
+            )
         }
+    }
+
+    func testAnAcceptedAsynchronousMergeWhoseBodyCannotBeReadIsPendingWithoutAUuid() async throws {
+        // A `2xx` is GitHub's acceptance. A body this build cannot decode must not fail a row
+        // for a merge that is running; the drain sends such an answer as started.
+        let transport = MockTransport()
+        await transport.route("/merge-async", Fixture.response(json: #"{"state":"accepted"}"#, status: 202))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let result = try await client.mergePullRequestAsync(
+            repo: repo,
+            number: 128,
+            method: .squash,
+            expectedHeadOid: "3f1a9c0d"
+        )
+
+        XCTAssertEqual(result.status, .pending)
+        XCTAssertNil(result.uuid)
+    }
+
+    func testOnlyGitHubsAlreadyEnqueuedSentenceReadsAsAMergeUnderWay() {
+        XCTAssertTrue(GitHubClient.isMergeAlreadyUnderWay(
+            "A merge request is already enqueued for this pull request"
+        ))
+        XCTAssertTrue(GitHubClient.isMergeAlreadyUnderWay("Merge ALREADY in progress"))
+        XCTAssertTrue(GitHubClient.isMergeAlreadyUnderWay("already enqueued"))
+        XCTAssertFalse(GitHubClient.isMergeAlreadyUnderWay("Base branch was modified"))
+        XCTAssertFalse(GitHubClient.isMergeAlreadyUnderWay("Merge already requested"))
+        XCTAssertFalse(GitHubClient.isMergeAlreadyUnderWay("A merge request is enqueued"))
+    }
+
+    func testAPullRequestIsStackedWhenGitHubReportsItsStack() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "/pulls/128",
+            Fixture.response(json: #"{"number":128,"stack":{"number":7,"size":3,"position":2,"base":{"ref":"main"}}}"#)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let stacked = try await client.pullRequestIsStacked(repo: repo, number: 128)
+
+        XCTAssertTrue(stacked)
+        let request = await transport.onlyRequest()
+        XCTAssertEqual(request?.method, "GET")
+        XCTAssertEqual(request?.url.absoluteString, "https://api.github.com/repos/schnaq/review/pulls/128")
+    }
+
+    func testAPullRequestWithoutAStackObjectIsNotStacked() async throws {
+        let transport = MockTransport()
+        await transport.route("/pulls/128", Fixture.response(json: #"{"number":128,"stack":null}"#))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let stacked = try await client.pullRequestIsStacked(repo: repo, number: 128)
+
+        XCTAssertFalse(stacked)
     }
 
     func testAnExpiredMergeUuidIsNotFound() async throws {

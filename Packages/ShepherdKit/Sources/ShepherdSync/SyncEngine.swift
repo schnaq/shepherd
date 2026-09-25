@@ -45,7 +45,7 @@ public struct SyncConfiguration: Sendable {
     /// How many times the drain asks how a stacked pull request's merge is going before it lets
     /// go of the row (ADR 0042).
     ///
-    /// GitHub merges a stack in the background. The drain holds the row for about half a minute
+    /// GitHub merges a stack in the background. The drain holds the row for about ten seconds
     /// (this times ``asyncMergePollInterval``) so the common case — a stack that merges in
     /// seconds — is announced as merged; beyond that the sweep is the better reader, and a drain
     /// that waited longer would hold every row behind this one.
@@ -64,8 +64,8 @@ public struct SyncConfiguration: Sendable {
         outboxBatchSize: Int = 20,
         viewerLogin: String? = nil,
         pollsNotifications: Bool = true,
-        asyncMergePollCount: Int = 5,
-        asyncMergePollInterval: TimeInterval = 6
+        asyncMergePollCount: Int = 3,
+        asyncMergePollInterval: TimeInterval = 3
     ) {
         self.asyncMergePollCount = max(0, asyncMergePollCount)
         self.asyncMergePollInterval = max(0, asyncMergePollInterval)
@@ -1145,6 +1145,14 @@ public actor SyncEngine {
                     expectedHeadOid: expectedHeadOid,
                     commitTitle: nil
                 )
+            } catch GitHubError.validationFailed(let message) {
+                // The stored summary may simply not know yet: a stack made since the last sweep
+                // is refused by the synchronous endpoint. One read decides, and a stacked pull
+                // request is merged the way it has to be, in this same step.
+                guard try await github.pullRequestIsStacked(repo: item.repo, number: item.number) else {
+                    throw GitHubError.validationFailed(message: message)
+                }
+                return try await mergeStacked(item, method: method, expectedHeadOid: expectedHeadOid)
             } catch GitHubError.notMergeable(let message) {
                 // GitHub answers a merge on a pull request that is *already merged* with the same
                 // `405` it answers one that cannot be merged at all with, and `405` is not
@@ -1157,7 +1165,12 @@ public actor SyncEngine {
                     repo: item.repo,
                     number: item.number
                 ) else {
-                    throw GitHubError.notMergeable(message: message)
+                    // Not merged — but perhaps stacked since the last sweep, which this endpoint
+                    // refuses too (see the `422` above).
+                    guard try await github.pullRequestIsStacked(repo: item.repo, number: item.number) else {
+                        throw GitHubError.notMergeable(message: message)
+                    }
+                    return try await mergeStacked(item, method: method, expectedHeadOid: expectedHeadOid)
                 }
             }
             // The head branch is deliberately *not* deleted here: it is the drain's follow-up,
@@ -1509,10 +1522,15 @@ public actor SyncEngine {
                 method: MergeMethod(rawValue: method) ?? .merge,
                 expectedHeadOid: expectedHeadOid
             )
-        } catch GitHubError.conflict {
-            // On this endpoint a `409` is "a merge request is already enqueued for this pull
-            // request": this row, re-sent after a crash, or the same merge asked for on
-            // github.com. Either way a merge is under way, which is what the row asked for.
+        } catch GitHubError.conflict(let message) {
+            // On this endpoint a `409` is documented as "a merge request is already enqueued for
+            // this pull request": this row, re-sent after a crash, or the same merge asked for on
+            // github.com. Either way a merge is under way, which is what the row asked for. Only
+            // when GitHub says so, though: any other `409` is not known to be harmless, and it is
+            // parked like a moved head, for the user to look at, rather than read as a success.
+            guard GitHubClient.isMergeAlreadyUnderWay(message) else {
+                throw GitHubError.staleHead(expected: expectedHeadOid ?? "", actual: nil)
+            }
             return .sentStackedMerge(.mergeStarted)
         } catch GitHubError.notMergeable(let message) {
             // A closed pull request is "not ready" to this endpoint, and a merged one is closed —

@@ -74,6 +74,12 @@ public protocol PullRequestFetching: Sendable {
     ) async throws -> AsyncMergeResult
     /// How far an asynchronous merge has got (ADR 0042).
     func asyncMergeStatus(repo: RepoRef, number: Int, uuid: String) async throws -> AsyncMergeResult
+    /// Whether GitHub reports the pull request as part of a stack right now (ADR 0042).
+    ///
+    /// Asked only after a synchronous merge was refused for a pull request the stored summary
+    /// shows in no stack: a stack made since the last sweep is refused by that endpoint, and one
+    /// read tells such a refusal apart from a real one.
+    func pullRequestIsStacked(repo: RepoRef, number: Int) async throws -> Bool
 }
 
 /// Whether a pull request, by node id, is part of a GitHub stack (ADR 0042).

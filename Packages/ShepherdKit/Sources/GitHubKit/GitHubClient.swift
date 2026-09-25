@@ -1114,9 +1114,12 @@ public actor GitHubClient {
     /// - `400` is "not ready to be merged" (closed, draft). The generic mapping would make it a
     ///   retryable `.server(400)`, and the row would be retried for ever; it is
     ///   ``GitHubError/notMergeable(message:)`` instead.
-    /// - `409` is "a merge request is already enqueued for this pull request", **not** a moved
-    ///   head, so it stays ``GitHubError/conflict(message:)`` for the caller to read as "already
-    ///   under way" — the answer a row re-sent after a crash gets.
+    /// - `409` is documented as "a merge request is already enqueued for this pull request",
+    ///   **not** a moved head, so it stays ``GitHubError/conflict(message:)``. The caller reads it
+    ///   as "already under way" (the answer a row re-sent after a crash gets) only when the
+    ///   message says so (``isMergeAlreadyUnderWay(_:)``).
+    /// - A `2xx` whose body cannot be decoded is an acceptance with an unknown status: it is
+    ///   returned as `pending` without a uuid rather than thrown.
     /// - `422` carrying the head-SHA sentence (``isHeadMismatch(_:)``) is
     ///   ``GitHubError/staleHead(expected:actual:)``, like the update-branch endpoint's; any
     ///   other `422` stays ``GitHubError/validationFailed(message:)``. GitHub's documentation
@@ -1146,13 +1149,51 @@ public actor GitHubClient {
                 useCache: false,
                 resource: "\(repo.fullName)#\(number) merge"
             )
-            let dto: RESTAsyncMergeDTO = try RESTJSON.decode(response.body)
-            return dto.model
+            // A `2xx` is GitHub's acceptance, whatever the body says. A body this build cannot
+            // read must not turn a running merge into a failed row (which offers a retry of a
+            // write that cannot be taken back), so it reads as "accepted, status unknown": pending
+            // and without a uuid, which the drain sends as started and the sweep settles.
+            let dto: RESTAsyncMergeDTO? = try? RESTJSON.decode(response.body)
+            return dto?.model ?? AsyncMergeResult(status: .pending)
         } catch GitHubError.validationFailed(let message) where Self.isHeadMismatch(message) {
             throw GitHubError.staleHead(expected: expectedHeadOid ?? "", actual: nil)
         } catch GitHubError.server(let status, let message) where status == 400 {
             throw GitHubError.notMergeable(message: message)
         }
+    }
+
+    /// Whether a `409` from ``mergePullRequestAsync(repo:number:method:expectedHeadOid:)`` says a
+    /// merge of the pull request is already under way (ADR 0042). GitHub documents the sentence
+    /// as "a merge request is already enqueued for this pull request"; it is matched loosely,
+    /// ignoring case — "already" together with "enqueued", "in progress" or "merge request" — so
+    /// a reworded sentence still reads the same. A `409` that says anything else is not known to
+    /// be harmless, and the drain parks it like a moved head.
+    public static func isMergeAlreadyUnderWay(_ message: String) -> Bool {
+        func has(_ word: String) -> Bool { message.range(of: word, options: .caseInsensitive) != nil }
+        return has("already") && (has("enqueued") || has("in progress") || has("merge request"))
+    }
+
+    /// Whether a pull request is part of a GitHub stack right now (ADR 0042).
+    ///
+    /// `GET /repos/{owner}/{repo}/pulls/{number}`, read for its `stack` object alone. Asked by the
+    /// drain only when a synchronous merge was refused for a pull request whose stored summary has
+    /// no stack yet — a stack made since the last sweep — so the refusal can be retried through
+    /// the asynchronous merge. Uncached for ``isPullRequestMerged(repo:number:)``'s reason.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - number: The pull request number.
+    /// - Returns: `true` when GitHub reports a complete `stack` object.
+    public func pullRequestIsStacked(repo: RepoRef, number: Int) async throws -> Bool {
+        let response = try await performREST(
+            method: "GET",
+            path: "/repos/\(repo.owner)/\(repo.name)/pulls/\(number)",
+            queryItems: [],
+            body: nil,
+            useCache: false,
+            resource: "\(repo.fullName)#\(number) stack"
+        )
+        let dto: RESTPullRequestStackDTO = try RESTJSON.decode(response.body)
+        return ResponseMapping.stack(rest: dto.stack) != nil
     }
 
     /// How far an asynchronous merge has got (ADR 0042).

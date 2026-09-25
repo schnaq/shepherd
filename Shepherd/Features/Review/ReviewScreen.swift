@@ -159,7 +159,11 @@ struct ReviewScreen: View {
                     actions: actions,
                     settings: environment.settings,
                     mergeWhenGreen: environment.mergeWhenGreen,
-                    stack: PullRequestStackOverview.make(for: summary, in: session.inboxRows),
+                    // The rows the inbox holds (`InboxModel.allRows`): stored rows minus ignored.
+                    stack: PullRequestStackOverview.make(
+                        for: summary,
+                        in: environment.settings.ignoredPullRequests.filter(session.inboxRows)
+                    ),
                     // A merged pull request is not one you are still reviewing, so the screen
                     // that was reviewing it goes away. Queued rather than done — the write is in
                     // the outbox (ADR 0006) — but the decision is made, and standing in a diff
