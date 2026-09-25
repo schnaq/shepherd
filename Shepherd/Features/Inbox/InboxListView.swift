@@ -16,6 +16,9 @@ struct InboxListView: View {
     let isKeyboardOwner: Bool
 
     @FocusState private var isListFocused: Bool
+    /// Whether the selection change about to arrive came from a click on a row, which is the
+    /// one kind that must not scroll the list.
+    @State private var isClickSelection = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -156,7 +159,7 @@ struct InboxListView: View {
                     localized: "Pull requests waiting on you, yours, and the ones you are part of."
                 )
             )
-        } else if model.visibleRows.isEmpty {
+        } else if model.filteredRows.isEmpty {
             // Two empty states, because an empty list means two opposite things. The designed one
             // is for the pile actually being cleared; the generic one is still what a filter with
             // no matches gets, and what the three other rails get, because "you have no open pull
@@ -203,6 +206,10 @@ struct InboxListView: View {
                                     // which read as a list that ignores its clicks
                                     // (`onClick(_:onDoubleClick:)`).
                                     .onClick {
+                                        // The row is under the pointer, so it is on screen:
+                                        // scrolling to it would only move the list away from
+                                        // where the reader is looking.
+                                        if model.selectedID != row.id { isClickSelection = true }
                                         model.select(row.id)
                                     } onDoubleClick: {
                                         onOpen(row.id)
@@ -231,6 +238,13 @@ struct InboxListView: View {
                     }
                 }
                 .onChange(of: model.selectedID) { _, id in
+                    // A click's selection is already in view; `j`/`k`, a restore, a deep link
+                    // and a clamp after a filter change can all land off screen, and those
+                    // still scroll.
+                    if isClickSelection {
+                        isClickSelection = false
+                        return
+                    }
                     guard let id else { return }
                     withAnimation(.easeOut(duration: 0.12)) {
                         proxy.scrollTo(id, anchor: .center)

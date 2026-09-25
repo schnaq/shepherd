@@ -563,21 +563,30 @@ final class InboxModel {
 
     /// The rows the centre list shows, after every rail filter.
     var filteredRows: [PullRequestSummary] {
-        allRows.filter { row in
-            guard smartView.matches(row) else { return false }
-            if let provenanceFilter, !provenanceFilter.matches(row) { return false }
-            // Case-insensitive: the rail always sets this from a row it is showing, but a
-            // `shepherd://inbox?filter=repo:…` link carries whatever casing was typed.
-            if let repoFilter, !row.repo.isSameRepository(as: repoFilter) { return false }
-            // A row with no risk at all — nobody has opened it, so there is no diff to judge and
-            // no verdict — is filtered *out* rather than kept: the facet is a claim about risk,
-            // and "we do not know" is not one of its levels.
-            if let riskFilter, triage?.risk(for: row.id) != riskFilter { return false }
-            // No "we do not know" case, unlike the risk facet above: every row has a lane, and a
-            // row nothing has been computed for is a full review (ADR 0027).
-            if let laneFilter, trust.lane(for: row.id) != laneFilter { return false }
-            return true
-        }
+        allRows.filter(passesRail)
+    }
+
+    /// Whether one row survives every rail filter — ``filteredRows``' predicate, on its own.
+    ///
+    /// Split out so ``selectedRow`` can ask it of one row. The grouping and sorting after it only
+    /// ever *arrange* the filtered rows (``InboxGrouper`` partitions, it drops nothing), so "is the
+    /// selected row visible" is this question and not the whole pipeline.
+    /// - Parameter row: The row to test.
+    /// - Returns: `true` when the centre list shows it.
+    private func passesRail(_ row: PullRequestSummary) -> Bool {
+        guard smartView.matches(row) else { return false }
+        if let provenanceFilter, !provenanceFilter.matches(row) { return false }
+        // Case-insensitive: the rail always sets this from a row it is showing, but a
+        // `shepherd://inbox?filter=repo:…` link carries whatever casing was typed.
+        if let repoFilter, !row.repo.isSameRepository(as: repoFilter) { return false }
+        // A row with no risk at all — nobody has opened it, so there is no diff to judge and
+        // no verdict — is filtered *out* rather than kept: the facet is a claim about risk,
+        // and "we do not know" is not one of its levels.
+        if let riskFilter, triage?.risk(for: row.id) != riskFilter { return false }
+        // No "we do not know" case, unlike the risk facet above: every row has a lane, and a
+        // row nothing has been computed for is a full review (ADR 0027).
+        if let laneFilter, trust.lane(for: row.id) != laneFilter { return false }
+        return true
     }
 
     /// The grouped sections, ordered by the user's sort choice.
@@ -606,9 +615,16 @@ final class InboxModel {
     }
 
     /// The selected row, if it is still visible.
+    ///
+    /// One lookup and one ``passesRail(_:)``, not a search of ``visibleRows``: this is read on
+    /// every click — by the detail panel, and by the screen that hands the row to ⌘K — and
+    /// ``visibleRows`` is the whole filter → group → sort pipeline with nothing cached behind it.
+    /// The answer is the same, because the grouping and the sort drop no row.
     var selectedRow: PullRequestSummary? {
-        guard let selectedID else { return nil }
-        return visibleRows.first { $0.id == selectedID }
+        guard let selectedID, let row = allRows.first(where: { $0.id == selectedID }) else {
+            return nil
+        }
+        return passesRail(row) ? row : nil
     }
 
     /// The rail counts for the smart views.
