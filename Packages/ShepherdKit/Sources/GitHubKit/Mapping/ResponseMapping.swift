@@ -30,6 +30,28 @@ public enum ResponseMapping {
         }
     }
 
+    /// Maps GraphQL's `MergeStateStatus` or REST's `mergeable_state`.
+    ///
+    /// Both endpoints spell the same values, GraphQL in upper case (`HAS_HOOKS`) and REST in lower
+    /// case (`has_hooks`), so one function serves the sweep and the detail fetch. A value GitHub
+    /// adds later maps to `nil` rather than to ``MergeStateStatus/unknown``: `unknown` is GitHub's
+    /// own "not computed yet", and a state this build cannot name is better read as "not sent"
+    /// than as a claim about the pull request.
+    static func mergeStateStatus(_ raw: String?) -> MergeStateStatus? {
+        guard let value = raw?.uppercased() else { return nil }
+        switch value {
+        case "BEHIND": return .behind
+        case "BLOCKED": return .blocked
+        case "CLEAN": return .clean
+        case "DIRTY": return .dirty
+        case "DRAFT": return .draft
+        case "HAS_HOOKS": return .hasHooks
+        case "UNSTABLE": return .unstable
+        case "UNKNOWN": return .unknown
+        default: return nil
+        }
+    }
+
     /// Maps REST's boolean `mergeable` plus `mergeable_state`.
     static func mergeable(restValue: Bool?, state: String?) -> Mergeable? {
         if let restValue {
@@ -165,7 +187,8 @@ public enum ResponseMapping {
             checkRollup: rollup,
             myRelation: relations,
             labels: (node.labels?.nodes ?? []).compactMap { $0?.name },
-            mergeable: mergeable(node.mergeable)
+            mergeable: mergeable(node.mergeable),
+            mergeStateStatus: mergeStateStatus(node.mergeStateStatus)
         )
     }
 
@@ -459,7 +482,8 @@ public enum ResponseMapping {
             checkRollup: rollup,
             myRelation: relations,
             labels: (dto.labels ?? []).compactMap(\.name),
-            mergeable: mergeable(restValue: dto.mergeable, state: dto.mergeableState)
+            mergeable: mergeable(restValue: dto.mergeable, state: dto.mergeableState),
+            mergeStateStatus: mergeStateStatus(dto.mergeableState)
         )
     }
 

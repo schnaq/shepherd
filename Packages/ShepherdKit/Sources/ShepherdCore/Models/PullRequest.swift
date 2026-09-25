@@ -20,6 +20,32 @@ public enum Mergeable: String, Sendable, Codable, Hashable, CaseIterable {
     case unknown
 }
 
+/// Why GitHub would or would not merge the pull request right now, in more detail than
+/// ``Mergeable``.
+///
+/// GitHub's `mergeStateStatus` (GraphQL) and `mergeable_state` (REST), mapped by GitHubKit. The
+/// merge series (ADR 0041) reads only ``behind``, to know when to bring a branch up to date; the
+/// other cases are stored so the row says what GitHub said, not a guess. Absent (`nil`) means the
+/// server did not send the field, or sent a value this build does not know.
+public enum MergeStateStatus: String, Sendable, Codable, Hashable, CaseIterable {
+    /// The head branch is behind its base and the repository requires it to be up to date.
+    case behind
+    /// Merging is blocked, for example by a missing required review.
+    case blocked
+    /// Mergeable, and every commit status passed.
+    case clean
+    /// The merge commit cannot be created cleanly, usually because of a conflict.
+    case dirty
+    /// The pull request is a draft.
+    case draft
+    /// Mergeable with passing statuses, and pre-receive hooks exist.
+    case hasHooks
+    /// Mergeable, but a non-required status failed.
+    case unstable
+    /// GitHub has not computed the state yet.
+    case unknown
+}
+
 /// The rolled-up CI state of a pull request's head commit, plus per-state counts.
 ///
 /// The GraphQL inbox sweep only carries the rolled-up `state` and the total number of
@@ -170,6 +196,11 @@ public struct PullRequestSummary: Sendable, Codable, Hashable, Identifiable {
     public var labels: [String]
     /// Whether GitHub considers the pull request mergeable.
     public var mergeable: Mergeable?
+    /// GitHub's finer-grained merge state, if the server sent one (ADR 0041).
+    ///
+    /// Optional, and decoded with `decodeIfPresent` by the synthesised `Codable`, so a summary
+    /// cached before the field existed still decodes.
+    public var mergeStateStatus: MergeStateStatus?
 
     /// Creates an inbox row.
     public init(
@@ -191,7 +222,8 @@ public struct PullRequestSummary: Sendable, Codable, Hashable, Identifiable {
         checkRollup: CheckRollup? = nil,
         myRelation: Set<Relation> = [],
         labels: [String] = [],
-        mergeable: Mergeable? = nil
+        mergeable: Mergeable? = nil,
+        mergeStateStatus: MergeStateStatus? = nil
     ) {
         self.id = id
         self.repo = repo
@@ -212,6 +244,7 @@ public struct PullRequestSummary: Sendable, Codable, Hashable, Identifiable {
         self.myRelation = myRelation
         self.labels = labels
         self.mergeable = mergeable
+        self.mergeStateStatus = mergeStateStatus
     }
 
     /// `owner/name#number`, the shorthand used in logs and notifications.

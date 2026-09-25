@@ -63,6 +63,7 @@ public final class DatabaseManager: Sendable {
         migrator.registerMigration("v6", migrate: DatabaseSchema.addV6)
         migrator.registerMigration("v7", migrate: DatabaseSchema.addV7)
         migrator.registerMigration("v8", migrate: DatabaseSchema.addV8)
+        migrator.registerMigration("v9", migrate: DatabaseSchema.addV9)
         return migrator
     }
 
@@ -665,5 +666,14 @@ enum DatabaseSchema {
     /// code into the text the log reads and make every reader of that column parse it.
     static func addV8(_ db: Database) throws {
         try db.execute(sql: "ALTER TABLE outbox ADD COLUMN lastErrorCode TEXT")
+    }
+
+    /// v9: `pull_requests.mergeStateStatus`, GitHub's finer-grained merge state (ADR 0041).
+    ///
+    /// The merge series reads `behind` from it to know when to bring a branch up to date before
+    /// merging. One nullable column, additive: every row stored before reads back with no state,
+    /// which the series treats as "not behind", and the next sweep fills it in.
+    static func addV9(_ db: Database) throws {
+        try db.execute(sql: "ALTER TABLE pull_requests ADD COLUMN mergeStateStatus TEXT")
     }
 }

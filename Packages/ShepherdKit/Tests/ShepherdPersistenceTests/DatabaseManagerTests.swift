@@ -34,7 +34,7 @@ final class MigrationTests: XCTestCase {
         // edit to `createV1` — which would silently skip on existing installs — fails CI.
         XCTAssertEqual(
             DatabaseManager.migrator.migrations,
-            ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"]
+            ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"]
         )
     }
 
@@ -1174,5 +1174,85 @@ final class OutboxErrorCodeMigrationTests: XCTestCase {
         let parked = try await database.outboxItem(id: item.id)
         XCTAssertEqual(parked?.lastError, "head moved")
         XCTAssertNil(parked?.lastErrorCode, "the code never outlives the text it belongs to")
+    }
+}
+
+/// Migration v9: `pull_requests.mergeStateStatus` (ADR 0041).
+final class MergeStateStatusMigrationTests: XCTestCase {
+    func testV9AddsOneNullableColumnAndARowWrittenBeforeItReadsBackWithoutAState() async throws {
+        // A database migrated only as far as v8, holding a pull request an older build stored.
+        let queue = try DatabaseQueue()
+        var upToV8 = DatabaseMigrator()
+        upToV8.registerMigration("v1", migrate: DatabaseSchema.createV1)
+        upToV8.registerMigration("v2", migrate: DatabaseSchema.addV2)
+        upToV8.registerMigration("v3", migrate: DatabaseSchema.addV3)
+        upToV8.registerMigration("v4", migrate: DatabaseSchema.addV4)
+        upToV8.registerMigration("v5", migrate: DatabaseSchema.addV5)
+        upToV8.registerMigration("v6", migrate: DatabaseSchema.addV6)
+        upToV8.registerMigration("v7", migrate: DatabaseSchema.addV7)
+        upToV8.registerMigration("v8", migrate: DatabaseSchema.addV8)
+        try upToV8.migrate(queue)
+        let before = try await queue.read { db in
+            try db.columns(in: "pull_requests").map(\.name)
+        }
+        XCTAssertFalse(before.contains("mergeStateStatus"))
+        try await queue.write { db in
+            try db.execute(sql: "INSERT INTO repos (fullName, owner, name) VALUES ('schnaq/review', 'schnaq', 'review')")
+            try db.execute(
+                sql: """
+                    INSERT INTO pull_requests (id, repoFullName, number, title, authorLogin,
+                        authorKind, createdAt, updatedAt, isDraft, additions, deletions,
+                        changedFiles, headRefName, headRefOid, baseRefName, checkTotal,
+                        checkSuccess, checkFailure, checkPending, relations, labels, mergeable)
+                    VALUES ('PR_old', 'schnaq/review', 7, 'Old row', 'octocat', 'human', 0, 0, 0,
+                        1, 1, 1, 'fix', 'abc', 'main', 0, 0, 0, 0, '[]', '[]', 'mergeable')
+                    """
+            )
+        }
+
+        let database = try DatabaseManager(writer: queue)
+        let columns = try await database.writer.read { db in try db.columns(in: "pull_requests") }
+        let column = try XCTUnwrap(columns.first { $0.name == "mergeStateStatus" })
+        XCTAssertEqual(column.type, "TEXT")
+        XCTAssertFalse(column.isNotNull, "additive: every existing row has no state")
+
+        let loaded = try await database.fetchPullRequestSummary(id: "PR_old")
+        XCTAssertEqual(loaded?.mergeable, .mergeable)
+        XCTAssertNil(loaded?.mergeStateStatus)
+    }
+
+    func testEveryMergeStateStatusRoundTripsThroughTheInbox() async throws {
+        let database = try DatabaseManager.inMemory()
+        for state in MergeStateStatus.allCases {
+            var summary = PersistenceFixtures.summary()
+            summary.mergeStateStatus = state
+            try await database.savePullRequestSummaries([summary])
+            let loaded = try await database.fetchPullRequestSummary(id: summary.id)
+            XCTAssertEqual(loaded?.mergeStateStatus, state)
+        }
+
+        var cleared = PersistenceFixtures.summary()
+        cleared.mergeStateStatus = nil
+        try await database.savePullRequestSummaries([cleared])
+        let loaded = try await database.fetchPullRequestSummary(id: cleared.id)
+        XCTAssertNil(loaded?.mergeStateStatus, "a sweep without the field clears it")
+    }
+
+    func testADetailWithoutAStateKeepsTheOneTheSweepStored() async throws {
+        let database = try DatabaseManager.inMemory()
+        var summary = PersistenceFixtures.summary()
+        summary.mergeStateStatus = .behind
+        try await database.savePullRequestSummaries([summary])
+
+        var detailSummary = summary
+        detailSummary.mergeStateStatus = nil
+        try await database.savePullRequestDetail(PersistenceFixtures.detail(summary: detailSummary))
+        let kept = try await database.fetchPullRequestSummary(id: summary.id)
+        XCTAssertEqual(kept?.mergeStateStatus, .behind)
+
+        detailSummary.mergeStateStatus = .clean
+        try await database.savePullRequestDetail(PersistenceFixtures.detail(summary: detailSummary))
+        let replaced = try await database.fetchPullRequestSummary(id: summary.id)
+        XCTAssertEqual(replaced?.mergeStateStatus, .clean, "a detail that knows the state wins")
     }
 }

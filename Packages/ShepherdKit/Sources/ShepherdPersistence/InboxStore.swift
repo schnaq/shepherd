@@ -217,6 +217,12 @@ extension DatabaseManager {
                 record.checkFailure = existing.checkFailure
                 record.checkPending = existing.checkPending
             }
+            if detail.summary.mergeStateStatus == nil, let existing {
+                // REST's `mergeable_state` normally carries the same state the sweep read from
+                // `mergeStateStatus`; when a detail fetch lacks it, absent means "unknown", so the
+                // sweep's `behind` survives for the merge series (ADR 0041).
+                record.mergeStateStatus = existing.mergeStateStatus
+            }
             record.bodyMarkdown = detail.bodyMarkdown
             record.commitsJSON = ColumnCoding.encodeJSON(detail.commits)
             record.timelineJSON = ColumnCoding.encodeJSON(detail.timeline)
