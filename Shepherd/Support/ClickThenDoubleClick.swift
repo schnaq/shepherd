@@ -42,6 +42,10 @@ enum PointerClick {
     @MainActor
     static var isSecondOfDoubleClick: Bool {
         guard let event = NSApp.currentEvent else { return false }
+        // `currentEvent` is whatever AppKit dispatched last, and an activation that does not come
+        // through the event loop can still find an old double-click there. Only a click from the
+        // last moment counts as the one being handled.
+        guard ProcessInfo.processInfo.systemUptime - event.timestamp < 0.5 else { return false }
         switch event.type {
         case .leftMouseDown, .leftMouseUp:
             return event.clickCount == 2

@@ -611,9 +611,22 @@ final class InboxModel {
     var sections: [InboxSection] {
         let sorted = sortedSections
         // Only the selected row is ever held, whatever path moved the cursor.
-        guard let selectionAnchor, selectionAnchor.id == selectedID else { return sorted }
-        return selectionAnchor.apply(to: sorted, context: anchorContext)
+        let shown: [InboxSection]
+        if let selectionAnchor, selectionAnchor.id == selectedID {
+            shown = selectionAnchor.apply(to: sorted, context: anchorContext)
+        } else {
+            shown = sorted
+        }
+        lastShownSections = shown
+        return shown
     }
+
+    /// The sections as ``sections`` last returned them, which is the list on screen.
+    ///
+    /// Kept so ``select(_:)`` can take its anchor from what the reader clicked without running
+    /// the filter → group → sort pipeline once more for every click. Not observed: it is a
+    /// by-product of reading ``sections``, never a reason to redraw.
+    @ObservationIgnored private var lastShownSections: [InboxSection]?
 
     /// The sections exactly as grouped and sorted, with no row held in place.
     private var sortedSections: [InboxSection] {
@@ -1327,8 +1340,11 @@ final class InboxModel {
         guard selectedID != id else { return }
         // From the list as it is on screen, before the cursor moves: the position to keep is the
         // one the reader clicked or walked to, which may itself be held by the previous anchor.
-        selectionAnchor = id.flatMap {
-            InboxSelectionAnchor.capture(id: $0, in: sections, context: anchorContext)
+        // A row the last drawn list does not have yet (it arrived since) is looked up in a fresh one.
+        selectionAnchor = id.flatMap { id in
+            let context = anchorContext
+            return lastShownSections.flatMap { InboxSelectionAnchor.capture(id: id, in: $0, context: context) }
+                ?? InboxSelectionAnchor.capture(id: id, in: sections, context: context)
         }
         selectedID = id
         detail = nil
