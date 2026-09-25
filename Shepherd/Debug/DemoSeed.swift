@@ -508,6 +508,30 @@ enum DemoSeed {
     ///
     /// Nothing drains them: the sweep loop is off in demo mode, and a manual drain would fail
     /// against ``DemoTransport`` and leave them as they are.
+    /// One merge series in progress on konduit (ADR 0041), so a screenshot shows the chips: the
+    /// first entry merged, the second waiting for GitHub's branch update, the third in line. The
+    /// active entry stays in "updating branch" for the demo's lifetime — the demo never sweeps,
+    /// so no new head arrives and nothing is written.
+    /// - Parameter now: When the series was started.
+    static func mergeSeries(now: Date) -> MergeSeries {
+        let rows = pullRequests.filter { $0.repo == konduit }
+        func row(_ number: Int) -> PullRequestSummary? { rows.first { $0.number == number } }
+        var series = MergeSeries(
+            repository: konduit,
+            pullRequests: [row(86), row(90), row(88)].compactMap { $0 },
+            mergeMethod: "squash",
+            deletesHeadBranch: true,
+            now: now.addingTimeInterval(-600)
+        )
+        if series.entries.count == 3 {
+            series.entries[0].state = .merged
+            series.entries[1].state = .updatingBranch(from: series.entries[1].pinnedHeadOid)
+            series.entries[1].activeSince = now
+            series.entries[1].updateQueuedAt = now
+        }
+        return series
+    }
+
     static var outbox: [OutboxItem] {
         [
             OutboxItem(

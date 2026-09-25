@@ -156,6 +156,19 @@ struct InboxScreen: View {
             // One indexed `SELECT COUNT(*)`, and the notice's third condition: an inbox that
             // already has a history must not be offered one.
             await environment.refreshTrackRecordCount()
+            #if DEBUG
+            // `SHEPHERD_DEMO_MERGE_SERIES=1`: tick a few rows and open the merge-series sheet, for
+            // `Scripts/demo-screenshots.sh`. After a moment, so the seeded rows have arrived.
+            if DemoMode.isActive, ProcessInfo.processInfo.environment["SHEPHERD_DEMO_MERGE_SERIES"] == "1" {
+                try? await Task.sleep(for: .seconds(1.5))
+                for id in ["PR_demo_schnaq_unlock_229", "PR_demo_schnaq_unlock_231", "PR_demo_schnaq_unlock_233",
+                           "PR_demo_schnaq_konduit_88", "PR_demo_schnaq_shepherd_409", "PR_demo_schnaq_shepherd_405",
+                           "PR_demo_schnaq_shepherd_412", "PR_demo_acme_api_619"] {
+                    model.toggleMark(id)
+                }
+                presentMergeSeries()
+            }
+            #endif
         }
         .onChange(of: environment.intelligence.configuration) { _, _ in
             model.intelligence = environment.intelligence
