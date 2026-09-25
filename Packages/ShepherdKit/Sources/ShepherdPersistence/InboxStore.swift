@@ -148,6 +148,17 @@ extension DatabaseManager {
         }
     }
 
+    /// Whether the stored pull request is part of a GitHub stack — the drain's
+    /// `StackMembershipLookup`, which picks the asynchronous merge for a stacked one (ADR 0042).
+    ///
+    /// Read off the same record as ``fetchPullRequestSummary(id:)``, so "stacked" means exactly
+    /// what a row's chip shows: all four stack columns hold a value. A pull request the inbox does
+    /// not hold reads as unstacked, which is how every merge worked before stacks.
+    /// - Parameter id: The pull request's GraphQL node id.
+    public func isInStack(prID id: String) async throws -> Bool {
+        try await fetchPullRequestSummary(id: id)?.stack != nil
+    }
+
     /// Reads one inbox row by repository and number.
     ///
     /// The node id is the primary key everywhere in Shepherd, so this is the *only* lookup that

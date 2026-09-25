@@ -1446,4 +1446,21 @@ final class PullRequestStackMigrationTests: XCTestCase {
         let replaced = try await database.fetchPullRequestSummary(id: summary.id)
         XCTAssertEqual(replaced?.stack, detailSummary.stack, "a detail that knows the stack wins")
     }
+
+    func testTheDrainsMembershipLookupReadsTheStoredStack() async throws {
+        let database = try DatabaseManager.inMemory()
+        var stacked = PersistenceFixtures.summary()
+        stacked.stack = PullRequestStack(number: 7, size: 3, position: 2, baseRefName: "main")
+        try await database.savePullRequestSummaries([stacked])
+        let isStacked = try await database.isInStack(prID: stacked.id)
+        XCTAssertTrue(isStacked)
+
+        stacked.stack = nil
+        try await database.savePullRequestSummaries([stacked])
+        let afterLeaving = try await database.isInStack(prID: stacked.id)
+        XCTAssertFalse(afterLeaving, "the sweep's null is the answer the next merge gets")
+
+        let unknown = try await database.isInStack(prID: "PR_not_in_the_inbox")
+        XCTAssertFalse(unknown, "a pull request the inbox does not hold merges the ordinary way")
+    }
 }
