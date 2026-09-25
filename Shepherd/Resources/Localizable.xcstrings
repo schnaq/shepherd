@@ -18850,6 +18850,26 @@
           }
         }
       }
+    },
+    "Queued on GitHub: %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf GitHub eingereiht: %@."
+          }
+        }
+      }
+    },
+    "GitHub is merging the stack for %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub mergt den Stack für %@."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -611,6 +611,7 @@ final class AppEnvironment {
             draftConflicts.raise(conflict)
         }
         confirmMerge(event)
+        confirmStackedMergeAccepted(event)
         followBranchUpdate(event)
         advanceMergeSeries(event)
         // Fire-and-forget by construction: the coordinator spawns its own task and swallows
@@ -659,6 +660,30 @@ final class AppEnvironment {
         scheduleSyncAfterMerge()
     }
 
+    /// Says so when GitHub took a stacked pull request's merge but had not finished it when the
+    /// drain let go (ADR 0042): queued in the merge queue, or still merging the stack.
+    ///
+    /// ``confirmMerge(_:)``'s loop, with one deliberate difference: nothing here counts as
+    /// *merged*. `session.noteMerged` is not called, because the merged ids feed a merge series'
+    /// reconciliation, which would take the entry for landed and step the next pull request on
+    /// rows from before the merge. The sweep is scheduled all the same — it is what reads the
+    /// outcome — and when the pull request leaves the inbox, the series' vanished-merge check asks
+    /// GitHub and settles it.
+    /// - Parameter event: The event the sync engine emitted.
+    private func confirmStackedMergeAccepted(_ event: SyncEvent) {
+        guard case .mutationSent(let sent) = event else { return }
+        let slug = "\(sent.repo.fullName)#\(sent.number)"
+        switch sent.kind {
+        case .mergeEnqueued:
+            toasts.success(String(localized: "Queued on GitHub: \(slug)."))
+        case .mergeStarted:
+            toasts.success(String(localized: "GitHub is merging the stack for \(slug)."))
+        default:
+            return
+        }
+        scheduleSyncAfterMerge()
+    }
+
     /// Sweeps soon after GitHub accepted an *Update branch* (ADR 0041).
     ///
     /// GitHub answers the update with a `202` and makes the merge commit a moment later, so the
@@ -684,6 +709,11 @@ final class AppEnvironment {
         switch sent.kind {
         case .merged: mergeSeries.noteMerged(sent.prID)
         case .branchUpdated: mergeSeries.noteBranchUpdated(sent.prID)
+        case .mergeEnqueued, .mergeStarted:
+            // Accepted, not merged (ADR 0042): the entry stays `merging`, its row is gone, and the
+            // pass's vanished-merge check asks GitHub once the pull request leaves the inbox.
+            // `noteMerged` here would step the next entry on rows from before the merge.
+            break
         default: break
         }
     }
