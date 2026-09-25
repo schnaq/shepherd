@@ -439,6 +439,10 @@ final class OutboxDrainTests: XCTestCase {
             .merged(method: "rebase")
         )
         XCTAssertEqual(SyncEngine.sentKind(for: .markReadyForReview), .markedReadyForReview)
+        XCTAssertEqual(
+            SyncEngine.sentKind(for: .updateBranch(expectedHeadOid: "head-1")),
+            .branchUpdated
+        )
     }
 
     func testASubmittedReviewIsAnnouncedWithItsVerdictAndCommentCount() async throws {
@@ -557,6 +561,70 @@ final class OutboxDrainTests: XCTestCase {
         )
         let stored = try await store.allOutboxItems()
         XCTAssertEqual(stored.first?.state, .conflicted)
+    }
+
+    // MARK: - Update branch (ADR 0041)
+
+    func testAnUpdateBranchIsSentPinnedAndAnnounced() async throws {
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(.updateBranch(expectedHeadOid: "head-1"), in: store, number: 7)
+        let engine = makeEngine(github: github, store: store)
+
+        let sent = sentMutations(in: await drainCollectingEvents(engine))
+
+        let updates = await github.branchUpdates
+        XCTAssertEqual(updates.map(\.number), [7])
+        XCTAssertEqual(updates.map(\.sha), ["head-1"])
+        XCTAssertEqual(sent.map(\.kind), [.branchUpdated])
+        XCTAssertEqual(sent.first?.number, 7)
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty)
+        let probes = await github.headOidRequests
+        XCTAssertTrue(probes.isEmpty, "the pin travels with the request, so nothing is probed")
+    }
+
+    func testAnUpdateAgainstAMovedHeadIsParkedAsAConflictAndNotAnnounced() async throws {
+        // The series pinned a head the user saw; a push since then must not be built on. It is
+        // parked exactly like the merge's stale head, so the series' "head moved" skip can read
+        // one kind of row for both.
+        let github = MockGitHub()
+        await github.setUpdateBranchError(.staleHead(expected: "head-1", actual: nil))
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(.updateBranch(expectedHeadOid: "head-1"), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        let emitted = await drainCollectingEvents(engine)
+
+        let conflicts = emitted.compactMap { event -> DraftConflict? in
+            if case .draftConflict(let conflict) = event { return conflict }
+            return nil
+        }
+        XCTAssertEqual(conflicts.map(\.expectedHeadOid), ["head-1"])
+        XCTAssertTrue(sentMutations(in: emitted).isEmpty)
+        let stored = try await store.allOutboxItems()
+        XCTAssertEqual(stored.first?.state, .conflicted)
+        XCTAssertEqual(
+            stored.first?.lastError,
+            "The pull request moved on before the branch could be updated"
+        )
+    }
+
+    func testAnUpdateGitHubRefusesIsParkedAsFailed() async throws {
+        let github = MockGitHub()
+        await github.setUpdateBranchError(
+            .validationFailed(message: "merge conflict between base and head")
+        )
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(.updateBranch(expectedHeadOid: "head-1"), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        let emitted = await drainCollectingEvents(engine)
+
+        XCTAssertTrue(sentMutations(in: emitted).isEmpty)
+        let stored = try await store.allOutboxItems()
+        XCTAssertEqual(stored.first?.state, .failed)
+        XCTAssertEqual(stored.first?.lastError?.contains("merge conflict"), true)
     }
 
     // MARK: - Failure and backoff

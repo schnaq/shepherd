@@ -233,6 +233,7 @@ final class ModelCodingTests: XCTestCase {
             .unresolveThread(threadID: "RT_2"),
             .merge(method: "squash", expectedHeadOid: "abc"),
             .markReadyForReview,
+            .updateBranch(expectedHeadOid: "abc"),
             // The conversation actions belong on this list and not on the issue one: they go
             // through the issue *endpoints* but carry no `updatedAt`, because a comment says
             // what it says however the pull request has moved since.
@@ -296,6 +297,25 @@ final class ModelCodingTests: XCTestCase {
         XCTAssertTrue(merge.contains(#""method":"rebase""#))
         XCTAssertTrue(merge.contains(#""expectedHeadOid":"abc""#))
         XCTAssertTrue(merge.contains(#""deletesHeadBranch":true"#))
+    }
+
+    func testAnUpdateBranchRowRoundTripsPinnedToItsHead() throws {
+        // ADR 0041: the merge series' one new write. It is always pinned, so the SHA is a
+        // required value, and the shape is the same one-key object every other case writes.
+        let action = OutboxAction.updateBranch(expectedHeadOid: "abc")
+        let data = try JSONEncoder().encode(action)
+        XCTAssertEqual(
+            String(decoding: data, as: UTF8.self),
+            #"{"updateBranch":{"expectedHeadOid":"abc"}}"#
+        )
+        XCTAssertEqual(try JSONDecoder().decode(OutboxAction.self, from: data), action)
+        XCTAssertEqual(action.kind, "updateBranch")
+        XCTAssertNil(action.basedOnIssueUpdatedAt)
+        // An update with no pin would build on a head nobody saw, so a row without one is not
+        // guessed at: it fails to decode, and the claim skips it.
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(OutboxAction.self, from: Data(#"{"updateBranch":{}}"#.utf8))
+        )
     }
 
     func testTheCloseReasonsAreGitHubsOwnTwoWords() {

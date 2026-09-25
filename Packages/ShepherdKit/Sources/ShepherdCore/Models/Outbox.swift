@@ -56,6 +56,14 @@ public enum OutboxAction: Sendable, Codable, Hashable {
     case merge(method: String, expectedHeadOid: String?, deletesHeadBranch: Bool = false)
     /// Take the pull request out of draft state.
     case markReadyForReview
+    /// Bring the head branch up to date with its base: GitHub's *Update branch* button, queued
+    /// by a merge series for a pull request that is behind (ADR 0041).
+    ///
+    /// A GitHub API call like every other row here, not a push: GitHub makes the merge commit.
+    /// - Parameter expectedHeadOid: The head SHA the series pinned. Required, unlike the merge's
+    ///   optional one, because the series only ever updates a head the user saw: an update
+    ///   without a pin could carry a push nobody reviewed into the next merge.
+    case updateBranch(expectedHeadOid: String)
     /// Post a comment on the pull request's conversation.
     ///
     /// The conversation, not a review: GitHub's own *Comment* button writes an issue comment,
@@ -109,6 +117,7 @@ public enum OutboxAction: Sendable, Codable, Hashable {
         case .unresolveThread: return "unresolveThread"
         case .merge: return "merge"
         case .markReadyForReview: return "markReadyForReview"
+        case .updateBranch: return "updateBranch"
         case .addPullRequestComment: return "addPullRequestComment"
         case .closePullRequest: return "closePullRequest"
         case .addIssueComment: return "addIssueComment"
@@ -134,7 +143,7 @@ public enum OutboxAction: Sendable, Codable, Hashable {
              .reopenIssue(let updatedAt):
             return updatedAt
         case .submitReview, .replyToComment, .resolveThread, .unresolveThread, .merge,
-             .markReadyForReview, .addPullRequestComment, .closePullRequest:
+             .markReadyForReview, .updateBranch, .addPullRequestComment, .closePullRequest:
             return nil
         }
     }
@@ -165,7 +174,7 @@ public enum OutboxAction: Sendable, Codable, Hashable {
     /// The single key of an encoded action: the case's own name.
     private enum CodingKeys: String, CodingKey {
         case submitReview, replyToComment, resolveThread, unresolveThread, merge
-        case markReadyForReview
+        case markReadyForReview, updateBranch
         case addIssueComment, addIssueLabel, addIssueAssignee, closeIssue, reopenIssue
         case addPullRequestComment, closePullRequest
     }
@@ -188,6 +197,11 @@ public enum OutboxAction: Sendable, Codable, Hashable {
     /// The payload keys of ``merge(method:expectedHeadOid:deletesHeadBranch:)``.
     private enum MergeKeys: String, CodingKey {
         case method, expectedHeadOid, deletesHeadBranch
+    }
+
+    /// The payload keys of ``updateBranch(expectedHeadOid:)``.
+    private enum UpdateBranchKeys: String, CodingKey {
+        case expectedHeadOid
     }
 
     /// The payload keys of ``addPullRequestComment(body:)``.
@@ -263,6 +277,12 @@ public enum OutboxAction: Sendable, Codable, Hashable {
             // The case has no associated values, so its payload is the empty object the
             // compiler's own synthesis writes.
             try container.encode([String: String](), forKey: .markReadyForReview)
+        case .updateBranch(let expectedHeadOid):
+            var nested = container.nestedContainer(
+                keyedBy: UpdateBranchKeys.self,
+                forKey: .updateBranch
+            )
+            try nested.encode(expectedHeadOid, forKey: .expectedHeadOid)
         case .addPullRequestComment(let body):
             var nested = container.nestedContainer(
                 keyedBy: PullRequestCommentKeys.self,
@@ -379,6 +399,16 @@ public enum OutboxAction: Sendable, Codable, Hashable {
             )
         case .markReadyForReview:
             self = .markReadyForReview
+        case .updateBranch:
+            let nested = try container.nestedContainer(
+                keyedBy: UpdateBranchKeys.self,
+                forKey: .updateBranch
+            )
+            // Required, and deliberately not read tolerantly like the merge's branch flag: there
+            // is no honest default for a missing pin, so such a row fails to decode and the claim
+            // skips it rather than updating whatever the head happens to be.
+            let expectedHeadOid = try nested.decode(String.self, forKey: .expectedHeadOid)
+            self = .updateBranch(expectedHeadOid: expectedHeadOid)
         case .addPullRequestComment:
             let nested = try container.nestedContainer(
                 keyedBy: PullRequestCommentKeys.self,

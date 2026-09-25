@@ -307,6 +307,7 @@ struct SyncSettingsTab: View {
         case .unresolveThread: return String(localized: "Unresolve")
         case .merge: return String(localized: "Merge")
         case .markReadyForReview: return String(localized: "Mark ready for review")
+        case .updateBranch: return String(localized: "Update branch")
         case .addIssueComment: return String(localized: "Comment on an issue")
         case .addIssueLabel: return String(localized: "Add a label")
         case .addIssueAssignee: return String(localized: "Add an assignee")

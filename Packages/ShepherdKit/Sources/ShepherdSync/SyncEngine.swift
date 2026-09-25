@@ -1016,6 +1016,14 @@ public actor SyncEngine {
 
     private func handleOutboxFailure(_ item: OutboxItem, error: GitHubError) async {
         if case .staleHead(let expected, let actual) = error {
+            // Only the two head-pinned writes can answer with a stale head; the sentence names
+            // which one did not run.
+            let reason: String
+            if case .updateBranch = item.action {
+                reason = "The pull request moved on before the branch could be updated"
+            } else {
+                reason = "The pull request moved on before the merge could run"
+            }
             let conflict = DraftConflict(
                 prID: item.prID,
                 repo: item.repo,
@@ -1023,10 +1031,7 @@ public actor SyncEngine {
                 expectedHeadOid: expected,
                 actualHeadOid: actual ?? ""
             )
-            try? await store.markOutboxItemConflicted(
-                id: item.id,
-                reason: "The pull request moved on before the merge could run"
-            )
+            try? await store.markOutboxItemConflicted(id: item.id, reason: reason)
             emit(.draftConflict(conflict))
             return
         }
@@ -1111,6 +1116,17 @@ public actor SyncEngine {
 
         case .markReadyForReview:
             try await github.markReadyForReview(pullRequestID: item.prID)
+            return .sent
+
+        case .updateBranch(let expectedHeadOid):
+            // No probe first: the pin travels with the request as `expected_head_sha`, and
+            // GitHub's refusal comes back as `.staleHead`, which `handleOutboxFailure` parks the
+            // way it parks a merge's (ADR 0041). A probe would only widen the race it cannot close.
+            try await github.updatePullRequestBranch(
+                repo: item.repo,
+                number: item.number,
+                expectedHeadOid: expectedHeadOid
+            )
             return .sent
 
         // The five issue actions (ADR 0032's Sprint 4a amendment). Every one of them goes
@@ -1426,6 +1442,7 @@ public actor SyncEngine {
         case .unresolveThread: return .threadUnresolved
         case .merge(let method, _, _): return .merged(method: method)
         case .markReadyForReview: return .markedReadyForReview
+        case .updateBranch: return .branchUpdated
         case .addIssueComment: return .issueCommentAdded
         case .addIssueLabel(let name, _): return .issueLabelAdded(name: name)
         case .addIssueAssignee(let login, _): return .issueAssigneeAdded(login: login)

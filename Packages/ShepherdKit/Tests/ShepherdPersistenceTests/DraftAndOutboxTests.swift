@@ -134,6 +134,7 @@ final class OutboxStoreTests: XCTestCase {
             .unresolveThread(threadID: "PRRT_2"),
             .merge(method: "squash", expectedHeadOid: "abc123"),
             .markReadyForReview,
+            .updateBranch(expectedHeadOid: "def456"),
         ]
         for (index, action) in actions.enumerated() {
             var queued = item(action: action)

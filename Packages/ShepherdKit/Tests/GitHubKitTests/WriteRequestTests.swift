@@ -26,6 +26,11 @@ private struct MergeRequestBody: Decodable {
     var commit_title: String?
 }
 
+/// The `PUT /pulls/{n}/update-branch` body (ADR 0041).
+private struct UpdateBranchRequestBody: Decodable {
+    var expected_head_sha: String?
+}
+
 private struct ReplyRequestBody: Decodable {
     var body: String
 }
@@ -283,6 +288,105 @@ final class WriteRequestTests: XCTestCase {
                 return XCTFail("expected .notMergeable, got \(error)")
             }
             XCTAssertTrue(message.contains("not mergeable"))
+        }
+    }
+
+    // MARK: - Update branch (ADR 0041)
+
+    func testUpdatingABranchIsOnePutPinnedToTheHeadTheUserSaw() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "/update-branch",
+            Fixture.response(
+                json: "{\"message\":\"Updating pull request branch.\",\"url\":\"https://github.com\"}",
+                status: 202
+            )
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        try await client.updatePullRequestBranch(
+            repo: repo,
+            number: 128,
+            expectedHeadOid: "3f1a9c0d"
+        )
+
+        let request = await transport.onlyRequest()
+        XCTAssertEqual(request?.method, "PUT")
+        XCTAssertEqual(
+            request?.url.absoluteString,
+            "https://api.github.com/repos/schnaq/review/pulls/128/update-branch"
+        )
+        let body = try decodeBody(UpdateBranchRequestBody.self, from: request)
+        XCTAssertEqual(body.expected_head_sha, "3f1a9c0d")
+    }
+
+    func testAnUnpinnedUpdateSendsNoShaKeyRatherThanANull() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "/update-branch",
+            Fixture.response(json: "{\"message\":\"Updating pull request branch.\"}", status: 202)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        try await client.updatePullRequestBranch(repo: repo, number: 128, expectedHeadOid: nil)
+
+        let request = await transport.onlyRequest()
+        XCTAssertFalse(bodyText(request).contains("expected_head_sha"))
+    }
+
+    func testAHeadThatMovedBecomesStaleHeadLikeTheMergesConflict() async throws {
+        // GitHub answers a failed `expected_head_sha` with a 422, not the merge endpoint's 409,
+        // and the drain must park it the same way: the pin exists so that a push nobody saw is
+        // never built on.
+        let transport = MockTransport()
+        await transport.route(
+            "/update-branch",
+            Fixture.response(
+                json: "{\"message\":\"expected head sha didn't match current head ref.\"}",
+                status: 422
+            )
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            try await client.updatePullRequestBranch(
+                repo: repo,
+                number: 128,
+                expectedHeadOid: "3f1a9c0d"
+            )
+            XCTFail("expected a stale head error")
+        } catch let error as GitHubError {
+            guard case .staleHead(let expected, let actual) = error else {
+                return XCTFail("expected .staleHead, got \(error)")
+            }
+            XCTAssertEqual(expected, "3f1a9c0d")
+            XCTAssertNil(actual)
+        }
+    }
+
+    func testAnyOtherRefusedUpdateStaysAValidationError() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "/update-branch",
+            Fixture.response(
+                json: "{\"message\":\"merge conflict between base and head\"}",
+                status: 422
+            )
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            try await client.updatePullRequestBranch(
+                repo: repo,
+                number: 128,
+                expectedHeadOid: "3f1a9c0d"
+            )
+            XCTFail("expected a validation error")
+        } catch let error as GitHubError {
+            guard case .validationFailed(let message) = error else {
+                return XCTFail("expected .validationFailed, got \(error)")
+            }
+            XCTAssertTrue(message.contains("merge conflict"))
         }
     }
 
