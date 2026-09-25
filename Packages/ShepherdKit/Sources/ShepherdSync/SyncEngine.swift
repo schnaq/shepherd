@@ -1149,10 +1149,12 @@ public actor SyncEngine {
                 // The stored summary may simply not know yet: a stack made since the last sweep
                 // is refused by the synchronous endpoint. One read decides, and a stacked pull
                 // request is merged the way it has to be, in this same step.
-                guard try await github.pullRequestIsStacked(repo: item.repo, number: item.number) else {
-                    throw GitHubError.validationFailed(message: message)
-                }
-                return try await mergeStacked(item, method: method, expectedHeadOid: expectedHeadOid)
+                return try await mergeStackedIfRefusalWasStacking(
+                    item,
+                    method: method,
+                    expectedHeadOid: expectedHeadOid,
+                    otherwise: .validationFailed(message: message)
+                )
             } catch GitHubError.notMergeable(let message) {
                 // GitHub answers a merge on a pull request that is *already merged* with the same
                 // `405` it answers one that cannot be merged at all with, and `405` is not
@@ -1161,16 +1163,15 @@ public actor SyncEngine {
                 // marked succeeded after `execute` returns, so a crash in between leaves a
                 // `sending` row that the next launch resets to `pending` and sends again.
                 // One read tells the two apart, and it is only made on the refusal.
-                guard try await github.isPullRequestMerged(
-                    repo: item.repo,
-                    number: item.number
-                ) else {
+                guard try await isAlreadyMerged(item) else {
                     // Not merged — but perhaps stacked since the last sweep, which this endpoint
                     // refuses too (see the `422` above).
-                    guard try await github.pullRequestIsStacked(repo: item.repo, number: item.number) else {
-                        throw GitHubError.notMergeable(message: message)
-                    }
-                    return try await mergeStacked(item, method: method, expectedHeadOid: expectedHeadOid)
+                    return try await mergeStackedIfRefusalWasStacking(
+                        item,
+                        method: method,
+                        expectedHeadOid: expectedHeadOid,
+                        otherwise: .notMergeable(message: message)
+                    )
                 }
             }
             // The head branch is deliberately *not* deleted here: it is the drain's follow-up,
@@ -1490,6 +1491,36 @@ public actor SyncEngine {
         return (head, newest)
     }
 
+    /// Whether GitHub's refusal of a merge write is, in fact, a pull request that is already
+    /// merged: a crash between the write landing and the row being marked succeeded would
+    /// otherwise leave a `sending` row that the next launch resets and re-sends, only to have the
+    /// retry refused the same way. Shared by the synchronous merge's `405` and the asynchronous
+    /// merge's own version of it (ADR 0042), which answer the question with the same read.
+    private func isAlreadyMerged(_ item: OutboxItem) async throws -> Bool {
+        try await github.isPullRequestMerged(repo: item.repo, number: item.number)
+    }
+
+    /// Reroutes a refused merge write to the asynchronous endpoint when the refusal means the
+    /// pull request became part of a stack since the last sweep (ADR 0042); rethrows the refusal
+    /// otherwise. Shared by the synchronous merge's `422` and `405` refusals, which each ask the
+    /// same question once they have ruled out their own more specific reading of the refusal.
+    /// - Parameters:
+    ///   - item: The merge row.
+    ///   - method: The merge method's raw value.
+    ///   - expectedHeadOid: The pin.
+    ///   - refusal: The error to throw when the pull request is not, after all, part of a stack.
+    private func mergeStackedIfRefusalWasStacking(
+        _ item: OutboxItem,
+        method: String,
+        expectedHeadOid: String?,
+        otherwise refusal: GitHubError
+    ) async throws -> OutboxOutcome {
+        guard try await github.pullRequestIsStacked(repo: item.repo, number: item.number) else {
+            throw refusal
+        }
+        return try await mergeStacked(item, method: method, expectedHeadOid: expectedHeadOid)
+    }
+
     /// Merges a pull request that is part of a stack, through GitHub's asynchronous API
     /// (ADR 0042).
     ///
@@ -1535,7 +1566,7 @@ public actor SyncEngine {
         } catch GitHubError.notMergeable(let message) {
             // A closed pull request is "not ready" to this endpoint, and a merged one is closed —
             // the synchronous merge's `405` problem in another status code, settled the same way.
-            guard try await github.isPullRequestMerged(repo: item.repo, number: item.number) else {
+            guard try await isAlreadyMerged(item) else {
                 throw GitHubError.notMergeable(message: message)
             }
             return .sentStackedMerge(.merged(method: method))

@@ -87,11 +87,3 @@ struct RESTAsyncMergeDTO: Decodable {
         )
     }
 }
-
-/// The body of `PUT /repos/{owner}/{repo}/pulls/{number}/merge-async`. A `nil` SHA is omitted
-/// rather than sent as a null; `merge_action` is never sent, so GitHub takes its default — the
-/// merge queue where the repository has one — which is what a Merge press means.
-struct AsyncMergeBody: Encodable {
-    var sha: String?
-    var mergeMethod: String
-}

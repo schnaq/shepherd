@@ -255,7 +255,7 @@ struct MergeSheet: View {
     /// one.
     private var deletesBranchBinding: Binding<Bool> {
         Binding(
-            get: { isStacked ? false : settings.deletesBranchAfterMerge },
+            get: { deletesBranchForThisMerge },
             set: { if !isStacked { settings.deletesBranchAfterMerge = $0 } }
         )
     }

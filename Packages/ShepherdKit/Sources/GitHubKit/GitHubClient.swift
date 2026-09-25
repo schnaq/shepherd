@@ -1138,7 +1138,7 @@ public actor GitHubClient {
         expectedHeadOid: String?
     ) async throws -> AsyncMergeResult {
         let encodedBody = try RESTJSON.encode(
-            AsyncMergeBody(sha: expectedHeadOid, mergeMethod: method.rawValue)
+            MergeBody(commitTitle: nil, sha: expectedHeadOid, mergeMethod: method.rawValue)
         )
         do {
             let response = try await performREST(
@@ -1843,7 +1843,11 @@ struct IssueStateBody: Encodable {
     var stateReason: String?
 }
 
-/// The body of `PUT /repos/{owner}/{repo}/pulls/{number}/merge`.
+/// The body of `PUT /repos/{owner}/{repo}/pulls/{number}/merge`, and, with `commitTitle` left
+/// `nil`, of `PUT …/merge-async` (ADR 0042) as well — the asynchronous endpoint takes no commit
+/// title. A `nil` field is omitted rather than sent as a null; `merge_action` is never sent, so
+/// GitHub takes its default there — the merge queue where the repository has one — which is what
+/// a Merge press means either way.
 struct MergeBody: Encodable {
     var commitTitle: String?
     var sha: String?

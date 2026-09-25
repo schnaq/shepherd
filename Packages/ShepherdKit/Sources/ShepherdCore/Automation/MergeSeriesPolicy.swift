@@ -204,6 +204,21 @@ public enum MergeSeriesPolicy {
         case merge
     }
 
+    /// Waits from `anchor` — recording `now` there the first time it is asked — then skips once
+    /// `gracePeriod` has elapsed since. Shared by every grace-period timer in `evaluate` whose
+    /// anchor defaults to *now* when it is missing; the one timer that instead skips at once on a
+    /// missing anchor (rule 7's "no checks yet") is not this shape and keeps its own logic.
+    private static func waitThenSkip(
+        anchor: inout Date?,
+        now: Date,
+        gracePeriod: TimeInterval,
+        ifExpired reason: MergeSeriesSkipReason
+    ) -> Verdict {
+        let since = anchor ?? now
+        anchor = since
+        return now >= since.addingTimeInterval(gracePeriod) ? .skip(reason) : .wait
+    }
+
     /// The rules of ``step(series:rows:existingOutbox:failedWrites:now:gracePeriod:)`` for the
     /// active entry. May change the entry in place (the re-pin, a missing timestamp); the state
     /// change a verdict implies is applied by the caller.
@@ -225,8 +240,12 @@ public enum MergeSeriesPolicy {
                 // what decides. A refused merge, though, would otherwise wait forever.
                 return hasFailedWrite ? .skip(.mergeRefused) : .wait
             }
-            let since = entry.activeSince ?? now
-            return now >= since.addingTimeInterval(gracePeriod) ? .skip(.disappeared) : .wait
+            return waitThenSkip(
+                anchor: &entry.activeSince,
+                now: now,
+                gracePeriod: gracePeriod,
+                ifExpired: .disappeared
+            )
         }
 
         // 2. A failed or parked write.
@@ -243,9 +262,12 @@ public enum MergeSeriesPolicy {
             guard row.headRefOid != from else {
                 // GitHub creates the update's merge commit asynchronously; the row may still show
                 // the old head (and still BEHIND) for a sweep or two. Never a second update.
-                let since = entry.updateQueuedAt ?? now
-                entry.updateQueuedAt = since
-                return now >= since.addingTimeInterval(gracePeriod) ? .skip(.updateRefused) : .wait
+                return waitThenSkip(
+                    anchor: &entry.updateQueuedAt,
+                    now: now,
+                    gracePeriod: gracePeriod,
+                    ifExpired: .updateRefused
+                )
             }
             entry.pinnedHeadOid = row.headRefOid
             entry.state = .pending
@@ -307,9 +329,12 @@ public enum MergeSeriesPolicy {
         if !behind { entry.restackWaitSince = nil }
         func update() -> Verdict {
             if mayUpdate { return .updateBranch }
-            let since = entry.restackWaitSince ?? now
-            entry.restackWaitSince = since
-            return now >= since.addingTimeInterval(gracePeriod) ? .skip(.updateRefused) : .wait
+            return waitThenSkip(
+                anchor: &entry.restackWaitSince,
+                now: now,
+                gracePeriod: gracePeriod,
+                ifExpired: .updateRefused
+            )
         }
         switch decision {
         case .abandon(.headMoved): return .skip(.headMoved)
