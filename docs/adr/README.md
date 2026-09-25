@@ -46,6 +46,7 @@ founder interview (2026-08-31) combined with three research reports (see
 | 0038 | [macOS 27 (Golden Gate) as the floor, and what it buys](0038-macos-27-floor.md) | Accepted |
 | 0039 | [Open in editor: a pull request's file, in your own clone, in your own editor](0039-open-in-editor.md) | Accepted |
 | 0040 | [Liquid Glass on macOS 27: system glass for the control layer, opaque content](0040-liquid-glass.md) | Accepted |
+| 0041 | [Merge series: several pull requests, one after another, per repository](0041-merge-series.md) | Accepted |
 
 Format: lightweight [MADR](https://adr.github.io/madr/)-style — Context, Decision, Consequences.
 New decisions get the next number; superseded ADRs are marked, never deleted.
