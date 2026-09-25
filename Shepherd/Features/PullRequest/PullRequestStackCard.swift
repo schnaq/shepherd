@@ -49,47 +49,58 @@ struct PullRequestStackCard: View {
         }
     }
 
+    /// One member. The shown pull request is drawn as plain text rather than as a disabled
+    /// button: a disabled button dims its label, which would undo the marking.
     @ViewBuilder
     private func row(_ member: PullRequestSummary) -> some View {
-        let isCurrent = member.id == overview.currentID
-        Button {
-            if !isCurrent { onOpen(member) }
-        } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(verbatim: member.stack.map { String($0.position) } ?? "")
-                    .font(Theme.mono(.subheadline))
-                    .foregroundStyle(Theme.textMuted)
-                    .frame(minWidth: 12, alignment: .trailing)
-                Text(verbatim: "#\(member.number)")
-                    .font(Theme.mono(.callout, weight: isCurrent ? .semibold : .regular))
-                    .foregroundStyle(isCurrent ? Theme.textStrong : Theme.accentText)
-                Text(member.title)
-                    .font(Theme.type(.callout, weight: isCurrent ? .semibold : .regular))
-                    .foregroundStyle(isCurrent ? Theme.textStrong : Theme.text)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                Spacer(minLength: 4)
-                if isCurrent {
-                    Text(String(localized: "this one"))
-                        .font(Theme.type(.subheadline))
-                        .foregroundStyle(Theme.textMuted)
-                        .lineLimit(1)
-                }
+        if member.id == overview.currentID {
+            label(member, isCurrent: true)
+                .help(String(localized: "The pull request you are looking at"))
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(Text(verbatim: "\(member.slug): \(member.title)"))
+                .accessibilityAddTraits(.isSelected)
+        } else {
+            Button {
+                onOpen(member)
+            } label: {
+                label(member, isCurrent: false)
             }
-            .padding(.vertical, 2)
-            .padding(.horizontal, 4)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                isCurrent ? Theme.selection : Color.clear,
-                in: RoundedRectangle(cornerRadius: 4, style: .continuous)
-            )
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .help(String(localized: "Open \(member.slug)"))
+            .accessibilityLabel(Text(verbatim: "\(member.slug): \(member.title)"))
         }
-        .buttonStyle(.plain)
-        .disabled(isCurrent)
-        .help(isCurrent ? String(localized: "The pull request you are looking at") : String(localized: "Open \(member.slug)"))
-        .accessibilityLabel(Text(verbatim: "\(member.slug): \(member.title)"))
-        .accessibilityAddTraits(isCurrent ? .isSelected : [])
+    }
+
+    private func label(_ member: PullRequestSummary, isCurrent: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(verbatim: member.stack.map { String($0.position) } ?? "")
+                .font(Theme.mono(.subheadline))
+                .foregroundStyle(Theme.textMuted)
+                .frame(minWidth: 12, alignment: .trailing)
+            Text(verbatim: "#\(member.number)")
+                .font(Theme.mono(.callout, weight: isCurrent ? .semibold : .regular))
+                .foregroundStyle(isCurrent ? Theme.textStrong : Theme.accentText)
+            Text(member.title)
+                .font(Theme.type(.callout, weight: isCurrent ? .semibold : .regular))
+                .foregroundStyle(isCurrent ? Theme.textStrong : Theme.text)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 4)
+            if isCurrent {
+                Text(String(localized: "this one"))
+                    .font(Theme.type(.subheadline))
+                    .foregroundStyle(Theme.textMuted)
+                    .lineLimit(1)
+            }
+        }
+        .padding(.vertical, 2)
+        .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            isCurrent ? Theme.selection : Color.clear,
+            in: RoundedRectangle(cornerRadius: 4, style: .continuous)
+        )
+        .contentShape(Rectangle())
     }
 }
 
