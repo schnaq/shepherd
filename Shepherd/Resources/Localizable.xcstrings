@@ -18270,6 +18270,16 @@
           }
         }
       }
+    },
+    "Update branch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Branch aktualisieren"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

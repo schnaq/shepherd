@@ -582,6 +582,7 @@ final class AppEnvironment {
             draftConflicts.raise(conflict)
         }
         confirmMerge(event)
+        followBranchUpdate(event)
         // Fire-and-forget by construction: the coordinator spawns its own task and swallows
         // every failure, so a broken webhook cannot slow down or break the sync (ADR 0012).
         webhookCoordinator.handle(event, database: session?.database)
@@ -625,6 +626,19 @@ final class AppEnvironment {
         let slug = "\(sent.repo.fullName)#\(sent.number)"
         toasts.success(String(localized: "Merged \(slug)."))
         session?.noteMerged(sent.prID)
+        scheduleSyncAfterMerge()
+    }
+
+    /// Sweeps soon after GitHub accepted an *Update branch* (ADR 0041).
+    ///
+    /// GitHub answers the update with a `202` and makes the merge commit a moment later, so the
+    /// new head only reaches Shepherd with a sweep, and a merge series waits on that head before
+    /// it can merge. Waiting for the scheduled sweep would add minutes per pull request to a
+    /// series; the merge's own coalesced sweep, a few seconds out, is the same need. No toast:
+    /// the update is a step of something the user started, not news of its own.
+    /// - Parameter event: The event the sync engine emitted.
+    private func followBranchUpdate(_ event: SyncEvent) {
+        guard case .mutationSent(let sent) = event, case .branchUpdated = sent.kind else { return }
         scheduleSyncAfterMerge()
     }
 

@@ -134,6 +134,10 @@ public struct SentMutation: Sendable, Hashable, Codable {
         case merged(method: String)
         /// The pull request was taken out of draft state.
         case markedReadyForReview
+        /// GitHub accepted an *Update branch* for the pull request (ADR 0041). Accepted, not
+        /// finished: the new head arrives with a later sweep, which is what a merge series waits
+        /// for before it re-pins.
+        case branchUpdated
         /// A comment was posted on an issue (ADR 0032's Sprint 4a amendment).
         case issueCommentAdded
         /// A label was added to an issue.
