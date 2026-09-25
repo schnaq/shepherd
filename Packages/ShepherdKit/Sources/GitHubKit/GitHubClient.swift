@@ -1092,8 +1092,93 @@ public actor GitHubClient {
     /// failing. GitHub's sentence is "expected head sha didn't match current head ref."; it is
     /// matched on its stable prefix, ignoring case, so a changed full stop does not turn a moved
     /// head into a plain failure.
-    static func isHeadMismatch(_ message: String) -> Bool {
+    ///
+    /// Public because the asynchronous merge (ADR 0042) says the same thing twice: in a `422` on
+    /// the request, read here, and in a `failed` status polled later, which the sync engine reads.
+    public static func isHeadMismatch(_ message: String) -> Bool {
         message.range(of: "expected head sha", options: .caseInsensitive) != nil
+    }
+
+    /// Asks GitHub to merge a pull request in the background: the only way to merge one that is
+    /// part of a stack (ADR 0042).
+    ///
+    /// `PUT /repos/{owner}/{repo}/pulls/{number}/merge-async`. Merging a stacked pull request
+    /// merges every pull request below it too, atomically, which the synchronous
+    /// ``mergePullRequest(repo:number:method:expectedHeadOid:commitTitle:)`` cannot do. GitHub
+    /// answers `202` (accepted) or `200` (merged or queued already) with how far it got; the rest
+    /// is polled with ``asyncMergeStatus(repo:number:uuid:)``.
+    ///
+    /// The status codes do not mean what the synchronous endpoint's do, so its error mapping is
+    /// deliberately not copied:
+    ///
+    /// - `400` is "not ready to be merged" (closed, draft). The generic mapping would make it a
+    ///   retryable `.server(400)`, and the row would be retried for ever; it is
+    ///   ``GitHubError/notMergeable(message:)`` instead.
+    /// - `409` is "a merge request is already enqueued for this pull request", **not** a moved
+    ///   head, so it stays ``GitHubError/conflict(message:)`` for the caller to read as "already
+    ///   under way" — the answer a row re-sent after a crash gets.
+    /// - `422` carrying the head-SHA sentence (``isHeadMismatch(_:)``) is
+    ///   ``GitHubError/staleHead(expected:actual:)``, like the update-branch endpoint's; any
+    ///   other `422` stays ``GitHubError/validationFailed(message:)``. GitHub's documentation
+    ///   does not quote the sentence for this endpoint, so the match is the update-branch one.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - number: The pull request number.
+    ///   - method: How to merge.
+    ///   - expectedHeadOid: The head the merge is pinned to, sent as `sha`. `nil` omits the key,
+    ///     and GitHub pins the merge to the head at the moment of the request.
+    /// - Returns: How far the merge got when GitHub answered.
+    public func mergePullRequestAsync(
+        repo: RepoRef,
+        number: Int,
+        method: MergeMethod,
+        expectedHeadOid: String?
+    ) async throws -> AsyncMergeResult {
+        let encodedBody = try RESTJSON.encode(
+            AsyncMergeBody(sha: expectedHeadOid, mergeMethod: method.rawValue)
+        )
+        do {
+            let response = try await performREST(
+                method: "PUT",
+                path: "/repos/\(repo.owner)/\(repo.name)/pulls/\(number)/merge-async",
+                queryItems: [],
+                body: encodedBody,
+                useCache: false,
+                resource: "\(repo.fullName)#\(number) merge"
+            )
+            let dto: RESTAsyncMergeDTO = try RESTJSON.decode(response.body)
+            return dto.model
+        } catch GitHubError.validationFailed(let message) where Self.isHeadMismatch(message) {
+            throw GitHubError.staleHead(expected: expectedHeadOid ?? "", actual: nil)
+        } catch GitHubError.server(let status, let message) where status == 400 {
+            throw GitHubError.notMergeable(message: message)
+        }
+    }
+
+    /// How far an asynchronous merge has got (ADR 0042).
+    ///
+    /// `GET /repos/{owner}/{repo}/pulls/{number}/merge-async/{uuid}`. GitHub keeps the answer for
+    /// 24 hours; after that the uuid is ``GitHubError/notFound(resource:)``.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - number: The pull request number.
+    ///   - uuid: The id from ``mergePullRequestAsync(repo:number:method:expectedHeadOid:)``.
+    /// - Returns: The merge's status now.
+    public func asyncMergeStatus(
+        repo: RepoRef,
+        number: Int,
+        uuid: String
+    ) async throws -> AsyncMergeResult {
+        let response = try await performREST(
+            method: "GET",
+            path: "/repos/\(repo.owner)/\(repo.name)/pulls/\(number)/merge-async/\(uuid)",
+            queryItems: [],
+            body: nil,
+            useCache: false,
+            resource: "\(repo.fullName)#\(number) merge status"
+        )
+        let dto: RESTAsyncMergeDTO = try RESTJSON.decode(response.body)
+        return dto.model
     }
 
     /// Whether a pull request has already been merged.

@@ -62,7 +62,34 @@ public protocol PullRequestFetching: Sendable {
         number: Int,
         expectedHeadOid: String?
     ) async throws
+    /// Asks GitHub to merge a stacked pull request in the background (ADR 0042).
+    ///
+    /// On this port rather than an optional one for ``updatePullRequestBranch(repo:number:expectedHeadOid:)``'s
+    /// reason: for a stacked pull request this *is* the merge, not a tidying-up after it.
+    func mergePullRequestAsync(
+        repo: RepoRef,
+        number: Int,
+        method: MergeMethod,
+        expectedHeadOid: String?
+    ) async throws -> AsyncMergeResult
+    /// How far an asynchronous merge has got (ADR 0042).
+    func asyncMergeStatus(repo: RepoRef, number: Int, uuid: String) async throws -> AsyncMergeResult
 }
+
+/// Whether a pull request, by node id, is part of a GitHub stack (ADR 0042).
+///
+/// The seam between the drain and wherever stack membership is stored. The drain asks it for
+/// every merge row, just before sending, and merges a stacked pull request through
+/// ``PullRequestFetching/mergePullRequestAsync(repo:number:method:expectedHeadOid:)``.
+///
+/// A closure rather than a requirement on ``SyncStoring``, and on purpose: membership is stored
+/// with the sweep's summaries (`PullRequestSummary.stack`, migration v10), which is a separate
+/// piece of work from the drain's, and this keeps the two apart — the engine needs to know one
+/// bit, not the storage's shape. The app wires it to the stored summary (a stored `stack` means
+/// stacked); an engine built without one treats every pull request as unstacked, which is
+/// exactly how merging worked before stacks. It throws so that a lookup that fails is a retry,
+/// never a guess about which endpoint to use.
+public typealias StackMembershipLookup = @Sendable (_ prID: String) async throws -> Bool
 
 /// `GitHubClient` already has exactly this shape; the conformance is the contract check.
 extension GitHubClient: PullRequestFetching {}
