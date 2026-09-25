@@ -18870,6 +18870,146 @@
           }
         }
       }
+    },
+    "Stack %lld/%lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stack %lld/%lld"
+          }
+        }
+      }
+    },
+    "Part of a GitHub stack: %lld of %lld, on %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teil eines GitHub-Stacks: %lld von %lld, auf %@"
+          }
+        }
+      }
+    },
+    "STACK": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "STACK"
+          }
+        }
+      }
+    },
+    "The branch the stack merges into": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Branch, in den der Stack gemergt wird"
+          }
+        }
+      }
+    },
+    "this one": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "dieser"
+          }
+        }
+      }
+    },
+    "The pull request you are looking at": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Pull Request, den du gerade ansiehst"
+          }
+        }
+      }
+    },
+    "Open %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ öffnen"
+          }
+        }
+      }
+    },
+    "One more is not in your inbox.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein weiterer ist nicht in deiner Inbox."
+          }
+        }
+      }
+    },
+    "%lld more are not in your inbox.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld weitere sind nicht in deiner Inbox."
+          }
+        }
+      }
+    },
+    "Also merges %@, the pull request below it in the stack.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mergt auch %@, den Pull Request darunter im Stack."
+          }
+        }
+      }
+    },
+    "Also merges %@, the pull requests below it in the stack.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mergt auch %@, die Pull Requests darunter im Stack."
+          }
+        }
+      }
+    },
+    "Also merges the pull request below it in the stack.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mergt auch den Pull Request darunter im Stack."
+          }
+        }
+      }
+    },
+    "Also merges the %lld pull requests below it in the stack.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mergt auch die %lld Pull Requests darunter im Stack."
+          }
+        }
+      }
+    },
+    "GitHub manages the branches of a stack, so Shepherd leaves them alone.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub verwaltet die Branches eines Stacks, deshalb rührt Shepherd sie nicht an."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

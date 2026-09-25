@@ -23,6 +23,9 @@ struct MergeSheet: View {
     let settings: AppSettings
     /// Where a merge decided on while the checks were still running is kept (ADR 0037).
     let mergeWhenGreen: MergeWhenGreenCoordinator
+    /// The pull request's stack as far as the inbox holds it, when it is in one (ADR 0042) — for
+    /// the line that says what else this merge takes along.
+    var stack: PullRequestStackOverview?
     /// Called once the merge is queued, so a caller that was *showing* this pull request can go
     /// somewhere else. `nil` for the inbox, which is already where you would end up.
     var onMerged: (@MainActor () -> Void)?
@@ -43,6 +46,21 @@ struct MergeSheet: View {
                     .foregroundStyle(Theme.textMuted)
             }
 
+            // A merge of an upper stack member merges every pull request below it too, and
+            // there is no way to merge it alone — so the button stays *Merge*, and this says
+            // what that means before the click rather than after (ADR 0042).
+            if let alsoMerges = stack?.alsoMergesSentence {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "square.stack.3d.up")
+                        .foregroundStyle(Theme.accentText)
+                        .accessibilityHidden(true)
+                    Text(alsoMerges)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .font(Theme.type(.callout))
+                .foregroundStyle(Theme.textSecondary)
+            }
+
             MergeMethodPicker(settings: settings)
 
             VStack(alignment: .leading, spacing: 4) {
@@ -50,9 +68,12 @@ struct MergeSheet: View {
                     String(localized: "Delete the branch afterwards"),
                     isOn: deletesBranchBinding
                 )
-                Text(String(
-                    localized: "Removes the head branch once the merge has landed. Skipped for forks and for a repository's default branch."
-                ))
+                .disabled(isStacked)
+                Text(
+                    isStacked
+                        ? String(localized: "GitHub manages the branches of a stack, so Shepherd leaves them alone.")
+                        : String(localized: "Removes the head branch once the merge has landed. Skipped for forks and for a repository's default branch.")
+                )
                 .font(Theme.type(.subheadline))
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -100,7 +121,7 @@ struct MergeSheet: View {
                 }
                 Button {
                     let method = settings.defaultMergeMethod
-                    let deletesBranch = settings.deletesBranchAfterMerge
+                    let deletesBranch = deletesBranchForThisMerge
                     // Merging by hand supersedes a wait the sheet may be showing: the arm would
                     // otherwise fire behind this merge on the sweep that sees the checks go green,
                     // and be refused by the outbox's "one write in flight" rule rather than by
@@ -197,7 +218,7 @@ struct MergeSheet: View {
         mergeWhenGreen.arm(
             summary,
             method: settings.defaultMergeMethod,
-            deletesHeadBranch: settings.deletesBranchAfterMerge
+            deletesHeadBranch: deletesBranchForThisMerge
         )
         actions.toasts.success(
             String(localized: "\(summary.slug) will be merged once its checks pass.")
@@ -225,11 +246,26 @@ struct MergeSheet: View {
     /// drain reads both from GitHub at the moment it would delete, which is also the only place
     /// they are still true — a pull request can be re-targeted between this click and the sweep
     /// that drains it (ADR 0005's 2026-09-05 amendment).
+    ///
+    /// For a stacked pull request the box shows *off* and is disabled, and the remembered answer
+    /// is left as it is for the next ordinary merge: GitHub re-targets the pull requests above a
+    /// merged one onto its base itself and manages the stack's branches (ADR 0042), so a deletion
+    /// of Shepherd's would at best be redundant and at worst pull a branch out from under it. The
+    /// drain skips the follow-up for a stacked merge anyway; this keeps the sheet from promising
+    /// one.
     private var deletesBranchBinding: Binding<Bool> {
         Binding(
-            get: { settings.deletesBranchAfterMerge },
-            set: { settings.deletesBranchAfterMerge = $0 }
+            get: { isStacked ? false : settings.deletesBranchAfterMerge },
+            set: { if !isStacked { settings.deletesBranchAfterMerge = $0 } }
         )
+    }
+
+    /// Whether the pull request is part of a GitHub stack, however far the inbox holds it.
+    private var isStacked: Bool { summary.stack != nil }
+
+    /// The branch answer this merge is queued with: the remembered one, except for a stack.
+    private var deletesBranchForThisMerge: Bool {
+        isStacked ? false : settings.deletesBranchAfterMerge
     }
 
     /// The one thing worth reading before merging, worst first.

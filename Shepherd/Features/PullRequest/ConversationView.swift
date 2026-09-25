@@ -35,6 +35,7 @@ struct ConversationView: View {
                 claimsCard
                 recurringFinding
                 closingIssues
+                stack
                 description
                 timeline
                 commits
@@ -158,6 +159,21 @@ struct ConversationView: View {
             repo: model.summary?.repo,
             onOpen: { issue in ClosingIssuesCard.openOnGitHub(issue) }
         )
+    }
+
+    /// The pull request's GitHub stack, bottom to top, as far as the inbox holds it (ADR 0042).
+    ///
+    /// Beside the issues it closes, because both say what this pull request is part of. Built from
+    /// the session's inbox rows — every stored row, not a filtered list — and a click opens the
+    /// other pull request's review, which is where a reader of this screen goes next.
+    @ViewBuilder
+    private var stack: some View {
+        if let summary = model.summary, summary.stack != nil,
+           let overview = PullRequestStackOverview.make(for: summary, in: environment.session?.inboxRows ?? []) {
+            PullRequestStackCard(overview: overview) { member in
+                environment.openReview(prID: member.id)
+            }
+        }
     }
 
     @ViewBuilder
