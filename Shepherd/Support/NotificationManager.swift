@@ -73,6 +73,12 @@ final class NotificationManager {
     /// The delegate that receives clicks. Held here because `UNUserNotificationCenter.delegate`
     /// is a weak reference, so nothing else in the app keeps it alive.
     private var router: NotificationRouter?
+    /// Answers `true` for a sync event that is somebody else's to announce.
+    ///
+    /// Today only a merge series (ADR 0041) sets it: the parked branch update it queued raises
+    /// ``ShepherdSync/SyncEvent/draftConflict(_:)``, whose notice says "Review not sent" — about
+    /// a review nobody wrote. The series says what happened in its chip and its summary.
+    var suppresses: (@MainActor (SyncEvent) -> Bool)?
 
     /// Creates a manager.
     /// - Parameter center: The notification centre. Injectable for tests.
@@ -113,6 +119,7 @@ final class NotificationManager {
     ///   - event: The event the sync engine emitted.
     ///   - settings: The user's notification preferences.
     func present(_ event: SyncEvent, settings: AppSettings) async {
+        if suppresses?(event) == true { return }
         guard let payload = Self.payload(for: event, settings: settings) else { return }
         await present(payload)
     }

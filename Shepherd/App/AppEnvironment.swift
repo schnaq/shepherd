@@ -361,7 +361,7 @@ final class AppEnvironment {
         )
         let mergeSeriesStore = MergeSeriesStore(defaults: defaults)
         self.mergeSeriesStore = mergeSeriesStore
-        self.mergeSeries = MergeSeriesCoordinator(
+        let mergeSeries = MergeSeriesCoordinator(
             settings: settings,
             store: mergeSeriesStore,
             notify: { payload in
@@ -371,6 +371,13 @@ final class AppEnvironment {
                 }
             }
         )
+        self.mergeSeries = mergeSeries
+        // The draft-conflict notice has the same problem the alert has for a series' parked
+        // branch update (see `handle(_:)`), and it is posted before `handle(_:)` runs.
+        notifications.suppresses = { [weak mergeSeries] event in
+            guard case .draftConflict(let conflict) = event else { return false }
+            return mergeSeries?.handlesConflict(conflict) ?? false
+        }
         self.search = SearchIndexCoordinator(settings: settings)
         self.triage = TriageCoordinator(settings: settings)
         self.spotlight = SpotlightIndexer(settings: settings, index: spotlightIndex)

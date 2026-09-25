@@ -58,11 +58,18 @@ enum RowWriteState: Equatable, Sendable {
         if failed > 0 { return .failed(failed) }
         let parked = mine.filter { $0.state == .conflicted }.count
         if parked > 0 { return .parked(parked) }
-        if let series, !wasMerged { return .series(series) }
+        let waiting = mine.filter { $0.state == .pending || $0.state == .sending }
+        let mergeWaiting = waiting.contains { if case .merge = $0.action { true } else { false } }
+        if var series, !wasMerged {
+            // A merge on its way — the series' own, or one pressed by hand on an entry still
+            // waiting its turn — reads as the series merging, so ``isMergeOnItsWay`` stays true
+            // and the Merge button and `m` refuse a second one exactly as without a series.
+            if isMerging || mergeWaiting { series.phase = .merging }
+            return .series(series)
+        }
         if isMerging { return .merging }
         if wasMerged { return .merged }
-        let waiting = mine.filter { $0.state == .pending || $0.state == .sending }
-        if waiting.contains(where: { if case .merge = $0.action { true } else { false } }) {
+        if mergeWaiting {
             return .mergeQueued
         }
         return waiting.isEmpty ? nil : .queued(waiting.count)

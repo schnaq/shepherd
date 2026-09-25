@@ -50,6 +50,16 @@ final class RowWriteStateTests: XCTestCase {
         XCTAssertEqual(state([], isMerging: true, series: seriesChip), .series(seriesChip))
     }
 
+    func testAMergeOnItsWayForAWaitingEntryStillBlocksASecondMerge() {
+        // Merged by hand while the series had not got to it yet.
+        let waiting = MergeSeriesChip(position: 3, total: 5, phase: .waiting)
+        let queued = state([item(merge)], series: waiting)
+        XCTAssertEqual(queued, .series(MergeSeriesChip(position: 3, total: 5, phase: .merging)))
+        XCTAssertEqual(queued?.isMergeOnItsWay, true)
+        XCTAssertEqual(state([], isMerging: true, series: waiting)?.isMergeOnItsWay, true)
+        XCTAssertEqual(state([item(comment)], series: waiting), .series(waiting))
+    }
+
     func testAConfirmedMergeFallsThroughToMerged() {
         XCTAssertEqual(state([], wasMerged: true, series: seriesChip), .merged)
     }
