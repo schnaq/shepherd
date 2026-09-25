@@ -112,8 +112,8 @@ targets:
       path: Shepherd/Support/Info.plist
       properties:
         CFBundleDisplayName: Shepherd
-        CFBundleShortVersionString: "1.5.5"
-        CFBundleVersion: "13"
+        CFBundleShortVersionString: "1.6.0"
+        CFBundleVersion: "14"
         LSApplicationCategoryType: public.app-category.developer-tools
         # schnaq GmbH is named beside the contributors because it is who publishes Shepherd:
         # the Developer ID on the signature says schnaq GmbH, and an About box that does not is
