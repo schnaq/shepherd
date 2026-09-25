@@ -79,6 +79,10 @@ public enum MergeSeriesPolicy {
     ///    means GitHub has not created the merge commit yet (it answers the update with `202`):
     ///    wait, never queue a second update, and after `updateQueuedAt + gracePeriod` skip as
     ///    *update refused*.
+    ///    **After a lower stack member merged** (an entry of the same stack, below this one when
+    ///    the series started, is merged — ADR 0042): a head that differs from the pin becomes the
+    ///    new pin, once, because GitHub re-targets and rebases the pull requests above a merged
+    ///    one itself. Not waited for: the head may also stay as it was.
     /// 4. **Updating branch or merging:** wait for the drain's confirmation.
     /// 5. **Head moved** off the pin: skipped.
     /// 6. **Draft**, then **conflicting**, then **changes requested**: skipped.
@@ -90,6 +94,9 @@ public enum MergeSeriesPolicy {
     /// 9. **Behind its base** (`mergeStateStatus == .behind`): queue the branch update — even
     ///    while checks are still running. The update gives the pull request a new head whose
     ///    checks run anyway, so waiting for the old head's checks first would run CI twice.
+    ///    **Never above the bottom of a stack** (the row's `stack.position > 1`, ADR 0042): GitHub
+    ///    brings those up to date itself, so the entry waits instead, and after `gracePeriod` of
+    ///    being behind is skipped as *update refused*.
     /// 10. **Checks running** or **mergeability unknown:** wait.
     /// 11. Otherwise: queue the merge.
     ///
@@ -118,6 +125,7 @@ public enum MergeSeriesPolicy {
             let verdict = evaluate(
                 &entry,
                 row: rows[entry.prID],
+                lowerStackMemberMerged: hasMergedLowerStackMember(of: entry, in: series),
                 existingOutbox: existingOutbox,
                 failedWrites: failedWrites,
                 now: now,
@@ -158,6 +166,19 @@ public enum MergeSeriesPolicy {
 
     // MARK: - One entry
 
+    /// Whether an entry of the same stack, below this one when the series started, is merged
+    /// (ADR 0042). That merge is what makes GitHub re-target and rebase this entry's branch, so it
+    /// is the one head change the series expects without having caused it.
+    private static func hasMergedLowerStackMember(of entry: MergeSeriesEntry, in series: MergeSeries) -> Bool {
+        guard let number = entry.stackNumber, let position = entry.stackPosition else { return false }
+        return series.entries.contains { other in
+            other.prID != entry.prID
+                && other.stackNumber == number
+                && (other.stackPosition ?? .max) < position
+                && other.state == .merged
+        }
+    }
+
     private enum Verdict {
         case skip(MergeSeriesSkipReason)
         case wait
@@ -171,6 +192,7 @@ public enum MergeSeriesPolicy {
     private static func evaluate(
         _ entry: inout MergeSeriesEntry,
         row: PullRequestSummary?,
+        lowerStackMemberMerged: Bool,
         existingOutbox: Set<String>,
         failedWrites: Set<String>,
         now: Date,
@@ -211,6 +233,20 @@ public enum MergeSeriesPolicy {
             entry.state = .pending
         }
 
+        // 3b. Re-pin after a lower member of the stack merged, once (ADR 0042). GitHub re-targets
+        // and rebases the pull requests above a merged one itself, so a new head here is expected
+        // — and it has to be taken without waiting for it: with a merge commit a re-target can
+        // also leave the head as it was, and then there is nothing to wait for. Any head change
+        // after this one is somebody's push, and rule 5 skips it.
+        if entry.state == .pending, lowerStackMemberMerged, !entry.repinnedAfterStackMerge,
+           row.headRefOid != entry.pinnedHeadOid {
+            entry.pinnedHeadOid = row.headRefOid
+            entry.repinnedAfterStackMerge = true
+            // A head GitHub made seconds ago often has no check suites yet; the grace period that
+            // rule 7 gives a head from Shepherd's own update applies to this one as well.
+            entry.updateQueuedAt = now
+        }
+
         // 4. Waiting for the drain.
         switch entry.state {
         case .updatingBranch, .merging: return .wait
@@ -243,6 +279,20 @@ public enum MergeSeriesPolicy {
         // top of it. Checked here and not only through `.writeInFlight`, because merge-when-green
         // looks at the outbox last and answers `.checksPending` first.
         let inFlight = existingOutbox.contains(entry.prID)
+        // Above the bottom of a stack, *Update branch* is never the series' write (ADR 0042): the
+        // base is the branch of the pull request below, and GitHub brings the stack up to date
+        // itself once that one merges. What would have been the update is a wait instead, bounded
+        // by the grace period so a lone upper pull request cannot hold the series for ever. The
+        // row's *current* position decides: once the ones below have merged it is the bottom,
+        // its base is the trunk, and updating it is the series' job again.
+        let mayUpdate = (row.stack?.position ?? 1) <= 1
+        if !behind { entry.restackWaitSince = nil }
+        func update() -> Verdict {
+            if mayUpdate { return .updateBranch }
+            let since = entry.restackWaitSince ?? now
+            entry.restackWaitSince = since
+            return now >= since.addingTimeInterval(gracePeriod) ? .skip(.updateRefused) : .wait
+        }
         switch decision {
         case .abandon(.headMoved): return .skip(.headMoved)
         case .abandon(.draft): return .skip(.draft)
@@ -263,13 +313,13 @@ public enum MergeSeriesPolicy {
             // Behind and still building: update now. The old head's checks are about a commit
             // that will never be merged, and waiting for them only to start a second run on the
             // updated head would double the wait for every pull request in the series.
-            return behind && !inFlight ? .updateBranch : .wait
+            return behind && !inFlight ? update() : .wait
         case .wait(.mergeabilityUnknown):
             // Green checks on the pinned head; GitHub has not worked out the merge yet.
-            return behind && !inFlight ? .updateBranch : .wait
+            return behind && !inFlight ? update() : .wait
         case .merge:
             // Green checks, mergeability known, nothing of this pull request in the outbox.
-            return behind ? .updateBranch : .merge
+            return behind ? update() : .merge
         }
     }
 }

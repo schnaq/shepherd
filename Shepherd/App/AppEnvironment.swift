@@ -712,8 +712,10 @@ final class AppEnvironment {
         case .mergeEnqueued, .mergeStarted:
             // Accepted, not merged (ADR 0042): the entry stays `merging`, its row is gone, and the
             // pass's vanished-merge check asks GitHub once the pull request leaves the inbox.
-            // `noteMerged` here would step the next entry on rows from before the merge.
-            break
+            // `noteMerged` here would step the next entry on rows from before the merge. What
+            // is recorded is the acceptance, so the entry is waited for as long as GitHub's
+            // merge queue may take rather than skipped after the ordinary hour.
+            mergeSeries.noteMergeAccepted(sent.prID)
         default: break
         }
     }

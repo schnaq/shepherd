@@ -368,6 +368,206 @@ final class MergeSeriesPolicyTests: XCTestCase {
         XCTAssertTrue(current.isFinished)
     }
 
+    // MARK: - Stacks (ADR 0042)
+
+    /// An entry that joined the series as a member of stack `stack`, at `position`.
+    private func stackEntry(
+        _ prID: String,
+        stack: Int = 7,
+        position: Int,
+        head: String? = nil,
+        state: MergeSeriesEntryState = .pending,
+        repinned: Bool = false,
+        restackWaitSince: Date? = nil
+    ) -> MergeSeriesEntry {
+        var entry = entry(prID, head: head, state: state)
+        entry.stackNumber = stack
+        entry.stackPosition = position
+        entry.repinnedAfterStackMerge = repinned
+        entry.restackWaitSince = restackWaitSince
+        return entry
+    }
+
+    /// A green row that GitHub currently reports at `position` of stack `stack`, or in no stack.
+    private func stackRow(
+        _ prID: String,
+        stack: Int = 7,
+        position: Int?,
+        head: String? = nil,
+        checkRollup: CheckRollup? = CheckRollup(state: .success, total: 3, successCount: 3),
+        mergeable: Mergeable? = .mergeable,
+        mergeStateStatus: MergeStateStatus? = .clean
+    ) -> PullRequestSummary {
+        var row = green(
+            prID,
+            head: head,
+            checkRollup: checkRollup,
+            mergeable: mergeable,
+            mergeStateStatus: mergeStateStatus
+        )
+        row.stack = position.map { PullRequestStack(number: stack, size: 3, position: $0, baseRefName: "main") }
+        return row
+    }
+
+    func testABehindEntryAboveTheBottomOfAStackWaitsInsteadOfQueuingAnUpdate() {
+        let result = step(
+            series([stackEntry("U", position: 2)]),
+            rows: [stackRow("U", position: 2, mergeStateStatus: .behind)]
+        )
+        XCTAssertEqual(result.action, .none, "GitHub re-targets and rebases a stack's upper pull requests itself")
+        XCTAssertEqual(state(result, "U"), .pending)
+        XCTAssertEqual(result.series.entry(for: "U")?.restackWaitSince, clock)
+    }
+
+    func testABehindStackMemberAboveTheBottomIsNotUpdatedWhileItsChecksRunOrMergeabilityIsUnknown() {
+        let running = stackRow(
+            "U",
+            position: 3,
+            checkRollup: CheckRollup(state: .pending, total: 2, pendingCount: 2),
+            mergeStateStatus: .behind
+        )
+        XCTAssertEqual(step(series([stackEntry("U", position: 3)]), rows: [running]).action, .none)
+        let unknown = stackRow("U", position: 3, mergeable: .unknown, mergeStateStatus: .behind)
+        XCTAssertEqual(step(series([stackEntry("U", position: 3)]), rows: [unknown]).action, .none)
+    }
+
+    func testTheRowsCurrentPositionDecidesWhetherAStackMemberMayBeUpdated() {
+        // Joined as #2, but the stack below it has merged since: GitHub now reports it as the
+        // bottom, whose base is the trunk, and bringing it up to date is Shepherd's job again.
+        let result = step(
+            series([stackEntry("U", position: 2)]),
+            rows: [stackRow("U", position: 1, mergeStateStatus: .behind)]
+        )
+        XCTAssertEqual(result.action, .updateBranch(entry: result.series.entries[0], expectedHeadOid: "head-U"))
+    }
+
+    func testTheBottomOfAStackIsUpdatedLikeAnyOtherPullRequest() {
+        let result = step(
+            series([stackEntry("B", position: 1)]),
+            rows: [stackRow("B", position: 1, mergeStateStatus: .behind)]
+        )
+        guard case .updateBranch(_, "head-B") = result.action else {
+            return XCTFail("expected an update, got \(result.action)")
+        }
+    }
+
+    func testAStackMemberThatStaysBehindIsSkippedAfterTheGracePeriodAndTheNextActs() {
+        let result = step(
+            series([stackEntry("U", position: 2, restackWaitSince: clock), entry("N")]),
+            rows: [stackRow("U", position: 2, mergeStateStatus: .behind), green("N")],
+            at: clock.addingTimeInterval(grace)
+        )
+        XCTAssertEqual(state(result, "U"), .skipped(.updateRefused))
+        XCTAssertEqual(result.action.entry?.prID, "N")
+    }
+
+    func testAStackMemberWaitingToBeRestackedIsNotSkippedWithinTheGracePeriod() {
+        let result = step(
+            series([stackEntry("U", position: 2, restackWaitSince: clock)]),
+            rows: [stackRow("U", position: 2, mergeStateStatus: .behind)],
+            at: clock.addingTimeInterval(grace - 1)
+        )
+        XCTAssertEqual(state(result, "U"), .pending)
+        XCTAssertEqual(result.series.entry(for: "U")?.restackWaitSince, clock, "the wait keeps its start")
+    }
+
+    func testTheRestackWaitStartsOverOnceThePullRequestIsNoLongerBehind() {
+        let result = step(
+            series([stackEntry("U", position: 2, restackWaitSince: clock)]),
+            rows: [stackRow("U", position: 2, checkRollup: CheckRollup(state: .pending, total: 1, pendingCount: 1))],
+            at: clock.addingTimeInterval(60)
+        )
+        XCTAssertEqual(result.action, .none)
+        XCTAssertNil(result.series.entry(for: "U")?.restackWaitSince)
+    }
+
+    func testAfterTheLowerMemberMergedTheRebasedHeadIsTakenAndMergedInTheSameStep() {
+        let result = step(
+            series([stackEntry("L", position: 1, state: .merged), stackEntry("U", position: 2)]),
+            // GitHub re-numbered the stack: U is its bottom now.
+            rows: [stackRow("U", position: 1, head: "rebased")]
+        )
+        guard case .merge(let entry, "rebased") = result.action else {
+            return XCTFail("expected a merge on the rebased head, got \(result.action)")
+        }
+        XCTAssertEqual(entry.pinnedHeadOid, "rebased")
+        XCTAssertTrue(entry.repinnedAfterStackMerge)
+    }
+
+    func testTheRebasedHeadIsTakenEvenWhenGitHubDissolvedTheStack() {
+        let result = step(
+            series([stackEntry("L", position: 1, state: .merged), stackEntry("U", position: 2)]),
+            rows: [stackRow("U", position: nil, head: "rebased")]
+        )
+        XCTAssertEqual(result.action.expectedHeadOid, "rebased")
+    }
+
+    func testTheRebasedHeadIsTakenWhenAnyLowerMemberOfTheStackMerged() {
+        let result = step(
+            series([
+                stackEntry("L1", position: 1, state: .merged),
+                stackEntry("L2", position: 2, state: .skipped(.draft)),
+                stackEntry("U", position: 3),
+            ]),
+            rows: [stackRow("U", position: 2, head: "rebased")]
+        )
+        XCTAssertEqual(result.action.expectedHeadOid, "rebased")
+    }
+
+    func testARebasedHeadWithoutChecksYetWaitsForThem() {
+        let result = step(
+            series([stackEntry("L", position: 1, state: .merged), stackEntry("U", position: 2)]),
+            rows: [stackRow("U", position: 1, head: "rebased", checkRollup: nil)]
+        )
+        XCTAssertEqual(result.action, .none)
+        let entry = result.series.entry(for: "U")
+        XCTAssertEqual(entry?.state, .pending)
+        XCTAssertEqual(entry?.pinnedHeadOid, "rebased")
+        XCTAssertEqual(entry?.updateQueuedAt, clock, "a seconds-old head gets the grace period for its checks")
+    }
+
+    func testAnUnchangedHeadAfterTheLowerMergeMergesWithoutWaiting() {
+        let result = step(
+            series([stackEntry("L", position: 1, state: .merged), stackEntry("U", position: 2)]),
+            rows: [stackRow("U", position: 1)]
+        )
+        XCTAssertEqual(result.action.expectedHeadOid, "head-U")
+        XCTAssertEqual(result.series.entry(for: "U")?.repinnedAfterStackMerge, false)
+    }
+
+    func testASecondHeadChangeAfterTheStackRePinSkips() {
+        let result = step(
+            series([
+                stackEntry("L", position: 1, state: .merged),
+                stackEntry("U", position: 2, head: "rebased", repinned: true),
+            ]),
+            rows: [stackRow("U", position: 1, head: "pushed")]
+        )
+        XCTAssertEqual(state(result, "U"), .skipped(.headMoved))
+    }
+
+    func testAMovedHeadStillSkipsWithoutAMergedLowerMemberOfTheSameStack() {
+        let cases: [(String, [MergeSeriesEntry])] = [
+            ("alone", [stackEntry("U", position: 2)]),
+            ("lower one skipped", [stackEntry("L", position: 1, state: .skipped(.draft)), stackEntry("U", position: 2)]),
+            ("other stack", [stackEntry("L", stack: 8, position: 1, state: .merged), stackEntry("U", position: 2)]),
+            ("higher one merged", [stackEntry("T", position: 3, state: .merged), stackEntry("U", position: 2)]),
+            ("no stack", [entry("L", state: .merged), stackEntry("U", position: 2)]),
+        ]
+        for (name, entries) in cases {
+            let result = step(series(entries), rows: [stackRow("U", position: 2, head: "pushed")])
+            XCTAssertEqual(state(result, "U"), .skipped(.headMoved), name)
+        }
+    }
+
+    func testAnEntryInNoStackIsNeverRePinnedByAStackMerge() {
+        let result = step(
+            series([stackEntry("L", position: 1, state: .merged), entry("A")]),
+            rows: [green("A", head: "pushed")]
+        )
+        XCTAssertEqual(state(result, "A"), .skipped(.headMoved))
+    }
+
     // MARK: - Skipping
 
     func testAHeadThatMovedWithoutAnUpdateSkips() {

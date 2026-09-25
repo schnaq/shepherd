@@ -107,10 +107,42 @@ public struct MergeSeriesPlan: Sendable, Equatable {
             }
             return Group(
                 repository: repository,
-                candidates: candidates.sorted(by: isMergedEarlier),
+                candidates: stacksBottomFirst(candidates.sorted(by: isMergedEarlier)),
                 excluded: excluded
             )
         })
+    }
+
+    /// Puts the members of each stack into position order, bottom first, without moving anything
+    /// else (ADR 0042).
+    ///
+    /// A stack's upper pull request can only merge after the ones below it (merging it first
+    /// would take them along, unreviewed by the series), so position outranks size — but only
+    /// among members of one stack. Folding that into ``isMergedEarlier(_:_:)`` would not be an
+    /// order at all: "same stack → position, otherwise size" is not transitive (bottom < top by
+    /// position, top < X < bottom by size), and a sort with such a comparator is undefined. So
+    /// the size order is computed first, and each stack's members are then written back into the
+    /// slots they landed in, in position order. An unrelated pull request keeps its slot, even
+    /// between two members of a stack.
+    /// - Parameter sorted: The candidates in the default order, all of one repository.
+    /// - Returns: The same pull requests, each stack reordered within its own slots.
+    static func stacksBottomFirst(_ sorted: [PullRequestSummary]) -> [PullRequestSummary] {
+        var slotsByStack: [Int: [Int]] = [:]
+        for (index, pullRequest) in sorted.enumerated() {
+            if let stack = pullRequest.stack { slotsByStack[stack.number, default: []].append(index) }
+        }
+        var result = sorted
+        for slots in slotsByStack.values where slots.count > 1 {
+            let members = slots.map { sorted[$0] }.sorted { lhs, rhs in
+                let left = lhs.stack?.position ?? 0
+                let right = rhs.stack?.position ?? 0
+                // Two members claiming one position (a sweep caught mid-restack) keep their size
+                // order, so the result is still total.
+                return left != right ? left < right : isMergedEarlier(lhs, rhs)
+            }
+            for (slot, member) in zip(slots, members) { result[slot] = member }
+        }
+        return result
     }
 
     /// The default merge order: fewest changed lines first, because a small pull request causes
