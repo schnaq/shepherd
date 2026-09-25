@@ -473,6 +473,94 @@ final class InboxStoreTests: XCTestCase {
         XCTAssertEqual(loaded?.myRelation, [.reviewRequested, .author])
     }
 
+    // MARK: - Author provenance across sweep and detail
+
+    /// A human-looking author on a normal branch, as the sweep sees a Claude-written pull request.
+    private func sweptAsHuman(
+        kind: ActorKind = .human
+    ) -> PullRequestSummary {
+        PersistenceFixtures.summary(
+            author: ShepherdCore.Actor(login: "octocat", displayName: nil, avatarURL: nil, kind: kind)
+        )
+    }
+
+    /// The same pull request as the detail fetch sees it, with the commit trailers read.
+    private func detailWithTrailerAgent() -> PullRequestDetail {
+        let summary = sweptAsHuman(
+            kind: .agent(
+                AgentIdentity(
+                    id: "claude-code",
+                    displayName: "Claude Code",
+                    matchedBy: .commitTrailer
+                )
+            )
+        )
+        return PersistenceFixtures.detail(summary: summary)
+    }
+
+    func testASweepAfterADetailKeepsTheAgentTheCommitTrailersNamed() async throws {
+        let database = try makeDatabase()
+        try await database.savePullRequestSummaries([sweptAsHuman()])
+        try await database.savePullRequestDetail(detailWithTrailerAgent())
+
+        // The next sweep reads no trailers, so on its own it would call the author human again.
+        try await database.savePullRequestSummaries([sweptAsHuman()])
+
+        let loaded = try await database.fetchPullRequestSummary(id: "PR_1")
+        XCTAssertEqual(loaded?.author.kind.agentIdentity?.id, "claude-code")
+        XCTAssertEqual(loaded?.author.kind.agentIdentity?.matchedBy, .commitTrailer)
+        XCTAssertEqual(loaded?.author.login, "octocat", "the login still comes from the sweep")
+        let inbox = try await database.fetchInbox()
+        XCTAssertEqual(
+            inbox.first?.author.kind.agentIdentity?.id,
+            "claude-code",
+            "the inbox groups by what the database says, so the row stays in its group"
+        )
+    }
+
+    func testASweepThatSaysBotStillKeepsTheTrailerAgent() async throws {
+        let database = try makeDatabase()
+        try await database.savePullRequestSummaries([sweptAsHuman(kind: .bot)])
+        try await database.savePullRequestDetail(detailWithTrailerAgent())
+
+        try await database.savePullRequestSummaries([sweptAsHuman(kind: .bot)])
+
+        let loaded = try await database.fetchPullRequestSummary(id: "PR_1")
+        XCTAssertEqual(loaded?.author.kind.agentIdentity?.matchedBy, .commitTrailer)
+    }
+
+    func testASweepThatDetectsAnAgentOfItsOwnWinsOverTheTrailer() async throws {
+        let database = try makeDatabase()
+        try await database.savePullRequestSummaries([sweptAsHuman()])
+        try await database.savePullRequestDetail(detailWithTrailerAgent())
+
+        // A login match is the sweep's own evidence, and it is stronger than a remembered one.
+        let copilot = PersistenceFixtures.summary(
+            author: ShepherdCore.Actor(
+                login: "Copilot",
+                displayName: nil,
+                avatarURL: nil,
+                kind: .agent(
+                    AgentIdentity(id: "copilot", displayName: "Copilot", matchedBy: .login)
+                )
+            )
+        )
+        try await database.savePullRequestSummaries([copilot])
+
+        let loaded = try await database.fetchPullRequestSummary(id: "PR_1")
+        XCTAssertEqual(loaded?.author.kind.agentIdentity?.id, "copilot")
+        XCTAssertEqual(loaded?.author.kind.agentIdentity?.matchedBy, .login)
+    }
+
+    func testAFreshPullRequestWithoutADetailStaysHuman() async throws {
+        let database = try makeDatabase()
+        try await database.savePullRequestSummaries([sweptAsHuman()])
+        try await database.savePullRequestSummaries([sweptAsHuman()])
+
+        let loaded = try await database.fetchPullRequestSummary(id: "PR_1")
+        XCTAssertEqual(loaded?.author.kind, .human)
+    }
+
     func testFetchingAnUnknownDetailReturnsNil() async throws {
         let database = try makeDatabase()
         let loaded = try await database.fetchPullRequestDetail(id: "nope")
