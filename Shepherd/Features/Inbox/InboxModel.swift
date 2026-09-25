@@ -307,6 +307,13 @@ final class InboxModel {
     }
     /// The selected row's pull request id — the keyboard cursor, always exactly one row.
     var selectedID: String?
+    /// Where the selected row stood when it was selected, which is where the list keeps it
+    /// while it stays selected (``InboxSelectionAnchor``).
+    ///
+    /// Taken by ``select(_:)`` and, for a cursor that had no rows to stand in yet, by
+    /// ``clampSelection()`` — never on an ordinary observation tick, because those ticks are
+    /// exactly the updates it exists to hold the row still through.
+    private var selectionAnchor: InboxSelectionAnchor?
     /// The rows ticked for a bulk action (ADR 0015).
     ///
     /// Deliberately separate from ``selectedID``: the cursor drives `j`/`k` and the detail
@@ -597,7 +604,19 @@ final class InboxModel {
     /// `localizedTitle` (`InboxSectionText.swift`, ADR 0022's 2026-09-22 amendment). That replaced
     /// a remap here that caught the one "People" section by its id and left "Bots" and every
     /// review-state header in English.
+    ///
+    /// The selected row is the one exception to the sort: it stays where it was when it was
+    /// selected (``InboxSelectionAnchor``), so the detail refresh a selection causes does not
+    /// sort it out from under the pointer.
     var sections: [InboxSection] {
+        let sorted = sortedSections
+        // Only the selected row is ever held, whatever path moved the cursor.
+        guard let selectionAnchor, selectionAnchor.id == selectedID else { return sorted }
+        return selectionAnchor.apply(to: sorted, context: anchorContext)
+    }
+
+    /// The sections exactly as grouped and sorted, with no row held in place.
+    private var sortedSections: [InboxSection] {
         InboxGrouper.group(filteredRows, by: settings.groupBy).map { section in
             InboxSection(
                 id: section.id,
@@ -607,6 +626,17 @@ final class InboxModel {
                 items: order(section.items)
             )
         }
+    }
+
+    /// What the list's order depends on, as an anchor records it.
+    private var anchorContext: InboxSelectionAnchor.Context {
+        var rail = railState
+        rail.selectedID = nil
+        return InboxSelectionAnchor.Context(
+            rail: rail,
+            groupBy: settings.groupBy,
+            sortOrder: settings.sortOrder
+        )
     }
 
     /// Every visible row in display order — the order `j`/`k` walks.
@@ -1295,6 +1325,11 @@ final class InboxModel {
     /// - Parameter id: The pull request's node id.
     func select(_ id: String?) {
         guard selectedID != id else { return }
+        // From the list as it is on screen, before the cursor moves: the position to keep is the
+        // one the reader clicked or walked to, which may itself be held by the previous anchor.
+        selectionAnchor = id.flatMap {
+            InboxSelectionAnchor.capture(id: $0, in: sections, context: anchorContext)
+        }
         selectedID = id
         detail = nil
         priorities = []
@@ -1320,6 +1355,18 @@ final class InboxModel {
             // read that is running, or one that failed and left the panel empty, is not started
             // again by the next write to the inbox table.
             if detailTask == nil { loadDetail() }
+            // The same moment for the anchor: a restored cursor had no list to be placed in, and
+            // a rail, grouping or sort the reader changed has retired the old one. An anchor that
+            // still applies is left alone — this runs on every write to the inbox table, and
+            // re-taking it here would let each of them move the row after all.
+            let context = anchorContext
+            if selectionAnchor?.id != selectedID || selectionAnchor?.context != context {
+                selectionAnchor = InboxSelectionAnchor.capture(
+                    id: selectedID,
+                    in: sections,
+                    context: context
+                )
+            }
             return
         }
         select(rows.first?.id)
