@@ -61,6 +61,24 @@ public enum MergeSeriesEntryState: Sendable, Hashable {
         if case .skipped(let reason) = self { return reason }
         return nil
     }
+
+    /// Whether **Remove from series** (or **Cancel**) can take an entry in this state out right
+    /// now.
+    ///
+    /// A queued merge or branch update cannot be taken back out of the outbox, so a `merging` or
+    /// `updatingBranch` entry can only go once the caller has checked that the outbox holds no
+    /// unsent row for it any more — there is nothing left to wait for then. Shared by
+    /// ``MergeSeries/remove(_:hasNoUnsentWrite:)``, ``MergeSeries/cancel(withoutUnsentWrites:)``
+    /// and the app's `MergeSeriesCoordinator.canRemove(_:hasUnsentWrite:)`, so the rule is written
+    /// once.
+    /// - Parameter hasNoUnsentWrite: Whether the outbox is known to hold no unsent row for it.
+    public func isRemovable(hasNoUnsentWrite: Bool) -> Bool {
+        switch self {
+        case .pending, .branchUpdated: return true
+        case .updatingBranch, .merging: return hasNoUnsentWrite
+        case .merged, .skipped: return false
+        }
+    }
 }
 
 extension MergeSeriesEntryState: Codable {
@@ -355,6 +373,22 @@ public struct MergeSeries: Sendable, Codable, Hashable, Identifiable {
         return true
     }
 
+    /// Records that GitHub said a vanished `merging` entry's pull request is **not** merged
+    /// (asked once per pass when its row has left both the outbox and the inbox without a
+    /// confirmation — see `MergeSeriesCoordinator.probeVanishedMerges`): closed elsewhere, or its
+    /// row was discarded by hand and it left the inbox on its own. Only a `merging` entry is
+    /// touched, like ``markMerged(_:)`` and ``markBranchUpdated(_:)`` beside it.
+    /// - Parameter prID: The pull request's node id.
+    /// - Returns: Whether anything changed.
+    @discardableResult
+    public mutating func markGoneUnmerged(_ prID: String) -> Bool {
+        guard let index = entries.firstIndex(where: { $0.prID == prID }),
+              entries[index].state == .merging
+        else { return false }
+        entries[index].state = .skipped(.disappeared)
+        return true
+    }
+
     /// Records the drain's confirmation of the branch update the series queued
     /// (`mutationSent(.branchUpdated)`). Only an entry that is waiting for its update moves;
     /// a confirmation for anything else is ignored. An entry **Cancel** asked to take out
@@ -388,7 +422,7 @@ public struct MergeSeries: Sendable, Codable, Hashable, Identifiable {
     @discardableResult
     public mutating func remove(_ prID: String, hasNoUnsentWrite: Bool = false) -> Bool {
         guard let index = entries.firstIndex(where: { $0.prID == prID }),
-              Self.isRemovable(entries[index].state, hasNoUnsentWrite: hasNoUnsentWrite)
+              entries[index].state.isRemovable(hasNoUnsentWrite: hasNoUnsentWrite)
         else { return false }
         entries[index].state = .skipped(.removedByUser)
         return true
@@ -401,23 +435,21 @@ public struct MergeSeries: Sendable, Codable, Hashable, Identifiable {
     /// is settled, but is marked (``MergeSeriesEntry/removalRequested``) so that it is removed
     /// then rather than merged. Finished entries are untouched.
     /// - Parameter withoutUnsentWrites: Entries whose outbox row is known to be gone.
-    public mutating func cancel(withoutUnsentWrites: Set<String> = []) {
+    /// - Returns: Whether anything changed, like every other mutator here.
+    @discardableResult
+    public mutating func cancel(withoutUnsentWrites: Set<String> = []) -> Bool {
+        var changed = false
         for index in entries.indices {
             let hasNoUnsentWrite = withoutUnsentWrites.contains(entries[index].prID)
-            if Self.isRemovable(entries[index].state, hasNoUnsentWrite: hasNoUnsentWrite) {
+            if entries[index].state.isRemovable(hasNoUnsentWrite: hasNoUnsentWrite) {
                 entries[index].state = .skipped(.removedByUser)
-            } else if case .updatingBranch = entries[index].state {
+                changed = true
+            } else if case .updatingBranch = entries[index].state, !entries[index].removalRequested {
                 entries[index].removalRequested = true
+                changed = true
             }
         }
-    }
-
-    private static func isRemovable(_ state: MergeSeriesEntryState, hasNoUnsentWrite: Bool) -> Bool {
-        switch state {
-        case .pending, .branchUpdated: return true
-        case .updatingBranch, .merging: return hasNoUnsentWrite
-        case .merged, .skipped: return false
-        }
+        return changed
     }
 }
 

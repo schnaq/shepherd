@@ -230,17 +230,18 @@ extension MergeSeriesExclusionReason {
         }
     }
 
-    /// The tooltip.
+    /// The tooltip. Three reasons are spelled exactly like ``BulkTriageSkipReason``'s own (this
+    /// type's doc comment says why), so their wording is reused rather than repeated.
     var explanation: String {
         switch self {
         case .mergeOnItsWay:
             return String(localized: "A merge is already queued, armed or part of another series.")
         case .draft:
-            return String(localized: "A draft pull request is not ready to be reviewed or merged.")
+            return BulkTriageSkipReason.draft.explanation
         case .conflicting:
-            return String(localized: "GitHub reports conflicts with the base branch. Resolve them first.")
+            return BulkTriageSkipReason.conflicting.explanation
         case .checksFailing:
-            return String(localized: "At least one check on the head commit failed.")
+            return BulkTriageSkipReason.checksFailing.explanation
         case .changesRequested:
             return String(localized: "A reviewer asked for changes. A series will not overrule that.")
         case .ownPullRequest:

@@ -203,8 +203,8 @@ public enum MergeSeriesPolicy {
             guard row.headRefOid != from else {
                 // GitHub creates the update's merge commit asynchronously; the row may still show
                 // the old head (and still BEHIND) for a sweep or two. Never a second update.
-                if entry.updateQueuedAt == nil { entry.updateQueuedAt = now }
                 let since = entry.updateQueuedAt ?? now
+                entry.updateQueuedAt = since
                 return now >= since.addingTimeInterval(gracePeriod) ? .skip(.updateRefused) : .wait
             }
             entry.pinnedHeadOid = row.headRefOid

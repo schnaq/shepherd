@@ -172,9 +172,8 @@ struct MergeSeriesChip: Equatable, Sendable {
     ///   - prID: The pull request's node id.
     ///   - row: The pull request as the caller shows it, for its head and its checks.
     static func make(series: MergeSeries, prID: String, row: PullRequestSummary?) -> MergeSeriesChip? {
-        guard let place = series.position(of: prID), let entry = series.entry(for: prID) else {
-            return nil
-        }
+        guard let place = series.position(of: prID) else { return nil }
+        let entry = series.entries[place.index]
         let isActive = series.activeIndex == place.index
         let checksRunning = row?.checkRollup?.state == .pending
         let phase: Phase

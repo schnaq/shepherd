@@ -783,7 +783,6 @@ final class AppEnvironment {
                 queuedThisSweep.formUnion(queued.map(\.pullRequest.id))
             }
 
-
             if decisionsArmed {
                 // `announcesSuccess: false` here too: the pass posts its own notification, and
                 // the user is not necessarily looking at the window a toast would land in.

@@ -226,11 +226,7 @@ final class MergeSeriesCoordinator {
     ///   - hasUnsentWrite: Whether the outbox holds a pending or sending row for it.
     func canRemove(_ prID: String, hasUnsentWrite: Bool) -> Bool {
         guard let entry = store.series(containing: prID)?.entry(for: prID) else { return false }
-        switch entry.state {
-        case .pending, .branchUpdated: return true
-        case .updatingBranch, .merging: return !hasUnsentWrite
-        case .merged, .skipped: return false
-        }
+        return entry.state.isRemovable(hasNoUnsentWrite: !hasUnsentWrite)
     }
 
     // MARK: - Starting and stopping
@@ -287,11 +283,12 @@ final class MergeSeriesCoordinator {
     ///   - id: The series id.
     ///   - outbox: The outbox as it stands; see ``remove(_:outbox:)``.
     func cancel(seriesID id: String, outbox: MergeSeriesOutboxSnapshot? = nil) {
+        // `queuedIDs` is read once for the whole series rather than through `hasNoUnsentRow` per
+        // entry, which would recompute it from the outbox's items every time.
+        let queued = outbox?.queuedIDs ?? []
         store.update(id) { series in
-            let before = series
-            let removable = Set(series.entries.map(\.prID).filter { outbox?.hasNoUnsentRow(for: $0) ?? false })
-            series.cancel(withoutUnsentWrites: removable)
-            return series != before
+            let removable = Set(series.entries.map(\.prID)).subtracting(queued)
+            return series.cancel(withoutUnsentWrites: removable)
         }
         finishIfDone(id)
     }
@@ -473,15 +470,14 @@ final class MergeSeriesCoordinator {
             // The pin, not whatever the row says, is what the write is pinned to. They are equal
             // whenever the policy acts; this keeps it so if that ever changes.
             row.headRefOid = oid
+            // `.none` is already ruled out: the guard above requires `step.action.entry`, which
+            // only `.updateBranch` and `.merge` carry.
             let request: MergeSeriesWrite
-            switch step.action {
-            case .none:
-                continue
-            case .updateBranch:
-                request = .updateBranch(row)
-            case .merge:
+            if case .merge = step.action {
                 let method = MergeMethod(rawValue: step.series.mergeMethod) ?? settings.defaultMergeMethod
                 request = .merge(row, method: method, deletesHeadBranch: step.series.deletesHeadBranch)
+            } else {
+                request = .updateBranch(row)
             }
             queued.insert(entry.prID)
             result.writes.append(request)
@@ -557,7 +553,7 @@ final class MergeSeriesCoordinator {
                 continue
             }
             switch entry.state {
-            case .merging where !isQueued && !hasFailed && rows[entry.prID] == nil:
+            case .merging where hasVanished(entry, rows: rows, queued: queued, snapshot: snapshot, now: moment):
                 // The row left the outbox without a failure and the pull request left the inbox.
                 // Likely merged — but the row may have been discarded and the pull request closed
                 // or filtered out, so GitHub decides. No answer (offline): ask again next pass.
@@ -566,9 +562,7 @@ final class MergeSeriesCoordinator {
                     // The rows are already from after the merge; no gate needed.
                     series.markMerged(entry.prID)
                 case false?:
-                    if let index = series.entries.firstIndex(where: { $0.prID == entry.prID }) {
-                        series.entries[index].state = .skipped(.disappeared)
-                    }
+                    series.markGoneUnmerged(entry.prID)
                 case nil:
                     break
                 }
