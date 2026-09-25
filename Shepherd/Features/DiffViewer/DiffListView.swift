@@ -234,11 +234,14 @@ struct DiffListView: View {
         // composer, which the list otherwise had none of — Monaco has the gutter "+", and a
         // hover affordance here would be a second mechanism for a job this one already does.
         //
-        // Declared before the single tap, as in the inbox list. The order is not cosmetic: the
-        // gesture attached first is the one closer to the view, and a single tap recognised there
-        // would end the sequence before a second click could arrive.
-        .onTapGesture(count: 2) { comment(at: index) }
-        .onTapGesture { select(index) }
+        // One gesture for both, as in the inbox list, and not a count-2 tap beside a single one:
+        // that pair holds every click back for the double-click interval before it selects
+        // anything. Here the click selects at once and the second click of a pair comments.
+        .onClick {
+            select(index)
+        } onDoubleClick: {
+            comment(at: index)
+        }
         // One element per row, and the whole sentence as its label. Left alone, `.combine` reads
         // out two line numbers, a lone "+" and the code as separate things — and an
         // `.accessibilityLabel` beside it *replaces* what `.combine` produced rather than adding

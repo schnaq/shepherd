@@ -197,8 +197,16 @@ struct InboxListView: View {
                                     )
                                     .id(row.id)
                                     .contentShape(Rectangle())
-                                    .onTapGesture(count: 2) { onOpen(row.id) }
-                                    .onTapGesture { model.select(row.id) }
+                                    // A click selects at once, a double-click opens as well.
+                                    // Not `onTapGesture(count: 2)` beside a single tap: that
+                                    // pair holds every click back for the double-click interval,
+                                    // which read as a list that ignores its clicks
+                                    // (`onClick(_:onDoubleClick:)`).
+                                    .onClick {
+                                        model.select(row.id)
+                                    } onDoubleClick: {
+                                        onOpen(row.id)
+                                    }
                                     // ⌘-click ticks one row, ⇧-click ticks the range from the
                                     // cursor. Attached outermost so a modified click never
                                     // falls through to plain selection (ADR 0015).
