@@ -44,6 +44,7 @@ final class StructuredTriageTests: XCTestCase {
         nonisolated let modelIdentifier: String
         private let availabilityReason: String?
         private let failsFor: Set<String>
+        private let failure: IntelligenceError
         private(set) var classifiedIDs: [String] = []
         private(set) var titles: [String] = []
         private(set) var prompts: [String] = []
@@ -51,11 +52,13 @@ final class StructuredTriageTests: XCTestCase {
         init(
             modelIdentifier: String = "fake-tagger-1",
             availabilityReason: String? = nil,
-            failsFor: Set<String> = []
+            failsFor: Set<String> = [],
+            failure: IntelligenceError = .guardrailDeclined
         ) {
             self.modelIdentifier = modelIdentifier
             self.availabilityReason = availabilityReason
             self.failsFor = failsFor
+            self.failure = failure
         }
 
         var callCount: Int { classifiedIDs.count }
@@ -69,7 +72,7 @@ final class StructuredTriageTests: XCTestCase {
             classifiedIDs.append(input.prID)
             titles.append(input.title)
             prompts.append(input.promptText)
-            if failsFor.contains(input.prID) { throw IntelligenceError.guardrailDeclined }
+            if failsFor.contains(input.prID) { throw failure }
             let lowercased = input.title.lowercased()
             if lowercased.contains("bump") {
                 return TriageVerdict(
@@ -129,15 +132,23 @@ final class StructuredTriageTests: XCTestCase {
         return settings
     }
 
+    /// A clock a test can move, for the transient-failure backoff.
+    @MainActor
+    private final class Clock {
+        var now: Date
+        init(_ now: Date) { self.now = now }
+    }
+
     private func makeCoordinator(
         settings: AppSettings,
-        classifier: any TriageClassifying
+        classifier: any TriageClassifying,
+        clock movable: Clock? = nil
     ) -> TriageCoordinator {
         let fixedNow = clock
         return TriageCoordinator(
             settings: settings,
             classifier: classifier,
-            now: { fixedNow }
+            now: { movable?.now ?? fixedNow }
         )
     }
 
@@ -298,19 +309,107 @@ final class StructuredTriageTests: XCTestCase {
         XCTAssertEqual(Set(stored.map(\.modelIdentifier)), ["fake-tagger-2"])
     }
 
-    func testAFailedClassificationIsRetriedOnTheNextPass() async throws {
+    func testARefusedClassificationIsNotAskedAgainForTheSameText() async throws {
         let database = try DatabaseManager.inMemory()
         try await database.savePullRequestSummaries(rows)
-        let classifier = FakeClassifier(failsFor: ["PR_3"])
+        let classifier = FakeClassifier(failsFor: ["PR_3"], failure: .guardrailDeclined)
         let coordinator = makeCoordinator(settings: makeSettings(), classifier: classifier)
 
         await classify(coordinator, rows: rows, database: database)
         XCTAssertNil(coordinator.verdict(for: "PR_3"))
         XCTAssertEqual(coordinator.status.classifiedCount, 2)
 
+        // Every inbox write runs a pass. A refusal of the same text is the same refusal, so
+        // neither an untouched pass nor one whose `updatedAt` moved may ask again.
         await classify(coordinator, rows: rows, database: database)
+        var touched = rows
+        touched[2].updatedAt = clock.addingTimeInterval(600)
+        try await database.savePullRequestSummaries(touched)
+        await classify(coordinator, rows: touched, database: database)
+
         let calls = await classifier.callCount
-        XCTAssertEqual(calls, 4, "the two that worked are settled; the one that failed is asked again")
+        XCTAssertEqual(calls, 3, "the refused pull request was asked about exactly once")
+    }
+
+    func testAContentFailureIsNotRetriedAfterTheBackoffEither() async throws {
+        let database = try DatabaseManager.inMemory()
+        try await database.savePullRequestSummaries(rows)
+        let classifier = FakeClassifier(
+            failsFor: ["PR_3"],
+            failure: .digestTooLarge(tokens: 9_000, limit: 4_096)
+        )
+        let movable = Clock(clock)
+        let coordinator = makeCoordinator(
+            settings: makeSettings(),
+            classifier: classifier,
+            clock: movable
+        )
+
+        await classify(coordinator, rows: rows, database: database)
+        movable.now = clock.addingTimeInterval(TriageFailure.transientBackoff * 10)
+        await classify(coordinator, rows: rows, database: database)
+
+        let calls = await classifier.callCount
+        XCTAssertEqual(calls, 3, "a document that does not fit will not fit later")
+    }
+
+    func testARefusedPullRequestIsAskedAgainOnceItsTextChanges() async throws {
+        let database = try DatabaseManager.inMemory()
+        try await database.savePullRequestSummaries(rows)
+        let classifier = FakeClassifier(failsFor: ["PR_3"])
+        let coordinator = makeCoordinator(settings: makeSettings(), classifier: classifier)
+        await classify(coordinator, rows: rows, database: database)
+
+        var edited = rows
+        edited[2].title = "A dark theme for the sidebar, reworded"
+        try await database.savePullRequestSummaries(edited)
+        await classify(coordinator, rows: edited, database: database)
+
+        let calls = await classifier.callCount
+        XCTAssertEqual(calls, 4, "new text is a new question")
+    }
+
+    func testATransientFailureIsRetriedOnlyOnceTheBackoffHasRunOut() async throws {
+        let database = try DatabaseManager.inMemory()
+        try await database.savePullRequestSummaries(rows)
+        let classifier = FakeClassifier(failsFor: ["PR_3"], failure: .unavailable("busy"))
+        let movable = Clock(clock)
+        let coordinator = makeCoordinator(
+            settings: makeSettings(),
+            classifier: classifier,
+            clock: movable
+        )
+
+        await classify(coordinator, rows: rows, database: database)
+        movable.now = clock.addingTimeInterval(TriageFailure.transientBackoff - 1)
+        await classify(coordinator, rows: rows, database: database)
+        let beforeBackoff = await classifier.callCount
+        XCTAssertEqual(beforeBackoff, 3, "a sweep inside the backoff leaves the model alone")
+
+        movable.now = clock.addingTimeInterval(TriageFailure.transientBackoff)
+        await classify(coordinator, rows: rows, database: database)
+        let afterBackoff = await classifier.callCount
+        XCTAssertEqual(afterBackoff, 4, "and the first one after it asks again")
+    }
+
+    func testRowsSeenWhileTheTiersWereOffAreClassifiedOnceTheyAreBackOn() async throws {
+        let database = try DatabaseManager.inMemory()
+        try await database.savePullRequestSummaries(rows)
+        let classifier = FakeClassifier()
+        let settings = makeSettings(mode: .off)
+        let coordinator = makeCoordinator(settings: settings, classifier: classifier)
+
+        await classify(coordinator, rows: rows, database: database)
+        await classify(coordinator, rows: rows, database: database)
+        let whileOff = await classifier.callCount
+        XCTAssertEqual(whileOff, 0)
+
+        settings.intelligenceMode = .onDevice
+        await classify(coordinator, rows: rows, database: database)
+
+        let calls = await classifier.callCount
+        XCTAssertEqual(calls, 3, "nothing changed on the rows, but the model is there now")
+        XCTAssertEqual(coordinator.status.classifiedCount, 3)
     }
 
     func testAPullRequestThatLeftTheInboxLeavesTheCoordinatorAndTheTable() async throws {
@@ -352,6 +451,30 @@ final class StructuredTriageTests: XCTestCase {
             "the queued snapshot was classified, not dropped"
         )
         XCTAssertEqual(coordinator.status.classifiedCount, 3)
+    }
+
+    func testThePullRequestWhoseDetailJustLoadedIsFirstInTheQueue() async throws {
+        // Ten rows, so a queue that merely happened to come out in the right order — a
+        // dictionary's order is random per process — would fail most runs.
+        let many = (1...10).map { summary(id: "PR_\($0)", number: $0, title: "Change \($0)") }
+        let database = try DatabaseManager.inMemory()
+        try await database.savePullRequestSummaries(many)
+        let classifier = FakeClassifier()
+        let coordinator = makeCoordinator(settings: makeSettings(), classifier: classifier)
+
+        // One main-actor turn: a pass over the first row starts, the sweep's snapshot queues
+        // behind it, and the user opens PR_7 — the one they are looking at.
+        coordinator.considerClassifying(rows: Array(many.prefix(1)), database: database)
+        coordinator.considerClassifying(rows: many, database: database)
+        coordinator.classifyAfterDetailLoad(prID: "PR_7", database: database)
+        // A later snapshot merging into the queue must not push it back again.
+        coordinator.considerClassifying(rows: many, database: database)
+        await waitForPass(coordinator)
+
+        let ids = await classifier.classifiedIDs
+        XCTAssertEqual(ids.first, "PR_1", "the pass that was already running finished first")
+        XCTAssertEqual(ids.dropFirst().first, "PR_7", "then the pull request on screen")
+        XCTAssertEqual(Set(ids).count, 10)
     }
 
     // MARK: - The tier-1 half
