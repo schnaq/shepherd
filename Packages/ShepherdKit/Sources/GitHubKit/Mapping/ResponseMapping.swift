@@ -159,11 +159,15 @@ public enum ResponseMapping {
         else { return nil }
 
         let headRefName = node.headRefName ?? ""
-        let rollupDTO = node.commits?.nodes?
+        let headCommit = node.commits?.nodes?
             .compactMap { $0 }
             .first?
-            .commit?
-            .statusCheckRollup
+            .commit
+        let rollupDTO = headCommit?.statusCheckRollup
+        // The head commit's trailers, so a `Co-Authored-By: Claude` pull request under a human
+        // account is an agent's from the first sweep on. Only the detail fetch read trailers
+        // before, and the row moved between provenance groups the moment it did.
+        let headTrailers = CommitInfo.parseTrailers(in: headCommit?.messageBody ?? "")
         let rollup = rollupState(rollupDTO?.state).map { state in
             CheckRollup(state: state, total: rollupDTO?.contexts?.totalCount ?? 0)
         }
@@ -173,7 +177,12 @@ public enum ResponseMapping {
             repo: RepoRef(owner: repoOwner, name: repoName),
             number: number,
             title: node.title ?? "",
-            author: makeActor(from: node.author, detector: detector, branchName: headRefName),
+            author: makeActor(
+                from: node.author,
+                detector: detector,
+                branchName: headRefName,
+                commitTrailers: headTrailers
+            ),
             updatedAt: updatedAt,
             createdAt: createdAt,
             isDraft: node.isDraft ?? false,

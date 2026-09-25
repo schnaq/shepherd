@@ -149,6 +149,35 @@ final class SearchParsingTests: XCTestCase {
         }
     }
 
+    func testTheSweepReadsTheHeadCommitsTrailersSoAnAgentIsKnownFromTheStart() async throws {
+        // A Claude Code pull request on an ordinary branch, opened under a human account: only the
+        // commit's `Co-Authored-By` trailer says who wrote it. Found only by the detail fetch, the
+        // row used to sit under "People" until then and jump into "Claude Code" the moment the
+        // detail loaded.
+        let json = """
+        {"data":{"search":{"issueCount":1,"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[
+          {"__typename":"PullRequest","id":"PR_trailer","number":7,"title":"Tidy the sync loop",
+           "createdAt":"2026-09-20T09:00:00Z","updatedAt":"2026-09-25T09:00:00Z","isDraft":false,
+           "headRefName":"tidy-sync","headRefOid":"abc","baseRefName":"main",
+           "repository":{"name":"shepherd","owner":{"login":"schnaq"}},
+           "author":{"__typename":"User","login":"n2o","avatarUrl":null},
+           "labels":{"nodes":[]},
+           "commits":{"nodes":[{"commit":{"oid":"abc",
+             "messageBody":"Keeps the loop alive.\\n\\nCo-Authored-By: Claude <noreply@anthropic.com>",
+             "statusCheckRollup":null}}]}}
+        ]}}}
+        """
+        let transport = MockTransport()
+        await transport.route("ShepherdInboxSweep", Fixture.response(json: json))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let summaries = try await client.searchOpenPullRequests(queries: [.involves])
+
+        XCTAssertEqual(summaries.first?.author.kind.agentIdentity?.id, "claude-code")
+        XCTAssertEqual(summaries.first?.author.login, "n2o")
+        XCTAssertTrue(GraphQLDocuments.searchPullRequests.contains("messageBody"))
+    }
+
     func testTheSweepAsksForMergeStateStatusNextToMergeable() {
         // The merge series (ADR 0041) reads `BEHIND` from every sweep; without the field in the
         // query nothing would ever bring a branch up to date.

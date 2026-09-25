@@ -70,6 +70,8 @@ struct SearchNodeDTO: Decodable {
         struct Node: Decodable {
             struct Commit: Decodable {
                 var oid: String?
+                /// The head commit's message below its headline, read for its trailers.
+                var messageBody: String?
                 var statusCheckRollup: StatusCheckRollupDTO?
             }
             var commit: Commit?

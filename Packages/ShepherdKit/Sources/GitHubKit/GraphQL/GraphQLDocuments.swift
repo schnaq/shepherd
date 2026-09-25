@@ -248,6 +248,7 @@ public enum GraphQLDocuments {
               nodes {
                 commit {
                   oid
+                  messageBody
                   statusCheckRollup {
                     state
                     contexts(first: 100) { totalCount }
