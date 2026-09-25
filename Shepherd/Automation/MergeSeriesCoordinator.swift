@@ -284,9 +284,10 @@ final class MergeSeriesCoordinator {
     ///   - outbox: The outbox as it stands; see ``remove(_:outbox:)``.
     func cancel(seriesID id: String, outbox: MergeSeriesOutboxSnapshot? = nil) {
         // `queuedIDs` is read once for the whole series rather than through `hasNoUnsentRow` per
-        // entry, which would recompute it from the outbox's items every time.
-        let queued = outbox?.queuedIDs ?? []
+        // entry, which would recompute it from the outbox's items every time. Without a snapshot
+        // nothing is known to be unsent, so no merging or updating entry counts as removable.
         store.update(id) { series in
+            guard let queued = outbox?.queuedIDs else { return series.cancel() }
             let removable = Set(series.entries.map(\.prID)).subtracting(queued)
             return series.cancel(withoutUnsentWrites: removable)
         }
