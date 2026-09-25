@@ -85,6 +85,18 @@ struct SearchNodeDTO: Decodable {
         var contexts: Contexts?
     }
 
+    /// `PullRequest.stack`: `null` when the pull request is in no stack (ADR 0042).
+    struct StackDTO: Decodable {
+        var number: Int?
+        var size: Int?
+        var baseRefName: String?
+    }
+
+    /// `PullRequest.stackEntry`: `null` when the pull request is in no stack (ADR 0042).
+    struct StackEntryDTO: Decodable {
+        var position: Int?
+    }
+
     var typename: String?
     var id: String?
     var number: Int?
@@ -100,6 +112,8 @@ struct SearchNodeDTO: Decodable {
     var baseRefName: String?
     var mergeable: String?
     var mergeStateStatus: String?
+    var stack: StackDTO?
+    var stackEntry: StackEntryDTO?
     var reviewDecision: String?
     var repository: GraphQLRepositoryDTO?
     var author: GraphQLActorDTO?
@@ -111,6 +125,7 @@ struct SearchNodeDTO: Decodable {
         case id, number, title, createdAt, updatedAt, isDraft, additions, deletions
         case changedFiles, headRefName, headRefOid, baseRefName, mergeable, reviewDecision
         case mergeStateStatus
+        case stack, stackEntry
         case repository, author, labels, commits
     }
 }

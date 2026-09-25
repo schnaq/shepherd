@@ -27,6 +27,10 @@ final class SearchParsingTests: XCTestCase {
         XCTAssertEqual(agentPR.reviewDecision, .reviewRequired)
         XCTAssertEqual(agentPR.mergeable, .mergeable)
         XCTAssertEqual(agentPR.mergeStateStatus, .behind)
+        XCTAssertEqual(
+            agentPR.stack,
+            PullRequestStack(number: 7, size: 3, position: 2, baseRefName: "main")
+        )
         XCTAssertEqual(agentPR.labels, ["agent", "refactor"])
         XCTAssertFalse(agentPR.isDraft)
         XCTAssertEqual(agentPR.checkRollup?.state, .failure)
@@ -67,6 +71,7 @@ final class SearchParsingTests: XCTestCase {
         XCTAssertNil(humanPR?.reviewDecision)
         XCTAssertEqual(humanPR?.mergeable, .conflicting)
         XCTAssertEqual(humanPR?.mergeStateStatus, .dirty)
+        XCTAssertNil(humanPR?.stack, "a pull request outside a stack has null for both fields")
     }
 
     func testRelationsComeFromTheFacetQueryAndAreUnioned() async throws {
@@ -200,5 +205,40 @@ final class SearchParsingTests: XCTestCase {
             ResponseMapping.mergeStateStatus("QUEUED_SOMEWHERE"),
             "a value GitHub adds later reads as absent, never as a state the series acts on"
         )
+    }
+
+    func testTheSweepAsksForTheStackAndThePullRequestsPlaceInIt() {
+        // ADR 0042: the row's "Stack 2/3" chip and the drain's choice of the asynchronous merge
+        // both read what the sweep stored; without the selection every row reads as unstacked.
+        let query = GraphQLDocuments.searchPullRequests
+        XCTAssertTrue(query.contains("stack { number size baseRefName }"))
+        XCTAssertTrue(query.contains("stackEntry { position }"))
+    }
+
+    func testAStackIsOnlyMappedWhenTheStackAndTheEntryAreBothComplete() throws {
+        func node(_ json: String) throws -> SearchNodeDTO {
+            try JSONDecoder().decode(SearchNodeDTO.self, from: Data(json.utf8))
+        }
+        let complete = try node(
+            #"{"stack":{"number":4,"size":2,"baseRefName":"trunk"},"stackEntry":{"position":1}}"#
+        )
+        XCTAssertEqual(
+            ResponseMapping.stack(complete.stack, entry: complete.stackEntry),
+            PullRequestStack(number: 4, size: 2, position: 1, baseRefName: "trunk")
+        )
+
+        let unstacked = try node(#"{"stack":null,"stackEntry":null}"#)
+        XCTAssertNil(ResponseMapping.stack(unstacked.stack, entry: unstacked.stackEntry))
+        let absent = try node("{}")
+        XCTAssertNil(ResponseMapping.stack(absent.stack, entry: absent.stackEntry))
+
+        // Half a stack is not a place in one: without a position the chip could not say 2/3,
+        // and the stack's number without a size could not say how many merge along.
+        let noEntry = try node(#"{"stack":{"number":4,"size":2,"baseRefName":"trunk"},"stackEntry":null}"#)
+        XCTAssertNil(ResponseMapping.stack(noEntry.stack, entry: noEntry.stackEntry))
+        let noStack = try node(#"{"stack":null,"stackEntry":{"position":1}}"#)
+        XCTAssertNil(ResponseMapping.stack(noStack.stack, entry: noStack.stackEntry))
+        let noSize = try node(#"{"stack":{"number":4,"baseRefName":"trunk"},"stackEntry":{"position":1}}"#)
+        XCTAssertNil(ResponseMapping.stack(noSize.stack, entry: noSize.stackEntry))
     }
 }

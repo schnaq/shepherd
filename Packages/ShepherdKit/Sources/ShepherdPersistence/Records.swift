@@ -145,6 +145,13 @@ struct PullRequestRecord: Codable, FetchableRecord, PersistableRecord {
     var mergeable: String?
     /// `MergeStateStatus.rawValue`, or `NULL` when GitHub did not send one (v9, ADR 0041).
     var mergeStateStatus: String?
+    /// `PullRequestStack`, one column per field so a stack's rows are one plain
+    /// `WHERE repoFullName = ? AND stackNumber = ? ORDER BY stackPosition` away; all four
+    /// `NULL` when the pull request is in no stack (v10, ADR 0042).
+    var stackNumber: Int?
+    var stackSize: Int?
+    var stackPosition: Int?
+    var stackBaseRef: String?
     var bodyMarkdown: String?
     var commitsJSON: String?
     var timelineJSON: String?
@@ -183,6 +190,10 @@ struct PullRequestRecord: Codable, FetchableRecord, PersistableRecord {
         self.labels = ColumnCoding.encodeJSON(summary.labels)
         self.mergeable = summary.mergeable?.rawValue
         self.mergeStateStatus = summary.mergeStateStatus?.rawValue
+        self.stackNumber = summary.stack?.number
+        self.stackSize = summary.stack?.size
+        self.stackPosition = summary.stack?.position
+        self.stackBaseRef = summary.stack?.baseRefName
         self.bodyMarkdown = existing?.bodyMarkdown
         self.commitsJSON = existing?.commitsJSON
         self.timelineJSON = existing?.timelineJSON
@@ -255,8 +266,28 @@ struct PullRequestRecord: Codable, FetchableRecord, PersistableRecord {
             myRelation: ColumnCoding.decodeRelations(relations),
             labels: ColumnCoding.decodeJSON([String].self, from: labels) ?? [],
             mergeable: mergeable.flatMap { Mergeable(rawValue: $0) },
-            mergeStateStatus: mergeStateStatus.flatMap { MergeStateStatus(rawValue: $0) }
+            mergeStateStatus: mergeStateStatus.flatMap { MergeStateStatus(rawValue: $0) },
+            stack: stack
         )
+    }
+
+    /// The stored place in a stack, rebuilt only when all four columns hold a value.
+    var stack: PullRequestStack? {
+        guard let stackNumber, let stackSize, let stackPosition, let stackBaseRef else { return nil }
+        return PullRequestStack(
+            number: stackNumber,
+            size: stackSize,
+            position: stackPosition,
+            baseRefName: stackBaseRef
+        )
+    }
+
+    /// Copies the place in a stack from another row, all four columns together.
+    mutating func keepStack(from existing: PullRequestRecord) {
+        stackNumber = existing.stackNumber
+        stackSize = existing.stackSize
+        stackPosition = existing.stackPosition
+        stackBaseRef = existing.stackBaseRef
     }
 
     /// The stored commit list, or an empty list when no detail fetch has happened yet.

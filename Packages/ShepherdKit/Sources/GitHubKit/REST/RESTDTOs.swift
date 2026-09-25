@@ -35,6 +35,17 @@ struct RESTPullRequestDTO: Decodable {
     struct Label: Decodable {
         var name: String?
     }
+    /// `stack`, present when the pull request belongs to a stack (ADR 0042). `base.sha` and
+    /// `id` (a database id) are not read.
+    struct Stack: Decodable {
+        struct Base: Decodable {
+            var ref: String?
+        }
+        var base: Base?
+        var size: Int?
+        var position: Int?
+        var number: Int?
+    }
 
     var nodeId: String?
     var number: Int?
@@ -45,6 +56,7 @@ struct RESTPullRequestDTO: Decodable {
     var merged: Bool?
     var mergeable: Bool?
     var mergeableState: String?
+    var stack: Stack?
     var additions: Int?
     var deletions: Int?
     var changedFiles: Int?
