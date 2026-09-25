@@ -307,6 +307,13 @@ final class InboxModel {
     }
     /// The selected row's pull request id — the keyboard cursor, always exactly one row.
     var selectedID: String?
+    /// Where the selected row stood when it was selected, which is where the list keeps it
+    /// while it stays selected (``InboxSelectionAnchor``).
+    ///
+    /// Taken by ``select(_:)`` and, for a cursor that had no rows to stand in yet, by
+    /// ``clampSelection()`` — never on an ordinary observation tick, because those ticks are
+    /// exactly the updates it exists to hold the row still through.
+    private var selectionAnchor: InboxSelectionAnchor?
     /// The rows ticked for a bulk action (ADR 0015).
     ///
     /// Deliberately separate from ``selectedID``: the cursor drives `j`/`k` and the detail
@@ -563,21 +570,30 @@ final class InboxModel {
 
     /// The rows the centre list shows, after every rail filter.
     var filteredRows: [PullRequestSummary] {
-        allRows.filter { row in
-            guard smartView.matches(row) else { return false }
-            if let provenanceFilter, !provenanceFilter.matches(row) { return false }
-            // Case-insensitive: the rail always sets this from a row it is showing, but a
-            // `shepherd://inbox?filter=repo:…` link carries whatever casing was typed.
-            if let repoFilter, !row.repo.isSameRepository(as: repoFilter) { return false }
-            // A row with no risk at all — nobody has opened it, so there is no diff to judge and
-            // no verdict — is filtered *out* rather than kept: the facet is a claim about risk,
-            // and "we do not know" is not one of its levels.
-            if let riskFilter, triage?.risk(for: row.id) != riskFilter { return false }
-            // No "we do not know" case, unlike the risk facet above: every row has a lane, and a
-            // row nothing has been computed for is a full review (ADR 0027).
-            if let laneFilter, trust.lane(for: row.id) != laneFilter { return false }
-            return true
-        }
+        allRows.filter(passesRail)
+    }
+
+    /// Whether one row survives every rail filter — ``filteredRows``' predicate, on its own.
+    ///
+    /// Split out so ``selectedRow`` can ask it of one row. The grouping and sorting after it only
+    /// ever *arrange* the filtered rows (``InboxGrouper`` partitions, it drops nothing), so "is the
+    /// selected row visible" is this question and not the whole pipeline.
+    /// - Parameter row: The row to test.
+    /// - Returns: `true` when the centre list shows it.
+    private func passesRail(_ row: PullRequestSummary) -> Bool {
+        guard smartView.matches(row) else { return false }
+        if let provenanceFilter, !provenanceFilter.matches(row) { return false }
+        // Case-insensitive: the rail always sets this from a row it is showing, but a
+        // `shepherd://inbox?filter=repo:…` link carries whatever casing was typed.
+        if let repoFilter, !row.repo.isSameRepository(as: repoFilter) { return false }
+        // A row with no risk at all — nobody has opened it, so there is no diff to judge and
+        // no verdict — is filtered *out* rather than kept: the facet is a claim about risk,
+        // and "we do not know" is not one of its levels.
+        if let riskFilter, triage?.risk(for: row.id) != riskFilter { return false }
+        // No "we do not know" case, unlike the risk facet above: every row has a lane, and a
+        // row nothing has been computed for is a full review (ADR 0027).
+        if let laneFilter, trust.lane(for: row.id) != laneFilter { return false }
+        return true
     }
 
     /// The grouped sections, ordered by the user's sort choice.
@@ -588,7 +604,19 @@ final class InboxModel {
     /// `localizedTitle` (`InboxSectionText.swift`, ADR 0022's 2026-09-22 amendment). That replaced
     /// a remap here that caught the one "People" section by its id and left "Bots" and every
     /// review-state header in English.
+    ///
+    /// The selected row is the one exception to the sort: it stays where it was when it was
+    /// selected (``InboxSelectionAnchor``), so the detail refresh a selection causes does not
+    /// sort it out from under the pointer.
     var sections: [InboxSection] {
+        let sorted = sortedSections
+        // Only the selected row is ever held, whatever path moved the cursor.
+        guard let selectionAnchor, selectionAnchor.id == selectedID else { return sorted }
+        return selectionAnchor.apply(to: sorted, context: anchorContext)
+    }
+
+    /// The sections exactly as grouped and sorted, with no row held in place.
+    private var sortedSections: [InboxSection] {
         InboxGrouper.group(filteredRows, by: settings.groupBy).map { section in
             InboxSection(
                 id: section.id,
@@ -600,15 +628,33 @@ final class InboxModel {
         }
     }
 
+    /// What the list's order depends on, as an anchor records it.
+    private var anchorContext: InboxSelectionAnchor.Context {
+        var rail = railState
+        rail.selectedID = nil
+        return InboxSelectionAnchor.Context(
+            rail: rail,
+            groupBy: settings.groupBy,
+            sortOrder: settings.sortOrder
+        )
+    }
+
     /// Every visible row in display order — the order `j`/`k` walks.
     var visibleRows: [PullRequestSummary] {
         sections.flatMap(\.items)
     }
 
     /// The selected row, if it is still visible.
+    ///
+    /// One lookup and one ``passesRail(_:)``, not a search of ``visibleRows``: this is read on
+    /// every click — by the detail panel, and by the screen that hands the row to ⌘K — and
+    /// ``visibleRows`` is the whole filter → group → sort pipeline with nothing cached behind it.
+    /// The answer is the same, because the grouping and the sort drop no row.
     var selectedRow: PullRequestSummary? {
-        guard let selectedID else { return nil }
-        return visibleRows.first { $0.id == selectedID }
+        guard let selectedID, let row = allRows.first(where: { $0.id == selectedID }) else {
+            return nil
+        }
+        return passesRail(row) ? row : nil
     }
 
     /// The rail counts for the smart views.
@@ -1279,6 +1325,11 @@ final class InboxModel {
     /// - Parameter id: The pull request's node id.
     func select(_ id: String?) {
         guard selectedID != id else { return }
+        // From the list as it is on screen, before the cursor moves: the position to keep is the
+        // one the reader clicked or walked to, which may itself be held by the previous anchor.
+        selectionAnchor = id.flatMap {
+            InboxSelectionAnchor.capture(id: $0, in: sections, context: anchorContext)
+        }
         selectedID = id
         detail = nil
         priorities = []
@@ -1304,6 +1355,18 @@ final class InboxModel {
             // read that is running, or one that failed and left the panel empty, is not started
             // again by the next write to the inbox table.
             if detailTask == nil { loadDetail() }
+            // The same moment for the anchor: a restored cursor had no list to be placed in, and
+            // a rail, grouping or sort the reader changed has retired the old one. An anchor that
+            // still applies is left alone — this runs on every write to the inbox table, and
+            // re-taking it here would let each of them move the row after all.
+            let context = anchorContext
+            if selectionAnchor?.id != selectedID || selectionAnchor?.context != context {
+                selectionAnchor = InboxSelectionAnchor.capture(
+                    id: selectedID,
+                    in: sections,
+                    context: context
+                )
+            }
             return
         }
         select(rows.first?.id)

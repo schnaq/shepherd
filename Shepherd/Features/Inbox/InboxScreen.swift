@@ -197,17 +197,13 @@ struct InboxScreen: View {
             environment.clearPendingAction()
             perform(pending.action)
         }
-        // What ⌘K's review commands act on. `initial: true` because the cursor is already on a
-        // row by the time this screen is built, and a palette opened before the first `j` would
-        // otherwise show none of them.
-        .onChange(of: model.selectedRow, initial: true) { _, row in
-            environment.selectedPullRequest = row
-        }
-        // Every move of the rail, written down for the next rebuild (ADR 0013). `RailState` is
-        // `Equatable`, so this is silent while the reader is doing anything else — including the
-        // restore above, which sets the value it just read.
-        .onChange(of: model.railState) { _, state in
-            storeRail(state)
+        // The two things every move of the cursor has to reach outside the model — ⌘K's row and
+        // the stored rail — watched from a view of their own rather than from here. An
+        // `onChange(of:)` reads its value in the body it is attached to, so on this screen it made
+        // the whole split view depend on the cursor: every click re-ran this body, and with it
+        // every column's. In the mirror only an empty view does.
+        .background {
+            InboxSelectionMirror(model: model, onRailChange: storeRail)
         }
         .onChange(of: environment.pendingInboxFilter) { _, _ in
             consumeDeepLinkRequests()
@@ -684,6 +680,38 @@ struct InboxScreen: View {
     private func compose(_ verdict: ReviewVerdict) {
         guard let id = model.selectedID else { return }
         environment.openReview(prID: id, composing: verdict)
+    }
+}
+
+/// Carries the inbox cursor out of the model, from a view nothing else depends on.
+///
+/// ``InboxScreen``'s two cursor watchers, moved here so that the values they read — the selected
+/// row, and the rail the cursor is part of — are dependencies of this empty view instead of the
+/// screen's (2026-09-25: a click on a row used to re-evaluate the whole three-pane split).
+private struct InboxSelectionMirror: View {
+    @Environment(AppEnvironment.self) private var environment
+    /// The inbox model whose cursor is mirrored.
+    let model: InboxModel
+    /// Writes the rail down for the next rebuild (ADR 0013).
+    let onRailChange: (InboxModel.RailState) -> Void
+
+    var body: some View {
+        Color.clear
+            // What ⌘K's review commands act on. `initial: true` because the cursor is already on
+            // a row by the time this screen is built, and a palette opened before the first `j`
+            // would otherwise show none of them. Assigned only when it differs: the root view
+            // observes the value, and an equal write would still wake it.
+            .onChange(of: model.selectedRow, initial: true) { _, row in
+                if environment.selectedPullRequest != row {
+                    environment.selectedPullRequest = row
+                }
+            }
+            // Every move of the rail, written down for the next rebuild (ADR 0013). `RailState`
+            // is `Equatable`, so this is silent while the reader is doing anything else —
+            // including the restore, which sets the value it just read.
+            .onChange(of: model.railState) { _, state in
+                onRailChange(state)
+            }
     }
 }
 
