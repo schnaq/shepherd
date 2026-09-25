@@ -316,6 +316,17 @@ final class MergeSeriesCoordinator {
         }
     }
 
+    /// GitHub accepted a stacked merge without finishing it (`mutationSent(.mergeEnqueued)` or
+    /// `.mergeStarted`, ADR 0042). The entry stays `merging`; the acceptance only lengthens how
+    /// long it is waited for while the pull request is still open
+    /// (``ShepherdCore/MergeSeriesEntry/unconfirmedMergeDeadline(gracePeriod:now:)``).
+    /// - Parameter prID: The pull request's node id.
+    func noteMergeAccepted(_ prID: String) {
+        guard let series = store.series(containing: prID) else { return }
+        let moment = now()
+        store.update(series.id) { $0.markMergeAccepted(prID, at: moment) }
+    }
+
     /// The drain confirmed a branch update (`mutationSent(.branchUpdated)`). For an entry Cancel
     /// asked to take out, that is also the moment it goes, which can finish the series.
     /// - Parameter prID: The pull request's node id.
@@ -571,9 +582,11 @@ final class MergeSeriesCoordinator {
                 // No row, no failure, no confirmation, and the pull request is still open: the
                 // merge was never written (a crash between save and enqueue) or its row was
                 // discarded by hand. Waiting for a confirmation that cannot come would hold every
-                // entry behind it, so after the grace period the entry is let go.
-                let since = entry.mergeQueuedAt ?? entry.activeSince ?? moment
-                if moment >= since.addingTimeInterval(Self.missingRowGracePeriod),
+                // entry behind it, so after the grace period the entry is let go. A merge GitHub
+                // accepted into its merge queue (ADR 0042) looks exactly like this while the queue
+                // works — row sent, pull request open — and is given a day instead of the hour.
+                let deadline = entry.unconfirmedMergeDeadline(gracePeriod: Self.missingRowGracePeriod, now: moment)
+                if moment >= deadline,
                    let index = series.entries.firstIndex(where: { $0.prID == entry.prID }) {
                     series.entries[index].state = .skipped(.mergeRefused)
                 }

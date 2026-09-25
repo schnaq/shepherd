@@ -8,6 +8,13 @@
   "merged": false,
   "mergeable": true,
   "mergeable_state": "behind",
+  "stack": {
+    "base": { "ref": "main", "sha": "0011223344556677889900aabbccddeeff001122" },
+    "size": 3,
+    "position": 2,
+    "id": 789,
+    "number": 7
+  },
   "additions": 240,
   "deletions": 96,
   "changed_files": 2,

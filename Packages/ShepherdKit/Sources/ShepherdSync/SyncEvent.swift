@@ -138,6 +138,14 @@ public struct SentMutation: Sendable, Hashable, Codable {
         /// finished: the new head arrives with a later sweep, which is what a merge series waits
         /// for before it re-pins.
         case branchUpdated
+        /// GitHub put a stacked pull request's merge into the repository's merge queue
+        /// (ADR 0042). Queued, not merged: the pull request leaves the inbox with the sweep
+        /// after the queue merges it.
+        case mergeEnqueued
+        /// GitHub accepted a stacked pull request's merge and was still working on it when the
+        /// drain stopped polling (ADR 0042). The sweep reads the outcome: the pull request leaves
+        /// the inbox, or it stays open.
+        case mergeStarted
         /// A comment was posted on an issue (ADR 0032's Sprint 4a amendment).
         case issueCommentAdded
         /// A label was added to an issue.

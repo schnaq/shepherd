@@ -628,7 +628,9 @@ final class AppEnvironment {
         }
     }
 
-    /// Says so when a merge actually lands.
+    /// Says so when a merge actually lands, or when GitHub took a stacked pull request's merge
+    /// but had not finished it when the drain let go (ADR 0042): queued in the merge queue, or
+    /// still merging the stack.
     ///
     /// The merge is the one write whose *landing* nothing else reported. At the button the most
     /// that can honestly be said is "Merge queued for …", because the drain re-checks the head
@@ -647,15 +649,31 @@ final class AppEnvironment {
     /// ``PullRequestActions/announcesSuccess``: that flag silences the *queueing* toast for rows
     /// nobody asked for one by one, while a branch that really got merged while nobody was
     /// watching is the one thing about the pass worth saying out loud, once per merge.
+    ///
+    /// A stacked merge's acceptance is not a landing, though: `session.noteMerged` is called only
+    /// for ``ShepherdSync/SentMutation/Kind/merged(method:)``, because the merged ids feed a merge series'
+    /// reconciliation, which would take the entry for landed and step the next pull request on
+    /// rows from before the merge. The sweep is scheduled all the same for every kind that gets a
+    /// toast here — it is what reads the outcome — and when the pull request leaves the inbox,
+    /// the series' vanished-merge check asks GitHub and settles it.
     /// - Parameter event: The event the sync engine emitted.
     private func confirmMerge(_ event: SyncEvent) {
-        guard case .mutationSent(let sent) = event, case .merged = sent.kind else { return }
+        guard case .mutationSent(let sent) = event else { return }
         // Built here rather than carried on the event: ``ShepherdSync/SentMutation`` holds the
         // repository and the number and spends no fetch on describing itself, which is the same
         // two fields the draft-conflict notification spells a slug out of.
         let slug = "\(sent.repo.fullName)#\(sent.number)"
-        toasts.success(String(localized: "Merged \(slug)."))
-        session?.noteMerged(sent.prID)
+        switch sent.kind {
+        case .merged:
+            toasts.success(String(localized: "Merged \(slug)."))
+            session?.noteMerged(sent.prID)
+        case .mergeEnqueued:
+            toasts.success(String(localized: "Queued on GitHub: \(slug)."))
+        case .mergeStarted:
+            toasts.success(String(localized: "GitHub is merging the stack for \(slug)."))
+        default:
+            return
+        }
         scheduleSyncAfterMerge()
     }
 
@@ -684,6 +702,13 @@ final class AppEnvironment {
         switch sent.kind {
         case .merged: mergeSeries.noteMerged(sent.prID)
         case .branchUpdated: mergeSeries.noteBranchUpdated(sent.prID)
+        case .mergeEnqueued, .mergeStarted:
+            // Accepted, not merged (ADR 0042): the entry stays `merging`, its row is gone, and the
+            // pass's vanished-merge check asks GitHub once the pull request leaves the inbox.
+            // `noteMerged` here would step the next entry on rows from before the merge. What
+            // is recorded is the acceptance, so the entry is waited for as long as GitHub's
+            // merge queue may take rather than skipped after the ordinary hour.
+            mergeSeries.noteMergeAccepted(sent.prID)
         default: break
         }
     }

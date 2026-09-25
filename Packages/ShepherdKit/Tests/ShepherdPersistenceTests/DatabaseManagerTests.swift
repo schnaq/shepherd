@@ -34,7 +34,7 @@ final class MigrationTests: XCTestCase {
         // edit to `createV1` — which would silently skip on existing installs — fails CI.
         XCTAssertEqual(
             DatabaseManager.migrator.migrations,
-            ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"]
+            ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10"]
         )
     }
 
@@ -1342,5 +1342,125 @@ final class MergeStateStatusMigrationTests: XCTestCase {
         try await database.savePullRequestDetail(PersistenceFixtures.detail(summary: detailSummary))
         let replaced = try await database.fetchPullRequestSummary(id: summary.id)
         XCTAssertEqual(replaced?.mergeStateStatus, .clean, "a detail that knows the state wins")
+    }
+}
+
+/// Migration v10: the four `pull_requests.stack*` columns (ADR 0042).
+final class PullRequestStackMigrationTests: XCTestCase {
+    func testV10AddsFourNullableColumnsAndARowWrittenBeforeItReadsBackUnstacked() async throws {
+        // A database migrated only as far as v9, holding a pull request an older build stored.
+        let queue = try DatabaseQueue()
+        var upToV9 = DatabaseMigrator()
+        upToV9.registerMigration("v1", migrate: DatabaseSchema.createV1)
+        upToV9.registerMigration("v2", migrate: DatabaseSchema.addV2)
+        upToV9.registerMigration("v3", migrate: DatabaseSchema.addV3)
+        upToV9.registerMigration("v4", migrate: DatabaseSchema.addV4)
+        upToV9.registerMigration("v5", migrate: DatabaseSchema.addV5)
+        upToV9.registerMigration("v6", migrate: DatabaseSchema.addV6)
+        upToV9.registerMigration("v7", migrate: DatabaseSchema.addV7)
+        upToV9.registerMigration("v8", migrate: DatabaseSchema.addV8)
+        upToV9.registerMigration("v9", migrate: DatabaseSchema.addV9)
+        try upToV9.migrate(queue)
+        let before = try await queue.read { db in
+            try db.columns(in: "pull_requests").map(\.name)
+        }
+        XCTAssertFalse(before.contains { $0.hasPrefix("stack") })
+        try await queue.write { db in
+            try db.execute(sql: "INSERT INTO repos (fullName, owner, name) VALUES ('schnaq/review', 'schnaq', 'review')")
+            try db.execute(
+                sql: """
+                    INSERT INTO pull_requests (id, repoFullName, number, title, authorLogin,
+                        authorKind, createdAt, updatedAt, isDraft, additions, deletions,
+                        changedFiles, headRefName, headRefOid, baseRefName, checkTotal,
+                        checkSuccess, checkFailure, checkPending, relations, labels, mergeable,
+                        mergeStateStatus)
+                    VALUES ('PR_old', 'schnaq/review', 7, 'Old row', 'octocat', 'human', 0, 0, 0,
+                        1, 1, 1, 'fix', 'abc', 'main', 0, 0, 0, 0, '[]', '[]', 'mergeable', 'behind')
+                    """
+            )
+        }
+
+        let database = try DatabaseManager(writer: queue)
+        let columns = try await database.writer.read { db in try db.columns(in: "pull_requests") }
+        let expected = [
+            "stackNumber": "INTEGER", "stackSize": "INTEGER",
+            "stackPosition": "INTEGER", "stackBaseRef": "TEXT",
+        ]
+        for (name, type) in expected {
+            let column = try XCTUnwrap(columns.first { $0.name == name }, name)
+            XCTAssertEqual(column.type, type, name)
+            XCTAssertFalse(column.isNotNull, "additive: no existing row is in a stack (\(name))")
+        }
+
+        let loaded = try await database.fetchPullRequestSummary(id: "PR_old")
+        XCTAssertEqual(loaded?.mergeStateStatus, .behind)
+        XCTAssertNil(loaded?.stack)
+    }
+
+    func testAStackRoundTripsThroughTheInboxAndASweepWithoutOneClearsIt() async throws {
+        let database = try DatabaseManager.inMemory()
+        var summary = PersistenceFixtures.summary()
+        summary.stack = PullRequestStack(number: 7, size: 3, position: 2, baseRefName: "main")
+        try await database.savePullRequestSummaries([summary])
+        let loaded = try await database.fetchPullRequestSummary(id: summary.id)
+        XCTAssertEqual(loaded?.stack, summary.stack)
+
+        // The sweep is the authority on membership: GraphQL says `null` for a pull request
+        // that left its stack, and that must reach the drain before its next merge.
+        summary.stack = nil
+        try await database.savePullRequestSummaries([summary])
+        let cleared = try await database.fetchPullRequestSummary(id: summary.id)
+        XCTAssertNil(cleared?.stack, "a sweep without the field clears it")
+    }
+
+    func testAPartlyWrittenStackReadsBackAsNoStack() async throws {
+        let database = try DatabaseManager.inMemory()
+        var summary = PersistenceFixtures.summary()
+        summary.stack = PullRequestStack(number: 7, size: 3, position: 2, baseRefName: "main")
+        try await database.savePullRequestSummaries([summary])
+        let id = summary.id
+        try await database.writer.write { db in
+            try db.execute(
+                sql: "UPDATE pull_requests SET stackPosition = NULL WHERE id = ?",
+                arguments: [id]
+            )
+        }
+        let loaded = try await database.fetchPullRequestSummary(id: summary.id)
+        XCTAssertNil(loaded?.stack, "three of four columns are not a place in a stack")
+    }
+
+    func testADetailWithoutAStackKeepsTheOneTheSweepStored() async throws {
+        let database = try DatabaseManager.inMemory()
+        var summary = PersistenceFixtures.summary()
+        summary.stack = PullRequestStack(number: 7, size: 3, position: 2, baseRefName: "main")
+        try await database.savePullRequestSummaries([summary])
+
+        var detailSummary = summary
+        detailSummary.stack = nil
+        try await database.savePullRequestDetail(PersistenceFixtures.detail(summary: detailSummary))
+        let kept = try await database.fetchPullRequestSummary(id: summary.id)
+        XCTAssertEqual(kept?.stack, summary.stack)
+
+        detailSummary.stack = PullRequestStack(number: 7, size: 4, position: 3, baseRefName: "main")
+        try await database.savePullRequestDetail(PersistenceFixtures.detail(summary: detailSummary))
+        let replaced = try await database.fetchPullRequestSummary(id: summary.id)
+        XCTAssertEqual(replaced?.stack, detailSummary.stack, "a detail that knows the stack wins")
+    }
+
+    func testTheDrainsMembershipLookupReadsTheStoredStack() async throws {
+        let database = try DatabaseManager.inMemory()
+        var stacked = PersistenceFixtures.summary()
+        stacked.stack = PullRequestStack(number: 7, size: 3, position: 2, baseRefName: "main")
+        try await database.savePullRequestSummaries([stacked])
+        let isStacked = try await database.isInStack(prID: stacked.id)
+        XCTAssertTrue(isStacked)
+
+        stacked.stack = nil
+        try await database.savePullRequestSummaries([stacked])
+        let afterLeaving = try await database.isInStack(prID: stacked.id)
+        XCTAssertFalse(afterLeaving, "the sweep's null is the answer the next merge gets")
+
+        let unknown = try await database.isInStack(prID: "PR_not_in_the_inbox")
+        XCTAssertFalse(unknown, "a pull request the inbox does not hold merges the ordinary way")
     }
 }

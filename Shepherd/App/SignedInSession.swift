@@ -187,6 +187,10 @@ final class SignedInSession {
             // anything when a merge row carries `deletesHeadBranch` — the box the merge sheet
             // remembers, which nothing automatic ever ticks.
             branchDeletion: github,
+            // And where the drain reads whether a merge row's pull request is in a GitHub stack,
+            // which decides between the synchronous and the asynchronous merge (ADR 0042). The
+            // sweep keeps the stored membership current; a failed read is a retry, not a guess.
+            isStacked: { [database] prID in try await database.isInStack(prID: prID) },
             configuration: SyncConfiguration(
                 sweepInterval: sweepInterval,
                 viewerLogin: account.login,

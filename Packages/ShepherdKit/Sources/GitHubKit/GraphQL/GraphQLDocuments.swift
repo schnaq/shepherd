@@ -218,6 +218,12 @@ public struct IssueQuery: Sendable, Hashable {
 public enum GraphQLDocuments {
     /// The inbox sweep (ADR 0005). Selects exactly the list-view fields, including the cheap
     /// `statusCheckRollup.state` scalar that REST search cannot provide.
+    ///
+    /// `stack` and `stackEntry` (ADR 0042) are github.com fields since 2026-07-30. A GraphQL
+    /// server that does not know a field rejects the *whole* query at validation, so they are
+    /// selected unguarded only because Shepherd talks to github.com and nothing else (ADR 0011;
+    /// `GitHubConfiguration.apiBaseURL` is never overridden). GitHub Enterprise Server support
+    /// (ROADMAP) must gate this selection on the host.
     public static let searchPullRequests = """
     query ShepherdInboxSweep($q: String!, $first: Int!, $after: String) {
       search(query: $q, type: ISSUE, first: $first, after: $after) {
@@ -240,6 +246,8 @@ public enum GraphQLDocuments {
             baseRefName
             mergeable
             mergeStateStatus
+            stack { number size baseRefName }
+            stackEntry { position }
             reviewDecision
             repository { name owner { login } }
             author { __typename login avatarUrl }

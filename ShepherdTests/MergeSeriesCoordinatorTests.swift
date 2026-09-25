@@ -600,6 +600,28 @@ final class MergeSeriesCoordinatorTests: XCTestCase {
         XCTAssertEqual(harness.writes.last?.pullRequest.id, "B", "the series goes on")
     }
 
+    func testAMergeGitHubPutIntoItsMergeQueueIsWaitedForADayInsteadOfAnHour() async {
+        let harness = Harness(clock: start)
+        let store = makeStore()
+        let coordinator = makeCoordinator(store: store, harness: harness)
+        coordinator.start([(repository: repo, pullRequests: [row("A"), row("B")])], method: .squash, deletesHeadBranch: false)
+        await run(coordinator, store: store, rows: [row("A"), row("B")], harness: harness)
+
+        // The drain sent the stacked merge and GitHub queued it (ADR 0042): the row is gone and
+        // the pull request stays open while the queue works.
+        harness.clock = start.addingTimeInterval(10)
+        coordinator.noteMergeAccepted("A")
+        XCTAssertEqual(store.series.first?.entry(for: "A")?.mergeAcceptedAt, start.addingTimeInterval(10))
+
+        harness.clock = start.addingTimeInterval(3 * MergeSeriesCoordinator.missingRowGracePeriod)
+        await run(coordinator, store: store, rows: [row("A"), row("B")], harness: harness)
+        XCTAssertEqual(entryState(store, "A"), .merging, "the merge queue is still working")
+
+        harness.clock = start.addingTimeInterval(10 + MergeSeriesEntry.acceptedMergeGracePeriod)
+        await run(coordinator, store: store, rows: [row("A"), row("B")], harness: harness)
+        XCTAssertEqual(entryState(store, "A"), .skipped(.mergeRefused))
+    }
+
     func testAMergingEntryWhoseRowIsStillQueuedWaitsPastTheGracePeriod() async {
         let harness = Harness(clock: start)
         let store = makeStore()

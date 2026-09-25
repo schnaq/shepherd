@@ -152,6 +152,17 @@ enum DemoSeed {
         var files: [ChangedFile]
         var body: String
         var isDraft = false
+        /// The place in a GitHub stack (ADR 0042), and the branch this pull request targets —
+        /// the one below it, for everything above a stack's bottom.
+        var stack: PullRequestStack?
+        var base = "main"
+    }
+
+    /// The demo's one GitHub stack (ADR 0042): three of Claude's pull requests on
+    /// schnaq/shepherd, the showcase in the middle, so the inbox screenshot shows the chip and
+    /// the detail panel and the review screen show the stack.
+    private static func outboxStack(_ position: Int) -> PullRequestStack {
+        PullRequestStack(number: 3, size: 3, position: position, baseRefName: "main")
     }
 
     private static var samples: [Sample] {
@@ -162,7 +173,34 @@ enum DemoSeed {
                 author: claude, branch: "claude/outbox-retry-from-row", hoursAgo: 0.4,
                 ci: .failure, decision: .reviewRequired,
                 relation: [.reviewRequested, .assigned], labels: ["outbox", "ux"],
-                files: ShowcaseFiles.all, body: ShowcaseFiles.body
+                files: ShowcaseFiles.all, body: ShowcaseFiles.body,
+                stack: outboxStack(2), base: "claude/outbox-failure-codes"
+            ),
+            Sample(
+                repo: shepherd, number: 410,
+                title: "Store a failure code with every failed outbox row",
+                author: claude, branch: "claude/outbox-failure-codes", hoursAgo: 0.9,
+                ci: .success, decision: .reviewRequired,
+                relation: [.reviewRequested], labels: ["outbox"],
+                files: [
+                    file("Packages/ShepherdKit/Sources/ShepherdPersistence/OutboxStore.swift", lines: 34, removed: 6),
+                    file("Packages/ShepherdKit/Tests/ShepherdPersistenceTests/OutboxStoreTests.swift", lines: 41),
+                ],
+                body: "A failed row now keeps GitHub's status as a code, so the row can say *why* without parsing text.",
+                stack: outboxStack(1)
+            ),
+            Sample(
+                repo: shepherd, number: 413,
+                title: "Retry every failed write of a pull request at once",
+                author: claude, branch: "claude/outbox-retry-all", hoursAgo: 0.2,
+                ci: .pending, decision: .reviewRequired,
+                relation: [.reviewRequested], labels: ["outbox", "ux"],
+                files: [
+                    file("Shepherd/Features/PullRequest/PullRequestActions.swift", lines: 22, removed: 4),
+                    file("ShepherdTests/PullRequestActionsTests.swift", lines: 30),
+                ],
+                body: "Builds on the row retry: *Retry all* re-queues every failed write of the pull request.",
+                stack: outboxStack(3), base: "claude/outbox-retry-from-row"
             ),
             Sample(
                 repo: shepherd, number: 409,
@@ -341,12 +379,13 @@ enum DemoSeed {
             changedFiles: sample.files.count,
             headRefName: sample.branch,
             headRefOid: headOid(sample),
-            baseRefName: "main",
+            baseRefName: sample.base,
             reviewDecision: sample.decision,
             checkRollup: CheckRollup(runs: checks),
             myRelation: sample.relation,
             labels: sample.labels,
-            mergeable: .mergeable
+            mergeable: .mergeable,
+            stack: sample.stack
         )
     }
 

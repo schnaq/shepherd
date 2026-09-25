@@ -54,6 +54,47 @@ final class DetailParsingTests: XCTestCase {
         XCTAssertEqual(detail.summary.mergeable, .mergeable, "the boolean still decides mergeable")
     }
 
+    func testTheDetailFetchReadsTheStackFromTheRESTResource() async throws {
+        // REST names the stack's trunk `base.ref` and its repository-scoped number `number`;
+        // `id` is a database id Shepherd has no use for (ADR 0042).
+        let transport = try await makeTransport()
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let detail = try await client.pullRequestDetail(repo: repo, number: 128)
+
+        XCTAssertEqual(
+            detail.summary.stack,
+            PullRequestStack(number: 7, size: 3, position: 2, baseRefName: "main")
+        )
+    }
+
+    func testARESTStackMissingAFieldMapsToNoStack() throws {
+        func pull(_ json: String) throws -> RESTPullRequestDTO {
+            let decoder = JSONDecoder()
+            decoder.keyDecodingStrategy = .convertFromSnakeCase
+            return try decoder.decode(RESTPullRequestDTO.self, from: Data(json.utf8))
+        }
+        XCTAssertNil(ResponseMapping.stack(rest: try pull("{}").stack))
+        XCTAssertNil(ResponseMapping.stack(rest: try pull(#"{"stack":null}"#).stack))
+        XCTAssertNil(
+            ResponseMapping.stack(rest: try pull(#"{"stack":{"size":3,"position":2,"number":7}}"#).stack),
+            "no base branch"
+        )
+        XCTAssertNil(
+            ResponseMapping.stack(
+                rest: try pull(#"{"stack":{"base":{"ref":"main"},"size":3,"id":789,"number":7}}"#).stack
+            ),
+            "no position"
+        )
+        XCTAssertEqual(
+            ResponseMapping.stack(
+                rest: try pull(#"{"stack":{"base":{"ref":"main"},"size":3,"position":3,"number":7}}"#).stack
+            ),
+            PullRequestStack(number: 7, size: 3, position: 3, baseRefName: "main"),
+            "the base sha and the stack's id are not needed"
+        )
+    }
+
     func testChangedFilesArePreservedIncludingRenamesAndBinaries() async throws {
         let transport = try await makeTransport()
         let client = GitHubClient.makeForTesting(transport: transport)

@@ -143,6 +143,106 @@ final class MergeSeriesPlanTests: XCTestCase {
         XCTAssertEqual(plan.groups[0].candidates.map(\.id), ["A"])
     }
 
+    // MARK: - Stacks (ADR 0042)
+
+    private func stacked(
+        _ id: String,
+        stack: Int = 7,
+        position: Int,
+        size: Int = 3,
+        additions: Int,
+        isDraft: Bool = false
+    ) -> PullRequestSummary {
+        var summary = row(id, isDraft: isDraft, additions: additions)
+        summary.stack = PullRequestStack(number: stack, size: size, position: position, baseRefName: "main")
+        return summary
+    }
+
+    func testMembersOfOneStackMergeBottomFirstEvenWhenTheBottomIsTheBiggest() {
+        let plan = MergeSeriesPlan.make(pullRequests: [
+            stacked("pos2", position: 2, additions: 1),
+            stacked("pos1", position: 1, additions: 100),
+            row("other", additions: 50),
+        ])
+        // Size order alone is pos2, other, pos1; the stack's two slots are refilled bottom first,
+        // and the unrelated pull request keeps its place between them.
+        XCTAssertEqual(plan.groups[0].candidates.map(\.id), ["pos1", "other", "pos2"])
+    }
+
+    func testAWholeStackTickedInAnyOrderComesOutBottomToTop() {
+        let plan = MergeSeriesPlan.make(pullRequests: [
+            stacked("top", position: 3, additions: 1),
+            stacked("bottom", position: 1, additions: 3),
+            stacked("middle", position: 2, additions: 2),
+        ])
+        XCTAssertEqual(plan.groups[0].candidates.map(\.id), ["bottom", "middle", "top"])
+    }
+
+    func testTwoStacksOfOneRepositoryAreOrderedEachOnItsOwn() {
+        let plan = MergeSeriesPlan.make(pullRequests: [
+            stacked("a2", stack: 1, position: 2, additions: 1),
+            stacked("b2", stack: 2, position: 2, additions: 2),
+            stacked("a1", stack: 1, position: 1, additions: 3),
+            stacked("b1", stack: 2, position: 1, additions: 4),
+        ])
+        // Size order: a2, b2, a1, b1. Stack 1 holds slots 0 and 2, stack 2 slots 1 and 3.
+        XCTAssertEqual(plan.groups[0].candidates.map(\.id), ["a1", "b1", "a2", "b2"])
+    }
+
+    func testPullRequestsOutsideAnyStackKeepTheSizeOrder() {
+        let plan = MergeSeriesPlan.make(pullRequests: [
+            row("big", additions: 300),
+            stacked("only", position: 2, additions: 100),
+            row("small", additions: 1),
+        ])
+        XCTAssertEqual(plan.groups[0].candidates.map(\.id), ["small", "only", "big"])
+    }
+
+    func testAnExcludedStackMemberExcludesEveryMemberAboveItBecauseMergingOneWouldMergeIt() {
+        let plan = MergeSeriesPlan.make(pullRequests: [
+            stacked("pos3", position: 3, additions: 2),
+            stacked("pos1", position: 1, additions: 1, isDraft: true),
+            stacked("pos2", position: 2, additions: 5),
+            stacked("other", stack: 8, position: 2, additions: 1),
+            row("loose", additions: 1),
+        ])
+        XCTAssertEqual(plan.groups[0].candidates.map(\.id), ["other", "loose"])
+        // In tick order, each with its own reason.
+        XCTAssertEqual(plan.groups[0].excluded.map(\.id), ["pos3", "pos1", "pos2"])
+        XCTAssertEqual(
+            plan.groups[0].excluded.map(\.reason),
+            [.belowInStackExcluded, .draft, .belowInStackExcluded]
+        )
+    }
+
+    func testAnExcludedUpperStackMemberLeavesTheOnesBelowItInTheSeries() {
+        let plan = MergeSeriesPlan.make(pullRequests: [
+            stacked("pos3", position: 3, additions: 2, isDraft: true),
+            stacked("pos1", position: 1, additions: 1),
+            stacked("pos2", position: 2, additions: 5),
+        ])
+        XCTAssertEqual(plan.groups[0].candidates.map(\.id), ["pos1", "pos2"])
+        XCTAssertEqual(plan.groups[0].excluded.map(\.reason), [.draft])
+    }
+
+    func testAStackMemberAboveAnExcludedOneKeepsItsOwnReason() {
+        let plan = MergeSeriesPlan.make(pullRequests: [
+            stacked("pos1", position: 1, additions: 1, isDraft: true),
+            stacked("pos2", position: 2, additions: 5, isDraft: true),
+        ])
+        XCTAssertEqual(plan.groups[0].excluded.map(\.reason), [.draft, .draft])
+    }
+
+    func testReorderingKeepsEachStackBottomFirstWithinTheSlotsItOccupies() {
+        // The order a user dragged: the top of the stack first, an unrelated pull request between.
+        let reordered = MergeSeriesPlan.stacksBottomFirst([
+            stacked("top", position: 2, additions: 1),
+            row("loose", additions: 1),
+            stacked("bottom", position: 1, additions: 1),
+        ])
+        XCTAssertEqual(reordered.map(\.id), ["bottom", "loose", "top"])
+    }
+
     func testNoTicksMakeAnEmptyPlan() {
         XCTAssertEqual(MergeSeriesPlan.make(pullRequests: []).groups, [])
     }

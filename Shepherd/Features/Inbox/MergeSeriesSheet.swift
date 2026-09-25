@@ -66,7 +66,17 @@ struct MergeSeriesSheet: View {
                     MergeMethodPicker(settings: settings)
                     Toggle(isOn: deletesBranchBinding) {
                         Text(String(localized: "Delete the branch afterwards"))
-                        Text(String(localized: "Removes each head branch once its merge has landed."))
+                        // The box still applies to every pull request outside a stack. Inside one,
+                        // GitHub re-targets the pull requests above a merged one and manages the
+                        // stack's branches, so the drain never deletes them (ADR 0042) — which the
+                        // note says rather than leaving the box to promise it.
+                        if hasStackedCandidate {
+                            Text(String(
+                                localized: "Removes each head branch once its merge has landed. Branches of stacked pull requests are left to GitHub."
+                            ))
+                        } else {
+                            Text(String(localized: "Removes each head branch once its merge has landed."))
+                        }
                     }
                 } footer: {
                     SettingsNote(String(
@@ -90,12 +100,20 @@ struct MergeSeriesSheet: View {
                 candidateRow(pullRequest, index: index, in: group)
             }
             .onMove { source, destination in
-                order[group.id]?.move(fromOffsets: source, toOffset: destination)
+                guard var list = order[group.id] else { return }
+                list.move(fromOffsets: source, toOffset: destination)
+                order[group.id] = MergeSeriesPlan.stacksBottomFirst(list)
             }
         } header: {
             Text(verbatim: group.repository.fullName)
         } footer: {
-            SettingsNote(String(localized: "Drag to change the order. Smallest first causes the fewest conflicts."))
+            if group.candidates.contains(where: { $0.stack != nil }) {
+                SettingsNote(String(
+                    localized: "Drag to change the order. Smallest first causes the fewest conflicts. Pull requests of one stack always merge bottom first."
+                ))
+            } else {
+                SettingsNote(String(localized: "Drag to change the order. Smallest first causes the fewest conflicts."))
+            }
         }
     }
 
@@ -185,6 +203,11 @@ struct MergeSeriesSheet: View {
         plan.groups.flatMap(\.excluded)
     }
 
+    /// Whether any pull request the series would merge is part of a GitHub stack.
+    private var hasStackedCandidate: Bool {
+        plan.groups.contains { group in group.candidates.contains { $0.stack != nil } }
+    }
+
     private var deletesBranchBinding: Binding<Bool> {
         Binding(
             get: { settings.deletesBranchAfterMerge },
@@ -197,7 +220,9 @@ struct MergeSeriesSheet: View {
         let target = index + offset
         guard list.indices.contains(index), list.indices.contains(target) else { return }
         list.swapAt(index, target)
-        order[groupID] = list
+        // Never an order that inverts a stack: an upper member merged first would take the lower
+        // ones along unchecked (ADR 0042). Swapping two members of one stack is therefore a no-op.
+        order[groupID] = MergeSeriesPlan.stacksBottomFirst(list)
     }
 
     private func start() {
@@ -227,6 +252,7 @@ extension MergeSeriesExclusionReason {
         case .checksFailing: return String(localized: "checks failing")
         case .changesRequested: return String(localized: "changes requested")
         case .ownPullRequest: return String(localized: "your own")
+        case .belowInStackExcluded: return String(localized: "one below it is excluded")
         }
     }
 
@@ -246,6 +272,10 @@ extension MergeSeriesExclusionReason {
             return String(localized: "A reviewer asked for changes. A series will not overrule that.")
         case .ownPullRequest:
             return String(localized: "Your own pull request is not merged by a series. Merge it yourself.")
+        case .belowInStackExcluded:
+            return String(
+                localized: "A pull request below it in the stack can't be merged. Merging this one would merge that one too."
+            )
         }
     }
 }

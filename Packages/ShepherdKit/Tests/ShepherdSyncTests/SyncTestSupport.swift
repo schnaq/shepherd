@@ -34,6 +34,23 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
     var branchContexts: [String: HeadBranchContext] = [:]
     var branchContextError: GitHubError?
     var deleteBranchError: GitHubError?
+    /// What the asynchronous merge's `PUT` answers (ADR 0042). Unscripted, GitHub merges at once.
+    var asyncMergeAnswer = AsyncMergeResult(status: .merged)
+    /// What the asynchronous merge's `PUT` throws, when a test wants GitHub to refuse it.
+    var asyncMergeError: GitHubError?
+    /// What successive status polls answer; the last one repeats once the queue is drained.
+    var asyncMergeStatuses: [AsyncMergeResult] = []
+    /// What every status poll throws, when a test wants the poll to fail.
+    var asyncMergeStatusError: GitHubError?
+    /// Every asynchronous merge that got through, with its method and pin.
+    private(set) var asyncMerges: [(number: Int, method: MergeMethod, sha: String?)] = []
+    /// The uuid of every status poll, in order.
+    private(set) var asyncMergePolls: [String] = []
+    /// What the "is it stacked now?" read answers, keyed by number (ADR 0042). A missing key
+    /// answers `false`.
+    var stackedOnGitHub: [Int: Bool] = [:]
+    /// The number of every "is it stacked now?" read, in order.
+    private(set) var stackProbes: [Int] = []
 
     private(set) var searchCallCount = 0
     private(set) var detailRequests: [String] = []
@@ -260,6 +277,46 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
         if let updateBranchError { throw updateBranchError }
         branchUpdates.append((number: number, sha: expectedHeadOid))
         writeLog.append("update branch #\(number)")
+    }
+
+    func mergePullRequestAsync(
+        repo: RepoRef,
+        number: Int,
+        method: MergeMethod,
+        expectedHeadOid: String?
+    ) async throws -> AsyncMergeResult {
+        if let asyncMergeError { throw asyncMergeError }
+        asyncMerges.append((number: number, method: method, sha: expectedHeadOid))
+        writeLog.append("merge-async #\(number)")
+        return asyncMergeAnswer
+    }
+
+    func asyncMergeStatus(repo: RepoRef, number: Int, uuid: String) async throws -> AsyncMergeResult {
+        asyncMergePolls.append(uuid)
+        if let asyncMergeStatusError { throw asyncMergeStatusError }
+        guard !asyncMergeStatuses.isEmpty else { return AsyncMergeResult(status: .pending, uuid: uuid) }
+        return asyncMergeStatuses.count > 1 ? asyncMergeStatuses.removeFirst() : asyncMergeStatuses[0]
+    }
+
+    func pullRequestIsStacked(repo: RepoRef, number: Int) async throws -> Bool {
+        stackProbes.append(number)
+        return stackedOnGitHub[number] ?? false
+    }
+
+    func setStackedOnGitHub(_ stacked: Bool, number: Int) {
+        stackedOnGitHub[number] = stacked
+    }
+
+    func scriptAsyncMerge(
+        answer: AsyncMergeResult,
+        statuses: [AsyncMergeResult] = [],
+        error: GitHubError? = nil,
+        statusError: GitHubError? = nil
+    ) {
+        asyncMergeAnswer = answer
+        asyncMergeStatuses = statuses
+        asyncMergeError = error
+        asyncMergeStatusError = statusError
     }
 
     // MARK: - BranchDeleting

@@ -26,6 +26,12 @@ private struct MergeRequestBody: Decodable {
     var commit_title: String?
 }
 
+/// The `PUT /pulls/{n}/merge-async` body (ADR 0042).
+private struct AsyncMergeRequestBody: Decodable {
+    var sha: String?
+    var merge_method: String?
+}
+
 /// The `PUT /pulls/{n}/update-branch` body (ADR 0041).
 private struct UpdateBranchRequestBody: Decodable {
     var expected_head_sha: String?
@@ -387,6 +393,329 @@ final class WriteRequestTests: XCTestCase {
                 return XCTFail("expected .validationFailed, got \(error)")
             }
             XCTAssertTrue(message.contains("merge conflict"))
+        }
+    }
+
+    // MARK: - Asynchronous merge (ADR 0042)
+
+    /// A `merge-async` answer in the long shape GitHub documents for an accepted merge.
+    private func asyncMergeJSON(status: String) -> String {
+        """
+        {"status":"\(status)","details":{"message":"ok","uuid":"5f0e-uuid","merge_method":"squash",\
+        "merge_action":"default","expected_head_sha":"3f1a9c0d"}}
+        """
+    }
+
+    func testAnAsynchronousMergeIsOnePutPinnedToTheHeadWithItsMethod() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "/merge-async",
+            Fixture.response(json: asyncMergeJSON(status: "pending"), status: 202)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let result = try await client.mergePullRequestAsync(
+            repo: repo,
+            number: 128,
+            method: .squash,
+            expectedHeadOid: "3f1a9c0d"
+        )
+
+        let request = await transport.onlyRequest()
+        XCTAssertEqual(request?.method, "PUT")
+        XCTAssertEqual(
+            request?.url.absoluteString,
+            "https://api.github.com/repos/schnaq/review/pulls/128/merge-async"
+        )
+        let body = try decodeBody(AsyncMergeRequestBody.self, from: request)
+        XCTAssertEqual(body.sha, "3f1a9c0d")
+        XCTAssertEqual(body.merge_method, "squash")
+        // GitHub's default action is what a Merge press means, and a title is not Shepherd's to
+        // set: neither key is sent.
+        XCTAssertFalse(bodyText(request).contains("merge_action"))
+        XCTAssertFalse(bodyText(request).contains("commit_title"))
+        XCTAssertEqual(result.status, .pending)
+        XCTAssertEqual(result.uuid, "5f0e-uuid")
+        XCTAssertEqual(result.message, "ok")
+        XCTAssertEqual(result.mergeMethod, "squash")
+        XCTAssertEqual(result.mergeAction, "default")
+        XCTAssertEqual(result.expectedHeadSha, "3f1a9c0d")
+    }
+
+    func testAnUnpinnedAsynchronousMergeSendsNoShaKeyRatherThanANull() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "/merge-async",
+            Fixture.response(json: asyncMergeJSON(status: "pending"), status: 202)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        _ = try await client.mergePullRequestAsync(
+            repo: repo,
+            number: 128,
+            method: .merge,
+            expectedHeadOid: nil
+        )
+
+        let request = await transport.onlyRequest()
+        XCTAssertFalse(bodyText(request).contains("sha"))
+        XCTAssertEqual(
+            try decodeBody(AsyncMergeRequestBody.self, from: request).merge_method,
+            "merge"
+        )
+    }
+
+    func testEveryAsynchronousMergeStatusIsDecoded() async throws {
+        let cases: [(String, AsyncMergeResult.Status)] = [
+            ("pending", .pending), ("merged", .merged), ("enqueued", .enqueued), ("failed", .failed),
+        ]
+        for (word, expected) in cases {
+            let transport = MockTransport()
+            await transport.route(
+                "/merge-async",
+                Fixture.response(json: asyncMergeJSON(status: word), status: 202)
+            )
+            let client = GitHubClient.makeForTesting(transport: transport)
+
+            let result = try await client.mergePullRequestAsync(
+                repo: repo,
+                number: 128,
+                method: .squash,
+                expectedHeadOid: "3f1a9c0d"
+            )
+            XCTAssertEqual(result.status, expected, word)
+        }
+    }
+
+    func testAnAlreadyMergedAnswerWithOnlyAMessageAndAShaStillDecodes() async throws {
+        // GitHub answers `200` with `details: {message, sha}` for a pull request that is merged
+        // already; that shape, like the bare `{message}`, carries no uuid.
+        let transport = MockTransport()
+        await transport.route(
+            "/merge-async",
+            Fixture.response(
+                json: #"{"status":"merged","details":{"message":"Already merged","sha":"9999"}}"#,
+                status: 200
+            )
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let result = try await client.mergePullRequestAsync(
+            repo: repo,
+            number: 128,
+            method: .squash,
+            expectedHeadOid: "3f1a9c0d"
+        )
+        XCTAssertEqual(result.status, .merged)
+        XCTAssertNil(result.uuid)
+        XCTAssertEqual(result.sha, "9999")
+        XCTAssertEqual(result.message, "Already merged")
+    }
+
+    func testAStatusWordThisBuildDoesNotKnowReadsAsPendingRatherThanAsAFailure() async throws {
+        // By the time the answer is read GitHub has accepted the merge; a decoding error here
+        // would report a merge that is running as one that did not happen.
+        let transport = MockTransport()
+        await transport.route(
+            "/merge-async",
+            Fixture.response(json: asyncMergeJSON(status: "rebasing"), status: 202)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let result = try await client.mergePullRequestAsync(
+            repo: repo,
+            number: 128,
+            method: .squash,
+            expectedHeadOid: nil
+        )
+        XCTAssertEqual(result.status, .pending)
+    }
+
+    func testTheStatusOfAnAsynchronousMergeIsOneGetByItsUuid() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "/merge-async/5f0e-uuid",
+            Fixture.response(json: asyncMergeJSON(status: "enqueued"), status: 200)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let result = try await client.asyncMergeStatus(repo: repo, number: 128, uuid: "5f0e-uuid")
+
+        let request = await transport.onlyRequest()
+        XCTAssertEqual(request?.method, "GET")
+        XCTAssertEqual(
+            request?.url.absoluteString,
+            "https://api.github.com/repos/schnaq/review/pulls/128/merge-async/5f0e-uuid"
+        )
+        XCTAssertEqual(result.status, .enqueued)
+        XCTAssertEqual(result.uuid, "5f0e-uuid")
+    }
+
+    func testAPullRequestThatIsNotReadyIsNotMergeableRatherThanARetryableServerError() async throws {
+        // `400` is GitHub's "closed or draft"; left as `.server(400)` it would be retried for ever.
+        let transport = MockTransport()
+        await transport.route(
+            "/merge-async",
+            Fixture.response(json: #"{"message":"Pull request is in draft state"}"#, status: 400)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            _ = try await client.mergePullRequestAsync(
+                repo: repo,
+                number: 128,
+                method: .merge,
+                expectedHeadOid: nil
+            )
+            XCTFail("expected a not-mergeable error")
+        } catch let error as GitHubError {
+            XCTAssertEqual(error, .notMergeable(message: "Pull request is in draft state"))
+            XCTAssertFalse(error.isRetryable)
+        }
+    }
+
+    func testAnAsynchronousMergeWhoseHeadMovedBecomesStaleHead() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "/merge-async",
+            Fixture.response(
+                json: #"{"message":"expected head sha didn't match current head ref."}"#,
+                status: 422
+            )
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            _ = try await client.mergePullRequestAsync(
+                repo: repo,
+                number: 128,
+                method: .merge,
+                expectedHeadOid: "3f1a9c0d"
+            )
+            XCTFail("expected a stale head error")
+        } catch let error as GitHubError {
+            XCTAssertEqual(error, .staleHead(expected: "3f1a9c0d", actual: nil))
+        }
+    }
+
+    func testAnyOtherRefusedAsynchronousMergeStaysAValidationError() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "/merge-async",
+            Fixture.response(json: #"{"message":"Required status check is failing"}"#, status: 422)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            _ = try await client.mergePullRequestAsync(
+                repo: repo,
+                number: 128,
+                method: .merge,
+                expectedHeadOid: "3f1a9c0d"
+            )
+            XCTFail("expected a validation error")
+        } catch let error as GitHubError {
+            XCTAssertEqual(error, .validationFailed(message: "Required status check is failing"))
+        }
+    }
+
+    func testAMergeAlreadyUnderWayStaysAConflictAndIsNotMistakenForAMovedHead() async throws {
+        // Unlike the synchronous endpoint, `409` here means "a merge request is already enqueued
+        // for this pull request" — what a row re-sent after a crash finds.
+        let transport = MockTransport()
+        await transport.route(
+            "/merge-async",
+            Fixture.response(
+                json: #"{"message":"A merge request is already enqueued for this pull request"}"#,
+                status: 409
+            )
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            _ = try await client.mergePullRequestAsync(
+                repo: repo,
+                number: 128,
+                method: .merge,
+                expectedHeadOid: "3f1a9c0d"
+            )
+            XCTFail("expected a conflict")
+        } catch let error as GitHubError {
+            XCTAssertEqual(
+                error,
+                .conflict(message: "A merge request is already enqueued for this pull request")
+            )
+        }
+    }
+
+    func testAnAcceptedAsynchronousMergeWhoseBodyCannotBeReadIsPendingWithoutAUuid() async throws {
+        // A `2xx` is GitHub's acceptance. A body this build cannot decode must not fail a row
+        // for a merge that is running; the drain sends such an answer as started.
+        let transport = MockTransport()
+        await transport.route("/merge-async", Fixture.response(json: #"{"state":"accepted"}"#, status: 202))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let result = try await client.mergePullRequestAsync(
+            repo: repo,
+            number: 128,
+            method: .squash,
+            expectedHeadOid: "3f1a9c0d"
+        )
+
+        XCTAssertEqual(result.status, .pending)
+        XCTAssertNil(result.uuid)
+    }
+
+    func testOnlyGitHubsAlreadyEnqueuedSentenceReadsAsAMergeUnderWay() {
+        XCTAssertTrue(GitHubClient.isMergeAlreadyUnderWay(
+            "A merge request is already enqueued for this pull request"
+        ))
+        XCTAssertTrue(GitHubClient.isMergeAlreadyUnderWay("Merge ALREADY in progress"))
+        XCTAssertTrue(GitHubClient.isMergeAlreadyUnderWay("already enqueued"))
+        XCTAssertFalse(GitHubClient.isMergeAlreadyUnderWay("Base branch was modified"))
+        XCTAssertFalse(GitHubClient.isMergeAlreadyUnderWay("Merge already requested"))
+        XCTAssertFalse(GitHubClient.isMergeAlreadyUnderWay("A merge request is enqueued"))
+    }
+
+    func testAPullRequestIsStackedWhenGitHubReportsItsStack() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "/pulls/128",
+            Fixture.response(json: #"{"number":128,"stack":{"number":7,"size":3,"position":2,"base":{"ref":"main"}}}"#)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let stacked = try await client.pullRequestIsStacked(repo: repo, number: 128)
+
+        XCTAssertTrue(stacked)
+        let request = await transport.onlyRequest()
+        XCTAssertEqual(request?.method, "GET")
+        XCTAssertEqual(request?.url.absoluteString, "https://api.github.com/repos/schnaq/review/pulls/128")
+    }
+
+    func testAPullRequestWithoutAStackObjectIsNotStacked() async throws {
+        let transport = MockTransport()
+        await transport.route("/pulls/128", Fixture.response(json: #"{"number":128,"stack":null}"#))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let stacked = try await client.pullRequestIsStacked(repo: repo, number: 128)
+
+        XCTAssertFalse(stacked)
+    }
+
+    func testAnExpiredMergeUuidIsNotFound() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "/merge-async/old-uuid",
+            Fixture.response(json: #"{"message":"Not Found"}"#, status: 404)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            _ = try await client.asyncMergeStatus(repo: repo, number: 128, uuid: "old-uuid")
+            XCTFail("expected not found")
+        } catch let error as GitHubError {
+            guard case .notFound = error else { return XCTFail("expected .notFound, got \(error)") }
         }
     }
 

@@ -113,6 +113,21 @@ final class ModelCodingTests: XCTestCase {
         XCTAssertEqual(decoded.author.kind.agentIdentity?.id, "claude-code")
     }
 
+    func testAStackRoundTripsAndASummaryEncodedBeforeItStillDecodes() throws {
+        var summary = Fixtures.summary(id: "PR_stacked")
+        summary.stack = PullRequestStack(number: 7, size: 3, position: 2, baseRefName: "main")
+        let data = try JSONEncoder().encode(summary)
+        XCTAssertEqual(try JSONDecoder().decode(PullRequestSummary.self, from: data), summary)
+
+        // A summary cached by a build without the field (ADR 0042) must still decode.
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        object.removeValue(forKey: "stack")
+        let older = try JSONSerialization.data(withJSONObject: object)
+        let decoded = try JSONDecoder().decode(PullRequestSummary.self, from: older)
+        XCTAssertNil(decoded.stack)
+        XCTAssertEqual(decoded.id, "PR_stacked")
+    }
+
     func testMergeStateStatusRoundTripsAndASummaryEncodedBeforeItStillDecodes() throws {
         var summary = Fixtures.summary(id: "PR_behind")
         summary.mergeStateStatus = .behind
