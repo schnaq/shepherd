@@ -99,6 +99,9 @@ extension DatabaseManager {
                     // A detail fetch cannot know the user's relation; keep what the sweep saw.
                     record.relations = existing.relations
                 }
+                if let existing {
+                    record.keepTrailerAgent(from: existing)
+                }
                 try record.save(db)
             }
 

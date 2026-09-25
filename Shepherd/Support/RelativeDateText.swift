@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Synchronization
 
 /// Compact relative timestamps, matching the inbox mockup (`12 m`, `2 h`, `1 d`).
 ///
@@ -37,10 +38,31 @@ enum RelativeDate {
         // (2026-09-09 live test). ``short(_:relativeTo:)`` above has the same kind of floor — a
         // whole minute of it, because it has one word to say it in.
         guard reference.timeIntervalSince(date) >= 1 else { return String(localized: "just now") }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .full
-        return formatter.localizedString(for: date, relativeTo: reference)
+        let locale = Locale.current
+        return longFormatters.withLock { formatters in
+            let formatter: RelativeDateTimeFormatter
+            if let cached = formatters[locale.identifier] {
+                formatter = cached
+            } else {
+                formatter = RelativeDateTimeFormatter()
+                formatter.unitsStyle = .full
+                formatter.locale = locale
+                formatters[locale.identifier] = formatter
+            }
+            return formatter.localizedString(for: date, relativeTo: reference)
+        }
     }
+
+    /// One long-form formatter per locale, made once and reused.
+    ///
+    /// ``long(_:relativeTo:)`` is not only a tooltip: every inbox row speaks it in its VoiceOver
+    /// label and hangs it on its age as help, so building a fresh `RelativeDateTimeFormatter`
+    /// each time meant two of them per row on every pass of the list — and a pass happens on
+    /// every click (2026-09-25). Keyed by locale rather than a single instance, because the
+    /// language picker changes what `Locale.current` is, and a formatter keeps the
+    /// locale it was given. Behind a lock because the formatter is not `Sendable` and this is
+    /// called from outside the main actor too.
+    private static let longFormatters = Mutex<[String: RelativeDateTimeFormatter]>([:])
 
     /// A duration in the compact `1 m 42 s` form used by the checks card.
     /// - Parameter seconds: The duration.

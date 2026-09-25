@@ -131,6 +131,20 @@ final class TriageCoordinator {
     private(set) var passTask: Task<Void, Never>?
     /// Rows that arrived while a pass was running, merged per pull request.
     private var pendingRows: [String: PullRequestSummary] = [:]
+    /// Pull requests in ``pendingRows`` that go first, most recently announced first.
+    ///
+    /// A detail load is the user opening a pull request: of everything waiting, that is the one
+    /// whose chip is on screen. Kept apart from ``pendingRows`` so a sweep's snapshot merging in
+    /// afterwards cannot push it back into the crowd.
+    private var priorityIDs: [String] = []
+    /// Classifications that failed, per pull request, so a pass does not repeat them.
+    private var failures: [String: TriageFailure] = [:]
+    /// Pull requests a pass saw while the model could not be asked.
+    ///
+    /// Their fingerprints are kept — re-reading every diff on every sweep would change nothing
+    /// while the tiers stay off — and taken back on the first pass that can classify, which is
+    /// what gets them their verdicts the moment the model is there.
+    private var skippedWithoutModel: Set<String> = []
 
     /// Creates a coordinator.
     /// - Parameters:
@@ -206,6 +220,8 @@ final class TriageCoordinator {
         self.rows = self.rows.filter { present.contains($0.key) }
         fingerprints = fingerprints.filter { present.contains($0.key) }
         storedEntries = storedEntries.filter { present.contains($0.key) }
+        failures = failures.filter { present.contains($0.key) }
+        skippedWithoutModel = skippedWithoutModel.filter { present.contains($0) }
         status.isEnabled = settings.structuredTriageEnabled
         status.rowCount = rows.count
 
@@ -230,12 +246,17 @@ final class TriageCoordinator {
     /// verdict made from a title and one made from the change itself.
     ///
     /// Deliberately *not* a snapshot: it upserts one row into whatever is waiting, which is the
-    /// whole reason ``pendingRows`` merges instead of replacing.
+    /// whole reason ``pendingRows`` merges instead of replacing — and it goes to the front of
+    /// that queue, because it is the pull request the user is looking at.
     /// - Parameters:
     ///   - prID: The pull request whose detail arrived.
     ///   - database: Where the sources and the verdicts live.
     func classifyAfterDetailLoad(prID: String, database: DatabaseManager) {
         guard settings.structuredTriageEnabled, let summary = summaries[prID] else { return }
+        if passTask != nil {
+            priorityIDs.removeAll { $0 == prID }
+            priorityIDs.insert(prID, at: 0)
+        }
         schedulePass(rows: [summary], database: database)
     }
 
@@ -280,9 +301,12 @@ final class TriageCoordinator {
         passTask?.cancel()
         passTask = nil
         pendingRows = [:]
+        priorityIDs = []
         rows = [:]
         fingerprints = [:]
         storedEntries = [:]
+        failures = [:]
+        skippedWithoutModel = []
         hasReadStoredEntries = false
         hasCheckedAvailability = false
         modelUnavailabilityReason = nil
@@ -307,9 +331,22 @@ final class TriageCoordinator {
         }
     }
 
+    /// Empties the queue: the prioritised pull requests first, then everything else.
+    ///
+    /// The order matters because ``runPass(rows:database:)`` classifies in the order it is handed
+    /// and ``DatabaseManager/searchIndexSources(prIDs:)`` keeps it.
     private func takePendingRows() -> [PullRequestSummary]? {
-        defer { pendingRows = [:] }
-        return pendingRows.isEmpty ? nil : Array(pendingRows.values)
+        defer {
+            pendingRows = [:]
+            priorityIDs = []
+        }
+        guard !pendingRows.isEmpty else { return nil }
+        var remaining = pendingRows
+        var ordered: [PullRequestSummary] = []
+        for id in priorityIDs {
+            if let row = remaining.removeValue(forKey: id) { ordered.append(row) }
+        }
+        return ordered + Array(remaining.values)
     }
 
     private func runPass(rows: [PullRequestSummary], database: DatabaseManager) async {
@@ -322,6 +359,11 @@ final class TriageCoordinator {
             hasReadStoredEntries = true
         }
         let canClassify = await resolveClassifiability()
+        if canClassify, !skippedWithoutModel.isEmpty {
+            // The model is back: everything seen without it is looked at again, this pass.
+            for prID in skippedWithoutModel { fingerprints[prID] = nil }
+            skippedWithoutModel = []
+        }
 
         let timestamps = (try? await database.detailFetchTimestamps()) ?? [:]
         let stale = rows
@@ -407,9 +449,10 @@ final class TriageCoordinator {
     private func classify(_ row: TriagePreparedRow, canClassify: Bool) async -> TriageVerdictEntry? {
         let prID = row.input.prID
         // Recorded before the model is asked, so a pass stops re-reading this pull request's
-        // diff on every sweep. It is taken back in two places: when a classification *failed*,
-        // and when the model could not be asked at all — a row seen while the tier was off must
-        // be looked at again on the first sweep after the tier comes back.
+        // diff on every sweep. It is taken back when a classification failed for a reason that
+        // may pass (so a later pass comes round again), when a pass was cancelled mid-question,
+        // and — through ``skippedWithoutModel`` — on the first pass that can ask the model after
+        // one that could not.
         fingerprints[prID] = row.fingerprint
         var summary = rows[prID] ?? TriageRowSummary()
         summary.heuristicRisk = row.heuristicRisk
@@ -426,7 +469,19 @@ final class TriageCoordinator {
         summary.verdict = nil
         rows[prID] = summary
         guard canClassify else {
-            fingerprints[prID] = nil
+            skippedWithoutModel.insert(prID)
+            return nil
+        }
+        let modelIdentifier = classifier.modelIdentifier
+        if let failure = failures[prID],
+           !failure.allowsRetry(
+               documentHash: row.input.documentHash,
+               modelIdentifier: modelIdentifier,
+               now: now()
+           ) {
+            // A transient failure keeps its row stale so the pass after the backoff reaches it
+            // again; a refusal is settled until the text or the model changes.
+            if failure.kind == .transient { fingerprints[prID] = nil }
             return nil
         }
 
@@ -442,15 +497,49 @@ final class TriageCoordinator {
                 classifiedAt: now()
             )
             storedEntries[prID] = entry
+            failures[prID] = nil
             return entry
         } catch {
-            // Silent by design, and the only failure handling this pass has: a verdict is a
-            // convenience nobody asked for, so a toast about one pull request the model declined
-            // would be noise about work the user did not start. Forgetting the fingerprint is
-            // what makes the next pass try again — a guardrail refusal will refuse again, and a
-            // transient failure will not.
-            fingerprints[prID] = nil
+            // Silent by design: a verdict is a convenience nobody asked for, so a toast about one
+            // pull request the model declined would be noise about work the user did not start.
+            // What is *not* silent any more is the memory of it. The pass runs on every inbox
+            // write, and a guardrail refusal or an oversized document asked about again is the
+            // same question with the same answer — so the failure is remembered against this
+            // text and this model, and only a transient one comes back, after a backoff.
+            guard let kind = Self.failureKind(of: error), !Task.isCancelled else {
+                // Cancelled: nothing was learnt about the text, so the next pass simply asks.
+                fingerprints[prID] = nil
+                return nil
+            }
+            failures[prID] = TriageFailure(
+                documentHash: row.input.documentHash,
+                modelIdentifier: modelIdentifier,
+                kind: kind,
+                failedAt: now()
+            )
+            if kind == .transient { fingerprints[prID] = nil }
             return nil
+        }
+    }
+
+    /// How a classification failure bears on retrying, or `nil` for a cancellation.
+    ///
+    /// Only the failures that are about the *text* are final: the guardrails, and an input that
+    /// does not fit the context window, give the same answer every time. Everything else — the
+    /// model busy or unloaded, an answer that did not parse, an error this code has not met — is
+    /// worth one more try after ``ShepherdCore/TriageFailure/transientBackoff``.
+    /// - Parameter error: What ``TriageClassifying/classify(_:)`` threw.
+    private static func failureKind(of error: any Error) -> TriageFailure.Kind? {
+        if error is CancellationError { return nil }
+        guard let error = error as? IntelligenceError else { return .transient }
+        switch error {
+        case .cancelled:
+            return nil
+        case .guardrailDeclined, .digestTooLarge, .contextExceeded, .toolsUnsupported:
+            return .content
+        case .unavailable, .notConfigured, .http, .malformedResponse, .noModelsListed,
+             .toolLoopExceeded:
+            return .transient
         }
     }
 

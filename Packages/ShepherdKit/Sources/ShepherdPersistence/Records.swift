@@ -189,6 +189,27 @@ struct PullRequestRecord: Codable, FetchableRecord, PersistableRecord {
         self.detailFetchedAt = existing?.detailFetchedAt
     }
 
+    /// Keeps an agent identity a detail fetch read from the commit trailers when a sweep, which
+    /// cannot read them, would otherwise overwrite it.
+    ///
+    /// The search query carries no commit messages, so for a Claude-written pull request on an
+    /// ordinary branch the sweep says "human" and the detail fetch says "Claude Code". Written
+    /// through as they arrive, the row changed inbox group on every detail load and changed back
+    /// on the next sweep — and every flip moved the triage document's hash, so the on-device
+    /// model classified the same pull request again each time. A pull request's commits do not
+    /// un-author themselves, so the trailer is sticky; a sweep that detects an agent *itself*
+    /// (by login or branch) is fresher evidence and still wins.
+    /// - Parameter existing: The row as the database held it before this sweep.
+    mutating func keepTrailerAgent(from existing: PullRequestRecord) {
+        guard existing.agentMatchedBy == AgentMatchSignal.commitTrailer.rawValue,
+              authorKind != "agent"
+        else { return }
+        authorKind = existing.authorKind
+        agentID = existing.agentID
+        agentDisplayName = existing.agentDisplayName
+        agentMatchedBy = existing.agentMatchedBy
+    }
+
     /// Rebuilds the inbox row.
     var summary: PullRequestSummary {
         let rollup: CheckRollup? = checkState
