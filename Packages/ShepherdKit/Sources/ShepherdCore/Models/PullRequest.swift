@@ -46,6 +46,41 @@ public enum MergeStateStatus: String, Sendable, Codable, Hashable, CaseIterable 
     case unknown
 }
 
+/// A pull request's place in a GitHub stack (ADR 0042).
+///
+/// A stack is an ordered series of pull requests in one repository: the bottom one targets the
+/// trunk, and each one above targets the branch of the one below. Merging one merges every pull
+/// request below it too, and only through GitHub's asynchronous merge, which is why the outbox
+/// drain reads this before it picks an endpoint.
+///
+/// GitHubKit builds it from GraphQL's `stack` and `stackEntry` (the sweep) and REST's `stack`
+/// object (the detail fetch). It exists only when every field arrived: half a stack is not a
+/// place in one.
+public struct PullRequestStack: Sendable, Codable, Hashable {
+    /// GitHub's number for the stack, unique within its repository (not a pull request number).
+    public var number: Int
+    /// How many pull requests the stack holds.
+    public var size: Int
+    /// This pull request's place in the stack, **1-based** and counted from the bottom.
+    ///
+    /// GitHub's GraphQL reference: "This entry's position in the stack, where 1 is the closest
+    /// to the base branch, 2 is stacked on top of 1, etc." The REST reference does not say; its
+    /// example (`position: 2` of `size: 3`) fits the same numbering, and GitHubKit stores both
+    /// as given, so a row can show `position`/`size` directly ("Stack 2/3").
+    public var position: Int
+    /// The branch the stack's bottom pull request targets, its trunk (GraphQL `baseRefName`,
+    /// REST `base.ref`).
+    public var baseRefName: String
+
+    /// Creates a stack membership.
+    public init(number: Int, size: Int, position: Int, baseRefName: String) {
+        self.number = number
+        self.size = size
+        self.position = position
+        self.baseRefName = baseRefName
+    }
+}
+
 /// The rolled-up CI state of a pull request's head commit, plus per-state counts.
 ///
 /// The GraphQL inbox sweep only carries the rolled-up `state` and the total number of
@@ -201,6 +236,11 @@ public struct PullRequestSummary: Sendable, Codable, Hashable, Identifiable {
     /// Optional, and decoded with `decodeIfPresent` by the synthesised `Codable`, so a summary
     /// cached before the field existed still decodes.
     public var mergeStateStatus: MergeStateStatus?
+    /// The pull request's place in a GitHub stack, or `nil` when it is not in one (ADR 0042).
+    ///
+    /// Optional for ``mergeStateStatus``'s reason: a summary cached before the field existed
+    /// still decodes.
+    public var stack: PullRequestStack?
 
     /// Creates an inbox row.
     public init(
@@ -223,7 +263,8 @@ public struct PullRequestSummary: Sendable, Codable, Hashable, Identifiable {
         myRelation: Set<Relation> = [],
         labels: [String] = [],
         mergeable: Mergeable? = nil,
-        mergeStateStatus: MergeStateStatus? = nil
+        mergeStateStatus: MergeStateStatus? = nil,
+        stack: PullRequestStack? = nil
     ) {
         self.id = id
         self.repo = repo
@@ -245,6 +286,7 @@ public struct PullRequestSummary: Sendable, Codable, Hashable, Identifiable {
         self.labels = labels
         self.mergeable = mergeable
         self.mergeStateStatus = mergeStateStatus
+        self.stack = stack
     }
 
     /// `owner/name#number`, the shorthand used in logs and notifications.

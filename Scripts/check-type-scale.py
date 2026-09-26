@@ -75,6 +75,8 @@ MIGRATED = (
     "Shepherd/Features/Settings/TelemetrySettingsCard.swift",
     # "Add a local repository…" (ADR 0011's 2026-09-23 amendment), on the scale from birth.
     "Shepherd/Features/Inbox/AddLocalRepositorySheet.swift",
+    # The stack card (ADR 0042), on the scale from birth.
+    "Shepherd/Features/PullRequest/PullRequestStackCard.swift",
 )
 
 # A fixed point size, either spelling: SwiftUI's own or `Theme.mono`'s numeric overload. `\s*`

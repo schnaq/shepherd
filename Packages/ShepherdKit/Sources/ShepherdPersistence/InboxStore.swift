@@ -148,6 +148,17 @@ extension DatabaseManager {
         }
     }
 
+    /// Whether the stored pull request is part of a GitHub stack — the drain's
+    /// `StackMembershipLookup`, which picks the asynchronous merge for a stacked one (ADR 0042).
+    ///
+    /// Read off the same record as ``fetchPullRequestSummary(id:)``, so "stacked" means exactly
+    /// what a row's chip shows: all four stack columns hold a value. A pull request the inbox does
+    /// not hold reads as unstacked, which is how every merge worked before stacks.
+    /// - Parameter id: The pull request's GraphQL node id.
+    public func isInStack(prID id: String) async throws -> Bool {
+        try await fetchPullRequestSummary(id: id)?.stack != nil
+    }
+
     /// Reads one inbox row by repository and number.
     ///
     /// The node id is the primary key everywhere in Shepherd, so this is the *only* lookup that
@@ -225,6 +236,14 @@ extension DatabaseManager {
                 // `mergeStateStatus`; when a detail fetch lacks it, absent means "unknown", so the
                 // sweep's `behind` survives for the merge series (ADR 0041).
                 record.mergeStateStatus = existing.mergeStateStatus
+            }
+            if detail.summary.stack == nil, let existing {
+                // REST documents `stack` as present "when a pull request belongs to a stack",
+                // without saying whether an API version or preview gates it, so its absence is
+                // read as "unknown". Clearing it wrongly would send a stacked merge to the
+                // synchronous endpoint GitHub refuses; keeping it wrongly lasts until the next
+                // sweep, which writes GraphQL's `null` through (ADR 0042).
+                record.keepStack(from: existing)
             }
             record.bodyMarkdown = detail.bodyMarkdown
             record.commitsJSON = ColumnCoding.encodeJSON(detail.commits)

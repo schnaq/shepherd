@@ -47,6 +47,7 @@ founder interview (2026-08-31) combined with three research reports (see
 | 0039 | [Open in editor: a pull request's file, in your own clone, in your own editor](0039-open-in-editor.md) | Accepted |
 | 0040 | [Liquid Glass on macOS 27: system glass for the control layer, opaque content](0040-liquid-glass.md) | Accepted |
 | 0041 | [Merge series: several pull requests, one after another, per repository](0041-merge-series.md) | Accepted |
+| 0042 | [Stacked pull requests: shown as a tag, merged through GitHub's asynchronous merge](0042-stacked-pull-requests.md) | Accepted |
 
 Format: lightweight [MADR](https://adr.github.io/madr/)-style — Context, Decision, Consequences.
 New decisions get the next number; superseded ADRs are marked, never deleted.

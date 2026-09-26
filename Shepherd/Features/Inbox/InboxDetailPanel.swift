@@ -55,6 +55,12 @@ struct InboxDetailPanel: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     header(row)
+                    // Under the header because it says the same kind of thing — where this pull
+                    // request comes from and what it builds on — and nothing when it is in no
+                    // stack (ADR 0042).
+                    if let stack = model.stackOverview(for: row) {
+                        PullRequestStackCard(overview: stack, onOpen: openStackMember)
+                    }
                     checksCard(row)
                     priorityCard
                     intelligenceCard
@@ -63,6 +69,17 @@ struct InboxDetailPanel: View {
             }
             Divider().overlay(Theme.border)
             actionBar(row)
+        }
+    }
+
+    /// A click on another pull request of the stack: selected in the list when the rail shows it,
+    /// so the reader stays in the inbox, and opened in the review screen when it does not —
+    /// selecting a row the list hides would leave this panel empty.
+    private func openStackMember(_ member: PullRequestSummary) {
+        if model.isShown(member.id) {
+            model.select(member.id)
+        } else {
+            onOpenReview(member.id)
         }
     }
 

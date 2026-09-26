@@ -174,6 +174,35 @@ public struct MergeSeriesEntry: Sendable, Codable, Hashable, Identifiable {
     /// entry is *removed by user* instead of going on to a merge nobody wants any more, and until
     /// then it stays `updatingBranch`, so a parked update still keeps its alert down.
     public var removalRequested: Bool
+    /// The stack the pull request was in when the series started (ADR 0042). Copied in rather
+    /// than read off the row, because the row changes under a stack exactly when it matters: once
+    /// the pull request below merges, GitHub re-numbers the stack (or dissolves it) and
+    /// re-targets and rebases this one, and the row's own position no longer says that something
+    /// below it just merged. `nil` for a pull request in no stack.
+    public var stackNumber: Int?
+    /// The place in that stack, 1-based from the bottom like ``PullRequestStack/position``.
+    public var stackPosition: Int?
+    /// Whether the series already took a new head for this entry after a lower member of its
+    /// stack merged. Once: the rebase GitHub does after the lower merge is expected, a second
+    /// head change is somebody's push (ADR 0042).
+    public var repinnedAfterStackMerge: Bool
+    /// When the entry started waiting, behind its base and above the bottom of a stack, for
+    /// GitHub to bring its branch up to date — the series never queues an update for such a pull
+    /// request (ADR 0042). The start of that wait's grace period; cleared once the pull request
+    /// is no longer behind.
+    public var restackWaitSince: Date?
+    /// When GitHub accepted the merge without having finished it — put it into the merge queue,
+    /// or started merging the stack (`mergeEnqueued` / `mergeStarted`, ADR 0042). The entry is
+    /// still `merging`, but is waited for much longer
+    /// (``unconfirmedMergeDeadline(gracePeriod:now:)``), because the pull request stays open in
+    /// the inbox for as long as GitHub's queue takes.
+    public var mergeAcceptedAt: Date?
+
+    /// How long a merge GitHub accepted but has not finished is waited for: 24 hours, as long as
+    /// GitHub keeps an asynchronous merge's result (`GET …/merge-async/{uuid}`). A queue that has
+    /// not landed the pull request by then is not one the series should hold every later entry
+    /// behind.
+    public static let acceptedMergeGracePeriod: TimeInterval = 24 * 60 * 60
 
     /// Creates an entry.
     public init(
@@ -186,7 +215,12 @@ public struct MergeSeriesEntry: Sendable, Codable, Hashable, Identifiable {
         activeSince: Date? = nil,
         updateQueuedAt: Date? = nil,
         mergeQueuedAt: Date? = nil,
-        removalRequested: Bool = false
+        removalRequested: Bool = false,
+        stackNumber: Int? = nil,
+        stackPosition: Int? = nil,
+        repinnedAfterStackMerge: Bool = false,
+        restackWaitSince: Date? = nil,
+        mergeAcceptedAt: Date? = nil
     ) {
         self.prID = prID
         self.slug = slug
@@ -198,9 +232,14 @@ public struct MergeSeriesEntry: Sendable, Codable, Hashable, Identifiable {
         self.updateQueuedAt = updateQueuedAt
         self.mergeQueuedAt = mergeQueuedAt
         self.removalRequested = removalRequested
+        self.stackNumber = stackNumber
+        self.stackPosition = stackPosition
+        self.repinnedAfterStackMerge = repinnedAfterStackMerge
+        self.restackWaitSince = restackWaitSince
+        self.mergeAcceptedAt = mergeAcceptedAt
     }
 
-    /// Creates a pending entry pinned to the row's current head.
+    /// Creates a pending entry pinned to the row's current head, with its place in a stack.
     /// - Parameter pullRequest: The ticked row.
     public init(pullRequest: PullRequestSummary) {
         self.init(
@@ -208,16 +247,45 @@ public struct MergeSeriesEntry: Sendable, Codable, Hashable, Identifiable {
             slug: pullRequest.slug,
             number: pullRequest.number,
             title: pullRequest.title,
-            pinnedHeadOid: pullRequest.headRefOid
+            pinnedHeadOid: pullRequest.headRefOid,
+            stackNumber: pullRequest.stack?.number,
+            stackPosition: pullRequest.stack?.position
         )
     }
 
     /// An entry is identified by its pull request.
     public var id: String { prID }
 
+    /// When a `merging` entry whose outbox row is gone, without a failure or a confirmation,
+    /// stops being waited for while its pull request is still open.
+    ///
+    /// A merge GitHub accepted (``mergeAcceptedAt``) gets ``acceptedMergeGracePeriod`` from the
+    /// acceptance: the pull request stays open while GitHub's merge queue works, and skipping it
+    /// as *merge refused* after an hour would be wrong about a merge that is running. An entry
+    /// with a recorded stack gets the same 24 hours from when the merge was queued, acceptance
+    /// seen or not. Any other gets `gracePeriod` from when the merge was queued.
+    /// - Parameters:
+    ///   - gracePeriod: The ordinary bound (`MergeSeriesCoordinator.missingRowGracePeriod`).
+    ///   - now: The fallback start for an entry without any timestamp.
+    public func unconfirmedMergeDeadline(gracePeriod: TimeInterval, now: Date) -> Date {
+        if let mergeAcceptedAt {
+            return mergeAcceptedAt.addingTimeInterval(Self.acceptedMergeGracePeriod)
+        }
+        let queued = mergeQueuedAt ?? activeSince ?? now
+        // A stacked pull request is always merged through GitHub's asynchronous API, so it gets
+        // the long wait whether or not the acceptance event was seen: that event lives only in
+        // memory, and an app that quit before it arrived must not skip a running merge after an
+        // hour. Stored with the entry, the stack survives the restart the event does not.
+        if stackNumber != nil {
+            return queued.addingTimeInterval(Self.acceptedMergeGracePeriod)
+        }
+        return queued.addingTimeInterval(gracePeriod)
+    }
+
     private enum CodingKeys: String, CodingKey {
         case prID, slug, number, title, pinnedHeadOid, state, activeSince, updateQueuedAt, mergeQueuedAt
         case removalRequested
+        case stackNumber, stackPosition, repinnedAfterStackMerge, restackWaitSince, mergeAcceptedAt
     }
 
     /// Decodes tolerantly, like every persisted value in this folder. A missing pin decodes as
@@ -240,6 +308,15 @@ public struct MergeSeriesEntry: Sendable, Codable, Hashable, Identifiable {
             .flatMap { $0 }
         removalRequested = (try? container.decodeIfPresent(Bool.self, forKey: .removalRequested))
             .flatMap { $0 } ?? false
+        // A series stored before stacks existed reads as in no stack, which is how it was run.
+        stackNumber = (try? container.decodeIfPresent(Int.self, forKey: .stackNumber)).flatMap { $0 }
+        stackPosition = (try? container.decodeIfPresent(Int.self, forKey: .stackPosition)).flatMap { $0 }
+        repinnedAfterStackMerge = (try? container.decodeIfPresent(Bool.self, forKey: .repinnedAfterStackMerge))
+            .flatMap { $0 } ?? false
+        restackWaitSince = (try? container.decodeIfPresent(Date.self, forKey: .restackWaitSince))
+            .flatMap { $0 }
+        mergeAcceptedAt = (try? container.decodeIfPresent(Date.self, forKey: .mergeAcceptedAt))
+            .flatMap { $0 }
     }
 }
 
@@ -279,6 +356,13 @@ public struct MergeSeries: Sendable, Codable, Hashable, Identifiable {
     }
 
     /// Creates a series over these rows, in this order, each pinned to its current head.
+    ///
+    /// With one exception to "in this order": members of one GitHub stack are put back into
+    /// position order, bottom first, within the slots they occupy
+    /// (``MergeSeriesPlan/stacksBottomFirst(_:)``, ADR 0042). An upper member merged first would
+    /// take the lower ones along before the series had checked them, and the lower entries would
+    /// then wait for a row that is gone. The sheet already keeps its order that way; this is the
+    /// backstop for any caller that does not.
     /// - Parameters:
     ///   - repository: The repository.
     ///   - pullRequests: The rows, in merge order.
@@ -300,7 +384,7 @@ public struct MergeSeries: Sendable, Codable, Hashable, Identifiable {
             mergeMethod: mergeMethod,
             deletesHeadBranch: deletesHeadBranch,
             createdAt: now,
-            entries: pullRequests.map(MergeSeriesEntry.init(pullRequest:))
+            entries: MergeSeriesPlan.stacksBottomFirst(pullRequests).map(MergeSeriesEntry.init(pullRequest:))
         )
     }
 
@@ -370,6 +454,25 @@ public struct MergeSeries: Sendable, Codable, Hashable, Identifiable {
               entries[index].state != .merged
         else { return false }
         entries[index].state = .merged
+        return true
+    }
+
+    /// Records that GitHub accepted a `merging` entry's merge without finishing it
+    /// (`mutationSent(.mergeEnqueued)` or `.mergeStarted`, ADR 0042). The entry stays `merging` —
+    /// accepted is not merged — but its wait is now bounded by
+    /// ``MergeSeriesEntry/acceptedMergeGracePeriod``. The first acceptance counts: a second event
+    /// for the same merge does not push the deadline out.
+    /// - Parameters:
+    ///   - prID: The pull request's node id.
+    ///   - now: When the drain reported it.
+    /// - Returns: Whether anything changed.
+    @discardableResult
+    public mutating func markMergeAccepted(_ prID: String, at now: Date) -> Bool {
+        guard let index = entries.firstIndex(where: { $0.prID == prID }),
+              entries[index].state == .merging,
+              entries[index].mergeAcceptedAt == nil
+        else { return false }
+        entries[index].mergeAcceptedAt = now
         return true
     }
 

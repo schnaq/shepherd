@@ -64,6 +64,7 @@ public final class DatabaseManager: Sendable {
         migrator.registerMigration("v7", migrate: DatabaseSchema.addV7)
         migrator.registerMigration("v8", migrate: DatabaseSchema.addV8)
         migrator.registerMigration("v9", migrate: DatabaseSchema.addV9)
+        migrator.registerMigration("v10", migrate: DatabaseSchema.addV10)
         return migrator
     }
 
@@ -675,5 +676,18 @@ enum DatabaseSchema {
     /// which the series treats as "not behind", and the next sweep fills it in.
     static func addV9(_ db: Database) throws {
         try db.execute(sql: "ALTER TABLE pull_requests ADD COLUMN mergeStateStatus TEXT")
+    }
+
+    /// v10: `pull_requests.stackNumber`, `stackSize`, `stackPosition` and `stackBaseRef`, the
+    /// pull request's place in a GitHub stack (ADR 0042).
+    ///
+    /// Four nullable columns rather than one JSON blob, like the check counts, so the detail
+    /// panel's "every row of this stack, in order" is a plain query. Additive: every row stored
+    /// before reads back as in no stack, and the next sweep fills them in.
+    static func addV10(_ db: Database) throws {
+        try db.execute(sql: "ALTER TABLE pull_requests ADD COLUMN stackNumber INTEGER")
+        try db.execute(sql: "ALTER TABLE pull_requests ADD COLUMN stackSize INTEGER")
+        try db.execute(sql: "ALTER TABLE pull_requests ADD COLUMN stackPosition INTEGER")
+        try db.execute(sql: "ALTER TABLE pull_requests ADD COLUMN stackBaseRef TEXT")
     }
 }

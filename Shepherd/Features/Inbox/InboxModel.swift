@@ -670,6 +670,26 @@ final class InboxModel {
         return passesRail(row) ? row : nil
     }
 
+    /// The part of a pull request's GitHub stack the inbox holds (ADR 0042), for the detail
+    /// panel and the merge sheet.
+    ///
+    /// Over ``allRows`` rather than the list on screen: the rail filters are about what to look
+    /// at next, and a stack member the current smart view leaves out is still in the inbox —
+    /// counting it as missing would make the merge sheet say less than the merge does.
+    /// - Parameter row: The pull request on screen.
+    /// - Returns: `nil` when it is in no stack.
+    func stackOverview(for row: PullRequestSummary) -> PullRequestStackOverview? {
+        guard row.stack != nil else { return nil }
+        return PullRequestStackOverview.make(for: row, in: allRows)
+    }
+
+    /// Whether a pull request is in the list the rail currently shows — whether selecting it
+    /// would show it in the detail panel or leave the panel empty.
+    /// - Parameter id: The pull request's node id.
+    func isShown(_ id: String) -> Bool {
+        allRows.first(where: { $0.id == id }).map(passesRail) ?? false
+    }
+
     /// The rail counts for the smart views.
     func count(for view: SmartView) -> Int {
         allRows.filter(view.matches).count

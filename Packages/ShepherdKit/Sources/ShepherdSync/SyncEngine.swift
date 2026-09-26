@@ -42,6 +42,17 @@ public struct SyncConfiguration: Sendable {
     /// notification and the sweep that would have found the same pull request anyway.
     public var pollsNotifications: Bool
 
+    /// How many times the drain asks how a stacked pull request's merge is going before it lets
+    /// go of the row (ADR 0042).
+    ///
+    /// GitHub merges a stack in the background. The drain holds the row for about ten seconds
+    /// (this times ``asyncMergePollInterval``) so the common case — a stack that merges in
+    /// seconds — is announced as merged; beyond that the sweep is the better reader, and a drain
+    /// that waited longer would hold every row behind this one.
+    public var asyncMergePollCount: Int
+    /// How long the drain waits between two of those questions, in seconds.
+    public var asyncMergePollInterval: TimeInterval
+
     /// Creates a configuration.
     public init(
         queries: [InboxQuery] = InboxQuery.defaultSweep,
@@ -52,8 +63,12 @@ public struct SyncConfiguration: Sendable {
         maxConcurrentDetailFetches: Int = 5,
         outboxBatchSize: Int = 20,
         viewerLogin: String? = nil,
-        pollsNotifications: Bool = true
+        pollsNotifications: Bool = true,
+        asyncMergePollCount: Int = 3,
+        asyncMergePollInterval: TimeInterval = 3
     ) {
+        self.asyncMergePollCount = max(0, asyncMergePollCount)
+        self.asyncMergePollInterval = max(0, asyncMergePollInterval)
         self.queries = queries
         self.sweepInterval = sweepInterval
         self.notificationsFallbackInterval = notificationsFallbackInterval
@@ -118,6 +133,9 @@ public actor SyncEngine {
     /// deletion cannot be carried out is still a merge, so `nil` costs the user nothing but the
     /// tidying-up — where a `nil` issue writer would mean sending an issue write blind.
     private let branchDeletion: (any BranchDeleting)?
+    /// Whether a pull request, by node id, is part of a stack, which decides how the drain merges
+    /// it (ADR 0042). See ``StackMembershipLookup``.
+    private let isStacked: StackMembershipLookup
     private let configuration: SyncConfiguration
     private let sleeper: any Sleeping
     private let now: @Sendable () -> Date
@@ -172,6 +190,9 @@ public actor SyncEngine {
     ///     (ADR 0005's 2026-09-05 amendment). `nil` — the default — means a merge row that asks
     ///     for the deletion is merged and nothing more, which is how every caller that predates
     ///     branch deletion builds an engine.
+    ///   - isStacked: Whether a pull request is part of a stack, so its merge goes through
+    ///     GitHub's asynchronous API (ADR 0042). The default answers `false` for everything, which
+    ///     is how every caller that predates stacks builds an engine: every merge is synchronous.
     ///   - configuration: Tunables.
     ///   - sleeper: The delay abstraction; tests inject one that does not wait.
     ///   - now: Clock injection point for tests.
@@ -183,6 +204,7 @@ public actor SyncEngine {
         issues: IssueCapture? = nil,
         issueWrites: (any IssueWriting)? = nil,
         branchDeletion: (any BranchDeleting)? = nil,
+        isStacked: @escaping StackMembershipLookup = { _ in false },
         configuration: SyncConfiguration = SyncConfiguration(),
         sleeper: any Sleeping = SystemSleeper(),
         now: @escaping @Sendable () -> Date = { Date() }
@@ -194,6 +216,7 @@ public actor SyncEngine {
         self.issues = issues
         self.issueWrites = issueWrites
         self.branchDeletion = branchDeletion
+        self.isStacked = isStacked
         self.configuration = configuration
         self.sleeper = sleeper
         self.now = now
@@ -888,6 +911,16 @@ public actor SyncEngine {
     private enum OutboxOutcome {
         /// The mutation reached GitHub.
         case sent
+        /// A stacked pull request's merge reached GitHub through the asynchronous API
+        /// (ADR 0042), announced as `kind` — how far GitHub had got when the drain let go.
+        ///
+        /// Its own case rather than ``sent`` with a kind beside it, because two things differ,
+        /// and both are about the stack: the announcement depends on GitHub's answer rather than
+        /// on the action alone, and there is no follow-up. GitHub re-targets and rebases the
+        /// pull requests above a merged one onto its base itself, and deleting the head branch
+        /// out from under that — a branch the next pull request of the stack was built on — is
+        /// exactly the kind of tidying-up that belongs to GitHub here, not to Shepherd.
+        case sentStackedMerge(SentMutation.Kind)
         /// The mutation was not sent because the pull request moved on.
         case conflict(DraftConflict)
         /// The mutation was not sent because the **issue** moved on (ADR 0032's Sprint 4a
@@ -943,22 +976,11 @@ public actor SyncEngine {
             do {
                 switch try await execute(item) {
                 case .sent:
-                    try await store.markOutboxItemSucceeded(id: item.id)
-                    // Announced only here, after the row is gone: this is the single moment at
-                    // which the mutation is known to have reached GitHub rather than merely
-                    // been queued.
-                    emit(
-                        .mutationSent(
-                            SentMutation(
-                                prID: item.prID,
-                                repo: item.repo,
-                                number: item.number,
-                                kind: Self.sentKind(for: item.action),
-                                sentAt: now()
-                            )
-                        )
-                    )
+                    try await settleSent(item, as: Self.sentKind(for: item.action))
                     await followUp(for: item)
+                case .sentStackedMerge(let kind):
+                    // No follow-up: see `OutboxOutcome.sentStackedMerge`.
+                    try await settleSent(item, as: kind)
                 case .conflict(let conflict):
                     try await store.markOutboxItemConflicted(
                         id: item.id,
@@ -991,6 +1013,28 @@ public actor SyncEngine {
         if index < items.count {
             try? await store.releaseOutboxItems(ids: items[index...].map(\.id))
         }
+    }
+
+    /// Removes a sent row and announces it.
+    ///
+    /// Announced only here, after the row is gone: this is the single moment at which the
+    /// mutation is known to have reached GitHub rather than merely been queued.
+    /// - Parameters:
+    ///   - item: The row that was sent.
+    ///   - kind: What it amounts to.
+    private func settleSent(_ item: OutboxItem, as kind: SentMutation.Kind) async throws {
+        try await store.markOutboxItemSucceeded(id: item.id)
+        emit(
+            .mutationSent(
+                SentMutation(
+                    prID: item.prID,
+                    repo: item.repo,
+                    number: item.number,
+                    kind: kind,
+                    sentAt: now()
+                )
+            )
+        )
     }
 
     /// The best-effort tidying-up a sent row leaves behind, run **after** the row is gone.
@@ -1087,6 +1131,12 @@ public actor SyncEngine {
             return .sent
 
         case .merge(let method, let expectedHeadOid, _):
+            // Asked before anything is sent, and a lookup that fails is a retry rather than a
+            // guess: a stack sent to the synchronous endpoint is refused, and an ordinary pull
+            // request sent to the asynchronous one would lose its branch deletion.
+            if try await isStacked(item.prID) {
+                return try await mergeStacked(item, method: method, expectedHeadOid: expectedHeadOid)
+            }
             do {
                 _ = try await github.mergePullRequest(
                     repo: item.repo,
@@ -1094,6 +1144,16 @@ public actor SyncEngine {
                     method: MergeMethod(rawValue: method) ?? .merge,
                     expectedHeadOid: expectedHeadOid,
                     commitTitle: nil
+                )
+            } catch GitHubError.validationFailed(let message) {
+                // The stored summary may simply not know yet: a stack made since the last sweep
+                // is refused by the synchronous endpoint. One read decides, and a stacked pull
+                // request is merged the way it has to be, in this same step.
+                return try await mergeStackedIfRefusalWasStacking(
+                    item,
+                    method: method,
+                    expectedHeadOid: expectedHeadOid,
+                    otherwise: .validationFailed(message: message)
                 )
             } catch GitHubError.notMergeable(let message) {
                 // GitHub answers a merge on a pull request that is *already merged* with the same
@@ -1103,11 +1163,15 @@ public actor SyncEngine {
                 // marked succeeded after `execute` returns, so a crash in between leaves a
                 // `sending` row that the next launch resets to `pending` and sends again.
                 // One read tells the two apart, and it is only made on the refusal.
-                guard try await github.isPullRequestMerged(
-                    repo: item.repo,
-                    number: item.number
-                ) else {
-                    throw GitHubError.notMergeable(message: message)
+                guard try await isAlreadyMerged(item) else {
+                    // Not merged — but perhaps stacked since the last sweep, which this endpoint
+                    // refuses too (see the `422` above).
+                    return try await mergeStackedIfRefusalWasStacking(
+                        item,
+                        method: method,
+                        expectedHeadOid: expectedHeadOid,
+                        otherwise: .notMergeable(message: message)
+                    )
                 }
             }
             // The head branch is deliberately *not* deleted here: it is the drain's follow-up,
@@ -1425,6 +1489,139 @@ public actor SyncEngine {
         }
         guard let newest = reviews.map(\.createdAt).max() else { return nil }
         return (head, newest)
+    }
+
+    /// Whether GitHub's refusal of a merge write is, in fact, a pull request that is already
+    /// merged: a crash between the write landing and the row being marked succeeded would
+    /// otherwise leave a `sending` row that the next launch resets and re-sends, only to have the
+    /// retry refused the same way. Shared by the synchronous merge's `405` and the asynchronous
+    /// merge's own version of it (ADR 0042), which answer the question with the same read.
+    private func isAlreadyMerged(_ item: OutboxItem) async throws -> Bool {
+        try await github.isPullRequestMerged(repo: item.repo, number: item.number)
+    }
+
+    /// Reroutes a refused merge write to the asynchronous endpoint when the refusal means the
+    /// pull request became part of a stack since the last sweep (ADR 0042); rethrows the refusal
+    /// otherwise. Shared by the synchronous merge's `422` and `405` refusals, which each ask the
+    /// same question once they have ruled out their own more specific reading of the refusal.
+    /// - Parameters:
+    ///   - item: The merge row.
+    ///   - method: The merge method's raw value.
+    ///   - expectedHeadOid: The pin.
+    ///   - refusal: The error to throw when the pull request is not, after all, part of a stack.
+    private func mergeStackedIfRefusalWasStacking(
+        _ item: OutboxItem,
+        method: String,
+        expectedHeadOid: String?,
+        otherwise refusal: GitHubError
+    ) async throws -> OutboxOutcome {
+        guard try await github.pullRequestIsStacked(repo: item.repo, number: item.number) else {
+            throw refusal
+        }
+        return try await mergeStacked(item, method: method, expectedHeadOid: expectedHeadOid)
+    }
+
+    /// Merges a pull request that is part of a stack, through GitHub's asynchronous API
+    /// (ADR 0042).
+    ///
+    /// One `PUT`, then a few status polls through the engine's ``ShepherdCore/Sleeping``
+    /// (``SyncConfiguration/asyncMergePollCount`` × ``SyncConfiguration/asyncMergePollInterval``),
+    /// and the row is let go with how far GitHub got. The line this draws is **acceptance**:
+    /// once GitHub has taken the merge, nothing may fail the row any more — not a poll that could
+    /// not be made, not an expired uuid, not the app quitting mid-wait — because a failed row
+    /// offers a retry of a write that is already running. Every such case is sent as
+    /// ``SentMutation/Kind/mergeStarted``, and the sweep reads the outcome.
+    ///
+    /// Before acceptance the answers are the synchronous merge's: a moved head is parked
+    /// (``GitHubKit/GitHubError/staleHead(expected:actual:)``, via `handleOutboxFailure`), a
+    /// refusal fails the row, and a refusal of a pull request GitHub has merged already is sent.
+    /// - Parameters:
+    ///   - item: The merge row.
+    ///   - method: The merge method's raw value.
+    ///   - expectedHeadOid: The pin.
+    /// - Returns: ``OutboxOutcome/sentStackedMerge(_:)`` with the announcement.
+    private func mergeStacked(
+        _ item: OutboxItem,
+        method: String,
+        expectedHeadOid: String?
+    ) async throws -> OutboxOutcome {
+        let accepted: AsyncMergeResult
+        do {
+            accepted = try await github.mergePullRequestAsync(
+                repo: item.repo,
+                number: item.number,
+                method: MergeMethod(rawValue: method) ?? .merge,
+                expectedHeadOid: expectedHeadOid
+            )
+        } catch GitHubError.conflict(let message) {
+            // On this endpoint a `409` is documented as "a merge request is already enqueued for
+            // this pull request": this row, re-sent after a crash, or the same merge asked for on
+            // github.com. Either way a merge is under way, which is what the row asked for. Only
+            // when GitHub says so, though: any other `409` is not known to be harmless, and it is
+            // parked like a moved head, for the user to look at, rather than read as a success.
+            guard GitHubClient.isMergeAlreadyUnderWay(message) else {
+                throw GitHubError.staleHead(expected: expectedHeadOid ?? "", actual: nil)
+            }
+            return .sentStackedMerge(.mergeStarted)
+        } catch GitHubError.notMergeable(let message) {
+            // A closed pull request is "not ready" to this endpoint, and a merged one is closed —
+            // the synchronous merge's `405` problem in another status code, settled the same way.
+            guard try await isAlreadyMerged(item) else {
+                throw GitHubError.notMergeable(message: message)
+            }
+            return .sentStackedMerge(.merged(method: method))
+        }
+
+        var result = accepted
+        // The uuid is the `PUT`'s: a poll that answers in a short shape without one must not end
+        // the polling early.
+        var polls = 0
+        while result.status == .pending, let uuid = accepted.uuid,
+              polls < configuration.asyncMergePollCount {
+            polls += 1
+            do {
+                try await sleeper.sleep(for: .seconds(configuration.asyncMergePollInterval))
+                result = try await github.asyncMergeStatus(
+                    repo: item.repo,
+                    number: item.number,
+                    uuid: uuid
+                )
+            } catch {
+                // Accepted is accepted: see the method's documentation.
+                break
+            }
+        }
+
+        if let kind = Self.sentKind(forStackedMerge: result.status, method: method) {
+            return .sentStackedMerge(kind)
+        }
+        // `failed`: GitHub's verdict, in GitHub's words. Not retryable — the same merge would
+        // fail the same way — except that GitHub cancels a merge whose pull request was pushed
+        // to in between, and that is a moved head, parked like the synchronous merge's.
+        let message = result.message ?? "GitHub could not merge the stack."
+        if GitHubClient.isHeadMismatch(message) {
+            throw GitHubError.staleHead(expected: expectedHeadOid ?? "", actual: nil)
+        }
+        throw GitHubError.notMergeable(message: message)
+    }
+
+    /// What a stacked merge amounts to once the drain lets go of it (ADR 0042), or `nil` for
+    /// `failed`, which is not a send.
+    ///
+    /// Pure and `static` for ``sentKind(for:)``'s reason.
+    /// - Parameters:
+    ///   - status: How far GitHub had got.
+    ///   - method: The merge method's raw value, for ``SentMutation/Kind/merged(method:)``.
+    static func sentKind(
+        forStackedMerge status: AsyncMergeResult.Status,
+        method: String
+    ) -> SentMutation.Kind? {
+        switch status {
+        case .merged: return .merged(method: method)
+        case .enqueued: return .mergeEnqueued
+        case .pending: return .mergeStarted
+        case .failed: return nil
+        }
     }
 
     /// The ``SentMutation/Kind`` an outbox action amounts to once it has been sent.

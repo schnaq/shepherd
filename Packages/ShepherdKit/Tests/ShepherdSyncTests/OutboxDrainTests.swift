@@ -13,15 +13,18 @@ final class OutboxDrainTests: XCTestCase {
         github: MockGitHub,
         store: any SyncStoring,
         issueWrites: (any IssueWriting)? = nil,
-        branchDeletion: (any BranchDeleting)? = nil
+        branchDeletion: (any BranchDeleting)? = nil,
+        stacked: Set<String> = [],
+        sleeper: RecordingSleeper = RecordingSleeper()
     ) -> SyncEngine {
         SyncEngine(
             github: github,
             store: store,
             issueWrites: issueWrites,
             branchDeletion: branchDeletion,
+            isStacked: { stacked.contains($0) },
             configuration: SyncConfiguration(),
-            sleeper: RecordingSleeper(),
+            sleeper: sleeper,
             now: { Date(timeIntervalSince1970: 1_788_162_000) }
         )
     }
@@ -443,6 +446,401 @@ final class OutboxDrainTests: XCTestCase {
             SyncEngine.sentKind(for: .updateBranch(expectedHeadOid: "head-1")),
             .branchUpdated
         )
+        // A stacked merge is announced by how far GitHub got (ADR 0042); `failed` is no send.
+        XCTAssertEqual(
+            SyncEngine.sentKind(forStackedMerge: .merged, method: "squash"),
+            .merged(method: "squash")
+        )
+        XCTAssertEqual(
+            SyncEngine.sentKind(forStackedMerge: .enqueued, method: "squash"),
+            .mergeEnqueued
+        )
+        XCTAssertEqual(
+            SyncEngine.sentKind(forStackedMerge: .pending, method: "squash"),
+            .mergeStarted
+        )
+        XCTAssertNil(SyncEngine.sentKind(forStackedMerge: .failed, method: "squash"))
+    }
+
+    // MARK: - Stacked merges (ADR 0042)
+
+    private func stackedMergeRow(deletesHeadBranch: Bool = false) -> OutboxAction {
+        .merge(method: "squash", expectedHeadOid: "head-1", deletesHeadBranch: deletesHeadBranch)
+    }
+
+    func testAPullRequestInNoStackIsMergedSynchronouslyExactlyAsBefore() async throws {
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(stackedMergeRow(), in: store)
+        let engine = makeEngine(github: github, store: store, stacked: ["PR_OTHER"])
+
+        let sent = sentMutations(in: await drainCollectingEvents(engine))
+
+        let merges = await github.merges
+        XCTAssertEqual(merges.map(\.number), [1])
+        let asyncMerges = await github.asyncMerges
+        XCTAssertTrue(asyncMerges.isEmpty)
+        XCTAssertEqual(sent.map(\.kind), [.merged(method: "squash")])
+    }
+
+    func testAStackedMergeGoesThroughTheAsynchronousApiPinnedToTheHead() async throws {
+        let github = MockGitHub()
+        await github.scriptAsyncMerge(answer: AsyncMergeResult(status: .merged))
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(stackedMergeRow(), in: store)
+        let sleeper = RecordingSleeper()
+        let engine = makeEngine(github: github, store: store, stacked: ["PR_1"], sleeper: sleeper)
+
+        let sent = sentMutations(in: await drainCollectingEvents(engine))
+
+        let merges = await github.merges
+        XCTAssertTrue(merges.isEmpty, "a stack cannot be merged with the synchronous endpoint")
+        let asyncMerges = await github.asyncMerges
+        XCTAssertEqual(asyncMerges.map(\.number), [1])
+        XCTAssertEqual(asyncMerges.map(\.method), [.squash])
+        XCTAssertEqual(asyncMerges.map(\.sha), ["head-1"])
+        let polls = await github.asyncMergePolls
+        XCTAssertTrue(polls.isEmpty, "an answer that is already final is not polled")
+        let waits = await sleeper.recorded
+        XCTAssertTrue(waits.isEmpty)
+        XCTAssertEqual(sent.map(\.kind), [.merged(method: "squash")])
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testAPendingStackedMergeIsPolledUntilItLands() async throws {
+        let github = MockGitHub()
+        await github.scriptAsyncMerge(
+            answer: AsyncMergeResult(status: .pending, uuid: "u-1"),
+            statuses: [
+                // A short answer without the uuid: the polling goes on with the `PUT`'s.
+                AsyncMergeResult(status: .pending, message: "Merging"),
+                AsyncMergeResult(status: .merged, uuid: "u-1"),
+            ]
+        )
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(stackedMergeRow(), in: store)
+        let sleeper = RecordingSleeper()
+        let engine = makeEngine(github: github, store: store, stacked: ["PR_1"], sleeper: sleeper)
+
+        let sent = sentMutations(in: await drainCollectingEvents(engine))
+
+        let polls = await github.asyncMergePolls
+        XCTAssertEqual(polls, ["u-1", "u-1"])
+        let waits = await sleeper.recorded.map(\.inSeconds)
+        XCTAssertEqual(waits, [3, 3])
+        XCTAssertEqual(sent.map(\.kind), [.merged(method: "squash")])
+    }
+
+    func testAStackedMergeThatJoinsTheMergeQueueIsSentAsEnqueued() async throws {
+        let github = MockGitHub()
+        await github.scriptAsyncMerge(
+            answer: AsyncMergeResult(status: .pending, uuid: "u-1"),
+            statuses: [AsyncMergeResult(status: .enqueued, uuid: "u-1")]
+        )
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(stackedMergeRow(), in: store)
+        let engine = makeEngine(github: github, store: store, stacked: ["PR_1"])
+
+        let sent = sentMutations(in: await drainCollectingEvents(engine))
+
+        XCTAssertEqual(sent.map(\.kind), [.mergeEnqueued])
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testAStackedMergeStillRunningAfterThePollingWindowIsSentAsStarted() async throws {
+        let github = MockGitHub()
+        await github.scriptAsyncMerge(answer: AsyncMergeResult(status: .pending, uuid: "u-1"))
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(stackedMergeRow(), in: store)
+        let sleeper = RecordingSleeper()
+        let engine = makeEngine(github: github, store: store, stacked: ["PR_1"], sleeper: sleeper)
+
+        let sent = sentMutations(in: await drainCollectingEvents(engine))
+
+        let polls = await github.asyncMergePolls
+        XCTAssertEqual(polls.count, 3)
+        let waits = await sleeper.recorded.map(\.inSeconds)
+        XCTAssertEqual(waits, [3, 3, 3], "about ten seconds, then the sweep takes over")
+        XCTAssertEqual(sent.map(\.kind), [.mergeStarted])
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty, "the row is sent; the outcome is read off the sweep")
+    }
+
+    func testAPendingAnswerWithoutAUuidIsSentAsStartedWithoutPolling() async throws {
+        let github = MockGitHub()
+        await github.scriptAsyncMerge(answer: AsyncMergeResult(status: .pending, message: "Queued"))
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(stackedMergeRow(), in: store)
+        let engine = makeEngine(github: github, store: store, stacked: ["PR_1"])
+
+        let sent = sentMutations(in: await drainCollectingEvents(engine))
+
+        let polls = await github.asyncMergePolls
+        XCTAssertTrue(polls.isEmpty)
+        XCTAssertEqual(sent.map(\.kind), [.mergeStarted])
+    }
+
+    func testAPollThatFailsAfterGitHubAcceptedTheMergeNeverFailsTheRow() async throws {
+        // The merge is running on GitHub; failing the row would put a retry of a write that
+        // cannot be taken back in front of the user.
+        let github = MockGitHub()
+        await github.scriptAsyncMerge(
+            answer: AsyncMergeResult(status: .pending, uuid: "u-1"),
+            statusError: .transport(message: "offline")
+        )
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(stackedMergeRow(), in: store)
+        let engine = makeEngine(github: github, store: store, stacked: ["PR_1"])
+
+        let emitted = await drainCollectingEvents(engine)
+
+        XCTAssertEqual(sentMutations(in: emitted).map(\.kind), [.mergeStarted])
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testAMergeAlreadyUnderWayIsSentAsStartedRatherThanFailed() async throws {
+        // GitHub's `409` on this endpoint: a merge request for the pull request exists already,
+        // which is what a row re-sent after a crash finds.
+        let github = MockGitHub()
+        await github.scriptAsyncMerge(
+            answer: AsyncMergeResult(status: .merged),
+            error: .conflict(message: "A merge request is already enqueued for this pull request")
+        )
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(stackedMergeRow(), in: store)
+        let engine = makeEngine(github: github, store: store, stacked: ["PR_1"])
+
+        let sent = sentMutations(in: await drainCollectingEvents(engine))
+
+        XCTAssertEqual(sent.map(\.kind), [.mergeStarted])
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testAnyOtherConflictOnTheAsynchronousMergeIsParkedRatherThanReadAsStarted() async throws {
+        // Only GitHub's "already enqueued" sentence is known to be harmless. Anything else a `409`
+        // says is parked for the user, like a moved head, and never announced as a merge.
+        let github = MockGitHub()
+        await github.scriptAsyncMerge(
+            answer: AsyncMergeResult(status: .merged),
+            error: .conflict(message: "Base branch was modified")
+        )
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(stackedMergeRow(), in: store)
+        let engine = makeEngine(github: github, store: store, stacked: ["PR_1"])
+
+        let emitted = await drainCollectingEvents(engine)
+
+        XCTAssertTrue(sentMutations(in: emitted).isEmpty)
+        let stored = try await store.allOutboxItems()
+        XCTAssertEqual(stored.first?.state, .conflicted)
+    }
+
+    func testARefusedMergeOfAPullRequestStackedSinceTheLastSweepIsRetriedAsynchronously() async throws {
+        // The stored summary has no stack yet, so the synchronous endpoint is tried and refuses.
+        let github = MockGitHub()
+        await github.setMergeError(.notMergeable(message: "Pull request is part of a stack"))
+        await github.setStackedOnGitHub(true, number: 1)
+        await github.scriptAsyncMerge(answer: AsyncMergeResult(status: .merged))
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(stackedMergeRow(deletesHeadBranch: true), in: store)
+        let engine = makeEngine(github: github, store: store, branchDeletion: github)
+
+        let sent = sentMutations(in: await drainCollectingEvents(engine))
+
+        let probes = await github.stackProbes
+        XCTAssertEqual(probes, [1], "asked once")
+        let asyncMerges = await github.asyncMerges
+        XCTAssertEqual(asyncMerges.map(\.sha), ["head-1"])
+        XCTAssertEqual(sent.map(\.kind), [.merged(method: "squash")])
+        let deleted = await github.deletedBranches
+        XCTAssertTrue(deleted.isEmpty, "a stack's branches are GitHub's")
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testAValidationRefusalOfAPullRequestStackedSinceTheLastSweepIsRetriedAsynchronously() async throws {
+        let github = MockGitHub()
+        await github.setMergeError(.validationFailed(message: "Use the merge-async endpoint"))
+        await github.setStackedOnGitHub(true, number: 1)
+        await github.scriptAsyncMerge(answer: AsyncMergeResult(status: .enqueued))
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(stackedMergeRow(), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        let sent = sentMutations(in: await drainCollectingEvents(engine))
+
+        let probes = await github.stackProbes
+        XCTAssertEqual(probes, [1])
+        XCTAssertEqual(sent.map(\.kind), [.mergeEnqueued])
+    }
+
+    func testARefusedMergeOfAnUnstackedPullRequestStillFailsAfterOneStackRead() async throws {
+        let github = MockGitHub()
+        await github.setMergeError(.notMergeable(message: "Required status check is failing"))
+        let store = try DatabaseManager.inMemory()
+        let id = try await enqueue(stackedMergeRow(), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        let emitted = await drainCollectingEvents(engine)
+
+        XCTAssertTrue(sentMutations(in: emitted).isEmpty)
+        let probes = await github.stackProbes
+        XCTAssertEqual(probes, [1])
+        let asyncMerges = await github.asyncMerges
+        XCTAssertTrue(asyncMerges.isEmpty)
+        let row = try await store.outboxItem(id: id)
+        XCTAssertEqual(row?.state, .failed)
+    }
+
+    func testARefusedMergeThatHadAlreadyLandedIsNotAskedAboutAStack() async throws {
+        let github = MockGitHub()
+        await github.setMergeError(.notMergeable(message: "Pull Request is not mergeable"))
+        await github.setIsMerged(true, number: 1)
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(stackedMergeRow(), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        let sent = sentMutations(in: await drainCollectingEvents(engine))
+
+        XCTAssertEqual(sent.map(\.kind), [.merged(method: "squash")])
+        let probes = await github.stackProbes
+        XCTAssertTrue(probes.isEmpty)
+    }
+
+    func testAFailedStackedMergeIsParkedAsFailedWithGitHubsMessage() async throws {
+        let github = MockGitHub()
+        await github.scriptAsyncMerge(
+            answer: AsyncMergeResult(status: .pending, uuid: "u-1"),
+            statuses: [
+                AsyncMergeResult(status: .failed, uuid: "u-1", message: "Stack has merge conflicts"),
+            ]
+        )
+        let store = try DatabaseManager.inMemory()
+        let id = try await enqueue(stackedMergeRow(), in: store)
+        let engine = makeEngine(github: github, store: store, stacked: ["PR_1"])
+
+        let emitted = await drainCollectingEvents(engine)
+
+        XCTAssertTrue(sentMutations(in: emitted).isEmpty)
+        let row = try await store.outboxItem(id: id)
+        XCTAssertEqual(row?.state, .failed, "not retried: GitHub has given its verdict")
+        XCTAssertEqual(row?.lastError?.contains("Stack has merge conflicts"), true)
+        XCTAssertEqual(
+            row?.lastErrorCode.flatMap(GitHubError.init(storageCode:)),
+            .notMergeable(message: "Stack has merge conflicts")
+        )
+        let probes = await github.mergedProbes
+        XCTAssertTrue(probes.isEmpty, "GitHub said this merge failed; there is nothing to ask")
+    }
+
+    func testAStackedMergeWhoseHeadMovedIsParkedLikeAnyMerge() async throws {
+        let github = MockGitHub()
+        await github.scriptAsyncMerge(
+            answer: AsyncMergeResult(status: .merged),
+            error: .staleHead(expected: "head-1", actual: nil)
+        )
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(stackedMergeRow(), in: store)
+        let engine = makeEngine(github: github, store: store, stacked: ["PR_1"])
+
+        let emitted = await drainCollectingEvents(engine)
+
+        let conflicts = emitted.compactMap { event -> DraftConflict? in
+            if case .draftConflict(let conflict) = event { return conflict }
+            return nil
+        }
+        XCTAssertEqual(conflicts.map(\.expectedHeadOid), ["head-1"])
+        XCTAssertTrue(sentMutations(in: emitted).isEmpty)
+        let stored = try await store.allOutboxItems()
+        XCTAssertEqual(stored.first?.state, .conflicted)
+    }
+
+    func testAFailedStatusThatNamesAMovedHeadIsParkedRatherThanFailed() async throws {
+        // GitHub cancels an asynchronous merge when the pull request is pushed to in between.
+        let github = MockGitHub()
+        await github.scriptAsyncMerge(
+            answer: AsyncMergeResult(
+                status: .failed,
+                uuid: "u-1",
+                message: "Expected head sha didn't match current head ref."
+            )
+        )
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(stackedMergeRow(), in: store)
+        let engine = makeEngine(github: github, store: store, stacked: ["PR_1"])
+
+        _ = await drainCollectingEvents(engine)
+
+        let stored = try await store.allOutboxItems()
+        XCTAssertEqual(stored.first?.state, .conflicted)
+    }
+
+    func testAStackThatIsNotReadyButAlreadyMergedIsSentRatherThanFailed() async throws {
+        // A closed pull request is "not ready" (`400`) to the asynchronous endpoint — and a
+        // merged one is closed. The same one read the synchronous merge makes tells them apart.
+        let github = MockGitHub()
+        await github.scriptAsyncMerge(
+            answer: AsyncMergeResult(status: .merged),
+            error: .notMergeable(message: "Pull request is closed")
+        )
+        await github.setIsMerged(true, number: 1)
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(stackedMergeRow(), in: store)
+        let engine = makeEngine(github: github, store: store, stacked: ["PR_1"])
+
+        let sent = sentMutations(in: await drainCollectingEvents(engine))
+
+        XCTAssertEqual(sent.map(\.kind), [.merged(method: "squash")])
+        let probes = await github.mergedProbes
+        XCTAssertEqual(probes, ["\(repo.fullName)#1"])
+    }
+
+    func testAStackedMergeNeverDeletesTheHeadBranchBecauseGitHubManagesTheStacksBranches() async throws {
+        let github = MockGitHub()
+        await github.scriptAsyncMerge(answer: AsyncMergeResult(status: .merged))
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(stackedMergeRow(deletesHeadBranch: true), in: store)
+        let engine = makeEngine(
+            github: github,
+            store: store,
+            branchDeletion: github,
+            stacked: ["PR_1"]
+        )
+
+        let sent = sentMutations(in: await drainCollectingEvents(engine))
+
+        XCTAssertEqual(sent.map(\.kind), [.merged(method: "squash")])
+        let probed = await github.branchContextRequests
+        XCTAssertTrue(probed.isEmpty)
+        let deleted = await github.deletedBranches
+        XCTAssertTrue(deleted.isEmpty)
+    }
+
+    func testAStackLookupThatFailsIsARetryAndSendsNothing() async throws {
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        let id = try await enqueue(stackedMergeRow(), in: store)
+        struct LookupFailed: Error {}
+        let engine = SyncEngine(
+            github: github,
+            store: store,
+            isStacked: { _ in throw LookupFailed() },
+            sleeper: RecordingSleeper(),
+            now: { Date(timeIntervalSince1970: 1_788_162_000) }
+        )
+
+        await engine.drainOutbox()
+
+        let merges = await github.merges
+        XCTAssertTrue(merges.isEmpty, "not knowing whether it is a stack is no reason to guess")
+        let asyncMerges = await github.asyncMerges
+        XCTAssertTrue(asyncMerges.isEmpty)
+        let row = try await store.outboxItem(id: id)
+        XCTAssertEqual(row?.state, .pending, "retried after a backoff")
     }
 
     func testASubmittedReviewIsAnnouncedWithItsVerdictAndCommentCount() async throws {

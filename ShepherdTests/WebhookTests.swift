@@ -699,6 +699,9 @@ final class WebhookTests: XCTestCase {
             .mutationSent(mutation(.markedReadyForReview)),
             // A step of a merge series (ADR 0041); the merge that follows is the event.
             .mutationSent(mutation(.branchUpdated)),
+            // A stacked merge GitHub queued or is still running (ADR 0042) is not a merge yet.
+            .mutationSent(mutation(.mergeEnqueued)),
+            .mutationSent(mutation(.mergeStarted)),
         ]
         for event in ignored {
             XCTAssertNil(WebhookCoordinator.plan(for: event), "this event must not be a webhook")

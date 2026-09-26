@@ -52,6 +52,37 @@ public enum ResponseMapping {
         }
     }
 
+    /// Maps GraphQL's `stack` and `stackEntry` onto a place in a stack (ADR 0042).
+    ///
+    /// Both are `null` for a pull request outside a stack. Either one missing, or any field in
+    /// them, maps to `nil` too: a stack without a position cannot say "2/3", and the drain would
+    /// rather merge an unknown one the ordinary way than guess.
+    static func stack(
+        _ stack: SearchNodeDTO.StackDTO?,
+        entry: SearchNodeDTO.StackEntryDTO?
+    ) -> PullRequestStack? {
+        guard let number = stack?.number,
+              let size = stack?.size,
+              let baseRefName = stack?.baseRefName,
+              let position = entry?.position
+        else { return nil }
+        return PullRequestStack(number: number, size: size, position: position, baseRefName: baseRefName)
+    }
+
+    /// Maps REST's `stack` object onto a place in a stack (ADR 0042).
+    ///
+    /// `number` is the stack's repository-scoped number, the same one GraphQL calls `number`;
+    /// `id` is a database id and not read. `position` is stored as given, on the assumption that
+    /// REST counts like GraphQL (1 = the bottom), which its documented example fits.
+    static func stack(rest stack: RESTPullRequestDTO.Stack?) -> PullRequestStack? {
+        guard let number = stack?.number,
+              let size = stack?.size,
+              let position = stack?.position,
+              let baseRefName = stack?.base?.ref
+        else { return nil }
+        return PullRequestStack(number: number, size: size, position: position, baseRefName: baseRefName)
+    }
+
     /// Maps REST's boolean `mergeable` plus `mergeable_state`.
     static func mergeable(restValue: Bool?, state: String?) -> Mergeable? {
         if let restValue {
@@ -197,7 +228,8 @@ public enum ResponseMapping {
             myRelation: relations,
             labels: (node.labels?.nodes ?? []).compactMap { $0?.name },
             mergeable: mergeable(node.mergeable),
-            mergeStateStatus: mergeStateStatus(node.mergeStateStatus)
+            mergeStateStatus: mergeStateStatus(node.mergeStateStatus),
+            stack: stack(node.stack, entry: node.stackEntry)
         )
     }
 
@@ -492,7 +524,8 @@ public enum ResponseMapping {
             myRelation: relations,
             labels: (dto.labels ?? []).compactMap(\.name),
             mergeable: mergeable(restValue: dto.mergeable, state: dto.mergeableState),
-            mergeStateStatus: mergeStateStatus(dto.mergeableState)
+            mergeStateStatus: mergeStateStatus(dto.mergeableState),
+            stack: stack(rest: dto.stack)
         )
     }
 

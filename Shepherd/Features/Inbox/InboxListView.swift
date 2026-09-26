@@ -659,6 +659,16 @@ struct InboxRowView: View {
                             .layoutPriority(1)
                     }
 
+                    // "Stack 2/3": where this pull request sits in a GitHub stack (ADR 0042). A
+                    // tag and nothing more — neutral, because it is a fact about the pull request
+                    // rather than something to act on, and it neither groups nor sorts the list:
+                    // provenance stays the grouping.
+                    if let stack = row.stack {
+                        ChipView(text: stack.chipText, color: Theme.textSecondary)
+                            .layoutPriority(1)
+                            .help(stack.chipHelp)
+                    }
+
                     // "3 rounds · 2 findings unchanged": the one thing a reviewer wants to know
                     // before opening a pull request they have already reviewed once (ADR 0028).
                     if let text = rounds?.chipText {
@@ -747,6 +757,7 @@ struct InboxRowView: View {
             hasSession ? String(localized: "Has a session to answer to") : nil,
             triage.flatMap { TriageChip.spokenTitle(for: $0) },
             row.isDraft ? String(localized: "Draft") : nil,
+            row.stack?.chipHelp,
             rounds?.chipText,
             statusChip?.text,
             DiffCountsView.spokenCounts(additions: row.additions, deletions: row.deletions),

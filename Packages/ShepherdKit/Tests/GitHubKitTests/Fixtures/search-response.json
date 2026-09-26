@@ -20,6 +20,8 @@
           "baseRefName": "main",
           "mergeable": "MERGEABLE",
           "mergeStateStatus": "BEHIND",
+          "stack": { "number": 7, "size": 3, "baseRefName": "main" },
+          "stackEntry": { "position": 2 },
           "reviewDecision": "REVIEW_REQUIRED",
           "repository": { "name": "review", "owner": { "login": "schnaq" } },
           "author": {
@@ -58,6 +60,8 @@
           "baseRefName": "main",
           "mergeable": "CONFLICTING",
           "mergeStateStatus": "DIRTY",
+          "stack": null,
+          "stackEntry": null,
           "reviewDecision": null,
           "repository": { "name": "review", "owner": { "login": "schnaq" } },
           "author": {
