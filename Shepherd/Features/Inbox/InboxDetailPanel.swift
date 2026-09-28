@@ -10,7 +10,8 @@ struct InboxDetailPanel: View {
     let actions: PullRequestActions
     /// Opens the full review screen.
     var onOpenReview: (String) -> Void
-    /// Opens the merge sheet.
+    /// Merges what ``InboxModel/mergeChoice`` says: opens the merge sheet for the selected row or
+    /// the ticked stack's top, or the merge-series sheet for the ticked rows.
     var onMerge: () -> Void
 
     /// Whether the conversation composer is up, and what is in it.
@@ -300,23 +301,7 @@ struct InboxDetailPanel: View {
                 }
                 .buttonStyle(SecondaryButtonStyle())
 
-                Button(action: onMerge) {
-                    Text(String(localized: "Merge…"))
-                        .frame(maxWidth: .infinity)
-                }
-                // The primary action, here as everywhere (ADR 0040's 2026-09-23 amendment): the
-                // one filled green button in the panel. A blocker disables it rather than
-                // repainting it, and the help text says why.
-                .buttonStyle(SuccessButtonStyle())
-                // This one only opens the sheet, but it opens the sheet onto a merge that is
-                // already queueing — so it goes quiet with the write rather than with the click.
-                .busy(isWriting(row, .merge))
-                .disabled(row.mergeBlocker != nil)
-                .help(PullRequestActions.help(
-                    for: row.mergeBlocker,
-                    on: row,
-                    otherwise: String(localized: "Merge (m)")
-                ))
+                mergeButton(for: row)
             }
 
             // On its own row under the two above, and last: a verdict is what this panel is for,
@@ -333,6 +318,66 @@ struct InboxDetailPanel: View {
         }
         .padding(16)
         .background(Theme.panel)
+    }
+
+    /// The green *Merge* button, which merges what the ticks say rather than only the row under
+    /// the cursor.
+    ///
+    /// With two or more rows ticked, a button that still merged the selected row alone ignored
+    /// what the user had just said they wanted (2026-09-28). So it names what it merges: the
+    /// ticked stack, through its top — one merge that takes the rest along (ADR 0042) — or the
+    /// ticked rows one after another (ADR 0041). The selected row's blocker does not disable
+    /// those two: it speaks for one of the rows, and the sheets behind them sort out which of
+    /// the ticked ones can merge.
+    /// - Parameter row: The selected pull request.
+    @ViewBuilder
+    private func mergeButton(for row: PullRequestSummary) -> some View {
+        let choice = model.mergeChoice
+        Button(action: onMerge) {
+            Text(mergeTitle(for: choice))
+                .frame(maxWidth: .infinity)
+        }
+        // The primary action, here as everywhere (ADR 0040's 2026-09-23 amendment): the one
+        // filled green button in the panel. A blocker disables it rather than repainting it, and
+        // the help text says why.
+        .buttonStyle(SuccessButtonStyle())
+        // This one only opens the sheet, but it opens the sheet onto a merge that is already
+        // queueing — so it goes quiet with the write rather than with the click.
+        .busy(mergeTarget(for: choice, row: row).map { isWriting($0, .merge) } ?? false)
+        .disabled(!choice.isMulti && row.mergeBlocker != nil)
+        .help(mergeHelp(for: choice, row: row))
+    }
+
+    /// The pull request a merge sheet would open for, or `nil` for the merge series.
+    private func mergeTarget(for choice: MultiMergeChoice, row: PullRequestSummary) -> PullRequestSummary? {
+        switch choice {
+        case .single: row
+        case .stack(let top, _): top
+        case .several: nil
+        }
+    }
+
+    private func mergeTitle(for choice: MultiMergeChoice) -> String {
+        switch choice {
+        case .single: String(localized: "Merge…")
+        case .stack(_, let count): String(localized: "Merge stack (\(count))…")
+        case .several(let count): String(localized: "Merge \(count) pull requests…")
+        }
+    }
+
+    private func mergeHelp(for choice: MultiMergeChoice, row: PullRequestSummary) -> String {
+        switch choice {
+        case .single:
+            PullRequestActions.help(
+                for: row.mergeBlocker,
+                on: row,
+                otherwise: String(localized: "Merge (m)")
+            )
+        case .stack:
+            String(localized: "Merge the selected stack through its top pull request (m)")
+        case .several:
+            String(localized: "Merge the selected pull requests one after another (m)")
+        }
     }
 
     /// Whether this pull request already has a write of this kind on its way to the outbox.

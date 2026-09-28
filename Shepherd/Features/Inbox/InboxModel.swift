@@ -1410,7 +1410,7 @@ final class InboxModel {
 
     // MARK: - Bulk triage (ADR 0015)
 
-    /// Whether anything is ticked, which is also what makes the tick column appear.
+    /// Whether anything is ticked, which is also what brings the faint tick boxes up to strength.
     var hasMarks: Bool { !marks.isEmpty }
 
     /// The ticked pull-request ids.
@@ -1431,6 +1431,16 @@ final class InboxModel {
     /// - Returns: The ticked subset.
     func markedRows(in rows: [PullRequestSummary]) -> [PullRequestSummary] {
         rows.filter { marks.contains($0.id) }
+    }
+
+    /// What the *Merge* button merges: the selected row, the ticked stack, or the ticked rows one
+    /// after another.
+    ///
+    /// Over the same rows ``markedRows`` gives the merge-series sheet, so the count on the button
+    /// is the count the sheet opens with. Nothing ticked skips the pipeline altogether — this is
+    /// read by the detail panel on every render.
+    var mergeChoice: MultiMergeChoice {
+        hasMarks ? MultiMergeChoice.make(marked: markedRows) : .single
     }
 
     /// Ticks or unticks one row.
