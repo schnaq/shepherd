@@ -748,7 +748,9 @@ struct InboxRowView: View {
             Image(systemName: isMarked ? "checkmark.square.fill" : "square")
                 .font(.system(size: 12))
                 .foregroundStyle(isMarked ? Theme.accent : Theme.textMuted)
-                .opacity(isMarked || hasMarks || isHovered ? 1 : 0.4)
+                // `isMarked` rows are always covered by `hasMarks` too, since a row cannot be
+                // marked while the marks set is empty.
+                .opacity(hasMarks || isHovered ? 1 : 0.4)
                 .frame(width: 30, height: 40)
                 .contentShape(Rectangle())
         }
