@@ -141,3 +141,13 @@ request is allowed. The rule also hit exactly the pull requests a series exists 
 similar agents open pull requests under the reviewer's own account and mark themselves in a
 `Co-Authored-By` trailer. For such a reviewer every ticked pull request was excluded, and **Start**
 stayed disabled. `MergeSeriesExclusionReason.ownPullRequest` is gone.
+
+## Amendment 2026-09-28: no checks is nothing to wait for
+
+A series skipped a pull request without checks as *no checks*, a rule taken from merge when checks
+pass (ADR 0037), where it means "there is no build to wait for, so this arm is pointless". A series
+is different: it merges what the reviewer ticked, and in a repository without CI (schnaq/charts'
+image bumps) there never are checks. Every entry was skipped, and the series ended with nothing
+merged. Now a pull request without checks merges once it is mergeable, after *Update branch* if it
+is behind. A head that Shepherd's own update produced still waits the grace period for checks to
+register before counting as "no checks".

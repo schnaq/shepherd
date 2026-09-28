@@ -349,7 +349,12 @@ public enum MergeSeriesPolicy {
             if let queuedAt = entry.updateQueuedAt, now < queuedAt.addingTimeInterval(gracePeriod) {
                 return .wait
             }
-            return .skip(.noChecks)
+            // After that, no checks means a repository without CI, and there is nothing to wait
+            // for: merge it like the merge sheet and bulk triage would. Skipping it made a series
+            // of image bumps in schnaq/charts end with nothing merged. Mergeability and the outbox
+            // still get their say, since `decide` stopped at the checks before asking them.
+            if row.mergeable != .mergeable || inFlight { return .wait }
+            return behind ? update() : .merge
         case .wait(.writeInFlight):
             return .wait
         case .wait(.checksPending):
