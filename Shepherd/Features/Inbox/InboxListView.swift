@@ -60,10 +60,16 @@ struct InboxListView: View {
                 .foregroundStyle(Theme.textStrong)
                 .lineLimit(1)
                 .layoutPriority(1)
-            Text(String(localized: "\(model.filteredRows.count) pull requests"))
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.textMuted)
-                .lineLimit(1)
+            // While rows are ticked, the selection chip below takes the count's place: the bar is
+            // the narrowest part of the window, and with both beside the pickers the count was cut
+            // to "1(" and the chip squeezed to an empty pill.
+            if !model.hasMarks {
+                Text(String(localized: "\(model.filteredRows.count) pull requests"))
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textMuted)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
 
             if let filter = activeFilterLabel {
                 ChipView(text: filter, color: Theme.accentText)
@@ -87,6 +93,7 @@ struct InboxListView: View {
                     text: String(localized: "\(model.markedIDs.count) selected"),
                     color: Theme.accent
                 )
+                .fixedSize()
                 Button {
                     model.clearMarks()
                 } label: {
@@ -102,8 +109,10 @@ struct InboxListView: View {
             Spacer(minLength: 8)
 
             // Only when there is something to work through: an entry point that starts an empty
-            // session, or explains why it cannot, is worse than no entry point.
-            if pendingReviewCount > 0 {
+            // session, or explains why it cannot, is worse than no entry point. Not while rows
+            // are ticked either: a bulk selection is the other way through the list, and the bar
+            // needs the width for the selection chip.
+            if pendingReviewCount > 0 && !model.hasMarks {
                 Button {
                     environment.request(.startReviewSession)
                 } label: {
