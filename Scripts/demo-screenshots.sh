@@ -156,6 +156,12 @@ caffeinate -d -u -w $$ &
 
 for appearance in light dark; do
     shoot inbox "shepherd://inbox" largest "$appearance"
+    # The *Merge* button following the ticks: the bottom two of the demo stack, then a set with a
+    # gap in it (ADR 0015's 2026-09-28 amendment).
+    shoot inbox-stack "shepherd://inbox" largest "$appearance" \
+        SHEPHERD_DEMO_MARKS=PR_demo_schnaq_shepherd_410,PR_demo_schnaq_shepherd_412
+    shoot inbox-several "shepherd://inbox" largest "$appearance" \
+        SHEPHERD_DEMO_MARKS=PR_demo_schnaq_shepherd_410,PR_demo_schnaq_shepherd_413
     shoot review "shepherd://pr/schnaq/shepherd/412" largest "$appearance"
     shoot review-files "shepherd://pr/schnaq/shepherd/412" largest "$appearance" \
         SHEPHERD_DEMO_REVIEW_TAB=files
