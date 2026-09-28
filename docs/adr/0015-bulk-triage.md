@@ -33,8 +33,9 @@ retry, no staleness check, and no `mutationSent` event, which is what webhooks h
 ## Decision
 
 - **The selection is visible, explicit and the user's.** Rows are ticked with `x`, ⌘-click or
-  ⇧-click (range from the cursor), and the tick column appears with the first tick. The header
-  shows *n* selected; Escape clears. There is a convenience — "select all green agent pull
+  ⇧-click (range from the cursor), and the tick column appears with the first tick (since the
+  2026-09-28 amendment it is always there, with a click target of its own). The header shows *n*
+  selected; Escape clears. There is a convenience — "select all green agent pull
   requests in this view" — but it only *ticks* rows; it never acts. Green means CI rollup
   success **and** mergeable **and** no changes requested **and** not a draft, and only
   agent-authored rows are preselected: a human's pull request never enters a bulk action through
@@ -127,3 +128,23 @@ shown one alert at a time, in arrival order, with the alert naming how many are 
 and `conflictedOutboxCount()` backs a standing "n conflicted — needs your attention" line in
 Settings → Sync plus a "n not sent" marker in the title bar. A pending row drains by itself, a
 parked one needs the user, so the second number stays on screen until someone acts on it.
+
+## Amendment (2026-09-28): the tick column is always there, and *Merge* merges the ticks
+
+**The tick column no longer waits for the first tick.** "The tick column appears with the first
+tick" kept a list nobody was bulk-triaging looking as it did before — and hid the way in. The
+first tick had to come from `x`, ⌘-click or ⇧-click, and none of those is discoverable by looking
+at the list — selecting several pull requests was called "a bit hidden" in use. Every row now carries its tick box at the left
+edge, the idiom of every mail client. An empty box is faint until the pointer is over its row or
+anything is ticked, so a list nobody is triaging still reads as a list of pull requests rather
+than a column of checkboxes. The box is a 30 × 40 pt button of its own, so a click on it ticks
+without also selecting the row. VoiceOver still hears "selected" / "not selected" only once
+something is ticked.
+
+**The detail panel's *Merge* button follows the ticks.** With two or more rows ticked it no
+longer merges the row under the cursor alone (`MultiMergeChoice`): ticks that are exactly the
+bottom of one stack — positions 1…k of one repository's stack — read *Merge stack (k)…* and open
+the merge sheet for the stack's top, which merges the rest along with it (ADR 0042); any other
+set reads *Merge n pull requests…* and opens the merge-series sheet (ADR 0041). A slice with a gap
+or one that does not start at the bottom is not a stack for this purpose, because merging its top
+would take along a pull request nobody ticked. `m` does the same.

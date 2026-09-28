@@ -60,10 +60,16 @@ struct InboxListView: View {
                 .foregroundStyle(Theme.textStrong)
                 .lineLimit(1)
                 .layoutPriority(1)
-            Text(String(localized: "\(model.filteredRows.count) pull requests"))
-                .font(.system(size: 13))
-                .foregroundStyle(Theme.textMuted)
-                .lineLimit(1)
+            // While rows are ticked, the selection chip below takes the count's place: the bar is
+            // the narrowest part of the window, and with both beside the pickers the count was cut
+            // to "1(" and the chip squeezed to an empty pill.
+            if !model.hasMarks {
+                Text(String(localized: "\(model.filteredRows.count) pull requests"))
+                    .font(.system(size: 13))
+                    .foregroundStyle(Theme.textMuted)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
 
             if let filter = activeFilterLabel {
                 ChipView(text: filter, color: Theme.accentText)
@@ -87,6 +93,7 @@ struct InboxListView: View {
                     text: String(localized: "\(model.markedIDs.count) selected"),
                     color: Theme.accent
                 )
+                .fixedSize()
                 Button {
                     model.clearMarks()
                 } label: {
@@ -102,8 +109,10 @@ struct InboxListView: View {
             Spacer(minLength: 8)
 
             // Only when there is something to work through: an entry point that starts an empty
-            // session, or explains why it cannot, is worse than no entry point.
-            if pendingReviewCount > 0 {
+            // session, or explains why it cannot, is worse than no entry point. Not while rows
+            // are ticked either: a bulk selection is the other way through the list, and the bar
+            // needs the width for the selection chip.
+            if pendingReviewCount > 0 && !model.hasMarks {
                 Button {
                     environment.request(.startReviewSession)
                 } label: {
@@ -183,7 +192,7 @@ struct InboxListView: View {
                                     InboxRowView(
                                         row: row,
                                         isSelected: model.selectedID == row.id,
-                                        showsMarkColumn: model.hasMarks,
+                                        hasMarks: model.hasMarks,
                                         isMarked: model.markedIDs.contains(row.id),
                                         triage: model.triageSummary(for: row.id),
                                         rounds: model.reviewRounds(for: row.id),
@@ -534,11 +543,14 @@ struct InboxRowView: View {
     let row: PullRequestSummary
     /// Whether it is the selected row.
     let isSelected: Bool
-    /// Whether the bulk-selection column is showing, i.e. whether anything is ticked at all.
+    /// Whether anything in the list is ticked at all.
     ///
-    /// The column appears with the first tick and disappears with the last, so a list nobody is
-    /// bulk-triaging looks exactly as it did before (ADR 0015).
-    var showsMarkColumn = false
+    /// The tick column is always there (ADR 0015's 2026-09-28 amendment): with it only appearing
+    /// on the first tick, the way to that first tick — `x`, ⌘- or ⇧-click — was one nobody found.
+    /// What this still decides is how loud an empty box is: faint in a list nobody is
+    /// bulk-triaging, so it reads as a place to click rather than as a column of unticked boxes,
+    /// and at full strength once a selection is under way.
+    var hasMarks = false
     /// Whether this row is ticked for a bulk action.
     var isMarked = false
     /// The row's triage state, or `nil` when there is nothing to show (ADR 0023).
@@ -572,149 +584,138 @@ struct InboxRowView: View {
     var onToggleMark: (() -> Void)?
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Whether the pointer is over the row, which brings a faint empty tick box up to strength.
+    @State private var isHovered = false
 
     var body: some View {
-        HStack(spacing: 12) {
-            if showsMarkColumn {
-                Button {
-                    onToggleMark?()
-                } label: {
-                    Image(systemName: isMarked ? "checkmark.square.fill" : "square")
-                        .font(.system(size: 12))
-                        .foregroundStyle(isMarked ? Theme.accent : Theme.textMuted)
-                }
-                .buttonStyle(.plain)
-                .help(
-                    isMarked
-                        ? String(localized: "Remove from the selection (x)")
-                        : String(localized: "Add to the selection (x)")
-                )
-                .accessibilityLabel(
-                    isMarked
-                        ? Text(String(localized: "Selected"))
-                        : Text(String(localized: "Not selected"))
-                )
-            }
+        // The tick box sits outside the row's 12 pt spacing, against the left edge: that is where
+        // the list idiom puts it, and the column costs the title 20 pt rather than 34.
+        HStack(spacing: 2) {
+            markBox
 
-            CheckDotView(state: row.checkRollup?.state)
+            HStack(spacing: 12) {
+                CheckDotView(state: row.checkRollup?.state)
 
-            // Two lines, not one. On one line the title shared the row with the slug and four
-            // chips, and every one of them had a claim on the width: at 1045 pt the inbox read
-            // "fix(mobile):…" four times over, which is a list of pull requests that does not
-            // say what any of them changes. The title is the row's sentence and the rest is
-            // metadata *about* that sentence, so the title gets a line of its own and the
-            // metadata gets the line under it.
-            VStack(alignment: .leading, spacing: 3) {
-                Text(row.title)
-                    .font(.system(size: 13, weight: isSelected ? .medium : .regular))
-                    .foregroundStyle(isSelected ? Theme.textStrong : Theme.text)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                HStack(spacing: 8) {
-                    // Shortened in the middle, exactly as the sidebar shortens the same slug, and
-                    // first on the metadata line because a pull request you cannot place is one
-                    // you cannot judge — an inbox spanning four owners used to render "rhe…#238"
-                    // beside "swift-…es #50" (2026-09-09 live test). It outranks the chips beside
-                    // it so it is the last thing on this line to give up width; the full
-                    // `owner/name#number` is on the tooltip either way.
-                    Text(verbatim: "\(row.repo.name) #\(row.number)")
-                        .font(Theme.mono(11))
-                        .foregroundStyle(Theme.textSecondary)
+                // Two lines, not one. On one line the title shared the row with the slug and four
+                // chips, and every one of them had a claim on the width: at 1045 pt the inbox read
+                // "fix(mobile):…" four times over, which is a list of pull requests that does not
+                // say what any of them changes. The title is the row's sentence and the rest is
+                // metadata *about* that sentence, so the title gets a line of its own and the
+                // metadata gets the line under it.
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(row.title)
+                        .font(.system(size: 13, weight: isSelected ? .medium : .regular))
+                        .foregroundStyle(isSelected ? Theme.textStrong : Theme.text)
                         .lineLimit(1)
-                        .truncationMode(.middle)
-                        .layoutPriority(2)
-                        .help(Text(verbatim: row.slug))
+                        .truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                    // The chip is tinted by the track record when there is one — that is ADR
-                    // 0027's "colours the provenance chip" — and keeps the agent palette's colour
-                    // when there is not. Since 2026-09-17 this tint is *all* a row says about a
-                    // track record: the "2 merged" chip and the popover behind it were the
-                    // loudest thing on a line whose job is to say what the pull request is, and
-                    // the same numbers are still in the fleet, where someone looking for them
-                    // would go.
-                    ProvenanceChip(actor: row.author, tint: trackRecord?.chipColor)
-                        .layoutPriority(1)
+                    HStack(spacing: 8) {
+                        // Shortened in the middle, exactly as the sidebar shortens the same slug, and
+                        // first on the metadata line because a pull request you cannot place is one
+                        // you cannot judge — an inbox spanning four owners used to render "rhe…#238"
+                        // beside "swift-…es #50" (2026-09-09 live test). It outranks the chips beside
+                        // it so it is the last thing on this line to give up width; the full
+                        // `owner/name#number` is on the tooltip either way.
+                        Text(verbatim: "\(row.repo.name) #\(row.number)")
+                            .font(Theme.mono(11))
+                            .foregroundStyle(Theme.textSecondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .layoutPriority(2)
+                            .help(Text(verbatim: row.slug))
 
-                    // Beside the provenance chip, because it says the same kind of thing: this
-                    // pull request came from a session, and that session can still be answered
-                    // (ADR 0030).
-                    if hasSession {
-                        Image(systemName: "bubble.left.and.text.bubble.right")
-                            .font(.system(size: 11))
-                            .foregroundStyle(Theme.agent)
+                        // The chip is tinted by the track record when there is one — that is ADR
+                        // 0027's "colours the provenance chip" — and keeps the agent palette's colour
+                        // when there is not. Since 2026-09-17 this tint is *all* a row says about a
+                        // track record: the "2 merged" chip and the popover behind it were the
+                        // loudest thing on a line whose job is to say what the pull request is, and
+                        // the same numbers are still in the fleet, where someone looking for them
+                        // would go.
+                        ProvenanceChip(actor: row.author, tint: trackRecord?.chipColor)
                             .layoutPriority(1)
-                            .help(String(localized: "Has a session to answer to"))
-                            .accessibilityLabel(Text(String(localized: "Has a session to answer to")))
-                    }
 
-                    if let triage {
-                        TriageChip(summary: triage)
+                        // Beside the provenance chip, because it says the same kind of thing: this
+                        // pull request came from a session, and that session can still be answered
+                        // (ADR 0030).
+                        if hasSession {
+                            Image(systemName: "bubble.left.and.text.bubble.right")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Theme.agent)
+                                .layoutPriority(1)
+                                .help(String(localized: "Has a session to answer to"))
+                                .accessibilityLabel(Text(String(localized: "Has a session to answer to")))
+                        }
+
+                        if let triage {
+                            TriageChip(summary: triage)
+                                .layoutPriority(1)
+                        }
+
+                        if row.isDraft {
+                            ChipView(text: String(localized: "Draft"), color: Theme.textMuted)
+                                .layoutPriority(1)
+                        }
+
+                        // "Stack 2/3": where this pull request sits in a GitHub stack (ADR 0042). A
+                        // tag and nothing more — neutral, because it is a fact about the pull request
+                        // rather than something to act on, and it neither groups nor sorts the list:
+                        // provenance stays the grouping.
+                        if let stack = row.stack {
+                            ChipView(text: stack.chipText, color: Theme.textSecondary)
+                                .layoutPriority(1)
+                                .help(stack.chipHelp)
+                        }
+
+                        // "3 rounds · 2 findings unchanged": the one thing a reviewer wants to know
+                        // before opening a pull request they have already reviewed once (ADR 0028).
+                        if let text = rounds?.chipText {
+                            ChipView(
+                                text: text,
+                                color: (rounds?.unchangedFindingCount ?? 0) > 0
+                                    ? Theme.pending
+                                    : Theme.textSecondary
+                            )
                             .layoutPriority(1)
-                    }
+                            .help(String(localized: "Rounds you have reviewed on this Mac"))
+                        }
 
-                    if row.isDraft {
-                        ChipView(text: String(localized: "Draft"), color: Theme.textMuted)
-                            .layoutPriority(1)
+                        Spacer(minLength: 0)
                     }
-
-                    // "Stack 2/3": where this pull request sits in a GitHub stack (ADR 0042). A
-                    // tag and nothing more — neutral, because it is a fact about the pull request
-                    // rather than something to act on, and it neither groups nor sorts the list:
-                    // provenance stays the grouping.
-                    if let stack = row.stack {
-                        ChipView(text: stack.chipText, color: Theme.textSecondary)
-                            .layoutPriority(1)
-                            .help(stack.chipHelp)
-                    }
-
-                    // "3 rounds · 2 findings unchanged": the one thing a reviewer wants to know
-                    // before opening a pull request they have already reviewed once (ADR 0028).
-                    if let text = rounds?.chipText {
-                        ChipView(
-                            text: text,
-                            color: (rounds?.unchangedFindingCount ?? 0) > 0
-                                ? Theme.pending
-                                : Theme.textSecondary
-                        )
-                        .layoutPriority(1)
-                        .help(String(localized: "Rounds you have reviewed on this Mac"))
-                    }
-
-                    Spacer(minLength: 0)
                 }
-            }
 
-            Spacer(minLength: 8)
+                Spacer(minLength: 8)
 
-            if let status = statusChip {
-                ChipView(text: status.text, color: status.color)
+                if let status = statusChip {
+                    ChipView(text: status.text, color: status.color)
+                        .layoutPriority(1)
+                        .help(write?.help ?? "")
+                        .contentTransition(.opacity)
+                        .animation(reduceMotion ? nil : .snappy, value: status.text)
+                }
+
+                // The two trailing columns are numbers, and a number that wraps is unreadable:
+                // "+1.896 −117" came out as "+1 .8 96" / "−1 17" while the slug beside it was
+                // wrapping too. `fixedSize` is what keeps them out of the width fight altogether —
+                // the age's 52 pt frame stays outside it, so the column still lines up.
+                DiffCountsView(additions: row.additions, deletions: row.deletions)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                     .layoutPriority(1)
-                    .help(write?.help ?? "")
-                    .contentTransition(.opacity)
-                    .animation(reduceMotion ? nil : .snappy, value: status.text)
+
+                RelativeDateText(date: row.updatedAt)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textMuted)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(width: 52, alignment: .trailing)
+                    .layoutPriority(1)
             }
-
-            // The two trailing columns are numbers, and a number that wraps is unreadable:
-            // "+1.896 −117" came out as "+1 .8 96" / "−1 17" while the slug beside it was
-            // wrapping too. `fixedSize` is what keeps them out of the width fight altogether —
-            // the age's 52 pt frame stays outside it, so the column still lines up.
-            DiffCountsView(additions: row.additions, deletions: row.deletions)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-                .layoutPriority(1)
-
-            RelativeDateText(date: row.updatedAt)
-                .font(.system(size: 12))
-                .foregroundStyle(Theme.textMuted)
-                .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
-                .frame(width: 52, alignment: .trailing)
-                .layoutPriority(1)
         }
-        .padding(.horizontal, 16)
+        .padding(.leading, 4)
+        .padding(.trailing, 16)
         .frame(height: 58)
+        .onHover { isHovered = $0 }
         .background(isSelected ? Theme.selection : Color.clear)
         .overlay(alignment: .leading) {
             if isSelected {
@@ -734,6 +735,38 @@ struct InboxRowView: View {
         .accessibilityAddTraits(.isButton)
     }
 
+    /// The tick box, a click target of its own at the row's left edge.
+    ///
+    /// A button, so its click is the button's and not the row's: SwiftUI hands a click to the
+    /// innermost gesture, and the row's select-on-click (`onClick(_:onDoubleClick:)`) sits
+    /// outside it. The target is 30 × 40 pt rather than the glyph's 12 — "click at the far left"
+    /// has to land even when it lands a little off the square.
+    private var markBox: some View {
+        Button {
+            onToggleMark?()
+        } label: {
+            Image(systemName: isMarked ? "checkmark.square.fill" : "square")
+                .font(.system(size: 12))
+                .foregroundStyle(isMarked ? Theme.accent : Theme.textMuted)
+                // `isMarked` rows are always covered by `hasMarks` too, since a row cannot be
+                // marked while the marks set is empty.
+                .opacity(hasMarks || isHovered ? 1 : 0.4)
+                .frame(width: 30, height: 40)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(
+            isMarked
+                ? String(localized: "Remove from the selection (x)")
+                : String(localized: "Add to the selection (x)")
+        )
+        .accessibilityLabel(
+            isMarked
+                ? Text(String(localized: "Selected"))
+                : Text(String(localized: "Not selected"))
+        )
+    }
+
     /// The row's spoken label: everything the row shows, in the order it shows it.
     ///
     /// `.accessibilityElement(children: .combine)` would concatenate the siblings' own labels,
@@ -746,7 +779,9 @@ struct InboxRowView: View {
     /// spoken forms, so the row cannot describe itself differently from its own chips.
     private var accessibilityText: String {
         SpokenRow.sentence([
-            showsMarkColumn
+            // Said only once something is ticked: "not selected" on every row of a list nobody is
+            // bulk-triaging would be the first words of each one, and tell the listener nothing.
+            hasMarks
                 ? (isMarked
                     ? String(localized: "Selected")
                     : String(localized: "Not selected"))

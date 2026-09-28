@@ -27,7 +27,8 @@ struct MergeSheet: View {
     /// the line that says what else this merge takes along.
     var stack: PullRequestStackOverview?
     /// Called once the merge is queued, so a caller that was *showing* this pull request can go
-    /// somewhere else. `nil` for the inbox, which is already where you would end up.
+    /// somewhere else, and so the inbox can drop the ticks of a stack it merged through its top.
+    /// `nil` for a plain inbox merge, which leaves you where you would end up anyway.
     var onMerged: (@MainActor () -> Void)?
 
     var body: some View {

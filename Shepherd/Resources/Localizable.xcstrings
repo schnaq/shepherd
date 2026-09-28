@@ -19050,6 +19050,58 @@
           }
         }
       }
+    },
+    "Merge stack (%lld)…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stack mergen (%lld)…"
+          }
+        }
+      }
+    },
+    "Merge the selected stack through its top pull request (m)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den ausgewählten Stack über seinen obersten Pull Request mergen (m)"
+          }
+        }
+      }
+    },
+    "Merge the selected pull requests one after another (m)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die ausgewählten Pull Requests nacheinander mergen (m)"
+          }
+        }
+      }
+    },
+    "Merge %lld pull requests…": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Pull Request mergen…"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Pull Requests mergen…"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "version": "1.0"

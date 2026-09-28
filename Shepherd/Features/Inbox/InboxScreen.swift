@@ -43,7 +43,12 @@ struct InboxScreen: View {
     /// a window happens to be showing is not a preference, and it would only ever arrive wrong on
     /// another Mac (ADR 0014).
     @SceneStorage("inbox.rail") private var railStateJSON = ""
-    @State private var isMergeSheetPresented = false
+    /// The pull request the merge sheet is up for, or `nil` while it is down.
+    ///
+    /// A row of its own rather than "the selected row": with a stack ticked, the sheet merges the
+    /// stack's top, which need not be the row under the cursor. Only the id is fixed when the
+    /// sheet opens; the sheet reads the row itself fresh, so a sweep still reaches it.
+    @State private var mergeSheetTarget: MergeSheetTarget?
     /// Whether the bulk-triage confirmation is up, and what it is confirming (ADR 0015).
     @State private var isBulkSheetPresented = false
     @State private var bulkAction: BulkTriageAction = .approve
@@ -168,6 +173,12 @@ struct InboxScreen: View {
                 }
                 presentMergeSeries()
             }
+            // `SHEPHERD_DEMO_MARKS=<id>,<id>`: tick those rows and nothing else, for the screenshot
+            // of the tick column and of the *Merge* button that follows the ticks.
+            if DemoMode.isActive, let ids = ProcessInfo.processInfo.environment["SHEPHERD_DEMO_MARKS"] {
+                try? await Task.sleep(for: .seconds(1.5))
+                for id in ids.split(separator: ",") { model.toggleMark(String(id)) }
+            }
             #endif
         }
         .onChange(of: environment.intelligence.configuration) { _, _ in
@@ -211,18 +222,7 @@ struct InboxScreen: View {
         .onChange(of: environment.pendingIssueSelection) { _, _ in
             consumeDeepLinkRequests()
         }
-        .sheet(isPresented: $isMergeSheetPresented) {
-            if let summary = model.selectedRow {
-                MergeSheet(
-                    summary: summary,
-                    checkState: summary.checkRollup?.state,
-                    actions: actions,
-                    settings: environment.settings,
-                    mergeWhenGreen: environment.mergeWhenGreen,
-                    stack: model.stackOverview(for: summary)
-                )
-            }
-        }
+        .sheet(item: $mergeSheetTarget, content: mergeSheet)
         .sheet(isPresented: mergeSeriesSheetBinding) {
             if let plan = mergeSeriesPlan {
                 MergeSeriesSheet(plan: plan, settings: environment.settings) { [model] groups, method, deletes in
@@ -335,7 +335,7 @@ struct InboxScreen: View {
                 model: model,
                 actions: actions,
                 onOpenReview: open,
-                onMerge: { isMergeSheetPresented = true }
+                onMerge: merge
             )
         case .issues:
             IssueDetailPanel(model: issueModel)
@@ -581,7 +581,7 @@ struct InboxScreen: View {
         case .comment:
             compose(.comment)
         case .merge:
-            if model.selectedRow != nil { isMergeSheetPresented = true }
+            merge()
         case .startReviewSession:
             // The queue is frozen from the session's own inbox observation, not from this
             // screen's filtered list, so nothing about the rail's current facets is passed in.
@@ -636,6 +636,48 @@ struct InboxScreen: View {
         Task {
             await model.loadMarkedDrafts()
             isBulkSheetPresented = true
+        }
+    }
+
+    /// The merge sheet for one target, out of `body` so the type checker gets the long modifier
+    /// chain there in reasonable time.
+    private func mergeSheet(for target: MergeSheetTarget) -> some View {
+        // The row as the latest sweep has it, so checks finishing while the sheet is up still
+        // reach it — the target only fixes *which* pull request.
+        let summary = model.allRows.first { $0.id == target.summary.id } ?? target.summary
+        // A merged stack takes its ticks with it, exactly as a started series does: leaving them
+        // would offer the same rows for a second merge.
+        var onMerged: (@MainActor () -> Void)?
+        if target.clearsMarks {
+            let model = model
+            onMerged = { model.clearMarks() }
+        }
+        return MergeSheet(
+            summary: summary,
+            checkState: summary.checkRollup?.state,
+            actions: actions,
+            settings: environment.settings,
+            mergeWhenGreen: environment.mergeWhenGreen,
+            stack: model.stackOverview(for: summary),
+            onMerged: onMerged
+        )
+    }
+
+    /// Merges what the ticks say, the *Merge* button's and `m`'s one action.
+    ///
+    /// No ticks, or one: the selected row, as before. A ticked stack: the merge sheet for its
+    /// top, which merges the rest along with it (ADR 0042). Anything else ticked: the merge
+    /// series, one after another (ADR 0041).
+    private func merge() {
+        switch model.mergeChoice {
+        case .single:
+            if let summary = model.selectedRow {
+                mergeSheetTarget = MergeSheetTarget(summary: summary, clearsMarks: false)
+            }
+        case .stack(let top, _):
+            mergeSheetTarget = MergeSheetTarget(summary: top, clearsMarks: true)
+        case .several:
+            presentMergeSeries()
         }
     }
 
@@ -817,4 +859,15 @@ struct SyncStatusView: View {
             Theme.success
         }
     }
+}
+
+/// What the inbox's merge sheet is up for.
+private struct MergeSheetTarget: Identifiable {
+    /// The pull request the sheet merges.
+    let summary: PullRequestSummary
+    /// Whether queueing the merge clears the ticks: yes for a ticked stack, which the merge
+    /// consumes; no for the selected row, which the ticks never described.
+    let clearsMarks: Bool
+
+    var id: String { summary.id }
 }
