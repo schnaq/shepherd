@@ -251,7 +251,6 @@ extension MergeSeriesExclusionReason {
         case .conflicting: return String(localized: "conflicts")
         case .checksFailing: return String(localized: "checks failing")
         case .changesRequested: return String(localized: "changes requested")
-        case .ownPullRequest: return String(localized: "your own")
         case .belowInStackExcluded: return String(localized: "one below it is excluded")
         }
     }
@@ -270,8 +269,6 @@ extension MergeSeriesExclusionReason {
             return BulkTriageSkipReason.checksFailing.explanation
         case .changesRequested:
             return String(localized: "A reviewer asked for changes. A series will not overrule that.")
-        case .ownPullRequest:
-            return String(localized: "Your own pull request is not merged by a series. Merge it yourself.")
         case .belowInStackExcluded:
             return String(
                 localized: "A pull request below it in the stack can't be merged. Merging this one would merge that one too."

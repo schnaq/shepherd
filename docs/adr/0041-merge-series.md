@@ -132,3 +132,12 @@ it simply never triggers an update.
   parks the row as a conflict, and the drain raises `draftConflict`. For an entry the series is
   updating from exactly that pin, the "review not sent" alert and notification are suppressed;
   the series skips the entry as *update refused* and says so in its chip and summary.
+
+## Amendment 2026-09-28: the reviewer's own pull requests belong in a series
+
+The sheet used to leave out the reviewer's own pull requests, a rule copied from bulk triage. There
+it guards the *approval*, which GitHub refuses for your own pull request. A merge of your own pull
+request is allowed. The rule also hit exactly the pull requests a series exists for: Claude Code and
+similar agents open pull requests under the reviewer's own account and mark themselves in a
+`Co-Authored-By` trailer. For such a reviewer every ticked pull request was excluded, and **Start**
+stayed disabled. `MergeSeriesExclusionReason.ownPullRequest` is gone.
