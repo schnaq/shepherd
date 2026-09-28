@@ -17,9 +17,6 @@ public enum MergeSeriesExclusionReason: String, Sendable, Codable, Hashable, Cas
     case checksFailing
     /// A reviewer asked for changes.
     case changesRequested
-    /// The signed-in user opened it. A series merges what the reviewer judged in others' work;
-    /// their own pull request is not swept into one by a tick.
-    case ownPullRequest
     /// A pull request below it in the same GitHub stack is excluded (ADR 0042). Merging a stacked
     /// pull request merges every one below it too, so merging this one would merge the excluded
     /// one after all — the very thing its exclusion says must not happen.
@@ -202,7 +199,8 @@ public struct MergeSeriesPlan: Sendable, Equatable {
         if pullRequest.mergeBlocker == .conflicting { return .conflicting }
         if pullRequest.checkRollup?.state == .failure { return .checksFailing }
         if pullRequest.reviewDecision == .changesRequested { return .changesRequested }
-        if pullRequest.verdictBlocker == .ownPullRequest { return .ownPullRequest }
+        // Not the reviewer's own pull request: GitHub refuses an approval of it, not a merge, and
+        // agent pull requests often run under the reviewer's own account (ADR 0041's amendment).
         return nil
     }
 }

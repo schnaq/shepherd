@@ -93,7 +93,6 @@ final class MergeSeriesPlanTests: XCTestCase {
                 row("conflict", mergeable: .conflicting),
                 row("failing", checkRollup: CheckRollup(state: .failure, total: 1, failureCount: 1)),
                 row("changes", reviewDecision: .changesRequested),
-                row("mine", relations: [.author]),
                 row("queued"),
                 row("fine"),
             ],
@@ -101,11 +100,20 @@ final class MergeSeriesPlanTests: XCTestCase {
         )
         let group = plan.groups[0]
         XCTAssertEqual(group.candidates.map(\.id), ["fine"])
-        XCTAssertEqual(group.excluded.map(\.id), ["draft", "conflict", "failing", "changes", "mine", "queued"])
+        XCTAssertEqual(group.excluded.map(\.id), ["draft", "conflict", "failing", "changes", "queued"])
         XCTAssertEqual(
             group.excluded.map(\.reason),
-            [.draft, .conflicting, .checksFailing, .changesRequested, .ownPullRequest, .mergeOnItsWay]
+            [.draft, .conflicting, .checksFailing, .changesRequested, .mergeOnItsWay]
         )
+    }
+
+    func testTheReviewersOwnPullRequestIsACandidate() {
+        // GitHub refuses an approval of your own pull request, not a merge of it — and the agent
+        // pull requests a reviewer runs under their own account are exactly the ones a series is
+        // for. Leaving them out made the whole sheet unstartable for such a reviewer.
+        let plan = MergeSeriesPlan.make(pullRequests: [row("mine", relations: [.author]), row("theirs")])
+        XCTAssertEqual(plan.groups[0].candidates.map(\.id).sorted(), ["mine", "theirs"])
+        XCTAssertTrue(plan.groups[0].excluded.isEmpty)
     }
 
     func testAMergeOnItsWayIsTheReasonGivenBeforeAnyOther() {
@@ -126,7 +134,7 @@ final class MergeSeriesPlanTests: XCTestCase {
     }
 
     func testReasonsSharedWithBulkTriageUseTheSameRawValues() {
-        let shared: [MergeSeriesExclusionReason] = [.draft, .conflicting, .checksFailing, .changesRequested, .ownPullRequest]
+        let shared: [MergeSeriesExclusionReason] = [.draft, .conflicting, .checksFailing, .changesRequested]
         for reason in shared {
             XCTAssertNotNil(BulkTriageSkipReason(rawValue: reason.rawValue), reason.rawValue)
         }

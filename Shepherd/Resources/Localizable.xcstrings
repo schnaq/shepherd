@@ -18701,16 +18701,6 @@
         }
       }
     },
-    "Your own pull request is not merged by a series. Merge it yourself.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deinen eigenen Pull Request mergt keine Serie. Merge ihn selbst."
-          }
-        }
-      }
-    },
     "a write failed": {
       "localizations": {
         "de": {
@@ -18837,16 +18827,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Update abgelehnt"
-          }
-        }
-      }
-    },
-    "your own": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "eigener"
           }
         }
       }
