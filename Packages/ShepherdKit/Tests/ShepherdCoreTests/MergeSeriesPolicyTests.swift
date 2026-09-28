@@ -329,18 +329,37 @@ final class MergeSeriesPolicyTests: XCTestCase {
         XCTAssertEqual(result.series.entry(for: "A")?.pinnedHeadOid, "new", "re-pinned all the same")
     }
 
-    func testAnUpdatedHeadThatNeverGetsChecksIsSkippedAfterTheGracePeriod() {
+    func testAnUpdatedHeadThatNeverGetsChecksMergesAfterTheGracePeriod() {
+        // The repository simply has no checks: after the grace period there is nothing left to
+        // wait for, and the merge sheet and bulk triage would merge it too.
         let result = step(
             series([entry("A", head: "new", updateQueuedAt: clock)]),
             rows: [green("A", head: "new", checkRollup: CheckRollup(state: .none, total: 0))],
             at: clock.addingTimeInterval(grace)
         )
-        XCTAssertEqual(state(result, "A"), .skipped(.noChecks))
+        XCTAssertEqual(result.action, .merge(entry: result.series.entries[0], expectedHeadOid: "new"))
     }
 
-    func testAHeadWithoutChecksThatShepherdNeverUpdatedIsSkippedAtOnce() {
+    func testAHeadWithoutChecksThatShepherdNeverUpdatedMergesAtOnce() {
+        // schnaq/charts: image bumps in a repository without CI. Skipping them as "no checks" made
+        // a series of them end with nothing merged.
         let result = step(series([entry("A")]), rows: [green("A", checkRollup: nil)])
-        XCTAssertEqual(state(result, "A"), .skipped(.noChecks))
+        XCTAssertEqual(result.action.expectedHeadOid, result.series.entries[0].pinnedHeadOid)
+        XCTAssertEqual(state(result, "A"), .merging)
+    }
+
+    func testAHeadWithoutChecksThatIsBehindIsUpdatedFirst() {
+        let result = step(
+            series([entry("A")]),
+            rows: [green("A", checkRollup: nil, mergeStateStatus: .behind)]
+        )
+        if case .updateBranch = result.action {} else { XCTFail("expected an update, got \(result.action)") }
+    }
+
+    func testAHeadWithoutChecksWaitsForMergeability() {
+        let result = step(series([entry("A")]), rows: [green("A", checkRollup: nil, mergeable: .unknown)])
+        XCTAssertEqual(result.action, .none)
+        XCTAssertEqual(state(result, "A"), .pending)
     }
 
     func testTheFullUpdateCycleEndsInAMergeOnTheUpdatedHead() {
@@ -674,10 +693,10 @@ final class MergeSeriesPolicyTests: XCTestCase {
         XCTAssertEqual(state(step(series([entry("A")]), rows: [row]), "A"), .skipped(.checksFailed))
     }
 
-    func testAHeadWithoutChecksSkips() {
+    func testAHeadWithoutChecksMerges() {
         for rollup in [nil, CheckRollup(state: .none), CheckRollup(state: .success, total: 0)] {
             let result = step(series([entry("A")]), rows: [green("A", checkRollup: rollup)])
-            XCTAssertEqual(state(result, "A"), .skipped(.noChecks), "rollup \(String(describing: rollup))")
+            XCTAssertEqual(state(result, "A"), .merging, "rollup \(String(describing: rollup))")
         }
     }
 
