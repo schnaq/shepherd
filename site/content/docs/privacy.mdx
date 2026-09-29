@@ -1,0 +1,83 @@
+---
+title: Privacy
+description: What Shepherd stores on your Mac, what leaves it, and how to control it.
+---
+
+Shepherd is local-first. Your data lives on your Mac, GitHub is the only service it needs, and everything else is optional and off until you switch it on.
+
+## What is stored on your Mac
+
+| What | Where |
+| --- | --- |
+| Pull requests, issues, review threads and your drafts | A local database in `~/Library/Application Support/Shepherd/` |
+| Writes not yet sent, such as approvals, merges and comments | The same database, so they survive a crash or being offline |
+| Tokens and keys | Your login Keychain, never the database |
+| Preferences | macOS preferences |
+
+The Keychain holds your GitHub token, AI API keys, the webhook signing secret and, if you use settings sync, the bucket access keys.
+
+To remove it all, use **Sign out & erase local data** in **Settings → Account**.
+
+Shepherd has no account system of its own. The only identity is your GitHub login.
+
+## What goes to GitHub
+
+Shepherd talks to GitHub with your token to read pull requests and issues and to send your reviews, merges and comments. Downloading a CI job log or update files also touches GitHub's download hosts.
+
+## What leaves your Mac only if you turn it on
+
+Each of these is off until you set it up. The list is complete.
+
+- **An AI endpoint.** Only if you configure an API key. See [AI and language models](/docs/ai) for exactly what is sent.
+- **A webhook URL.** Only that URL. Payloads carry no review text, comments, diffs or agent output.
+- **A settings sync bucket.** Only your own bucket, and only encrypted.
+- **Usage statistics.** Off by default, see below.
+
+Software updates check GitHub for a new release. Automatic checks are on by default. Switch them off with **Check for updates automatically** in **Settings → Account**, and updates are installed only after you confirm.
+
+## Encrypted settings sync
+
+You can keep your settings in an S3-compatible bucket that you own, so a second Mac is set up in minutes.
+
+1. Open **Settings → Sync** and switch on **Keep settings in an S3-compatible bucket**.
+2. Enter the **Endpoint**, **Bucket**, **Region** and **Prefix**. Use HTTPS.
+3. Enter the access **Key id** and **Secret** and press **Save keys**. They go into your Keychain.
+4. Choose a **Passphrase** of at least 12 characters. Use the same one on every Mac. Optionally keep it with **Remember passphrase in Keychain**.
+5. Press **Upload settings** on the first Mac. On another Mac, press **Download settings**.
+
+Upload and download are manual. **Check remote** shows what is stored.
+
+Your settings and your secrets are encrypted on your Mac before they leave it. The bucket operator sees ciphertext only. There is no recovery if you lose the passphrase.
+
+**Synced:** your preferences, including sweep interval, notifications, digest schedule, AI settings, delegation and automation settings, appearance, and your custom agent entries. Also your secrets: the GitHub token, AI API keys and the webhook secret.
+
+**Not synced:** the local database, unsent writes, viewed-file state, window layout and the bucket access keys. Usage telemetry's queue and any identifier stay on each Mac too.
+
+## Crash reports
+
+Crash and hang reports are off by default. If you switch on **Keep crash and hang reports on this Mac** in **Settings → Account**, macOS hands Shepherd its reports after a crash. They are saved as files in `~/Library/Application Support/Shepherd/Diagnostics/`. The newest 30 are kept.
+
+They are never sent anywhere. To help with a bug, use **Show in Finder** and attach a file yourself. **Delete all** removes them.
+
+## Usage statistics
+
+Shepherd asks once, when it first opens, whether it may count usage anonymously. Nothing is counted before you answer, and nothing is counted if you say **Not now**. You can change it any time in **Settings → Account** under **Usage statistics**. **Level** has three choices.
+
+| Level | What it means |
+| --- | --- |
+| **Off** | Nothing is collected or sent. This is the default. |
+| **Anonymous** | Version, language and which features you use, as categories and buckets. No identifier. |
+| **Anonymous + reach** | Adds a random identifier that is thrown away every month. |
+
+Never included: repository names, branches, titles, paths, code or any free text.
+
+Events go to PostHog's EU endpoint, about once a day. **Show what would be sent** shows the exact data, and **Clear queue** deletes what is waiting. Switching to **Off** deletes the queue and any identifier.
+
+Builds made from source, and forks, contain no statistics mechanism at all.
+
+For the full statement, see [PRIVACY.md on GitHub](https://github.com/schnaq/shepherd/blob/main/docs/PRIVACY.md). Questions: info@schnaq.com.
+
+<Cards>
+<Card title="AI and language models" href="/docs/ai" />
+<Card title="Settings" href="/docs/settings" />
+</Cards>

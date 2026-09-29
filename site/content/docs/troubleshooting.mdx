@@ -1,0 +1,79 @@
+---
+title: Troubleshooting
+description: Short answers for a missing pull request, a disabled merge, unsent reviews, missing notifications and how to report a bug.
+---
+
+## A pull request is missing from the inbox
+
+Work through these in order.
+
+1. **Sync now.** Press `⌘R`. Shepherd runs a full search every 1 to 10 minutes (**Settings → Sync → Full search every**), so a brand-new pull request can take a moment.
+2. **Is it open?** The inbox shows open pull requests only. Archived repositories are skipped.
+3. **Is it about you?** Shepherd searches for pull requests where you were asked to review, are the author, are assigned, are mentioned, or are otherwise involved. A pull request nobody involved you in appears only if you watch its repository. Press `⇧⌘A` to watch one. You can watch up to 10 repositories.
+4. **Did you hide it?** Check **Settings → Sync → Hidden pull requests** and click **Show again**. A hidden pull request comes back by itself when a review is requested from you.
+5. **Is a filter on?** Clear the rail selection or filter. The inbox says "No pull request matches this filter" when one hides everything.
+6. **Can your token see the repository?** This is the usual cause for organization repositories with SAML single sign-on. GitHub's search silently omits results the token cannot access, and no error appears. Watching the repository does not help. See [GitHub token](/docs/github-token#organizations-with-saml-single-sign-on).
+
+## The merge button is greyed out
+
+Hover the button. The tooltip says why.
+
+- **The pull request is a draft.** GitHub refuses to merge drafts. Mark it ready for review first.
+- **It has conflicts with the base branch.** Resolve them, then sync.
+- **It was merged or closed meanwhile.** Approve, request changes and merge go dark when the pull request is gone.
+- **It is your own pull request.** You can comment on it, but GitHub does not accept approve or request changes from its author.
+
+Details: [Merging](/docs/merging).
+
+## GitHub refused the merge
+
+A toast reads "This pull request cannot be merged" followed by GitHub's own reason. This is a `405` from GitHub. Typical reasons are a branch protection rule, a required review or check that is missing, or a branch that is behind its base on a repository that requires up-to-date branches.
+
+Bring the branch up to date, wait for the required checks, then try again. A [merge series](/docs/merging) can update the branch for you and merge when the checks pass.
+
+If the message says the pull request moved on, someone pushed after you looked. Read the new commits and merge again. Shepherd pins every merge to the commit you saw, so it never merges code you have not seen.
+
+## A merge is "Merge queued" or "Not sent"
+
+Merges and reviews go through a local outbox. They show as **Merge queued** until GitHub is reachable, then **Merging…**, and **Merged** only once GitHub confirms. A failed write shows **Not sent** with **Retry**. Failed rows are also listed with Retry and Discard in **Settings → Sync**.
+
+## "This review was not sent"
+
+You queued a review, then new commits landed before it was sent. Shepherd parks the review instead of attaching your comments to a commit you did not judge. Your draft is saved locally. Open the pull request, check the draft against the new commit, and send it again. A notification, "Review not sent", tells you when this happens. See [Review](/docs/review).
+
+## Nothing happens after I press Sync
+
+- **Settings → Sync** says "Nothing synced yet" until the first sweep finishes.
+- If you see "Rate limited until…", wait until that time.
+- If you see "GitHub rejected the credentials. Sign in again.", your token was revoked or expired. Sign out in **Settings → Account** and sign in again.
+- "Could not reach GitHub" means a network problem. Shepherd keeps working from its local data and retries.
+
+## Notifications do not arrive
+
+1. Open **Settings → Sync → Notifications** and check the three toggles: a new review is requested from me, checks fail on a pull request I opened, a queued review could not be sent.
+2. macOS asks for permission the first time Shepherd posts one. Check System Settings → Notifications → Shepherd.
+3. Shepherd sends notifications while it is running. Keep it running.
+
+Separately, you may see "This token cannot read GitHub notifications". That only affects how fast the inbox refreshes. GitHub serves that endpoint to classic tokens only, and the regular sweep covers the gap.
+
+## macOS asks for my Keychain password
+
+If the prompt appears after you updated or rebuilt Shepherd, a different build than the one that saved the token is asking. Choose **Always Allow**. It answers once for that build.
+
+## Where are the logs
+
+Shepherd has no log file to send. It can keep crash and hang reports on this Mac, and nothing leaves the Mac.
+
+1. Open **Settings → Account → Diagnostics** and switch on **Keep crash and hang reports on this Mac**.
+2. A report appears at the next launch after a crash.
+3. Click **Show in Finder**. The files are in `~/Library/Application Support/Shepherd/Diagnostics`. Click **Delete all** to remove them.
+
+## Report a bug
+
+Open an issue at [github.com/schnaq/shepherd/issues](https://github.com/schnaq/shepherd/issues). Include:
+
+- Your Shepherd version, from **Settings → Account → Updates**, and your macOS version.
+- What you did, what you expected and what happened.
+- A crash report from the Diagnostics folder, if there was a crash. Remove anything private first.
+
+Never paste your token into an issue.

@@ -1,0 +1,160 @@
+---
+title: Keyboard shortcuts
+description: Every key and key combination Shepherd understands, grouped by where you use it.
+---
+
+## Finding the shortcuts in the app
+
+Shepherd has no separate cheat sheet or help overlay. Three places show the keys instead:
+
+- **The hint bar** at the bottom of the inbox lists the most common keys. On a narrow window it shows a shorter set.
+- **The command palette** (`⌘K`) lists every command with its key next to it. It is also the fastest way to run a command you do not remember the key for.
+- **The menu bar** at the top of the screen. The **Review** menu, and the entries added to the **View** menu, show the shortcuts that have one.
+
+Holding `⌘` does not open anything.
+
+## Global
+
+These work anywhere in the main window, once you are signed in.
+
+| Keys | What it does |
+| --- | --- |
+| `⌘K` | Open the command palette. |
+| `⌘R` | Sync now. |
+| `⇧⌘A` | Watch a repository. |
+| `⇧⌘⏎` | Start a review session. |
+| `⌘,` | Open Settings. See [Settings](/docs/settings). |
+| `⌘W` | Close the window (File menu, **Close Window**). |
+
+Shepherd registers no system-wide hotkey. To trigger it from outside the app, use Shortcuts or Siri. See [Automation](/docs/automation).
+
+## Command palette
+
+| Keys | What it does |
+| --- | --- |
+| Type | Search commands. |
+| `↑` `↓` | Move the selection. |
+| `⏎` | Run the selected command. |
+| `⎋` | Close the palette. |
+
+## Inbox
+
+Keys work while the pull request list has the keyboard. A key with no modifier is a command, so click into a text field first if you want to type.
+
+| Keys | What it does |
+| --- | --- |
+| `j` or `↓` | Select the next row. |
+| `k` or `↑` | Select the previous row. |
+| `⏎` | Open the review for the selected pull request. |
+| `x` | Tick or untick the row for a bulk action. |
+| `⎋` | Clear the ticked rows. |
+| `r` `a` | Approve. |
+| `r` `x` | Request changes. |
+| `r` `c` | Comment. |
+| `r` `f` | Start a review session. |
+| `m` | Open the merge dialog. |
+| `g` `a` | Group by agent. |
+| `g` `r` | Group by repository. |
+| `g` `s` | Group by review state. |
+
+Two-key commands are typed one after the other, not held together. If you do not press the second key within about a second and a half, the first is forgotten.
+
+Bulk actions, merge series and delegation have no key. Run them from the **Review** menu or the command palette. See [Merging](/docs/merging).
+
+### Issues
+
+In the issue list:
+
+| Keys | What it does |
+| --- | --- |
+| `j` or `↓` | Select the next issue. |
+| `k` or `↑` | Select the previous issue. |
+| `l` | Open the linked pull request (when the issue has one). |
+| `⎋` | Clear the filter. |
+
+The two-key commands above do not work here, because they act on pull requests.
+
+## Review screen
+
+The review screen keeps the keyboard in the file list when it opens.
+
+### File list
+
+| Keys | What it does |
+| --- | --- |
+| `j` or `↓` | Next file. |
+| `k` or `↑` | Previous file. |
+| `a` | Mark the file as viewed and jump to the next unviewed one. |
+| `v` | Toggle the file's viewed mark and stay on it. |
+| `t` | Switch between the Files and Conversation tabs. |
+| `u` | Reload when the strip says "Updated on GitHub". |
+| `c` | Move the keyboard into the diff. |
+| `[` | Move into the original (left) side of the diff. |
+| `]` | Move into the modified (right) side of the diff. |
+| `⎋` | Go back to the inbox. |
+| `r` `a` | Approve. |
+| `r` `x` | Request changes. |
+| `r` `c` | Comment. |
+| `m` | Open the merge dialog. |
+| `r` `f` | Start a review session. |
+
+### Diff
+
+| Keys | What it does |
+| --- | --- |
+| `j` `k` or `↓` `↑` | Move between lines. |
+| `c` | Comment on the line under the cursor. |
+| `⏎` | Open the thread on the selected line. |
+| `[` `]` | Cross to the other side of a side-by-side diff. |
+| `⎋` | Give the keyboard back to the file list. |
+
+`[` and `]` need the side-by-side diff. In the inline diff and in the **Line list** renderer there is only one pane, so they do nothing.
+### Comments and AI
+
+| Keys | What it does |
+| --- | --- |
+| `⌘⏎` | Start the review with **Approve…** or **Review…**. |
+| `⇧⌘D` | Draft with AI, or stop drafting. See [AI](/docs/ai). |
+| `⌥E` | Explain the selected lines, or stop explaining. |
+| `⇧⌘I` | Open the first closing issue on GitHub. |
+| `⎋` | Cancel the open sheet. |
+
+## Merge
+
+| Keys | Where | What it does |
+| --- | --- | --- |
+| `m` | Inbox or review | Open the merge dialog. |
+| `⌘⏎` | Merge dialog | **Merge**. |
+| `⇧⌘⏎` | Merge dialog | **Merge when checks pass**, when it is offered. |
+| `⎋` | Merge dialog | Cancel. |
+
+`⌘⏎` works even when the dialog shows a warning. A plain `⏎` does not merge.
+
+## Review session
+
+While a session is running, two more keys work on the review screen:
+
+| Keys | What it does |
+| --- | --- |
+| `d` | **Done & next**. |
+| `n` | **Next**, and leave this one for later. |
+| `⎋` | **End** the session. |
+
+Approving, requesting changes or merging also counts as done. See [Review](/docs/review).
+
+## Sheets and dialogs
+
+In dialogs and sheets, `⏎` presses the default button and `⎋` cancels. This applies to comment sheets, the merge series sheet, bulk triage, the watch-repository sheet and the review summary.
+
+## Menu bar
+
+The quick inbox in the macOS menu bar has no shortcuts of its own. You turn it on and off with **Show in menu bar** in Settings.
+
+## Fleet
+
+In the Fleet screen, `↑` `↓` change the selected agent, `⏎` opens the selected open pull request, and `⎋` goes back to the inbox.
+
+<Cards>
+  <Card title="Automation" href="/docs/automation" />
+  <Card title="Review" href="/docs/review" />
+</Cards>

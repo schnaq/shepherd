@@ -1,0 +1,156 @@
+---
+title: Reviewing pull requests
+description: Read a diff, comment on lines, submit a verdict, and what happens when you are offline or the pull request moves on.
+---
+
+Open a pull request from the inbox with `⏎` or a double-click. Press `esc` to go back.
+
+![The diff view](/diff.png)
+
+The review screen has two tabs. Press `t` to switch between them.
+
+- **Files** shows the changed files and the diff.
+- **Conversation** shows the description, commits, checks and review threads.
+
+An agent's pull request opens on **Conversation** when its description claims something, such as tests added or nothing breaking. Everything else opens on **Files**. Turn this off in Settings → Appearance with **Open agent pull requests on Conversation**.
+
+## Read the diff
+
+The file list is ordered by review priority, riskiest first. It groups files into Review first, Standard, Skim and generated files, so lockfiles and generated code do not get in your way.
+
+- `↑` and `↓` move between files.
+- `v` marks the file as viewed, or unmarks it.
+- `a` marks the file as viewed and jumps to the next one that is not.
+- The **Layout** control switches between **Side by side** and **Inline**.
+
+Once every file is marked, the review bar shows **All files viewed**.
+
+### Pick a diff renderer
+
+Settings → Appearance → **Diff renderer** has three choices:
+
+- **Automatic** uses the line list while VoiceOver is running, and the rich viewer otherwise.
+- **Rich viewer** is the full diff editor.
+- **Line list** is a native list with one row per diff line. Walk it with `j`, `k` or the arrow keys.
+
+## Comment on lines
+
+In the rich viewer, hover a line number and click the `+` that appears. On the deleted side of a diff, use the left pane. In the line list, double-click a row.
+
+You can also use the keyboard:
+
+1. Press `c` to move the keyboard into the diff.
+2. Walk the lines with the arrow keys.
+3. Press `c` again to open the comment box on the current line.
+
+In the side-by-side diff, `[` and `]` move between the original and the modified pane. That is how you comment on a deleted line.
+
+Type your comment and click **Add comment**. It is saved to your pending review. Nothing is sent until you submit. The review bar counts your pending comments. Drafts survive a restart.
+
+Threads that already exist show on their lines. You can reply, and **Resolve** or **Unresolve** a thread. A reply or resolve made offline is queued like a review.
+
+### Saved replies and templates
+
+The insert menu next to a comment field lists your saved replies. Pick one to paste it. On a thread, replies that fit the conversation are listed first under **Suggested**. This uses on-device matching only.
+
+Add and edit saved replies in Settings → Replies. The same page has **Review templates**. A template matches a repository like `schnaq/review`, or a whole owner like `schnaq/*`, and pre-fills the summary of a new review. It never overwrites a review you have started.
+
+### Long threads
+
+A thread with six or more comments gets a **Summarise** button. It writes a short digest on your Mac, marked **Agreed**, **Open** or **Blocked**. It only summarises. It never replies or resolves. It needs Apple Intelligence.
+
+## Submit a review
+
+Use the buttons in the review bar, or the keys:
+
+| Action | Button | Keys |
+| --- | --- | --- |
+| Approve | **Approve…** | `r a` |
+| Request changes | **Request changes** | `r x` |
+| Comment | **Comment** | `r c` |
+| Open the submit sheet | **Review…** | `⌘⏎` |
+
+The submit sheet has a **Summary**, a **Verdict** and your pending inline comments. Click **Submit** to send.
+
+- Only an approval may go without a summary. GitHub rejects the other two.
+- GitHub does not accept an approval or change request on your own pull request. The button then offers a plain comment.
+- Once the pull request is merged or closed, the three verdict buttons are disabled.
+
+If GitHub reports the pull request as updated while you are reading, a strip above the diff says **Updated on GitHub — n new commits.** Press **Reload** or `u` to show them. Your file, cursor and comment text stay where they are until you do. New commits are never applied silently, because your comments are anchored to the commit you were reading.
+
+### Offline and the outbox
+
+Submitting does not talk to GitHub directly. The review goes into a local queue, the outbox, and is sent as soon as possible. It survives a crash and a lost connection. The queue also carries replies, thread resolves and merges.
+
+A toast tells you which case you are in:
+
+- **Approved …** means GitHub has the review.
+- **Approval queued for …** means it is still on your Mac. It has not approved anything yet.
+- **Review held back — … changed since you started. See the alert.** means the pull request moved on and the review was parked.
+
+Settings → Sync shows how many writes are waiting or parked. It also lists the ones GitHub refused, each with **Retry** and **Discard**. The review header and the detail panel offer **Retry** for the pull request you are on.
+
+### When a review is not sent
+
+A review is pinned to the head commit you wrote it on. If the pull request gets new commits before the review reaches GitHub, Shepherd does not send it. Your inline comments could land on the wrong lines. It shows **This review was not sent** with two buttons:
+
+- **Re-review** opens the pull request again so you can check your draft against the new commit.
+- **Later** dismisses the alert.
+
+Your draft is kept. The title bar and Settings → Sync keep counting the review as **not sent** until you deal with it, and you get a **Review not sent** notification. If several reviews were parked in one run, the alerts come one after another.
+
+A quick verdict with no inline comments is pinned to the head you saw when you clicked it. Inline comments keep the commit you wrote them on.
+
+## Since your review
+
+When an agent pushes a fix round, the review opens on **Since your review** instead of the whole pull request. You see only the files and hunks that differ from the head you reviewed. **All files** is one click away. The control only appears once there is a round to compare against, so a first review opens on all files.
+
+Under it, **Your findings** lists the comments you made in the earlier round:
+
+- **Addressed**: the lines your comment was on changed. This does not say the fix is right. The thread stays open until you resolve it.
+- **Unchanged**: neither the lines nor the thread changed.
+- **Moved**: the file was renamed or the lines shifted.
+- **Replied**: somebody answered in the thread.
+
+Click a finding to jump to the file and line. On the inbox row, a chip such as `3 rounds · 2 findings unchanged` tells you before you open it.
+
+Shepherd keeps the diff you reviewed once your review reaches GitHub. The comparison runs on your Mac, so it survives a force-push and works offline. A review you submitted on github.com counts too, as long as the pull request is still on that commit.
+
+## What it says, and what Shepherd found
+
+On an agent's pull request, a card above the description lists each claim the description makes next to the evidence Shepherd found: tests added, only one module touched, no breaking changes, fixes an issue. A failed line can be turned into a comment for your review summary with **Turn into a comment**. Nothing is submitted for you, and there is no score.
+
+## What this pull request closes
+
+If the description says `closes #123`, a **Closes** section above the description lists each issue with its title and whether it is still open. Press `⇧⌘I` or click a row to open the first issue on GitHub. A pull request that closes nothing has no such section.
+
+## Focus review session
+
+Press `⇧⌘⏎` or `r f`, or click **Session** in the inbox header, to work through every pull request waiting for your review, one after another, on this same screen. The queue is frozen at the start.
+
+- A bar shows your place, for example **3 of 12**.
+- `d` counts the pull request as reviewed and moves on. The button reads **Done & next**.
+- `n` leaves it for later and moves on.
+- `esc` ends the session after a confirmation.
+- Approving, requesting changes or merging moves on by itself.
+
+Pull requests that get merged or closed meanwhile are skipped with a note. At the end, a summary shows what you reviewed, skipped and lost to merges. A session is not saved.
+
+## Bulk triage
+
+For a pile of agent pull requests you have already looked at, tick them in the inbox and approve or merge them behind one confirmation. See [The inbox](/docs/inbox#select-several-pull-requests). To merge, see [Merging](/docs/merging).
+
+## Translate and Writing Tools
+
+Text fields for review text offer Apple's **Writing Tools** for proofreading and rewriting, on your Mac where supported. Descriptions and comments in a language you do not read get a **Translate** button. The translation appears in a block below the original, so what you approve is what was written. **Hide translation** collapses it. Nothing is sent anywhere.
+
+## AI help
+
+If you set up AI, a sparkle button drafts review text, and a **Why?** button explains a red check. Drafts are text in a field. You still click submit. See [AI](/docs/ai).
+
+<Cards>
+  <Card title="The inbox" href="/docs/inbox" />
+  <Card title="Merging" href="/docs/merging" />
+  <Card title="AI" href="/docs/ai" />
+  <Card title="Keyboard shortcuts" href="/docs/keyboard-shortcuts" />
+</Cards>

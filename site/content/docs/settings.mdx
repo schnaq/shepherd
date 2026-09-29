@@ -1,0 +1,268 @@
+---
+title: Settings
+description: Every pane of the Shepherd Settings window, what each option does and what it is set to by default.
+---
+
+## Opening Settings
+
+Press `⌘,` or choose **Settings** from the Shepherd menu. The window has a sidebar on the left and the selected pane on the right, like System Settings. You can drag it larger.
+
+The panes, top to bottom:
+
+1. Account
+2. Sync
+3. Replies
+4. Agents
+5. Intelligence
+6. Delegation
+7. Automation
+8. Appearance
+
+Changes apply as soon as you make them. There is no Save button, except where a pane has its own (API keys, secrets).
+
+## Account
+
+### Your account
+
+Shows your GitHub login and how you signed in: with the GitHub App device flow or with a personal access token. To change how you sign in, see [GitHub token](/docs/github-token).
+
+- **Sign out & erase local data** deletes the token from the Keychain and empties the local database. Reviews you have not sent yet are lost. You are asked to confirm.
+- The **Local data** line has an info button with the database location.
+
+### Diagnostics
+
+- **Keep crash and hang reports on this Mac.** Off by default. Reports stay on your Mac and are never sent anywhere. A report appears at the next launch after a crash.
+- **Show in Finder** opens the reports folder. **Delete all** removes the files. Shepherd keeps the newest reports only.
+
+### Usage statistics
+
+Choose a **Level**. The default is **Off**.
+
+| Level | What it sends |
+| --- | --- |
+| Off | Nothing is collected and nothing is sent. |
+| Anonymous | Version, language and which features you use. No identifier. |
+| Anonymous + reach | Adds a random identifier that is thrown away every month, so users can be counted. Switching this off deletes it. |
+
+- **Show what would be sent** shows the queued events before anything leaves your Mac.
+- **Clear queue** empties the queue.
+- **Privacy statement** opens the privacy page. See [Privacy](/docs/privacy).
+
+### Updates
+
+- **Check for updates automatically.** Updates are installed only after you confirm, never in the background.
+- **Check now** checks immediately. The same command is in the Shepherd menu as **Check for Updates…**.
+- A build without an update feed shows these controls disabled.
+
+## Sync
+
+### Inbox sweep
+
+**Full search every** sets how often Shepherd runs a full search of GitHub, from 1 to 10 minutes. The default is 2 minutes. It applies from the next sign-in. Notifications are polled at the interval GitHub asks for, not by this slider.
+
+### Notifications
+
+Three switches, all on by default:
+
+- **A new review is requested from me**
+- **Checks fail on a pull request I opened**
+- **A queued review could not be sent**
+
+macOS asks for permission the first time Shepherd posts one.
+
+### Morning digest
+
+- **Send me a morning digest.** Off by default. One notification a day with what came in since the last one.
+- **At** sets the time. The default is 09:00.
+- **Weekdays only.** On by default.
+
+The digest is built from the local database only. If your Mac was asleep, it arrives when the Mac wakes, if that is still the same day. A quiet night produces nothing.
+
+### Outbox
+
+Shows how many actions are waiting to be sent, with a **Sync now** button. Reviews and other writes go through this outbox, so they survive a lost connection.
+
+- **Conflicted** means the pull request got new commits after you queued the review. Nothing was sent. Open it and check your draft.
+- **Given up on** lists writes GitHub refused. Each has **Retry** and **Discard**.
+
+### Merge series
+
+This section only appears while a merge series is running. Each series shows its progress, for example "2 of 5 merged", and a **Cancel** button. Cancel stops the series. A merge that is already queued still goes out. Series live on this Mac only. See [Merging](/docs/merging).
+
+### Watched repositories
+
+Every open pull request in a watched repository reaches the inbox, under **Watched**.
+
+- Type `owner/repository` or a GitHub URL and press **Watch**.
+- **Stop watching** removes one.
+- You can watch at most 10 repositories. Each one is another search on every sweep.
+
+The list is per Mac and is not part of settings sync.
+
+### Hidden pull requests
+
+Appears when you have hidden pull requests. **Show again** brings one back, **Show all again** all of them. A hidden pull request also comes back on its own when a review is requested from you.
+
+### Sync across Macs
+
+Keeps your settings and secrets in an S3-compatible bucket that you own. Off by default.
+
+- Data is encrypted on your Mac with a passphrase you choose. The bucket only sees ciphertext.
+- Turn on **Keep settings in an S3-compatible bucket**, then fill in **Endpoint**, **Bucket**, **Region**, **Prefix** and **Addressing**. **Path style** works with every provider. The endpoint must be HTTPS.
+- Under **Access keys**, enter the key id and secret and press **Save keys**. They are kept in your Keychain. Read and write on the one object is enough.
+- Under **Passphrase**, use at least 12 characters. If you lose it there is no recovery. Use the same one on every Mac. **Remember passphrase in Keychain** is off by default.
+- **Check remote** looks at the bucket. **Upload settings** writes this Mac's settings. **Download settings** asks before it overwrites this Mac's settings, including keys in your Keychain. Local data, drafts and the outbox are not touched.
+
+## Replies
+
+- **Saved replies.** Markdown snippets for any comment field. The insert menu lists them in the order you set. Use **Add a saved reply**, then move, edit or remove.
+- **Review templates.** The summary a new review starts from. Match one repository with `schnaq/review` or a whole owner with `schnaq/*`. `*` and `?` are wildcards. An exact pattern wins over a wildcard, and a longer wildcard over a shorter one. A review you already started is never changed.
+- **Recurring findings.** A comment you wrote at least three times in 30 days, on at least two pull requests of the same repository. The review screen offers to draft a rule for that repository's agent instructions. Found on this Mac and never sent anywhere. You can **Hide** and **Show again** a finding.
+
+## Agents
+
+The registry Shepherd uses to recognize agent pull requests.
+
+- **Bundled registry** lists the built-in agents and the logins they match.
+- **Your extensions** are entries you added. **Remove** deletes one. An entry with the same id replaces the bundled one.
+- **New entry** takes an **Id**, a **Name**, **Logins**, **Branches** and **Trailers**, then **Add entry**. Example login pattern: `my-agent[bot], my-agent-*`.
+
+## Intelligence
+
+Shepherd never reviews, approves, merges or comments for you. AI output is only a dismissible hint. When a model looks something up, it can only read. See [AI](/docs/ai).
+
+### Provider
+
+| Option | What it does |
+| --- | --- |
+| Off | Local heuristics only: file priority, agent detection, risk hints. |
+| On-device | Adds short summaries from Apple's on-device model. Nothing leaves the Mac. This is the default. |
+| On-device + API key | Adds whole-pull-request analysis through an endpoint you configure. |
+
+If the on-device model is unavailable, the pane shows why.
+
+### Bring your own key
+
+Shown with **On-device + API key**.
+
+- **Kind** is **Anthropic** or **OpenAI-compatible**.
+- For Anthropic, set the **Model**. The default is `claude-haiku-4-5`.
+- For OpenAI-compatible, pick an **Endpoint** or enter a **Base URL**, then a **Model**. **Load models** fetches the list from the endpoint.
+- **API key** is stored in your Keychain and sent only to this endpoint. Press **Save key**, then **Test connection**.
+- For OpenAI-compatible endpoints, **Where the model runs** takes two-letter **Countries** (for example `DE, FR`) and **Require zero retention**. Both are sent with the request. An endpoint that cannot meet them refuses the request. Both are empty and off by default.
+
+### Semantic search
+
+**Semantic search index** is on by default. `⌘K` finds pull requests and issues by meaning. The index is built on this Mac with Apple's on-device embeddings and never uses an AI endpoint. Switched off, the index is emptied and `⌘K` matches words only. **Rebuild index** starts it again.
+
+### Structured triage
+
+**Classify pull requests** is on by default. The on-device model gives each pull request a kind, a risk and a one-sentence reason to sort the inbox by. With the provider set to Off, nothing is classified.
+
+### Spotlight
+
+**Show pull requests in Spotlight** is on by default. Only the title, `owner/repo#number`, labels, repository and agent are exported. Switching it off deletes what Shepherd put there.
+
+### Screenshots
+
+**Read screenshots in descriptions on this Mac** is off by default. It adds a button to the summary card. Pressing it downloads up to two screenshots from GitHub and reads them with the on-device model. Nothing is downloaded until you press it.
+
+## Delegation
+
+Hands a pull request to a local agent CLI. See [Automation](/docs/automation).
+
+### Agent CLI
+
+- **Agent** is **Claude Code** or **Custom command**. Shepherd runs your installed CLI with your environment. It holds no login for it and never pushes.
+- **Path**: leave empty to look in the usual places. **Detect** finds it.
+- **Command** (custom): `{prompt}` is the task, `{worktree}` the path. No shell runs the command, so a prompt cannot become a second command.
+
+### Guardrails
+
+| Option | Default |
+| --- | --- |
+| **Permission mode**: **Accept edits**, **Plan only**, **Don't ask** | Accept edits |
+| **Max turns** (1 to 200), or **No limit** | 25 |
+| **Budget** in USD, with **Cap spend** | 5 |
+| **Tools** (passed to `--allowedTools`) | `Read,Edit,Bash(git *),Glob,Grep` |
+
+**Don't ask** runs every allowed tool unattended, including shell commands. Guardrails do not apply to a resumed session.
+
+### Session back-channel
+
+**Local** and **Remote** commands send a review finding to the session named in a commit's `Claude-Session:` trailer. The local default is `claude --resume {sessionID} -p {message}`. Leave a field empty to switch that button off.
+
+### Local checkouts
+
+A delegation runs in a git worktree of your own clone. Shepherd never clones anything. Add a checkout with **Add a local repository…**, by folder, or by name for a clone whose origin does not say. **Change** and **Remove** edit the list.
+
+### Open in editor
+
+**System default**, **Visual Studio Code**, **IntelliJ IDEA**, **Cursor** or **Custom command**. It opens a review's file in your checkout at the line. In a custom command `{file}` is the path and `{line}` the line.
+
+### Automatic delegation
+
+Off by default. When on, Shepherd starts a delegation on its own on your pull requests when:
+
+- **CI turns red** (on by default)
+- **A reviewer requests changes**
+
+"Turns" is literal. A pull request that was already red when Shepherd first saw it never starts anything. Each pull request starts at most one run per commit. Same worktree and guardrails, and it never pushes, approves or merges.
+
+You can edit the **Task for the agent** and **Reset to the default task**. **Limits** cap runs **At once** (1 to 5, default 1) and **Per day** (1 to 50, default 5). At a cap, Shepherd notifies you instead.
+
+## Automation
+
+### Outbound webhook
+
+Off by default. Turn on **Send events to a webhook** and enter a **URL**. Any endpoint that takes a JSON POST works, for example n8n. Use https, or http on this Mac.
+
+- **Events.** All are selected by default: a review was submitted, a pull request was merged, a delegation finished, a new review was requested from you, an automatic merge was queued, an issue was closed, an issue was handed to an agent.
+- **Secret** is optional. With one set, each request carries an `X-Shepherd-Signature: sha256=…` header, an HMAC-SHA256 of the body. It is stored in your Keychain.
+- **Send test event** checks the connection.
+
+Events carry repository, number, title, author, provenance and verdict, and nothing more. They never carry review text, comments, diffs or agent output. A failing webhook never blocks anything. Shepherd tries twice, then gives up quietly.
+
+### Automatic merging
+
+Off by default. **Merge green, approved agent pull requests automatically** queues a merge with no confirmation click. Pull requests already waiting can merge on the next sweep.
+
+Shepherd merges only when a recognised agent opened it, every check passed, somebody approved it, it is not a draft and GitHub reports it as mergeable.
+
+- **Repos**: comma-separated, `*` and `?` as wildcards. Empty means all.
+- **Labels**: a pull request must carry all of them. Empty means none.
+- **Method**: **Merge commit**, **Squash and merge** (default) or **Rebase and merge**. Shared with the merge sheet and bulk triage.
+
+**What Shepherd merged** is a log that stays on this Mac, with **Clear**. See [Merging](/docs/merging).
+
+### Trust lanes
+
+A short look is for a pull request with green CI, at most **Files** and **Lines** changed, and nothing sensitive. Defaults are 5 files and 120 lines (limits 1 to 100 and 1 to 5000). Everything else is a full review. Sensitive means a workflow, auth, secret, migration or deleted-test file. Both limits travel to your other Macs through settings sync.
+
+### Track record
+
+Reads the last 90 days of closed pull requests, up to 500 per repository, for each agent's chip. Use **Load track record**, **Stop** or **Clear history**. The history stays on this Mac and is not synced.
+
+## Appearance
+
+- **Appearance**: **System**, **Light** or **Dark**. Default is System.
+- **Language**: **System**, **English** or **Deutsch**. Choosing a different language than the current one shows **Restart Now**. It applies after Shepherd restarts.
+- **Show in menu bar**: on by default. Shows how many reviews are waiting and a short list of them. Turning it off removes the item at once.
+
+### Review screen
+
+**Open agent pull requests on Conversation** is on by default. The diff is one keystroke away (`t`).
+
+### Diff viewer
+
+- **Diff renderer**: **Automatic** (default), **Rich viewer** or **Line list**. Automatic uses the line list while VoiceOver is running.
+- **Font size**: 10 to 18 pt. Default 13.
+- **Wrap long lines**: off by default.
+- **Show diffs inline instead of side by side**: off by default. The line list ignores it.
+
+<Cards>
+  <Card title="GitHub token" href="/docs/github-token" />
+  <Card title="AI" href="/docs/ai" />
+  <Card title="Automation" href="/docs/automation" />
+  <Card title="Privacy" href="/docs/privacy" />
+</Cards>

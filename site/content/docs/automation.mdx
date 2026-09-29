@@ -1,0 +1,146 @@
+---
+title: Automation
+description: Hand work to your local coding agents, and drive Shepherd from the terminal, Shortcuts, Siri, Spotlight and webhooks.
+---
+
+Shepherd can send a pull request or a single finding back to a coding agent on your Mac. It can also be driven from outside, and it can tell your own tools when something happened.
+
+## Delegate to a local coding agent
+
+Shepherd runs the agent CLI you already have. It holds no login for it, leaves your environment untouched and never pushes. You review the result and push it yourself.
+
+### Choose the agent
+
+Open **Settings → Delegation**. The **Agent** picker has two choices.
+
+- **Claude Code.** Shepherd runs `claude` headless and reads its output as it arrives. Use **Detect** to find the executable, or type its **Path**.
+- **Custom command.** Any other agent CLI. Write a **Command** template. `{prompt}` is the task and `{worktree}` is the path. `{prompt}` always becomes exactly one argument, and no shell runs the command.
+
+Under **Guardrails** you set the **Permission mode** (**Accept edits**, **Plan only** or **Don't ask**), **Max turns** (or **No limit**), an optional spend cap (**Cap spend**, in USD) and the allowed **Tools**.
+
+### Link your local clones
+
+A delegation runs in a git worktree of your own clone. Shepherd never clones anything itself.
+
+In **Settings → Delegation**, under **Local checkouts**, press **Add a local repository…** and choose the folder. Shepherd reads the repository from the clone's `origin`. You can also watch it in the same step. For a clone whose origin does not say, enter the name as `owner/name`.
+
+### Start an agent
+
+- On a pull request or a finding, choose **Delegate to Agent…** or **Delegate this finding…**. A sheet opens with the task. **Run** is your click.
+- On a watched repository with a linked clone, choose **Start an agent…** and type the task. Shepherd makes a branch from your first line, for example `agent/add-dark-mode`, and a worktree on it. Several tasks can run in one repository at once.
+- ⌘K also offers **Start an agent on owner/repo…** for every linked clone.
+
+The **Agent tasks** menu lists each task and whether it is running, finished or failed. **Discard worktree** removes one task's worktree. **Commit & push branch** is your button.
+
+### Let Shepherd write the brief
+
+The ✨ button next to the task field drafts the brief for you as **Goal**, **Constraints** and **Acceptance**. The text streams into the field and you edit it. Nothing starts until you press **Run**. If the brief would quote a colleague's review comment, only the on-device model writes it. See [AI and language models](/docs/ai).
+
+### Answer the session that wrote the code
+
+Claude Code stamps its commits with a `Claude-Session:` trailer. When a pull request's commits carry one, each finding and the review summary get **Send to the session**. A sheet shows the exact message first. Your installed CLI then resumes that session in the pull request's worktree. For a session that lives on `claude.ai/code`, the button reads **Open the session**.
+
+Both commands are editable in **Settings → Delegation** under **Session back-channel**. This is not a review action: it resolves nothing and submits nothing.
+
+### Start automatically when CI goes red
+
+Off by default. In **Settings → Delegation**, under **Automatic delegation**, switch on **Start a delegation on its own when a rule matches**. Then choose when, under **Run on my pull requests when**:
+
+- **CI turns red**
+- **A reviewer requests changes**
+
+It uses the same worktree and guardrails, and it never pushes, approves or merges. The finished diff waits for you to review, marked as automatic. You can set limits for runs **At once** and **Per day**.
+
+## The `shepherd://` URL scheme
+
+Any tool can open Shepherd on the right screen.
+
+| URL | Opens |
+| --- | --- |
+| `shepherd://pr/owner/repo/123` | A pull request in the review screen |
+| `shepherd://issue/owner/repo/123` | An issue in the issues inbox |
+| `shepherd://inbox` | The inbox |
+| `shepherd://inbox?filter=needs-my-review` | The inbox with a filter |
+| `shepherd://fleet` | Every agent Shepherd has seen |
+| `shepherd://fleet/claude-code` | One agent's page |
+| `shepherd://sync` | Starts a sweep of every repository |
+| `shepherd://settings/intelligence` | Settings on a tab |
+
+Inbox filters are `needs-my-review`, `mine`, `involved`, `approved-by-me`, `watched`, `humans`, `bots`, `issues`, `agent:<id>` and `repo:<owner>/<name>`. Settings tabs are `account`, `sync`, `replies`, `agents`, `intelligence`, `delegation`, `automation` and `appearance`.
+
+Links carry no file path, command or body. A link that arrives while you are signed out is kept and opens after sign-in.
+
+## The command line
+
+The `shepherd` tool builds a `shepherd://` URL and hands it to the app. It never talks to GitHub and never sees your token.
+
+The CLI is not bundled with the app. Build it from source in a checkout of the repository and copy it onto your path:
+
+```sh
+xcodebuild -project Shepherd.xcodeproj -scheme ShepherdCLI -configuration Release \
+  -derivedDataPath .build/cli build
+cp .build/cli/Build/Products/Release/shepherd /usr/local/bin/
+```
+
+Commands:
+
+```sh
+shepherd open owner/repo#123
+shepherd open https://github.com/owner/repo/pull/123
+shepherd issue owner/repo#128
+shepherd inbox needs-my-review
+shepherd inbox --filter agent:claude-code
+shepherd fleet
+shepherd fleet claude-code
+shepherd sync
+shepherd settings intelligence
+shepherd --help
+shepherd --version
+```
+
+`open` and `issue` accept `owner/repo#123`, `owner/repo/123` or the github.com URL. Exit code 2 means the arguments were not understood. Exit code 1 means the URL could not be handed over.
+
+## Shortcuts, Siri and Spotlight
+
+Shepherd's commands are App Intents. They appear in the Shortcuts app and in Spotlight actions.
+
+| Action | What it does |
+| --- | --- |
+| **Open Pull Request** | Opens a pull request you pick or search for |
+| **Show Inbox** | Shows the inbox with an optional filter |
+| **Show Agent Fleet** | Shows the fleet |
+| **Sync Now** | Sweeps every repository |
+| **Start Review Session** | Starts a focus session |
+| **Open Shepherd Settings** | Opens a Settings tab |
+| **Get Pull Requests Needing Review** | Returns the list from the local database, with no GitHub call |
+| **Summarise Pull Request** | Reads out an on-device summary |
+
+Siri phrases include "Open my review queue in Shepherd", "What needs my review in Shepherd", "Sync Shepherd", "Start a review session in Shepherd" and "Summarise my next review in Shepherd".
+
+There are no write actions. Nothing here can approve, comment, merge or delegate.
+
+Pull requests in your inbox also appear in Spotlight (⌘Space) with title and metadata only. To remove them, switch off **Show pull requests in Spotlight** in **Settings → Intelligence**.
+
+## Outbound webhooks
+
+Shepherd can POST a JSON event to one URL you choose, such as an n8n Webhook node. Go to **Settings → Automation**, switch on **Send events to a webhook**, enter the **URL** and press **Send test event**.
+
+Events:
+
+- `review.submitted`
+- `pr.merged`
+- `delegation.finished`
+- `inbox.new_review_request`
+- `pr.auto_merge_queued`
+- `issue.closed`
+- `issue.assigned_to_agent`
+
+Events fire only after the action really succeeded. The payload says what happened, never what was written: no review text, comments, diffs or agent output. You can add an optional **Signing secret**, stored in your Keychain, and every request then carries an HMAC signature.
+
+For the full schema, signature check and an n8n walkthrough, see [WEBHOOKS.md on GitHub](https://github.com/schnaq/shepherd/blob/main/docs/WEBHOOKS.md).
+
+<Cards>
+<Card title="Merging" href="/docs/merging" />
+<Card title="Settings" href="/docs/settings" />
+<Card title="Privacy" href="/docs/privacy" />
+</Cards>

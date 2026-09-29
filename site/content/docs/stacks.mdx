@@ -1,0 +1,75 @@
+---
+title: Stacks
+description: How Shepherd shows GitHub's stacked pull requests and merges a stack in one go.
+---
+
+## What a stack is
+
+GitHub supports stacked pull requests natively (public preview since 2026-07-30). A stack is an ordered list of pull requests in one repository. The bottom one targets the main branch. Each one above targets the branch of the one below.
+
+Merging a pull request in a stack merges everything below it too, all together. The pull requests above stay open. GitHub re-targets and rebases them by itself.
+
+Shepherd shows and merges stacks. It does not create or change them. Use github.com or `gh stack` for that.
+
+## How Shepherd shows a stack
+
+- Each row in the inbox gets a small chip such as **Stack 2/3**. Hover it: "Part of a GitHub stack: 2 of 3, on main".
+- The detail panel and the review screen show a **STACK** card. It lists the stack from bottom to top, which is the merge order. The current pull request is marked "this one". Click another row to open it.
+- The card only lists pull requests that are in your inbox. It adds a line like "2 more are not in your inbox."
+
+Rows are not grouped by stack. The chip is only a tag.
+
+## Merge a stack
+
+### From the top pull request
+
+Open the merge sheet on a stacked pull request. Below the title, it says what else goes along, for example "Also merges #411 and #410, the pull requests below it in the stack." If your inbox does not hold all of them, it gives only the number.
+
+There is no way to merge an upper pull request alone. The button stays **Merge**.
+
+**Delete the branch afterwards** is off and disabled here. GitHub manages the branches of a stack.
+
+### By ticking
+
+1. Tick positions 1 up to k of one stack. Press `x` or Command-click.
+2. The button becomes **Merge stack (k)…**.
+3. Press it, or press `m`. The merge sheet opens on the top ticked pull request.
+
+The ticks must be exactly the bottom of the stack: positions 1, 2, 3 and so on, with no gap, from one repository. If you tick position 2 without 1, or skip one, Shepherd cannot merge exactly what you ticked. The button then reads **Merge n pull requests…** and starts a series, see below.
+
+### What you see while it merges
+
+Stacks use GitHub's asynchronous merge. Shepherd sends it, then asks GitHub a few times for about ten seconds.
+
+| GitHub says | What you see |
+| --- | --- |
+| merged | "Merged owner/repo#12." The pull requests leave the inbox on the next sync. |
+| enqueued | "Queued on GitHub: owner/repo#12." GitHub's merge queue takes over. |
+| still pending | "GitHub is merging the stack for owner/repo#12." The result shows on the next sync: the pull requests leave the inbox, or stay. |
+| failed | The merge shows as not sent, with GitHub's message. |
+
+There is no separate merged message for the last case. The pull request just disappears from the inbox.
+
+## Limits
+
+- Only a prefix from the bottom can be merged. You can not skip a pull request in the middle.
+- One repository and one stack at a time.
+- If a check fails on a pull request, Shepherd still shows the warning in the sheet, but GitHub decides. A stack merges all together or not at all.
+- Shepherd never deletes the branches of a stack.
+
+Your token needs Contents write and Pull requests write. See [GitHub token](/docs/github-token).
+
+## Stacks in a merge series
+
+If your ticks are not a clean bottom prefix, or you tick pull requests from several places, you get a merge series (see [Merging](/docs/merging)). Stacks work in a series like this:
+
+- Members of one stack always merge bottom first, whatever the order on the sheet. Swapping two of them does nothing.
+- Shepherd never presses Update branch on a pull request above the bottom. GitHub rebases those after the one below merged. Shepherd waits, and takes over the new commit once.
+- If a pull request is excluded, everything above it in the same stack is excluded too, with the reason "one below it is excluded". Merging the upper one would merge the excluded one along.
+- If the update never comes, the pull request is skipped as "update refused" after one hour.
+- **Delete the branch afterwards** applies to pull requests outside a stack only. The sheet says so.
+- A queued stack merge can take a while. Shepherd waits up to 24 hours for GitHub's answer.
+
+<Callout type="info">
+A stack that is fully merged in one go with **Merge stack** needs no series. Use a series when you mix stacks with other pull requests.
+</Callout>

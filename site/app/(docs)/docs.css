@@ -1,0 +1,22 @@
+@import "tailwindcss";
+@import "fumadocs-ui/css/neutral.css";
+@import "fumadocs-ui/css/preset.css";
+
+/* Dark mode in Shepherd's own palette (app/(site)/globals.css, Theme.swift). */
+.dark {
+  --color-fd-background: #0b0c11;
+  --color-fd-card: #101116;
+  --color-fd-popover: #14161d;
+  --color-fd-secondary: #1b1e27;
+  --color-fd-muted: #14161d;
+  --color-fd-accent: #1b1e27;
+  --color-fd-border: #252833;
+  --color-fd-foreground: #e8eaf0;
+  --color-fd-muted-foreground: #9aa1b2;
+  --color-fd-primary: #6e9df2;
+  --color-fd-ring: #6e9df2;
+}
+
+html {
+  scrollbar-gutter: stable;
+}

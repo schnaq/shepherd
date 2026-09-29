@@ -14,6 +14,7 @@ export function Nav() {
             <li><a href="#what">What it does</a></li>
             <li><a href="#privacy">Privacy</a></li>
             <li><a href="#install">Install</a></li>
+            <li><a href="/docs">Docs</a></li>
             <li><a href="https://github.com/schnaq/shepherd">GitHub</a></li>
           </ul>
         </nav>

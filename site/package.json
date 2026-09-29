@@ -11,14 +11,21 @@
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
+    "fumadocs-core": "16.15.15",
+    "fumadocs-mdx": "15.4.5",
+    "fumadocs-ui": "npm:@fumadocs/base-ui@16.15.15",
     "next": "^16",
     "react": "^19",
     "react-dom": "^19"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/mdx": "^2.0.14",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "postcss": "^8.5.28",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5"
   }
 }

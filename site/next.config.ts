@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { createMDX } from "fumadocs-mdx/next";
 
 const nextConfig: NextConfig = {
   // Screenshots are served from /public and are already the size they are shown at, so the
@@ -7,4 +8,5 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
 };
 
-export default nextConfig;
+// Compiles the user guide in content/docs (MDX) for the pages under /docs.
+export default createMDX()(nextConfig);
