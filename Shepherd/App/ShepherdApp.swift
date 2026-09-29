@@ -194,6 +194,14 @@ struct ShepherdCommands: Commands {
             .disabled(!environment.updates.isEnabled)
         }
 
+        // In the Help menu, where the Mac's own apps keep it, on the ⌘/ they use.
+        CommandGroup(after: .help) {
+            Button(String(localized: "Keyboard Shortcuts")) {
+                environment.isShowingKeyboardShortcuts = true
+            }
+            .keyboardShortcut("/", modifiers: .command)
+        }
+
         CommandMenu(String(localized: "Review")) {
             // ⇧⌘⏎ rather than a bare ⏎-with-modifiers: the inbox's plain ⏎ opens the row under
             // the cursor, and the main menu resolves its key equivalents before the key ever

@@ -53,6 +53,9 @@ final class AppEnvironment {
     var route: Route = .inbox
     /// Whether the ⌘K palette is up.
     var isCommandPaletteVisible = false
+    /// Whether the ⌘/ keyboard-shortcut overview is up. Raised by the Help menu, the inbox's
+    /// hint bar and ⌘K.
+    var isShowingKeyboardShortcuts = false
     /// Whether the "watch a repository" dialog is up.
     ///
     /// Here rather than in the inbox's own state because three things raise it: the `+` beside
