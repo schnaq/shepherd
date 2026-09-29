@@ -1,0 +1,81 @@
+---
+title: AI and language models
+description: What runs on your Mac, what can go to a model provider you configure, and how to switch AI off.
+---
+
+Shepherd works fully without AI. Every model feature is a suggestion you can dismiss. Shepherd never submits a review, approves, merges or comments for you.
+
+## The three levels
+
+Open **Settings → Intelligence**. The **Provider** picker has three choices.
+
+| Choice | What it does |
+| --- | --- |
+| **Off** | Only local heuristics: file priority, agent detection, risk hints. |
+| **On-device** (default) | Adds short summaries and other hints from Apple's on-device model. Nothing leaves the Mac. |
+| **On-device + API key** | Adds whole-pull-request analysis through the endpoint you configure. |
+
+The on-device model needs Apple Intelligence. If your Mac does not have it, Settings shows the reason under the picker and the features that need it stay away.
+
+## Providers you can bring
+
+With **On-device + API key**, a **Bring your own key** section appears. Pick a **Kind**.
+
+- **Anthropic.** Talks to `api.anthropic.com`. The default model is `claude-haiku-4-5`. You can type another model name.
+- **OpenAI-compatible.** Any endpoint that speaks `chat/completions`. Pick a preset or type a **Base URL**:
+  - **Konduit (EU)**: EU-hosted open models.
+  - **Ollama (local)**: `http://localhost:11434/v1`. No key needed, and nothing leaves your Mac.
+  - **Custom**: any URL you type.
+
+Use **Load models** to list what the endpoint offers, or type a **Model** name. **Test connection** checks that it answers.
+
+Enter your **API key** and press **Save key**. The key is stored in your Keychain and is sent only to that endpoint. It is not kept in the local database or in preferences.
+
+For an OpenAI-compatible endpoint you can add an optional policy under **Where the model runs**: a list of allowed **Countries** (two-letter codes) and **Require zero retention**. They are sent with each request only when set. Endpoints that cannot meet them can refuse the request.
+
+## Which feature uses which model
+
+With a key configured, most drafting requests go to your endpoint first. If it fails, Shepherd falls back to the on-device model. Without a key, everything below runs on your Mac.
+
+| Feature | Model | Leaves your Mac? |
+| --- | --- | --- |
+| Summary and focus hints for a pull request (shown when you select or open it) | Endpoint first if configured, else on-device | Yes, to your endpoint, when a key is configured |
+| **Draft with AI** for a review summary or inline comment (⇧⌘D) | Endpoint first if configured, else on-device | Yes, to your endpoint, when a key is configured |
+| **Explain these lines** (⌥E) | Endpoint first if configured, else on-device | Yes, to your endpoint, when a key is configured |
+| Brief for a coding agent (the ✨ button in the delegation sheet) | Endpoint first if configured, else on-device. On-device only when the brief would quote a colleague's comment | Only to your endpoint, and never with a colleague's comment |
+| **Why?** on a red check | On-device first. Your endpoint only if the log did not fit and you press the card's own button | Only on that click, when a key is configured |
+| Pull request kind and risk chips | On-device only | No |
+| Claims card, **Read by the model** lines | On-device only | No |
+| Read screenshots in descriptions (off by default) | On-device only | No. The images are downloaded from GitHub, and never sent anywhere else |
+| Thread summary and **Translate** | On-device (Apple frameworks) | No |
+| Search by meaning in ⌘K | On-device embeddings | No |
+| **Summarise Pull Request** in Shortcuts and Siri | On-device only | No |
+| Morning digest | No model. Built from the local database | No |
+
+### What a configured endpoint receives
+
+- For summaries and hints: the pull request title, a description excerpt, the file list and the top hunks.
+- For drafts: the diff excerpt around the line you comment on, plus the inline comments already in your pending review.
+- For **Explain these lines**: the same diff excerpt and nothing else.
+- For **Why?**, after you press the button: failing check names and summaries, a diff window, and a reduced tail of the job log.
+
+All of it is cut to a token budget before it is sent. Pull request code does reach the endpoint you chose, and only that endpoint.
+
+When a model answers, a caption tells you which one: on-device, Anthropic or custom endpoint.
+
+## Turn AI off
+
+- **Everything that talks to a model:** set **Provider** to **Off**. Nothing is sent to a cloud endpoint, and model-based features (kind and risk chips, model-read claims, screenshot reading) stop.
+- **Only the cloud:** set **Provider** to **On-device**. Your saved key stays in the Keychain but is not used.
+- **Semantic search:** switch off **Semantic search index** in the same tab. ⌘K then matches words only, and the index is emptied.
+- **Structured triage:** switch off **Classify pull requests**. This deletes the stored verdicts.
+
+<Callout type="info">
+Semantic search, triage and Spotlight run on your Mac and never use a configured endpoint. See [Privacy](/docs/privacy) for what leaves your Mac overall.
+</Callout>
+
+<Cards>
+<Card title="Review" href="/docs/review" />
+<Card title="Automation" href="/docs/automation" />
+<Card title="Privacy" href="/docs/privacy" />
+</Cards>

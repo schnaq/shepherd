@@ -1,0 +1,152 @@
+---
+title: Merging
+description: Merge one pull request, wait for its checks, or merge several one after another.
+---
+
+Shepherd never merges on its own unless you ask. Every merge starts with a click or a key press from you.
+
+## Merge one pull request
+
+Select a pull request and press `m`, or use the green **Merge…** button in the inbox. On the review screen the button is called **Merge**. Both open the merge sheet.
+
+The sheet has these choices:
+
+- **Method**: Merge commit, Squash and merge, or Rebase and merge. Shepherd remembers your last choice.
+- **Delete the branch afterwards**: removes the head branch after the merge landed. It is skipped for forks and for a repository's default branch. If the deletion fails, the merge still counts as done.
+
+Then press **Merge**. Shepherd queues the merge. If GitHub cannot be reached, it goes out as soon as it can.
+
+### The merge is pinned to what you reviewed
+
+Shepherd merges the exact commit you looked at. If somebody pushes a new commit first, the merge is not sent. You see "Merge held back" and an alert. Look at the new commit, then merge again.
+
+### When the Merge button is disabled
+
+The button is dark in two cases. Hover it to read the reason.
+
+| Reason | Text you see |
+| --- | --- |
+| The pull request is a draft | "is still a draft — GitHub refuses the merge until it is marked ready for review." |
+| GitHub reports conflicts | "has conflicts with its base branch. Resolve them first." |
+
+The review screen also disables it when the pull request is already merged or closed on GitHub, or when a merge is already on its way.
+
+The sheet only warns about the other cases. It says "Checks are failing on the head commit", "Checks are still running", or "GitHub has not finished computing mergeability". You can still merge. GitHub may refuse.
+
+## Merge when the checks pass
+
+If the checks are still running, the sheet offers **Merge when checks pass** (`⇧⌘⏎`). It is not shown when a check already failed, or when the pull request has no checks. Use plain **Merge** for those.
+
+After you press it:
+
+- Shepherd merges the first time it sees every check green on that commit.
+- It uses the method and branch setting you saw in the sheet.
+- The inbox shows "Merges when the checks pass".
+- It works only while Shepherd is running.
+
+To stop waiting, open the merge sheet again and press **Stop waiting**, or press `m`.
+
+Shepherd gives up and tells you with a notification when:
+
+- somebody pushes a new commit,
+- a check fails,
+- the pull request becomes a draft,
+- GitHub reports conflicts,
+- the commit turns out to have no checks.
+
+If the pull request disappears from your inbox without being merged, Shepherd drops the wait after seven days.
+
+## Merge several one after another
+
+Use this when you have a pile of small pull requests in one repository, for example dependency bumps.
+
+1. Tick the pull requests. Press `x` on a row, or Command-click rows.
+2. Press `m`, or click the button. With several ticks it reads **Merge 4 pull requests…**. You can also use the command **Merge one after another…**.
+3. Check the sheet and press **Start**.
+
+The button changes with your ticks. See [Stacks](/docs/stacks) for the case where the ticks are the bottom of one stack.
+
+| Ticked | Button |
+| --- | --- |
+| none or one | **Merge…** |
+| the bottom of one stack | **Merge stack (n)…** |
+| anything else, two or more | **Merge n pull requests…** |
+
+### The sheet
+
+- There is one list per repository. Each repository becomes its own series.
+- The order is smallest change first, because small pull requests cause the fewest conflicts. Ties go to the older pull request. Drag rows to change the order, or use Move up and Move down in the context menu.
+- Method and **Delete the branch afterwards** apply to the whole series.
+- Nothing asks again after **Start**.
+
+Your own pull requests are allowed. This matters if an agent opens pull requests under your account.
+
+### What is excluded
+
+Some ticked pull requests are left out. They are listed under **Excluded** with a reason. Hover for a longer explanation.
+
+| Reason | Meaning |
+| --- | --- |
+| merge already on its way | A merge is queued, armed, or part of another series. |
+| draft | Still a draft. |
+| conflicts | GitHub reports conflicts. |
+| checks failing | A check on the head commit failed. |
+| changes requested | A reviewer asked for changes. A series does not overrule that. |
+| one below it is excluded | Stacked pull request, see [Stacks](/docs/stacks). |
+
+Running checks are not a reason. Waiting for them is the point of a series.
+
+### What each step does
+
+Shepherd works through the list from the top, one pull request at a time:
+
+1. If the branch is behind its base, it asks GitHub to update the branch. This restarts the checks.
+2. It waits for the checks to pass.
+3. It merges, pinned to the commit it checked.
+4. It goes on with the next one.
+
+A pull request without any checks is merged as soon as GitHub reports it mergeable. After an update it waits up to one hour for checks to register on the new commit before it decides there are none.
+
+A pull request that cannot be merged is skipped and the series continues.
+
+### Chips on the rows
+
+Every row in a series shows a chip.
+
+- `Series 2/5 · waiting`
+- `Series 2/5 · updating branch`
+- `Series 2/5 · waiting for checks`
+- `Series 2/5 · merging`
+- `Series 2/5 · skipped: reason`
+
+Skip reasons: checks failed, conflicts, draft, changes requested, new commits, a write failed, update refused, merge refused, left the inbox, removed.
+
+New commits mean somebody pushed something nobody reviewed in this series. A skipped pull request stays as it is on GitHub. You can merge it by hand later.
+
+### Stop or change a series
+
+- **Remove from series** takes one pull request out. Find it on the review screen. The series goes on with the next one.
+- **Cancel** stops the whole series. Running series are listed in **Settings → Sync** under **Merge series**, each with a Cancel button. A merge that is already queued still goes out.
+
+Series live on this Mac only. They survive a restart of Shepherd.
+
+### Time limits
+
+Shepherd does not wait forever. After one hour it skips a pull request that:
+
+- left the inbox without a confirmed merge,
+- did not show the new commit after Shepherd updated the branch,
+- was queued for merge but is still open without any answer from GitHub.
+
+### The summary
+
+When a series finishes, you get one notification per repository, for example `schnaq/shepherd: 4 merged, 1 skipped`.
+
+## Related
+
+<Cards>
+  <Card title="Stacks" href="/docs/stacks" />
+  <Card title="Automation" href="/docs/automation" />
+  <Card title="Settings" href="/docs/settings" />
+  <Card title="GitHub token" href="/docs/github-token" />
+</Cards>

@@ -1,0 +1,110 @@
+---
+title: GitHub token
+description: How Shepherd signs in to GitHub, which permissions each feature needs, and how to fix organizations with SAML single sign-on.
+---
+
+## How Shepherd signs in
+
+Shepherd offers two ways to sign in.
+
+| Method | What it is | Good for |
+| --- | --- | --- |
+| Device flow | You approve a short code at `github.com/login/device`. Shepherd gets a token from its GitHub App. No password and no client secret. | Most people. The token refreshes itself. |
+| Personal access token | You paste a token. The sign-in screen suggests a fine-grained token with **Pull requests: Read & write**. | Organizations with SAML single sign-on, or when you want to control exactly what Shepherd can touch. |
+
+Shepherd checks the token with `GET /user` before it signs you in. **Settings → Account** shows which method you used.
+
+The token is stored in the macOS Keychain and nowhere else. It is deleted when you sign out.
+
+<Callout type="warn">
+Shepherd only talks to `api.github.com` and `github.com`. GitHub Enterprise Server is not supported, with either sign-in method.
+</Callout>
+
+## What each feature needs
+
+Shepherd asks GitHub for these things. The table maps them to the permissions GitHub documents for each endpoint.
+
+| Feature | GitHub call | Fine-grained permission | Classic scope |
+| --- | --- | --- | --- |
+| Inbox, watched repositories | GraphQL search over pull requests | Pull requests: Read, Metadata: Read | `repo` (or `public_repo` for public repositories only) |
+| Read a pull request, files, commits, reviews, threads | `/pulls/...` and GraphQL | Pull requests: Read | `repo` |
+| Approve, request changes, comment, reply, resolve threads, mark ready | Reviews and comment replies, GraphQL mutations | Pull requests: Read and write | `repo` |
+| Checks on a commit | `/commits/{ref}/check-runs` | Checks: Read | `repo` |
+| Failing-job logs ("why is CI red") | `/actions/jobs/{id}/logs` | Actions: Read | `repo` |
+| Merge | `PUT /pulls/{n}/merge` | Contents: Read and write, Pull requests: Read and write | `repo` |
+| Update branch | `PUT /pulls/{n}/update-branch` | Contents: Read and write | `repo` |
+| Merge a stack | `PUT /pulls/{n}/merge-async` | Same as Merge | `repo` |
+| Delete branch after merge | `DELETE /git/refs/heads/{name}` | Contents: Read and write | `repo` |
+| Issues: comment, label, assign, close | `/issues/{n}/...` | Issues: Read and write | `repo` |
+| Faster refresh from notifications | `GET /notifications` | Not available | `notifications` or `repo`, classic token only |
+
+<Callout type="info">
+The permission columns follow GitHub's documentation for these endpoints. If a feature fails with a 403 or 404, compare the token with its row here.
+</Callout>
+
+### Fine-grained token setup
+
+1. Open GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → **Generate new token**.
+2. Set **Resource owner** to the account or organization that owns the repositories. To cover several owners, create one token per owner.
+3. Under **Repository access**, choose all repositories, or select the ones you review and merge in.
+4. Under **Permissions**, set Pull requests to Read and write. Metadata is added automatically.
+5. For the full feature set, also set Contents (Read and write), Checks (Read), Actions (Read) and Issues (Read and write). Leave out what you do not use. Without Contents write, merge and update branch will fail.
+6. Generate the token and paste it into **PERSONAL ACCESS TOKEN** on the sign-in screen.
+
+### Classic token setup
+
+Create a token under Developer settings → Personal access tokens → Tokens (classic) with the `repo` scope. Shepherd calls no organization or workflow endpoints, so `read:org` and `workflow` are not needed. Add `notifications` if you want the notification poll described below.
+
+### Notifications
+
+GitHub only serves `GET /notifications` to classic tokens. With device flow, Shepherd never starts that poll. With a pasted token, Shepherd tries once. If GitHub refuses, it stops and keeps the inbox current with its regular sweep instead. Nothing else is lost.
+
+## Organizations with SAML single sign-on
+
+Many organizations require SAML single sign-on. A token does not get access to such an organization until it is authorized for it.
+
+### Symptom
+
+A pull request you are assigned to or asked to review in that organization does not appear in the inbox. There is no error and no warning. GitHub's search silently leaves out results from organizations the token cannot access.
+
+Watching the repository does not help. A watched repository is one more search with the same token, so it comes back empty for the same reason.
+
+### Fix for a classic token
+
+1. Open GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic).
+2. Next to your token, click **Configure SSO**.
+3. Next to the organization, click **Authorize** and complete the single sign-on prompt.
+
+### Fix for a fine-grained token
+
+- Set the organization as **Resource owner** when you create the token. A token owned by your personal account cannot see the organization's private repositories.
+- Some organizations require an owner to approve fine-grained tokens. The token stays pending until they do.
+- If the organization was missing when you created the token, create a new one. The resource owner cannot be changed later.
+
+### Device flow and organizations
+
+Device flow signs in through Shepherd's GitHub App. GitHub may require the organization to allow that app before it shows you the organization's pull requests. If pull requests from an organization are missing after a device-flow sign-in, ask an owner to approve the app, or sign in with a token instead. The Shepherd project recommends a token for SSO organizations.
+
+### Check that the token works
+
+Replace `OWNER/REPO` with a repository in the organization and run:
+
+```sh
+curl -i -H "Authorization: Bearer YOUR_TOKEN" https://api.github.com/repos/OWNER/REPO
+```
+
+- `200` means the token can read the repository.
+- `404` on a repository you know exists means the token has no access to it.
+- `403` with an `X-GitHub-SSO` header means the token needs SSO authorization. The header contains a URL to do it.
+
+## Rate limits
+
+Shepherd keeps the request count low. It uses a handful of search calls per sweep and conditional requests, so an unchanged inbox costs nothing. If GitHub still rate-limits you, Shepherd waits and retries a few times, then shows **Rate limited until** with the reset time. Try again after that.
+
+To lower the load, use a longer **Full search every** interval in **Settings → Sync**, and watch fewer repositories. Each watched repository is one more search on every sweep.
+
+## Signing in again
+
+If GitHub rejects the token, Shepherd shows **GitHub rejected the credentials. Sign in again.** This happens when a token is revoked, expires or loses a permission. Sign out in **Settings → Account** and sign in with a new token.
+
+See [Troubleshooting](/docs/troubleshooting) for more.

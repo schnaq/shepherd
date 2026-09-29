@@ -1,0 +1,36 @@
+---
+title: Shepherd
+description: A native macOS review inbox that herds pull requests from every repository into one place.
+---
+
+Shepherd is a macOS app for reviewing GitHub pull requests. It pulls every pull request that needs you, from every repository, into one local, keyboard-driven inbox. You triage, review and merge without opening a browser tab.
+
+## Who it is for
+
+Coding agents open pull requests faster than you can read them. Shepherd is for the person who has to review that flood: many repositories, many small pull requests, some from people and some from agents like Claude Code or Copilot.
+
+Each row shows CI state, review state and diff size. Shepherd works from a local database, so the inbox opens fast and stays usable offline. Reviews and merges you queue are sent when GitHub is reachable.
+
+## Quick start
+
+1. **Install.** Download the app or use Homebrew. See [Installation](/docs/installation).
+2. **Sign in.** Approve a short code on github.com, or paste a personal access token. See [GitHub token](/docs/github-token).
+3. **Watch repositories.** Press `⇧⌘A` and enter `owner/repo` for each repository you are responsible for. Shepherd already finds pull requests that involve you.
+4. **Open the inbox.** Start with **Needs my review**. Press `⌘R` to sync now. See [Inbox](/docs/inbox).
+5. **Review and merge.** Open a pull request, read the diff, then approve, comment or merge. See [Review](/docs/review) and [Merging](/docs/merging).
+
+<Callout type="info">
+Shepherd only talks to github.com. GitHub Enterprise Server is not supported.
+</Callout>
+
+## Where to go next
+
+<Cards>
+  <Card title="Installation" href="/docs/installation" />
+  <Card title="GitHub token" href="/docs/github-token" />
+  <Card title="Inbox" href="/docs/inbox" />
+  <Card title="Review" href="/docs/review" />
+  <Card title="Merging" href="/docs/merging" />
+  <Card title="Keyboard shortcuts" href="/docs/keyboard-shortcuts" />
+  <Card title="Troubleshooting" href="/docs/troubleshooting" />
+</Cards>

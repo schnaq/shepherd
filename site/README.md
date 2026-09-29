@@ -1,6 +1,7 @@
 # shepherd.schnaq.com
 
-The product page for Shepherd: one dark page in Next.js, hosted on Vercel.
+The product page for Shepherd, one dark page in Next.js, and the user guide under `/docs`
+(Fumadocs), hosted on Vercel.
 
 ## Run it
 
@@ -47,7 +48,14 @@ member of the team), `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` (both from `vercel 
 
 ## Where things live
 
-- `app/` — layout, the single page, the Open Graph image
+- `app/(site)/` — the product page: its root layout, the page, the Open Graph image, `globals.css`
+- `app/(docs)/` — the user guide's own root layout (Fumadocs, Tailwind in `docs.css`) and its page
+  route. Two root layouts on purpose: crossing between them is a full page load, so neither
+  side's CSS reaches the other
+- `content/docs/` — the user guide, one MDX file per page; `meta.json` sets the sidebar order.
+  Quote UI labels as the app's English strings, and keep `{`, `}`, `<` inside backticks
+- `app/llms.txt`, `app/llms-full.txt`, `app/llms.mdx/` — the guide as Markdown for language
+  models; `app/api/search` — the guide's search
 - `components/` — one file per section; `InboxDemo` and `CopyButton` are the only client components
 - `public/` — the app icon and the screenshots, copied from `docs/assets`
 - `app/globals.css` — every style; the palette is Shepherd's own from `Theme.swift`
