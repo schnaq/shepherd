@@ -407,6 +407,17 @@ struct CommandPaletteView: View {
         )
         result.append(
             PaletteCommand(
+                id: "keyboard-shortcuts",
+                section: inbox,
+                title: String(localized: "Keyboard Shortcuts"),
+                systemImage: "keyboard",
+                keyHint: "⌘/"
+            ) {
+                environment.isShowingKeyboardShortcuts = true
+            }
+        )
+        result.append(
+            PaletteCommand(
                 id: "watch-repo",
                 section: inbox,
                 title: String(localized: "Watch a repository"),

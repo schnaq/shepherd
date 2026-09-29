@@ -2481,6 +2481,16 @@
         }
       }
     },
+    "all keyboard shortcuts": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "alle Tastaturkürzel"
+          }
+        }
+      }
+    },
     "API key": {
       "localizations": {
         "de": {
@@ -3341,6 +3351,16 @@
         }
       }
     },
+    "Back to the file list": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zurück zur Dateiliste"
+          }
+        }
+      }
+    },
     "Back to the inbox": {
       "localizations": {
         "de": {
@@ -3717,6 +3737,16 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "Comment on the line": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeile kommentieren"
           }
         }
       }
@@ -5311,6 +5341,16 @@
         }
       }
     },
+    "During a review session": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Während einer Review-Sitzung"
+          }
+        }
+      }
+    },
     "ENTER THIS CODE ON GITHUB": {
       "localizations": {
         "de": {
@@ -5501,6 +5541,26 @@
         }
       }
     },
+    "Everywhere": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Überall"
+          }
+        }
+      }
+    },
+    "Explain the selected lines": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausgewählte Zeilen erklären"
+          }
+        }
+      }
+    },
     "Explain these lines": {
       "localizations": {
         "de": {
@@ -5627,6 +5687,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dateien"
+          }
+        }
+      }
+    },
+    "Files / Conversation": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dateien / Unterhaltung"
           }
         }
       }
@@ -6031,6 +6101,36 @@
         }
       }
     },
+    "Group by agent": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nach Agent gruppieren"
+          }
+        }
+      }
+    },
+    "Group by repository": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nach Repository gruppieren"
+          }
+        }
+      }
+    },
+    "Group by review state": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nach Review-Status gruppieren"
+          }
+        }
+      }
+    },
     "Group Inbox By": {
       "localizations": {
         "de": {
@@ -6287,6 +6387,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Intelligenz nicht verfügbar: %@"
+          }
+        }
+      }
+    },
+    "Into the diff": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In den Diff"
           }
         }
       }
@@ -6551,6 +6661,16 @@
         }
       }
     },
+    "Keyboard Shortcuts": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tastaturkürzel"
+          }
+        }
+      }
+    },
     "Keychain error: %@": {
       "localizations": {
         "de": {
@@ -6597,6 +6717,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "SPUREN"
+          }
+        }
+      }
+    },
+    "Left / right side, side by side": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linke / rechte Seite (Side by Side)"
           }
         }
       }
@@ -6781,6 +6911,16 @@
         }
       }
     },
+    "Load an update from GitHub": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update von GitHub laden, wenn eins wartet"
+          }
+        }
+      }
+    },
     "Load models": {
       "localizations": {
         "de": {
@@ -6867,6 +7007,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mergen, sobald Checks grün"
+          }
+        }
+      }
+    },
+    "Merge when checks pass, in the merge dialog": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Im Merge-Dialog: Mergen, sobald Checks grün"
+          }
+        }
+      }
+    },
+    "Merge, or merge the selection": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mergen, oder die Auswahl mergen"
           }
         }
       }
@@ -7207,6 +7367,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "Meine Pull Requests"
+          }
+        }
+      }
+    },
+    "Next / previous file": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nächste / vorige Datei"
+          }
+        }
+      }
+    },
+    "Next / previous line": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nächste / vorige Zeile"
+          }
+        }
+      }
+    },
+    "Next / previous pull request": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nächster / voriger Pull Request"
+          }
+        }
+      }
+    },
+    "Next, deal with this one later": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weiter, diesen später erledigen"
           }
         }
       }
@@ -8351,6 +8551,16 @@
         }
       }
     },
+    "Open the first closing issue": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erstes Issue öffnen, das er schließt"
+          }
+        }
+      }
+    },
     "Open the full inbox on “Needs my review”": {
       "localizations": {
         "de": {
@@ -8367,6 +8577,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Das Issue auf GitHub öffnen"
+          }
+        }
+      }
+    },
+    "Open the line's thread": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thread der Zeile öffnen"
+          }
+        }
+      }
+    },
+    "Open the review": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review öffnen"
           }
         }
       }
@@ -9001,12 +9231,52 @@
         }
       }
     },
+    "Review and merge keys, as in the inbox": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review- und Merge-Tasten wie in der Inbox"
+          }
+        }
+      }
+    },
     "REVIEW PRIORITY": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "REVIEW-PRIORITÄT"
+          }
+        }
+      }
+    },
+    "Review: diff": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review: Diff"
+          }
+        }
+      }
+    },
+    "Review: file list": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review: Dateiliste"
+          }
+        }
+      }
+    },
+    "Review… or Approve…; Merge in its dialog": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review… / Approve…, im Merge-Dialog Mergen"
           }
         }
       }
@@ -9831,6 +10101,16 @@
         }
       }
     },
+    "Select for a bulk action": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für eine Sammelaktion auswählen"
+          }
+        }
+      }
+    },
     "Shepherd queues this merge on the first sweep that finds every check green on this commit — while the app is running. A new push or a failing check cancels it.": {
       "localizations": {
         "de": {
@@ -9867,6 +10147,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "per Squash mergen"
+          }
+        }
+      }
+    },
+    "Start a review session": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review-Sitzung starten"
           }
         }
       }
@@ -11311,12 +11601,32 @@
         }
       }
     },
+    "This overview": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Übersicht"
+          }
+        }
+      }
+    },
     "THREAD DIGEST": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "THREAD-ZUSAMMENFASSUNG"
+          }
+        }
+      }
+    },
+    "Toggle viewed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gesehen umschalten"
           }
         }
       }
@@ -12511,6 +12821,16 @@
         }
       }
     },
+    "Two-key commands are typed one after the other. Every command is also in ⌘K.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zwei-Tasten-Befehle tippst du nacheinander. Jeder Befehl steht auch in ⌘K."
+          }
+        }
+      }
+    },
     "Type a command…": {
       "localizations": {
         "de": {
@@ -12717,6 +13037,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Gesehen"
+          }
+        }
+      }
+    },
+    "Viewed, then next unviewed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gesehen, weiter zur nächsten ungesehenen"
           }
         }
       }
@@ -12977,6 +13307,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Schreibe zuerst eine Zusammenfassung — GitHub lehnt ein „request changes“- oder „comment“-Review ohne eine ab."
+          }
+        }
+      }
+    },
+    "Writing and merging": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schreiben und Mergen"
           }
         }
       }
@@ -16981,12 +17321,12 @@
         }
       }
     },
-    "Kind of change and risk, to sort the inbox by. Stays on this Mac.": {
+    "Kind of change and risk, as a tag to filter by. Stays on this Mac.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Art der Änderung und Risiko, zum Sortieren der Inbox. Bleibt auf diesem Mac."
+            "value": "Art der Änderung und Risiko, als Tag zum Filtern. Bleibt auf diesem Mac."
           }
         }
       }

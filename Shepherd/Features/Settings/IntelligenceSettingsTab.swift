@@ -276,7 +276,7 @@ struct IntelligenceSettingsTab: View {
         Section {
             Toggle(isOn: structuredTriageBinding) {
                 Text(String(localized: "Classify pull requests"))
-                Text(String(localized: "Kind of change and risk, to sort the inbox by. Stays on this Mac."))
+                Text(String(localized: "Kind of change and risk, as a tag to filter by. Stays on this Mac."))
             }
         } header: {
             SettingsSectionHeader(
