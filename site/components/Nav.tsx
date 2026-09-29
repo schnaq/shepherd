@@ -11,7 +11,7 @@ export function Nav() {
         </a>
         <nav aria-label="Sections">
           <ul className="nav-links">
-            <li><a href="#what">What it does</a></li>
+            <li className="nav-optional"><a href="#what">What it does</a></li>
             <li><a href="#privacy">Privacy</a></li>
             <li><a href="#install">Install</a></li>
             <li><a href="/docs">Docs</a></li>

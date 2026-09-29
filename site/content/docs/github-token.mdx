@@ -14,7 +14,7 @@ Shepherd offers two ways to sign in.
 
 Shepherd checks the token with `GET /user` before it signs you in. **Settings → Account** shows which method you used.
 
-The token is stored in the macOS Keychain and nowhere else. It is deleted when you sign out.
+The token is stored in the Keychain on this Mac. With **Sync across Macs** on, an encrypted copy also goes to your own bucket (see [Privacy](/docs/privacy)). Signing out deletes it.
 
 <Callout type="warn">
 Shepherd only talks to `api.github.com` and `github.com`. GitHub Enterprise Server is not supported, with either sign-in method.
@@ -99,7 +99,7 @@ curl -i -H "Authorization: Bearer YOUR_TOKEN" https://api.github.com/repos/OWNER
 
 ## Rate limits
 
-Shepherd keeps the request count low. It uses a handful of search calls per sweep and conditional requests, so an unchanged inbox costs nothing. If GitHub still rate-limits you, Shepherd waits and retries a few times, then shows **Rate limited until** with the reset time. Try again after that.
+Shepherd keeps the request count low. It uses a handful of search calls per sweep and conditional requests, so an unchanged inbox costs nothing. If GitHub still rate-limits you, Shepherd waits and retries twice, then shows **Rate limited until** with the reset time. Try again after that.
 
 To lower the load, use a longer **Full search every** interval in **Settings → Sync**, and watch fewer repositories. Each watched repository is one more search on every sweep.
 

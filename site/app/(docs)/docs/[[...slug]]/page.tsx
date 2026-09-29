@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { createRelativeLink } from "fumadocs-ui/mdx";
+import defaultMdxComponents, { createRelativeLink } from "fumadocs-ui/mdx";
 import {
   DocsBody,
   DocsDescription,
@@ -9,8 +9,7 @@ import {
   MarkdownCopyButton,
   ViewOptionsPopover,
 } from "fumadocs-ui/layouts/docs/page";
-import { getMDXComponents } from "@/components/mdx";
-import { markdownSegments, source } from "@/lib/source";
+import { markdownUrl, source } from "@/lib/source";
 
 export default async function Page(props: PageProps<"/docs/[[...slug]]">) {
   const params = await props.params;
@@ -18,21 +17,21 @@ export default async function Page(props: PageProps<"/docs/[[...slug]]">) {
   if (!page) notFound();
 
   const MDX = page.data.body;
-  const markdownUrl = `/llms.mdx/docs/${markdownSegments(page).join("/")}`;
+  const markdown = markdownUrl(page);
 
   return (
-    <DocsPage toc={page.data.toc} full={page.data.full}>
+    <DocsPage toc={page.data.toc}>
       <DocsTitle>{page.data.title}</DocsTitle>
       <DocsDescription className="mb-0">{page.data.description}</DocsDescription>
       <div className="flex flex-row items-center gap-2 border-b pb-6">
-        <MarkdownCopyButton markdownUrl={markdownUrl} />
+        <MarkdownCopyButton markdownUrl={markdown} />
         <ViewOptionsPopover
-          markdownUrl={markdownUrl}
+          markdownUrl={markdown}
           githubUrl={`https://github.com/schnaq/shepherd/blob/main/site/content/docs/${page.path}`}
         />
       </div>
       <DocsBody>
-        <MDX components={getMDXComponents({ a: createRelativeLink(source, page) })} />
+        <MDX components={{ ...defaultMdxComponents, a: createRelativeLink(source, page) }} />
       </DocsBody>
     </DocsPage>
   );

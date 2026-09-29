@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import { DocsLayout } from "fumadocs-ui/layouts/docs";
 import { RootProvider } from "fumadocs-ui/provider/next";
+import { LATEST_RELEASE_URL } from "@/components/LatestRelease";
 import { source } from "@/lib/source";
 import icon from "@/public/icon.png";
 import "./docs.css";
@@ -19,7 +20,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="flex min-h-screen flex-col">
-        <RootProvider theme={{ defaultTheme: "dark" }}>
+        <RootProvider theme={{ defaultTheme: "dark" }} search={{ options: { type: "static" } }}>
           <DocsLayout
             tree={source.getPageTree()}
             nav={{
@@ -30,7 +31,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
                 </>
               ),
             }}
-            links={[{ text: "Download", url: "https://github.com/schnaq/shepherd/releases/latest", external: true }]}
+            links={[{ text: "Download", url: LATEST_RELEASE_URL, external: true }]}
             githubUrl="https://github.com/schnaq/shepherd"
           >
             {children}
