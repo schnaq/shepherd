@@ -4511,16 +4511,6 @@
         }
       }
     },
-    "Continue with device flow": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mit Device-Flow fortfahren"
-          }
-        }
-      }
-    },
     "Conversation": {
       "localizations": {
         "de": {
@@ -10731,16 +10721,6 @@
         }
       }
     },
-    "Shepherd shows a short code, you approve it on github.com. No password, no client secret.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Shepherd zeigt einen kurzen Code, den du auf github.com bestätigst. Kein Passwort, kein Client-Secret."
-          }
-        }
-      }
-    },
     "Shepherd talks to github.com only — plus the AI endpoint you configure yourself. Everything it downloads stays on this Mac.": {
       "localizations": {
         "de": {
@@ -15261,56 +15241,6 @@
         }
       }
     },
-    "May Shepherd count, anonymously?": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Darf Shepherd anonym mitzählen?"
-          }
-        }
-      }
-    },
-    "Shepherd is built on what gets used. To know that, the app would send us a few numbers about once a day.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Shepherd wird nach dem gebaut, was genutzt wird. Damit wir das wissen, würde die App etwa einmal am Tag ein paar Zahlen an uns senden."
-          }
-        }
-      }
-    },
-    "The version, the language, and which features are used": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Die Version, die Sprache und welche Funktionen genutzt werden"
-          }
-        }
-      }
-    },
-    "Only as categories and buckets, never as text": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nur als Kategorien und Stufen, nie als Text"
-          }
-        }
-      }
-    },
-    "No identifier, no repository, no branch, not a line of code": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Keine Kennung, kein Repository, kein Branch, keine Zeile Code"
-          }
-        }
-      }
-    },
     "The counts go to PostHog in the EU (eu.i.posthog.com); your IP address is discarded and no profile is kept. schnaq GmbH is responsible for the data.": {
       "localizations": {
         "de": {
@@ -19419,6 +19349,86 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "Amounts only roughly, e.g. 1–3, 4–10 or 11+ repositories": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mengen nur grob, z. B. 1–3, 4–10 oder 11+ Repositories"
+          }
+        }
+      }
+    },
+    "May Shepherd send the following anonymously, about once a day?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Darf Shepherd etwa einmal am Tag anonym Folgendes senden?"
+          }
+        }
+      }
+    },
+    "Never names of repositories or branches, titles or code": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nie Namen von Repositories oder Branches, Titel oder Code"
+          }
+        }
+      }
+    },
+    "Shepherd opens github.com and copies a short code for you to paste there. No password, no client secret.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd öffnet github.com und kopiert einen kurzen Code, den du dort einfügst. Kein Passwort, kein Client-Secret."
+          }
+        }
+      }
+    },
+    "Sign in with GitHub": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit GitHub anmelden"
+          }
+        }
+      }
+    },
+    "So we know which features are worth improving.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Damit wir wissen, welche Funktionen sich zu verbessern lohnen."
+          }
+        }
+      }
+    },
+    "The app's version, the macOS version and the language": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Version der App und von macOS, Sprache"
+          }
+        }
+      }
+    },
+    "Which features are used, and how often": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Welche Funktionen wie oft genutzt werden"
           }
         }
       }

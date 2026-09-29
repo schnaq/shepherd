@@ -29,14 +29,14 @@ struct TelemetryNoticeSheet: View {
                     .background(Theme.accent.opacity(0.14), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(String(localized: "May Shepherd count, anonymously?"))
+                    Text(String(localized: "May Shepherd send the following anonymously, about once a day?"))
                         .font(Theme.type(.title3, weight: .semibold))
                         .foregroundStyle(Theme.text)
                     // Vertically fixed, and rightly so here: the sheet's width is fixed at 500 pt
                     // below, so this measures against a real width — unlike a split-view column,
                     // where ``EmptyStateView`` explains why the same modifier is a bug.
                     Text(String(
-                        localized: "Shepherd is built on what gets used. To know that, the app would send us a few numbers about once a day."
+                        localized: "So we know which features are worth improving."
                     ))
                     .font(Theme.type(.body))
                     .foregroundStyle(Theme.textSecondary)
@@ -45,9 +45,10 @@ struct TelemetryNoticeSheet: View {
             }
 
             VStack(alignment: .leading, spacing: 10) {
-                fact(String(localized: "The version, the language, and which features are used"), included: true)
-                fact(String(localized: "Only as categories and buckets, never as text"), included: true)
-                fact(String(localized: "No identifier, no repository, no branch, not a line of code"), included: false)
+                fact(String(localized: "The app's version, the macOS version and the language"), included: true)
+                fact(String(localized: "Which features are used, and how often"), included: true)
+                fact(String(localized: "Amounts only roughly, e.g. 1–3, 4–10 or 11+ repositories"), included: true)
+                fact(String(localized: "Never names of repositories or branches, titles or code"), included: false)
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
