@@ -43,7 +43,7 @@ Es geht auch per Tastatur:
 2. Geh die Zeilen mit den Pfeiltasten durch.
 3. Drücke noch einmal `c`, um das Kommentarfeld an der aktuellen Zeile zu öffnen.
 
-Im Side-by-Side-Diff wechselst du mit `[` und `]` zwischen dem Original und dem geänderten Fenster. So kommentierst du eine gelöschte Zeile.
+In der Ansicht **Nebeneinander** wechselst du mit `[` und `]` zwischen dem Original und dem geänderten Fenster. So kommentierst du eine gelöschte Zeile.
 
 Schreibe deinen Kommentar und klicke auf **Kommentar hinzufügen**. Er wird in deinem ausstehenden Review gespeichert. Gesendet wird erst, wenn du abschickst. Die Review-Leiste zählt deine ausstehenden Kommentare. Drafts überstehen einen Neustart.
 
@@ -84,9 +84,9 @@ Beim Abschicken spricht Shepherd nicht direkt mit GitHub. Das Review kommt in ei
 
 Ein Hinweis sagt dir, in welchem Fall du bist:
 
-- **Approved …** heißt: GitHub hat das Review.
-- **Approval queued for …** heißt: Es liegt noch auf deinem Mac. Es hat noch nichts approved.
-- **Review held back — … changed since you started. See the alert.** heißt: Der Pull Request hat sich weiterentwickelt und das Review wurde geparkt.
+- „… approved.“ heißt: GitHub hat das Review.
+- „Approval für … eingereiht.“ heißt: Es liegt noch auf deinem Mac. Es hat noch nichts approved.
+- „Review zurückgehalten — … hat sich geändert, seit du angefangen hast. Siehe Hinweis.“ heißt: Der Pull Request hat sich weiterentwickelt und das Review wurde geparkt.
 
 Unter Einstellungen → Sync siehst du, wie viele Schreibvorgänge warten oder geparkt sind. Dort stehen auch die, die GitHub abgelehnt hat, jeweils mit **Erneut senden** und **Verwerfen**. Der Review-Kopf und das Detail-Panel bieten **Erneut senden** für den Pull Request, in dem du gerade bist.
 
@@ -97,7 +97,7 @@ Ein Review ist an den Head-Commit gebunden, auf dem du es geschrieben hast. Beko
 - **Erneut reviewen** öffnet den Pull Request noch einmal, damit du deinen Draft gegen den neuen Commit prüfen kannst.
 - **Später** schließt den Hinweis.
 
-Dein Draft bleibt erhalten. Die Titelleiste und Einstellungen → Sync zählen das Review weiter als **nicht gesendet**, bis du dich darum gekümmert hast, und du bekommst eine Mitteilung **Review nicht gesendet**. Wurden in einem Durchlauf mehrere Reviews geparkt, kommen die Hinweise nacheinander.
+Dein Draft bleibt erhalten. Die Titelleiste und Einstellungen → Sync zählen das Review weiter als **nicht gesendet**, bis du dich darum gekümmert hast, und du bekommst eine Mitteilung **Review nicht gesendet**. Wurden in einem Sweep mehrere Reviews geparkt, kommen die Hinweise nacheinander.
 
 Ein schnelles Urteil ohne Inline-Kommentare ist an den Head gebunden, den du beim Klicken gesehen hast. Inline-Kommentare behalten den Commit, auf dem du sie geschrieben hast.
 

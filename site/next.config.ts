@@ -15,6 +15,9 @@ const nextConfig: NextConfig = {
   },
   async redirects() {
     return [
+      // The [lang] segment has no page of its own.
+      { source: "/en", destination: "/docs", permanent: false },
+      { source: "/de", destination: "/de/docs", permanent: false },
       { source: "/en/docs", destination: "/docs", permanent: true },
       { source: "/en/docs/:path*", destination: "/docs/:path*", permanent: true },
     ];

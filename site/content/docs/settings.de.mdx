@@ -24,7 +24,7 @@ Die Bereiche von oben nach unten:
 
 Oben im Bereich siehst du dein GitHub-Login und wie du dich angemeldet hast: mit dem Device Flow der GitHub App oder mit einem Personal Access Token. Wie du die Anmeldung änderst, steht unter [GitHub-Token](/de/docs/github-token).
 
-- **Abmelden & lokale Daten löschen** entfernt den Token aus dem Schlüsselbund und leert die lokale Datenbank. Reviews, die du noch nicht gesendet hast, sind weg. Du musst das bestätigen.
+- **Abmelden & lokale Daten löschen** entfernt das Token aus dem Schlüsselbund und leert die lokale Datenbank. Reviews, die du noch nicht gesendet hast, sind weg. Du musst das bestätigen.
 - Die Zeile **Lokale Daten** hat einen Info-Button mit dem Ort der Datenbank.
 
 ### Diagnose
@@ -87,13 +87,13 @@ Zeigt, wie viele Aktionen noch auf das Senden warten, mit einem Button **Jetzt s
 
 Dieser Abschnitt erscheint nur, solange eine Merge-Serie läuft. Jede Serie zeigt ihren Fortschritt, zum Beispiel „2 von 5 gemergt“, und einen Button **Abbrechen**. Abbrechen stoppt die Serie. Ein Merge, der schon eingereiht ist, wird trotzdem ausgeführt. Serien gibt es nur auf diesem Mac. Siehe [Mergen](/de/docs/merging).
 
-### Beobachtete Repositories
+### Beobachtete Repositorys
 
 Jeder offene Pull Request in einem beobachteten Repository landet in der Inbox, unter **Beobachtet**.
 
 - Gib `owner/repository` oder eine GitHub-URL ein und drücke **Beobachten**.
 - **Nicht mehr beobachten** entfernt eins.
-- Du kannst höchstens 10 Repositories beobachten. Jedes ist bei jedem Sweep eine weitere Suche.
+- Du kannst höchstens 10 Repositorys beobachten. Jedes ist bei jedem Sweep eine weitere Suche.
 
 Die Liste gilt pro Mac und gehört nicht zum Einstellungs-Sync.
 
@@ -147,7 +147,7 @@ Wird bei **On-Device + API-Schlüssel** angezeigt.
 - Bei Anthropic legst du das **Modell** fest. Standard ist `claude-haiku-4-5`.
 - Bei OpenAI-kompatibel wählst du einen **Endpunkt** oder gibst eine **Basis-URL** ein, dann ein **Modell**. **Modelle laden** holt die Liste vom Endpunkt.
 - Der **API-Schlüssel** liegt in deinem Schlüsselbund und wird nur an diesen Endpunkt gesendet. Drücke **Schlüssel speichern**, dann **Verbindung testen**.
-- Bei OpenAI-kompatiblen Endpunkten nimmt **Wo das Modell läuft** zweistellige **Länder** (zum Beispiel `DE, FR`) und **Keine Speicherung verlangen**. Beides wird mit der Anfrage gesendet. Ein Endpunkt, der es nicht erfüllen kann, lehnt die Anfrage ab. Standardmäßig sind beide leer bzw. aus.
+- Bei OpenAI-kompatiblen Endpunkten nimmt **Wo das Modell läuft** zweistellige **Länder** (zum Beispiel `DE, FR`) und **Keine Speicherung verlangen**. Beides wird mit der Anfrage gesendet. Ein Endpunkt, der es nicht erfüllen kann, lehnt die Anfrage ab. Standardmäßig sind **Länder** leer und **Keine Speicherung verlangen** ist aus.
 
 ### Semantische Suche
 
@@ -155,7 +155,7 @@ Der **Semantische Suchindex** ist standardmäßig an. `⌘K` findet Pull Request
 
 ### Strukturierte Triage
 
-**Pull Requests einordnen** ist standardmäßig an. Das On-Device-Modell gibt jedem Pull Request eine Art, ein Risiko und eine Begründung in einem Satz, nach denen die Inbox sortiert wird. Ist der Anbieter auf Aus gesetzt, wird nichts eingeordnet.
+**Pull Requests einordnen** ist standardmäßig an. Das On-Device-Modell gibt jedem Pull Request eine Art, ein Risiko und eine Begründung in einem Satz, die in der Inbox als Label und Filter erscheinen. Die Reihenfolge der Inbox ändern sie nicht. Ist der Anbieter auf Aus gesetzt, wird nichts eingeordnet.
 
 ### Spotlight
 
@@ -207,7 +207,7 @@ Standardmäßig aus. Wenn an, startet Shepherd bei deinen Pull Requests von selb
 
 „Wird“ ist wörtlich gemeint. Ein Pull Request, der schon rot war, als Shepherd ihn zum ersten Mal sah, startet nie etwas. Jeder Pull Request startet höchstens einen Lauf pro Commit. Gleicher Worktree, gleiche Leitlinien, und es pusht, approvet oder mergt nie.
 
-Du kannst die **Aufgabe für den Agenten** bearbeiten und **Auf die Standardaufgabe zurücksetzen**. **Limits** begrenzen die Läufe **Parallel** (1 bis 5, Standard 1) und **Pro Tag** (1 bis 50, Standard 5). Am Limit benachrichtigt dich Shepherd stattdessen.
+Du kannst die **Aufgabe für den Agenten** bearbeiten und **Auf die Standardaufgabe zurücksetzen**. **Limits** begrenzen die Läufe **Parallel** (1 bis 5, Standard 1) und **Pro Tag** (1 bis 50, Standard 5). Am Limit zeigt Shepherd stattdessen eine Mitteilung.
 
 ## Automatisierung
 
@@ -233,9 +233,9 @@ Shepherd mergt nur, wenn ein erkannter Agent ihn geöffnet hat, alle Checks best
 
 **Was Shepherd gemergt hat** ist ein Protokoll, das auf diesem Mac bleibt, mit **Leeren**. Siehe [Mergen](/de/docs/merging).
 
-### Vertrauensspuren
+### Spuren
 
-Ein kurzer Blick reicht für einen Pull Request mit grüner CI, höchstens **Dateien** und **Zeilen** Änderungen und nichts Sensiblem. Standard sind 5 Dateien und 120 Zeilen (Grenzen 1 bis 100 und 1 bis 5000). Alles andere ist ein volles Review. Sensibel heißt: eine Workflow-, Auth-, Secret-, Migrations- oder gelöschte Testdatei. Beide Grenzen wandern per Einstellungs-Sync auf deine anderen Macs.
+Ein kurzer Blick reicht für einen Pull Request mit grüner CI, höchstens **Dateien** und **Zeilen** Änderungen und nichts Sensiblem. Standard sind 5 Dateien und 120 Zeilen (Grenzen 1 bis 100 und 1 bis 5000). Alles andere ist ein **Vollständiges Review**. Sensibel heißt: eine Workflow-, Auth-, Secret-, Migrations- oder gelöschte Testdatei. Beide Grenzen wandern per Einstellungs-Sync auf deine anderen Macs.
 
 ### Erfolgsbilanz
 

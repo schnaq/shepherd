@@ -12,11 +12,14 @@ import "./docs.css";
 // A root layout of its own, apart from the product page's: crossing between the two is a full
 // page load, so the docs' Tailwind never reaches the product page and its styles never reach here.
 export async function generateMetadata({ params }: LayoutProps<"/[lang]">): Promise<Metadata> {
-  const name = (await params).lang === "de" ? "Shepherd-Doku" : "Shepherd docs";
+  const isGerman = (await params).lang === "de";
+  const name = isGerman ? "Shepherd-Doku" : "Shepherd docs";
   return {
     metadataBase: new URL("https://shepherd.schnaq.com"),
     title: { default: name, template: `%s · ${name}` },
-    description: "How to set up and use Shepherd, the review inbox for the pull request flood.",
+    description: isGerman
+      ? "So richtest du Shepherd ein und arbeitest damit, die Review-Inbox für die Pull-Request-Flut."
+      : "How to set up and use Shepherd, the review inbox for the pull request flood.",
     icons: { icon: "/icon.png", apple: "/icon.png" },
   };
 }

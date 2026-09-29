@@ -28,7 +28,7 @@ Shepherd fragt GitHub nach diesen Dingen. Die Tabelle ordnet sie den Berechtigun
 | --- | --- | --- | --- |
 | Inbox, beobachtete Repositorys | GraphQL-Suche über Pull Requests | Pull requests: Read, Metadata: Read | `repo` (oder `public_repo` nur für öffentliche Repositorys) |
 | Pull Request, Dateien, Commits, Reviews, Threads lesen | `/pulls/...` und GraphQL | Pull requests: Read | `repo` |
-| Genehmigen, Änderungen anfordern, kommentieren, antworten, Threads auflösen, als bereit markieren | Reviews und Kommentarantworten, GraphQL-Mutations | Pull requests: Read and write | `repo` |
+| **Approve**, **Request changes**, Änderungen anfordern, kommentieren, antworten, Threads auflösen, als bereit markieren | Reviews und Kommentarantworten, GraphQL-Mutations | Pull requests: Read and write | `repo` |
 | Checks eines Commits | `/commits/{ref}/check-runs` | Checks: Read | `repo` |
 | Logs fehlgeschlagener Jobs ("Warum ist CI rot") | `/actions/jobs/{id}/logs` | Actions: Read | `repo` |
 | Merge | `PUT /pulls/{n}/merge` | Contents: Read and write, Pull requests: Read and write | `repo` |

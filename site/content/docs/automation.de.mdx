@@ -34,9 +34,9 @@ Das Menü **Agent-Aufgaben** listet jede Aufgabe und ob sie läuft, fertig ist o
 
 ### Shepherd den Brief schreiben lassen
 
-Der ✨-Button neben dem Aufgabenfeld entwirft den Brief für dich als **Goal**, **Constraints** und **Acceptance**. Der Text läuft ins Feld, und du bearbeitest ihn. Nichts startet, bis du **Ausführen** drückst. Würde der Brief den Review-Kommentar einer Kollegin oder eines Kollegen zitieren, schreibt ihn nur das On-Device-Modell. Siehe [KI und Sprachmodelle](/de/docs/ai).
+Der ✨-Button neben dem Aufgabenfeld entwirft den Brief für dich als **Goal**, **Constraints** und **Acceptance**. Der Text läuft ins Feld, und du bearbeitest ihn. Nichts startet, bis du **Ausführen** drückst. Würde der Brief den Review-Kommentar einer anderen Person zitieren, schreibt ihn nur das On-Device-Modell. Siehe [KI und Sprachmodelle](/de/docs/ai).
 
-### Der Session antworten, die den Code geschrieben hat
+### Auf die Session antworten, die den Code geschrieben hat
 
 Claude Code versieht seine Commits mit einem `Claude-Session:`-Trailer. Tragen die Commits eines Pull Requests einen, bekommen jeder Befund und die Review-Zusammenfassung **An die Session schicken**. Ein Sheet zeigt vorher die genaue Nachricht. Deine installierte CLI setzt dann diese Session im Worktree des Pull Requests fort. Bei einer Session, die auf `claude.ai/code` liegt, heißt der Button **Session öffnen**.
 
@@ -72,7 +72,7 @@ Links enthalten keinen Dateipfad, keinen Befehl und keinen Body. Ein Link, der a
 
 ## Die Kommandozeile
 
-Das Tool `shepherd` baut eine `shepherd://`-URL und übergibt sie an die App. Es spricht nie mit GitHub und sieht nie deinen Token.
+Das Tool `shepherd` baut eine `shepherd://`-URL und übergibt sie an die App. Es spricht nie mit GitHub und sieht nie dein Token.
 
 Die CLI ist nicht in der App enthalten. Baue sie aus dem Quellcode in einem Checkout des Repositorys und kopiere sie in deinen Pfad:
 
@@ -102,7 +102,7 @@ shepherd --version
 
 ## Kurzbefehle, Siri und Spotlight
 
-Die Befehle von Shepherd sind App Intents. Sie erscheinen in der App Kurzbefehle und in den Spotlight-Aktionen.
+Die Befehle von Shepherd sind App Intents. Sie erscheinen in der Kurzbefehle-App und in den Spotlight-Aktionen.
 
 | Aktion | Was sie macht |
 | --- | --- |

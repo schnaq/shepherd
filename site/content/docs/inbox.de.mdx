@@ -3,7 +3,7 @@ title: Die Inbox
 description: "Was in deiner Inbox landet, wie du Pull Requests gruppierst, filterst und auswählst, und was es rundherum gibt: Menüleisten-Liste, Morgen-Digest und Mitteilungen."
 ---
 
-Die Inbox ist eine Liste aller offenen Pull Requests aus all deinen Repositories. Shepherd füllt sie alle paar Minuten mit ein paar GitHub-Suchen und speichert das Ergebnis in einer lokalen Datenbank. Mit `⌘R` synchronisierst du sofort.
+Die Inbox ist eine Liste aller offenen Pull Requests aus all deinen Repositorys. Shepherd füllt sie alle paar Minuten mit ein paar GitHub-Suchen und speichert das Ergebnis in einer lokalen Datenbank. Mit `⌘R` synchronisierst du sofort.
 
 ![Die Shepherd-Inbox](/inbox.png)
 
@@ -16,7 +16,7 @@ Die linke Seitenleiste hat diese Ansichten:
 | **Braucht mein Review** | Pull Requests, bei denen ausdrücklich dein Review angefragt wurde und die noch kein Approval haben. |
 | **Meine Pull Requests** | Pull Requests, die du geöffnet hast. |
 | **Beteiligt** | Alles, was Shepherd für dich synchronisiert: Review angefragt, dir zugewiesen, von dir geöffnet, du wurdest erwähnt, oder alles andere, was GitHub als Beteiligung zählt. |
-| **Beobachtet** | Offene Pull Requests in [beobachteten Repositories](#beobachtete-repositories), an denen dich niemand beteiligt hat. |
+| **Beobachtet** | Offene Pull Requests in [beobachteten Repositorys](#beobachtete-repositorys), an denen dich niemand beteiligt hat. |
 | **Von mir approved** | Eine Annäherung. GitHub kann nicht nach "das habe ich approved" suchen. Hier siehst du deshalb Pull Requests, bei denen dein Review angefragt war und die jetzt ein Approval haben. |
 
 Ein Pull Request, an dem du auch beteiligt bist, bleibt unter **Beteiligt**, selbst in einem beobachteten Repository. Nur Zeilen ohne andere Verbindung zu dir landen unter **Beobachtet**.
@@ -29,9 +29,9 @@ Neben den Pull Requests gibt es einen zweiten Bereich für Issues. Mit der Auswa
 
 Klicke eine Zeile mit der rechten Maustaste an und wähle **Diesen Pull Request ausblenden**. Ein Hinweis bietet **Rückgängig** an. Eine neue Review-Anfrage holt einen ausgeblendeten Pull Request zurück. Die vollständige Liste findest du unter Einstellungen → Sync bei **Ausgeblendete Pull Requests**.
 
-## Beobachtete Repositories
+## Beobachtete Repositorys
 
-Wenn du ein Repository beobachtest, kommt jeder offene Pull Request darin in die Inbox, auch die, bei denen dich niemand gefragt hat. Du kannst bis zu 10 Repositories beobachten. Jedes ist eine weitere Suche bei jedem Durchlauf.
+Wenn du ein Repository beobachtest, kommt jeder offene Pull Request darin in die Inbox, auch die, bei denen dich niemand gefragt hat. Du kannst bis zu 10 Repositorys beobachten. Jedes ist eine weitere Suche bei jedem Sweep.
 
 So fügst du eines hinzu:
 
@@ -39,9 +39,9 @@ So fügst du eines hinzu:
 2. Wähle **Repository beobachten…**.
 3. Tippe `owner/repository` oder füge eine GitHub-URL ein und klicke auf **Beobachten**.
 
-Die Liste kannst du auch unter Einstellungen → Sync bei **Beobachtete Repositories** verwalten. Beobachtete Repositories stehen ganz oben im Bereich **REPOSITORYS**, mit einem Fernglas-Symbol, auch wenn die aktuelle Ansicht nichts von ihnen enthält.
+Die Liste kannst du auch unter Einstellungen → Sync bei **Beobachtete Repositorys** verwalten. Beobachtete Repositorys stehen ganz oben im Bereich **REPOSITORYS**, mit einem Fernglas-Symbol, auch wenn die aktuelle Ansicht nichts von ihnen enthält.
 
-![Beobachtete Repositories in der Seitenleiste](/watched-repositories.png)
+![Beobachtete Repositorys in der Seitenleiste](/watched-repositories.png)
 
 ### Einen lokalen Clone hinzufügen
 
