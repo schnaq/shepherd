@@ -17321,12 +17321,12 @@
         }
       }
     },
-    "Kind of change and risk, to sort the inbox by. Stays on this Mac.": {
+    "Kind of change and risk, as a tag to filter by. Stays on this Mac.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Art der Änderung und Risiko, zum Sortieren der Inbox. Bleibt auf diesem Mac."
+            "value": "Art der Änderung und Risiko, als Tag zum Filtern. Bleibt auf diesem Mac."
           }
         }
       }
