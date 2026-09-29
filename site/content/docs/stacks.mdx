@@ -48,7 +48,7 @@ Stacks use GitHub's asynchronous merge. Shepherd sends it, then asks GitHub a fe
 | still pending | "GitHub is merging the stack for owner/repo#12." The result shows on the next sync: the pull requests leave the inbox, or stay. |
 | failed | The merge shows as not sent, with GitHub's message. |
 
-There is no separate merged message for the last case. The pull request just disappears from the inbox.
+While GitHub is still merging, no second message follows. The pull request just disappears from the inbox.
 
 ## Limits
 

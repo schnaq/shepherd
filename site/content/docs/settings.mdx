@@ -22,9 +22,7 @@ Changes apply as soon as you make them. There is no Save button, except where a 
 
 ## Account
 
-### Your account
-
-Shows your GitHub login and how you signed in: with the GitHub App device flow or with a personal access token. To change how you sign in, see [GitHub token](/docs/github-token).
+The top of the pane shows your GitHub login and how you signed in: with the GitHub App device flow or with a personal access token. To change how you sign in, see [GitHub token](/docs/github-token).
 
 - **Sign out & erase local data** deletes the token from the Keychain and empties the local database. Reviews you have not sent yet are lost. You are asked to confirm.
 - The **Local data** line has an info button with the database location.
@@ -82,8 +80,8 @@ The digest is built from the local database only. If your Mac was asleep, it arr
 
 Shows how many actions are waiting to be sent, with a **Sync now** button. Reviews and other writes go through this outbox, so they survive a lost connection.
 
-- **Conflicted** means the pull request got new commits after you queued the review. Nothing was sent. Open it and check your draft.
-- **Given up on** lists writes GitHub refused. Each has **Retry** and **Discard**.
+- "n conflicted — needs your attention" means the pull request got new commits after you queued the review. Nothing was sent. Open it and check your draft.
+- "n given up on — they will not be retried" lists writes GitHub refused. Each has **Retry** and **Discard**.
 
 ### Merge series
 
@@ -230,7 +228,7 @@ Off by default. **Merge green, approved agent pull requests automatically** queu
 Shepherd merges only when a recognised agent opened it, every check passed, somebody approved it, it is not a draft and GitHub reports it as mergeable.
 
 - **Repos**: comma-separated, `*` and `?` as wildcards. Empty means all.
-- **Labels**: a pull request must carry all of them. Empty means none.
+- **Labels**: a pull request must carry all of them. Empty means no label is required.
 - **Method**: **Merge commit**, **Squash and merge** (default) or **Rebase and merge**. Shared with the merge sheet and bulk triage.
 
 **What Shepherd merged** is a log that stays on this Mac, with **Clear**. See [Merging](/docs/merging).

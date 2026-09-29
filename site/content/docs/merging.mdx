@@ -35,7 +35,7 @@ The sheet only warns about the other cases. It says "Checks are failing on the h
 
 ## Merge when the checks pass
 
-If the checks are still running, the sheet offers **Merge when checks pass** (`⇧⌘⏎`). It is not shown when a check already failed, or when the pull request has no checks. Use plain **Merge** for those.
+If the checks are still running, the sheet offers **Merge when checks pass** (`⇧⌘⏎`). It is not shown when a check already failed, when the pull request has no checks, or when it is a draft or has conflicts. Use plain **Merge** for those.
 
 After you press it:
 
@@ -44,7 +44,7 @@ After you press it:
 - The inbox shows "Merges when the checks pass".
 - It works only while Shepherd is running.
 
-To stop waiting, open the merge sheet again and press **Stop waiting**, or press `m`.
+To stop waiting, reopen the merge sheet (`m`) and press **Stop waiting**.
 
 Shepherd gives up and tells you with a notification when:
 

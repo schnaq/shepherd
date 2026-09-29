@@ -1,16 +1,9 @@
 import { llms, loader } from "fumadocs-core/source";
-import { metaSchema, pageSchema } from "fumadocs-core/source/schema";
 import { defineDocs } from "fumadocs-mdx/macro";
 
-const docs = defineDocs({
-  dir: "content/docs",
-  docs: {
-    schema: pageSchema,
-    // Keeps each page's Markdown for /llms.txt, /llms-full.txt and the "Copy Markdown" button.
-    postprocess: { includeProcessedMarkdown: true },
-  },
-  meta: { schema: metaSchema },
-});
+// Reads content/docs. Keeps each page's Markdown for /llms.txt, /llms-full.txt and the
+// "Copy Markdown" button.
+const docs = defineDocs({ docs: { postprocess: { includeProcessedMarkdown: true } } });
 
 export const source = loader({
   baseUrl: "/docs",
@@ -23,7 +16,11 @@ export const docsLlms = llms(source, {
 ${await page.data.getText("processed")}`,
 });
 
-/** Where a page's Markdown is served: /llms.mdx/docs/<slug>/content.md. */
+/** The segments of a page's Markdown route, app/llms.mdx/docs/<slug>/content.md. */
 export function markdownSegments(page: { slugs: string[] }) {
   return [...page.slugs, "content.md"];
+}
+
+export function markdownUrl(page: { slugs: string[] }) {
+  return `/llms.mdx/docs/${markdownSegments(page).join("/")}`;
 }

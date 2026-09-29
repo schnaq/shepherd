@@ -279,9 +279,9 @@ kbd {
     font-size: 0.88rem;
   }
 }
-/* Five links do not fit a 390px phone; "What it does" is the section right below the hero. */
+/* Five links do not fit a 390px phone; the optional ones point at sections a scroll away. */
 @media (max-width: 420px) {
-  .nav-links li:first-child {
+  .nav-optional {
     display: none;
   }
 }
