@@ -27,23 +27,24 @@ struct KeyboardShortcutsSheet: View {
     private static let columns: [[Group]] = [
         [
             Group(title: String(localized: "Everywhere"), shortcuts: [
-                Shortcut(keys: ["⌘K"], label: String(localized: "Command palette")),
+                Shortcut(keys: ["⌘K"], label: String(localized: "Command Palette")),
                 Shortcut(keys: ["⌘R"], label: String(localized: "Sync now")),
                 Shortcut(keys: ["⇧⌘A"], label: String(localized: "Watch a repository")),
                 Shortcut(keys: ["⇧⌘⏎"], label: String(localized: "Start a review session")),
                 Shortcut(keys: ["⌘,"], label: String(localized: "Settings")),
+                Shortcut(keys: ["⌘W"], label: String(localized: "Close Window")),
                 Shortcut(keys: ["⌘/"], label: String(localized: "This overview")),
             ]),
             Group(title: String(localized: "Inbox"), shortcuts: [
-                Shortcut(keys: ["j", "k"], label: String(localized: "Next / previous row")),
+                Shortcut(keys: ["j", "k"], label: String(localized: "Next / previous pull request")),
                 Shortcut(keys: ["⏎"], label: String(localized: "Open the review")),
-                Shortcut(keys: ["x"], label: String(localized: "Tick for a bulk action")),
-                Shortcut(keys: ["⎋"], label: String(localized: "Clear the ticks")),
+                Shortcut(keys: ["x"], label: String(localized: "Select for a bulk action")),
+                Shortcut(keys: ["esc"], label: String(localized: "Clear the selection")),
                 Shortcut(keys: ["r a"], label: String(localized: "Approve")),
                 Shortcut(keys: ["r x"], label: String(localized: "Request changes")),
                 Shortcut(keys: ["r c"], label: String(localized: "Comment")),
                 Shortcut(keys: ["r f"], label: String(localized: "Start a review session")),
-                Shortcut(keys: ["m"], label: String(localized: "Merge, or merge what is ticked")),
+                Shortcut(keys: ["m"], label: String(localized: "Merge, or merge the selection")),
                 Shortcut(keys: ["g a"], label: String(localized: "Group by agent")),
                 Shortcut(keys: ["g r"], label: String(localized: "Group by repository")),
                 Shortcut(keys: ["g s"], label: String(localized: "Group by review state")),
@@ -55,25 +56,28 @@ struct KeyboardShortcutsSheet: View {
                 Shortcut(keys: ["a"], label: String(localized: "Viewed, then next unviewed")),
                 Shortcut(keys: ["v"], label: String(localized: "Toggle viewed")),
                 Shortcut(keys: ["t"], label: String(localized: "Files / Conversation")),
-                Shortcut(keys: ["u"], label: String(localized: "Load the update from GitHub")),
+                Shortcut(keys: ["u"], label: String(localized: "Load an update from GitHub")),
                 Shortcut(keys: ["c"], label: String(localized: "Into the diff")),
-                Shortcut(keys: ["⎋"], label: String(localized: "Back to the inbox")),
+                Shortcut(keys: ["r a", "m"], label: String(localized: "Review and merge keys, as in the inbox")),
+                Shortcut(keys: ["esc"], label: String(localized: "Back to the inbox")),
             ]),
             Group(title: String(localized: "Review: diff"), shortcuts: [
                 Shortcut(keys: ["j", "k"], label: String(localized: "Next / previous line")),
                 Shortcut(keys: ["c"], label: String(localized: "Comment on the line")),
-                Shortcut(keys: ["[", "]"], label: String(localized: "Left / right side")),
-                Shortcut(keys: ["⎋"], label: String(localized: "Back to the file list")),
+                Shortcut(keys: ["⏎"], label: String(localized: "Open the line's thread")),
+                Shortcut(keys: ["[", "]"], label: String(localized: "Left / right side, side by side")),
+                Shortcut(keys: ["esc"], label: String(localized: "Back to the file list")),
             ]),
             Group(title: String(localized: "Writing and merging"), shortcuts: [
-                Shortcut(keys: ["⌘⏎"], label: String(localized: "Submit the review, or merge")),
-                Shortcut(keys: ["⇧⌘⏎"], label: String(localized: "Merge when checks pass")),
+                Shortcut(keys: ["⌘⏎"], label: String(localized: "Review… or Approve…; Merge in its dialog")),
+                Shortcut(keys: ["⇧⌘⏎"], label: String(localized: "Merge when checks pass, in the merge dialog")),
                 Shortcut(keys: ["⇧⌘D"], label: String(localized: "Draft with AI")),
                 Shortcut(keys: ["⌥E"], label: String(localized: "Explain the selected lines")),
+                Shortcut(keys: ["⇧⌘I"], label: String(localized: "Open the first closing issue")),
             ]),
-            Group(title: String(localized: "Review session"), shortcuts: [
+            Group(title: String(localized: "During a review session"), shortcuts: [
                 Shortcut(keys: ["d"], label: String(localized: "Done & next")),
-                Shortcut(keys: ["n"], label: String(localized: "Next, keep this one for later")),
+                Shortcut(keys: ["n"], label: String(localized: "Next, deal with this one later")),
             ]),
         ],
     ]
@@ -107,7 +111,7 @@ struct KeyboardShortcutsSheet: View {
             }
         }
         .padding(20)
-        .frame(width: 660, height: 680)
+        .frame(width: 780, height: 700)
         .background(Theme.panel)
     }
 

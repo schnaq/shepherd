@@ -844,7 +844,7 @@ struct ShortcutBar: View {
         Hint(keys: ["m"], label: String(localized: "merge"), isCompact: false),
         Hint(keys: ["x"], label: String(localized: "select"), isCompact: true),
         Hint(keys: ["r f"], label: String(localized: "session"), isCompact: false),
-        Hint(keys: ["⌘/"], label: String(localized: "all shortcuts"), isCompact: false),
+        Hint(keys: ["⌘/"], label: String(localized: "all keyboard shortcuts"), isCompact: false),
         Hint(keys: ["⌘K"], label: String(localized: "commands"), isCompact: true),
     ]
 

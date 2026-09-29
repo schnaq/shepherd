@@ -2481,12 +2481,12 @@
         }
       }
     },
-    "all shortcuts": {
+    "all keyboard shortcuts": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "alle Kürzel"
+            "value": "alle Tastaturkürzel"
           }
         }
       }
@@ -3701,16 +3701,6 @@
         }
       }
     },
-    "Clear the ticks": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Haken entfernen"
-          }
-        }
-      }
-    },
     "CLOSES %lld ISSUES": {
       "localizations": {
         "de": {
@@ -3747,16 +3737,6 @@
                 }
               }
             }
-          }
-        }
-      }
-    },
-    "Command palette": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Befehlspalette"
           }
         }
       }
@@ -5361,6 +5341,16 @@
         }
       }
     },
+    "During a review session": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Während einer Review-Sitzung"
+          }
+        }
+      }
+    },
     "ENTER THIS CODE ON GITHUB": {
       "localizations": {
         "de": {
@@ -6731,12 +6721,12 @@
         }
       }
     },
-    "Left / right side": {
+    "Left / right side, side by side": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Linke / rechte Seite"
+            "value": "Linke / rechte Seite (Side by Side)"
           }
         }
       }
@@ -6921,6 +6911,16 @@
         }
       }
     },
+    "Load an update from GitHub": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update von GitHub laden, wenn eins wartet"
+          }
+        }
+      }
+    },
     "Load models": {
       "localizations": {
         "de": {
@@ -6937,16 +6937,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Modelle laden, um eins zu wählen"
-          }
-        }
-      }
-    },
-    "Load the update from GitHub": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Update von GitHub laden"
           }
         }
       }
@@ -7021,12 +7011,22 @@
         }
       }
     },
-    "Merge, or merge what is ticked": {
+    "Merge when checks pass, in the merge dialog": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Mergen, oder das Abgehakte mergen"
+            "value": "Im Merge-Dialog: Mergen, sobald Checks grün"
+          }
+        }
+      }
+    },
+    "Merge, or merge the selection": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mergen, oder die Auswahl mergen"
           }
         }
       }
@@ -7386,27 +7386,27 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Nächste / vorige Zeile im Diff"
-          }
-        }
-      }
-    },
-    "Next / previous row": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
             "value": "Nächste / vorige Zeile"
           }
         }
       }
     },
-    "Next, keep this one for later": {
+    "Next / previous pull request": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Weiter, den hier für später lassen"
+            "value": "Nächster / voriger Pull Request"
+          }
+        }
+      }
+    },
+    "Next, deal with this one later": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weiter, diesen später erledigen"
           }
         }
       }
@@ -8551,6 +8551,16 @@
         }
       }
     },
+    "Open the first closing issue": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erstes Issue öffnen, das er schließt"
+          }
+        }
+      }
+    },
     "Open the full inbox on “Needs my review”": {
       "localizations": {
         "de": {
@@ -8567,6 +8577,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Das Issue auf GitHub öffnen"
+          }
+        }
+      }
+    },
+    "Open the line's thread": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thread der Zeile öffnen"
           }
         }
       }
@@ -9211,6 +9231,16 @@
         }
       }
     },
+    "Review and merge keys, as in the inbox": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review- und Merge-Tasten wie in der Inbox"
+          }
+        }
+      }
+    },
     "REVIEW PRIORITY": {
       "localizations": {
         "de": {
@@ -9237,6 +9267,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Review: Dateiliste"
+          }
+        }
+      }
+    },
+    "Review… or Approve…; Merge in its dialog": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review… / Approve…, im Merge-Dialog Mergen"
           }
         }
       }
@@ -10061,6 +10101,16 @@
         }
       }
     },
+    "Select for a bulk action": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Für eine Sammelaktion auswählen"
+          }
+        }
+      }
+    },
     "Shepherd queues this merge on the first sweep that finds every check green on this commit — while the app is running. A new push or a failing check cancels it.": {
       "localizations": {
         "de": {
@@ -10137,16 +10187,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Nicht mehr warten"
-          }
-        }
-      }
-    },
-    "Submit the review, or merge": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Review absenden oder mergen"
           }
         }
       }
@@ -11581,22 +11621,12 @@
         }
       }
     },
-    "Tick for a bulk action": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Für eine Sammelaktion abhaken"
-          }
-        }
-      }
-    },
     "Toggle viewed": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Angesehen an/aus"
+            "value": "Gesehen umschalten"
           }
         }
       }
@@ -13016,7 +13046,7 @@
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Angesehen, weiter zur nächsten neuen"
+            "value": "Gesehen, weiter zur nächsten ungesehenen"
           }
         }
       }
