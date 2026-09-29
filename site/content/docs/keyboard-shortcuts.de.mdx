@@ -1,0 +1,161 @@
+---
+title: Tastaturkürzel
+description: Jede Taste und Tastenkombination, die Shepherd versteht, gruppiert danach, wo du sie nutzt.
+---
+
+## Die Kürzel in der App finden
+
+Drücke `⌘/` oder wähle **Hilfe → Tastaturkürzel**, um alle Tasten auf einem Blatt zu sehen. Auch die Befehlspalette (`⌘K`) kennt **Tastaturkürzel**.
+
+Zwei weitere Stellen zeigen dir Tasten bei der Arbeit:
+
+- **Die Hinweisleiste** unten in der Inbox listet die häufigsten Tasten, darunter `⌘/`. In einem schmalen Fenster zeigt sie weniger.
+- **Die Befehlspalette** (`⌘K`) listet jeden Befehl mit seiner Taste daneben. Sie ist auch der schnellste Weg, einen Befehl auszuführen, dessen Taste du vergessen hast.
+
+## Global
+
+Diese Tasten funktionieren überall im Hauptfenster, sobald du angemeldet bist.
+
+| Tasten | Was sie tun |
+| --- | --- |
+| `⌘K` | Die Befehlspalette öffnen. |
+| `⌘R` | Jetzt synchronisieren. |
+| `⇧⌘A` | Repository beobachten. |
+| `⇧⌘⏎` | Eine Review-Sitzung starten. Im Merge-Dialog bedeutet sie stattdessen **Mergen, sobald Checks grün**. |
+| `⌘,` | Die Einstellungen öffnen. Siehe [Einstellungen](/de/docs/settings). |
+| `⌘W` | Das Fenster schließen (Menü Ablage, **Fenster schließen**). |
+| `⌘/` | Alle Tastaturkürzel anzeigen. |
+
+Shepherd registriert keinen systemweiten Hotkey. Um es von außerhalb der App auszulösen, nutze Kurzbefehle oder Siri. Siehe [Automatisierung](/de/docs/automation).
+
+## Befehlspalette
+
+| Tasten | Was sie tun |
+| --- | --- |
+| Tippen | Befehle suchen. |
+| `↑` `↓` | Die Auswahl bewegen. |
+| `⏎` | Den ausgewählten Befehl ausführen. |
+| `esc` | Die Palette schließen. |
+
+## Inbox
+
+Die Tasten wirken, solange die Pull-Request-Liste die Tastatur hat. Eine Taste ohne Modifier ist ein Befehl. Klicke also zuerst in ein Textfeld, wenn du tippen willst.
+
+| Tasten | Was sie tun |
+| --- | --- |
+| `j` oder `↓` | Nächste Zeile auswählen. |
+| `k` oder `↑` | Vorige Zeile auswählen. |
+| `⏎` | Das Review des ausgewählten Pull Requests öffnen. |
+| `x` | Die Zeile für eine Sammelaktion an- oder abhaken. |
+| `esc` | Die angehakten Zeilen zurücksetzen. |
+| `r` `a` | Approve. |
+| `r` `x` | Request changes. |
+| `r` `c` | Comment. |
+| `r` `f` | Eine Review-Sitzung starten. |
+| `m` | Den Merge-Dialog öffnen. |
+| `g` `a` | Nach Agent gruppieren. |
+| `g` `r` | Nach Repository gruppieren. |
+| `g` `s` | Nach Review-Status gruppieren. |
+
+Befehle mit zwei Tasten tippst du nacheinander, nicht gleichzeitig. Drückst du die zweite Taste nicht innerhalb von etwa anderthalb Sekunden, ist die erste vergessen.
+
+Sammelaktionen, Merge-Serien und Delegieren haben keine Taste. Starte sie über das Menü **Review** oder die Befehlspalette. Siehe [Mergen](/de/docs/merging).
+
+### Issues
+
+In der Issue-Liste:
+
+| Tasten | Was sie tun |
+| --- | --- |
+| `j` oder `↓` | Nächstes Issue auswählen. |
+| `k` oder `↑` | Voriges Issue auswählen. |
+| `l` | Den verknüpften Pull Request öffnen (wenn das Issue einen hat). |
+| `esc` | Den Filter zurücksetzen. |
+
+Die Befehle mit zwei Tasten von oben funktionieren hier nicht, weil sie auf Pull Requests wirken.
+
+## Review-Bildschirm
+
+Der Review-Bildschirm hält die Tastatur beim Öffnen in der Dateiliste.
+
+### Dateiliste
+
+| Tasten | Was sie tun |
+| --- | --- |
+| `j` oder `↓` | Nächste Datei. |
+| `k` oder `↑` | Vorige Datei. |
+| `a` | Die Datei als gesehen markieren und zur nächsten ungesehenen springen. |
+| `v` | Die Gesehen-Markierung der Datei umschalten und bleiben. |
+| `t` | Zwischen den Tabs Dateien und Unterhaltung wechseln. |
+| `u` | Neu laden, wenn der Streifen „Auf GitHub aktualisiert“ zeigt. |
+| `c` | Die Tastatur in den Diff bringen. |
+| `[` | In die Original-Seite (links) des Diffs wechseln. |
+| `]` | In die geänderte Seite (rechts) des Diffs wechseln. |
+| `esc` | Zurück zur Inbox. |
+| `r` `a` | Approve. |
+| `r` `x` | Request changes. |
+| `r` `c` | Comment. |
+| `m` | Den Merge-Dialog öffnen. |
+| `r` `f` | Eine Review-Sitzung starten. |
+
+### Diff
+
+| Tasten | Was sie tun |
+| --- | --- |
+| `j` `k` oder `↓` `↑` | Zwischen Zeilen wechseln. |
+| `c` | Die Zeile unter dem Cursor kommentieren. |
+| `⏎` | Den Thread an der ausgewählten Zeile öffnen. |
+| `[` `]` | Auf die andere Seite der Ansicht **Nebeneinander** wechseln. |
+| `esc` | Die Tastatur zurück an die Dateiliste geben. |
+
+`[` und `]` brauchen das Layout **Nebeneinander**. In **Inline** und in der Darstellung **Zeilenliste** gibt es nur ein Fenster, dort tun sie nichts.
+
+### Kommentare und KI
+
+| Tasten | Was sie tun |
+| --- | --- |
+| `⌘⏎` | Das Review mit **Approve…** oder **Review…** starten. |
+| `⇧⌘D` | Mit KI entwerfen oder den Entwurf stoppen. Siehe [KI](/de/docs/ai). |
+| `⌥E` | Die ausgewählten Zeilen erklären oder die Erklärung stoppen. |
+| `⇧⌘I` | Das erste schließende Issue auf GitHub öffnen. |
+| `esc` | Das geöffnete Sheet abbrechen. |
+
+## Merge
+
+| Tasten | Wo | Was sie tun |
+| --- | --- | --- |
+| `m` | Inbox oder Review | Den Merge-Dialog öffnen. |
+| `⌘⏎` | Merge-Dialog | **Merge**. |
+| `⇧⌘⏎` | Merge-Dialog | **Mergen, sobald Checks grün**, wenn es angeboten wird. |
+| `esc` | Merge-Dialog | Abbrechen. |
+
+`⌘⏎` funktioniert auch, wenn der Dialog eine Warnung zeigt. Ein einfaches `⏎` mergt nicht.
+
+## Review-Sitzung
+
+Läuft eine Sitzung, wirken auf dem Review-Bildschirm drei weitere Tasten:
+
+| Tasten | Was sie tun |
+| --- | --- |
+| `d` | **Fertig & weiter**. |
+| `n` | **Weiter**, und diesen für später liegen lassen. |
+| `esc` | Fragt, ob du die Sitzung **Beenden** willst. |
+
+Approven, Änderungen anfordern oder Mergen zählt ebenfalls als erledigt. Siehe [Review](/de/docs/review).
+
+## Sheets und Dialoge
+
+In Dialogen und Sheets drückt `⏎` den Standard-Button und `esc` bricht ab. Das gilt für Kommentar-Sheets, das Merge-Serien-Sheet, die Sammel-Triage, das Sheet zum Beobachten eines Repositorys und die Review-Zusammenfassung.
+
+## Menüleiste
+
+Die schnelle Inbox in der macOS-Menüleiste hat keine eigenen Kürzel. Du schaltest sie in den Einstellungen mit **In der Menüleiste zeigen** ein und aus.
+
+## Flotte
+
+Im Bildschirm Flotte wechselst du mit `↑` `↓` den ausgewählten Agent, `⏎` öffnet den ausgewählten offenen Pull Request und `esc` geht zurück zur Inbox.
+
+<Cards>
+  <Card title="Automatisierung" href="/de/docs/automation" />
+  <Card title="Review" href="/de/docs/review" />
+</Cards>

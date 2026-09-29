@@ -1,0 +1,152 @@
+---
+title: Mergen
+description: Einen Pull Request mergen, auf seine Checks warten oder mehrere nacheinander mergen.
+---
+
+Shepherd mergt nie von allein, es sei denn, du willst es. Jeder Merge beginnt mit einem Klick oder Tastendruck von dir.
+
+## Einen Pull Request mergen
+
+Wähle einen Pull Request aus und drücke `m`, oder nutze den grünen Button **Mergen…** in der Inbox. Auf dem Review-Bildschirm heißt der Button **Merge**. Beide öffnen das Merge-Sheet.
+
+Das Sheet hat diese Optionen:
+
+- **Methode**: Merge-Commit, Squash and merge oder Rebase and merge. Shepherd merkt sich deine letzte Wahl.
+- **Den Branch danach löschen**: löscht den Head-Branch, nachdem der Merge durch ist. Bei Forks und beim Default-Branch eines Repositorys wird das übersprungen. Schlägt das Löschen fehl, gilt der Merge trotzdem als erledigt.
+
+Drücke dann **Merge**. Shepherd reiht den Merge ein. Ist GitHub nicht erreichbar, geht er raus, sobald es geht.
+
+### Der Merge ist an das gebunden, was du reviewt hast
+
+Shepherd mergt genau den Commit, den du dir angesehen hast. Pusht vorher jemand einen neuen Commit, wird der Merge nicht gesendet. Du siehst "Merge zurückgehalten" und einen Hinweis. Sieh dir den neuen Commit an und merge dann noch einmal.
+
+### Wenn der Merge-Button deaktiviert ist
+
+Der Button ist in zwei Fällen dunkel. Fahr mit der Maus darüber, um den Grund zu lesen.
+
+| Grund | Text, den du siehst |
+| --- | --- |
+| Der Pull Request ist ein Draft | "ist noch ein Draft — GitHub lehnt den Merge ab, bis er als bereit zum Review markiert ist." |
+| GitHub meldet Konflikte | "hat Konflikte mit dem Basis-Branch. Löse sie zuerst." |
+
+Der Review-Bildschirm deaktiviert ihn außerdem, wenn der Pull Request auf GitHub schon gemergt oder geschlossen ist oder wenn bereits ein Merge unterwegs ist.
+
+Bei den anderen Fällen warnt das Sheet nur. Es sagt "Auf dem Head-Commit schlagen Checks fehl.", "Die Checks laufen noch." oder "GitHub ist mit der Mergebarkeit noch nicht fertig." Du kannst trotzdem mergen. GitHub kann ablehnen.
+
+## Mergen, wenn die Checks grün sind
+
+Laufen die Checks noch, bietet das Sheet **Mergen, sobald Checks grün** an (`⇧⌘⏎`). Der Button erscheint nicht, wenn ein Check schon fehlgeschlagen ist, wenn der Pull Request keine Checks hat oder wenn er ein Draft ist oder Konflikte hat. Nimm dafür den normalen **Merge**.
+
+Nachdem du ihn gedrückt hast:
+
+- Shepherd mergt, sobald es zum ersten Mal alle Checks auf diesem Commit grün sieht.
+- Es nutzt die Methode und die Branch-Einstellung, die du im Sheet gesehen hast.
+- Die Inbox zeigt "Wird gemerged, sobald die Checks grün sind".
+- Es funktioniert nur, solange Shepherd läuft.
+
+Um nicht mehr zu warten, öffne das Merge-Sheet erneut (`m`) und drücke **Nicht mehr warten**.
+
+Shepherd gibt auf und sagt dir per Mitteilung Bescheid, wenn:
+
+- jemand einen neuen Commit pusht,
+- ein Check fehlschlägt,
+- der Pull Request zum Draft wird,
+- GitHub Konflikte meldet,
+- sich herausstellt, dass der Commit keine Checks hat.
+
+Verschwindet der Pull Request aus deiner Inbox, ohne gemergt zu sein, verwirft Shepherd das Warten nach sieben Tagen.
+
+## Mehrere nacheinander mergen
+
+Nutze das, wenn du einen Stapel kleiner Pull Requests in einem Repository hast, zum Beispiel Dependency-Bumps.
+
+1. Hake die Pull Requests an. Drücke `x` auf einer Zeile oder klicke Zeilen mit Command an.
+2. Drücke `m` oder klicke auf den Button. Bei mehreren angehakten Zeilen heißt er **4 Pull Requests mergen…**. Du kannst auch den Befehl **Nacheinander mergen…** nutzen.
+3. Prüfe das Sheet und drücke **Starten**.
+
+Der Button ändert sich mit deiner Auswahl. Für den Fall, dass die angehakten Zeilen das untere Ende eines Stacks sind, siehe [Stacks](/de/docs/stacks).
+
+| Angehakt | Button |
+| --- | --- |
+| keiner oder einer | **Mergen…** |
+| das untere Ende eines Stacks | **Stack mergen (n)…** |
+| alles andere, zwei oder mehr | **n Pull Requests mergen…** |
+
+### Das Sheet
+
+- Es gibt eine Liste pro Repository. Jedes Repository wird zu einer eigenen Serie.
+- Die Reihenfolge ist: kleinste Änderung zuerst, weil kleine Pull Requests die wenigsten Konflikte verursachen. Bei Gleichstand kommt der ältere Pull Request zuerst. Zieh Zeilen, um die Reihenfolge zu ändern, oder nutze Nach oben und Nach unten im Kontextmenü.
+- Methode und **Den Branch danach löschen** gelten für die ganze Serie.
+- Nach **Starten** fragt nichts mehr nach.
+
+Deine eigenen Pull Requests sind erlaubt. Das ist wichtig, wenn ein Agent Pull Requests unter deinem Account öffnet.
+
+### Was ausgeschlossen wird
+
+Manche angehakten Pull Requests bleiben draußen. Sie stehen mit einem Grund unter **Ausgeschlossen**. Fahr mit der Maus darüber für eine längere Erklärung.
+
+| Grund | Bedeutung |
+| --- | --- |
+| Merge schon unterwegs | Ein Merge ist eingereiht, vorgemerkt oder Teil einer anderen Serie. |
+| Draft | Noch ein Draft. |
+| Konflikte | GitHub meldet Konflikte. |
+| Checks fehlgeschlagen | Ein Check auf dem Head-Commit ist fehlgeschlagen. |
+| Änderungen angefordert | Ein Reviewer hat Änderungen angefordert. Eine Serie setzt sich darüber nicht hinweg. |
+| einer darunter ist ausgeschlossen | Pull Request in einem Stack, siehe [Stacks](/de/docs/stacks). |
+
+Laufende Checks sind kein Grund. Auf sie zu warten ist der Sinn einer Serie.
+
+### Was jeder Schritt macht
+
+Shepherd arbeitet die Liste von oben ab, einen Pull Request nach dem anderen:
+
+1. Liegt der Branch hinter seiner Basis, bittet es GitHub, den Branch zu aktualisieren. Das startet die Checks neu.
+2. Es wartet, bis die Checks grün sind.
+3. Es mergt, gebunden an den Commit, den es geprüft hat.
+4. Es macht mit dem nächsten weiter.
+
+Ein Pull Request ohne Checks wird gemergt, sobald GitHub ihn als mergebar meldet. Nach einem Update wartet es bis zu einer Stunde, bis Checks auf dem neuen Commit auftauchen, bevor es entscheidet, dass es keine gibt.
+
+Ein Pull Request, der sich nicht mergen lässt, wird übersprungen, und die Serie läuft weiter.
+
+### Chips an den Zeilen
+
+Jede Zeile in einer Serie zeigt einen Chip.
+
+- `Serie 2/5 · wartet`
+- `Serie 2/5 · Branch wird aktualisiert`
+- `Serie 2/5 · wartet auf Checks`
+- `Serie 2/5 · wird gemergt`
+- `Serie 2/5 · übersprungen: Grund`
+
+Gründe fürs Überspringen: Checks fehlgeschlagen, Konflikte, Draft, Änderungen angefordert, neue Commits, Schreiben fehlgeschlagen, Update abgelehnt, Merge abgelehnt, Inbox verlassen, herausgenommen.
+
+Neue Commits heißt: Jemand hat etwas gepusht, das in dieser Serie niemand gesehen hat. Ein übersprungener Pull Request bleibt auf GitHub, wie er ist. Du kannst ihn später von Hand mergen.
+
+### Eine Serie stoppen oder ändern
+
+- **Aus der Serie nehmen** nimmt einen Pull Request heraus. Du findest den Button auf dem Review-Bildschirm. Die Serie macht mit dem nächsten weiter.
+- **Abbrechen** stoppt die ganze Serie. Laufende Serien stehen unter **Einstellungen → Sync** bei **Merge-Serien**, jede mit einem Button Abbrechen. Ein Merge, der schon eingereiht ist, geht trotzdem raus.
+
+Serien leben nur auf diesem Mac. Sie überstehen einen Neustart von Shepherd.
+
+### Zeitlimits
+
+Shepherd wartet nicht ewig. Nach einer Stunde überspringt es einen Pull Request, der:
+
+- die Inbox ohne bestätigten Merge verlassen hat,
+- den neuen Commit nicht gezeigt hat, nachdem Shepherd den Branch aktualisiert hat,
+- für den Merge eingereiht war, aber noch offen ist, ohne dass GitHub geantwortet hat.
+
+### Die Zusammenfassung
+
+Wenn eine Serie fertig ist, bekommst du eine Mitteilung pro Repository, zum Beispiel `schnaq/shepherd: 4 gemergt, 1 übersprungen`.
+
+## Verwandt
+
+<Cards>
+  <Card title="Stacks" href="/de/docs/stacks" />
+  <Card title="Automatisierung" href="/de/docs/automation" />
+  <Card title="Einstellungen" href="/de/docs/settings" />
+  <Card title="GitHub-Token" href="/de/docs/github-token" />
+</Cards>

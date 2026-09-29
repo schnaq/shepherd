@@ -1,0 +1,64 @@
+---
+title: Installation
+description: Voraussetzungen, Download, erster Start, Updates und wo Shepherd seine Daten ablegt.
+---
+
+## Voraussetzungen
+
+- macOS 27 (Golden Gate) oder neuer.
+- Ein Mac mit Apple Silicon. Shepherd wird nur für `arm64` gebaut.
+- Ein GitHub-Account auf github.com.
+
+## Download
+
+Nutze Homebrew:
+
+```sh
+brew install --cask schnaq/tap/shepherd
+```
+
+Oder lade das DMG vom [neuesten Release](https://github.com/schnaq/shepherd/releases/latest) herunter und ziehe Shepherd in den Programme-Ordner. Jeder Release-Build ist von Apple notarisiert.
+
+## Erster Start
+
+Shepherd hat keinen Einrichtungsassistenten. Das erste Fenster ist der Anmeldebildschirm mit zwei Optionen:
+
+- **MIT GITHUB ANMELDEN**: Klicke auf **Mit Device-Flow fortfahren**. Shepherd zeigt einen kurzen Code. Klicke auf **github.com/login/device öffnen**, gib den Code ein und bestätige. Shepherd wartet und meldet dich an.
+- **PERSONAL ACCESS TOKEN**: Füge ein Token (`github_pat_…`) ein und klicke auf **Mit Token anmelden**.
+
+Welche Option passt und was das Token braucht, steht unter [GitHub-Token](/de/docs/github-token).
+
+Nach der Anmeldung landest du in der Inbox. Sie füllt sich mit den Pull Requests, in die du involviert bist. Willst du ein Repository verfolgen, in dem dich niemand angefragt hat, drücke `⇧⌘A` (**Repository beobachten…**). Siehe [Inbox](/de/docs/inbox).
+
+<Callout type="info">
+Fragt macOS nach deinem Anmeldepasswort, übergibt der Schlüsselbund Shepherd sein eigenes GitHub-Token. Sonst wird nichts gelesen. Hast du Shepherd selbst gebaut, wähle einmal **Immer erlauben** für diesen Build.
+</Callout>
+
+## Updates
+
+Shepherd aktualisiert sich selbst über Sparkle. Updates kommen von GitHub Releases und werden erst nach deiner Bestätigung installiert. Sie laufen nie im Hintergrund, damit ein ungesendeter Review-Entwurf nie unterbrochen wird.
+
+Öffne **Einstellungen → Account → Updates**, um **Automatisch nach Updates suchen** ein- oder auszuschalten, oder klicke auf **Jetzt suchen**. Der Menüpunkt heißt **Nach Updates suchen…**. Den Homebrew-Cask musst du nicht aktualisieren, das übernimmt die App.
+
+## Wo deine Daten liegen
+
+| Was | Wo |
+| --- | --- |
+| Lokale Datenbank | `~/Library/Application Support/Shepherd/shepherd.sqlite` |
+| Agent-Worktrees | `~/Library/Application Support/Shepherd/Worktrees` |
+| Crash- und Hang-Berichte (optional) | `~/Library/Application Support/Shepherd/Diagnostics` |
+| Warteschlange für Nutzungszahlen (optional) | `~/Library/Application Support/Shepherd/Telemetry` |
+| GitHub-Token | macOS-Schlüsselbund, Dienst `com.schnaq.shepherd.github` |
+| KI-Schlüssel und andere Secrets | macOS-Schlüsselbund, Dienst `com.schnaq.shepherd.secrets` |
+
+## Abmelden und deinstallieren
+
+Zum Abmelden und Löschen der lokalen Daten nutze **Einstellungen → Account → Abmelden & lokale Daten löschen**. Das entfernt das Token aus dem Schlüsselbund und leert die Datenbank. Eingereihte Reviews, die noch nicht gesendet wurden, gehen verloren.
+
+So entfernst du Shepherd komplett:
+
+1. Melde dich ab und lösche die Daten wie oben.
+2. Beende Shepherd und wirf es in den Papierkorb, oder führe `brew uninstall --cask shepherd` aus.
+3. Lösche `~/Library/Application Support/Shepherd`, falls noch etwas übrig ist.
+
+Was Shepherd wohin sendet, steht unter [Datenschutz](/de/docs/privacy).

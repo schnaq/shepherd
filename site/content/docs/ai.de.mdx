@@ -1,0 +1,81 @@
+---
+title: KI und Sprachmodelle
+description: Was auf deinem Mac läuft, was an einen von dir konfigurierten Modellanbieter gehen kann und wie du KI ausschaltest.
+---
+
+Shepherd funktioniert komplett ohne KI. Jede Modellfunktion ist ein Vorschlag, den du wegklicken kannst. Shepherd schickt nie ein Review ab, approvet, mergt oder kommentiert für dich.
+
+## Die drei Stufen
+
+Öffne **Einstellungen → Intelligenz**. Die Auswahl **Anbieter** hat drei Optionen.
+
+| Option | Was sie macht |
+| --- | --- |
+| **Aus** | Nur lokale Heuristiken: Dateipriorität, Agent-Erkennung, Risikohinweise. |
+| **On-Device** (Standard) | Fügt kurze Zusammenfassungen und weitere Hinweise vom On-Device-Modell von Apple hinzu. Nichts verlässt den Mac. |
+| **On-Device + API-Schlüssel** | Fügt die Analyse ganzer Pull Requests über den Endpunkt hinzu, den du konfigurierst. |
+
+Das On-Device-Modell braucht Apple Intelligence. Hat dein Mac das nicht, zeigen die Einstellungen den Grund unter der Auswahl, und die Funktionen, die es brauchen, bleiben aus.
+
+## Anbieter, die du mitbringen kannst
+
+Bei **On-Device + API-Schlüssel** erscheint der Abschnitt **Eigener Schlüssel**. Wähle eine **Art**.
+
+- **Anthropic.** Spricht mit `api.anthropic.com`. Das Standardmodell ist `claude-haiku-4-5`. Du kannst einen anderen Modellnamen eintippen.
+- **OpenAI-kompatibel.** Jeder Endpunkt, der `chat/completions` spricht. Wähle eine Voreinstellung oder tippe eine **Basis-URL**:
+  - **Konduit (EU)**: in der EU gehostete offene Modelle.
+  - **Ollama (lokal)**: `http://localhost:11434/v1`. Kein Schlüssel nötig, und nichts verlässt deinen Mac.
+  - **Eigener**: jede URL, die du eintippst.
+
+Bei einem OpenAI-kompatiblen Endpunkt listet **Modelle laden** auf, was er anbietet. Oder tippe einen **Modell**-Namen ein. **Verbindung testen** prüft, ob er antwortet.
+
+Gib deinen **API-Schlüssel** ein und drücke **Schlüssel speichern**. Der Schlüssel liegt in deinem Schlüsselbund und wird nur an diesen Endpunkt gesendet. Er steckt weder in der lokalen Datenbank noch in den Einstellungen.
+
+Bei einem OpenAI-kompatiblen Endpunkt kannst du unter **Wo das Modell läuft** eine optionale Richtlinie angeben: eine Liste erlaubter **Länder** (zweistellige Codes) und **Keine Speicherung verlangen**. Sie werden nur dann mit jeder Anfrage gesendet, wenn sie gesetzt sind. Endpunkte, die sie nicht erfüllen können, dürfen die Anfrage ablehnen.
+
+## Welche Funktion welches Modell nutzt
+
+Mit konfiguriertem Schlüssel gehen die meisten Entwurfsanfragen zuerst an deinen Endpunkt. Schlägt das fehl, fällt Shepherd auf das On-Device-Modell zurück. Ohne Schlüssel läuft alles unten auf deinem Mac.
+
+| Funktion | Modell | Verlässt den Mac? |
+| --- | --- | --- |
+| Zusammenfassung und Fokus-Hinweise für einen Pull Request (angezeigt, wenn du ihn auswählst oder öffnest) | Zuerst der Endpunkt, wenn konfiguriert, sonst On-Device | Ja, an deinen Endpunkt, wenn ein Schlüssel konfiguriert ist |
+| **Mit KI entwerfen** für eine Review-Zusammenfassung oder einen Inline-Kommentar (⇧⌘D) | Zuerst der Endpunkt, wenn konfiguriert, sonst On-Device | Ja, an deinen Endpunkt, wenn ein Schlüssel konfiguriert ist |
+| **Diese Zeilen erklären** (⌥E) | Zuerst der Endpunkt, wenn konfiguriert, sonst On-Device | Ja, an deinen Endpunkt, wenn ein Schlüssel konfiguriert ist |
+| Brief für einen Coding-Agenten (der ✨-Button im Delegations-Sheet) | Zuerst der Endpunkt, wenn konfiguriert, sonst On-Device. Nur On-Device, wenn der Brief den Kommentar einer anderen Person zitieren würde | Nur an deinen Endpunkt, und nie mit dem Kommentar einer anderen Person |
+| **Warum?** bei einem roten Check | Zuerst On-Device. Dein Endpunkt nur, wenn das Log nicht passte und du den eigenen Button der Karte drückst | Nur bei diesem Klick, wenn ein Schlüssel konfiguriert ist |
+| Chips für Art und Risiko eines Pull Requests | Nur On-Device | Nein |
+| Aussagen-Karte, Zeilen **Vom Modell gelesen** | Nur On-Device | Nein |
+| Screenshots in Beschreibungen lesen (standardmäßig aus) | Nur On-Device | Nein. Die Bilder werden von GitHub geladen und nie woandershin gesendet |
+| Thread-Zusammenfassung und **Übersetzen** | On-Device (Apple-Frameworks) | Nein |
+| Suche nach Bedeutung in ⌘K | On-Device-Embeddings | Nein |
+| **Pull Request zusammenfassen** in Kurzbefehle und Siri | Nur On-Device | Nein |
+| Morgen-Digest | Kein Modell. Aus der lokalen Datenbank gebaut | Nein |
+
+### Was ein konfigurierter Endpunkt bekommt
+
+- Für Zusammenfassungen und Hinweise: den Titel des Pull Requests, einen Auszug der Beschreibung, die Dateiliste und die wichtigsten Hunks.
+- Für Entwürfe: den Diff-Ausschnitt um die Zeile, die du kommentierst, plus die Inline-Kommentare, die schon in deinem ausstehenden Review stehen.
+- Für **Diese Zeilen erklären**: denselben Diff-Ausschnitt und sonst nichts.
+- Für **Warum?**, nachdem du den Button gedrückt hast: Namen und Zusammenfassungen der fehlgeschlagenen Checks, ein Diff-Fenster und das gekürzte Ende des Job-Logs.
+
+Alles wird vor dem Senden auf ein Token-Budget gekürzt. Der Code des Pull Requests erreicht tatsächlich den Endpunkt, den du gewählt hast, und nur diesen.
+
+Wenn ein Modell antwortet, sagt dir eine Bildunterschrift, welches: On-Device, Anthropic oder eigener Endpunkt.
+
+## KI ausschalten
+
+- **Alles, was mit einem Modell spricht:** Setze **Anbieter** auf **Aus**. Nichts wird an einen Cloud-Endpunkt gesendet, und modellbasierte Funktionen (Chips für Art und Risiko, vom Modell gelesene Aussagen, Screenshot-Lesen) hören auf.
+- **Nur die Cloud:** Setze **Anbieter** auf **On-Device**. Dein gespeicherter Schlüssel bleibt im Schlüsselbund, wird aber nicht benutzt.
+- **Semantische Suche:** Schalte den **Semantischen Suchindex** im selben Tab aus. ⌘K sucht dann nur nach Wörtern, und der Index wird geleert.
+- **Strukturierte Triage:** Schalte **Pull Requests einordnen** aus. Das löscht die gespeicherten Urteile.
+
+<Callout type="info">
+Semantische Suche, Triage und Spotlight laufen auf deinem Mac und nutzen nie einen konfigurierten Endpunkt. Was insgesamt deinen Mac verlässt, steht unter [Datenschutz](/de/docs/privacy).
+</Callout>
+
+<Cards>
+<Card title="Pull Requests reviewen" href="/de/docs/review" />
+<Card title="Automatisierung" href="/de/docs/automation" />
+<Card title="Datenschutz" href="/de/docs/privacy" />
+</Cards>

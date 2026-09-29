@@ -1,0 +1,79 @@
+---
+title: Fehlerbehebung
+description: Kurze Antworten bei fehlendem Pull Request, ausgegrautem Merge, ungesendeten Reviews, fehlenden Mitteilungen und wie du einen Bug meldest.
+---
+
+## Ein Pull Request fehlt in der Inbox
+
+Geh die Punkte der Reihe nach durch.
+
+1. **Jetzt synchronisieren.** Drücke `⌘R`. Shepherd macht alle 1 bis 10 Minuten eine volle Suche (**Einstellungen → Sync → Volle Suche alle**), ein ganz neuer Pull Request kann also einen Moment dauern.
+2. **Ist er offen?** Die Inbox zeigt nur offene Pull Requests. Archivierte Repositorys werden übersprungen.
+3. **Betrifft er dich?** Shepherd sucht nach Pull Requests, bei denen du als Reviewer angefragt, Autor, zugewiesen, erwähnt oder sonst beteiligt bist. Ein Pull Request, in den dich niemand einbezogen hat, erscheint nur, wenn du sein Repository beobachtest. Mit `⇧⌘A` beobachtest du eins. Du kannst bis zu 10 Repositorys beobachten.
+4. **Hast du ihn ausgeblendet?** Prüfe **Einstellungen → Sync → Ausgeblendete Pull Requests** und klicke auf **Wieder anzeigen**. Ein ausgeblendeter Pull Request kommt von selbst zurück, wenn ein Review von dir angefordert wird.
+5. **Ist ein Filter aktiv?** Setze die Auswahl in der Seitenleiste oder den Filter zurück. Die Inbox meldet "Kein Pull Request passt zu diesem Filter", wenn einer alles ausblendet.
+6. **Sieht dein Token das Repository?** Das ist die übliche Ursache bei Organisations-Repositorys mit SAML-Single-Sign-on. Die GitHub-Suche lässt Ergebnisse, auf die das Token nicht zugreifen kann, stillschweigend weg, und es erscheint kein Fehler. Das Repository zu beobachten hilft nicht. Siehe [GitHub-Token](/de/docs/github-token#organisationen-mit-saml-single-sign-on).
+
+## Der Merge-Button ist ausgegraut
+
+Fahre mit der Maus über den Button. Der Tooltip nennt den Grund.
+
+- **Der Pull Request ist ein Draft.** GitHub lässt Drafts nicht mergen. Markiere ihn zuerst als bereit für das Review.
+- **Er hat Konflikte mit dem Basis-Branch.** Löse sie und synchronisiere dann.
+- **Er wurde inzwischen gemergt oder geschlossen.** **Approve**, **Request changes** und **Mergen…** sind gesperrt, wenn der Pull Request weg ist.
+- **Es ist dein eigener Pull Request.** Du kannst ihn kommentieren, aber GitHub akzeptiert **Approve** oder **Request changes** nicht vom Autor.
+
+Details: [Merge](/de/docs/merging).
+
+## GitHub hat den Merge abgelehnt
+
+Ein Toast zeigt "Dieser Pull Request kann nicht gemergt werden", gefolgt von GitHubs eigener Begründung. Das ist ein `405` von GitHub. Typische Gründe sind eine Branch-Protection-Regel, ein fehlendes Pflicht-Review oder ein fehlender Pflicht-Check, oder ein Branch, der hinter seiner Basis liegt, in einem Repository, das aktuelle Branches verlangt.
+
+Bring den Branch auf den neuesten Stand, warte auf die Pflicht-Checks und versuche es erneut. Eine [Merge-Serie](/de/docs/merging) kann den Branch für dich aktualisieren und mergen, sobald die Checks grün sind.
+
+Sagt die Meldung, der Pull Request habe sich weiterentwickelt, hat jemand gepusht, nachdem du ihn angesehen hast. Lies die neuen Commits und merge erneut. Shepherd bindet jeden Merge an den Commit, den du gesehen hast, und mergt deshalb nie Code, den du nicht kennst.
+
+## Ein Merge steht auf "Merge eingereiht" oder "Nicht gesendet"
+
+Merges und Reviews laufen über eine lokale Outbox. Sie stehen auf **Merge eingereiht**, bis GitHub erreichbar ist, dann auf **Wird gemergt …**, und auf **Gemergt** erst, wenn GitHub es bestätigt. Ein fehlgeschlagener Schreibzugriff zeigt **Nicht gesendet** mit **Erneut senden**. Fehlgeschlagene Zeilen findest du auch mit Erneut senden und Verwerfen unter **Einstellungen → Sync**.
+
+## "Dieses Review wurde nicht gesendet"
+
+Du hast ein Review eingereiht, und bevor es gesendet wurde, kamen neue Commits dazu. Shepherd hält das Review zurück, statt deine Kommentare an einen Commit zu hängen, den du nicht beurteilt hast. Dein Entwurf ist lokal gespeichert. Öffne den Pull Request, prüfe den Entwurf gegen den neuen Commit und sende ihn erneut. Eine Mitteilung, "Review nicht gesendet", sagt dir Bescheid, wenn das passiert. Siehe [Review](/de/docs/review).
+
+## Nach dem Sync passiert nichts
+
+- **Einstellungen → Sync** zeigt "Noch nichts synchronisiert", bis der erste Sweep fertig ist.
+- Siehst du "Anfragelimit erreicht bis …", warte bis zu dieser Zeit.
+- Siehst du "GitHub hat die Anmeldedaten abgelehnt. Melde dich erneut an.", wurde dein Token widerrufen oder ist abgelaufen. Melde dich unter **Einstellungen → Account** ab und wieder an.
+- "GitHub ist nicht erreichbar" heißt, es gibt ein Netzwerkproblem. Shepherd arbeitet mit seinen lokalen Daten weiter und versucht es erneut.
+
+## Mitteilungen kommen nicht an
+
+1. Öffne **Einstellungen → Sync → Mitteilungen** und prüfe die drei Schalter: ein neues Review wird von mir angefordert, Checks auf einem Pull Request von mir fehlschlagen, ein eingereihtes Review konnte nicht gesendet werden.
+2. macOS fragt beim ersten Mal nach der Erlaubnis, wenn Shepherd eine Mitteilung sendet. Prüfe Systemeinstellungen → Mitteilungen → Shepherd.
+3. Shepherd sendet Mitteilungen, solange es läuft. Lass es laufen.
+
+Davon getrennt siehst du vielleicht "Dieses Token kann keine GitHub-Mitteilungen lesen". Das betrifft nur, wie schnell sich die Inbox aktualisiert. GitHub liefert diesen Endpunkt nur an Classic Tokens, und der reguläre Sweep füllt die Lücke.
+
+## macOS fragt nach meinem Schlüsselbund-Passwort
+
+Erscheint die Abfrage nach einem Update oder Neubau von Shepherd, fragt ein anderer Build an als der, der das Token gespeichert hat. Wähle **Immer erlauben**. Das gilt einmalig für diesen Build.
+
+## Wo sind die Logs
+
+Shepherd hat keine Logdatei zum Einsenden. Es kann Crash- und Hang-Berichte auf diesem Mac behalten, und nichts verlässt den Mac.
+
+1. Öffne **Einstellungen → Account → Diagnose** und schalte **Crash- und Hang-Berichte auf diesem Mac behalten** ein.
+2. Nach einem Crash erscheint beim nächsten Start ein Bericht.
+3. Klicke auf **Im Finder zeigen**. Die Dateien liegen in `~/Library/Application Support/Shepherd/Diagnostics`. Mit **Alle löschen** entfernst du sie.
+
+## Einen Bug melden
+
+Öffne ein Issue auf [github.com/schnaq/shepherd/issues](https://github.com/schnaq/shepherd/issues). Gib an:
+
+- Deine Shepherd-Version, zu finden unter **Einstellungen → Account → Updates**, und deine macOS-Version.
+- Was du getan hast, was du erwartet hast und was passiert ist.
+- Einen Crash-Bericht aus dem Diagnostics-Ordner, falls es einen Crash gab. Entferne vorher alles Private.
+
+Füge dein Token nie in ein Issue ein.
