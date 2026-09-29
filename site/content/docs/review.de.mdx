@@ -1,0 +1,156 @@
+---
+title: Pull Requests reviewen
+description: Einen Diff lesen, Zeilen kommentieren, ein Urteil abschicken, und was passiert, wenn du offline bist oder der Pull Request sich weiterentwickelt.
+---
+
+Öffne einen Pull Request aus der Inbox mit `⏎` oder per Doppelklick. Mit `esc` gehst du zurück.
+
+![Die Diff-Ansicht](/diff.png)
+
+Der Review-Bildschirm hat zwei Tabs. Mit `t` wechselst du zwischen ihnen.
+
+- **Dateien** zeigt die geänderten Dateien und den Diff.
+- **Unterhaltung** zeigt Beschreibung, Commits, Checks und Review-Threads.
+
+Ein Agent-Pull-Request öffnet auf **Unterhaltung**, wenn seine Beschreibung etwas behauptet, zum Beispiel hinzugefügte Tests oder keine Breaking Changes. Alles andere öffnet auf **Dateien**. Schalte das unter Einstellungen → Darstellung mit **Pull Requests von Agents auf „Conversation“ öffnen** aus.
+
+## Den Diff lesen
+
+Die Dateiliste ist nach Review-Priorität sortiert, das Riskanteste zuerst. Sie gruppiert Dateien in Zuerst reviewen, Standard, Überfliegen und generierte Dateien, damit Lockfiles und generierter Code dir nicht im Weg sind.
+
+- Mit `↑` und `↓` wechselst du zwischen Dateien.
+- Mit `v` markierst du die Datei als gesehen oder hebst die Markierung auf.
+- Mit `a` markierst du die Datei als gesehen und springst zur nächsten, die es noch nicht ist.
+- Der Regler **Layout** wechselt zwischen **Nebeneinander** und **Inline**.
+
+Sobald jede Datei markiert ist, zeigt die Review-Leiste **Alle Dateien gesehen**.
+
+### Diff-Darstellung wählen
+
+Unter Einstellungen → Darstellung → **Diff-Darstellung** gibt es drei Optionen:
+
+- **Automatisch** nutzt die Zeilenliste, solange VoiceOver läuft, sonst die erweiterte Ansicht.
+- **Erweiterte Ansicht** ist der volle Diff-Editor.
+- **Zeilenliste** ist eine native Liste mit einer Zeile pro Diff-Zeile. Mit `j`, `k` oder den Pfeiltasten gehst du sie durch.
+
+## Zeilen kommentieren
+
+In der erweiterten Ansicht fährst du über eine Zeilennummer und klickst auf das `+`, das erscheint. Auf der gelöschten Seite eines Diffs nutzt du das linke Fenster. In der Zeilenliste klickst du doppelt auf eine Zeile.
+
+Es geht auch per Tastatur:
+
+1. Drücke `c`, um die Tastatur in den Diff zu bringen.
+2. Geh die Zeilen mit den Pfeiltasten durch.
+3. Drücke noch einmal `c`, um das Kommentarfeld an der aktuellen Zeile zu öffnen.
+
+Im Side-by-Side-Diff wechselst du mit `[` und `]` zwischen dem Original und dem geänderten Fenster. So kommentierst du eine gelöschte Zeile.
+
+Schreibe deinen Kommentar und klicke auf **Kommentar hinzufügen**. Er wird in deinem ausstehenden Review gespeichert. Gesendet wird erst, wenn du abschickst. Die Review-Leiste zählt deine ausstehenden Kommentare. Drafts überstehen einen Neustart.
+
+Bestehende Threads erscheinen an ihren Zeilen. Du kannst antworten und einen Thread **Auflösen** oder **Auflösung aufheben**. Eine Antwort oder Auflösung im Offline-Modus wird eingereiht wie ein Review.
+
+### Gespeicherte Antworten und Vorlagen
+
+Das Einfügen-Menü neben einem Kommentarfeld listet deine gespeicherten Antworten. Wähle eine, um sie einzufügen. Bei einem Thread stehen Antworten, die zur Unterhaltung passen, zuerst unter **Vorschläge**. Das nutzt nur Abgleich auf dem Gerät.
+
+Gespeicherte Antworten legst du unter Einstellungen → Antworten an und bearbeitest sie dort. Dieselbe Seite hat **Review-Vorlagen**. Eine Vorlage passt auf ein Repository wie `schnaq/review` oder auf einen ganzen Owner wie `schnaq/*` und füllt die Zusammenfassung eines neuen Reviews vor. Sie überschreibt nie ein Review, das du schon begonnen hast.
+
+### Lange Threads
+
+Ein Thread mit sechs oder mehr Kommentaren bekommt einen Button **Zusammenfassen**. Er schreibt auf deinem Mac eine kurze Übersicht, markiert mit **Einig**, **Offen** oder **Blockiert**. Er fasst nur zusammen. Er antwortet nie und löst nichts auf. Er braucht Apple Intelligence.
+
+## Ein Review abschicken
+
+Nutze die Buttons in der Review-Leiste oder die Tasten:
+
+| Aktion | Button | Tasten |
+| --- | --- | --- |
+| Approve | **Approve…** | `r a` |
+| Änderungen anfordern | **Request changes** | `r x` |
+| Kommentar | **Comment** | `r c` |
+| Abschicken-Sheet öffnen | **Review…** | `⌘⏎` |
+
+Das Abschicken-Sheet hat eine **Zusammenfassung**, eine **Bewertung** und deine ausstehenden Inline-Kommentare. Klicke auf **Abschicken**, um zu senden.
+
+- Nur ein Approval darf ohne Zusammenfassung raus. GitHub lehnt die anderen beiden ab.
+- GitHub akzeptiert bei deinem eigenen Pull Request kein Approval und keine Änderungsanforderung. Der Button bietet dann einen einfachen Kommentar an.
+- Sobald der Pull Request gemergt oder geschlossen ist, sind die drei Urteils-Buttons deaktiviert.
+
+Meldet GitHub, dass der Pull Request während des Lesens aktualisiert wurde, zeigt ein Streifen über dem Diff **Auf GitHub aktualisiert — n neue Commits.** Drücke **Neu laden** oder `u`, um sie anzuzeigen. Deine Datei, dein Cursor und dein Kommentartext bleiben, wo sie sind, bis du das tust. Neue Commits werden nie stillschweigend übernommen, denn deine Kommentare hängen an dem Commit, den du gelesen hast.
+
+### Offline und die Outbox
+
+Beim Abschicken spricht Shepherd nicht direkt mit GitHub. Das Review kommt in eine lokale Warteschlange, die Outbox, und wird so schnell wie möglich gesendet. Sie übersteht einen Absturz und eine unterbrochene Verbindung. Die Warteschlange trägt auch Antworten, Thread-Auflösungen und Merges.
+
+Ein Hinweis sagt dir, in welchem Fall du bist:
+
+- **Approved …** heißt: GitHub hat das Review.
+- **Approval queued for …** heißt: Es liegt noch auf deinem Mac. Es hat noch nichts approved.
+- **Review held back — … changed since you started. See the alert.** heißt: Der Pull Request hat sich weiterentwickelt und das Review wurde geparkt.
+
+Unter Einstellungen → Sync siehst du, wie viele Schreibvorgänge warten oder geparkt sind. Dort stehen auch die, die GitHub abgelehnt hat, jeweils mit **Erneut senden** und **Verwerfen**. Der Review-Kopf und das Detail-Panel bieten **Erneut senden** für den Pull Request, in dem du gerade bist.
+
+### Wenn ein Review nicht gesendet wird
+
+Ein Review ist an den Head-Commit gebunden, auf dem du es geschrieben hast. Bekommt der Pull Request neue Commits, bevor das Review GitHub erreicht, sendet Shepherd es nicht. Deine Inline-Kommentare könnten sonst auf falschen Zeilen landen. Es zeigt **Dieses Review wurde nicht gesendet** mit zwei Buttons:
+
+- **Erneut reviewen** öffnet den Pull Request noch einmal, damit du deinen Draft gegen den neuen Commit prüfen kannst.
+- **Später** schließt den Hinweis.
+
+Dein Draft bleibt erhalten. Die Titelleiste und Einstellungen → Sync zählen das Review weiter als **nicht gesendet**, bis du dich darum gekümmert hast, und du bekommst eine Mitteilung **Review nicht gesendet**. Wurden in einem Durchlauf mehrere Reviews geparkt, kommen die Hinweise nacheinander.
+
+Ein schnelles Urteil ohne Inline-Kommentare ist an den Head gebunden, den du beim Klicken gesehen hast. Inline-Kommentare behalten den Commit, auf dem du sie geschrieben hast.
+
+## Seit deinem Review
+
+Wenn ein Agent eine Runde mit Fixes pusht, öffnet das Review auf **Seit deinem Review** statt auf dem ganzen Pull Request. Du siehst nur die Dateien und Hunks, die sich vom Head unterscheiden, den du reviewt hast. **Alle Dateien** ist einen Klick entfernt. Der Regler erscheint erst, wenn es eine Runde zum Vergleichen gibt, ein erstes Review öffnet also auf allen Dateien.
+
+Darunter listet **Deine Anmerkungen** die Kommentare, die du in der früheren Runde gemacht hast:
+
+- **Bearbeitet**: Die Zeilen, an denen dein Kommentar hing, haben sich geändert. Das heißt nicht, dass der Fix richtig ist. Der Thread bleibt offen, bis du ihn auflöst.
+- **Unverändert**: Weder die Zeilen noch der Thread haben sich geändert.
+- **Verschoben**: Die Datei wurde umbenannt oder die Zeilen sind verrutscht.
+- **Beantwortet**: Jemand hat im Thread geantwortet.
+
+Klicke eine Anmerkung an, um zu Datei und Zeile zu springen. In der Inbox-Zeile sagt dir ein Chip wie `3 Runden · 2 Findings unverändert` schon vor dem Öffnen Bescheid.
+
+Shepherd behält den Diff, den du reviewt hast, sobald dein Review GitHub erreicht. Der Vergleich läuft auf deinem Mac, übersteht also einen Force-Push und funktioniert offline. Ein Review, das du auf github.com abgeschickt hast, zählt auch, solange der Pull Request noch auf diesem Commit steht.
+
+## Was drinsteht und was Shepherd gefunden hat
+
+Bei einem Agent-Pull-Request listet eine Karte über der Beschreibung jede Behauptung der Beschreibung neben den Belegen, die Shepherd gefunden hat: Tests hinzugefügt, nur ein Modul angefasst, keine Breaking Changes, behebt ein Issue. Eine gescheiterte Zeile kannst du mit **In einen Kommentar umwandeln** in einen Kommentar für deine Review-Zusammenfassung verwandeln. Nichts wird für dich abgeschickt, und es gibt keine Bewertung.
+
+## Was dieser Pull Request schließt
+
+Steht in der Beschreibung `closes #123`, listet ein Abschnitt **SCHLIESST n ISSUES** über der Beschreibung jedes Issue mit Titel und der Angabe, ob es noch offen ist. Mit `⇧⌘I` oder einem Klick auf eine Zeile öffnest du das erste Issue auf GitHub. Ein Pull Request, der nichts schließt, hat keinen solchen Abschnitt.
+
+## Fokus-Review-Sitzung
+
+Drücke `⇧⌘⏎` oder `r f`, oder klicke im Inbox-Kopf auf **Sitzung**, um alle Pull Requests, die auf dein Review warten, nacheinander auf diesem Bildschirm abzuarbeiten. Die Warteschlange wird beim Start eingefroren.
+
+- Eine Leiste zeigt, wo du bist, zum Beispiel **3 von 12**.
+- `d` zählt den Pull Request als reviewt und geht weiter. Der Button heißt **Fertig & weiter**.
+- `n` lässt ihn für später liegen und geht weiter.
+- `esc` beendet die Sitzung nach einer Rückfrage.
+- Approven, Änderungen anfordern oder Mergen geht von selbst weiter.
+
+Pull Requests, die zwischenzeitlich gemergt oder geschlossen werden, werden mit einem Hinweis übersprungen. Am Ende zeigt eine Zusammenfassung, was du reviewt, übersprungen und an Merges verloren hast. Eine Sitzung wird nicht gespeichert.
+
+## Sammel-Triage
+
+Für einen Stapel Agent-Pull-Requests, die du dir schon angesehen hast, hakst du sie in der Inbox an und approvst oder mergst sie hinter einer Bestätigung. Siehe [Die Inbox](/de/docs/inbox#mehrere-pull-requests-auswählen). Zum Mergen siehe [Mergen](/de/docs/merging).
+
+## Übersetzen und Writing Tools
+
+Textfelder für Review-Text bieten Apples **Writing Tools** zum Korrigieren und Umschreiben, auf deinem Mac, wo unterstützt. Beschreibungen und Kommentare in einer Sprache, die du nicht liest, bekommen einen Button **Übersetzen**. Die Übersetzung erscheint in einem Block unter dem Original, sodass du bestätigst, was tatsächlich geschrieben wurde. **Übersetzung ausblenden** klappt sie zu. Nichts wird irgendwohin gesendet.
+
+## KI-Hilfe
+
+Wenn du KI eingerichtet hast, entwirft ein Funken-Button Review-Text, und ein Button **Warum?** erklärt einen roten Check. Entwürfe sind Text in einem Feld. Das Abschicken klickst weiterhin du. Siehe [KI](/de/docs/ai).
+
+<Cards>
+  <Card title="Die Inbox" href="/de/docs/inbox" />
+  <Card title="Mergen" href="/de/docs/merging" />
+  <Card title="KI" href="/de/docs/ai" />
+  <Card title="Tastaturkürzel" href="/de/docs/keyboard-shortcuts" />
+</Cards>

@@ -1,0 +1,146 @@
+---
+title: Automatisierung
+description: Gib Arbeit an deine lokalen Coding-Agenten ab und steuere Shepherd per Terminal, Kurzbefehle, Siri, Spotlight und Webhooks.
+---
+
+Shepherd kann einen Pull Request oder einen einzelnen Befund an einen Coding-Agenten auf deinem Mac zurückgeben. Es lässt sich auch von außen steuern und kann deinen eigenen Tools Bescheid geben, wenn etwas passiert ist.
+
+## An einen lokalen Coding-Agenten delegieren
+
+Shepherd startet die Agent-CLI, die du schon hast. Es hält kein Login dafür, lässt deine Umgebung unangetastet und pusht nie. Das Ergebnis reviewst und pushst du selbst.
+
+### Den Agenten wählen
+
+Öffne **Einstellungen → Delegation**. Die Auswahl **Agent** hat zwei Optionen.
+
+- **Claude Code.** Shepherd startet `claude` headless und liest die Ausgabe, sobald sie ankommt. Mit **Suchen** findest du die ausführbare Datei, oder tippe ihren **Pfad** ein.
+- **Eigener Befehl.** Jede andere Agent-CLI. Schreibe eine **Befehl**-Vorlage. `{prompt}` ist die Aufgabe und `{worktree}` der Pfad. `{prompt}` wird immer genau ein Argument, und keine Shell führt den Befehl aus.
+
+Unter **Leitlinien** legst du den **Berechtigungsmodus** fest (**Änderungen zulassen**, **Nur planen** oder **Nicht fragen**), **Max. Turns** (oder **Unbegrenzt**), ein optionales Ausgabenlimit (**Begrenzen**, in USD) und die erlaubten **Werkzeuge**.
+
+### Lokale Klone verknüpfen
+
+Eine Delegation läuft in einem Git-Worktree deines eigenen Klons. Shepherd klont nie selbst etwas.
+
+Drücke in **Einstellungen → Delegation** unter **Lokale Checkouts** auf **Lokales Repository hinzufügen…** und wähle den Ordner. Shepherd liest das Repository aus dem `origin` des Klons. Im selben Schritt kannst du es auch beobachten. Bei einem Klon, dessen Origin es nicht verrät, gib den Namen als `owner/name` ein.
+
+### Einen Agenten starten
+
+- Wähle bei einem Pull Request oder einem Befund **An Agenten delegieren…** oder **Diesen Befund delegieren…**. Ein Sheet öffnet sich mit der Aufgabe. **Ausführen** ist dein Klick.
+- Wähle bei einem beobachteten Repository mit verknüpftem Klon **Agent starten…** und tippe die Aufgabe. Shepherd legt aus deiner ersten Zeile einen Branch an, zum Beispiel `agent/add-dark-mode`, und einen Worktree darauf. Mehrere Aufgaben können gleichzeitig in einem Repository laufen.
+- ⌘K bietet außerdem **Agent in owner/repo starten…** für jeden verknüpften Klon.
+
+Das Menü **Agent-Aufgaben** listet jede Aufgabe und ob sie läuft, fertig ist oder fehlgeschlagen ist. **Worktree verwerfen** entfernt den Worktree einer Aufgabe. **Committen & Branch pushen** ist dein Button.
+
+### Shepherd den Brief schreiben lassen
+
+Der ✨-Button neben dem Aufgabenfeld entwirft den Brief für dich als **Goal**, **Constraints** und **Acceptance**. Der Text läuft ins Feld, und du bearbeitest ihn. Nichts startet, bis du **Ausführen** drückst. Würde der Brief den Review-Kommentar einer Kollegin oder eines Kollegen zitieren, schreibt ihn nur das On-Device-Modell. Siehe [KI und Sprachmodelle](/de/docs/ai).
+
+### Der Session antworten, die den Code geschrieben hat
+
+Claude Code versieht seine Commits mit einem `Claude-Session:`-Trailer. Tragen die Commits eines Pull Requests einen, bekommen jeder Befund und die Review-Zusammenfassung **An die Session schicken**. Ein Sheet zeigt vorher die genaue Nachricht. Deine installierte CLI setzt dann diese Session im Worktree des Pull Requests fort. Bei einer Session, die auf `claude.ai/code` liegt, heißt der Button **Session öffnen**.
+
+Beide Befehle kannst du in **Einstellungen → Delegation** unter **Rückkanal zur Session** bearbeiten. Das ist keine Review-Aktion: Sie löst nichts auf und sendet nichts ab.
+
+### Automatisch starten, wenn CI rot wird
+
+Standardmäßig aus. Schalte in **Einstellungen → Delegation** unter **Automatische Delegation** **Eine Delegation von selbst starten, wenn eine Regel zutrifft** ein. Wähle dann unter **Auf meinen Pull Requests ausführen, wenn**, wann:
+
+- **CI rot wird**
+- **Ein Reviewer Änderungen anfordert**
+
+Es nutzt denselben Worktree und dieselben Leitlinien und pusht, approvet oder mergt nie. Der fertige Diff wartet auf dein Review, als automatisch markiert. Du kannst Limits für Läufe **Parallel** und **Pro Tag** setzen.
+
+## Das URL-Schema `shepherd://`
+
+Jedes Tool kann Shepherd auf dem richtigen Bildschirm öffnen.
+
+| URL | Öffnet |
+| --- | --- |
+| `shepherd://pr/owner/repo/123` | Einen Pull Request in der Review-Ansicht |
+| `shepherd://issue/owner/repo/123` | Ein Issue in der Issue-Inbox |
+| `shepherd://inbox` | Die Inbox |
+| `shepherd://inbox?filter=needs-my-review` | Die Inbox mit einem Filter |
+| `shepherd://fleet` | Jeden Agenten, den Shepherd gesehen hat |
+| `shepherd://fleet/claude-code` | Die Seite eines Agenten |
+| `shepherd://sync` | Startet einen Sweep über jedes Repository |
+| `shepherd://settings/intelligence` | Die Einstellungen in einem Tab |
+
+Inbox-Filter sind `needs-my-review`, `mine`, `involved`, `approved-by-me`, `watched`, `humans`, `bots`, `issues`, `agent:<id>` und `repo:<owner>/<name>`. Einstellungs-Tabs sind `account`, `sync`, `replies`, `agents`, `intelligence`, `delegation`, `automation` und `appearance`.
+
+Links enthalten keinen Dateipfad, keinen Befehl und keinen Body. Ein Link, der ankommt, während du abgemeldet bist, wird aufgehoben und nach der Anmeldung geöffnet.
+
+## Die Kommandozeile
+
+Das Tool `shepherd` baut eine `shepherd://`-URL und übergibt sie an die App. Es spricht nie mit GitHub und sieht nie deinen Token.
+
+Die CLI ist nicht in der App enthalten. Baue sie aus dem Quellcode in einem Checkout des Repositorys und kopiere sie in deinen Pfad:
+
+```sh
+xcodebuild -project Shepherd.xcodeproj -scheme ShepherdCLI -configuration Release \
+  -derivedDataPath .build/cli build
+cp .build/cli/Build/Products/Release/shepherd /usr/local/bin/
+```
+
+Befehle:
+
+```sh
+shepherd open owner/repo#123
+shepherd open https://github.com/owner/repo/pull/123
+shepherd issue owner/repo#128
+shepherd inbox needs-my-review
+shepherd inbox --filter agent:claude-code
+shepherd fleet
+shepherd fleet claude-code
+shepherd sync
+shepherd settings intelligence
+shepherd --help
+shepherd --version
+```
+
+`open` und `issue` akzeptieren `owner/repo#123`, `owner/repo/123` oder die github.com-URL. Exit-Code 2 heißt, die Argumente wurden nicht verstanden. Exit-Code 1 heißt, die URL konnte nicht übergeben werden.
+
+## Kurzbefehle, Siri und Spotlight
+
+Die Befehle von Shepherd sind App Intents. Sie erscheinen in der App Kurzbefehle und in den Spotlight-Aktionen.
+
+| Aktion | Was sie macht |
+| --- | --- |
+| **Pull Request öffnen** | Öffnet einen Pull Request, den du wählst oder suchst |
+| **Inbox anzeigen** | Zeigt die Inbox mit optionalem Filter |
+| **Agent-Flotte anzeigen** | Zeigt die Flotte |
+| **Jetzt synchronisieren** | Sweept jedes Repository |
+| **Review-Sitzung starten** | Startet eine Fokus-Sitzung |
+| **Shepherd-Einstellungen öffnen** | Öffnet einen Einstellungs-Tab |
+| **Pull Requests abrufen, die ein Review brauchen** | Gibt die Liste aus der lokalen Datenbank zurück, ohne GitHub-Aufruf |
+| **Pull Request zusammenfassen** | Liest eine On-Device-Zusammenfassung vor |
+
+Siri-Sätze (englisch) sind zum Beispiel „Open my review queue in Shepherd“, „What needs my review in Shepherd“, „Sync Shepherd“, „Start a review session in Shepherd“ und „Summarise my next review in Shepherd“.
+
+Es gibt keine Schreibaktionen. Damit kann nichts approven, kommentieren, mergen oder delegieren.
+
+Pull Requests aus deiner Inbox erscheinen auch in Spotlight (⌘Leertaste), nur mit Titel und Metadaten. Um sie zu entfernen, schalte **Pull Requests in Spotlight zeigen** in **Einstellungen → Intelligenz** aus.
+
+## Ausgehende Webhooks
+
+Shepherd kann ein JSON-Ereignis per POST an eine URL deiner Wahl senden, zum Beispiel an einen n8n-Webhook-Node. Gehe zu **Einstellungen → Automatisierung**, schalte **Ereignisse an einen Webhook senden** ein, gib die **URL** ein und drücke **Testereignis senden**.
+
+Ereignisse:
+
+- `review.submitted`
+- `pr.merged`
+- `delegation.finished`
+- `inbox.new_review_request`
+- `pr.auto_merge_queued`
+- `issue.closed`
+- `issue.assigned_to_agent`
+
+Ereignisse werden erst gesendet, nachdem die Aktion wirklich erfolgreich war. Die Nutzdaten sagen, was passiert ist, nie, was geschrieben wurde: kein Review-Text, keine Kommentare, keine Diffs, keine Agent-Ausgaben. Du kannst ein optionales **Signier-Secret** hinzufügen, das in deinem Schlüsselbund liegt, und jede Anfrage trägt dann eine HMAC-Signatur.
+
+Das vollständige Schema, die Signaturprüfung und eine n8n-Anleitung findest du in [WEBHOOKS.md auf GitHub](https://github.com/schnaq/shepherd/blob/main/docs/WEBHOOKS.md).
+
+<Cards>
+<Card title="Mergen" href="/de/docs/merging" />
+<Card title="Einstellungen" href="/de/docs/settings" />
+<Card title="Datenschutz" href="/de/docs/privacy" />
+</Cards>

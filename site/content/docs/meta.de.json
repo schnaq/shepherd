@@ -1,0 +1,22 @@
+{
+  "title": "Shepherd",
+  "pages": [
+    "---Erste Schritte---",
+    "index",
+    "installation",
+    "github-token",
+    "---Shepherd benutzen---",
+    "inbox",
+    "review",
+    "merging",
+    "stacks",
+    "keyboard-shortcuts",
+    "---Einrichten---",
+    "settings",
+    "ai",
+    "automation",
+    "privacy",
+    "---Hilfe---",
+    "troubleshooting"
+  ]
+}

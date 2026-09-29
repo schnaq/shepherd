@@ -1,0 +1,75 @@
+---
+title: Stacks
+description: Wie Shepherd die gestapelten Pull Requests von GitHub anzeigt und einen Stack in einem Zug mergt.
+---
+
+## Was ein Stack ist
+
+GitHub unterstützt gestapelte Pull Requests nativ (Public Preview seit 2026-07-30). Ein Stack ist eine geordnete Liste von Pull Requests in einem Repository. Der unterste zielt auf den Main-Branch. Jeder darüber zielt auf den Branch des Pull Requests darunter.
+
+Wenn du einen Pull Request in einem Stack mergst, wird alles darunter mit gemergt, alles zusammen. Die Pull Requests darüber bleiben offen. GitHub setzt ihr Ziel neu und rebased sie von selbst.
+
+Shepherd zeigt und mergt Stacks. Es erstellt oder ändert sie nicht. Dafür nutzt du github.com oder `gh stack`.
+
+## Wie Shepherd einen Stack anzeigt
+
+- Jede Zeile in der Inbox bekommt einen kleinen Chip wie **Stack 2/3**. Fahr mit der Maus darüber: "Teil eines GitHub-Stacks: 2 von 3, auf main".
+- Das Detail-Panel und der Review-Bildschirm zeigen eine **STACK**-Karte. Sie listet den Stack von unten nach oben, das ist die Merge-Reihenfolge. Der aktuelle Pull Request ist mit "dieser" markiert. Klicke eine andere Zeile an, um sie zu öffnen.
+- Die Karte listet nur Pull Requests, die in deiner Inbox sind. Sie ergänzt eine Zeile wie "2 weitere sind nicht in deiner Inbox."
+
+Zeilen werden nicht nach Stack gruppiert. Der Chip ist nur ein Tag.
+
+## Einen Stack mergen
+
+### Vom obersten Pull Request aus
+
+Öffne das Merge-Sheet bei einem Pull Request in einem Stack. Unter dem Titel steht, was noch mitgeht, zum Beispiel "Mergt auch #411 und #410, die Pull Requests darunter im Stack." Enthält deine Inbox nicht alle, steht nur die Anzahl da.
+
+Einen oberen Pull Request allein zu mergen geht nicht. Der Button bleibt **Merge**.
+
+**Den Branch danach löschen** ist hier aus und deaktiviert. GitHub verwaltet die Branches eines Stacks.
+
+### Durch Anhaken
+
+1. Hake die Positionen 1 bis k eines Stacks an. Drücke `x` oder klicke mit Command.
+2. Der Button wird zu **Stack mergen (k)…**.
+3. Drücke ihn oder drücke `m`. Das Merge-Sheet öffnet sich beim obersten angehakten Pull Request.
+
+Die angehakten Zeilen müssen genau das untere Ende des Stacks sein: Position 1, 2, 3 und so weiter, ohne Lücke, aus einem Repository. Hakst du Position 2 ohne 1 an oder lässt eine aus, kann Shepherd nicht genau das mergen, was du angehakt hast. Der Button heißt dann **n Pull Requests mergen…** und startet eine Serie, siehe unten.
+
+### Was du beim Mergen siehst
+
+Stacks nutzen den asynchronen Merge von GitHub. Shepherd sendet ihn und fragt dann etwa zehn Sekunden lang ein paarmal bei GitHub nach.
+
+| GitHub sagt | Was du siehst |
+| --- | --- |
+| gemergt | "owner/repo#12 gemergt." Die Pull Requests verlassen die Inbox beim nächsten Sync. |
+| eingereiht | "Auf GitHub eingereiht: owner/repo#12." Die Merge Queue von GitHub übernimmt. |
+| noch offen | "GitHub mergt den Stack für owner/repo#12." Das Ergebnis zeigt sich beim nächsten Sync: Die Pull Requests verlassen die Inbox oder bleiben. |
+| fehlgeschlagen | Der Merge steht als nicht gesendet da, mit der Meldung von GitHub. |
+
+Solange GitHub noch mergt, kommt keine zweite Meldung. Der Pull Request verschwindet einfach aus der Inbox.
+
+## Grenzen
+
+- Nur ein Präfix von unten kann gemergt werden. Du kannst keinen Pull Request in der Mitte überspringen.
+- Immer ein Repository und ein Stack.
+- Schlägt bei einem Pull Request ein Check fehl, zeigt Shepherd die Warnung trotzdem im Sheet, aber GitHub entscheidet. Ein Stack wird ganz oder gar nicht gemergt.
+- Shepherd löscht nie die Branches eines Stacks.
+
+Dein Token braucht Contents write und Pull requests write. Siehe [GitHub-Token](/de/docs/github-token).
+
+## Stacks in einer Merge-Serie
+
+Sind deine angehakten Zeilen kein sauberes unteres Präfix oder hakst du Pull Requests von mehreren Stellen an, bekommst du eine Merge-Serie (siehe [Mergen](/de/docs/merging)). In einer Serie verhalten sich Stacks so:
+
+- Mitglieder eines Stacks werden immer von unten nach oben gemergt, egal wie die Reihenfolge im Sheet ist. Zwei von ihnen zu tauschen bewirkt nichts.
+- Shepherd drückt nie Branch aktualisieren bei einem Pull Request über dem untersten. GitHub rebased diese, nachdem der darunter gemergt wurde. Shepherd wartet und übernimmt den neuen Commit einmal.
+- Wird ein Pull Request ausgeschlossen, ist alles darüber im selben Stack auch ausgeschlossen, mit dem Grund "einer darunter ist ausgeschlossen". Den oberen zu mergen würde den ausgeschlossenen mitmergen.
+- Kommt das Update nie, wird der Pull Request nach einer Stunde als "Update abgelehnt" übersprungen.
+- **Den Branch danach löschen** gilt nur für Pull Requests außerhalb eines Stacks. Das Sheet sagt das.
+- Ein eingereihter Stack-Merge kann dauern. Shepherd wartet bis zu 24 Stunden auf die Antwort von GitHub.
+
+<Callout type="info">
+Ein Stack, der mit **Stack mergen** komplett in einem Zug gemergt wird, braucht keine Serie. Nimm eine Serie, wenn du Stacks mit anderen Pull Requests mischst.
+</Callout>

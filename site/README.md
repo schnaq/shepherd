@@ -53,6 +53,9 @@ member of the team), `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` (both from `vercel 
   route. Two root layouts on purpose: crossing between them is a full page load, so neither
   side's CSS reaches the other
 - `content/docs/` — the user guide, one MDX file per page; `meta.json` sets the sidebar order.
+  German sits next to each page as `<name>.de.mdx` (and `meta.de.json`), served at `/de/docs`;
+  a page without one falls back to English. `lib/i18n.ts` holds the languages, and
+  `next.config.ts` maps `/docs` onto the `[lang]` route
   Quote UI labels as the app's English strings, and keep `{`, `}`, `<` inside backticks
 - `app/llms.txt`, `app/llms-full.txt`, `app/llms.mdx/` — the guide as Markdown for language
   models; `app/api/search` — the guide's search

@@ -1,0 +1,83 @@
+---
+title: Datenschutz
+description: Was Shepherd auf deinem Mac speichert, was ihn verlässt und wie du das steuerst.
+---
+
+Shepherd ist local-first. Deine Daten liegen auf deinem Mac, GitHub ist der einzige Dienst, den es braucht, und alles andere ist optional und aus, bis du es einschaltest.
+
+## Was auf deinem Mac gespeichert wird
+
+| Was | Wo |
+| --- | --- |
+| Pull Requests, Issues, Review-Threads und deine Entwürfe | Eine lokale Datenbank in `~/Library/Application Support/Shepherd/` |
+| Noch nicht gesendete Schreibzugriffe, etwa Approvals, Merges und Kommentare | Dieselbe Datenbank, damit sie einen Absturz oder Offline-Zeiten überstehen |
+| Tokens und Schlüssel | Dein Login-Schlüsselbund, nie die Datenbank |
+| Einstellungen | macOS-Einstellungen |
+
+Im Schlüsselbund liegen dein GitHub-Token, KI-API-Schlüssel, das Signier-Secret des Webhooks und, wenn du den Einstellungs-Sync nutzt, die Zugangsschlüssel für den Bucket.
+
+Um alles zu entfernen, nutze **Abmelden & lokale Daten löschen** unter **Einstellungen → Account**.
+
+Shepherd hat kein eigenes Kontosystem. Die einzige Identität ist dein GitHub-Login.
+
+## Was an GitHub geht
+
+Shepherd spricht mit deinem Token mit GitHub, um Pull Requests und Issues zu lesen und deine Reviews, Merges und Kommentare zu senden. Auch das Herunterladen eines CI-Job-Logs oder von Update-Dateien berührt die Download-Hosts von GitHub.
+
+## Was deinen Mac nur verlässt, wenn du es einschaltest
+
+Jedes davon ist aus, bis du es einrichtest. Die Liste ist vollständig.
+
+- **Ein KI-Endpunkt.** Nur, wenn du einen API-Schlüssel konfigurierst. Was genau gesendet wird, steht unter [KI und Sprachmodelle](/de/docs/ai).
+- **Eine Webhook-URL.** Nur diese URL. Die Nutzdaten enthalten keinen Review-Text, keine Kommentare, Diffs oder Agent-Ausgaben.
+- **Ein Bucket für den Einstellungs-Sync.** Nur dein eigener Bucket, und nur verschlüsselt.
+- **Nutzungsstatistik.** Standardmäßig aus, siehe unten.
+
+Software-Updates fragen bei GitHub nach einem neuen Release. Automatische Prüfungen sind standardmäßig an. Schalte sie mit **Automatisch nach Updates suchen** unter **Einstellungen → Account** aus. Updates werden nur nach deiner Bestätigung installiert.
+
+## Verschlüsselter Einstellungs-Sync
+
+Du kannst deine Einstellungen in einem S3-kompatiblen Bucket ablegen, der dir gehört, damit ein zweiter Mac in wenigen Minuten eingerichtet ist.
+
+1. Öffne **Einstellungen → Sync** und schalte **Einstellungen in einem S3-kompatiblen Bucket ablegen** ein.
+2. Gib **Endpunkt**, **Bucket**, **Region** und **Prefix** ein. Nutze HTTPS.
+3. Gib die **Schlüssel-ID** und das **Secret** ein und drücke **Schlüssel speichern**. Sie landen in deinem Schlüsselbund.
+4. Wähle eine **Passphrase** mit mindestens 12 Zeichen. Nutze auf jedem Mac dieselbe. Optional behältst du sie mit **Passphrase im Schlüsselbund behalten**.
+5. Drücke auf dem ersten Mac **Einstellungen hochladen**. Auf einem anderen Mac drückst du **Einstellungen laden**.
+
+Hochladen und Laden sind manuell. **Remote prüfen** zeigt, was gespeichert ist.
+
+Deine Einstellungen und Secrets werden auf deinem Mac verschlüsselt, bevor sie ihn verlassen. Der Betreiber des Buckets sieht nur Chiffretext. Wenn du die Passphrase verlierst, gibt es keine Wiederherstellung.
+
+**Synchronisiert:** deine Einstellungen, darunter Sweep-Intervall, Mitteilungen, Digest-Zeitplan, KI-Einstellungen, Delegations- und Automatisierungseinstellungen, Darstellung und deine eigenen Agent-Einträge. Dazu deine Secrets: das GitHub-Token, KI-API-Schlüssel und das Webhook-Secret.
+
+**Nicht synchronisiert:** die lokale Datenbank, ungesendete Schreibzugriffe, der Status angesehener Dateien, das Fensterlayout und die Zugangsschlüssel für den Bucket. Auch die Warteschlange der Nutzungsstatistik und jede Kennung bleiben auf dem jeweiligen Mac.
+
+## Crash-Berichte
+
+Crash- und Hang-Berichte sind standardmäßig aus. Wenn du **Crash- und Hang-Berichte auf diesem Mac behalten** unter **Einstellungen → Account** einschaltest, übergibt macOS Shepherd nach einem Absturz seine Berichte. Sie werden als Dateien in `~/Library/Application Support/Shepherd/Diagnostics/` gespeichert. Die neuesten 30 bleiben erhalten.
+
+Sie werden nie irgendwohin gesendet. Wenn du bei einem Bug helfen willst, nutze **Im Finder zeigen** und hänge eine Datei selbst an. **Alle löschen** entfernt sie.
+
+## Nutzungsstatistik
+
+Shepherd fragt einmal beim ersten Öffnen, ob es die Nutzung anonym zählen darf. Vor deiner Antwort wird nichts gezählt, und auch nichts, wenn du **Jetzt nicht** sagst. Du kannst es jederzeit unter **Einstellungen → Account** bei **Nutzungsstatistik** ändern. Die **Stufe** hat drei Optionen.
+
+| Stufe | Was sie bedeutet |
+| --- | --- |
+| **Aus** | Es wird nichts erfasst oder gesendet. Das ist der Standard. |
+| **Anonym** | Version, Sprache und welche Funktionen du nutzt, als Kategorien und Bereiche. Keine Kennung. |
+| **Anonym + Reichweite** | Fügt eine zufällige Kennung hinzu, die jeden Monat verworfen wird. |
+
+Nie enthalten: Repository-Namen, Branches, Titel, Pfade, Code oder freier Text.
+
+Die Ereignisse gehen etwa einmal am Tag an den EU-Endpunkt von PostHog. **Zeigen, was gesendet würde** zeigt die genauen Daten, und **Warteschlange löschen** löscht, was wartet. Beim Wechsel auf **Aus** werden die Warteschlange und jede Kennung gelöscht.
+
+Builds aus dem Quellcode und Forks enthalten überhaupt keinen Statistik-Mechanismus.
+
+Die vollständige Erklärung steht in [PRIVACY.md auf GitHub](https://github.com/schnaq/shepherd/blob/main/docs/PRIVACY.md). Fragen: info@schnaq.com.
+
+<Cards>
+<Card title="KI und Sprachmodelle" href="/de/docs/ai" />
+<Card title="Einstellungen" href="/de/docs/settings" />
+</Cards>

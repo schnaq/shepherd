@@ -1,0 +1,110 @@
+---
+title: GitHub-Token
+description: Wie sich Shepherd bei GitHub anmeldet, welche Berechtigungen jede Funktion braucht und wie du Organisationen mit SAML-Single-Sign-on behebst.
+---
+
+## So meldet sich Shepherd an
+
+Shepherd bietet zwei Wege zur Anmeldung.
+
+| Methode | Was es ist | Gut für |
+| --- | --- | --- |
+| Device-Flow | Du bestätigst einen kurzen Code auf `github.com/login/device`. Shepherd bekommt ein Token von seiner GitHub App. Kein Passwort und kein Client Secret. | Die meisten. Das Token erneuert sich selbst. |
+| Personal Access Token | Du fügst ein Token ein. Der Anmeldebildschirm schlägt ein fein granuliertes Token mit **Pull requests: Read & write** vor. | Organisationen mit SAML-Single-Sign-on, oder wenn du genau steuern willst, was Shepherd anfassen darf. |
+
+Shepherd prüft das Token mit `GET /user`, bevor es dich anmeldet. Unter **Einstellungen → Account** siehst du, welche Methode du benutzt hast.
+
+Das Token liegt im Schlüsselbund auf diesem Mac. Ist **Sync zwischen Macs** an, geht zusätzlich eine verschlüsselte Kopie in deinen eigenen Bucket (siehe [Datenschutz](/de/docs/privacy)). Beim Abmelden wird es gelöscht.
+
+<Callout type="warn">
+Shepherd spricht nur mit `api.github.com` und `github.com`. GitHub Enterprise Server wird nicht unterstützt, bei keiner der beiden Methoden.
+</Callout>
+
+## Was jede Funktion braucht
+
+Shepherd fragt GitHub nach diesen Dingen. Die Tabelle ordnet sie den Berechtigungen zu, die GitHub für den jeweiligen Endpunkt dokumentiert.
+
+| Funktion | GitHub-Aufruf | Fine-grained-Berechtigung | Classic Scope |
+| --- | --- | --- | --- |
+| Inbox, beobachtete Repositorys | GraphQL-Suche über Pull Requests | Pull requests: Read, Metadata: Read | `repo` (oder `public_repo` nur für öffentliche Repositorys) |
+| Pull Request, Dateien, Commits, Reviews, Threads lesen | `/pulls/...` und GraphQL | Pull requests: Read | `repo` |
+| Genehmigen, Änderungen anfordern, kommentieren, antworten, Threads auflösen, als bereit markieren | Reviews und Kommentarantworten, GraphQL-Mutations | Pull requests: Read and write | `repo` |
+| Checks eines Commits | `/commits/{ref}/check-runs` | Checks: Read | `repo` |
+| Logs fehlgeschlagener Jobs ("Warum ist CI rot") | `/actions/jobs/{id}/logs` | Actions: Read | `repo` |
+| Merge | `PUT /pulls/{n}/merge` | Contents: Read and write, Pull requests: Read and write | `repo` |
+| Branch aktualisieren | `PUT /pulls/{n}/update-branch` | Contents: Read and write | `repo` |
+| Einen Stack mergen | `PUT /pulls/{n}/merge-async` | Wie Merge | `repo` |
+| Branch nach dem Merge löschen | `DELETE /git/refs/heads/{name}` | Contents: Read and write | `repo` |
+| Issues: kommentieren, labeln, zuweisen, schließen | `/issues/{n}/...` | Issues: Read and write | `repo` |
+| Schnelleres Aktualisieren über Mitteilungen | `GET /notifications` | Nicht verfügbar | `notifications` oder `repo`, nur Classic Token |
+
+<Callout type="info">
+Die Berechtigungsspalten folgen der GitHub-Dokumentation für diese Endpunkte. Schlägt eine Funktion mit 403 oder 404 fehl, vergleiche dein Token mit der passenden Zeile.
+</Callout>
+
+### Fine-grained Token einrichten
+
+1. Öffne GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → **Generate new token**.
+2. Setze **Resource owner** auf den Account oder die Organisation, der die Repositorys gehören. Für mehrere Owner erstellst du je ein Token pro Owner.
+3. Wähle unter **Repository access** alle Repositorys oder nur die, in denen du reviewst und mergst.
+4. Setze unter **Permissions** Pull requests auf Read and write. Metadata kommt automatisch dazu.
+5. Für den vollen Funktionsumfang setzt du außerdem Contents (Read and write), Checks (Read), Actions (Read) und Issues (Read and write). Lass weg, was du nicht nutzt. Ohne Contents write schlagen Merge und Branch aktualisieren fehl.
+6. Erzeuge das Token und füge es auf dem Anmeldebildschirm unter **PERSONAL ACCESS TOKEN** ein.
+
+### Classic Token einrichten
+
+Erstelle unter Developer settings → Personal access tokens → Tokens (classic) ein Token mit dem Scope `repo`. Shepherd ruft keine Organisations- oder Workflow-Endpunkte auf, deshalb brauchst du weder `read:org` noch `workflow`. Ergänze `notifications`, wenn du den unten beschriebenen Mitteilungs-Poll willst.
+
+### Mitteilungen
+
+GitHub liefert `GET /notifications` nur an Classic Tokens. Mit Device-Flow startet Shepherd diesen Poll nie. Mit einem eingefügten Token versucht es Shepherd einmal. Lehnt GitHub ab, hört es auf und hält die Inbox stattdessen mit seinem regulären Sweep aktuell. Sonst geht nichts verloren.
+
+## Organisationen mit SAML-Single-Sign-on
+
+Viele Organisationen verlangen SAML-Single-Sign-on. Ein Token bekommt auf so eine Organisation erst Zugriff, wenn es dafür autorisiert wurde.
+
+### Symptom
+
+Ein Pull Request, der dir in dieser Organisation zugewiesen ist oder den du reviewen sollst, taucht nicht in der Inbox auf. Es gibt keinen Fehler und keine Warnung. Die GitHub-Suche lässt Ergebnisse aus Organisationen, auf die das Token nicht zugreifen kann, stillschweigend weg.
+
+Das Repository zu beobachten hilft nicht. Ein beobachtetes Repository ist nur eine weitere Suche mit demselben Token und kommt aus demselben Grund leer zurück.
+
+### Lösung für ein Classic Token
+
+1. Öffne GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic).
+2. Klicke neben deinem Token auf **Configure SSO**.
+3. Klicke neben der Organisation auf **Authorize** und schließe die Single-Sign-on-Abfrage ab.
+
+### Lösung für ein Fine-grained Token
+
+- Setze die Organisation beim Erstellen des Tokens als **Resource owner**. Ein Token, das deinem persönlichen Account gehört, sieht die privaten Repositorys der Organisation nicht.
+- Manche Organisationen verlangen, dass ein Owner Fine-grained Tokens freigibt. Bis dahin bleibt das Token ausstehend.
+- Fehlte die Organisation beim Erstellen, erstelle ein neues Token. Der Resource owner lässt sich nachträglich nicht ändern.
+
+### Device-Flow und Organisationen
+
+Device-Flow meldet dich über die GitHub App von Shepherd an. GitHub kann verlangen, dass die Organisation diese App zulässt, bevor du ihre Pull Requests siehst. Fehlen nach einer Anmeldung per Device-Flow Pull Requests einer Organisation, bitte einen Owner, die App freizugeben, oder melde dich stattdessen mit einem Token an. Das Shepherd-Projekt empfiehlt für SSO-Organisationen ein Token.
+
+### Prüfen, ob das Token funktioniert
+
+Ersetze `OWNER/REPO` durch ein Repository der Organisation und führe aus:
+
+```sh
+curl -i -H "Authorization: Bearer YOUR_TOKEN" https://api.github.com/repos/OWNER/REPO
+```
+
+- `200` heißt, das Token kann das Repository lesen.
+- `404` bei einem Repository, von dem du weißt, dass es existiert, heißt, das Token hat keinen Zugriff.
+- `403` mit einem `X-GitHub-SSO`-Header heißt, das Token braucht die SSO-Autorisierung. Der Header enthält eine URL dafür.
+
+## Anfragelimits
+
+Shepherd hält die Zahl der Anfragen niedrig. Es nutzt pro Sweep eine Handvoll Suchaufrufe und bedingte Anfragen, sodass eine unveränderte Inbox nichts kostet. Begrenzt GitHub dich trotzdem, wartet Shepherd, versucht es zweimal erneut und zeigt dann **Anfragelimit erreicht bis** mit der Zeit des Resets. Versuche es danach noch einmal.
+
+Um die Last zu senken, wähle unter **Einstellungen → Sync** ein längeres Intervall bei **Volle Suche alle** und beobachte weniger Repositorys. Jedes beobachtete Repository ist bei jedem Sweep eine weitere Suche.
+
+## Erneut anmelden
+
+Lehnt GitHub das Token ab, zeigt Shepherd **GitHub hat die Anmeldedaten abgelehnt. Melde dich erneut an.** Das passiert, wenn ein Token widerrufen wird, abläuft oder eine Berechtigung verliert. Melde dich unter **Einstellungen → Account** ab und mit einem neuen Token wieder an.
+
+Mehr dazu unter [Fehlerbehebung](/de/docs/troubleshooting).

@@ -1,0 +1,266 @@
+---
+title: Einstellungen
+description: Alle Bereiche des Shepherd-Einstellungsfensters, was jede Option macht und wie sie standardmäßig gesetzt ist.
+---
+
+## Einstellungen öffnen
+
+Drücke `⌘,` oder wähle **Einstellungen** im Shepherd-Menü. Das Fenster hat links eine Seitenleiste und rechts den gewählten Bereich, wie die Systemeinstellungen. Du kannst es größer ziehen.
+
+Die Bereiche von oben nach unten:
+
+1. Account
+2. Sync
+3. Antworten
+4. Agenten
+5. Intelligenz
+6. Delegation
+7. Automatisierung
+8. Darstellung
+
+Änderungen gelten sofort. Es gibt keinen Speichern-Button, außer wo ein Bereich einen eigenen hat (API-Schlüssel, Secrets).
+
+## Account
+
+Oben im Bereich siehst du dein GitHub-Login und wie du dich angemeldet hast: mit dem Device Flow der GitHub App oder mit einem Personal Access Token. Wie du die Anmeldung änderst, steht unter [GitHub-Token](/de/docs/github-token).
+
+- **Abmelden & lokale Daten löschen** entfernt den Token aus dem Schlüsselbund und leert die lokale Datenbank. Reviews, die du noch nicht gesendet hast, sind weg. Du musst das bestätigen.
+- Die Zeile **Lokale Daten** hat einen Info-Button mit dem Ort der Datenbank.
+
+### Diagnose
+
+- **Crash- und Hang-Berichte auf diesem Mac behalten.** Standardmäßig aus. Berichte bleiben auf deinem Mac und werden nie irgendwohin gesendet. Nach einem Absturz erscheint beim nächsten Start ein Bericht.
+- **Im Finder zeigen** öffnet den Berichte-Ordner. **Alle löschen** entfernt die Dateien. Shepherd behält nur die neuesten Berichte.
+
+### Nutzungsstatistik
+
+Wähle eine **Stufe**. Standard ist **Aus**.
+
+| Stufe | Was gesendet wird |
+| --- | --- |
+| Aus | Es wird nichts erfasst und nichts gesendet. |
+| Anonym | Version, Sprache und welche Funktionen du nutzt. Keine Kennung. |
+| Anonym + Reichweite | Fügt eine zufällige Kennung hinzu, die jeden Monat verworfen wird, damit Nutzer gezählt werden können. Wenn du das ausschaltest, wird sie gelöscht. |
+
+- **Zeigen, was gesendet würde** zeigt die wartenden Ereignisse, bevor irgendetwas deinen Mac verlässt.
+- **Warteschlange löschen** leert die Warteschlange.
+- **Datenschutzhinweise** öffnet die Datenschutzseite. Siehe [Datenschutz](/de/docs/privacy).
+
+### Updates
+
+- **Automatisch nach Updates suchen.** Updates werden nur nach deiner Bestätigung installiert, nie im Hintergrund.
+- **Jetzt suchen** sucht sofort. Derselbe Befehl steht im Shepherd-Menü als **Nach Updates suchen…**.
+- Bei einem Build ohne Update-Feed sind diese Bedienelemente deaktiviert.
+
+## Sync
+
+### Inbox-Sweep
+
+**Volle Suche alle** legt fest, wie oft Shepherd GitHub komplett durchsucht, von 1 bis 10 Minuten. Standard sind 2 Minuten. Die Einstellung gilt ab der nächsten Anmeldung. Mitteilungen werden in dem Intervall abgefragt, das GitHub vorgibt, nicht über diesen Regler.
+
+### Mitteilungen
+
+Drei Schalter, alle standardmäßig an:
+
+- **Ein neues Review wird von mir angefordert**
+- **Checks auf einem Pull Request von mir fehlschlagen**
+- **Ein eingereihtes Review konnte nicht gesendet werden**
+
+macOS fragt beim ersten Mal nach der Erlaubnis, wenn Shepherd eine Mitteilung sendet.
+
+### Morgen-Digest
+
+- **Morgen-Digest senden.** Standardmäßig aus. Eine Mitteilung pro Tag mit allem, was seit der letzten eingegangen ist.
+- **Um** legt die Uhrzeit fest. Standard ist 09:00.
+- **Nur an Wochentagen.** Standardmäßig an.
+
+Der Digest wird nur aus der lokalen Datenbank gebaut. Wenn dein Mac schlief, kommt er beim Aufwachen, sofern es noch derselbe Tag ist. Eine ruhige Nacht erzeugt nichts.
+
+### Outbox
+
+Zeigt, wie viele Aktionen noch auf das Senden warten, mit einem Button **Jetzt synchronisieren**. Reviews und andere Schreibzugriffe laufen über diese Outbox und überstehen deshalb eine unterbrochene Verbindung.
+
+- „n mit Konflikt — bitte ansehen“ heißt: Der Pull Request hat neue Commits bekommen, nachdem du das Review eingereiht hast. Es wurde nichts gesendet. Öffne ihn und prüfe deinen Entwurf.
+- „n aufgegeben — sie werden nicht erneut versucht“ listet Schreibzugriffe, die GitHub abgelehnt hat. Jeder hat **Erneut senden** und **Verwerfen**.
+
+### Merge-Serien
+
+Dieser Abschnitt erscheint nur, solange eine Merge-Serie läuft. Jede Serie zeigt ihren Fortschritt, zum Beispiel „2 von 5 gemergt“, und einen Button **Abbrechen**. Abbrechen stoppt die Serie. Ein Merge, der schon eingereiht ist, wird trotzdem ausgeführt. Serien gibt es nur auf diesem Mac. Siehe [Mergen](/de/docs/merging).
+
+### Beobachtete Repositories
+
+Jeder offene Pull Request in einem beobachteten Repository landet in der Inbox, unter **Beobachtet**.
+
+- Gib `owner/repository` oder eine GitHub-URL ein und drücke **Beobachten**.
+- **Nicht mehr beobachten** entfernt eins.
+- Du kannst höchstens 10 Repositories beobachten. Jedes ist bei jedem Sweep eine weitere Suche.
+
+Die Liste gilt pro Mac und gehört nicht zum Einstellungs-Sync.
+
+### Ausgeblendete Pull Requests
+
+Erscheint, wenn du Pull Requests ausgeblendet hast. **Wieder anzeigen** holt einen zurück, **Alle wieder anzeigen** alle. Ein ausgeblendeter Pull Request kommt auch von selbst zurück, wenn ein Review von dir angefordert wird.
+
+### Sync zwischen Macs
+
+Hält deine Einstellungen und Secrets in einem S3-kompatiblen Bucket, der dir gehört. Standardmäßig aus.
+
+- Die Daten werden auf deinem Mac mit einer Passphrase verschlüsselt, die du wählst. Der Bucket sieht nur Chiffretext.
+- Schalte **Einstellungen in einem S3-kompatiblen Bucket ablegen** ein und fülle dann **Endpunkt**, **Bucket**, **Region**, **Prefix** und **Adressierung** aus. **Pfad-Stil** funktioniert mit jedem Anbieter. Der Endpunkt muss HTTPS sein.
+- Gib unter **Zugangsschlüssel** die Schlüssel-ID und das Secret ein und drücke **Schlüssel speichern**. Sie liegen in deinem Schlüsselbund. Lesen und Schreiben auf dem einen Objekt reicht.
+- Nimm unter **Passphrase** mindestens 12 Zeichen. Wenn du sie verlierst, gibt es keine Wiederherstellung. Nutze auf jedem Mac dieselbe. **Passphrase im Schlüsselbund behalten** ist standardmäßig aus.
+- **Remote prüfen** schaut in den Bucket. **Einstellungen hochladen** schreibt die Einstellungen dieses Macs. **Einstellungen laden** fragt nach, bevor es die Einstellungen dieses Macs überschreibt, auch die Schlüssel in deinem Schlüsselbund. Lokale Daten, Entwürfe und die Outbox bleiben unberührt.
+
+## Antworten
+
+- **Gespeicherte Antworten.** Markdown-Bausteine für jedes Kommentarfeld. Das Einfügen-Menü listet sie in der Reihenfolge, die du festlegst. Nutze **Gespeicherte Antwort hinzufügen**, dann verschieben, bearbeiten oder entfernen.
+- **Review-Vorlagen.** Die Zusammenfassung, mit der ein neues Review startet. Triff ein Repository mit `schnaq/review` oder einen ganzen Owner mit `schnaq/*`. `*` und `?` sind Platzhalter. Ein exaktes Muster schlägt einen Platzhalter, und ein längerer Platzhalter einen kürzeren. Ein Review, das du schon begonnen hast, wird nie geändert.
+- **Wiederkehrende Befunde.** Ein Kommentar, den du in 30 Tagen mindestens dreimal geschrieben hast, auf mindestens zwei Pull Requests desselben Repositorys. Die Review-Ansicht bietet an, daraus eine Regel für die Agent-Anweisungen dieses Repositorys zu entwerfen. Wird auf diesem Mac gefunden und nie irgendwohin gesendet. Du kannst einen Befund **Ausblenden** und **Wieder anzeigen**.
+
+## Agenten
+
+Die Registry, mit der Shepherd Agent-Pull-Requests erkennt.
+
+- **Mitgelieferte Registry** listet die eingebauten Agenten und die Logins, auf die sie passen.
+- **Deine Erweiterungen** sind Einträge, die du hinzugefügt hast. **Entfernen** löscht einen. Ein Eintrag mit derselben ID ersetzt den mitgelieferten.
+- **Neuer Eintrag** nimmt eine **ID**, einen **Name**, **Logins**, **Branches** und **Trailer**, dann **Eintrag hinzufügen**. Beispiel für ein Login-Muster: `my-agent[bot], my-agent-*`.
+
+## Intelligenz
+
+Shepherd reviewt, approvet, mergt oder kommentiert nie für dich. KI-Ausgaben sind nur ein Hinweis, den du wegklicken kannst. Wenn ein Modell etwas nachschlägt, kann es nur lesen. Siehe [KI](/de/docs/ai).
+
+### Anbieter
+
+| Option | Was sie macht |
+| --- | --- |
+| Aus | Nur lokale Heuristiken: Dateipriorität, Agent-Erkennung, Risikohinweise. |
+| On-Device | Fügt kurze Zusammenfassungen vom On-Device-Modell von Apple hinzu. Nichts verlässt den Mac. Das ist der Standard. |
+| On-Device + API-Schlüssel | Fügt die Analyse ganzer Pull Requests über einen Endpunkt hinzu, den du konfigurierst. |
+
+Wenn das On-Device-Modell nicht verfügbar ist, zeigt der Bereich den Grund.
+
+### Eigener Schlüssel
+
+Wird bei **On-Device + API-Schlüssel** angezeigt.
+
+- **Art** ist **Anthropic** oder **OpenAI-kompatibel**.
+- Bei Anthropic legst du das **Modell** fest. Standard ist `claude-haiku-4-5`.
+- Bei OpenAI-kompatibel wählst du einen **Endpunkt** oder gibst eine **Basis-URL** ein, dann ein **Modell**. **Modelle laden** holt die Liste vom Endpunkt.
+- Der **API-Schlüssel** liegt in deinem Schlüsselbund und wird nur an diesen Endpunkt gesendet. Drücke **Schlüssel speichern**, dann **Verbindung testen**.
+- Bei OpenAI-kompatiblen Endpunkten nimmt **Wo das Modell läuft** zweistellige **Länder** (zum Beispiel `DE, FR`) und **Keine Speicherung verlangen**. Beides wird mit der Anfrage gesendet. Ein Endpunkt, der es nicht erfüllen kann, lehnt die Anfrage ab. Standardmäßig sind beide leer bzw. aus.
+
+### Semantische Suche
+
+Der **Semantische Suchindex** ist standardmäßig an. `⌘K` findet Pull Requests und Issues nach Bedeutung. Der Index wird auf diesem Mac mit Apples On-Device-Embeddings gebaut und nutzt nie einen KI-Endpunkt. Ausgeschaltet wird der Index geleert, und `⌘K` sucht nur nach Wörtern. **Index neu aufbauen** startet ihn wieder.
+
+### Strukturierte Triage
+
+**Pull Requests einordnen** ist standardmäßig an. Das On-Device-Modell gibt jedem Pull Request eine Art, ein Risiko und eine Begründung in einem Satz, nach denen die Inbox sortiert wird. Ist der Anbieter auf Aus gesetzt, wird nichts eingeordnet.
+
+### Spotlight
+
+**Pull Requests in Spotlight zeigen** ist standardmäßig an. Exportiert werden nur Titel, `owner/repo#number`, Labels, Repository und Agent. Wenn du es ausschaltest, wird gelöscht, was Shepherd dort abgelegt hat.
+
+### Screenshots
+
+**Screenshots in Beschreibungen auf diesem Mac lesen** ist standardmäßig aus. Es fügt der Zusammenfassungskarte einen Button hinzu. Ein Druck darauf lädt bis zu zwei Screenshots von GitHub und liest sie mit dem On-Device-Modell. Vorher wird nichts heruntergeladen.
+
+## Delegation
+
+Übergibt einen Pull Request an eine lokale Agent-CLI. Siehe [Automatisierung](/de/docs/automation).
+
+### Agent-CLI
+
+- **Agent** ist **Claude Code** oder **Eigener Befehl**. Shepherd startet deine installierte CLI mit deiner Umgebung. Es hält kein Login dafür und pusht nie.
+- **Pfad**: Leer lassen, dann wird an den üblichen Orten gesucht. **Suchen** findet sie.
+- **Befehl** (eigener): `{prompt}` ist die Aufgabe, `{worktree}` der Pfad. Der Befehl läuft ohne Shell, ein Prompt kann also nicht zu einem zweiten Befehl werden.
+
+### Leitlinien
+
+| Option | Standard |
+| --- | --- |
+| **Berechtigungsmodus**: **Änderungen zulassen**, **Nur planen**, **Nicht fragen** | Änderungen zulassen |
+| **Max. Turns** (1 bis 200) oder **Unbegrenzt** | 25 |
+| **Budget** in USD, mit **Begrenzen** | 5 |
+| **Werkzeuge** (an `--allowedTools` übergeben) | `Read,Edit,Bash(git *),Glob,Grep` |
+
+**Nicht fragen** führt jedes erlaubte Werkzeug unbeaufsichtigt aus, auch Shell-Befehle. Die Leitlinien gelten nicht für eine fortgesetzte Session.
+
+### Rückkanal zur Session
+
+Die Befehle **Lokal** und **Remote** senden einen Review-Befund an die Session, die im `Claude-Session:`-Trailer eines Commits steht. Der lokale Standard ist `claude --resume {sessionID} -p {message}`. Lass ein Feld leer, um den zugehörigen Button auszuschalten.
+
+### Lokale Checkouts
+
+Eine Delegation läuft in einem Git-Worktree deines eigenen Klons. Shepherd klont nie etwas. Füge einen Checkout mit **Lokales Repository hinzufügen…** hinzu, über den Ordner oder über den Namen bei einem Klon, dessen Origin ihn nicht verrät. **Ändern** und **Entfernen** bearbeiten die Liste.
+
+### Im Editor öffnen
+
+**Systemstandard**, **Visual Studio Code**, **IntelliJ IDEA**, **Cursor** oder **Eigener Befehl**. Es öffnet die Datei eines Reviews in deinem Checkout an der richtigen Zeile. In einem eigenen Befehl ist `{file}` der Pfad und `{line}` die Zeile.
+
+### Automatische Delegation
+
+Standardmäßig aus. Wenn an, startet Shepherd bei deinen Pull Requests von selbst eine Delegation, wenn:
+
+- **CI rot wird** (standardmäßig an)
+- **Ein Reviewer Änderungen anfordert**
+
+„Wird“ ist wörtlich gemeint. Ein Pull Request, der schon rot war, als Shepherd ihn zum ersten Mal sah, startet nie etwas. Jeder Pull Request startet höchstens einen Lauf pro Commit. Gleicher Worktree, gleiche Leitlinien, und es pusht, approvet oder mergt nie.
+
+Du kannst die **Aufgabe für den Agenten** bearbeiten und **Auf die Standardaufgabe zurücksetzen**. **Limits** begrenzen die Läufe **Parallel** (1 bis 5, Standard 1) und **Pro Tag** (1 bis 50, Standard 5). Am Limit benachrichtigt dich Shepherd stattdessen.
+
+## Automatisierung
+
+### Ausgehender Webhook
+
+Standardmäßig aus. Schalte **Ereignisse an einen Webhook senden** ein und gib eine **URL** an. Jeder Endpunkt, der einen JSON-POST annimmt, funktioniert, zum Beispiel n8n. Nutze https, oder http auf diesem Mac.
+
+- **Ereignisse.** Alle sind standardmäßig gewählt: ein Review wurde abgeschickt, ein Pull Request wurde gemergt, eine Delegation ist fertig, ein neues Review wurde von dir angefordert, ein automatischer Merge wurde eingereiht, ein Issue wurde geschlossen, ein Issue wurde an einen Agenten übergeben.
+- **Secret** ist optional. Ist eins gesetzt, trägt jede Anfrage einen Header `X-Shepherd-Signature: sha256=…`, ein HMAC-SHA256 des Bodys. Es liegt in deinem Schlüsselbund.
+- **Testereignis senden** prüft die Verbindung.
+
+Ereignisse enthalten Repository, Nummer, Titel, Autor, Herkunft und Urteil, sonst nichts. Sie enthalten nie Review-Text, Kommentare, Diffs oder Agent-Ausgaben. Ein fehlschlagender Webhook blockiert nie etwas. Shepherd versucht es zweimal und gibt dann still auf.
+
+### Automatisches Mergen
+
+Standardmäßig aus. **Grüne, approved Agent-Pull-Requests automatisch mergen** reiht einen Merge ohne Bestätigungsklick ein. Pull Requests, die schon warten, können beim nächsten Sweep gemergt werden.
+
+Shepherd mergt nur, wenn ein erkannter Agent ihn geöffnet hat, alle Checks bestanden sind, jemand ihn approved hat, er kein Draft ist und GitHub ihn als mergebar meldet.
+
+- **Repos**: kommagetrennt, `*` und `?` als Platzhalter. Leer heißt alle.
+- **Labels**: Ein Pull Request muss alle tragen. Leer heißt, es ist kein Label nötig.
+- **Methode**: **Merge-Commit**, **Squash and merge** (Standard) oder **Rebase and merge**. Gilt gemeinsam für das Merge-Sheet und die Bulk-Triage.
+
+**Was Shepherd gemergt hat** ist ein Protokoll, das auf diesem Mac bleibt, mit **Leeren**. Siehe [Mergen](/de/docs/merging).
+
+### Vertrauensspuren
+
+Ein kurzer Blick reicht für einen Pull Request mit grüner CI, höchstens **Dateien** und **Zeilen** Änderungen und nichts Sensiblem. Standard sind 5 Dateien und 120 Zeilen (Grenzen 1 bis 100 und 1 bis 5000). Alles andere ist ein volles Review. Sensibel heißt: eine Workflow-, Auth-, Secret-, Migrations- oder gelöschte Testdatei. Beide Grenzen wandern per Einstellungs-Sync auf deine anderen Macs.
+
+### Erfolgsbilanz
+
+Liest die letzten 90 Tage geschlossener Pull Requests, bis zu 500 pro Repository, für den Chip jedes Agenten. Nutze **Erfolgsbilanz laden**, **Stoppen** oder **Historie löschen**. Die Historie bleibt auf diesem Mac und wird nicht synchronisiert.
+
+## Darstellung
+
+- **Darstellung**: **System**, **Hell** oder **Dunkel**. Standard ist System.
+- **Sprache**: **System**, **English** oder **Deutsch**. Wenn du eine andere Sprache als die aktuelle wählst, erscheint **Jetzt neu starten**. Sie gilt nach dem Neustart von Shepherd.
+- **In der Menüleiste zeigen**: standardmäßig an. Zeigt, wie viele Reviews warten, und eine kurze Liste davon. Wenn du es ausschaltest, verschwindet der Eintrag sofort.
+
+### Review-Ansicht
+
+**Pull Requests von Agents auf „Conversation“ öffnen** ist standardmäßig an. Der Diff ist einen Tastendruck entfernt (`t`).
+
+### Diff-Ansicht
+
+- **Diff-Darstellung**: **Automatisch** (Standard), **Erweiterte Ansicht** oder **Zeilenliste**. Automatisch nutzt die Zeilenliste, solange VoiceOver läuft.
+- **Schriftgröße**: 10 bis 18 pt. Standard 13.
+- **Lange Zeilen umbrechen**: standardmäßig aus.
+- **Diffs inline statt nebeneinander zeigen**: standardmäßig aus. Die Zeilenliste ignoriert es.
+
+<Cards>
+  <Card title="GitHub-Token" href="/de/docs/github-token" />
+  <Card title="KI" href="/de/docs/ai" />
+  <Card title="Automatisierung" href="/de/docs/automation" />
+  <Card title="Datenschutz" href="/de/docs/privacy" />
+</Cards>

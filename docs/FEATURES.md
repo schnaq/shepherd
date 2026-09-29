@@ -794,7 +794,7 @@ at all, so a verdict formed there would be a verdict formed by somebody who has 
 
 ## Intelligence
 
-### On-device first, cloud optional
+### On-device by default, your own key when you add one
 
 Three tiers ([ADR 0007](adr/0007-layered-intelligence.md)):
 
@@ -807,8 +807,11 @@ Three tiers ([ADR 0007](adr/0007-layered-intelligence.md)):
    link to the console for the key) and a local **Ollama**, model discovery via
    `GET {base}/models`, a free-text model field as the fallback, and a connection test.
 
-The app is fully functional with AI switched off, and what reaches a configured endpoint is capped
-against an explicit token budget before it is sent.
+With a key configured, that endpoint answers first and the on-device model is the fallback when it
+cannot: someone who brings their own key has chosen the stronger model. Pull-request summaries
+then go to the endpoint as soon as a pull request is selected, not only on a click. Without a key,
+everything stays on the Mac. The app is fully functional with AI switched off, and what reaches a
+configured endpoint is capped against an explicit token budget before it is sent.
 
 An OpenAI-compatible endpoint may volunteer more than an answer, and where it does, Shepherd shows
 it — as an addition, never as a requirement. If the endpoint names the operator that actually ran
