@@ -51,7 +51,7 @@ struct SignInView: View {
             VStack(alignment: .leading, spacing: 10) {
                 CardTitle(String(localized: "SIGN IN WITH GITHUB"))
                 Text(String(
-                    localized: "Shepherd shows a short code, you approve it on github.com. No password, no client secret."
+                    localized: "Shepherd opens github.com and copies a short code for you to paste there. No password, no client secret."
                 ))
                 .font(.system(size: 12))
                 .foregroundStyle(Theme.textSecondary)
@@ -64,7 +64,7 @@ struct SignInView: View {
                         if model.step == .awaitingDeviceApproval {
                             ProgressView().controlSize(.small)
                         }
-                        Text(String(localized: "Continue with device flow"))
+                        Text(String(localized: "Sign in with GitHub"))
                     }
                     .frame(maxWidth: .infinity)
                 }

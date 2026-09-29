@@ -68,6 +68,12 @@ final class SignInModel {
             do {
                 let grant = try await authenticator.requestDeviceCode()
                 self.grant = grant
+                // One click, not three: the code is on the pasteboard and the page is open by the
+                // time the card shows them. GitHub offers no secretless flow that returns to the
+                // app on its own (ADR 0004), so this is as close to "Sign in with browser" as
+                // the device flow gets. The card's buttons stay for a closed tab.
+                self.copyUserCode()
+                self.openVerificationPage()
                 let token = try await authenticator.pollForToken(grant)
                 self.step = .verifying
                 let identity = try await Self.fetchViewer(

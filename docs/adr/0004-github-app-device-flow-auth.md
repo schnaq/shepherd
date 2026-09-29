@@ -34,3 +34,14 @@ OAuth App pattern is a legacy wart. GitHub Apps beat OAuth Apps on fine-grained 
   (`SyncConfiguration.pollsNotifications`), and a pasted token starts one that ends itself, after
   a single message, the first time GitHub refuses. Nothing is lost but latency: the poll was only
   ever a way to pull the next sweep forward, and the sweep is what the inbox is built from.
+
+## Amendment 2026-09-30: why still device flow
+
+A user asked why Shepherd uses the device flow when it can open a browser. The browser-based
+upgrade path above is not secretless: GitHub supports PKCE since July 2025, but its token exchange
+still requires the `client_secret`, even for native apps
+([changelog](https://github.blog/changelog/2025-07-14-pkce-support-for-oauth-and-github-app-authentication/)).
+Switching means shipping that secret in an open-source binary and registering a callback URL on the
+GitHub App, which is a decision in its own right and not taken here. Instead the one button is now
+**Sign in with GitHub**: it requests the code, copies it to the pasteboard and opens
+`github.com/login/device`, so the device flow costs one paste instead of three clicks.
