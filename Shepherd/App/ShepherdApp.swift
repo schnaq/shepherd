@@ -237,6 +237,11 @@ struct ShepherdCommands: Commands {
             }
             .disabled(environment.session == nil)
 
+            Button(String(localized: "Close Pull Request…")) {
+                environment.request(.close)
+            }
+            .disabled(environment.session == nil)
+
             Button(String(localized: "Delegate to Agent…")) {
                 environment.request(.delegate)
             }

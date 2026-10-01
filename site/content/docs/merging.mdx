@@ -14,7 +14,7 @@ The sheet has these choices:
 - **Method**: Merge commit, Squash and merge, or Rebase and merge. Shepherd remembers your last choice.
 - **Delete the branch afterwards**: removes the head branch after the merge landed. It is skipped for forks and for a repository's default branch. If the deletion fails, the merge still counts as done.
 
-Then press **Merge**. Shepherd queues the merge. If GitHub cannot be reached, it goes out as soon as it can.
+Then press **Merge**. The sheet closes at once and the merge is sent in the background; the row shows it on its way. If GitHub refuses it, you get a message. If GitHub cannot be reached, it goes out as soon as it can.
 
 ### The merge is pinned to what you reviewed
 
@@ -55,6 +55,10 @@ Shepherd gives up and tells you with a notification when:
 - the commit turns out to have no checks.
 
 If the pull request disappears from your inbox without being merged, Shepherd drops the wait after seven days.
+
+## Close without merging
+
+Click **Close…** under the buttons in the inbox, right-click a row and choose **Close pull request…**, or use the command **Close pull request…** (`⌘K`). Shepherd asks once, then closes it in the background. To say why, use **Comment…** and **Comment and close** instead. A closed pull request can be reopened on GitHub.
 
 ## Merge several one after another
 

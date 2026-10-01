@@ -291,6 +291,10 @@ struct InboxListView: View {
                 .copyBranch(row)
         }
         Divider()
+        Button(String(localized: "Close pull request…")) {
+            model.select(row.id)
+            environment.request(.close)
+        }
         Button(String(localized: "Hide this pull request")) { hide(row) }
         if model.hasMarks {
             Divider()

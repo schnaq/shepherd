@@ -19432,6 +19432,76 @@
           }
         }
       }
+    },
+    "Close %@?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ schließen?"
+          }
+        }
+      }
+    },
+    "Close Pull Request…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pull Request schließen…"
+          }
+        }
+      }
+    },
+    "Close pull request": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pull Request schließen"
+          }
+        }
+      }
+    },
+    "Close pull request…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pull Request schließen…"
+          }
+        }
+      }
+    },
+    "Close the pull request without merging it": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schließt den Pull Request, ohne ihn zu mergen"
+          }
+        }
+      }
+    },
+    "Close…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schließen…"
+          }
+        }
+      }
+    },
+    "Nothing is merged. It can be reopened on GitHub.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Es wird nichts gemergt. Auf GitHub lässt er sich wieder öffnen."
+          }
+        }
+      }
     }
   },
   "version": "1.0"
