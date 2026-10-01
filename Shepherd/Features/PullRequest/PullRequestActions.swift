@@ -243,8 +243,11 @@ struct PullRequestActions {
         let trimmed = comment?.trimmingCharacters(in: .whitespacesAndNewlines)
         let body = (trimmed?.isEmpty ?? true) ? nil : trimmed
         do {
-            let outcome = try await enqueue(.closePullRequest(comment: body), on: summary)
-            announce(outcome, of: .close(withComment: body != nil), on: summary)
+            try await enqueueInBackground(
+                .closePullRequest(comment: body),
+                on: summary,
+                as: .close(withComment: body != nil)
+            )
         } catch {
             toasts.failure(error, context: String(localized: "Could not queue the close"))
         }
@@ -293,15 +296,15 @@ struct PullRequestActions {
                 return false
             }
             do {
-                let outcome = try await enqueue(
+                try await enqueueInBackground(
                     .merge(
                         method: method.rawValue,
                         expectedHeadOid: summary.headRefOid,
                         deletesHeadBranch: deletesHeadBranch
                     ),
-                    on: summary
+                    on: summary,
+                    as: .merge
                 )
-                announce(outcome, of: .merge, on: summary)
                 onDidQueueVerdict?(summary.id)
                 telemetry?.record(
                     .pullRequestMerged(method: Self.telemetryMethod(method), source: mergeSource)
@@ -833,15 +836,8 @@ struct PullRequestActions {
         toasts.show(toast)
     }
 
-    /// Writes one row, drains, and reads back what became of *that* row.
-    ///
-    /// The read is the whole mechanism. ``ShepherdSync/SyncEngine/drainOutbox()`` returns nothing
-    /// and needs to return nothing: the queue already records every outcome ADR 0006 defines — a
-    /// sent row is deleted, a parked one is ``ShepherdCore/OutboxState/conflicted`` with its
-    /// reason, a refused one is ``ShepherdCore/OutboxState/failed`` with GitHub's — so the row
-    /// this call just wrote is looked up by its own id afterwards. Reading the store rather than
-    /// plumbing an outcome out of the engine also answers correctly when a *concurrent* drain was
-    /// the one that sent the row, which a return value could not.
+    /// Writes one row and waits for the drain to say what became of it
+    /// (``drainAndReadBack(_:)``).
     /// - Parameters:
     ///   - action: The mutation.
     ///   - summary: The pull request it targets.
@@ -852,6 +848,32 @@ struct PullRequestActions {
         _ action: OutboxAction,
         on summary: PullRequestSummary
     ) async throws -> OutboxWriteOutcome {
+        let item = try await write(action, on: summary)
+        return await drainAndReadBack(item)
+    }
+
+    /// ``enqueue(_:on:)`` without the wait: the row is written, and the drain and the toast for
+    /// whatever became of it follow in the background.
+    ///
+    /// For the two writes a reviewer is *finished* with once they press the button — a merge and
+    /// a close. Waiting for GitHub kept the merge sheet up for the whole round trip (seconds, and
+    /// three polls more for a stack), when the row on disk is already the promise ADR 0006 makes.
+    /// The row's chip shows the write in flight meanwhile, and a refusal still toasts.
+    /// - Parameters:
+    ///   - action: The mutation.
+    ///   - summary: The pull request it targets.
+    ///   - kind: What the user asked for, for the toast.
+    /// - Throws: When the local write fails — then nothing was queued, and the caller says so.
+    private func enqueueInBackground(
+        _ action: OutboxAction,
+        on summary: PullRequestSummary,
+        as kind: WriteKind
+    ) async throws {
+        let item = try await write(action, on: summary)
+        Task { announce(await drainAndReadBack(item), of: kind, on: summary) }
+    }
+
+    private func write(_ action: OutboxAction, on summary: PullRequestSummary) async throws -> OutboxItem {
         let item = OutboxItem(
             prID: summary.id,
             repo: summary.repo,
@@ -859,6 +881,19 @@ struct PullRequestActions {
             action: action
         )
         try await session.database.enqueue(item)
+        return item
+    }
+
+    /// Drains, and reads back what became of *that* row.
+    ///
+    /// The read is the whole mechanism. ``ShepherdSync/SyncEngine/drainOutbox()`` returns nothing
+    /// and needs to return nothing: the queue already records every outcome ADR 0006 defines — a
+    /// sent row is deleted, a parked one is ``ShepherdCore/OutboxState/conflicted`` with its
+    /// reason, a refused one is ``ShepherdCore/OutboxState/failed`` with GitHub's — so the row
+    /// just written is looked up by its own id afterwards. Reading the store rather than
+    /// plumbing an outcome out of the engine also answers correctly when a *concurrent* drain was
+    /// the one that sent the row, which a return value could not.
+    private func drainAndReadBack(_ item: OutboxItem) async -> OutboxWriteOutcome {
         await session.drainOutbox()
         do {
             let row = try await session.database.outboxItem(id: item.id)

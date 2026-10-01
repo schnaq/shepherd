@@ -14,7 +14,7 @@ Das Sheet hat diese Optionen:
 - **Methode**: Merge-Commit, Squash and merge oder Rebase and merge. Shepherd merkt sich deine letzte Wahl.
 - **Den Branch danach löschen**: löscht den Head-Branch, nachdem der Merge durch ist. Bei Forks und beim Default-Branch eines Repositorys wird das übersprungen. Schlägt das Löschen fehl, gilt der Merge trotzdem als erledigt.
 
-Drücke dann **Merge**. Shepherd reiht den Merge ein. Ist GitHub nicht erreichbar, geht er raus, sobald es geht.
+Drücke dann **Merge**. Das Sheet schließt sofort und der Merge geht im Hintergrund raus; die Zeile zeigt, dass er unterwegs ist. Lehnt GitHub ihn ab, bekommst du eine Meldung. Ist GitHub nicht erreichbar, geht er raus, sobald es geht.
 
 ### Der Merge ist an das gebunden, was du reviewt hast
 
@@ -55,6 +55,10 @@ Shepherd gibt auf und sagt dir per Mitteilung Bescheid, wenn:
 - sich herausstellt, dass der Commit keine Checks hat.
 
 Verschwindet der Pull Request aus deiner Inbox, ohne gemergt zu sein, verwirft Shepherd das Warten nach sieben Tagen.
+
+## Schließen ohne Merge
+
+Klicke in der Inbox unter den Buttons auf **Schließen…**, wähle per Rechtsklick auf eine Zeile **Pull Request schließen…** oder nutze den Befehl **Pull Request schließen…** (`⌘K`). Shepherd fragt einmal nach und schließt ihn dann im Hintergrund. Willst du einen Grund nennen, nimm **Kommentieren…** und **Kommentieren & schließen**. Ein geschlossener Pull Request lässt sich auf GitHub wieder öffnen.
 
 ## Mehrere nacheinander mergen
 

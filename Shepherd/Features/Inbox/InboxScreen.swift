@@ -49,6 +49,8 @@ struct InboxScreen: View {
     /// stack's top, which need not be the row under the cursor. Only the id is fixed when the
     /// sheet opens; the sheet reads the row itself fresh, so a sweep still reaches it.
     @State private var mergeSheetTarget: MergeSheetTarget?
+    /// The pull request the close confirmation is asking about.
+    @State private var closeTarget: PullRequestSummary?
     /// Whether the bulk-triage confirmation is up, and what it is confirming (ADR 0015).
     @State private var isBulkSheetPresented = false
     @State private var bulkAction: BulkTriageAction = .approve
@@ -223,6 +225,7 @@ struct InboxScreen: View {
             consumeDeepLinkRequests()
         }
         .sheet(item: $mergeSheetTarget, content: mergeSheet)
+        .closePullRequestConfirmation($closeTarget, actions: actions)
         .sheet(isPresented: mergeSeriesSheetBinding) {
             if let plan = mergeSeriesPlan {
                 MergeSeriesSheet(plan: plan, settings: environment.settings) { [model] groups, method, deletes in
@@ -582,6 +585,8 @@ struct InboxScreen: View {
             compose(.comment)
         case .merge:
             merge()
+        case .close:
+            closeTarget = model.selectedRow
         case .startReviewSession:
             // The queue is frozen from the session's own inbox observation, not from this
             // screen's filtered list, so nothing about the rail's current facets is passed in.

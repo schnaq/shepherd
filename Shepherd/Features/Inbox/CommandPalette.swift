@@ -673,6 +673,16 @@ struct CommandPaletteView: View {
             }
             result.append(
                 PaletteCommand(
+                    id: "close",
+                    section: review,
+                    title: String(localized: "Close pull request…"),
+                    systemImage: "xmark.circle"
+                ) {
+                    environment.request(.close)
+                }
+            )
+            result.append(
+                PaletteCommand(
                     id: "delegate",
                     section: review,
                     title: String(localized: "Delegate to agent"),

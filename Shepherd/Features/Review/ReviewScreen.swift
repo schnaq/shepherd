@@ -17,6 +17,8 @@ struct ReviewScreen: View {
     @State private var model: ReviewModel
     /// Whether "end the session with pull requests still in it?" is being asked.
     @State private var isEndSessionConfirmationPresented = false
+    /// The pull request the close confirmation is asking about.
+    @State private var closeTarget: PullRequestSummary?
     /// This pull request's outbox rows, observed, for the toolbar's write state.
     @State private var outboxItems: [OutboxItem] = []
     @FocusState private var isFileListFocused: Bool
@@ -172,6 +174,7 @@ struct ReviewScreen: View {
                 )
             }
         }
+        .closePullRequestConfirmation($closeTarget, actions: actions)
         .sheet(item: $model.composerRequest) { request in
             InlineCommentComposer(model: model, request: request)
         }
@@ -467,6 +470,9 @@ struct ReviewScreen: View {
             // would not.
             if let writeState, writeState.isMergeOnItsWay { return }
             model.isMergeSheetPresented = true
+        case .close:
+            guard !model.hasEndedOnGitHub else { return }
+            closeTarget = model.summary
         case .startReviewSession:
             // Re-freezing the queue while a session is running would restart the count the user
             // is halfway through, so an already-running session simply stays as it is.

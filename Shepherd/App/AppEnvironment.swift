@@ -674,6 +674,10 @@ final class AppEnvironment {
             toasts.success(String(localized: "Queued on GitHub: \(slug)."))
         case .mergeStarted:
             toasts.success(String(localized: "GitHub is merging the stack for \(slug)."))
+        case .pullRequestClosed:
+            // Toasted where it was queued (``PullRequestActions/close(_:comment:)``); the sweep is
+            // what takes the closed row out of the inbox.
+            break
         default:
             return
         }

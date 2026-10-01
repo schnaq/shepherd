@@ -306,15 +306,23 @@ struct InboxDetailPanel: View {
 
             // On its own row under the two above, and last: a verdict is what this panel is for,
             // a merge is what a verdict leads to, and saying something without a verdict — or
-            // closing the thing unmerged — is the rarer errand. It is one button rather than
-            // two because the sheet behind it holds both of GitHub's, and because "close" with
-            // no chance to say why is a button worth not having.
-            Button { isCommentSheetPresented = true } label: {
-                Text(String(localized: "Comment…"))
-                    .frame(maxWidth: .infinity)
+            // closing the thing unmerged — is the rarer errand. *Close…* asks once and closes
+            // without a word; closing with a reason stays in the comment sheet.
+            HStack(spacing: 8) {
+                Button { isCommentSheetPresented = true } label: {
+                    Text(String(localized: "Comment…"))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .help(String(localized: "Comment on the conversation, or comment and close"))
+
+                Button { environment.request(.close) } label: {
+                    Text(String(localized: "Close…"))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(SecondaryButtonStyle(tint: Theme.failure))
+                .help(String(localized: "Close the pull request without merging it"))
             }
-            .buttonStyle(SecondaryButtonStyle())
-            .help(String(localized: "Comment on the conversation, or comment and close"))
         }
         .padding(16)
         .background(Theme.panel)

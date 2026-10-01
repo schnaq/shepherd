@@ -22,6 +22,9 @@ enum ShortcutAction: Equatable, Sendable {
     case comment
     /// Open the merge dialog (`m`).
     case merge
+    /// Ask to close the pull request unmerged. Menu/palette only, like ``delegate``: a dialog
+    /// behind a bare keystroke is a dialog opened by accident.
+    case close
     /// Start the guided pass over every pull request waiting for review (`r f`, ⇧⌘⏎).
     ///
     /// Under the `r` prefix because it is a review command, not a grouping one, and `f` for
@@ -47,7 +50,7 @@ enum ShortcutAction: Equatable, Sendable {
     /// The key hint shown in the shortcut bar and the command palette.
     var keyHint: String {
         switch self {
-        case .delegate, .markGreenAgentPullRequests, .bulkTriage, .mergeSeries: return ""
+        case .delegate, .close, .markGreenAgentPullRequests, .bulkTriage, .mergeSeries: return ""
         case .toggleMark: return "x"
         case .selectNext: return "j"
         case .selectPrevious: return "k"
