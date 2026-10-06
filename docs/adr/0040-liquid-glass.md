@@ -147,3 +147,23 @@ with no hairline under it.
 
 In an inactive window macOS draws a prominent toolbar button without its tint; the review
 toolbar's Merge is grey there by the system's rule, not because it is disabled.
+
+## Amendment 2026-10-06: one shape for the pull request's controls
+
+The inbox panel had three rows of two equal-weight buttons (*Approve*, *Request changes*, *Open
+review*, *Merge…*, *Comment…*, *Close…*), and the review screen had its verdicts in the composer
+bar under the diff and nothing for closing at all. Both now follow one shape — **verdicts · ⋯ ·
+Merge**:
+
+- The verdict pair: *Approve* (tick) and *Request changes*. *Approve* sends at once, pending inline
+  comments included; *Request changes* opens the submit sheet, since GitHub refuses it without a
+  body. In the panel they are `SecondaryButtonStyle` buttons; in the review toolbar one
+  `ToolbarItemGroup`, with the tick labelled and the cross icon-only in `Theme.failure`.
+- **⋯** (`PullRequestMoreMenu`) holds the rarer errands — *Comment…*, *Mark ready for review* (draft
+  only), *Update branch* (behind only), *Open on GitHub*, *Copy branch name*, *Close pull
+  request…*. The inbox list's row menu shows the same items, so an errand added once reaches all
+  three surfaces.
+- Merge stays the one green button on each surface.
+- The panel's *Open review ⏎* is a plain link under the row. The review screen's composer bar keeps
+  only the pending-comment count and the *All files viewed* chip; its ⌘⏎ moved to the toolbar's
+  *Review* button.

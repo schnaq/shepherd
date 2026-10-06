@@ -3171,16 +3171,6 @@
         }
       }
     },
-    "Approve…": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Approve…"
-          }
-        }
-      }
-    },
     "Approximation: pull requests you were asked to review that now carry an approval.": {
       "localizations": {
         "de": {
@@ -3747,6 +3737,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zeile kommentieren"
+          }
+        }
+      }
+    },
+    "Comment, close and more": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentieren, schließen und mehr"
           }
         }
       }
@@ -4351,16 +4351,6 @@
         }
       }
     },
-    "Comment (r c)": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Comment (r c)"
-          }
-        }
-      }
-    },
     "Comment and close": {
       "localizations": {
         "de": {
@@ -4417,16 +4407,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pull Request kommentieren"
-          }
-        }
-      }
-    },
-    "Comment on the conversation, or comment and close": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "In der Konversation kommentieren – oder kommentieren und schließen"
           }
         }
       }
@@ -7311,6 +7291,26 @@
         }
       }
     },
+    "More": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mehr"
+          }
+        }
+      }
+    },
+    "More actions": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weitere Aktionen"
+          }
+        }
+      }
+    },
     "Move down": {
       "localizations": {
         "de": {
@@ -9221,6 +9221,16 @@
         }
       }
     },
+    "Requesting changes needs a summary. Write one in the submit sheet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Änderungen anfordern braucht eine Zusammenfassung. Schreib sie im Abschicken-Sheet."
+          }
+        }
+      }
+    },
     "Review and merge keys, as in the inbox": {
       "localizations": {
         "de": {
@@ -9261,12 +9271,12 @@
         }
       }
     },
-    "Review… or Approve…; Merge in its dialog": {
+    "Open the submit sheet; Merge in its dialog": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Review… / Approve…, im Merge-Dialog Mergen"
+            "value": "Abschicken-Sheet öffnen, im Merge-Dialog Mergen"
           }
         }
       }
@@ -9997,16 +10007,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Gereviewt"
-          }
-        }
-      }
-    },
-    "Review…": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Review…"
           }
         }
       }
@@ -19469,26 +19469,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pull Request schließen…"
-          }
-        }
-      }
-    },
-    "Close the pull request without merging it": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Schließt den Pull Request, ohne ihn zu mergen"
-          }
-        }
-      }
-    },
-    "Close…": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Schließen…"
           }
         }
       }

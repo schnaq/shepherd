@@ -61,20 +61,24 @@ Ein Thread mit sechs oder mehr Kommentaren bekommt einen Button **Zusammenfassen
 
 ## Ein Review abschicken
 
-Nutze die Buttons in der Review-Leiste oder die Tasten:
+Nutze die Buttons in der Toolbar oder die Tasten:
 
 | Aktion | Button | Tasten |
 | --- | --- | --- |
-| Approve | **Approve…** | `r a` |
-| Änderungen anfordern | **Request changes** | `r x` |
-| Kommentar | **Comment** | `r c` |
-| Abschicken-Sheet öffnen | **Review…** | `⌘⏎` |
+| Approve | **✓ Approve** | `r a` |
+| Änderungen anfordern | **✕** | `r x` |
+| Kommentar | im Abschicken-Sheet | `r c` |
+| Abschicken-Sheet öffnen | **Review** | `⌘⏎` |
+
+**Approve** geht sofort raus, zusammen mit deinen ausstehenden Inline-Kommentaren. **✕** öffnet das Abschicken-Sheet, weil eine Änderungsanforderung eine Zusammenfassung braucht.
+
+Der Button **⋯** neben **Review** enthält die selteneren Aktionen: **Kommentieren…** in der Unterhaltung, **Als bereit für Review markieren** bei einem Draft, **Branch aktualisieren**, wenn der Branch hinterherhängt, **Auf GitHub öffnen**, **Branch-Namen kopieren** und **Pull Request schließen…**. Das Panel in der Inbox hat dasselbe Menü.
 
 Das Abschicken-Sheet hat eine **Zusammenfassung**, eine **Bewertung** und deine ausstehenden Inline-Kommentare. Klicke auf **Abschicken**, um zu senden.
 
 - Nur ein Approval darf ohne Zusammenfassung raus. GitHub lehnt die anderen beiden ab.
-- GitHub akzeptiert bei deinem eigenen Pull Request kein Approval und keine Änderungsanforderung. Der Button bietet dann einen einfachen Kommentar an.
-- Sobald der Pull Request gemergt oder geschlossen ist, sind die drei Urteils-Buttons deaktiviert.
+- GitHub akzeptiert bei deinem eigenen Pull Request kein Approval und keine Änderungsanforderung. Die beiden Buttons sind dann deaktiviert; kommentiere stattdessen über das Abschicken-Sheet.
+- Sobald der Pull Request gemergt oder geschlossen ist, sind die Urteils-Buttons deaktiviert.
 
 Meldet GitHub, dass der Pull Request während des Lesens aktualisiert wurde, zeigt ein Streifen über dem Diff **Auf GitHub aktualisiert — n neue Commits.** Drücke **Neu laden** oder `u`, um sie anzuzeigen. Deine Datei, dein Cursor und dein Kommentartext bleiben, wo sie sind, bis du das tust. Neue Commits werden nie stillschweigend übernommen, denn deine Kommentare hängen an dem Commit, den du gelesen hast.
 
