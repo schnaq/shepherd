@@ -2421,6 +2421,36 @@
         }
       }
     },
+    "Add a suggestion": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorschlag einfügen"
+          }
+        }
+      }
+    },
+    "Add a suggestion: the lines as they are now, to edit into what they should be": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorschlag einfügen: die Zeilen, wie sie jetzt sind, zum Umschreiben in das, was sie werden sollen"
+          }
+        }
+      }
+    },
+    "Add review comment": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zum Review hinzufügen"
+          }
+        }
+      }
+    },
     "AGE": {
       "localizations": {
         "de": {
@@ -2597,16 +2627,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zuständige:n hinzufügen"
-          }
-        }
-      }
-    },
-    "Add comment": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Kommentar hinzufügen"
           }
         }
       }
@@ -3731,12 +3751,42 @@
         }
       }
     },
+    "Comment on a line": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeile kommentieren"
+          }
+        }
+      }
+    },
+    "Comment on lines %lld–%lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentar zu Zeilen %lld–%lld"
+          }
+        }
+      }
+    },
     "Comment on the line": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Zeile kommentieren"
+          }
+        }
+      }
+    },
+    "Comment posts it now. Start a review keeps it with your other comments until you submit.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "„Comment“ veröffentlicht ihn sofort. „Review starten“ sammelt ihn mit deinen anderen Kommentaren, bis du abschickst."
           }
         }
       }
@@ -8871,6 +8921,16 @@
         }
       }
     },
+    "Post this comment now, outside a review": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diesen Kommentar sofort veröffentlichen, ohne Review"
+          }
+        }
+      }
+    },
     "Prefix": {
       "localizations": {
         "de": {
@@ -10137,6 +10197,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "per Squash mergen"
+          }
+        }
+      }
+    },
+    "Start a review": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review starten"
           }
         }
       }
@@ -11571,6 +11641,16 @@
         }
       }
     },
+    "The comment is saved to your pending review, like any review comment. Sending resolves nothing and submits nothing.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Kommentar landet wie jeder Review-Kommentar in deinem offenen Review. Das Senden löst nichts auf und schickt kein Review ab."
+          }
+        }
+      }
+    },
     "THE MESSAGE": {
       "localizations": {
         "de": {
@@ -11907,16 +11987,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "In der Befehlsvorlage ist ein %@-Anführungszeichen nicht geschlossen."
-          }
-        }
-      }
-    },
-    "The comment is saved to your pending review exactly as “Add comment” saves it. Sending resolves nothing and submits nothing.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Kommentar landet genau so in deinem offenen Review wie über „Kommentar hinzufügen“. Das Senden löst nichts auf und schickt kein Review ab."
           }
         }
       }
@@ -12827,6 +12897,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Namen eingeben"
+          }
+        }
+      }
+    },
+    "Update comment": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentar aktualisieren"
           }
         }
       }

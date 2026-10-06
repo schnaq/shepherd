@@ -8,7 +8,7 @@ import ShepherdPersistence
 /// button they get, what the confirmation sheet shows, and what the delegation is handed. The
 /// views own no state of their own, which is why the whole feature is testable without a window.
 enum SessionBackChannel {
-    /// What the second button beside "Add comment" offers, or `nil` when it is not shown at all.
+    /// What the button beside the composer's draft button offers, or `nil` when it is not shown at all.
     enum Action: Equatable {
         /// A command is configured for this kind of session: confirm the message, then run it.
         case send(SessionReference)

@@ -179,6 +179,33 @@ final class WriteRequestTests: XCTestCase {
         XCTAssertEqual(body.body, "Thanks!")
     }
 
+    func testASingleCommentPostsToThePullRequestCommentsEndpoint() async throws {
+        let transport = MockTransport()
+        await transport.route("/pulls/128/comments", Fixture.response(json: "{\"id\": 1}", status: 201))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        try await client.addReviewComment(
+            DraftComment(path: "Sources/App.swift", line: 9, side: .right, startLine: 7, body: "Nit"),
+            commitOid: "head-1",
+            repo: repo,
+            number: 128
+        )
+
+        let request = await transport.onlyRequest()
+        XCTAssertEqual(request?.method, "POST")
+        XCTAssertEqual(request?.url.absoluteString, "https://api.github.com/repos/schnaq/review/pulls/128/comments")
+        let json = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: request?.body ?? Data()) as? [String: Any]
+        )
+        XCTAssertEqual(json["body"] as? String, "Nit")
+        XCTAssertEqual(json["commit_id"] as? String, "head-1")
+        XCTAssertEqual(json["path"] as? String, "Sources/App.swift")
+        XCTAssertEqual(json["line"] as? Int, 9)
+        XCTAssertEqual(json["side"] as? String, "RIGHT")
+        XCTAssertEqual(json["start_line"] as? Int, 7)
+        XCTAssertEqual(json["start_side"] as? String, "RIGHT")
+    }
+
     func testResolveThreadUsesTheGraphQLMutation() async throws {
         let transport = MockTransport()
         let response = try Fixture.response("resolve-thread")

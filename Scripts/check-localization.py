@@ -218,6 +218,7 @@ INTEGER_EXPRESSIONS = frozenset(
         "session.remaining",
         "session.total",
         "skipped",
+        "start",
         "status",
         "status.changedPaths.count",
         "status.classifiedCount",

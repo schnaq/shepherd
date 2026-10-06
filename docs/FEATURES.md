@@ -652,7 +652,7 @@ With no model configured the button is simply absent.
 
 Claude Code stamps every commit it makes with the session it came from
 (`Claude-Session: https://claude.ai/code/session_…`). When a pull request's head commits carry one,
-every inline finding and the review summary gain a second button beside *Add comment*: **Send to
+every inline finding and the review summary gain a second button beside the draft button (*Start a review*): **Send to
 the session**. A sheet shows the exact message first — the file and line, your text verbatim, the
 pull request link, the review round if there has been one — and Send runs it: your own installed
 CLI, `claude --resume <session-id> -p "<message>"` by default, in the pull request's worktree,

@@ -341,6 +341,7 @@ struct SyncSettingsTab: View {
         switch action {
         case .submitReview: return String(localized: "Submit review")
         case .replyToComment: return String(localized: "Reply")
+        case .addReviewComment: return String(localized: "Comment on a line")
         case .resolveThread: return String(localized: "Resolve")
         case .unresolveThread: return String(localized: "Unresolve")
         case .merge: return String(localized: "Merge")

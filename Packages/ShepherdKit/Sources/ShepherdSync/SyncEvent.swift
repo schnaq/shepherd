@@ -126,6 +126,8 @@ public struct SentMutation: Sendable, Hashable, Codable {
         case reviewSubmitted(verdict: ReviewVerdict?, inlineCommentCount: Int)
         /// A reply was posted to an existing review comment.
         case replyPosted
+        /// An inline comment was posted on its own, outside a review.
+        case reviewCommentPosted
         /// A review thread was resolved.
         case threadResolved
         /// A review thread was reopened.

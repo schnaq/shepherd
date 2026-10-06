@@ -920,16 +920,7 @@ public actor GitHubClient {
             commitId: draft.basedOnHeadOid.isEmpty ? nil : draft.basedOnHeadOid,
             body: draft.summaryBody.isEmpty ? nil : draft.summaryBody,
             event: draft.verdict?.apiEvent,
-            comments: draft.comments.map { comment in
-                ReviewSubmissionBody.Comment(
-                    path: comment.path,
-                    body: comment.body,
-                    line: comment.line,
-                    side: comment.side.rawValue,
-                    startLine: comment.startLine,
-                    startSide: comment.startLine == nil ? nil : comment.side.rawValue
-                )
-            }
+            comments: draft.comments.map { ReviewSubmissionBody.Comment($0) }
         )
         let encodedBody = try RESTJSON.encode(body)
         let response = try await performREST(
@@ -972,6 +963,33 @@ public actor GitHubClient {
             body: encodedBody,
             useCache: false,
             resource: "\(repo.fullName)#\(number) reply"
+        )
+    }
+
+    /// Posts one inline comment on its own, outside a review: GitHub's *Comment* button beside
+    /// *Start a review*.
+    ///
+    /// Anchored exactly as a review's inline comments are (``submitReview(_:repo:number:)``), so a
+    /// comment means the same lines whichever of the two buttons sent it.
+    /// - Parameters:
+    ///   - comment: Where the comment is anchored, and what it says.
+    ///   - commitOid: The head commit the reviewer was reading.
+    ///   - repo: The repository.
+    ///   - number: The pull request number.
+    public func addReviewComment(
+        _ comment: DraftComment,
+        commitOid: String,
+        repo: RepoRef,
+        number: Int
+    ) async throws {
+        let encodedBody = try RESTJSON.encode(ReviewSubmissionBody.Comment(comment, commitId: commitOid))
+        _ = try await performREST(
+            method: "POST",
+            path: "/repos/\(repo.owner)/\(repo.name)/pulls/\(number)/comments",
+            queryItems: [],
+            body: encodedBody,
+            useCache: false,
+            resource: "\(repo.fullName)#\(number) comment"
         )
     }
 
@@ -1801,14 +1819,26 @@ public actor GitHubClient {
 
 /// The body of `POST /repos/{owner}/{repo}/pulls/{number}/reviews`.
 struct ReviewSubmissionBody: Encodable {
-    /// One inline comment of the review.
+    /// One inline comment of the review — and, with `commitId`, the whole body of
+    /// `POST /pulls/{number}/comments`, which anchors a comment the same way.
     struct Comment: Encodable {
+        var commitId: String?
         var path: String
         var body: String
         var line: Int
         var side: String
         var startLine: Int?
         var startSide: String?
+
+        init(_ comment: DraftComment, commitId: String? = nil) {
+            self.commitId = commitId
+            path = comment.path
+            body = comment.body
+            line = comment.line
+            side = comment.side.rawValue
+            startLine = comment.startLine
+            startSide = comment.startLine == nil ? nil : comment.side.rawValue
+        }
     }
     var commitId: String?
     var body: String?

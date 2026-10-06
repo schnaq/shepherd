@@ -169,6 +169,10 @@ final class ModelCodingTests: XCTestCase {
         let actions: [OutboxAction] = [
             .submitReview(ReviewDraft(prID: "PR_1", basedOnHeadOid: "abc")),
             .replyToComment(commentDatabaseID: 42, body: "Thanks!"),
+            .addReviewComment(
+                DraftComment(path: "a.swift", line: 9, side: .right, startLine: 7, body: "Nit"),
+                commitOid: "abc"
+            ),
             .resolveThread(threadID: "RT_1"),
             .unresolveThread(threadID: "RT_2"),
             .merge(method: "squash", expectedHeadOid: "abc"),
@@ -182,7 +186,7 @@ final class ModelCodingTests: XCTestCase {
         XCTAssertEqual(
             actions.map(\.kind),
             [
-                "submitReview", "replyToComment", "resolveThread", "unresolveThread",
+                "submitReview", "replyToComment", "addReviewComment", "resolveThread", "unresolveThread",
                 "merge", "merge", "markReadyForReview",
             ]
         )
@@ -254,6 +258,7 @@ final class ModelCodingTests: XCTestCase {
             // what it says however the pull request has moved since.
             .addPullRequestComment(body: "One thought."),
             .closePullRequest(comment: "Superseded."),
+            .addReviewComment(DraftComment(path: "a.swift", line: 1, body: "Nit"), commitOid: "abc"),
         ]
         XCTAssertTrue(actions.allSatisfy { $0.basedOnIssueUpdatedAt == nil })
         XCTAssertTrue(actions.allSatisfy { !$0.targetsIssue })

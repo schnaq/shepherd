@@ -51,7 +51,14 @@ To comment on several lines, drag across the line numbers, or click one `+` and 
 
 ⌘-click any line in the diff to open the file in your editor at that line. In the line list, ⌘-click a row. This needs a linked local checkout, see [Local checkouts](/docs/settings#local-checkouts). A line on the deleted side opens where that spot is in the new file. Your editor shows the file as it is in your checkout. If another branch is checked out there, the line can be off.
 
-Type your comment and click **Add comment**. It is saved to your pending review. Nothing is sent until you submit. The review bar counts your pending comments. Drafts survive a restart.
+Type your comment, then choose as on GitHub:
+
+- **Comment** posts it right away, on its own.
+- **Start a review** saves it to your pending review. Nothing is sent until you submit.
+
+Once a review is pending, the button reads **Add review comment** and every new comment joins the review. The review bar counts your pending comments. Drafts survive a restart.
+
+On the new side of the diff, the suggestion button (±) inserts the commented lines as a `suggestion` block. Edit them into what they should be, and the author can apply your change on GitHub with one click.
 
 Threads that already exist show on their lines. You can reply, and **Resolve** or **Unresolve** a thread. A reply or resolve made offline is queued like a review.
 
