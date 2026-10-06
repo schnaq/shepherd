@@ -94,13 +94,13 @@ extension DatabaseManager {
     /// Measures the index.
     /// - Returns: Row and byte counts plus the newest write, or zeroes for an empty index.
     public func searchIndexStatistics() async throws -> SearchIndexStatistics {
-        try await indexStatistics(table: "search_index")
+        try await indexStatistics(of: .pullRequests)
     }
 
     /// Measures one search index table — shared by ``searchIndexStatistics()`` and
     /// ``issueSearchIndexStatistics()``, whose tables have the same columns.
-    /// - Parameter table: A table name, always a literal from this package.
-    func indexStatistics(table: String) async throws -> SearchIndexStatistics {
+    /// - Parameter kind: Which index; its table name is the one interpolated into the SQL.
+    func indexStatistics(of kind: SearchIndexKind) async throws -> SearchIndexStatistics {
         try await writer.read { db in
             guard let row = try Row.fetchOne(
                 db,
@@ -110,7 +110,7 @@ extension DatabaseManager {
                         COALESCE(SUM(CASE WHEN vector IS NULL THEN 0 ELSE 1 END), 0) AS vectorCount,
                         COALESCE(SUM(LENGTH(vector)), 0) AS byteCount,
                         MAX(indexedAt) AS lastIndexedAt
-                    FROM \(table)
+                    FROM \(kind.indexTable)
                     """
             ) else { return SearchIndexStatistics() }
             // Each column bound with an explicit type: `Row`'s subscript is generic over every
@@ -149,7 +149,7 @@ extension DatabaseManager {
         let ids = Array(Set(prIDs))
         guard !ids.isEmpty else { return [] }
         let sources = try await writer.read { db -> [String: SearchIndexSource] in
-            let placeholders = Array(repeating: "?", count: ids.count).joined(separator: ",")
+            let placeholders = sqlPlaceholders(ids.count)
             let records = try PullRequestRecord.fetchAll(
                 db,
                 sql: "SELECT * FROM pull_requests WHERE id IN (\(placeholders))",
@@ -192,18 +192,18 @@ extension DatabaseManager {
     /// without any code path having to announce it.
     /// - Returns: The timestamps, keyed by node id. Pull requests with no detail fetch are absent.
     public func detailFetchTimestamps() async throws -> [String: Date] {
-        try await fetchTimestamps(table: "pull_requests")
+        try await fetchTimestamps(of: .pullRequests)
     }
 
     /// Reads `detailFetchedAt` keyed by `id` — shared by ``detailFetchTimestamps()`` and
     /// ``issueDetailFetchTimestamps()``.
-    /// - Parameter table: A table name, always a literal from this package.
-    func fetchTimestamps(table: String) async throws -> [String: Date] {
+    /// - Parameter kind: Which source table to read.
+    func fetchTimestamps(of kind: SearchIndexKind) async throws -> [String: Date] {
         try await writer.read { db in
             var result: [String: Date] = [:]
             let rows = try Row.fetchAll(
                 db,
-                sql: "SELECT id, detailFetchedAt FROM \(table) WHERE detailFetchedAt IS NOT NULL"
+                sql: "SELECT id, detailFetchedAt FROM \(kind.sourceTable) WHERE detailFetchedAt IS NOT NULL"
             )
             for row in rows {
                 guard let id: String = row["id"], let stamp: Double = row["detailFetchedAt"] else {
@@ -212,6 +212,32 @@ extension DatabaseManager {
                 result[id] = Date(timeIntervalSince1970: stamp)
             }
             return result
+        }
+    }
+}
+
+/// The two search indexes — pull requests and issues — and the tables behind each.
+///
+/// The shared helpers above interpolate a table name into their SQL, which a bind parameter
+/// cannot carry. Taking the name from this closed set rather than from a `String` means no caller,
+/// present or future, can hand them an arbitrary identifier.
+enum SearchIndexKind {
+    case pullRequests
+    case issues
+
+    /// The index table, whose rows ``DatabaseManager/indexStatistics(of:)`` measures.
+    var indexTable: String {
+        switch self {
+        case .pullRequests: "search_index"
+        case .issues: "issue_search_index"
+        }
+    }
+
+    /// The source table, whose `detailFetchedAt` ``DatabaseManager/fetchTimestamps(of:)`` reads.
+    var sourceTable: String {
+        switch self {
+        case .pullRequests: "pull_requests"
+        case .issues: "issues"
         }
     }
 }

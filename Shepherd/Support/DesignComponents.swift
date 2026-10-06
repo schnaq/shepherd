@@ -474,6 +474,49 @@ private struct SecondaryButtonBody: View {
     }
 }
 
+/// A list row that is a button: `.plain`, plus the rail's hover fill.
+///
+/// The rail's ``RailRow`` lightens under the pointer and the rows elsewhere that open something —
+/// the fleet page's open pull requests, the review's file list, a stack card's members — did not,
+/// so the one clickable list read as clickable and the others read as labels. This is RailRow's
+/// fill (`textMuted` at 8 % in a rounded rect) lifted out so every such row says the same thing.
+///
+/// It adds a background and nothing else: no pressed dimming, no pointer change, because RailRow
+/// has neither and `.plain` is what these rows were. The label keeps its own padding and content
+/// shape; the fill sits under it. A selected row passes `isSelected` so the fill steps aside —
+/// ``Theme/selection`` is translucent, and a hover fill showing through it would make the selected
+/// row change colour under the pointer.
+struct RowButtonStyle: ButtonStyle {
+    /// Whether the row is the selected one, whose own selection fill already marks it.
+    var isSelected = false
+    /// The fill's corner radius; match the label's selection background.
+    var cornerRadius: CGFloat = 6
+
+    func makeBody(configuration: Configuration) -> some View {
+        RowButtonBody(configuration: configuration, isSelected: isSelected, cornerRadius: cornerRadius)
+    }
+}
+
+/// ``RowButtonStyle``'s body, a view of its own so it can hold the hover state.
+private struct RowButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    let isSelected: Bool
+    let cornerRadius: CGFloat
+
+    @State private var isHovering = false
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        configuration.label
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .background(
+                isHovering && isEnabled && !isSelected ? Theme.textMuted.opacity(0.08) : Color.clear,
+                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            )
+            .onHover { isHovering = $0 }
+    }
+}
+
 // MARK: - Chips and dots
 
 /// A rounded pill: agent names, review states, reason tags.

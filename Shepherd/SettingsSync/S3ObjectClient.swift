@@ -166,20 +166,11 @@ struct S3ObjectResponse: Sendable, Equatable {
 
     /// `Last-Modified`, parsed.
     ///
-    /// An RFC 7231 IMF-fixdate is the only shape S3 implementations emit here, and it is parsed
-    /// with a POSIX-locale formatter so a user in a non-Gregorian region still gets a date.
+    /// An RFC 7231 IMF-fixdate is the only shape S3 implementations emit here, parsed by the
+    /// shared POSIX-locale ``HTTPDate``.
     var lastModified: Date? {
-        headers["last-modified"].flatMap { Self.httpDateFormatter.date(from: $0) }
+        headers["last-modified"].flatMap(HTTPDate.parse)
     }
-
-    /// Built once: `DateFormatter` is expensive to create and this one is only used for parsing.
-    private static let httpDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
-        return formatter
-    }()
 
     /// The object size the service reported.
     var contentLength: Int? {

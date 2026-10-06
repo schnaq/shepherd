@@ -308,6 +308,8 @@ public protocol IssueSyncStoring: Sendable {
     func saveIssueSummaries(_ summaries: [IssueRowSummary], pruneMissing: Bool) async throws
     /// Reads the cached issues — the "before" side of delta detection.
     func fetchIssues(filter: IssueFilter) async throws -> [IssueRowSummary]
+    /// Reads the ids of every cached issue — the "after the prune" side.
+    func issueIDs() async throws -> Set<String>
 }
 
 /// `DatabaseManager` already has exactly this shape; the conformance is the contract check.

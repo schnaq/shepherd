@@ -286,7 +286,7 @@ extension DatabaseManager {
         let ids = Array(Set(prIDs))
         guard !ids.isEmpty else { return [:] }
         return try await writer.read { db in
-            let placeholders = Array(repeating: "?", count: ids.count).joined(separator: ",")
+            let placeholders = sqlPlaceholders(ids.count)
             let rows = try Row.fetchAll(
                 db,
                 sql: """

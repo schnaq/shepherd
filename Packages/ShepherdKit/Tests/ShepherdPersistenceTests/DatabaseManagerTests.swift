@@ -361,6 +361,22 @@ final class InboxStoreTests: XCTestCase {
         XCTAssertEqual(loaded, detail)
     }
 
+    func testCommitsForSeveralPullRequestsSkipThoseWithoutADetail() async throws {
+        let database = try makeDatabase()
+        let detail = PersistenceFixtures.detail()
+        // Both swept, only the first opened: PR_2 is a summary row with no commits column. The
+        // sweep goes first because a sweep prunes whatever it does not list.
+        try await database.savePullRequestSummaries([
+            detail.summary, PersistenceFixtures.summary(id: "PR_2", number: 129)
+        ])
+        try await database.savePullRequestDetail(detail)
+
+        let commits = try await database.commits(prIDs: [detail.id, "PR_2", "PR_ghost"])
+        XCTAssertEqual(commits, [detail.id: detail.commits])
+        let empty = try await database.commits(prIDs: [])
+        XCTAssertTrue(empty.isEmpty)
+    }
+
     func testDetailReplacesChildRowsRatherThanAccumulatingThem() async throws {
         let database = try makeDatabase()
         var detail = PersistenceFixtures.detail()

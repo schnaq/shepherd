@@ -136,16 +136,7 @@ struct IssueListView: View {
                         }
                     }
                 }
-                .onChange(of: model.selectedID) { _, id in
-                    if isClickSelection {
-                        isClickSelection = false
-                        return
-                    }
-                    guard let id else { return }
-                    withAnimation(.easeOut(duration: 0.12)) {
-                        proxy.scrollTo(id, anchor: .center)
-                    }
-                }
+                .scrollsToSelection(model.selectedID, proxy: proxy, skipNext: $isClickSelection)
             }
         }
     }

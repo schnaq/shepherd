@@ -142,7 +142,7 @@ struct ReviewFileListView: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(RowButtonStyle(isSelected: isSelected))
         // The selection bar and the strikethrough are visual only; VoiceOver hears these.
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityValue(isViewed ? Text(String(localized: "Viewed")) : Text(verbatim: ""))

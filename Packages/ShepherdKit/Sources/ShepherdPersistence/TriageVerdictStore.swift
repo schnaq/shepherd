@@ -35,7 +35,7 @@ extension DatabaseManager {
         let ids = Array(Set(prIDs))
         guard !ids.isEmpty else { return [:] }
         return try await writer.read { db in
-            let placeholders = Array(repeating: "?", count: ids.count).joined(separator: ",")
+            let placeholders = sqlPlaceholders(ids.count)
             let records = try TriageVerdictRecord.fetchAll(
                 db,
                 sql: "SELECT * FROM triage_verdicts WHERE prID IN (\(placeholders))",
@@ -89,7 +89,7 @@ extension DatabaseManager {
     public func deleteTriageVerdicts(prIDs: [String]) async throws {
         guard !prIDs.isEmpty else { return }
         try await writer.write { db in
-            let placeholders = Array(repeating: "?", count: prIDs.count).joined(separator: ",")
+            let placeholders = sqlPlaceholders(prIDs.count)
             try db.execute(
                 sql: "DELETE FROM triage_verdicts WHERE prID IN (\(placeholders))",
                 arguments: StatementArguments(prIDs)

@@ -59,7 +59,7 @@ extension DatabaseManager {
     /// only make the one line that adds them up harder to write.
     /// - Returns: Row and byte counts plus the newest write, or zeroes for an empty index.
     public func issueSearchIndexStatistics() async throws -> SearchIndexStatistics {
-        try await indexStatistics(table: "issue_search_index")
+        try await indexStatistics(of: .issues)
     }
 
     // MARK: - Sources
@@ -77,7 +77,7 @@ extension DatabaseManager {
         let ids = Array(Set(issueIDs))
         guard !ids.isEmpty else { return [] }
         let sources = try await writer.read { db -> [String: IssueSearchIndexSource] in
-            let placeholders = Array(repeating: "?", count: ids.count).joined(separator: ",")
+            let placeholders = sqlPlaceholders(ids.count)
             let records = try IssueRecord.fetchAll(
                 db,
                 sql: "SELECT * FROM issues WHERE id IN (\(placeholders))",
@@ -108,6 +108,6 @@ extension DatabaseManager {
     /// code path having to announce it.
     /// - Returns: The timestamps, keyed by node id. Issues with no detail fetch are absent.
     public func issueDetailFetchTimestamps() async throws -> [String: Date] {
-        try await fetchTimestamps(table: "issues")
+        try await fetchTimestamps(of: .issues)
     }
 }

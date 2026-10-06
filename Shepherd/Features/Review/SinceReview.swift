@@ -148,9 +148,10 @@ enum SinceReviewLoader {
 
     /// The round counts (and unchanged-finding counts) the inbox shows.
     ///
-    /// One grouped query for the whole list, then at most ``inboxRowLimit`` interdiffs for the
-    /// rows that actually moved on since their review. A row whose snapshot is still the current
-    /// head gets its round count and nothing else — there is no interdiff to count findings in.
+    /// One grouped query for the whole list (round counts and latest reviewed heads), then at most
+    /// ``inboxRowLimit`` interdiffs for the rows that actually moved on since their review. A row
+    /// whose snapshot is still the current head gets its round count and nothing else — there is
+    /// no interdiff to count findings in.
     /// - Parameters:
     ///   - database: The local source of truth.
     ///   - rows: The inbox rows, in display order.
@@ -161,16 +162,21 @@ enum SinceReviewLoader {
         rows: [PullRequestSummary],
         viewerLogin: String
     ) async -> [String: ReviewRoundsSummary] {
-        guard let counts = try? await database.reviewSnapshotCounts(prIDs: rows.map(\.id)),
-              !counts.isEmpty
+        guard let rounds = try? await database.reviewRounds(prIDs: rows.map(\.id)),
+              !rounds.isEmpty
         else { return [:] }
 
         var result: [String: ReviewRoundsSummary] = [:]
         var computed = 0
         for row in rows {
-            guard let count = counts[row.id], count > 0 else { continue }
+            guard let entry = rounds[row.id], entry.count > 0 else { continue }
+            let count = entry.count
             result[row.id] = ReviewRoundsSummary(roundCount: count, unchangedFindingCount: nil)
             guard computed < inboxRowLimit else { continue }
+            // The head alone settles a row whose review is still current, without decoding its
+            // snapshot's file list; `isBehind` again below because a review can land in between.
+            guard ReviewSnapshot.isBehind(reviewedHead: entry.latestHead, current: row.headRefOid)
+            else { continue }
             guard let snapshot = try? await database.latestReviewSnapshot(prID: row.id),
                   snapshot.isBehind(row.headRefOid),
                   let detail = try? await database.fetchPullRequestDetail(id: row.id)

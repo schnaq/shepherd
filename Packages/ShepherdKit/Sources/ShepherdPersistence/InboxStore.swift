@@ -110,8 +110,7 @@ extension DatabaseManager {
             if keep.isEmpty {
                 try db.execute(sql: "DELETE FROM pull_requests WHERE \(DatabaseManager.pruneGuardSQL)")
             } else {
-                let placeholders = Array(repeating: "?", count: keep.count)
-                    .joined(separator: ",")
+                let placeholders = sqlPlaceholders(keep.count)
                 try db.execute(
                     sql: """
                         DELETE FROM pull_requests
@@ -320,6 +319,39 @@ extension DatabaseManager {
     public func fetchPullRequestDetail(id: String) async throws -> PullRequestDetail? {
         try await writer.read { db in
             try DatabaseManager.loadPullRequestDetail(db, id: id)
+        }
+    }
+
+    /// The cached commits of several pull requests, in one query.
+    ///
+    /// The inbox's return-address glyph needs the commit trailers and nothing else, and reading
+    /// them through ``fetchPullRequestDetail(id:)`` loaded every patch, thread and check run of
+    /// up to forty pull requests one after another to throw all of it away. This reads the one
+    /// column instead. A pull request whose detail was never fetched has no commits column and is
+    /// absent from the result, as is an id that is not cached at all.
+    /// - Parameter prIDs: The pull requests to read.
+    /// - Returns: The commits, keyed by node id — the same list ``fetchPullRequestDetail(id:)``
+    ///   would have carried in `commits`.
+    /// - Throws: A `DatabaseError` when the read fails.
+    public func commits(prIDs: [String]) async throws -> [String: [CommitInfo]] {
+        let ids = Array(Set(prIDs))
+        guard !ids.isEmpty else { return [:] }
+        return try await writer.read { db in
+            let placeholders = sqlPlaceholders(ids.count)
+            let rows = try Row.fetchAll(
+                db,
+                sql: """
+                    SELECT id, commitsJSON FROM pull_requests
+                    WHERE id IN (\(placeholders)) AND commitsJSON IS NOT NULL
+                    """,
+                arguments: StatementArguments(ids)
+            )
+            var result: [String: [CommitInfo]] = [:]
+            for row in rows {
+                let id: String = row["id"]
+                result[id] = PullRequestRecord.commits(fromJSON: row["commitsJSON"])
+            }
+            return result
         }
     }
 

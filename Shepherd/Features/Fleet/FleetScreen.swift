@@ -160,15 +160,7 @@ struct FleetScreen: View {
                         }
                     }
                 }
-                .onChange(of: model.selectedAgentID) { _, id in
-                    // The clicked row is under the pointer, so it is on screen: scrolling to it
-                    // would only move the list away from where the reader is looking.
-                    if isClickSelection { isClickSelection = false; return }
-                    guard let id else { return }
-                    withAnimation(.easeOut(duration: 0.12)) {
-                        proxy.scrollTo(id, anchor: .center)
-                    }
-                }
+                .scrollsToSelection(model.selectedAgentID, proxy: proxy, skipNext: $isClickSelection)
             }
         }
         // The sidebar column of a `NavigationSplitView`, so the system's glass is its surface and

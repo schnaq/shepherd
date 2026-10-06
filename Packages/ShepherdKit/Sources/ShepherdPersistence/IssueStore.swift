@@ -153,8 +153,7 @@ extension DatabaseManager {
                     sql: "DELETE FROM issues WHERE \(DatabaseManager.issuePruneGuardSQL)"
                 )
             } else {
-                let placeholders = Array(repeating: "?", count: keep.count)
-                    .joined(separator: ",")
+                let placeholders = sqlPlaceholders(keep.count)
                 try db.execute(
                     sql: """
                         DELETE FROM issues
@@ -165,6 +164,14 @@ extension DatabaseManager {
                 )
             }
             try DatabaseManager.pruneOrphanedRepos(db)
+        }
+    }
+
+    /// Reads the ids of every cached issue — ``fetchIssues(filter:)`` without decoding the rows,
+    /// for a caller that only asks which ones are still there (``pullRequestIDs()``'s twin).
+    public func issueIDs() async throws -> Set<String> {
+        try await writer.read { db in
+            Set(try String.fetchAll(db, sql: "SELECT id FROM issues"))
         }
     }
 

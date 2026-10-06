@@ -46,37 +46,11 @@ enum IntelligenceRetryAfter {
             guard TimeInterval(seconds) <= maximumDelay else { return nil }
             return max(minimumDelay, TimeInterval(seconds))
         }
-        guard let date = IntelligenceRetryAfter.httpDate(raw) else { return nil }
+        guard let date = HTTPDate.parse(raw) else { return nil }
         let interval = date.timeIntervalSince(now)
         // A date in the past is a clock disagreement, not an instruction to wait: the shortest
         // wait is the honest reading of "you may go now".
         guard interval <= maximumDelay else { return nil }
         return max(minimumDelay, interval)
-    }
-
-    /// Parses an IMF-fixdate, the one HTTP-date spelling a server is required to send.
-    ///
-    /// A fixed `en_US_POSIX` locale and a fixed GMT zone, because the format is fixed: reading it
-    /// with the runner's locale is the classic way a date parser passes in Cupertino and fails in
-    /// Berlin.
-    private static func httpDate(_ raw: String) -> Date? {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(identifier: "GMT")
-        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss z"
-        return formatter.date(from: raw)
-    }
-}
-
-extension Dictionary where Key == String, Value == String {
-    /// One header's trimmed value, matched without regard to case, or `nil` when it is absent or
-    /// blank. Shared by ``IntelligenceRetryAfter`` and ``ServedBy``: field names are
-    /// case-insensitive per RFC 9110 and `URLSession` does not promise a spelling.
-    func headerValue(_ name: String) -> String? {
-        for (key, value) in self where key.caseInsensitiveCompare(name) == .orderedSame {
-            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty { return trimmed }
-        }
-        return nil
     }
 }

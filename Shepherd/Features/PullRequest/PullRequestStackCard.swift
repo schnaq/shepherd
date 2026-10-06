@@ -65,7 +65,7 @@ struct PullRequestStackCard: View {
             } label: {
                 label(member, isCurrent: false)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(RowButtonStyle(cornerRadius: 4))
             .help(String(localized: "Open \(member.slug)"))
             .accessibilityLabel(Text(verbatim: "\(member.slug): \(member.title)"))
         }

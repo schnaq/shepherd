@@ -142,32 +142,46 @@ extension DatabaseManager {
         }
     }
 
-    /// The round counts of several pull requests, in one query.
+    /// The round count and latest reviewed head of several pull requests, in one query.
     ///
     /// What the inbox reads: one grouped `SELECT` for the whole list rather than one query per
     /// row, and pull requests with no snapshot are simply absent from the result.
-    /// - Parameter prIDs: The pull requests to count.
-    /// - Returns: The counts, keyed by node id.
+    ///
+    /// The head is there because the inbox only needs to know whether a reviewed pull request has
+    /// moved on since, and that is a comparison of two commit ids. ``latestReviewSnapshot(prID:)``
+    /// answers it too, but it decodes the snapshot's whole file list, patches included, and for the
+    /// common row — reviewed and not pushed to since — that blob was decoded and dropped once per
+    /// row. With the head alongside the count, the full snapshot is fetched only for the rows that
+    /// are actually behind.
+    ///
+    /// SQLite takes the bare `reviewedHeadOid` from the row that supplied `MAX(reviewedAt)` (the
+    /// query's only min/max aggregate; `COUNT` does not count), so this is the same "latest" as
+    /// ``latestReviewSnapshot(prID:)``; a tie on `reviewedAt` is as arbitrary here as it is under
+    /// that query's `ORDER BY … LIMIT 1`.
+    /// - Parameter prIDs: The pull requests to read.
+    /// - Returns: The round count and the latest reviewed head, keyed by node id.
     /// - Throws: A `DatabaseError` when the read fails.
-    public func reviewSnapshotCounts(prIDs: [String]) async throws -> [String: Int] {
+    public func reviewRounds(
+        prIDs: [String]
+    ) async throws -> [String: (count: Int, latestHead: String)] {
         let ids = Array(Set(prIDs))
         guard !ids.isEmpty else { return [:] }
         return try await writer.read { db in
-            let placeholders = Array(repeating: "?", count: ids.count).joined(separator: ",")
+            let placeholders = sqlPlaceholders(ids.count)
             let rows = try Row.fetchAll(
                 db,
                 sql: """
-                    SELECT prID, COUNT(*) AS roundCount FROM review_snapshots
+                    SELECT prID, COUNT(*) AS roundCount, reviewedHeadOid, MAX(reviewedAt)
+                    FROM review_snapshots
                     WHERE prID IN (\(placeholders))
                     GROUP BY prID
                     """,
                 arguments: StatementArguments(ids)
             )
-            var result: [String: Int] = [:]
+            var result: [String: (count: Int, latestHead: String)] = [:]
             for row in rows {
                 let id: String = row["prID"]
-                let count: Int = row["roundCount"]
-                result[id] = count
+                result[id] = (row["roundCount"], row["reviewedHeadOid"])
             }
             return result
         }

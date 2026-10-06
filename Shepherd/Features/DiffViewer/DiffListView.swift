@@ -214,6 +214,7 @@ struct DiffListView: View {
         // opens the composer with the draft already in it — so a draft-only indicator has nothing
         // of its own to do and lets the click fall through to the row rather than eating it.
         let opensThreadAt: Int? = counts.threads > 0 ? index : nil
+        let isHunk = if case .hunk = value { true } else { false }
         Group {
             switch value {
             case .hunk(let originalStart, let modifiedStart):
@@ -275,9 +276,7 @@ struct DiffListView: View {
         // a screen reader can see. A hunk header is also a heading, so the rotor can jump
         // between hunks.
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityAddTraits(
-            { () -> AccessibilityTraits in if case .hunk = value { return .isHeader } else { return [] } }()
-        )
+        .accessibilityAddTraits(isHunk ? .isHeader : [])
     }
 
     /// What hangs on the row's own line: published threads and the reviewer's own drafts.

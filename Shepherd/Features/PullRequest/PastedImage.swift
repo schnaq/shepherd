@@ -33,6 +33,16 @@ enum PastedImage {
         let data: Data
         let name: String
         let contentType: String
+        /// The image's real size: `data.count`, except for a file over ``maxBytes``, whose bytes
+        /// are never read and whose `data` is empty.
+        let byteCount: Int
+
+        init(data: Data, name: String, contentType: String, byteCount: Int? = nil) {
+            self.data = data
+            self.name = name
+            self.contentType = contentType
+            self.byteCount = byteCount ?? data.count
+        }
     }
 
     /// GitHub's own limit for an image on a comment.
@@ -58,9 +68,9 @@ enum PastedImage {
            let type = UTType(filenameExtension: url.pathExtension), type.conforms(to: .image) {
             let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
             let mime = type.preferredMIMEType ?? "application/octet-stream"
-            // The buffer is only a size marker that trips the upload's `<= maxBytes` guard; sizing
-            // it to the file would zero-fill gigabytes on the main actor for a refused paste.
-            if size > maxBytes { return Payload(data: Data(count: maxBytes + 1), name: url.lastPathComponent, contentType: mime) }
+            if size > maxBytes {
+                return Payload(data: Data(), name: url.lastPathComponent, contentType: mime, byteCount: size)
+            }
             guard let data = try? Data(contentsOf: url) else { return nil }
             return Payload(data: data, name: url.lastPathComponent, contentType: mime)
         }
@@ -79,7 +89,7 @@ enum PastedImage {
     /// placeholder out again and says why.
     @MainActor
     static func upload(_ image: Payload, into text: Binding<String>, target: ImageUploadTarget) async {
-        guard image.data.count <= maxBytes else {
+        guard image.byteCount <= maxBytes else {
             target.toasts.show(Toast(
                 message: String(localized: "Images can be up to 10 MB on GitHub."),
                 kind: .warning

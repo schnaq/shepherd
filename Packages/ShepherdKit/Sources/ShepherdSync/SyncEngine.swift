@@ -758,7 +758,7 @@ public actor SyncEngine {
             // so a sweep where nothing dropped out skips the re-read.
             let remaining: Set<String> = candidates.isEmpty
                 ? []
-                : Set(try await issues.store.fetchIssues(filter: everything).map(\.id))
+                : try await issues.store.issueIDs()
             let departed = candidates.map(\.id).filter { !remaining.contains($0) }
 
             let delta = IssueSweepDelta(

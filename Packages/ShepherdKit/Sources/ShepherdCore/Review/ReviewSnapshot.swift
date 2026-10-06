@@ -40,6 +40,15 @@ public struct ReviewSnapshot: Sendable, Codable, Hashable, Identifiable {
     /// Whether a pull request has moved on since this snapshot was taken.
     /// - Parameter headRefOid: The pull request's current head commit.
     public func isBehind(_ headRefOid: String) -> Bool {
-        !reviewedHeadOid.isEmpty && reviewedHeadOid != headRefOid
+        Self.isBehind(reviewedHead: reviewedHeadOid, current: headRefOid)
+    }
+
+    /// The same rule for a reviewed head read on its own, without the snapshot's file list — the
+    /// inbox's cheap pre-check, which must not drift from the instance method.
+    /// - Parameters:
+    ///   - reviewedHead: The head the snapshot covers; empty means unknown, never behind.
+    ///   - current: The pull request's current head commit.
+    public static func isBehind(reviewedHead: String, current: String) -> Bool {
+        !reviewedHead.isEmpty && reviewedHead != current
     }
 }

@@ -15,6 +15,7 @@ struct AppearanceSettingsTab: View {
     @State private var language = AppLanguage.current
 
     var body: some View {
+        @Bindable var settings = environment.settings
         SettingsPage {
             Section {
                 Picker(String(localized: "Appearance"), selection: appearanceBinding) {
@@ -37,7 +38,7 @@ struct AppearanceSettingsTab: View {
                 }
                 // Nothing to apply: `MenuBarExtra(isInserted:)` in `ShepherdApp` reads this setting,
                 // so the item appears and disappears with the toggle.
-                Toggle(isOn: Bindable(environment.settings).showsMenuBarExtra) {
+                Toggle(isOn: $settings.showsMenuBarExtra) {
                     Text(String(localized: "Show in menu bar"))
                     Text(String(localized: "How many reviews are waiting, and a short list of them."))
                 }
@@ -47,14 +48,14 @@ struct AppearanceSettingsTab: View {
                 // Nothing to apply: the setting is read once, by the next review to open. A review
                 // already on screen keeps the tab it opened on, which is the same once-only rule the
                 // reviewer's own click on the picker obeys (ADR 0026's amendment).
-                Toggle(isOn: Bindable(environment.settings).opensAgentPullRequestsOnConversation) {
+                Toggle(isOn: $settings.opensAgentPullRequestsOnConversation) {
                     Text(String(localized: "Open agent pull requests on Conversation"))
                     Text(String(localized: "The diff is one keystroke away (t)."))
                 }
             }
 
             Section(String(localized: "Diff viewer")) {
-                Picker(selection: Bindable(environment.settings).diffRenderer) {
+                Picker(selection: $settings.diffRenderer) {
                     ForEach(DiffRenderer.allCases) { renderer in
                         Text(renderer.title).tag(renderer)
                     }
@@ -64,24 +65,26 @@ struct AppearanceSettingsTab: View {
                 }
                 LabeledContent(String(localized: "Font size")) {
                     HStack(spacing: 10) {
-                        Slider(value: Bindable(environment.settings).diffFontSize, in: 10...18, step: 1)
+                        Slider(value: $settings.diffFontSize, in: 10...18, step: 1)
                             .labelsHidden()
                             .frame(maxWidth: 220)
-                        Text("\(Int(environment.settings.diffFontSize)) pt")
+                        Text("\(Int(settings.diffFontSize)) pt")
                             .font(Theme.mono(.callout))
                             .foregroundStyle(.secondary)
                             .frame(width: 44, alignment: .trailing)
                     }
                 }
-                Toggle(String(localized: "Wrap long lines"), isOn: Bindable(environment.settings).diffWrapsLines)
+                Toggle(String(localized: "Wrap long lines"), isOn: $settings.diffWrapsLines)
                 Toggle(
                     String(localized: "Show diffs inline instead of side by side"),
-                    isOn: Bindable(environment.settings).diffUsesInlineMode
+                    isOn: $settings.diffUsesInlineMode
                 )
             }
         }
     }
 
+    /// Hand-written rather than `$settings.appearance`, because the setter also has to apply the
+    /// choice to the running app's windows.
     private var appearanceBinding: Binding<AppearanceSetting> {
         Binding(
             get: { environment.settings.appearance },

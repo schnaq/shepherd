@@ -36,7 +36,7 @@ extension DatabaseManager {
         let ids = Array(Set(prIDs))
         guard !ids.isEmpty else { return [:] }
         return try await writer.read { db -> [String: ReviewDraft] in
-            let placeholders = Array(repeating: "?", count: ids.count).joined(separator: ",")
+            let placeholders = sqlPlaceholders(ids.count)
             let records = try ReviewDraftRecord.fetchAll(
                 db,
                 sql: "SELECT * FROM review_drafts WHERE prID IN (\(placeholders))",

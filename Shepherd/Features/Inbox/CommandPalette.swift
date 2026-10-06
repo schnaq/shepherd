@@ -212,13 +212,6 @@ struct CommandPaletteView: View {
     @ViewBuilder
     private var results: some View {
         let groups = sections
-        // The cursor's row id, resolved once per render: asking per row re-ran `sections`
-        // (a fuzzy match of every command) for each visible row. Rows match it by identity
-        // rather than by index arithmetic, because the two sections can swap places between
-        // one keystroke and the next (a prose query moves the pull requests above the
-        // commands) and an index computed in the row would then be one section out of date.
-        let flat = groups.flatMap(\.rows)
-        let selectedID = flat.indices.contains(selectionIndex) ? flat[selectionIndex].id : nil
         if groups.isEmpty {
             Text(String(localized: "Nothing matches “\(query)”."))
                 .font(.system(size: 12))
@@ -226,6 +219,13 @@ struct CommandPaletteView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(16)
         } else {
+            // The cursor's row id, resolved once per render: asking per row re-ran `sections`
+            // (a fuzzy match of every command) for each visible row. Rows match it by identity
+            // rather than by index arithmetic, because the two sections can swap places between
+            // one keystroke and the next (a prose query moves the pull requests above the
+            // commands) and an index computed in the row would then be one section out of date.
+            let flat = groups.flatMap(\.rows)
+            let selectedID = flat.indices.contains(selectionIndex) ? flat[selectionIndex].id : nil
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 1) {
@@ -248,9 +248,8 @@ struct CommandPaletteView: View {
                 }
                 .frame(maxHeight: 330)
                 .onChange(of: selectionIndex) { _, index in
-                    let rows = flatRows
-                    guard index >= 0, index < rows.count else { return }
-                    proxy.scrollTo(rows[index].id, anchor: .center)
+                    guard flat.indices.contains(index) else { return }
+                    proxy.scrollTo(flat[index].id, anchor: .center)
                 }
             }
         }
