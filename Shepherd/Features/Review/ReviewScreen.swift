@@ -19,6 +19,9 @@ struct ReviewScreen: View {
     @State private var isEndSessionConfirmationPresented = false
     /// The pull request the close confirmation is asking about.
     @State private var closeTarget: PullRequestSummary?
+    /// Whether the conversation composer from the ⋯ menu is up, and what is in it.
+    @State private var isCommentSheetPresented = false
+    @State private var commentBody = ""
     /// This pull request's outbox rows, observed, for the toolbar's write state.
     @State private var outboxItems: [OutboxItem] = []
     @FocusState private var isFileListFocused: Bool
@@ -97,6 +100,12 @@ struct ReviewScreen: View {
                 onMerge: { model.isMergeSheetPresented = true },
                 onReview: { model.isSubmitSheetPresented = true },
                 onDelegate: delegate,
+                onApprove: approve,
+                onRequestChanges: { submit(.requestChanges) },
+                isSubmittingVerdict: environment.activity.isRunning(prID, .review),
+                actions: actions,
+                onComment: { isCommentSheetPresented = true },
+                onClose: { perform(.close) },
                 onRetry: { Task { await session.retryFailedWrites(for: prID) } },
                 onRemoveFromSeries: environment.mergeSeries.canRemove(
                     prID,
@@ -175,6 +184,11 @@ struct ReviewScreen: View {
             }
         }
         .closePullRequestConfirmation($closeTarget, actions: actions)
+        .sheet(isPresented: $isCommentSheetPresented) {
+            if let summary = model.summary {
+                PullRequestCommentSheet(summary: summary, actions: actions, text: $commentBody)
+            }
+        }
         .sheet(item: $model.composerRequest) { request in
             InlineCommentComposer(model: model, request: request)
         }
@@ -220,7 +234,7 @@ struct ReviewScreen: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             Divider().overlay(Theme.border)
-            ReviewComposerBar(model: model, actions: actions)
+            ReviewComposerBar(model: model)
         }
         .frame(maxWidth: .infinity)
         .popover(
@@ -496,6 +510,14 @@ struct ReviewScreen: View {
         environment.startDelegation(context)
     }
 
+    /// The toolbar's ✓: an approval needs no words, so it goes out without the sheet, and the
+    /// pending inline comments go with it (``ShepherdCore/ReviewDraft/verdict(_:on:existing:body:at:)``
+    /// keeps them) — the same one press the inbox panel's Approve is.
+    private func approve() {
+        guard !model.hasEndedOnGitHub, let summary = model.summary else { return }
+        Task { await actions.submitReview(on: summary, verdict: .approve) }
+    }
+
     private func submit(_ verdict: ReviewVerdict) {
         // The keys and the palette reach the same three verdicts the composer bar's buttons do,
         // so they need the same refusal: a review submitted against a pull request that has
@@ -638,6 +660,18 @@ struct ReviewToolbar: ToolbarContent {
     var onReview: () -> Void
     /// Opens the delegation sheet.
     var onDelegate: () -> Void
+    /// Approves at once, pending comments included (``PullRequestActions/submitReview(on:verdict:body:)``).
+    var onApprove: () -> Void
+    /// Opens the submit sheet on *Request changes*, which GitHub refuses without a body.
+    var onRequestChanges: () -> Void
+    /// Whether a verdict for this pull request is on its way to the outbox.
+    var isSubmittingVerdict = false
+    /// The outbox-backed write actions, for the ⋯ menu.
+    let actions: PullRequestActions
+    /// Opens the conversation composer.
+    var onComment: () -> Void
+    /// Asks the close confirmation.
+    var onClose: () -> Void
     /// Sends this pull request's failed writes again.
     var onRetry: () -> Void = {}
     /// Takes this pull request out of its merge series, or `nil` when it is in none or its merge
@@ -703,6 +737,30 @@ struct ReviewToolbar: ToolbarContent {
 
         ToolbarSpacer(.fixed, placement: .primaryAction)
 
+        // The verdicts as a pair, the same two the inbox panel leads with: one capsule, because
+        // they are one decision. *Review* beside them is the sheet with the summary and the
+        // pending comments, for a verdict that wants words.
+        ToolbarItemGroup(placement: .primaryAction) {
+            Button(action: onApprove) {
+                Label(String(localized: "Approve"), systemImage: "checkmark")
+                    .labelStyle(.titleAndIcon)
+                    .busyLabel(isBusy: isSubmittingVerdict)
+            }
+            .disabled(verdictDisabled)
+            .help(verdictHelp(String(localized: "Approve (r a)")))
+
+            Button(action: onRequestChanges) {
+                Label(String(localized: "Request changes"), systemImage: "xmark")
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(Theme.failure)
+            }
+            .disabled(verdictDisabled)
+            .help(verdictHelp(String(localized: "Request changes (r x)")))
+            .accessibilityLabel(Text(String(localized: "Request changes")))
+        }
+
+        ToolbarSpacer(.fixed, placement: .primaryAction)
+
         ToolbarItemGroup(placement: .primaryAction) {
             Button(action: onReview) {
                 Label(
@@ -714,10 +772,34 @@ struct ReviewToolbar: ToolbarContent {
                 .labelStyle(.titleAndIcon)
                 .foregroundStyle(Theme.accentText)
             }
+            // ⌘⏎ came along from the composer bar, which used to hold the submit button.
+            .keyboardShortcut(.return, modifiers: .command)
+            .help(String(localized: "Submit review (⌘⏎)"))
             .disabled(model.hasEndedOnGitHub)
+
+            if let summary = model.summary {
+                PullRequestMoreMenu(
+                    summary: summary,
+                    actions: actions,
+                    onComment: onComment,
+                    onClose: onClose
+                )
+                .disabled(model.hasEndedOnGitHub)
+            }
 
             mergeButton
         }
+    }
+
+    /// Whether the verdict pair is dark: GitHub would refuse a verdict, the pull request has
+    /// ended, or a verdict is already being sent.
+    private var verdictDisabled: Bool {
+        model.summary?.verdictBlocker != nil || model.hasEndedOnGitHub || isSubmittingVerdict
+    }
+
+    private func verdictHelp(_ shortcut: String) -> String {
+        guard let summary = model.summary else { return shortcut }
+        return PullRequestActions.help(for: summary.verdictBlocker, on: summary, otherwise: shortcut)
     }
 
     /// The facts row: provenance, size, checks, and the outbox's state for this pull request.

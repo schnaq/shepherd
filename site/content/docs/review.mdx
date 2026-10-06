@@ -61,20 +61,24 @@ A thread with six or more comments gets a **Summarise** button. It writes a shor
 
 ## Submit a review
 
-Use the buttons in the review bar, or the keys:
+Use the buttons in the toolbar, or the keys:
 
 | Action | Button | Keys |
 | --- | --- | --- |
-| Approve | **Approve…** | `r a` |
-| Request changes | **Request changes** | `r x` |
-| Comment | **Comment** | `r c` |
-| Open the submit sheet | **Review…** | `⌘⏎` |
+| Approve | **✓ Approve** | `r a` |
+| Request changes | **✕** | `r x` |
+| Comment | in the submit sheet | `r c` |
+| Open the submit sheet | **Review** | `⌘⏎` |
+
+**Approve** sends at once, with your pending inline comments. **✕** opens the submit sheet, because a change request needs a summary.
+
+The **⋯** button next to **Review** holds the rarer actions: **Comment…** on the conversation, **Mark ready for review** on a draft, **Update branch** when the branch is behind, **Open on GitHub**, **Copy branch name** and **Close pull request…**. The inbox panel has the same menu.
 
 The submit sheet has a **Summary**, a **Verdict** and your pending inline comments. Click **Submit** to send.
 
 - Only an approval may go without a summary. GitHub rejects the other two.
-- GitHub does not accept an approval or change request on your own pull request. The button then offers a plain comment.
-- Once the pull request is merged or closed, the three verdict buttons are disabled.
+- GitHub does not accept an approval or change request on your own pull request. The two buttons are then disabled; comment from the submit sheet instead.
+- Once the pull request is merged or closed, the verdict buttons are disabled.
 
 If GitHub reports the pull request as updated while you are reading, a strip above the diff says **Updated on GitHub — n new commits.** Press **Reload** or `u` to show them. Your file, cursor and comment text stay where they are until you do. New commits are never applied silently, because your comments are anchored to the commit you were reading.
 

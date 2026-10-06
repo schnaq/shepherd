@@ -1,12 +1,14 @@
 import ShepherdCore
 import SwiftUI
 
-/// The bar under the diff: pending-comment count and the three review verdicts.
+/// The bar under the diff: how many comments are waiting for the review, and whether every file
+/// has been looked at.
+///
+/// It carried the three verdicts as well until the toolbar took them (2026-10-06): the same
+/// *Approve* and *Request changes* above and below the diff was two places for one decision.
 struct ReviewComposerBar: View {
     /// The review model.
     let model: ReviewModel
-    /// The write actions.
-    let actions: PullRequestActions
 
     var body: some View {
         HStack(spacing: 10) {
@@ -23,58 +25,6 @@ struct ReviewComposerBar: View {
             }
 
             Spacer(minLength: 8)
-
-            Button {
-                start(.comment)
-            } label: {
-                Text(String(localized: "Comment"))
-            }
-            .buttonStyle(SecondaryButtonStyle(height: 30))
-            .busy(isSubmittingVerdict)
-            .disabled(model.hasEndedOnGitHub)
-            .help(String(localized: "Comment (r c)"))
-
-            Button {
-                start(.requestChanges)
-            } label: {
-                Text(String(localized: "Request changes"))
-            }
-            .buttonStyle(SecondaryButtonStyle(height: 30, tint: Theme.failure))
-            .busy(isSubmittingVerdict)
-            .disabled(model.hasEndedOnGitHub || model.verdictBlocker != nil)
-            .help(blockedHelp(otherwise: String(localized: "Request changes (r x)")))
-
-            Button {
-                start(preselectedVerdict)
-            } label: {
-                HStack(spacing: 6) {
-                    if preselectedVerdict == .approve {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 11, weight: .semibold))
-                    }
-                    Text(
-                        preselectedVerdict == .approve
-                            ? String(localized: "Approve…")
-                            : String(localized: "Review…")
-                    )
-                    KeyCapView(keys: "⌘⏎")
-                }
-            }
-            // Secondary, not green (ADR 0040's 2026-09-23 amendment): the prominent action on
-            // every surface is Merge, and this screen's Merge is the toolbar's green button. Two
-            // green buttons on one screen are two recommendations, and a reviewer's eye goes to
-            // whichever is nearer. The shortcut, the tick and the key cap stay — ⌘⏎ is still the
-            // fastest way to a verdict; it just is not painted as *the* thing to do.
-            .buttonStyle(SecondaryButtonStyle(height: 30))
-            .keyboardShortcut(.return, modifiers: .command)
-            // The three verdict buttons go dark together once GitHub has merged or closed the
-            // pull request under them, because none of the three has anywhere to land any more
-            // (``ReviewModel/hasEndedOnGitHub``). `.disabled` takes ⌘⏎ with it — and so does
-            // ``busy``, which is what stops ⌘⏎ held down from opening a second sheet onto a
-            // review that is already going out.
-            .busy(isSubmittingVerdict)
-            .disabled(model.hasEndedOnGitHub)
-            .help(String(localized: "Submit review (⌘⏎)"))
         }
         .padding(.horizontal, 14)
         .frame(height: 50)
@@ -85,44 +35,6 @@ struct ReviewComposerBar: View {
         let count = model.pendingCommentCount
         if count == 0 { return String(localized: "No pending comments") }
         return String(localized: "\(count) pending comments in this review")
-    }
-
-    /// Whether a verdict for this pull request is already on its way to the outbox.
-    ///
-    /// These three buttons only *open* the sheet, but they open it onto a review that is already
-    /// being written — so they wait with it rather than with the click.
-    private var isSubmittingVerdict: Bool {
-        actions.activity.isRunning(model.prID, .review)
-    }
-
-    /// Which verdict the composer's approve button opens the sheet on.
-    ///
-    /// Approve, unless GitHub would answer 422 to one — on your own pull request the same button
-    /// still opens the sheet, on a plain comment, because a comment is a review GitHub accepts
-    /// from an author. The label follows, so the button never offers what it cannot do.
-    private var preselectedVerdict: ReviewVerdict {
-        model.verdictBlocker == nil ? .approve : .comment
-    }
-
-    /// A blocked button's tooltip: the sentence the write funnel would have toasted
-    /// (``PullRequestActions/help(for:on:otherwise:)``).
-    ///
-    /// The guard is for the summary, not for the blocker: before the detail arrives there is no
-    /// pull request to name, and a bar with nothing to act on shows the shortcut.
-    /// - Parameter otherwise: The tooltip for a button that is live.
-    /// - Returns: The tooltip text.
-    private func blockedHelp(otherwise: String) -> String {
-        guard let summary = model.summary else { return otherwise }
-        return PullRequestActions.help(
-            for: summary.verdictBlocker,
-            on: summary,
-            otherwise: otherwise
-        )
-    }
-
-    private func start(_ verdict: ReviewVerdict) {
-        model.pendingVerdict = verdict
-        model.isSubmitSheetPresented = true
     }
 }
 

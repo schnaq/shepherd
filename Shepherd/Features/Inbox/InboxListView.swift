@@ -274,27 +274,18 @@ struct InboxListView: View {
             model.toggleMark(row.id)
         }
         Divider()
-        Button(String(localized: "Open on GitHub")) {
-            PullRequestActions(
+        PullRequestMoreMenuItems(
+            summary: row,
+            actions: PullRequestActions(
                 session: model.session,
                 toasts: environment.toasts,
                 activity: environment.activity
-            )
-                .openOnGitHub(row)
-        }
-        Button(String(localized: "Copy branch name")) {
-            PullRequestActions(
-                session: model.session,
-                toasts: environment.toasts,
-                activity: environment.activity
-            )
-                .copyBranch(row)
-        }
-        Divider()
-        Button(String(localized: "Close pull request…")) {
-            model.select(row.id)
-            environment.request(.close)
-        }
+            ),
+            onClose: {
+                model.select(row.id)
+                environment.request(.close)
+            }
+        )
         Button(String(localized: "Hide this pull request")) { hide(row) }
         if model.hasMarks {
             Divider()

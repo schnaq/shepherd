@@ -247,6 +247,13 @@ struct InboxDetailPanel: View {
 
     // MARK: - Actions
 
+    /// The panel's controls, one row of them: the two verdicts, the ⋯ menu with the rarer errands
+    /// (``PullRequestMoreMenu``) and the green Merge — and under it the way into the full review.
+    ///
+    /// It was three rows of two equal-weight buttons (2026-10-06), which put *Close…* level with
+    /// *Approve* and said nothing about which of the six was the one to press. The verdict and the
+    /// merge are what this panel is for; commenting, closing and the branch errands went into ⋯,
+    /// the same menu the review toolbar carries, so both screens have one shape.
     private func actionBar(_ row: PullRequestSummary) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             queueStatus(row)
@@ -273,9 +280,9 @@ struct InboxDetailPanel: View {
                     otherwise: String(localized: "Approve (r a)")
                 ))
 
-                Button {
-                    Task { await actions.submitReview(on: row, verdict: .requestChanges) }
-                } label: {
+                // Through `r x`'s path rather than a review sent from here: GitHub refuses
+                // `REQUEST_CHANGES` without a body, so it opens the review composer to write one.
+                Button { environment.request(.requestChanges) } label: {
                     Text(String(localized: "Request changes"))
                         .frame(maxWidth: .infinity)
                 }
@@ -287,42 +294,30 @@ struct InboxDetailPanel: View {
                     on: row,
                     otherwise: String(localized: "Request changes (r x)")
                 ))
-            }
 
-            HStack(spacing: 8) {
-                Button {
-                    onOpenReview(row.id)
-                } label: {
-                    HStack(spacing: 6) {
-                        Text(String(localized: "Open review"))
-                        KeyCapView(keys: "⏎")
-                    }
-                    .frame(maxWidth: .infinity)
-                }
+                PullRequestMoreMenu(
+                    summary: row,
+                    actions: actions,
+                    onComment: { isCommentSheetPresented = true },
+                    onClose: { environment.request(.close) }
+                )
+                .menuStyle(.button)
                 .buttonStyle(SecondaryButtonStyle())
+                .fixedSize()
 
                 mergeButton(for: row)
             }
 
-            // On its own row under the two above, and last: a verdict is what this panel is for,
-            // a merge is what a verdict leads to, and saying something without a verdict — or
-            // closing the thing unmerged — is the rarer errand. *Close…* asks once and closes
-            // without a word; closing with a reason stays in the comment sheet.
-            HStack(spacing: 8) {
-                Button { isCommentSheetPresented = true } label: {
-                    Text(String(localized: "Comment…"))
-                        .frame(maxWidth: .infinity)
+            Button {
+                onOpenReview(row.id)
+            } label: {
+                HStack(spacing: 6) {
+                    Text(String(localized: "Open review"))
+                    KeyCapView(keys: "⏎")
                 }
-                .buttonStyle(SecondaryButtonStyle())
-                .help(String(localized: "Comment on the conversation, or comment and close"))
-
-                Button { environment.request(.close) } label: {
-                    Text(String(localized: "Close…"))
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(SecondaryButtonStyle(tint: Theme.failure))
-                .help(String(localized: "Close the pull request without merging it"))
             }
+            .buttonStyle(.plain)
+            .foregroundStyle(Theme.accentText)
         }
         .padding(16)
         .background(Theme.panel)
