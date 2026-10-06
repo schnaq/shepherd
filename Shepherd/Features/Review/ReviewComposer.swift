@@ -521,9 +521,9 @@ struct InlineCommentComposer: View {
                         toggleCommentDraft()
                     }
                 }
-                if let suggestion {
+                if request.side == .right {
                     Button {
-                        commentText = commentText.isEmpty ? suggestion : commentText + "\n" + suggestion
+                        insertSuggestion()
                     } label: {
                         Image(systemName: "plus.forwardslash.minus")
                     }
@@ -898,13 +898,15 @@ struct InlineCommentComposer: View {
         commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// A ```` ```suggestion ```` block holding the commented lines, or `nil` where GitHub takes
-    /// none: suggestions change the new file, so only the head side has one.
-    private var suggestion: String? {
-        guard request.side == .right, request.path == model.selectedPath,
-              let document = model.currentReconstruction?.modified
-        else { return nil }
-        return SuggestionBlock.make(document: document, startLine: request.startLine, line: request.line)
+    /// Appends a ```` ```suggestion ```` block holding the commented lines. Offered on the head
+    /// side only: a suggestion changes the new file. Built on press rather than per render,
+    /// because it reconstructs and splits the whole file.
+    private func insertSuggestion() {
+        guard request.path == model.selectedPath,
+              let document = model.currentReconstruction?.modified,
+              let block = SuggestionBlock.make(document: document, startLine: request.startLine, line: request.line)
+        else { return }
+        commentText = commentText.isEmpty ? block : commentText + "\n" + block
     }
 
     /// Posts the comment on its own, pinned to the head being read, and closes on success. The
@@ -929,7 +931,11 @@ struct InlineCommentComposer: View {
             toasts: environment.toasts,
             activity: environment.activity
         )
-        if await actions.addReviewComment(comment, on: summary) { dismiss() }
+        guard await actions.addReviewComment(comment, on: summary) else { return }
+        // Fetched again so the published comment shows on its line now rather than at the next
+        // sweep — harmless when it is still queued.
+        model.load()
+        dismiss()
     }
 
     private var existingComment: DraftComment? {
@@ -1060,8 +1066,8 @@ struct InlineCommentComposer: View {
         }
     }
 
-    /// Saves the comment to the pending review, as the draft button does, then opens the delegation that carries the
-    /// message to the session.
+    /// Saves the comment to the pending review, as the draft button does, then opens the
+    /// delegation that carries the message to the session.
     ///
     /// The order is deliberate: a comment that could not be saved sends nothing, because the
     /// thread is the record and a session answering a finding GitHub never received would be the
