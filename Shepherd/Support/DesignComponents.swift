@@ -197,10 +197,15 @@ struct ComposerTextEditor: View {
                     .stroke(Theme.controlBorder, lineWidth: 1)
             )
             .onAppear { installPasteMonitor() }
-            .onDisappear {
-                if let pasteMonitor { NSEvent.removeMonitor(pasteMonitor) }
-                pasteMonitor = nil
-            }
+            // The target can arrive after the field does — the review composers build it from a
+            // summary that may still be loading — and the monitor holds the one it was made with.
+            .onChange(of: imageUpload?.repo) { removePasteMonitor(); installPasteMonitor() }
+            .onDisappear { removePasteMonitor() }
+    }
+
+    private func removePasteMonitor() {
+        if let pasteMonitor { NSEvent.removeMonitor(pasteMonitor) }
+        pasteMonitor = nil
     }
 
     /// Catches ⌘V of an image before the text view does. `TextEditor` is a plain-text view: it
@@ -215,7 +220,7 @@ struct ComposerTextEditor: View {
                   event.charactersIgnoringModifiers == "v",
                   let image = PastedImage.image(on: .general)
             else { return event }
-            Task { await PastedImage.upload(image, into: text, target: imageUpload) }
+            Task { @MainActor in await PastedImage.upload(image, into: text, target: imageUpload) }
             return nil
         }
     }

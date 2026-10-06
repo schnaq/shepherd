@@ -27,7 +27,8 @@ final class PastedImageTests: XCTestCase {
     }
 
     func testAPlaceholderHoldsTheSendBack() {
-        XCTAssertTrue(PastedImage.containsPendingUpload("Look:\n![Uploading Screenshot.png…](abc)\n"))
+        XCTAssertTrue(PastedImage.containsPendingUpload("Look:\n![Uploading Screenshot.png…](0E6C1E0A-6F2B-4F5E-9C7D-1A2B3C4D5E6F)\n"))
+        XCTAssertFalse(PastedImage.containsPendingUpload("![Uploading the release notes](draft)"))
         XCTAssertFalse(PastedImage.containsPendingUpload("![Screenshot.png](https://github.com/x)"))
     }
 }

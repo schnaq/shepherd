@@ -379,7 +379,8 @@ struct SubmitReviewSheet: View {
                 }
             }
             .buttonStyle(SecondaryButtonStyle(tint: Theme.agent))
-            .disabled(model.summaryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(model.summaryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || PastedImage.containsPendingUpload(model.summaryText))
             .help(String(
                 localized: "Send this summary to the session that wrote this code"
             ))
@@ -1039,7 +1040,7 @@ struct InlineCommentComposer: View {
                 }
             }
             .buttonStyle(SecondaryButtonStyle(tint: Theme.agent))
-            .disabled(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(isBlank)
             .help(String(
                 localized: "Add the comment and send it to the session that wrote this code"
             ))

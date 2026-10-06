@@ -28,47 +28,55 @@ extension ImageUploadTarget {
 /// (``containsPendingUpload(_:)``), so a comment can never be posted with a hole where the
 /// image should be.
 enum PastedImage {
+    /// An image ready to upload.
+    struct Payload {
+        let data: Data
+        let name: String
+        let contentType: String
+    }
+
     /// GitHub's own limit for an image on a comment.
     static let maxBytes = 10 * 1024 * 1024
 
-    /// What every placeholder starts with. Markdown rather than UI text, so it is not localized.
-    private static let placeholderPrefix = "![Uploading "
-
+    // A placeholder is matched exactly as ``upload(_:into:target:)`` writes it — the UUID makes
+    // it one no person types. Markdown rather than UI text, so it is not localized.
     /// Whether the text still waits for an upload to finish.
     static func containsPendingUpload(_ text: String) -> Bool {
-        text.contains(placeholderPrefix)
+        text.contains(/!\[Uploading [^\]]*…\]\([0-9A-F-]{36}\)/)
     }
 
-    /// The image on the pasteboard and a name for it, or `nil` when the paste is text — which
-    /// the field then pastes as it always did.
+    /// The image on the pasteboard, or `nil` when the paste is text — which the field then
+    /// pastes as it always did.
     ///
     /// A copied image file comes first, by its own name; a pasteboard that also has text (a
     /// copied file carries its name as text) is otherwise a text paste. A screenshot copied with
-    /// ⌃⇧⌘4 has image data and no text.
-    static func image(on pasteboard: NSPasteboard) -> (data: Data, name: String, contentType: String)? {
+    /// ⌃⇧⌘4 has image data and no text. A file over the limit is still answered, without its
+    /// bytes, so the upload can say why it refuses rather than freezing on reading it.
+    static func image(on pasteboard: NSPasteboard) -> Payload? {
         if let url = (pasteboard.readObjects(forClasses: [NSURL.self]) as? [URL])?.first,
            url.isFileURL,
-           let type = UTType(filenameExtension: url.pathExtension), type.conforms(to: .image),
-           let data = try? Data(contentsOf: url) {
-            return (data, url.lastPathComponent, type.preferredMIMEType ?? "application/octet-stream")
+           let type = UTType(filenameExtension: url.pathExtension), type.conforms(to: .image) {
+            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            let mime = type.preferredMIMEType ?? "application/octet-stream"
+            if size > maxBytes { return Payload(data: Data(count: size), name: url.lastPathComponent, contentType: mime) }
+            guard let data = try? Data(contentsOf: url) else { return nil }
+            return Payload(data: data, name: url.lastPathComponent, contentType: mime)
         }
         if pasteboard.string(forType: .string) != nil { return nil }
-        if let png = pasteboard.data(forType: .png) { return (png, "Screenshot.png", "image/png") }
+        if let png = pasteboard.data(forType: .png) {
+            return Payload(data: png, name: "Screenshot.png", contentType: "image/png")
+        }
         guard let image = NSImage(pasteboard: pasteboard),
               let tiff = image.tiffRepresentation,
               let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:])
         else { return nil }
-        return (png, "Screenshot.png", "image/png")
+        return Payload(data: png, name: "Screenshot.png", contentType: "image/png")
     }
 
     /// Uploads the image and swaps its placeholder for the Markdown that shows it, or takes the
     /// placeholder out again and says why.
     @MainActor
-    static func upload(
-        _ image: (data: Data, name: String, contentType: String),
-        into text: Binding<String>,
-        target: ImageUploadTarget
-    ) async {
+    static func upload(_ image: Payload, into text: Binding<String>, target: ImageUploadTarget) async {
         guard image.data.count <= maxBytes else {
             target.toasts.show(Toast(
                 message: String(localized: "Images can be up to 10 MB on GitHub."),
@@ -76,7 +84,8 @@ enum PastedImage {
             ))
             return
         }
-        let placeholder = "\(placeholderPrefix)\(image.name)…](\(UUID().uuidString))"
+        let alt = image.name.replacingOccurrences(of: "]", with: "")
+        let placeholder = "![Uploading \(alt)…](\(UUID().uuidString))"
         let current = text.wrappedValue
         let separator = current.isEmpty || current.hasSuffix("\n") ? "" : "\n"
         text.wrappedValue = current + separator + placeholder + "\n"
@@ -89,10 +98,11 @@ enum PastedImage {
             )
             text.wrappedValue = text.wrappedValue.replacingOccurrences(
                 of: placeholder,
-                with: "![\(image.name)](\(url.absoluteString))"
+                with: "![\(alt)](\(url.absoluteString))"
             )
         } catch {
-            text.wrappedValue = text.wrappedValue.replacingOccurrences(of: placeholder + "\n", with: "")
+            text.wrappedValue = text.wrappedValue
+                .replacingOccurrences(of: placeholder + "\n", with: "")
                 .replacingOccurrences(of: placeholder, with: "")
             target.toasts.failure(
                 error,
