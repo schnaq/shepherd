@@ -422,7 +422,7 @@ Pure logic in `ShepherdCore` (all unit-tested):
     just changed
   - `submitReview(_ draft: ReviewDraft, on:) async throws` — REST
     `POST /pulls/{n}/reviews` with full `comments` array; maps verdict to `event`
-  - `replyToComment/resolveThread/unresolveThread/mergePullRequest/markReadyForReview…`
+  - `replyToComment/addReviewComment/resolveThread/unresolveThread/mergePullRequest/markReadyForReview…`
   - `headBranchContext(repo:number:)` / `deleteBranch(repo:name:)` — the two halves of the merge
     sheet's "delete the branch afterwards" (ADR 0005's 2026-09-05 amendment): one small GraphQL
     read of the head branch, the repository it lives in and the base repository's default branch,

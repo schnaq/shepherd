@@ -189,6 +189,30 @@ struct PullRequestActions {
         }
     }
 
+    /// Posts one inline comment on its own, outside the pending review: GitHub's *Comment* beside
+    /// *Start a review*. Pinned to the head the reviewer is reading.
+    /// - Parameters:
+    ///   - comment: Where the comment is anchored, and what it says.
+    ///   - summary: The pull request.
+    /// - Returns: Whether the comment is on its way — sent or queued. `false` when it could not be
+    ///   queued or GitHub refused it, so the composer can stay open with the text still in it.
+    func addReviewComment(_ comment: DraftComment, on summary: PullRequestSummary) async -> Bool {
+        await activity.run(summary.id, .reply) {
+            do {
+                let outcome = try await enqueue(
+                    .addReviewComment(comment, commitOid: summary.headRefOid),
+                    on: summary
+                )
+                announce(outcome, of: .comment, on: summary)
+                if case .failed = outcome { return false }
+                return true
+            } catch {
+                toasts.failure(error, context: String(localized: "Could not queue the comment"))
+                return false
+            }
+        } ?? false
+    }
+
     /// Resolves or unresolves a review thread.
     /// - Parameters:
     ///   - summary: The pull request.

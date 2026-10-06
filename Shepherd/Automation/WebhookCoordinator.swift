@@ -268,7 +268,7 @@ final class WebhookCoordinator {
                     issue: nil,
                     occurredAt: sent.sentAt
                 )
-            case .replyPosted, .threadResolved, .threadUnresolved, .markedReadyForReview,
+            case .replyPosted, .reviewCommentPosted, .threadResolved, .threadUnresolved, .markedReadyForReview,
                  .branchUpdated, .mergeEnqueued, .mergeStarted, .issueCommentAdded, .issueLabelAdded,
                  .issueAssigneeAdded, .issueReopened, .pullRequestCommentAdded, .pullRequestClosed:
                 // Sent, and deliberately not events this version promises. A comment, a label,

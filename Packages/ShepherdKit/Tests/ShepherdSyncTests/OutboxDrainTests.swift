@@ -97,6 +97,22 @@ final class OutboxDrainTests: XCTestCase {
         XCTAssertTrue(remaining.isEmpty)
     }
 
+    func testASingleInlineCommentIsSentWithItsCommit() async throws {
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        let comment = DraftComment(path: "a.swift", line: 4, body: "Nit")
+        _ = try await enqueue(.addReviewComment(comment, commitOid: "head-1"), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        await engine.drainOutbox()
+
+        let sent = await github.reviewComments
+        XCTAssertEqual(sent.map(\.comment), [comment])
+        XCTAssertEqual(sent.map(\.commitOid), ["head-1"])
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
     func testReplyMergeAndReadyForReviewAreDispatched() async throws {
         let github = MockGitHub()
         let store = try DatabaseManager.inMemory()

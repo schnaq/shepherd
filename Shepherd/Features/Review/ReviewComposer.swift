@@ -488,7 +488,7 @@ struct InlineCommentComposer: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(String(localized: "Comment on line \(request.line)"))
+                    Text(title)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(Theme.textStrong)
                     Text(anchorDescription)
@@ -521,6 +521,16 @@ struct InlineCommentComposer: View {
                         toggleCommentDraft()
                     }
                 }
+                if let suggestion {
+                    Button {
+                        commentText = commentText.isEmpty ? suggestion : commentText + "\n" + suggestion
+                    } label: {
+                        Image(systemName: "plus.forwardslash.minus")
+                    }
+                    .buttonStyle(.borderless)
+                    .help(String(localized: "Add a suggestion: the lines as they are now, to edit into what they should be"))
+                    .accessibilityLabel(Text(String(localized: "Add a suggestion")))
+                }
                 SavedReplyMenu(
                     replies: model.settings.usableSavedReplies,
                     suggestedIDs: suggestedReplyIDs,
@@ -546,7 +556,9 @@ struct InlineCommentComposer: View {
                 onDiscard: { aiDraft.discardPendingDraft() }
             )
 
-            Text(String(localized: "Saved to your pending review — nothing is sent until you submit."))
+            Text(startsReview
+                ? String(localized: "Comment posts it now. Start a review keeps it with your other comments until you submit.")
+                : String(localized: "Saved to your pending review — nothing is sent until you submit."))
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textMuted)
 
@@ -580,20 +592,30 @@ struct InlineCommentComposer: View {
                 .buttonStyle(SecondaryButtonStyle())
                 .keyboardShortcut(.cancelAction)
                 // The second button, and only when the head commits carry a return address
-                // (ADR 0030). It never replaces "Add comment": the comment is still what gets
+                // (ADR 0030). It never replaces the draft button: the comment is still what gets
                 // posted, and the thread stays the record.
                 if let action = sessionAction {
                     sessionButton(action)
                 }
+                // GitHub's pair. *Comment* publishes at once and cannot be taken back, so it gets
+                // no default key: ⏎ stays on the button that only writes to the local draft.
+                if startsReview {
+                    Button(String(localized: "Comment")) {
+                        Task { await postSingleComment() }
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .disabled(isSaving || isBlank)
+                    .help(String(localized: "Post this comment now, outside a review"))
+                }
                 Button {
                     Task { await save() }
                 } label: {
-                    Text(String(localized: "Add comment"))
+                    Text(saveTitle)
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
                 .busy(isSaving)
-                .disabled(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .disabled(isBlank)
             }
         }
         .padding(20)
@@ -830,7 +852,7 @@ struct InlineCommentComposer: View {
     /// the reviewer has already typed it lands nowhere until they answer replace-or-append. That
     /// is why the explanation is handed over as an ``IntelligenceOutcome`` rather than assigned
     /// to `commentText` — the same value the drafting path produces, so it obeys the same rules
-    /// rather than a second copy of them. Nothing is submitted: "Add comment" is still a click.
+    /// rather than a second copy of them. Nothing is submitted: saving is still a click.
     @MainActor
     private func turnExplanationIntoComment() {
         guard let text = explain.explanation, let kind = explain.kind else { return }
@@ -849,6 +871,65 @@ struct InlineCommentComposer: View {
                 existingText: commentText
             )
         )
+    }
+
+    /// Whether this comment would be the first of a review — GitHub's case for offering
+    /// *Comment* beside *Start a review*. Once a review is pending, a new comment joins it.
+    private var startsReview: Bool {
+        existingComment == nil && (model.draft?.comments.isEmpty ?? true)
+    }
+
+    /// The draft button's label, in GitHub's words for the three cases.
+    private var saveTitle: String {
+        if existingComment != nil { return String(localized: "Update comment") }
+        return startsReview
+            ? String(localized: "Start a review")
+            : String(localized: "Add review comment")
+    }
+
+    private var title: String {
+        if let start = request.startLine, start != request.line {
+            return String(localized: "Comment on lines \(start)–\(request.line)")
+        }
+        return String(localized: "Comment on line \(request.line)")
+    }
+
+    private var isBlank: Bool {
+        commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// A ```` ```suggestion ```` block holding the commented lines, or `nil` where GitHub takes
+    /// none: suggestions change the new file, so only the head side has one.
+    private var suggestion: String? {
+        guard request.side == .right, request.path == model.selectedPath,
+              let document = model.currentReconstruction?.modified
+        else { return nil }
+        return SuggestionBlock.make(document: document, startLine: request.startLine, line: request.line)
+    }
+
+    /// Posts the comment on its own, pinned to the head being read, and closes on success. The
+    /// same anchor check as the draft path, because GitHub refuses a padding line here too.
+    private func postSingleComment() async {
+        guard let summary = model.summary else { return }
+        do {
+            try model.validateAnchor(of: request)
+        } catch {
+            errorMessage = error.userFacingDescription
+            return
+        }
+        let comment = DraftComment(
+            path: request.path,
+            line: request.line,
+            side: request.side,
+            startLine: request.startLine,
+            body: commentText.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        let actions = PullRequestActions(
+            session: model.session,
+            toasts: environment.toasts,
+            activity: environment.activity
+        )
+        if await actions.addReviewComment(comment, on: summary) { dismiss() }
     }
 
     private var existingComment: DraftComment? {
@@ -956,7 +1037,7 @@ struct InlineCommentComposer: View {
                         session: session,
                         message: plan.message,
                         note: String(
-                            localized: "The comment is saved to your pending review exactly as “Add comment” saves it. Sending resolves nothing and submits nothing."
+                            localized: "The comment is saved to your pending review, like any review comment. Sending resolves nothing and submits nothing."
                         ),
                         agentName: model.settings.agentCLI.kind.displayName
                     ) {
@@ -979,7 +1060,7 @@ struct InlineCommentComposer: View {
         }
     }
 
-    /// Saves the comment the way "Add comment" does, then opens the delegation that carries the
+    /// Saves the comment to the pending review, as the draft button does, then opens the delegation that carries the
     /// message to the session.
     ///
     /// The order is deliberate: a comment that could not be saved sends nothing, because the
@@ -997,6 +1078,22 @@ struct InlineCommentComposer: View {
         }
         dismiss()
         environment.sendToSession(plan.context, message: plan.message)
+    }
+}
+
+/// GitHub's suggested change: the commented lines inside a ```` ```suggestion ```` fence, which
+/// the reviewer edits into what the lines should become and the author applies with one click.
+enum SuggestionBlock {
+    /// - Parameters:
+    ///   - document: The head-side file, as the diff shows it.
+    ///   - startLine: The first commented line, or `nil` for one line.
+    ///   - line: The last commented line.
+    /// - Returns: The block, or `nil` when the lines are not in the document.
+    static func make(document: String, startLine: Int?, line: Int) -> String? {
+        let lines = document.split(separator: "\n", omittingEmptySubsequences: false)
+        let start = startLine ?? line
+        guard start >= 1, start <= line, line <= lines.count else { return nil }
+        return "```suggestion\n" + lines[(start - 1)..<line].joined(separator: "\n") + "\n```"
     }
 }
 

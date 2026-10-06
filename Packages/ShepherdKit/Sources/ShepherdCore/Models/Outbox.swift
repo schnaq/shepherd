@@ -36,6 +36,15 @@ public enum OutboxAction: Sendable, Codable, Hashable {
     case submitReview(ReviewDraft)
     /// Reply to an existing review comment, addressed by its REST database id.
     case replyToComment(commentDatabaseID: Int, body: String)
+    /// Post one inline comment on its own, without a review: GitHub's *Comment* beside *Start a
+    /// review* in the line composer.
+    ///
+    /// The comment is published as soon as it is sent, unlike one of a ``ReviewDraft``'s, which
+    /// waits for the review. `localID` is not sent.
+    /// - Parameters:
+    ///   - comment: Where the comment is anchored, and what it says.
+    ///   - commitOid: The head the reviewer was reading, which GitHub anchors the lines to.
+    case addReviewComment(DraftComment, commitOid: String)
     /// Resolve a review thread by its GraphQL node id.
     case resolveThread(threadID: String)
     /// Unresolve a review thread by its GraphQL node id.
@@ -113,6 +122,7 @@ public enum OutboxAction: Sendable, Codable, Hashable {
         switch self {
         case .submitReview: return "submitReview"
         case .replyToComment: return "replyToComment"
+        case .addReviewComment: return "addReviewComment"
         case .resolveThread: return "resolveThread"
         case .unresolveThread: return "unresolveThread"
         case .merge: return "merge"
@@ -142,8 +152,8 @@ public enum OutboxAction: Sendable, Codable, Hashable {
              .closeIssue(_, let updatedAt),
              .reopenIssue(let updatedAt):
             return updatedAt
-        case .submitReview, .replyToComment, .resolveThread, .unresolveThread, .merge,
-             .markReadyForReview, .updateBranch, .addPullRequestComment, .closePullRequest:
+        case .submitReview, .replyToComment, .addReviewComment, .resolveThread, .unresolveThread,
+             .merge, .markReadyForReview, .updateBranch, .addPullRequestComment, .closePullRequest:
             return nil
         }
     }
@@ -173,7 +183,7 @@ public enum OutboxAction: Sendable, Codable, Hashable {
 
     /// The single key of an encoded action: the case's own name.
     private enum CodingKeys: String, CodingKey {
-        case submitReview, replyToComment, resolveThread, unresolveThread, merge
+        case submitReview, replyToComment, addReviewComment, resolveThread, unresolveThread, merge
         case markReadyForReview, updateBranch
         case addIssueComment, addIssueLabel, addIssueAssignee, closeIssue, reopenIssue
         case addPullRequestComment, closePullRequest
@@ -187,6 +197,11 @@ public enum OutboxAction: Sendable, Codable, Hashable {
     /// The payload keys of ``replyToComment(commentDatabaseID:body:)``.
     private enum ReplyToCommentKeys: String, CodingKey {
         case commentDatabaseID, body
+    }
+
+    /// The payload keys of ``addReviewComment(_:commitOid:)``.
+    private enum ReviewCommentKeys: String, CodingKey {
+        case comment, commitOid
     }
 
     /// The payload keys of the two thread actions, which carry the same one value.
@@ -256,6 +271,13 @@ public enum OutboxAction: Sendable, Codable, Hashable {
             )
             try nested.encode(commentDatabaseID, forKey: .commentDatabaseID)
             try nested.encode(body, forKey: .body)
+        case .addReviewComment(let comment, let commitOid):
+            var nested = container.nestedContainer(
+                keyedBy: ReviewCommentKeys.self,
+                forKey: .addReviewComment
+            )
+            try nested.encode(comment, forKey: .comment)
+            try nested.encode(commitOid, forKey: .commitOid)
         case .resolveThread(let threadID):
             var nested = container.nestedContainer(
                 keyedBy: ThreadKeys.self,
@@ -364,6 +386,15 @@ public enum OutboxAction: Sendable, Codable, Hashable {
             let commentDatabaseID = try nested.decode(Int.self, forKey: .commentDatabaseID)
             let body = try nested.decode(String.self, forKey: .body)
             self = .replyToComment(commentDatabaseID: commentDatabaseID, body: body)
+        case .addReviewComment:
+            let nested = try container.nestedContainer(
+                keyedBy: ReviewCommentKeys.self,
+                forKey: .addReviewComment
+            )
+            self = .addReviewComment(
+                try nested.decode(DraftComment.self, forKey: .comment),
+                commitOid: try nested.decode(String.self, forKey: .commitOid)
+            )
         case .resolveThread:
             let nested = try container.nestedContainer(
                 keyedBy: ThreadKeys.self,

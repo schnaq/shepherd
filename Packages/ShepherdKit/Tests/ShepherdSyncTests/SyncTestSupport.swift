@@ -58,6 +58,7 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
     private(set) var resolvedThreads: [String] = []
     private(set) var unresolvedThreads: [String] = []
     private(set) var replies: [(commentID: Int, body: String)] = []
+    private(set) var reviewComments: [(comment: DraftComment, commitOid: String)] = []
     private(set) var merges: [(number: Int, method: MergeMethod, sha: String?)] = []
     /// Every update-branch call that got through, with the head it was pinned to.
     private(set) var branchUpdates: [(number: Int, sha: String?)] = []
@@ -237,6 +238,15 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
 
     func replyToComment(repo: RepoRef, number: Int, commentID: Int, body: String) async throws {
         replies.append((commentID: commentID, body: body))
+    }
+
+    func addReviewComment(
+        _ comment: DraftComment,
+        commitOid: String,
+        repo: RepoRef,
+        number: Int
+    ) async throws {
+        reviewComments.append((comment: comment, commitOid: commitOid))
     }
 
     func resolveThread(id: String) async throws {

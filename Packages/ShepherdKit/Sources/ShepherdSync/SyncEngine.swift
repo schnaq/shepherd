@@ -1122,6 +1122,18 @@ public actor SyncEngine {
             )
             return .sent
 
+        case .addReviewComment(let comment, let commitOid):
+            // No head-moved check, unlike a review: the comment is pinned to the commit the
+            // reviewer read, and GitHub anchors it there — outdated if the lines have moved since,
+            // which is what it would be had it been posted a minute earlier.
+            try await github.addReviewComment(
+                comment,
+                commitOid: commitOid,
+                repo: item.repo,
+                number: item.number
+            )
+            return .sent
+
         case .resolveThread(let threadID):
             try await github.resolveThread(id: threadID)
             return .sent
@@ -1635,6 +1647,7 @@ public actor SyncEngine {
                 inlineCommentCount: draft.comments.count
             )
         case .replyToComment: return .replyPosted
+        case .addReviewComment: return .reviewCommentPosted
         case .resolveThread: return .threadResolved
         case .unresolveThread: return .threadUnresolved
         case .merge(let method, _, _): return .merged(method: method)

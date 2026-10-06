@@ -975,6 +975,43 @@ public actor GitHubClient {
         )
     }
 
+    /// Posts one inline comment on its own, outside a review: GitHub's *Comment* button beside
+    /// *Start a review*.
+    ///
+    /// Anchored exactly as a review's inline comments are (``submitReview(_:repo:number:)``), so a
+    /// comment means the same lines whichever of the two buttons sent it.
+    /// - Parameters:
+    ///   - comment: Where the comment is anchored, and what it says.
+    ///   - commitOid: The head commit the reviewer was reading.
+    ///   - repo: The repository.
+    ///   - number: The pull request number.
+    public func addReviewComment(
+        _ comment: DraftComment,
+        commitOid: String,
+        repo: RepoRef,
+        number: Int
+    ) async throws {
+        let encodedBody = try RESTJSON.encode(
+            ReviewCommentBody(
+                body: comment.body,
+                commitId: commitOid,
+                path: comment.path,
+                line: comment.line,
+                side: comment.side.rawValue,
+                startLine: comment.startLine,
+                startSide: comment.startLine == nil ? nil : comment.side.rawValue
+            )
+        )
+        _ = try await performREST(
+            method: "POST",
+            path: "/repos/\(repo.owner)/\(repo.name)/pulls/\(number)/comments",
+            queryItems: [],
+            body: encodedBody,
+            useCache: false,
+            resource: "\(repo.fullName)#\(number) comment"
+        )
+    }
+
     /// Resolves a review thread. GraphQL-only.
     /// - Parameter id: The thread's GraphQL node id.
     public func resolveThread(id: String) async throws {
@@ -1815,6 +1852,17 @@ struct ReviewSubmissionBody: Encodable {
     /// Omitted entirely for a draft, which is how GitHub is asked for a `PENDING` review.
     var event: String?
     var comments: [Comment]?
+}
+
+/// The body of `POST /repos/{owner}/{repo}/pulls/{number}/comments`.
+struct ReviewCommentBody: Encodable {
+    var body: String
+    var commitId: String
+    var path: String
+    var line: Int
+    var side: String
+    var startLine: Int?
+    var startSide: String?
 }
 
 /// The body of the reply endpoint.

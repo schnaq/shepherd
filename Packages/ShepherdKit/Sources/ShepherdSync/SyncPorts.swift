@@ -28,6 +28,13 @@ public protocol PullRequestFetching: Sendable {
     ) async throws -> SubmittedReview
     /// Replies to a review comment.
     func replyToComment(repo: RepoRef, number: Int, commentID: Int, body: String) async throws
+    /// Posts one inline comment on its own, outside a review.
+    func addReviewComment(
+        _ comment: DraftComment,
+        commitOid: String,
+        repo: RepoRef,
+        number: Int
+    ) async throws
     /// Resolves a review thread.
     func resolveThread(id: String) async throws
     /// Unresolves a review thread.

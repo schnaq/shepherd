@@ -80,7 +80,7 @@ struct MergeSeriesOutboxSnapshot: Sendable, Equatable {
     private static func isSeriesWrite(_ item: OutboxItem) -> Bool {
         switch item.action {
         case .merge, .updateBranch: return true
-        case .submitReview, .replyToComment, .resolveThread, .unresolveThread, .markReadyForReview,
+        case .submitReview, .replyToComment, .addReviewComment, .resolveThread, .unresolveThread, .markReadyForReview,
              .addPullRequestComment, .closePullRequest, .addIssueComment, .addIssueLabel,
              .addIssueAssignee, .closeIssue, .reopenIssue:
             return false
