@@ -233,22 +233,6 @@ final class PullRequestOutcomeStoreTests: XCTestCase {
 
     // MARK: - Deleting
 
-    func testDeletingOneRepositoryLeavesTheOthers() async throws {
-        let database = try makeDatabase()
-        try await database.savePullRequestOutcomes([
-            OutcomeFixtures.closed(prID: "PR_1", number: 1, merged: true),
-            OutcomeFixtures.closed(
-                prID: "PR_2",
-                number: 2,
-                repo: PersistenceFixtures.otherRepo,
-                merged: true
-            ),
-        ])
-        try await database.deletePullRequestOutcomes(repo: PersistenceFixtures.repo)
-        let remaining = try await database.pullRequestOutcomes(since: window).map(\.prID)
-        XCTAssertEqual(remaining, ["PR_2"])
-    }
-
     func testClearHistoryEmptiesTheTable() async throws {
         let database = try makeDatabase()
         try await database.savePullRequestOutcomes([

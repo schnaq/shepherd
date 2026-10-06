@@ -35,21 +35,26 @@ struct AppearanceSettingsTab: View {
                     }
                     .foregroundStyle(.secondary)
                 }
-                Toggle(isOn: menuBarBinding) {
+                // Nothing to apply: `MenuBarExtra(isInserted:)` in `ShepherdApp` reads this setting,
+                // so the item appears and disappears with the toggle.
+                Toggle(isOn: Bindable(environment.settings).showsMenuBarExtra) {
                     Text(String(localized: "Show in menu bar"))
                     Text(String(localized: "How many reviews are waiting, and a short list of them."))
                 }
             }
 
             Section(String(localized: "Review screen")) {
-                Toggle(isOn: conversationFirstBinding) {
+                // Nothing to apply: the setting is read once, by the next review to open. A review
+                // already on screen keeps the tab it opened on, which is the same once-only rule the
+                // reviewer's own click on the picker obeys (ADR 0026's amendment).
+                Toggle(isOn: Bindable(environment.settings).opensAgentPullRequestsOnConversation) {
                     Text(String(localized: "Open agent pull requests on Conversation"))
                     Text(String(localized: "The diff is one keystroke away (t)."))
                 }
             }
 
             Section(String(localized: "Diff viewer")) {
-                Picker(selection: diffRendererBinding) {
+                Picker(selection: Bindable(environment.settings).diffRenderer) {
                     ForEach(DiffRenderer.allCases) { renderer in
                         Text(renderer.title).tag(renderer)
                     }
@@ -59,7 +64,7 @@ struct AppearanceSettingsTab: View {
                 }
                 LabeledContent(String(localized: "Font size")) {
                     HStack(spacing: 10) {
-                        Slider(value: fontBinding, in: 10...18, step: 1)
+                        Slider(value: Bindable(environment.settings).diffFontSize, in: 10...18, step: 1)
                             .labelsHidden()
                             .frame(maxWidth: 220)
                         Text("\(Int(environment.settings.diffFontSize)) pt")
@@ -68,8 +73,11 @@ struct AppearanceSettingsTab: View {
                             .frame(width: 44, alignment: .trailing)
                     }
                 }
-                Toggle(String(localized: "Wrap long lines"), isOn: wrapBinding)
-                Toggle(String(localized: "Show diffs inline instead of side by side"), isOn: inlineBinding)
+                Toggle(String(localized: "Wrap long lines"), isOn: Bindable(environment.settings).diffWrapsLines)
+                Toggle(
+                    String(localized: "Show diffs inline instead of side by side"),
+                    isOn: Bindable(environment.settings).diffUsesInlineMode
+                )
             }
         }
     }
@@ -83,52 +91,4 @@ struct AppearanceSettingsTab: View {
             }
         )
     }
-
-    private var menuBarBinding: Binding<Bool> {
-        Binding(
-            get: { environment.settings.showsMenuBarExtra },
-            // Nothing to apply: `MenuBarExtra(isInserted:)` in `ShepherdApp` reads this setting,
-            // so the item appears and disappears with the toggle.
-            set: { environment.settings.showsMenuBarExtra = $0 }
-        )
-    }
-
-    private var conversationFirstBinding: Binding<Bool> {
-        Binding(
-            get: { environment.settings.opensAgentPullRequestsOnConversation },
-            // Nothing to apply: the setting is read once, by the next review to open. A review
-            // already on screen keeps the tab it opened on, which is the same once-only rule the
-            // reviewer's own click on the picker obeys (ADR 0026's amendment).
-            set: { environment.settings.opensAgentPullRequestsOnConversation = $0 }
-        )
-    }
-
-    private var fontBinding: Binding<Double> {
-        Binding(
-            get: { environment.settings.diffFontSize },
-            set: { environment.settings.diffFontSize = $0 }
-        )
-    }
-
-    private var wrapBinding: Binding<Bool> {
-        Binding(
-            get: { environment.settings.diffWrapsLines },
-            set: { environment.settings.diffWrapsLines = $0 }
-        )
-    }
-
-    private var inlineBinding: Binding<Bool> {
-        Binding(
-            get: { environment.settings.diffUsesInlineMode },
-            set: { environment.settings.diffUsesInlineMode = $0 }
-        )
-    }
-
-    private var diffRendererBinding: Binding<DiffRenderer> {
-        Binding(
-            get: { environment.settings.diffRenderer },
-            set: { environment.settings.diffRenderer = $0 }
-        )
-    }
 }
-

@@ -391,6 +391,10 @@ actor MarkRecordingStore: SyncStoring {
         try await wrapped.fetchInbox(filter: filter)
     }
 
+    func pullRequestIDs() async throws -> Set<String> {
+        try await wrapped.pullRequestIDs()
+    }
+
     func savePullRequestDetail(_ detail: PullRequestDetail) async throws {
         try await wrapped.savePullRequestDetail(detail)
     }

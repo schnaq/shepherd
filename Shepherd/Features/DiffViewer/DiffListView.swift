@@ -232,6 +232,12 @@ struct DiffListView: View {
             }
         }
         .contentShape(Rectangle())
+        // The accent bar says "selected" for both kinds of row, so it is drawn here once.
+        .overlay(alignment: .leading) {
+            if isSelected {
+                Rectangle().fill(Theme.accent).frame(width: 2)
+            }
+        }
         // One tap picks the row, two open the composer on it: the inbox list's split, where a
         // click selects and a double-click opens what was selected. It is the mouse's way to the
         // composer, which the list otherwise had none of — Monaco has the gutter "+", and a
@@ -265,7 +271,13 @@ struct DiffListView: View {
                 )
             )
         )
-        .accessibilityAddTraits(traits(isSelected: isSelected))
+        // "Selected" is said as well as shown, because the tint and the accent bar are not facts
+        // a screen reader can see. A hunk header is also a heading, so the rotor can jump
+        // between hunks.
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityAddTraits(
+            { () -> AccessibilityTraits in if case .hunk = value { return .isHeader } else { return [] } }()
+        )
     }
 
     /// What hangs on the row's own line: published threads and the reviewer's own drafts.
@@ -288,14 +300,6 @@ struct DiffListView: View {
         return (threads[key] ?? 0, drafts[key] ?? 0)
     }
 
-    /// Says "selected" as well as showing it, because the tint and the accent bar are not facts
-    /// a screen reader can see.
-    /// - Parameter isSelected: Whether the cursor is on this row.
-    /// - Returns: The traits to add.
-    private func traits(isSelected: Bool) -> AccessibilityTraits {
-        isSelected ? .isSelected : []
-    }
-
     private func hunkRow(originalStart: Int, modifiedStart: Int, isSelected: Bool) -> some View {
         // The conventional `@@` form on screen, where it is a landmark a reader skims past; the
         // spoken label says the same thing in prose, because "at at minus twelve plus twelve" is
@@ -307,11 +311,6 @@ struct DiffListView: View {
             .padding(.vertical, 5)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(isSelected ? Theme.selection : Theme.raised)
-            .overlay(alignment: .leading) {
-                if isSelected {
-                    Rectangle().fill(Theme.accent).frame(width: 2)
-                }
-            }
     }
 
     private func lineRow(
@@ -343,11 +342,6 @@ struct DiffListView: View {
         .padding(.vertical, 1)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(rowBackground(for: row.kind, isSelected: isSelected))
-        .overlay(alignment: .leading) {
-            if isSelected {
-                Rectangle().fill(Theme.accent).frame(width: 2)
-            }
-        }
     }
 
     private func number(_ value: Int?) -> some View {

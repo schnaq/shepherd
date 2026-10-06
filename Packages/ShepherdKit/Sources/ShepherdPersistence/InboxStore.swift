@@ -136,6 +136,14 @@ extension DatabaseManager {
         }
     }
 
+    /// Reads the ids of every cached pull request — ``fetchInbox(filter:)`` without decoding the
+    /// rows, for a caller that only asks which ones are still there.
+    public func pullRequestIDs() async throws -> Set<String> {
+        try await writer.read { db in
+            Set(try String.fetchAll(db, sql: "SELECT id FROM pull_requests"))
+        }
+    }
+
     /// Reads one inbox row.
     /// - Parameter id: The pull request's GraphQL node id.
     public func fetchPullRequestSummary(id: String) async throws -> PullRequestSummary? {
@@ -348,19 +356,21 @@ extension DatabaseManager {
             sql: "SELECT * FROM review_threads WHERE prID = ? ORDER BY sortIndex ASC",
             arguments: [id]
         )
-        var threads: [ReviewThread] = []
-        threads.reserveCapacity(threadRecords.count)
-        for threadRecord in threadRecords {
-            let commentRecords = try ReviewCommentRecord.fetchAll(
-                db,
-                sql: """
-                    SELECT * FROM review_comments
-                    WHERE threadID = ? ORDER BY sortIndex ASC
-                    """,
-                arguments: [threadRecord.id]
-            )
-            threads.append(
-                threadRecord.reviewThread(comments: commentRecords.map(\.reviewComment))
+        // Every thread's comments in one read rather than one per thread; grouping keeps each
+        // thread's comments in `sortIndex` order.
+        let commentRecords = try ReviewCommentRecord.fetchAll(
+            db,
+            sql: """
+                SELECT c.* FROM review_comments c
+                JOIN review_threads t ON t.id = c.threadID
+                WHERE t.prID = ? ORDER BY c.threadID, c.sortIndex ASC
+                """,
+            arguments: [id]
+        )
+        let commentsByThread = Dictionary(grouping: commentRecords, by: \.threadID)
+        let threads: [ReviewThread] = threadRecords.map { threadRecord in
+            threadRecord.reviewThread(
+                comments: (commentsByThread[threadRecord.id] ?? []).map(\.reviewComment)
             )
         }
 

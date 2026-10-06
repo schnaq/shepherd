@@ -147,18 +147,6 @@ final class ReviewSnapshotStoreTests: XCTestCase {
         XCTAssertEqual(rounds, 0)
     }
 
-    func testDeletingSnapshotsLeavesThePullRequestAlone() async throws {
-        let database = try makeDatabase()
-        try await database.savePullRequestDetail(PersistenceFixtures.detail())
-        try await database.saveReviewSnapshot(snapshot())
-
-        try await database.deleteReviewSnapshots(prID: "PR_1")
-        let rounds = try await database.reviewSnapshotCount(prID: "PR_1")
-        XCTAssertEqual(rounds, 0)
-        let row = try await database.fetchPullRequestSummary(id: "PR_1")
-        XCTAssertNotNil(row)
-    }
-
     func testAnUnreadableBlobDegradesToASnapshotWithNoFiles() async throws {
         let database = try makeDatabase()
         try await database.savePullRequestDetail(PersistenceFixtures.detail())

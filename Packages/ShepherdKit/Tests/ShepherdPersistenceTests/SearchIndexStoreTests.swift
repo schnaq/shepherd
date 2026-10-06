@@ -119,7 +119,7 @@ final class SearchIndexStoreTests: XCTestCase {
         XCTAssertEqual(stored.map(\.prID), ["PR_1"])
     }
 
-    func testEntriesCanBeDeletedAndCleared() async throws {
+    func testEntriesCanBeCleared() async throws {
         let database = try DatabaseManager.inMemory()
         try await database.savePullRequestSummaries([
             PersistenceFixtures.summary(id: "PR_1", number: 1),
@@ -127,12 +127,8 @@ final class SearchIndexStoreTests: XCTestCase {
         ])
         try await database.saveSearchIndexEntries([entry(prID: "PR_1"), entry(prID: "PR_2")])
 
-        try await database.deleteSearchIndexEntries(prIDs: ["PR_1"])
-        var stored = try await database.searchIndexEntries()
-        XCTAssertEqual(stored.map(\.prID), ["PR_2"])
-
         try await database.clearSearchIndex()
-        stored = try await database.searchIndexEntries()
+        let stored = try await database.searchIndexEntries()
         XCTAssertTrue(stored.isEmpty)
     }
 

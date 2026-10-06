@@ -521,11 +521,16 @@ public actor SyncEngine {
         // search returned: a pull request the user still has a draft or a queued mutation for
         // is deliberately kept, and re-announcing it as merged on every sweep would be a
         // notification every two minutes for as long as the draft lives.
-        let remaining = Set(try await store.fetchInbox(filter: InboxFilter()).map(\.id))
+        // Only a row the search stopped returning can have left, so the common sweep where
+        // nothing did skips the read altogether.
+        let candidates = previous.filter { !currentIDs.contains($0.id) }
         var departed: [PullRequestSummary] = []
-        for old in previous where !currentIDs.contains(old.id) && !remaining.contains(old.id) {
-            departed.append(old)
-            emit(.prMerged(old))
+        if !candidates.isEmpty {
+            let remaining = try await store.pullRequestIDs()
+            for old in candidates where !remaining.contains(old.id) {
+                departed.append(old)
+                emit(.prMerged(old))
+            }
         }
 
         // The same list, for the track record: a pull request that has left the inbox is the one
@@ -740,9 +745,8 @@ public actor SyncEngine {
             // merely out of the user's facets. One read each decides which, and the rows that
             // come back are written *beside* the search's own — the write is also the prune, so
             // a row that is not in this array is a row that goes.
-            let retained = await captureIssueOutcomes(
-                for: previous.filter { !currentIDs.contains($0.id) }
-            )
+            let candidates = previous.filter { !currentIDs.contains($0.id) }
+            let retained = await captureIssueOutcomes(for: candidates)
 
             // Every write is preceded by a cancellation check, as in the pull-request sweep: a
             // sweep stopped because the user signed out must not repopulate tables the erase has
@@ -750,12 +754,12 @@ public actor SyncEngine {
             try Task.checkCancellation()
             try await issues.store.saveIssueSummaries(current + retained, pruneMissing: true)
 
-            let remaining = Set(
-                try await issues.store.fetchIssues(filter: everything).map(\.id)
-            )
-            let departed = previous
-                .map(\.id)
-                .filter { !currentIDs.contains($0) && !remaining.contains($0) }
+            // As in the pull-request sweep: nothing the search still returns can have departed,
+            // so a sweep where nothing dropped out skips the re-read.
+            let remaining: Set<String> = candidates.isEmpty
+                ? []
+                : Set(try await issues.store.fetchIssues(filter: everything).map(\.id))
+            let departed = candidates.map(\.id).filter { !remaining.contains($0) }
 
             let delta = IssueSweepDelta(
                 newIssueIDs: firstSightings,

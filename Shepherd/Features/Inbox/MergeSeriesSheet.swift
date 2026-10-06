@@ -185,12 +185,12 @@ struct MergeSeriesSheet: View {
         HStack {
             Spacer()
             Button(String(localized: "Cancel")) { dismiss() }
+                .buttonStyle(SecondaryButtonStyle())
                 .keyboardShortcut(.cancelAction)
             // Green, as Merge is on every surface (ADR 0040's 2026-09-23 amendment): Start is
             // the merge decision for the whole series.
             Button(String(localized: "Start")) { start() }
-                .buttonStyle(.borderedProminent)
-                .tint(Theme.success)
+                .buttonStyle(SuccessButtonStyle())
                 .keyboardShortcut(.defaultAction)
                 .disabled(!plan.isActionable)
         }

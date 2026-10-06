@@ -154,7 +154,7 @@ final class AutoMergeCoordinator {
 
     /// Forgets the ledger. Called from "Sign out & erase local data".
     func reset() {
-        store.reset()
+        store.clear()
         lastDecisions = [:]
     }
 

@@ -381,19 +381,8 @@ extension DatabaseManager {
     public func observeIssues(
         filter: IssueFilter = IssueFilter()
     ) -> AsyncStream<[IssueRowSummary]> {
-        let writer = self.writer
-        let observation = ValueObservation.tracking { db -> [IssueRowSummary] in
-            try DatabaseManager.loadIssues(db, filter: filter)
-        }
-        return AsyncStream { continuation in
-            let queue = DispatchQueue(label: "com.schnaq.shepherd.observation.issues")
-            let cancellable = observation.start(
-                in: writer,
-                scheduling: .async(onQueue: queue),
-                onError: { _ in continuation.finish() },
-                onChange: { value in continuation.yield(value) }
-            )
-            continuation.onTermination = { _ in cancellable.cancel() }
+        observeStream(label: "com.schnaq.shepherd.observation.issues") {
+            try DatabaseManager.loadIssues($0, filter: filter)
         }
     }
 }

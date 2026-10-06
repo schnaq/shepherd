@@ -79,8 +79,8 @@ public enum DescriptionImages {
         }
         for match in htmlImage?.matches(in: text, range: range) ?? [] {
             guard let tag = substring(text, match.range),
-                  let link = attribute("src", in: tag),
-                  let image = attachment(link: link, altText: attribute("alt", in: tag) ?? "")
+                  let link = attribute(srcAttribute, in: tag),
+                  let image = attachment(link: link, altText: attribute(altAttribute, in: tag) ?? "")
             else { continue }
             found.append((match.range.location, image))
         }
@@ -111,7 +111,7 @@ public enum DescriptionImages {
         let range = NSRange(html.startIndex..., in: html)
         let sources: [URL] = (htmlImage?.matches(in: html, range: range) ?? []).compactMap { match in
             guard let tag = substring(html, match.range),
-                  let raw = attribute("src", in: tag),
+                  let raw = attribute(srcAttribute, in: tag),
                   let url = URL(string: unescapedHTML(raw)),
                   isDownloadable(url)
             else { return nil }
@@ -202,10 +202,19 @@ public enum DescriptionImages {
         options: [.caseInsensitive]
     )
 
-    /// The value of one attribute in a tag, quoted either way.
-    private static func attribute(_ name: String, in tag: String) -> String? {
+    /// The `src` and `alt` attributes, compiled once like the two patterns above.
+    private static let srcAttribute = attributeRegex("src")
+    private static let altAttribute = attributeRegex("alt")
+
+    /// One attribute's value in a tag, quoted either way.
+    private static func attributeRegex(_ name: String) -> NSRegularExpression? {
         let pattern = #"\b"# + name + #"\s*=\s*(?:"([^"]*)"|'([^']*)')"#
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+        return try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+    }
+
+    /// The value of one attribute in a tag, quoted either way.
+    private static func attribute(_ regex: NSRegularExpression?, in tag: String) -> String? {
+        guard let regex,
               let match = regex.firstMatch(in: tag, range: NSRange(tag.startIndex..., in: tag))
         else { return nil }
         return substring(tag, match.range(at: 1)) ?? substring(tag, match.range(at: 2))

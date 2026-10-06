@@ -102,8 +102,6 @@ struct RepoRecord: Codable, FetchableRecord, PersistableRecord {
         self.owner = repo.owner
         self.name = repo.name
     }
-
-    var repoRef: RepoRef { RepoRef(owner: owner, name: name) }
 }
 
 /// A row of `pull_requests`.

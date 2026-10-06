@@ -10,7 +10,7 @@ import ShepherdCore
 /// - It must survive a relaunch, because forgetting it means queueing a merge Shepherd already
 ///   queued. The database would survive too, but it is *erased* on sign-out and on "erase local
 ///   data", which is exactly when the account's pull requests stop mattering — so the ledger is
-///   cleared there by hand instead (see ``reset()``).
+///   cleared there by hand instead (see ``clear()``).
 /// - It carries no secret: node ids, commit SHAs, a slug, a title and a date. Nothing here is
 ///   not already in the inbox (ADR 0006's rule is about *secrets*, and those stay in the
 ///   Keychain).
@@ -75,7 +75,7 @@ final class AutoMergeStore {
         persist()
     }
 
-    /// Forgets the log, because the user pressed *Clear*.
+    /// Forgets the log, because the user pressed *Clear* or chose "Sign out & erase local data".
     ///
     /// Clearing the log clears the deduplication with it — they are one list — and that is
     /// deliberate rather than a leak: the only pull requests this can affect are ones that are
@@ -86,11 +86,6 @@ final class AutoMergeStore {
     func clear() {
         ledger = AutoMergeLedger()
         defaults.removeObject(forKey: key)
-    }
-
-    /// Forgets everything. Called from "Sign out & erase local data".
-    func reset() {
-        clear()
     }
 
     private func persist() {

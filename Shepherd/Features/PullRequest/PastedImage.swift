@@ -58,7 +58,9 @@ enum PastedImage {
            let type = UTType(filenameExtension: url.pathExtension), type.conforms(to: .image) {
             let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
             let mime = type.preferredMIMEType ?? "application/octet-stream"
-            if size > maxBytes { return Payload(data: Data(count: size), name: url.lastPathComponent, contentType: mime) }
+            // The buffer is only a size marker that trips the upload's `<= maxBytes` guard; sizing
+            // it to the file would zero-fill gigabytes on the main actor for a refused paste.
+            if size > maxBytes { return Payload(data: Data(count: maxBytes + 1), name: url.lastPathComponent, contentType: mime) }
             guard let data = try? Data(contentsOf: url) else { return nil }
             return Payload(data: data, name: url.lastPathComponent, contentType: mime)
         }

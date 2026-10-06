@@ -103,11 +103,8 @@ final class SignedInSession {
     var issueRows: [IssueRowSummary] = []
 
     private var eventTask: Task<Void, Never>?
-    private var outboxTask: Task<Void, Never>?
-    private var conflictTask: Task<Void, Never>?
-    private var failedTask: Task<Void, Never>?
-    private var inboxTask: Task<Void, Never>?
-    private var issuesTask: Task<Void, Never>?
+    /// Every other observation `start` begins, so `shutdown` cannot forget one.
+    private var observationTasks: [Task<Void, Never>] = []
 
     private init(
         account: Account,
@@ -253,35 +250,35 @@ final class SignedInSession {
         }
 
         let stream = database.observePendingOutboxCount()
-        outboxTask = Task { [weak self] in
+        observationTasks.append(Task { [weak self] in
             for await count in stream {
                 self?.pendingOutboxCount = count
             }
-        }
+        })
 
         let conflicts = database.observeConflictedOutboxCount()
-        conflictTask = Task { [weak self] in
+        observationTasks.append(Task { [weak self] in
             for await count in conflicts {
                 self?.conflictedOutboxCount = count
             }
-        }
+        })
 
         let failures = database.observeFailedOutboxCount()
-        failedTask = Task { [weak self] in
+        observationTasks.append(Task { [weak self] in
             for await count in failures {
                 self?.failedOutboxCount = count
             }
-        }
+        })
 
         let inbox = database.observeInbox()
-        inboxTask = Task { [weak self] in
+        observationTasks.append(Task { [weak self] in
             for await rows in inbox {
                 guard let self else { return }
                 self.inboxRows = rows
                 self.hasLoadedInbox = true
                 onInboxRows(rows)
             }
-        }
+        })
 
         // `includeClosed: true`, because "an agent pull request closed one of your issues" is a
         // statement about a closed row. The sweep searches `is:open`, so such a row exists here
@@ -293,13 +290,13 @@ final class SignedInSession {
         // it is a different question — everything on disk, for the digest and for ⌘K, with no
         // facet in front of it.
         let issues = database.observeIssues(filter: IssueFilter(includeClosed: true))
-        issuesTask = Task { [weak self] in
+        observationTasks.append(Task { [weak self] in
             for await rows in issues {
                 guard let self else { return }
                 self.issueRows = rows
                 onIssueRows(rows)
             }
-        }
+        })
 
         guard runsSyncLoop else { return }
         Task { [syncEngine] in
@@ -376,16 +373,8 @@ final class SignedInSession {
     func shutdown() async {
         eventTask?.cancel()
         eventTask = nil
-        outboxTask?.cancel()
-        outboxTask = nil
-        conflictTask?.cancel()
-        conflictTask = nil
-        failedTask?.cancel()
-        failedTask = nil
-        inboxTask?.cancel()
-        inboxTask = nil
-        issuesTask?.cancel()
-        issuesTask = nil
+        observationTasks.forEach { $0.cancel() }
+        observationTasks = []
         await syncEngine.shutdown()
     }
 

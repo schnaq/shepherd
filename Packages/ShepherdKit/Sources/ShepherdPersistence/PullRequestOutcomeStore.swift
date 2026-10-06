@@ -69,21 +69,16 @@ extension DatabaseManager {
         return try await writer.write { db in
             var updated = 0
             for (targetID, revertingID) in pairs {
-                let exists = try Bool.fetchOne(
-                    db,
-                    sql: """
-                        SELECT EXISTS(
-                            SELECT 1 FROM pull_request_outcomes WHERE prID = ? AND merged = 1
-                        )
-                        """,
-                    arguments: [targetID]
-                ) ?? false
-                guard exists else { continue }
+                // The `merged = 1` guard is what makes a missing or unmerged target a silent
+                // no-op: the update then touches no row and adds nothing to the count.
                 try db.execute(
-                    sql: "UPDATE pull_request_outcomes SET revertedByPRID = ? WHERE prID = ?",
+                    sql: """
+                        UPDATE pull_request_outcomes SET revertedByPRID = ?
+                        WHERE prID = ? AND merged = 1
+                        """,
                     arguments: [revertingID, targetID]
                 )
-                updated += 1
+                updated += db.changesCount
             }
             return updated
         }
@@ -254,21 +249,6 @@ extension DatabaseManager {
     }
 
     // MARK: - Deleting
-
-    /// Deletes one repository's outcomes.
-    ///
-    /// There is no cascade to do this — the whole point of the table is that it outlives the pull
-    /// requests it describes — so forgetting a repository's history is an explicit delete.
-    /// - Parameter repo: The repository whose history goes.
-    /// - Throws: A `DatabaseError` when the write fails.
-    public func deletePullRequestOutcomes(repo: RepoRef) async throws {
-        try await writer.write { db in
-            try db.execute(
-                sql: "DELETE FROM pull_request_outcomes WHERE repoFullName = ? COLLATE NOCASE",
-                arguments: [repo.fullName]
-            )
-        }
-    }
 
     /// Deletes every stored outcome.
     ///

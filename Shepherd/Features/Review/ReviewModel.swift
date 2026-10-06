@@ -425,7 +425,10 @@ final class ReviewModel {
                     saveFailure = error.userFacingDescription
                 }
                 guard !Task.isCancelled else { return }
-                self.apply(fresh)
+                // An equal detail was already applied — by the cached read above, or by
+                // ``received(_:)`` reacting to the save — so applying it again would only re-run
+                // the prioritiser and reload the round for nothing.
+                if fresh != self.detail { self.apply(fresh) }
                 self.onDidLoadDetail?(self.prID)
                 // After the apply, which clears the banner: this notice is about the apply that
                 // just happened, so it has to outlive it.
@@ -1065,13 +1068,38 @@ final class ReviewModel {
     /// The reconstruction of the selected file's patch, or `nil` when there is no patch.
     var selectedReconstruction: PatchReconstructor.Reconstruction? {
         guard let file = selectedFile else { return nil }
-        return PatchReconstructor.reconstruct(file)
+        return reconstruction(of: file, memo: \.selectedReconstructionMemo)
     }
 
     /// The reconstruction of the *pull request's* patch at the selection.
     var currentReconstruction: PatchReconstructor.Reconstruction? {
         guard let file = currentFile else { return nil }
-        return PatchReconstructor.reconstruct(file)
+        return reconstruction(of: file, memo: \.currentReconstructionMemo)
+    }
+
+    /// One parsed patch, remembered by its text.
+    typealias ReconstructionMemo = (patch: String, value: PatchReconstructor.Reconstruction)
+
+    /// The last parse behind ``selectedReconstruction`` and ``currentReconstruction``.
+    ///
+    /// Both are read on every body pass and on every `j`/`k` in the native list, and each read
+    /// used to re-parse the whole patch. Two slots rather than one because in the since-review
+    /// round the selected file carries the interdiff's patch and the current file the pull
+    /// request's, so a shared slot would evict itself on every alternating read. Keyed on the
+    /// patch text alone — the reconstruction is a pure function of it — so it cannot go stale.
+    /// Ignored by observation: filling a cache from a getter must not redraw anything.
+    @ObservationIgnored private var selectedReconstructionMemo: ReconstructionMemo?
+    @ObservationIgnored private var currentReconstructionMemo: ReconstructionMemo?
+
+    private func reconstruction(
+        of file: ChangedFile,
+        memo: ReferenceWritableKeyPath<ReviewModel, ReconstructionMemo?>
+    ) -> PatchReconstructor.Reconstruction? {
+        guard let patch = file.patch, !patch.isEmpty else { return nil }
+        if let hit = self[keyPath: memo], hit.patch == patch { return hit.value }
+        let value = PatchReconstructor.reconstruct(patch: patch)
+        self[keyPath: memo] = (patch, value)
+        return value
     }
 
     /// The reconstructed left/right documents for the selected file.
@@ -1234,38 +1262,12 @@ final class ReviewModel {
         detail != nil && intelligence.canDraft
     }
 
-    /// Drafts a review summary suggestion.
-    ///
-    /// Returns the outcome instead of writing anywhere: the field belongs to the composer, and
-    /// what happens to a draft that arrives over text the reviewer already wrote is
-    /// ``AIDraftFieldState``'s decision, not this model's. Nothing about this call submits
-    /// anything — the reviewer still presses Submit themselves.
-    /// - Returns: The drafted text, or why there is none.
-    func draftReviewSummary() async -> IntelligenceOutcome<String> {
-        guard let detail else {
-            return .unavailable(String(localized: "The pull request is still loading."))
-        }
-        return await intelligence.draftReviewSummary(
-            for: detail,
-            pendingComments: draft?.comments ?? []
-        )
-    }
-
-    /// Drafts an inline comment suggestion for one anchor.
-    /// - Parameter request: The composer's anchor.
-    /// - Returns: The drafted text, or why there is none.
-    func draftInlineComment(for request: ComposerRequest) async -> IntelligenceOutcome<String> {
-        guard let detail else {
-            return .unavailable(String(localized: "The pull request is still loading."))
-        }
-        return await intelligence.draftInlineComment(for: detail, anchor: request.anchor)
-    }
-
     /// Drafts a review summary suggestion, streamed (plan §0.2).
     ///
     /// What the composers use: the ladder, the budgets and the failure shapes are the same as
-    /// ``draftReviewSummary()``, and a tier that cannot stream answers with a stream of one
-    /// element, so preferring this path costs nothing and never loses a tier.
+    /// ``IntelligenceRouter/draftReviewSummary(for:pendingComments:)``, and a tier that cannot
+    /// stream answers with a stream of one element, so preferring this path costs nothing and
+    /// never loses a tier.
     /// - Returns: A labelled stream, or why there is none.
     func streamReviewSummaryDraft() async -> IntelligenceStreamOutcome {
         guard let detail else {
@@ -1301,12 +1303,6 @@ final class ReviewModel {
             return .unavailable(String(localized: "The pull request is still loading."))
         }
         return await intelligence.streamExplanation(for: detail, anchor: request.anchor)
-    }
-
-    /// The AI focus hint for a file, if the provider produced one.
-    /// - Parameter path: The file path.
-    func focusHint(for path: String) -> String? {
-        focusOutcome.output?.value.first { $0.file == path }?.reason
     }
 
     /// The riskiest files with the reasons the prioritiser gave, as prompt-ready lines.

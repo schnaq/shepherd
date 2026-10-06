@@ -172,22 +172,4 @@ extension DatabaseManager {
             return result
         }
     }
-
-    // MARK: - Deleting
-
-    /// Deletes every snapshot of a pull request.
-    ///
-    /// Not the ordinary pruning path — that is the `ON DELETE CASCADE` in the v5 migration,
-    /// which happens inside the sweep's own transaction. This is for the case the cascade cannot
-    /// cover: a reviewer who wants the baseline forgotten while the pull request stays open.
-    /// - Parameter prID: The pull request whose snapshots go.
-    /// - Throws: A `DatabaseError` when the write fails.
-    public func deleteReviewSnapshots(prID: String) async throws {
-        try await writer.write { db in
-            try db.execute(
-                sql: "DELETE FROM review_snapshots WHERE prID = ?",
-                arguments: [prID]
-            )
-        }
-    }
 }

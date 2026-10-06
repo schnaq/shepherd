@@ -9,8 +9,6 @@
 
 import type { DraftComment, Side, Thread } from '../bridge/protocol.js';
 
-export type ZoneKind = 'thread' | 'draft';
-
 export interface ThreadZone {
   readonly key: string;
   readonly kind: 'thread';
@@ -149,9 +147,4 @@ export class ZoneStore {
  */
 export function hostSide(zoneSide: Side, mode: 'sideBySide' | 'inline'): Side {
   return mode === 'inline' ? 'right' : zoneSide;
-}
-
-/** Zones belonging to one pane, for a given render mode. */
-export function zonesForSide(zones: readonly Zone[], side: Side, mode: 'sideBySide' | 'inline'): Zone[] {
-  return zones.filter((zone) => hostSide(zone.side, mode) === side);
 }

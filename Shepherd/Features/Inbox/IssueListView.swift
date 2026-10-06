@@ -21,6 +21,8 @@ struct IssueListView: View {
     @Environment(AppEnvironment.self) private var environment
     /// The issues model.
     let model: IssueInboxModel
+    /// Set by a click so the selection change it causes does not scroll the list.
+    @State private var isClickSelection = false
     /// Whether the keyboard belongs to this list, or to something drawn over it (⌘K's palette).
     ///
     /// ``InboxListView/isKeyboardOwner``'s twin, for its reason: the palette is an overlay rather
@@ -91,6 +93,7 @@ struct IssueListView: View {
 
     @ViewBuilder
     private var list: some View {
+        let rows = model.visibleRows
         if !model.hasLoaded {
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -104,26 +107,40 @@ struct IssueListView: View {
                     localized: "Issues assigned to you, opened by you or mentioning you land here on the next sweep. Press ⌘R to run one now."
                 )
             )
-        } else if model.visibleRows.isEmpty {
+        } else if rows.isEmpty {
             EmptyStateView(
                 systemImage: "line.3.horizontal.decrease.circle",
                 title: String(localized: "Nothing matches these facets"),
-                message: String(localized: "Clear them to see every issue again.")
+                message: String(localized: "Clear them to see every issue again."),
+                // Only when a facet is on: with none, the empty list is just "no open issues"
+                // and clearing would silently reveal the closed ones.
+                action: model.hasActiveFacet
+                    ? (title: String(localized: "Clear filter"), run: { model.clearFacets() }) : nil
             )
         } else {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(model.visibleRows) { row in
+                        ForEach(rows) { row in
                             IssueRowView(row: row, isSelected: model.selectedID == row.id)
                                 .id(row.id)
                                 .contentShape(Rectangle())
-                                .onTapGesture { model.select(row.id) }
+                                .onTapGesture {
+                                    // The row is under the pointer, so it is on screen:
+                                    // scrolling to it would only move the list away from
+                                    // where the reader is looking.
+                                    if model.selectedID != row.id { isClickSelection = true }
+                                    model.select(row.id)
+                                }
                                 .contextMenu { rowMenu(for: row) }
                         }
                     }
                 }
                 .onChange(of: model.selectedID) { _, id in
+                    if isClickSelection {
+                        isClickSelection = false
+                        return
+                    }
                     guard let id else { return }
                     withAnimation(.easeOut(duration: 0.12)) {
                         proxy.scrollTo(id, anchor: .center)

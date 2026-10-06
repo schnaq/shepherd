@@ -116,6 +116,8 @@ public protocol SyncStoring: Sendable {
     ) async throws
     /// Reads the cached inbox — the "before" side of delta detection.
     func fetchInbox(filter: InboxFilter) async throws -> [PullRequestSummary]
+    /// Reads the ids of every cached pull request — the "after the prune" side.
+    func pullRequestIDs() async throws -> Set<String>
     /// Stores a detail fetch.
     func savePullRequestDetail(_ detail: PullRequestDetail) async throws
     /// Reads a review draft.

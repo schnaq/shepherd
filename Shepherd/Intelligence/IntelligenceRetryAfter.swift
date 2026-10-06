@@ -41,7 +41,7 @@ enum IntelligenceRetryAfter {
     /// - Returns: The delay in seconds, clamped into
     ///   ``minimumDelay``…``maximumDelay``, or `nil` when the header said nothing usable.
     static func delay(headers: [String: String], now: Date = Date()) -> TimeInterval? {
-        guard let raw = IntelligenceRetryAfter.value(in: headers) else { return nil }
+        guard let raw = headers.headerValue(header) else { return nil }
         if let seconds = Int(raw) {
             guard TimeInterval(seconds) <= maximumDelay else { return nil }
             return max(minimumDelay, TimeInterval(seconds))
@@ -52,15 +52,6 @@ enum IntelligenceRetryAfter {
         // wait is the honest reading of "you may go now".
         guard interval <= maximumDelay else { return nil }
         return max(minimumDelay, interval)
-    }
-
-    /// The header's trimmed value, matched without regard to case.
-    private static func value(in headers: [String: String]) -> String? {
-        for (key, value) in headers where key.caseInsensitiveCompare(header) == .orderedSame {
-            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty { return trimmed }
-        }
-        return nil
     }
 
     /// Parses an IMF-fixdate, the one HTTP-date spelling a server is required to send.
@@ -74,5 +65,18 @@ enum IntelligenceRetryAfter {
         formatter.timeZone = TimeZone(identifier: "GMT")
         formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss z"
         return formatter.date(from: raw)
+    }
+}
+
+extension Dictionary where Key == String, Value == String {
+    /// One header's trimmed value, matched without regard to case, or `nil` when it is absent or
+    /// blank. Shared by ``IntelligenceRetryAfter`` and ``ServedBy``: field names are
+    /// case-insensitive per RFC 9110 and `URLSession` does not promise a spelling.
+    func headerValue(_ name: String) -> String? {
+        for (key, value) in self where key.caseInsensitiveCompare(name) == .orderedSame {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty { return trimmed }
+        }
+        return nil
     }
 }

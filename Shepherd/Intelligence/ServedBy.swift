@@ -55,23 +55,13 @@ struct ServedBy: Sendable, Hashable {
     /// - Parameter headers: The response headers, keyed by field name in any spelling.
     /// - Returns: The value, or `nil` when the response said nothing about who served it.
     static func parse(headers: [String: String]) -> ServedBy? {
-        guard let operatorName = ServedBy.value(of: operatorHeader, in: headers) else {
+        guard let operatorName = headers.headerValue(operatorHeader) else {
             return nil
         }
         return ServedBy(
             operatorName: operatorName,
-            deployment: ServedBy.value(of: deploymentHeader, in: headers)
+            deployment: headers.headerValue(deploymentHeader)
         )
-    }
-
-    /// One header's trimmed value, matched without regard to case, or `nil` when it is absent
-    /// or blank.
-    private static func value(of field: String, in headers: [String: String]) -> String? {
-        for (key, value) in headers where key.caseInsensitiveCompare(field) == .orderedSame {
-            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !trimmed.isEmpty { return trimmed }
-        }
-        return nil
     }
 }
 

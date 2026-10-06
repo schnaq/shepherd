@@ -1145,7 +1145,7 @@ final class IssueSearchIndexStoreTests: XCTestCase {
         XCTAssertEqual(statistics.lastIndexedAt, PersistenceFixtures.date(0))
     }
 
-    func testDeletingAndClearingRemoveRowsWithoutTouchingTheIssue() async throws {
+    func testClearingRemovesRowsWithoutTouchingTheIssue() async throws {
         let database = try makeDatabase()
         try await database.saveIssueSummaries([
             IssueFixtures.summary(id: "I_1", number: 1),
@@ -1156,12 +1156,8 @@ final class IssueSearchIndexStoreTests: XCTestCase {
             entry(issueID: "I_2"),
         ])
 
-        try await database.deleteIssueSearchIndexEntries(issueIDs: ["I_1"])
-        var entries = try await database.issueSearchIndexEntries()
-        XCTAssertEqual(entries.map(\.issueID), ["I_2"])
-
         try await database.clearIssueSearchIndex()
-        entries = try await database.issueSearchIndexEntries()
+        let entries = try await database.issueSearchIndexEntries()
         XCTAssertTrue(entries.isEmpty)
         let inbox = try await database.fetchIssues()
         XCTAssertEqual(inbox.count, 2, "rebuilding the index must not touch the inbox")

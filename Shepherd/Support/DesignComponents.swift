@@ -336,21 +336,16 @@ struct PrimaryButtonStyle: ButtonStyle {
     @Environment(\.buttonIsBusy) private var isBusy
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 12.5, weight: .semibold))
-            .foregroundStyle(Color.white)
-            // The style's own text colour, not ``Theme/textOnFilled``: this fill is the accent
-            // and its label is white on both appearances.
-            .busyLabel(isBusy: isBusy, tint: Color.white)
-            .padding(.horizontal, 12)
-            .frame(height: height)
-            .background(
-                Theme.accent.opacity(configuration.isPressed ? 0.8 : 1),
-                in: RoundedRectangle(cornerRadius: 7, style: .continuous)
-            )
-            // A busy button is disabled but not dimmed — the spinner is the message, and a
-            // spinner at 45 % is the bug this arrangement exists to prevent.
-            .opacity(isEnabled || isBusy ? 1 : 0.45)
+        // The style's own text colour, not ``Theme/textOnFilled``: this fill is the accent
+        // and its label is white on both appearances.
+        FilledButtonBody(
+            configuration: configuration,
+            height: height,
+            fill: Theme.accent,
+            label: Color.white,
+            isEnabled: isEnabled,
+            isBusy: isBusy
+        )
     }
 }
 
@@ -363,17 +358,56 @@ struct SuccessButtonStyle: ButtonStyle {
     @Environment(\.buttonIsBusy) private var isBusy
 
     func makeBody(configuration: Configuration) -> some View {
+        FilledButtonBody(
+            configuration: configuration,
+            height: height,
+            fill: Theme.success,
+            label: Theme.textOnFilled,
+            isEnabled: isEnabled,
+            isBusy: isBusy
+        )
+    }
+}
+
+/// The body shared by ``PrimaryButtonStyle`` and ``SuccessButtonStyle``, a view of its own so it
+/// can hold the hover state. The two differ only in fill and label colour.
+///
+/// Like ``SecondaryButtonBody`` it answers the pointer — a lightening overlay and the pointing
+/// hand — because the filled buttons are the most important actions and a button that does not
+/// react reads as a label.
+private struct FilledButtonBody: View {
+    let configuration: ButtonStyleConfiguration
+    let height: CGFloat
+    let fill: Color
+    let label: Color
+    let isEnabled: Bool
+    let isBusy: Bool
+
+    @State private var isHovering = false
+
+    var body: some View {
         configuration.label
             .font(.system(size: 12.5, weight: .semibold))
-            .foregroundStyle(Theme.textOnFilled)
-            .busyLabel(isBusy: isBusy, tint: Theme.textOnFilled)
+            .foregroundStyle(label)
+            .busyLabel(isBusy: isBusy, tint: label)
             .padding(.horizontal, 12)
             .frame(height: height)
             .background(
-                Theme.success.opacity(configuration.isPressed ? 0.8 : 1),
+                fill.opacity(configuration.isPressed ? 0.8 : 1),
                 in: RoundedRectangle(cornerRadius: 7, style: .continuous)
             )
+            .overlay {
+                if isHovering && isEnabled {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(Color.white.opacity(0.08))
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            // A busy button is disabled but not dimmed — the spinner is the message, and a
+            // spinner at 45 % is the bug this arrangement exists to prevent.
             .opacity(isEnabled || isBusy ? 1 : 0.45)
+            .onHover { isHovering = $0 }
+            .pointerStyle(isEnabled ? .link : nil)
     }
 }
 

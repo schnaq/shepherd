@@ -6,7 +6,7 @@ import SwiftUI
 struct AgentSettingsTab: View {
     @Environment(AppEnvironment.self) private var environment
     /// The settings model.
-    let model: SettingsModel
+    @Bindable var model: SettingsModel
     @State private var errorMessage: String?
     /// Why the last *Remove* did not happen, drawn under the list it failed in.
     ///
@@ -79,27 +79,27 @@ struct AgentSettingsTab: View {
             Section(String(localized: "New entry")) {
                 TextField(
                     String(localized: "Id"),
-                    text: idBinding,
+                    text: $model.newAgentID,
                     prompt: Text(String(localized: "my-agent"))
                 )
                 TextField(
                     String(localized: "Name"),
-                    text: nameBinding,
+                    text: $model.newAgentName,
                     prompt: Text(String(localized: "My Agent"))
                 )
                 TextField(
                     String(localized: "Logins"),
-                    text: loginsBinding,
+                    text: $model.newAgentLogins,
                     prompt: Text(String(localized: "my-agent[bot], my-agent-*"))
                 )
                 TextField(
                     String(localized: "Branches"),
-                    text: branchesBinding,
+                    text: $model.newAgentBranches,
                     prompt: Text(String(localized: "my-agent/"))
                 )
                 TextField(
                     String(localized: "Trailers"),
-                    text: trailersBinding,
+                    text: $model.newAgentTrailers,
                     prompt: Text(String(localized: "Co-Authored-By: My Agent"))
                 )
 
@@ -122,25 +122,5 @@ struct AgentSettingsTab: View {
         .task {
             await model.loadRegistry(session: environment.session)
         }
-    }
-
-    private var idBinding: Binding<String> {
-        Binding(get: { model.newAgentID }, set: { model.newAgentID = $0 })
-    }
-
-    private var nameBinding: Binding<String> {
-        Binding(get: { model.newAgentName }, set: { model.newAgentName = $0 })
-    }
-
-    private var loginsBinding: Binding<String> {
-        Binding(get: { model.newAgentLogins }, set: { model.newAgentLogins = $0 })
-    }
-
-    private var branchesBinding: Binding<String> {
-        Binding(get: { model.newAgentBranches }, set: { model.newAgentBranches = $0 })
-    }
-
-    private var trailersBinding: Binding<String> {
-        Binding(get: { model.newAgentTrailers }, set: { model.newAgentTrailers = $0 })
     }
 }

@@ -113,12 +113,6 @@ public enum MergeWhenGreenDecision: Sendable, Equatable {
         if case .merge(let oid) = self { return oid }
         return nil
     }
-
-    /// The reason, when the decision was to abandon.
-    public var abandonReason: MergeWhenGreenAbandonReason? {
-        if case .abandon(let reason) = self { return reason }
-        return nil
-    }
 }
 
 /// The merges waiting for green on this Mac.

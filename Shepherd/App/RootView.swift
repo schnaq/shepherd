@@ -129,12 +129,12 @@ struct RootView: View {
                 ProgressView()
                 VStack(spacing: 6) {
                     Text(String(localized: "Opening your review inbox…"))
-                        .font(.system(size: 12))
+                        .font(Theme.type(.callout))
                         .foregroundStyle(Theme.textMuted)
                     Text(String(
                         localized: "If macOS asks for your login password, it is the Keychain handing Shepherd its own GitHub token. Nothing else is read."
                     ))
-                    .font(.system(size: 11))
+                    .font(Theme.type(.subheadline))
                     .foregroundStyle(Theme.textMuted)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 360)

@@ -21,6 +21,8 @@ struct FleetScreen: View {
 
     @State private var model: FleetModel
     @FocusState private var isListFocused: Bool
+    /// Set by a click on a row so the selection change does not re-centre the list under the pointer.
+    @State private var isClickSelection = false
 
     /// Creates the screen.
     /// - Parameters:
@@ -144,11 +146,24 @@ struct FleetScreen: View {
                                 isSelected: model.selectedAgentID == agent.id
                             )
                             .id(agent.id)
-                            .onTapGesture { model.selectAgent(agent.id) }
+                            .onTapGesture {
+                                if model.selectedAgentID != agent.id { isClickSelection = true }
+                                model.selectAgent(agent.id)
+                            }
+                            // Selected by a tap gesture, so say so: VoiceOver otherwise hears plain text.
+                            .accessibilityAddTraits(
+                                model.selectedAgentID == agent.id ? [.isButton, .isSelected] : .isButton
+                            )
+                            // A button VoiceOver can press: the tap gesture alone is not a
+                            // guaranteed accessibility action. No click flag — VO wants the scroll.
+                            .accessibilityAction { model.selectAgent(agent.id) }
                         }
                     }
                 }
                 .onChange(of: model.selectedAgentID) { _, id in
+                    // The clicked row is under the pointer, so it is on screen: scrolling to it
+                    // would only move the list away from where the reader is looking.
+                    if isClickSelection { isClickSelection = false; return }
                     guard let id else { return }
                     withAnimation(.easeOut(duration: 0.12)) {
                         proxy.scrollTo(id, anchor: .center)

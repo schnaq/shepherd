@@ -455,13 +455,18 @@ final class InboxModel {
         outboxTask = nil
     }
 
+    /// The rows' ids and head commits, the cheap gate both refreshes below compare against.
+    private var rowsHeadSignature: String {
+        allRows.map { "\($0.id):\($0.headRefOid)" }.joined(separator: ",")
+    }
+
     /// Recomputes the rounds chips, but only when the rows they describe have moved.
     ///
     /// The inbox observation speaks on every write, and the interdiff is real work; the
     /// signature is the cheap gate — a chip can only change when a pull request appears,
     /// disappears or gets a new head (ADR 0028).
     private func refreshReviewRounds() {
-        let signature = allRows.map { "\($0.id):\($0.headRefOid)" }.joined(separator: ",")
+        let signature = rowsHeadSignature
         guard signature != roundsSignature else { return }
         roundsSignature = signature
         let rows = allRows
@@ -485,7 +490,7 @@ final class InboxModel {
     /// observation speaks on every write, and a glyph can only change when a pull request
     /// appears, disappears or gets a new head commit (ADR 0030).
     private func refreshSessionReferences() {
-        let signature = allRows.map { "\($0.id):\($0.headRefOid)" }.joined(separator: ",")
+        let signature = rowsHeadSignature
         guard signature != sessionsSignature else { return }
         sessionsSignature = signature
         let rows = allRows
@@ -1530,7 +1535,9 @@ final class InboxModel {
                     number: row.number
                 )
                 try? await self.session.database.savePullRequestDetail(fresh)
-                guard !Task.isCancelled, self.selectedID == selectedID else { return }
+                // An unchanged copy would re-run the prioritiser and restart the same (possibly
+                // paid) summary request the cached apply already has in flight.
+                guard !Task.isCancelled, self.selectedID == selectedID, fresh != self.detail else { return }
                 self.apply(detail: fresh)
             } catch {
                 // Offline is a normal state: the cached copy above is what the user sees.

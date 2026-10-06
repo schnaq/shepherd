@@ -75,7 +75,8 @@ struct DiffViewerView: NSViewRepresentable {
         // Monaco's own words — the "hidden lines" bar, its hovers, its accessibility help — in
         // the app's language. Same reason to be a document-start script: Monaco reads its message
         // table while its modules evaluate, long before the bridge exists to carry anything.
-        if let dist = DiffViewerView.distributionURL(),
+        let dist = DiffViewerView.distributionURL()
+        if let dist,
            let messages = DiffViewerView.monacoMessages(for: DiffViewerView.appLanguage(), in: dist) {
             configuration.userContentController.addUserScript(
                 WKUserScript(source: messages, injectionTime: .atDocumentStart, forMainFrameOnly: true)
@@ -90,7 +91,7 @@ struct DiffViewerView: NSViewRepresentable {
         #endif
 
         context.coordinator.attach(webView)
-        if let dist = DiffViewerView.distributionURL() {
+        if let dist {
             // The one directory this web view is ever allowed to be in. Handed to the
             // coordinator before the load, so the first navigation is already checked against
             // it (ADR 0003's "no remote loads" is enforced here rather than assumed).
