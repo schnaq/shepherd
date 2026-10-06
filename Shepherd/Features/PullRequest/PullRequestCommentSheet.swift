@@ -141,5 +141,8 @@ private struct PullRequestCommentSheetModifier: ViewModifier {
                 PullRequestCommentSheet(summary: summary, actions: actions, text: $text)
             }
         }
+        // The inbox panel outlives its selection, and words written for one pull request must not
+        // be posted on the next one.
+        .onChange(of: summary?.id) { text = "" }
     }
 }

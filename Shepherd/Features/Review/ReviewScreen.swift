@@ -97,7 +97,9 @@ struct ReviewScreen: View {
                 write: writeState,
                 onBack: leaveReview,
                 onMerge: { model.isMergeSheetPresented = true },
-                onReview: { model.isSubmitSheetPresented = true },
+                // Opens on Approve where GitHub would take one, as the composer bar's ⌘⏎ did,
+                // rather than on whatever verdict a cancelled sheet left behind.
+                onReview: { submit(model.verdictBlocker == nil ? .approve : .comment) },
                 onDelegate: delegate,
                 onApprove: approve,
                 onRequestChanges: { submit(.requestChanges) },
@@ -509,7 +511,7 @@ struct ReviewScreen: View {
     /// keeps them) — the same one press the inbox panel's Approve is.
     private func approve() {
         guard !model.hasEndedOnGitHub, let summary = model.summary else { return }
-        Task { await actions.submitReview(on: summary, verdict: .approve) }
+        Task { await actions.submitReview(on: summary, verdict: .approve, body: model.summaryText) }
     }
 
     private func submit(_ verdict: ReviewVerdict) {
@@ -767,7 +769,9 @@ struct ReviewToolbar: ToolbarContent {
             // ⌘⏎ came along from the composer bar, which used to hold the submit button.
             .keyboardShortcut(.return, modifiers: .command)
             .help(String(localized: "Submit review (⌘⏎)"))
-            .disabled(model.hasEndedOnGitHub)
+            // Dark while a verdict is going out, so ⌘⏎ held down cannot open a second sheet onto
+            // a review that is already on its way.
+            .disabled(model.hasEndedOnGitHub || isSubmittingVerdict)
 
             if let summary = model.summary {
                 PullRequestMoreMenu(
@@ -776,7 +780,6 @@ struct ReviewToolbar: ToolbarContent {
                     onComment: onComment,
                     onClose: onClose
                 )
-                .disabled(model.hasEndedOnGitHub)
             }
 
             mergeButton
