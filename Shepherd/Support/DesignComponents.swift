@@ -175,9 +175,16 @@ struct ComposerTextEditor: View {
     /// paragraph is the only case where the two differ — for the second the stream runs, and
     /// never afterwards, because the tint goes as soon as the stream ends.
     var textColor: Color = Theme.text
+    /// Where a pasted image is uploaded to, or `nil` for a field that takes text only — the
+    /// Settings editors, whose text is not posted to any one repository.
+    var imageUpload: ImageUploadTarget?
+
+    @FocusState private var isFocused: Bool
+    @State private var pasteMonitor: Any?
 
     var body: some View {
         TextEditor(text: text)
+            .focused($isFocused)
             .font(.system(size: size))
             .foregroundStyle(textColor)
             .writingToolsBehavior(.complete)
@@ -189,6 +196,33 @@ struct ComposerTextEditor: View {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .stroke(Theme.controlBorder, lineWidth: 1)
             )
+            .onAppear { installPasteMonitor() }
+            // The target can arrive after the field does — the review composers build it from a
+            // summary that may still be loading — and the monitor holds the one it was made with.
+            .onChange(of: imageUpload?.repo) { removePasteMonitor(); installPasteMonitor() }
+            .onDisappear { removePasteMonitor() }
+    }
+
+    private func removePasteMonitor() {
+        if let pasteMonitor { NSEvent.removeMonitor(pasteMonitor) }
+        pasteMonitor = nil
+    }
+
+    /// Catches ⌘V of an image before the text view does. `TextEditor` is a plain-text view: it
+    /// would drop an image on the floor, and SwiftUI's paste command never reaches a field that
+    /// handles paste itself. A text paste is let through untouched.
+    private func installPasteMonitor() {
+        guard let imageUpload, pasteMonitor == nil else { return }
+        let text = text
+        pasteMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            guard isFocused,
+                  event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
+                  event.charactersIgnoringModifiers == "v",
+                  let image = PastedImage.image(on: .general)
+            else { return event }
+            Task { @MainActor in await PastedImage.upload(image, into: text, target: imageUpload) }
+            return nil
+        }
     }
 }
 

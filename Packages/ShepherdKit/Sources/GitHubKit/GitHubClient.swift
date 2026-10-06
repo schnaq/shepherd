@@ -993,6 +993,70 @@ public actor GitHubClient {
         )
     }
 
+    /// Uploads an image the way a drop onto a comment field on github.com does, and answers the
+    /// URL to embed as `![…](url)`.
+    ///
+    /// **Not a documented endpoint.** `POST uploads.github.com/user-attachments/assets` is what
+    /// the website itself uses, and it takes a bearer token; GitHub may change or withdraw it, so
+    /// every caller has to treat a failure here as "attach it on github.com instead" rather than as
+    /// a broken comment. Not idempotent and not cached: a retry is a second upload.
+    /// - Parameters:
+    ///   - data: The file's bytes.
+    ///   - name: The file name GitHub shows.
+    ///   - contentType: Its MIME type, e.g. `image/png`.
+    ///   - repo: The repository the comment belongs to; GitHub scopes the attachment to it.
+    /// - Returns: The attachment's URL.
+    public func uploadAttachment(
+        _ data: Data,
+        name: String,
+        contentType: String,
+        repo: RepoRef
+    ) async throws -> URL {
+        let repository = try await performREST(
+            method: "GET",
+            path: "/repos/\(repo.owner)/\(repo.name)",
+            queryItems: [],
+            body: nil,
+            useCache: true,
+            resource: "\(repo.fullName)"
+        )
+        guard let repositoryID = (try? JSONSerialization.jsonObject(with: repository.body) as? [String: Any])?["id"]
+            as? Int
+        else {
+            throw GitHubError.decoding(message: "Repository response was missing an id")
+        }
+        guard var components = URLComponents(url: GitHubDefaultURL.uploads, resolvingAgainstBaseURL: false) else {
+            throw GitHubError.invalidURL(GitHubDefaultURL.uploads.absoluteString)
+        }
+        components.path = "/user-attachments/assets"
+        components.queryItems = [
+            URLQueryItem(name: "name", value: name),
+            URLQueryItem(name: "content_type", value: contentType),
+            URLQueryItem(name: "repository_id", value: String(repositoryID)),
+        ]
+        guard let url = components.url else {
+            throw GitHubError.invalidURL(GitHubDefaultURL.uploads.absoluteString)
+        }
+        let response = try await perform(
+            method: "POST",
+            url: url,
+            body: data,
+            accept: "application/json",
+            useCache: false,
+            resource: "\(repo.fullName) attachment",
+            extraHeaders: ["Content-Type": contentType],
+            isIdempotent: false
+        )
+        // The field is not documented either; `href` is what the website reads.
+        let json = try? JSONSerialization.jsonObject(with: response.body) as? [String: Any]
+        guard let link = ["href", "url", "browser_download_url"].lazy.compactMap({ json?[$0] as? String }).first,
+              let attachment = URL(string: link)
+        else {
+            throw GitHubError.decoding(message: "Attachment response had no URL")
+        }
+        return attachment
+    }
+
     /// Resolves a review thread. GraphQL-only.
     /// - Parameter id: The thread's GraphQL node id.
     public func resolveThread(id: String) async throws {

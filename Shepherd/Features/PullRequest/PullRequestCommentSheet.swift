@@ -31,6 +31,7 @@ struct PullRequestCommentSheet: View {
     /// Whether the text is worth sending.
     private var hasText: Bool {
         !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !PastedImage.containsPendingUpload(text)
     }
 
     /// Hands the composed text to one of the two writes and closes the sheet.
@@ -60,7 +61,11 @@ struct PullRequestCommentSheet: View {
             }
 
             // The same field the review composer uses, so Writing Tools work here too (ADR 0020).
-            ComposerTextEditor(text: $text, height: 160)
+            ComposerTextEditor(
+                text: $text,
+                height: 160,
+                imageUpload: ImageUploadTarget(repo: summary.repo, actions: actions)
+            )
 
             Text(String(
                 localized: "Goes on the conversation, not on the diff — this is not a review verdict. Queued locally and posted in the background."
@@ -80,6 +85,7 @@ struct PullRequestCommentSheet: View {
                     )
                 }
                 .buttonStyle(SecondaryButtonStyle())
+                .disabled(PastedImage.containsPendingUpload(text))
                 .help(String(localized: "Closes the pull request. Nothing is merged."))
 
                 Spacer()

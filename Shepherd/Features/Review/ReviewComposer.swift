@@ -106,7 +106,8 @@ struct SubmitReviewSheet: View {
                     height: 130,
                     // The growing draft is drawn in the caption colour, so the reviewer can see
                     // which words are the model's while they are still arriving.
-                    textColor: aiDraft.streamingDraft == nil ? Theme.text : Theme.accentText
+                    textColor: aiDraft.streamingDraft == nil ? Theme.text : Theme.accentText,
+                    imageUpload: model.summary.map { ImageUploadTarget(repo: $0.repo, actions: actions) }
                 )
                 AIDraftStatusView(
                     state: aiDraft,
@@ -204,7 +205,7 @@ struct SubmitReviewSheet: View {
                 .buttonStyle(PrimaryButtonStyle())
                 .keyboardShortcut(.defaultAction)
                 .busy(isSubmitting)
-                .disabled(needsSummary || model.hasEndedOnGitHub)
+                .disabled(needsSummary || model.hasEndedOnGitHub || PastedImage.containsPendingUpload(model.summaryText))
                 .help(needsSummary
                     ? String(localized: "Write a summary first — GitHub rejects a “request changes” or “comment” review without one.")
                     : String(localized: "Queue the review"))
@@ -378,7 +379,8 @@ struct SubmitReviewSheet: View {
                 }
             }
             .buttonStyle(SecondaryButtonStyle(tint: Theme.agent))
-            .disabled(model.summaryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(model.summaryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                || PastedImage.containsPendingUpload(model.summaryText))
             .help(String(
                 localized: "Send this summary to the session that wrote this code"
             ))
@@ -545,7 +547,10 @@ struct InlineCommentComposer: View {
                 text: $commentText,
                 height: 120,
                 // The caption colour while the draft streams, the field's own colour after it.
-                textColor: aiDraft.streamingDraft == nil ? Theme.text : Theme.accentText
+                textColor: aiDraft.streamingDraft == nil ? Theme.text : Theme.accentText,
+                imageUpload: model.summary.map {
+                    ImageUploadTarget(repo: $0.repo, github: model.session.github, toasts: environment.toasts)
+                }
             )
 
             AIDraftStatusView(
@@ -894,8 +899,10 @@ struct InlineCommentComposer: View {
         return String(localized: "Comment on line \(request.line)")
     }
 
+    /// Nothing to send yet: an empty field, or an image still uploading into it.
     private var isBlank: Bool {
         commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || PastedImage.containsPendingUpload(commentText)
     }
 
     /// Appends a ```` ```suggestion ```` block holding the commented lines. Offered on the head
@@ -1033,7 +1040,7 @@ struct InlineCommentComposer: View {
                 }
             }
             .buttonStyle(SecondaryButtonStyle(tint: Theme.agent))
-            .disabled(commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .disabled(isBlank)
             .help(String(
                 localized: "Add the comment and send it to the session that wrote this code"
             ))
