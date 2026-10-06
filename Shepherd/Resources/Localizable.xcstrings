@@ -9221,12 +9221,12 @@
         }
       }
     },
-    "Requesting changes needs a summary. Write one in the review sheet.": {
+    "Requesting changes needs a summary. Write one in the submit sheet.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Änderungen anfordern braucht eine Zusammenfassung. Schreib sie im Review-Sheet."
+            "value": "Änderungen anfordern braucht eine Zusammenfassung. Schreib sie im Abschicken-Sheet."
           }
         }
       }
@@ -9271,12 +9271,12 @@
         }
       }
     },
-    "Review… or Approve…; Merge in its dialog": {
+    "Open the submit sheet; Merge in its dialog": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Review… / Approve…, im Merge-Dialog Mergen"
+            "value": "Abschicken-Sheet öffnen, im Merge-Dialog Mergen"
           }
         }
       }

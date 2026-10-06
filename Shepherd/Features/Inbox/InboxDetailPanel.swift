@@ -249,55 +249,17 @@ struct InboxDetailPanel: View {
     private func actionBar(_ row: PullRequestSummary) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             queueStatus(row)
-            HStack(spacing: 8) {
-                Button {
-                    Task { await actions.submitReview(on: row, verdict: .approve) }
-                } label: {
-                    Label(String(localized: "Approve"), systemImage: "checkmark")
-                        .frame(maxWidth: .infinity)
+            // One row where the panel is wide enough, two where it is not: at its narrowest,
+            // or with a "Merge 4 pull requests…" title, the four buttons would truncate.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    verdictButtons(row)
+                    moreAndMerge(row)
                 }
-                // Neutral: Merge is the panel's one green button (ADR 0040's 2026-09-23
-                // amendment), and two of them side by side would be two recommendations. Not even
-                // a green label, which from across the panel reads as a second green button; the
-                // tick is what keeps it recognisable.
-                .buttonStyle(SecondaryButtonStyle())
-                // Both verdict buttons go dark for either reason: GitHub would refuse this one
-                // (``disabled``), or a verdict for this pull request is already on its way to the
-                // outbox (``busy``, which disables as well and spins while it does).
-                .busy(isWriting(row, .review))
-                .disabled(row.verdictBlocker != nil)
-                .help(PullRequestActions.help(
-                    for: row.verdictBlocker,
-                    on: row,
-                    otherwise: String(localized: "Approve (r a)")
-                ))
-
-                // Through `r x`'s path rather than a review sent from here: GitHub refuses
-                // `REQUEST_CHANGES` without a body, so it opens the review composer to write one.
-                Button { environment.request(.requestChanges) } label: {
-                    Text(String(localized: "Request changes"))
-                        .frame(maxWidth: .infinity)
+                VStack(spacing: 8) {
+                    HStack(spacing: 8) { verdictButtons(row) }
+                    HStack(spacing: 8) { moreAndMerge(row) }
                 }
-                .buttonStyle(SecondaryButtonStyle(tint: Theme.failure))
-                .busy(isWriting(row, .review))
-                .disabled(row.verdictBlocker != nil)
-                .help(PullRequestActions.help(
-                    for: row.verdictBlocker,
-                    on: row,
-                    otherwise: String(localized: "Request changes (r x)")
-                ))
-
-                PullRequestMoreMenu(
-                    summary: row,
-                    actions: actions,
-                    onComment: { isCommentSheetPresented = true },
-                    onClose: { environment.request(.close) }
-                )
-                .menuStyle(.button)
-                .buttonStyle(SecondaryButtonStyle())
-                .fixedSize()
-
-                mergeButton(for: row)
             }
 
             Button {
@@ -313,6 +275,63 @@ struct InboxDetailPanel: View {
         }
         .padding(16)
         .background(Theme.panel)
+    }
+
+    /// *Approve* and *Request changes*.
+    @ViewBuilder
+    private func verdictButtons(_ row: PullRequestSummary) -> some View {
+        Button {
+            Task { await actions.submitReview(on: row, verdict: .approve) }
+        } label: {
+            Label(String(localized: "Approve"), systemImage: "checkmark")
+                .frame(maxWidth: .infinity)
+        }
+        // Neutral: Merge is the panel's one green button (ADR 0040's 2026-09-23
+        // amendment), and two of them side by side would be two recommendations. Not even
+        // a green label, which from across the panel reads as a second green button; the
+        // tick is what keeps it recognisable.
+        .buttonStyle(SecondaryButtonStyle())
+        // Both verdict buttons go dark for either reason: GitHub would refuse this one
+        // (``disabled``), or a verdict for this pull request is already on its way to the
+        // outbox (``busy``, which disables as well and spins while it does).
+        .busy(isWriting(row, .review))
+        .disabled(row.verdictBlocker != nil)
+        .help(PullRequestActions.help(
+            for: row.verdictBlocker,
+            on: row,
+            otherwise: String(localized: "Approve (r a)")
+        ))
+
+        // Through `r x`'s path rather than a review sent from here: GitHub refuses
+        // `REQUEST_CHANGES` without a body, so it opens the review composer to write one.
+        Button { environment.request(.requestChanges) } label: {
+            Text(String(localized: "Request changes"))
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(SecondaryButtonStyle(tint: Theme.failure))
+        .busy(isWriting(row, .review))
+        .disabled(row.verdictBlocker != nil)
+        .help(PullRequestActions.help(
+            for: row.verdictBlocker,
+            on: row,
+            otherwise: String(localized: "Request changes (r x)")
+        ))
+    }
+
+    /// The ⋯ menu and the green Merge.
+    @ViewBuilder
+    private func moreAndMerge(_ row: PullRequestSummary) -> some View {
+        PullRequestMoreMenu(
+            summary: row,
+            actions: actions,
+            onComment: { isCommentSheetPresented = true },
+            onClose: { environment.request(.close) }
+        )
+        .menuStyle(.button)
+        .buttonStyle(SecondaryButtonStyle())
+        .fixedSize()
+
+        mergeButton(for: row)
     }
 
     /// The green *Merge* button, which merges what the ticks say rather than only the row under

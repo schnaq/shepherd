@@ -137,7 +137,7 @@ struct PullRequestActions {
                 if verdict == .requestChanges,
                    draft.summaryBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     toasts.show(Toast(
-                        message: String(localized: "Requesting changes needs a summary. Write one in the review sheet."),
+                        message: String(localized: "Requesting changes needs a summary. Write one in the submit sheet."),
                         kind: .warning
                     ))
                     return false
