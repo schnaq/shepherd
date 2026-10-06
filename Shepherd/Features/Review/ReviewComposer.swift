@@ -854,6 +854,7 @@ struct InlineCommentComposer: View {
     private var existingComment: DraftComment? {
         model.draft?.comments.first {
             $0.path == request.path && $0.line == request.line && $0.side == request.side
+                && $0.startLine == request.startLine
         }
     }
 

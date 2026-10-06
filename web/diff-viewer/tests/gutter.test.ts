@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { addCommentTarget, cursorHit, gutterHit, hitChanged, MouseTargetType } from '../src/viewer/gutter.js';
+import {
+  cursorHit,
+  gutterHit,
+  hitChanged,
+  MouseTargetType,
+  originalToModifiedLine,
+  rangeTarget,
+  selectedLines,
+} from '../src/viewer/gutter.js';
 
 describe('gutterHit', () => {
   const base = { lineNumber: 5, side: 'right', lineCount: 40 } as const;
@@ -91,23 +99,63 @@ describe('hitChanged', () => {
   });
 });
 
-describe('addCommentTarget', () => {
-  const hit = { line: 9, side: 'right' } as const;
-
-  it('omits startLine for the single-line trigger', () => {
-    expect(addCommentTarget(hit)).toEqual({ line: 9, side: 'right' });
-    expect(Object.prototype.hasOwnProperty.call(addCommentTarget(hit), 'startLine')).toBe(false);
+describe('selectedLines', () => {
+  it('leaves out a last line selected only up to its start', () => {
+    // What a click on a line number selects: line 4 from column 1 to line 5, column 1.
+    expect(selectedLines({ startLineNumber: 4, endLineNumber: 5, endColumn: 1 })).toEqual({ start: 4, end: 4 });
+    expect(selectedLines({ startLineNumber: 4, endLineNumber: 7, endColumn: 3 })).toEqual({ start: 4, end: 7 });
   });
 
-  it('passes a valid multi-line selection through', () => {
-    expect(addCommentTarget(hit, 7)).toEqual({ line: 9, side: 'right', startLine: 7 });
+  it('keeps an empty selection on its line', () => {
+    expect(selectedLines({ startLineNumber: 6, endLineNumber: 6, endColumn: 1 })).toEqual({ start: 6, end: 6 });
+  });
+});
+
+describe('rangeTarget', () => {
+  const probe = { side: 'right', lineCount: 40, commentable: new Set([3, 4, 5, 6, 20, 21]) } as const;
+
+  it('omits startLine for a single line', () => {
+    const target = rangeTarget(probe, { startLineNumber: 4, endLineNumber: 4, endColumn: 9 });
+    expect(target).toEqual({ line: 4, side: 'right' });
+    expect(Object.prototype.hasOwnProperty.call(target, 'startLine')).toBe(false);
   });
 
-  it('drops a start line that is not strictly above the anchor', () => {
-    expect(addCommentTarget(hit, 9)).toEqual({ line: 9, side: 'right' });
-    expect(addCommentTarget(hit, 12)).toEqual({ line: 9, side: 'right' });
-    expect(addCommentTarget(hit, 0)).toEqual({ line: 9, side: 'right' });
-    expect(addCommentTarget(hit, 2.5)).toEqual({ line: 9, side: 'right' });
+  it('anchors a range on its last line, from its first', () => {
+    expect(rangeTarget(probe, { startLineNumber: 3, endLineNumber: 7, endColumn: 1 })).toEqual({
+      line: 6,
+      side: 'right',
+      startLine: 3,
+    });
+  });
+
+  it('refuses a range that crosses the padding between hunks', () => {
+    expect(rangeTarget(probe, { startLineNumber: 5, endLineNumber: 20, endColumn: 4 })).toBeNull();
+  });
+
+  it('refuses a range past the end of the file', () => {
+    expect(rangeTarget({ ...probe, commentable: null }, { startLineNumber: 38, endLineNumber: 41, endColumn: 2 })).toBeNull();
+  });
+});
+
+describe('originalToModifiedLine', () => {
+  it('keeps lines above every change', () => {
+    expect(originalToModifiedLine(3, [{ originalStartLineNumber: 3, originalEndLineNumber: 0, modifiedStartLineNumber: 4, modifiedEndLineNumber: 5 }])).toBe(3);
+  });
+
+  it('shifts lines below an insertion by its size', () => {
+    expect(originalToModifiedLine(4, [{ originalStartLineNumber: 3, originalEndLineNumber: 0, modifiedStartLineNumber: 4, modifiedEndLineNumber: 5 }])).toBe(6);
+  });
+
+  it('puts a deleted line where the deletion sits, and shifts what follows back', () => {
+    const deletion = { originalStartLineNumber: 4, originalEndLineNumber: 5, modifiedStartLineNumber: 3, modifiedEndLineNumber: 0 };
+    expect(originalToModifiedLine(5, [deletion])).toBe(3);
+    expect(originalToModifiedLine(6, [deletion])).toBe(4);
+  });
+
+  it('puts a changed line on the first line that replaced it', () => {
+    const change = { originalStartLineNumber: 4, originalEndLineNumber: 5, modifiedStartLineNumber: 4, modifiedEndLineNumber: 6 };
+    expect(originalToModifiedLine(5, [change])).toBe(4);
+    expect(originalToModifiedLine(7, [change])).toBe(8);
   });
 });
 

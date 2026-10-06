@@ -24,6 +24,13 @@ interface FakeModel {
   disposed: boolean;
   dispose(): void;
   getLineCount(): number;
+  getLineMaxColumn(line: number): number;
+}
+
+interface FakeSelection {
+  startLineNumber: number;
+  endLineNumber: number;
+  endColumn: number;
 }
 
 /** Live model URIs, the one invariant the real ModelService enforces. */
@@ -46,6 +53,12 @@ interface FakeCodeEditor {
   decorations: unknown[];
   onMouseLeave(handler: () => void): void;
   onMouseDown(handler: (event: unknown) => void): void;
+  /** The press handler, so a test can click the gutter itself. */
+  mouseDownHandler: ((event: unknown) => void) | null;
+  /** The selection, or `null` for an empty one at the cursor. */
+  selection: FakeSelection | null;
+  getSelection(): FakeSelection | null;
+  setSelection(selection: FakeSelection): void;
   /** The handler the viewer registered, so a test can press the key itself. */
   keyHandler: ((event: unknown) => void) | null;
   onKeyDown(handler: (event: unknown) => void): void;
@@ -89,7 +102,19 @@ function makeCodeEditor(): FakeCodeEditor {
       editor.mouseMoveHandler = handler;
     },
     onMouseLeave: () => undefined,
-    onMouseDown: () => undefined,
+    mouseDownHandler: null,
+    onMouseDown: (handler) => {
+      editor.mouseDownHandler = handler;
+    },
+    selection: null,
+    getSelection: () => {
+      if (editor.selection !== null) return editor.selection;
+      const line = editor.position?.lineNumber;
+      return line === undefined ? null : { startLineNumber: line, endLineNumber: line, endColumn: 1 };
+    },
+    setSelection: (selection) => {
+      editor.selection = selection;
+    },
     keyHandler: null,
     onKeyDown: (handler) => {
       editor.keyHandler = handler;
@@ -135,6 +160,8 @@ function makeCodeEditor(): FakeCodeEditor {
 const originalEditor = makeCodeEditor();
 const modifiedEditor = makeCodeEditor();
 const updateOptions = vi.fn<(options: Record<string, unknown>) => void>();
+/// What `getLineChanges` answers, so a test can lay out a diff for the original pane to map through.
+let lineChanges: unknown[] = [];
 /// What `createDiffEditor` was constructed with, so a test can assert on the base options.
 let constructionOptions: Record<string, unknown> = {};
 
@@ -159,6 +186,7 @@ vi.mock('monaco-editor/editor/editor.api', () => {
           liveURIs.delete(key);
         },
         getLineCount: () => value.split('\n').length,
+        getLineMaxColumn: (line: number) => (value.split('\n')[line - 1]?.length ?? 0) + 1,
       };
       return model;
     },
@@ -172,9 +200,11 @@ vi.mock('monaco-editor/editor/editor.api', () => {
           originalEditor.model = models === null ? null : models.original;
           modifiedEditor.model = models === null ? null : models.modified;
         },
+        getLineChanges: () => lineChanges,
         dispose: () => undefined,
       };
     },
+    MouseTargetType: { GUTTER_LINE_NUMBERS: 3 },
     ScrollType: { Smooth: 0 },
     TrackedRangeStickiness: { NeverGrowsWhenTypingAtEdges: 0 },
   };
@@ -185,6 +215,17 @@ vi.mock('monaco-editor/editor/editor.api', () => {
       from: (parts: { scheme: string; authority: string; path: string }) => ({
         toString: () => `${parts.scheme}://${parts.authority}${parts.path}`,
       }),
+    },
+    Selection: class {
+      readonly startLineNumber: number;
+      readonly endLineNumber: number;
+      readonly endColumn: number;
+      constructor(anchorLine: number, anchorColumn: number, activeLine: number, activeColumn: number) {
+        const forward = anchorLine < activeLine || (anchorLine === activeLine && anchorColumn <= activeColumn);
+        this.startLineNumber = forward ? anchorLine : activeLine;
+        this.endLineNumber = forward ? activeLine : anchorLine;
+        this.endColumn = forward ? activeColumn : anchorColumn;
+      }
     },
     Range: class {
       constructor(
@@ -628,5 +669,71 @@ describe('crossing between the panes with the brackets', () => {
     modifiedEditor.keyHandler?.({ ...pressBracketLeft, metaKey: true });
 
     expect(originalEditor.focused).toBe(false);
+  });
+});
+
+describe('ranges and ⌘-click', () => {
+  // Five lines on each side; the click helpers below are the pointer's whole vocabulary.
+  const five = message({ original: 'a\nb\nc\nd\ne', modified: 'a\nb\nc\nd\ne' });
+  const press = (editor: FakeCodeEditor, line: number, extra: Record<string, boolean> = {}, type = 2): void => {
+    editor.mouseDownHandler?.({ target: { type, position: { lineNumber: line } }, event: { metaKey: false, shiftKey: false, ...extra } });
+    window.dispatchEvent(new MouseEvent('mouseup'));
+  };
+
+  beforeEach(() => {
+    liveURIs.clear();
+    lineChanges = [];
+    for (const editor of [originalEditor, modifiedEditor]) {
+      editor.position = null;
+      editor.selection = null;
+    }
+  });
+
+  it('comments on a selected range with c, anchored on its last line', () => {
+    const { viewer, posted } = makeListeningViewer();
+    viewer.loadFile(five);
+    modifiedEditor.selection = { startLineNumber: 2, endLineNumber: 4, endColumn: 3 };
+
+    modifiedEditor.keyHandler?.(pressC);
+
+    expect(posted).toEqual([{ v: 1, type: 'addComment', line: 4, side: 'right', startLine: 2 }]);
+  });
+
+  it('comments on one line for a “+” click, and widens to a range on ⇧-click', () => {
+    const { viewer, posted } = makeListeningViewer();
+    viewer.loadFile(five);
+
+    press(modifiedEditor, 2);
+    press(modifiedEditor, 4, { shiftKey: true });
+
+    expect(posted).toEqual([
+      { v: 1, type: 'addComment', line: 2, side: 'right' },
+      { v: 1, type: 'addComment', line: 4, side: 'right', startLine: 2 },
+    ]);
+  });
+
+  it('falls back to the pressed line when the range crosses into another hunk', () => {
+    const { viewer, posted } = makeListeningViewer();
+    viewer.loadFile({ ...five, commentableLines: { left: [1, 2, 4, 5], right: [1, 2, 4, 5] } });
+
+    press(modifiedEditor, 2);
+    press(modifiedEditor, 4, { shiftKey: true });
+
+    expect(posted.at(-1)).toEqual({ v: 1, type: 'addComment', line: 4, side: 'right' });
+  });
+
+  it('opens a ⌘-clicked line, mapping the original pane onto the new file', () => {
+    const { viewer, posted } = makeListeningViewer();
+    viewer.loadFile(five);
+    // Two lines inserted after line 1 of the original.
+    lineChanges = [{ originalStartLineNumber: 1, originalEndLineNumber: 0, modifiedStartLineNumber: 2, modifiedEndLineNumber: 3 }];
+
+    press(modifiedEditor, 3, { metaKey: true }, 6);
+    press(originalEditor, 3, { metaKey: true }, 6);
+
+    expect(posted).toEqual([
+      { v: 1, type: 'openInEditor', line: 3 },
+      { v: 1, type: 'openInEditor', line: 5 },
+    ]);
   });
 });

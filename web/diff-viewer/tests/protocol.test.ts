@@ -58,7 +58,7 @@ describe('envelope', () => {
       ].sort(),
     );
     expect([...OUTBOUND_MESSAGE_TYPES].sort()).toEqual(
-      ['addComment', 'commentClicked', 'ready', 'viewportChanged'].sort(),
+      ['addComment', 'commentClicked', 'openInEditor', 'ready', 'viewportChanged'].sort(),
     );
   });
 });

@@ -306,6 +306,7 @@ struct ReviewScreen: View {
                     // mode it moves the keyboard into the list rather than into Monaco. One
                     // mechanism, because it is one question: who has the keyboard now.
                     focusRequest: model.focusEditorRequest,
+                    onOpenInEditor: openInEditor(line:),
                     onExit: { isFileListFocused = true }
                 )
             } else {
@@ -328,7 +329,13 @@ struct ReviewScreen: View {
                     focusRequest: model.focusEditorRequest,
                     focusSide: model.focusEditorSide,
                     screenReader: isVoiceOverEnabled,
-                    onEvent: { event in model.handle(event) }
+                    onEvent: { event in
+                        if case .openInEditor(let line) = event {
+                            openInEditor(line: line)
+                        } else {
+                            model.handle(event)
+                        }
+                    }
                 )
             }
         } else if let path = model.selectedPath {
@@ -421,6 +428,13 @@ struct ReviewScreen: View {
             wasMerged: session.mergedPullRequestIDs.contains(prID),
             series: environment.mergeSeries.chip(for: prID, row: model.summary)
         )
+    }
+
+    /// ⌘-click on a diff line: the selected file in the reviewer's editor (ADR 0039).
+    /// - Parameter line: The head-side line, or `nil` for a line the new file no longer has.
+    private func openInEditor(line: Int?) {
+        guard let editorContext, let path = model.selectedPath else { return }
+        editorContext.opener.open(repo: editorContext.repo, path: path, line: line)
     }
 
     /// "Open in …" for the file list and the file header (ADR 0039), or `nil` before the pull

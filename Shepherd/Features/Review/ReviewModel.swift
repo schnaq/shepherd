@@ -1363,7 +1363,8 @@ final class ReviewModel {
                     startLine: comment.startLine
                 )
             }
-        case .viewportChanged:
+        case .viewportChanged, .openInEditor:
+            // `openInEditor` is the screen's: the editor opener needs the settings and the toasts.
             break
         }
     }
@@ -1379,6 +1380,7 @@ final class ReviewModel {
         try validateAnchor(of: request)
         let existing = draft?.comments.first {
             $0.path == request.path && $0.line == request.line && $0.side == request.side
+                && $0.startLine == request.startLine
         }
         let comment = DraftComment(
             localID: existing?.localID ?? UUID(),
