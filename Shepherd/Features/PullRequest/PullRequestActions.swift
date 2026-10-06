@@ -131,6 +131,17 @@ struct PullRequestActions {
                     existing: existing,
                     body: body
                 )
+                // GitHub answers 422 to `REQUEST_CHANGES` without a summary. Refused here, where
+                // every verdict passes, rather than only by the buttons that know to open the
+                // composer — a caller that forgot once queued a review that could only fail.
+                if verdict == .requestChanges,
+                   draft.summaryBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    toasts.show(Toast(
+                        message: String(localized: "Requesting changes needs a summary. Write one in the review sheet."),
+                        kind: .warning
+                    ))
+                    return false
+                }
                 try await session.database.saveDraft(draft)
                 let outcome = try await enqueue(.submitReview(draft), on: summary)
                 announce(outcome, of: .review(verdict), on: summary)

@@ -14,13 +14,9 @@ struct InboxDetailPanel: View {
     /// the ticked stack's top, or the merge-series sheet for the ticked rows.
     var onMerge: () -> Void
 
-    /// Whether the conversation composer is up, and what is in it.
-    ///
-    /// Held here rather than on the screen, exactly as ``IssueDetailPanel`` holds its own: the
-    /// text is bound into the composer, so state one level up would re-evaluate the whole
-    /// three-column screen — rail, list and toolbar — on every character typed.
+    /// Whether the conversation composer is up. Its text is held by
+    /// ``SwiftUI/View/pullRequestCommentSheet(isPresented:summary:actions:)``.
     @State private var isCommentSheetPresented = false
-    @State private var commentBody = ""
 
     /// The selected pull request's screenshot reading (ADR 0038 item 4). Held here for the
     /// composer's reason above, and refreshed from the detail without ever downloading anything.
@@ -44,11 +40,7 @@ struct InboxDetailPanel: View {
         .task(id: ScreenshotRefreshKey(detail: model.detail, hasReader: environment.screenshotReader != nil)) {
             await screenshots.refresh(detail: model.detail, reader: environment.screenshotReader)
         }
-        .sheet(isPresented: $isCommentSheetPresented) {
-            if let row = model.selectedRow {
-                PullRequestCommentSheet(summary: row, actions: actions, text: $commentBody)
-            }
-        }
+        .pullRequestCommentSheet(isPresented: $isCommentSheetPresented, summary: model.selectedRow, actions: actions)
     }
 
     private func content(for row: PullRequestSummary) -> some View {

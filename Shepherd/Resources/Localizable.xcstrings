@@ -9221,6 +9221,16 @@
         }
       }
     },
+    "Requesting changes needs a summary. Write one in the review sheet.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Änderungen anfordern braucht eine Zusammenfassung. Schreib sie im Review-Sheet."
+          }
+        }
+      }
+    },
     "Review and merge keys, as in the inbox": {
       "localizations": {
         "de": {

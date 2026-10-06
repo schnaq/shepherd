@@ -19,9 +19,8 @@ struct ReviewScreen: View {
     @State private var isEndSessionConfirmationPresented = false
     /// The pull request the close confirmation is asking about.
     @State private var closeTarget: PullRequestSummary?
-    /// Whether the conversation composer from the ⋯ menu is up, and what is in it.
+    /// Whether the conversation composer from the ⋯ menu is up.
     @State private var isCommentSheetPresented = false
-    @State private var commentBody = ""
     /// This pull request's outbox rows, observed, for the toolbar's write state.
     @State private var outboxItems: [OutboxItem] = []
     @FocusState private var isFileListFocused: Bool
@@ -102,7 +101,6 @@ struct ReviewScreen: View {
                 onDelegate: delegate,
                 onApprove: approve,
                 onRequestChanges: { submit(.requestChanges) },
-                isSubmittingVerdict: environment.activity.isRunning(prID, .review),
                 actions: actions,
                 onComment: { isCommentSheetPresented = true },
                 onClose: { perform(.close) },
@@ -184,11 +182,7 @@ struct ReviewScreen: View {
             }
         }
         .closePullRequestConfirmation($closeTarget, actions: actions)
-        .sheet(isPresented: $isCommentSheetPresented) {
-            if let summary = model.summary {
-                PullRequestCommentSheet(summary: summary, actions: actions, text: $commentBody)
-            }
-        }
+        .pullRequestCommentSheet(isPresented: $isCommentSheetPresented, summary: model.summary, actions: actions)
         .sheet(item: $model.composerRequest) { request in
             InlineCommentComposer(model: model, request: request)
         }
@@ -473,7 +467,7 @@ struct ReviewScreen: View {
         case .openSelection:
             model.setTab(.files)
         case .approve:
-            submit(.approve)
+            approve()
         case .requestChanges:
             submit(.requestChanges)
         case .comment:
@@ -519,9 +513,9 @@ struct ReviewScreen: View {
     }
 
     private func submit(_ verdict: ReviewVerdict) {
-        // The keys and the palette reach the same three verdicts the composer bar's buttons do,
-        // so they need the same refusal: a review submitted against a pull request that has
-        // already been merged or closed would sit in the outbox until the drain threw it away.
+        // The keys, the palette and the toolbar all reach the verdicts, so they need one refusal:
+        // a review submitted against a pull request that has already been merged or closed would
+        // sit in the outbox until the drain threw it away.
         guard !model.hasEndedOnGitHub else { return }
         model.pendingVerdict = verdict
         model.isSubmitSheetPresented = true
@@ -664,9 +658,7 @@ struct ReviewToolbar: ToolbarContent {
     var onApprove: () -> Void
     /// Opens the submit sheet on *Request changes*, which GitHub refuses without a body.
     var onRequestChanges: () -> Void
-    /// Whether a verdict for this pull request is on its way to the outbox.
-    var isSubmittingVerdict = false
-    /// The outbox-backed write actions, for the ⋯ menu.
+    /// The outbox-backed write actions, for the ⋯ menu and the verdicts' write state.
     let actions: PullRequestActions
     /// Opens the conversation composer.
     var onComment: () -> Void
@@ -793,6 +785,10 @@ struct ReviewToolbar: ToolbarContent {
 
     /// Whether the verdict pair is dark: GitHub would refuse a verdict, the pull request has
     /// ended, or a verdict is already being sent.
+    private var isSubmittingVerdict: Bool {
+        actions.activity.isRunning(model.prID, .review)
+    }
+
     private var verdictDisabled: Bool {
         model.summary?.verdictBlocker != nil || model.hasEndedOnGitHub || isSubmittingVerdict
     }

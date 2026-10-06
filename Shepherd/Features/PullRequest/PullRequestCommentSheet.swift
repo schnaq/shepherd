@@ -108,3 +108,38 @@ struct PullRequestCommentSheet: View {
         .background(Theme.panel)
     }
 }
+
+extension View {
+    /// Presents ``PullRequestCommentSheet`` on `summary` while `isPresented` is true.
+    ///
+    /// The composed text lives in the modifier, not in the view it hangs on: the sheet keeps what
+    /// was typed when it is dismissed, and a keystroke re-evaluates only the modifier — hung on
+    /// the review screen, state one level up would redraw the diff and the toolbar on every
+    /// character. The counterpart of ``SwiftUI/View/closePullRequestConfirmation(_:actions:)``.
+    /// - Parameters:
+    ///   - isPresented: Whether the sheet is up.
+    ///   - summary: The pull request; no sheet while it is `nil`.
+    ///   - actions: The outbox-backed write actions.
+    func pullRequestCommentSheet(
+        isPresented: Binding<Bool>,
+        summary: PullRequestSummary?,
+        actions: PullRequestActions
+    ) -> some View {
+        modifier(PullRequestCommentSheetModifier(isPresented: isPresented, summary: summary, actions: actions))
+    }
+}
+
+private struct PullRequestCommentSheetModifier: ViewModifier {
+    @Binding var isPresented: Bool
+    let summary: PullRequestSummary?
+    let actions: PullRequestActions
+    @State private var text = ""
+
+    func body(content: Content) -> some View {
+        content.sheet(isPresented: $isPresented) {
+            if let summary {
+                PullRequestCommentSheet(summary: summary, actions: actions, text: $text)
+            }
+        }
+    }
+}
