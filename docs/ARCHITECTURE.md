@@ -680,8 +680,11 @@ copies Monaco's German table into `dist/nls/de.js`, and the app injects it as a 
 
 Web → Swift (`window.webkit.messageHandlers.shepherd.postMessage`):
 - `ready` `{}` — bundle booted, safe to send
-- `addComment` `{line, side, startLine?}` — user clicked a gutter “+”; Swift opens the native
-  comment composer (text entry is native, not in the webview)
+- `addComment` `{line, side, startLine?}` — user clicked a gutter “+” or pressed `c`; Swift opens
+  the native comment composer (text entry is native, not in the webview). `startLine` is set
+  when lines of one pane were selected (drag over the line numbers, ⇧-click a second “+”)
+- `openInEditor` `{line}` — user ⌘-clicked a line; Swift opens the file in the reviewer's editor
+  (ADR 0039). Always a head-side line: the viewer maps the original pane onto the new file
 - `commentClicked` `{threadID | localID}`
 - `viewportChanged` `{firstVisibleLine}` (scroll-state restore)
 

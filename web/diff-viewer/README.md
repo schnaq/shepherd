@@ -52,7 +52,7 @@ Every message carries `"v": 1`.
 
 Swift → web: `loadFile`, `setTheme`, `setThreads`, `setDraftComments`, `revealLine`,
 `focusEditor`, `setAccessibility`, `setLocale`.
-Web → Swift: `ready`, `addComment`, `commentClicked`, `viewportChanged`.
+Web → Swift: `ready`, `addComment`, `openInEditor`, `commentClicked`, `viewportChanged`.
 
 `shepherd.receive` returns `true`/`false` so Swift can assert delivery, and
 `shepherd.protocolVersion` lets it check the bundle it loaded speaks version 1.

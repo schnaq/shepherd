@@ -17,9 +17,15 @@ import type {
   Side,
   Thread,
 } from '../bridge/protocol.js';
-import { makeAddComment, makeDraftClicked, makeThreadClicked, makeViewportChanged } from '../bridge/protocol.js';
+import {
+  makeAddComment,
+  makeDraftClicked,
+  makeOpenInEditor,
+  makeThreadClicked,
+  makeViewportChanged,
+} from '../bridge/protocol.js';
 import type { OutboundSink } from '../bridge/transport.js';
-import { addCommentTarget, cursorHit, gutterHit, hitChanged, type GutterHit } from './gutter.js';
+import { gutterHit, hitChanged, originalToModifiedLine, rangeTarget, selectedLines, type GutterHit } from './gutter.js';
 import { registerLanguages, resolveLanguage } from './languages.js';
 import { DEFAULT_LOCALE, makeLocale, type ViewerLocale } from './locale.js';
 import type { ViewerPort } from './router.js';
@@ -94,6 +100,8 @@ export class MonacoDiffViewer implements ViewerPort {
 
   private readonly gutterDecorations: Map<Side, monaco.editor.IEditorDecorationsCollection> = new Map();
   private armed: GutterHit | null = null;
+  /** The gutter line a press started on; the comment is asked for on release. */
+  private gutterPress: GutterHit | null = null;
 
   private readonly viewportThrottled: Throttled<number>;
   private mode: 'sideBySide' | 'inline' = 'sideBySide';
@@ -363,17 +371,47 @@ export class MonacoDiffViewer implements ViewerPort {
       this.arm(null);
     });
 
+    // ⌘-click opens the line in the reviewer's editor, anywhere on the line.
+    //
+    // A press on the gutter selects lines and the release asks for the comment, over whatever
+    // the selection then covers — GitHub's gutter: click a line, drag or ⇧-click to widen it to a
+    // range. Monaco selects for a press on the line numbers, dragging included; the “+” sits in
+    // the glyph margin, which Monaco leaves alone, so that one selects here.
     editor.onMouseDown((event) => {
+      this.gutterPress = null;
+      const line = event.target.position?.lineNumber;
+      if (event.event.metaKey) {
+        if (line !== undefined) this.openInEditor(line, side);
+        return;
+      }
       const hit = gutterHit({
         targetType: event.target.type as number,
-        lineNumber: event.target.position?.lineNumber ?? null,
+        lineNumber: line ?? null,
         side,
         lineCount: editor.getModel()?.getLineCount() ?? -1,
         commentable: this.commentable[side],
       });
       if (hit === null) return;
-      const target = addCommentTarget(hit);
-      this.post(makeAddComment(target.line, target.side, target.startLine));
+      this.gutterPress = hit;
+      if (event.target.type === monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS) return;
+      const selection = editor.getSelection();
+      const current = selection === null ? null : selectedLines(selection);
+      if (event.event.shiftKey && current !== null) {
+        // Widened from whichever end is away from the click, as ⇧-click widens a text selection.
+        if (hit.line >= current.start) this.selectLines(editor, current.start, hit.line);
+        else this.selectLines(editor, current.end, hit.line);
+      } else if (current === null || current.start === current.end || hit.line < current.start || hit.line > current.end) {
+        // A “+” inside a selected range comments on the range; anywhere else, on its own line.
+        this.selectLines(editor, hit.line, hit.line);
+      }
+    });
+
+    editor.onMouseUp(() => {
+      const press = this.gutterPress;
+      this.gutterPress = null;
+      if (press === null || press.side !== side) return;
+      // A range that crosses into another hunk is not one GitHub takes; the line pressed is.
+      if (!this.commentOnSelection(editor, side)) this.post(makeAddComment(press.line, side));
     });
 
     // The same comment, reached by the keyboard. Until this existed, leaving an inline comment
@@ -392,7 +430,7 @@ export class MonacoDiffViewer implements ViewerPort {
       // may take that away.
       if (event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return;
       if (event.keyCode === monaco.KeyCode.KeyC) {
-        if (this.commentOnCursor(editor, side)) swallow(event);
+        if (this.commentOnSelection(editor, side)) swallow(event);
         return;
       }
       const target = bracketSide(event.keyCode);
@@ -401,26 +439,54 @@ export class MonacoDiffViewer implements ViewerPort {
   }
 
   /**
-   * `c`: asks for a composer on the line the cursor is on. Answers whether it did.
+   * `c`, or a release over the gutter: asks for a composer on the selected lines — one line when
+   * the selection is the cursor alone. Answers whether it did.
    *
    * `c` is the letter GitHub's own diff uses, and it is free here because the editor is
-   * read-only: a keystroke that would otherwise type a character types nothing. The *cursor's*
-   * line is asked the same question the pointer's line is asked — in range, and part of the diff
-   * rather than one of the blank lines the reconstruction pads gaps with — through `cursorHit`,
-   * so the two paths cannot come to different conclusions about which lines may carry a comment.
-   * A line that may not simply does nothing, which is what the pointer does over it too.
+   * read-only: a keystroke that would otherwise type a character types nothing. The lines are
+   * asked the same question the pointer's line is asked — in range, and part of the diff rather
+   * than one of the blank lines the reconstruction pads gaps with — through `rangeTarget`, so the
+   * two paths cannot come to different conclusions about which lines may carry a comment. A
+   * selection that may not simply does nothing, which is what the pointer does over it too.
    */
-  private commentOnCursor(editor: monaco.editor.ICodeEditor, side: Side): boolean {
-    const hit = cursorHit({
-      lineNumber: editor.getPosition()?.lineNumber ?? null,
-      side,
-      lineCount: editor.getModel()?.getLineCount() ?? -1,
-      commentable: this.commentable[side],
-    });
-    if (hit === null) return false;
-    const target = addCommentTarget(hit);
+  private commentOnSelection(editor: monaco.editor.ICodeEditor, side: Side): boolean {
+    const selection = editor.getSelection();
+    if (selection === null) return false;
+    const target = rangeTarget(
+      { side, lineCount: editor.getModel()?.getLineCount() ?? -1, commentable: this.commentable[side] },
+      selection,
+    );
+    if (target === null) return false;
     this.post(makeAddComment(target.line, target.side, target.startLine));
     return true;
+  }
+
+  /**
+   * Selects whole lines, `anchor` first, so a later ⇧-click widens from it. Up to the start of
+   * the line after, which is how Monaco selects from the line numbers, and what `rangeTarget`
+   * reads a selection ending at column 1 as.
+   */
+  private selectLines(editor: monaco.editor.ICodeEditor, anchor: number, active: number): void {
+    const model = editor.getModel();
+    if (model === null) return;
+    const after = (line: number): [number, number] =>
+      line < model.getLineCount() ? [line + 1, 1] : [line, model.getLineMaxColumn(line)];
+    const [anchorLine, anchorColumn] = active >= anchor ? [anchor, 1] : after(anchor);
+    const [activeLine, activeColumn] = active >= anchor ? after(active) : [active, 1];
+    editor.setSelection(new monaco.Selection(anchorLine, anchorColumn, activeLine, activeColumn));
+  }
+
+  /**
+   * ⌘-click: asks the app to open the file at this line. A line of the original pane is first
+   * moved to where that spot is in the new file, because the reviewer's checkout has only that.
+   * In inline mode the one pane is the modified file already.
+   */
+  private openInEditor(line: number, side: Side): void {
+    const head =
+      side === 'left' && this.mode === 'sideBySide'
+        ? originalToModifiedLine(line, this.diffEditor.getLineChanges() ?? [])
+        : line;
+    this.post(makeOpenInEditor(head));
   }
 
   /**

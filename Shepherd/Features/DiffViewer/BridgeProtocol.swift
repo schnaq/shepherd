@@ -609,6 +609,9 @@ enum DiffViewerEvent: Hashable, Sendable, Codable {
     case ready
     /// The user clicked a gutter “+”; Shepherd opens the *native* composer.
     case addComment(line: Int, side: BridgeSide, startLine: Int?)
+    /// The user ⌘-clicked a line; Shepherd opens the file in the reviewer's editor there. Always a
+    /// head-side line — the viewer maps the original pane onto the new file first.
+    case openInEditor(line: Int)
     /// The user clicked a thread or draft card.
     case commentClicked(BridgeCommentTarget)
     /// The viewer scrolled (throttled to one message per 120 ms by the web side).
@@ -619,6 +622,7 @@ enum DiffViewerEvent: Hashable, Sendable, Codable {
         switch self {
         case .ready: return "ready"
         case .addComment: return "addComment"
+        case .openInEditor: return "openInEditor"
         case .commentClicked: return "commentClicked"
         case .viewportChanged: return "viewportChanged"
         }
@@ -653,6 +657,10 @@ enum DiffViewerEvent: Hashable, Sendable, Codable {
                 }
             }
             self = .addComment(line: line, side: side, startLine: startLine)
+        case "openInEditor":
+            let line = try container.decode(Int.self, forKey: .line)
+            guard line >= 1 else { throw BridgeProtocolError.invalidLineNumber(line) }
+            self = .openInEditor(line: line)
         case "commentClicked":
             let threadID = try container.decodeIfPresent(String.self, forKey: .threadID)
             let localID = try container.decodeIfPresent(String.self, forKey: .localID)
@@ -686,6 +694,8 @@ enum DiffViewerEvent: Hashable, Sendable, Codable {
             try container.encode(line, forKey: .line)
             try container.encode(side, forKey: .side)
             try container.encodeIfPresent(startLine, forKey: .startLine)
+        case .openInEditor(let line):
+            try container.encode(line, forKey: .line)
         case .commentClicked(let target):
             switch target {
             case .thread(let id): try container.encode(id, forKey: .threadID)

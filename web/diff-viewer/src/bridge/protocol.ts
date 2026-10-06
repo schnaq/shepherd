@@ -271,9 +271,8 @@ export interface ReadyMessage {
  * User clicked a gutter “+”. Swift opens the *native* comment composer — text entry never
  * happens inside the webview.
  *
- * `startLine` is the protocol passthrough for multi-line selection comments. v1 of the viewer
- * only triggers single-line (`startLine` omitted); the field exists so Swift can decode
- * multi-line requests without a protocol bump when the drag affordance lands.
+ * `startLine` is set for a multi-line comment — lines selected in one pane, then `c` or the “+”
+ * — and omitted for a single line. Both ends are on `side`, the way GitHub anchors a range.
  */
 export interface AddCommentMessage {
   readonly v: ProtocolVersion;
@@ -302,9 +301,22 @@ export interface ViewportChangedMessage {
   readonly firstVisibleLine: number;
 }
 
+/**
+ * User ⌘-clicked a line. Swift opens the file in the reviewer's editor at `line`.
+ *
+ * Always a head-side line: the viewer maps a click on the original pane to where that spot is in
+ * the new file, because a checkout only has the new one.
+ */
+export interface OpenInEditorMessage {
+  readonly v: ProtocolVersion;
+  readonly type: 'openInEditor';
+  readonly line: number;
+}
+
 export type OutboundMessage =
   | ReadyMessage
   | AddCommentMessage
+  | OpenInEditorMessage
   | CommentClickedMessage
   | ViewportChangedMessage;
 
@@ -313,6 +325,7 @@ export type OutboundMessageType = OutboundMessage['type'];
 export const OUTBOUND_MESSAGE_TYPES: readonly OutboundMessageType[] = [
   'ready',
   'addComment',
+  'openInEditor',
   'commentClicked',
   'viewportChanged',
 ];
@@ -323,6 +336,10 @@ export const OUTBOUND_MESSAGE_TYPES: readonly OutboundMessageType[] = [
 
 export function makeReady(): ReadyMessage {
   return { v: PROTOCOL_VERSION, type: 'ready' };
+}
+
+export function makeOpenInEditor(line: number): OpenInEditorMessage {
+  return { v: PROTOCOL_VERSION, type: 'openInEditor', line };
 }
 
 export function makeAddComment(line: number, side: Side, startLine?: number): AddCommentMessage {
@@ -650,6 +667,9 @@ export function parseOutbound(value: unknown): ParseResult<OutboundMessage> {
       if (startLine > msg['line']) return fail('addComment.startLine: must not be greater than line');
       return ok({ v: PROTOCOL_VERSION, type: 'addComment', line: msg['line'], side: msg['side'], startLine });
     }
+    case 'openInEditor':
+      if (!isLineNumber(msg['line'])) return fail('openInEditor.line: expected a 1-based line number');
+      return ok({ v: PROTOCOL_VERSION, type: 'openInEditor', line: msg['line'] });
     case 'commentClicked': {
       const threadID = msg['threadID'];
       const localID = msg['localID'];

@@ -45,6 +45,12 @@ You can also use the keyboard:
 
 In the side-by-side diff, `[` and `]` move between the original and the modified pane. That is how you comment on a deleted line.
 
+To comment on several lines, drag across the line numbers, or click one `+` and ⇧-click another. Then the comment covers the range, as on GitHub. Selecting lines and pressing `c` does the same. A range has to stay inside one hunk and on one side.
+
+### Open a line in your editor
+
+⌘-click any line in the diff to open the file in your editor at that line. In the line list, ⌘-click a row. This needs a linked local checkout, see [Local checkouts](/docs/settings#local-checkouts). A line on the deleted side opens where that spot is in the new file. Your editor shows the file as it is in your checkout. If another branch is checked out there, the line can be off.
+
 Type your comment and click **Add comment**. It is saved to your pending review. Nothing is sent until you submit. The review bar counts your pending comments. Drafts survive a restart.
 
 Threads that already exist show on their lines. You can reply, and **Resolve** or **Unresolve** a thread. A reply or resolve made offline is queued like a review.

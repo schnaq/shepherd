@@ -146,6 +146,9 @@ struct DiffListView: View {
     /// is an event, so asking twice has to arrive twice. `focusEditorSide` is not read — the list
     /// is one column and has no pane to name.
     var focusRequest: Int
+    /// Opens the file in the reviewer's editor at a head-side line, on ⌘-click — `nil` for a
+    /// removed line, which the new file no longer has.
+    var onOpenInEditor: (Int?) -> Void
     /// Hands the keyboard back to the file list, on escape.
     var onExit: () -> Void
 
@@ -238,7 +241,11 @@ struct DiffListView: View {
         // that pair holds every click back for the double-click interval before it selects
         // anything. Here the click selects at once and the second click of a pair comments.
         .onClick {
-            select(index)
+            if NSEvent.modifierFlags.contains(.command), case .line(let patchRow) = value {
+                onOpenInEditor(DiffListContent.lineNumbers(of: patchRow).head)
+            } else {
+                select(index)
+            }
         } onDoubleClick: {
             comment(at: index)
         }

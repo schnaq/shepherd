@@ -1363,7 +1363,8 @@ final class ReviewModel {
                     startLine: comment.startLine
                 )
             }
-        case .viewportChanged:
+        case .viewportChanged, .openInEditor:
+            // `openInEditor` is the screen's: the editor opener needs the settings and the toasts.
             break
         }
     }

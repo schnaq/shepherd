@@ -17,7 +17,7 @@ final class BridgeProtocolTests: XCTestCase {
 
     /// Message types that travel web → Swift.
     private static let eventTypes: Set<String> = [
-        "ready", "addComment", "commentClicked", "viewportChanged",
+        "ready", "addComment", "openInEditor", "commentClicked", "viewportChanged",
     ]
 
     private func fixtureURLs() throws -> [URL] {

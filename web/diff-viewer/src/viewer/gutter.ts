@@ -91,22 +91,68 @@ export function hitChanged(previous: GutterHit | null, next: GutterHit | null): 
   return previous.line !== next.line || previous.side !== next.side;
 }
 
+/** Mirrors the line fields of `monaco.Selection`. */
+export interface SelectionLines {
+  readonly startLineNumber: number;
+  readonly endLineNumber: number;
+  readonly endColumn: number;
+}
+
 /**
- * Resolves the `addComment` payload for a click. Multi-line selection is a v2 affordance;
- * `selectionStartLine` is threaded through now so the protocol passthrough is exercised, but
- * the viewer currently always passes `undefined` (single-line trigger).
+ * The lines a selection covers. One ending at column 1 has selected nothing on its last line —
+ * clicking a line number selects up to the start of the *next* one — so that line is left out.
  */
-export function addCommentTarget(
-  hit: GutterHit,
-  selectionStartLine?: number,
-): { line: number; side: Side; startLine?: number } {
-  if (
-    selectionStartLine !== undefined &&
-    Number.isInteger(selectionStartLine) &&
-    selectionStartLine >= 1 &&
-    selectionStartLine < hit.line
-  ) {
-    return { line: hit.line, side: hit.side, startLine: selectionStartLine };
+export function selectedLines(selection: SelectionLines): { start: number; end: number } {
+  const start = selection.startLineNumber;
+  const end = selection.endLineNumber;
+  return { start, end: selection.endColumn === 1 && end > start ? end - 1 : end };
+}
+
+/**
+ * Resolves the `addComment` payload for a selection in one pane — a single line when nothing
+ * spans lines, a range otherwise — or `null` when any line of it may not carry a comment.
+ *
+ * Every line is asked, not just the two ends: the padding between hunks is not commentable, so a
+ * range that crosses it spans two hunks, and GitHub refuses a range comment like that along with
+ * the whole review it came in.
+ *
+ * A selection ending at column 1 has selected nothing on its last line — clicking a line number
+ * selects up to the start of the *next* one — so that line is left out.
+ */
+export function rangeTarget(
+  probe: Omit<CursorProbe, 'lineNumber'>,
+  selection: SelectionLines,
+): { line: number; side: Side; startLine?: number } | null {
+  const { start, end } = selectedLines(selection);
+  for (let line = start; line <= end; line += 1) {
+    if (cursorHit({ ...probe, lineNumber: line }) === null) return null;
   }
-  return { line: hit.line, side: hit.side };
+  return start === end ? { line: end, side: probe.side } : { line: end, side: probe.side, startLine: start };
+}
+
+/** Mirrors `monaco.editor.ILineChange`; an end of 0 means that side has no lines in the change. */
+export interface LineChange {
+  readonly originalStartLineNumber: number;
+  readonly originalEndLineNumber: number;
+  readonly modifiedStartLineNumber: number;
+  readonly modifiedEndLineNumber: number;
+}
+
+/**
+ * Where a line of the original file is in the modified one: a deleted or changed line lands on
+ * the first line that replaced it (or the line the deletion sits after), every other line shifts
+ * by what the changes above it added and removed.
+ */
+export function originalToModifiedLine(line: number, changes: readonly LineChange[]): number {
+  let shift = 0;
+  for (const change of changes) {
+    const originalEnd = change.originalEndLineNumber === 0 ? change.originalStartLineNumber : change.originalEndLineNumber;
+    if (change.originalEndLineNumber !== 0 && line >= change.originalStartLineNumber && line <= originalEnd) {
+      return Math.max(1, change.modifiedStartLineNumber);
+    }
+    if (originalEnd >= line) break;
+    const modifiedEnd = change.modifiedEndLineNumber === 0 ? change.modifiedStartLineNumber : change.modifiedEndLineNumber;
+    shift = modifiedEnd - originalEnd;
+  }
+  return Math.max(1, line + shift);
 }
