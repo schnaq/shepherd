@@ -4891,6 +4891,16 @@
         }
       }
     },
+    "Could not upload the image — attach it on GitHub instead": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bild konnte nicht hochgeladen werden – häng es stattdessen auf GitHub an"
+          }
+        }
+      }
+    },
     "Count this pull request as reviewed and move to the next one. Approving, requesting changes or merging does this on its own.": {
       "localizations": {
         "de": {
@@ -6307,6 +6317,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "ID"
+          }
+        }
+      }
+    },
+    "Images can be up to 10 MB on GitHub.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bilder dürfen auf GitHub höchstens 10 MB groß sein."
           }
         }
       }

@@ -15,6 +15,8 @@ public enum GitHubDefaultURL {
     public static var api: URL { url("https://api.github.com") }
     /// `https://api.github.com/graphql` — the GraphQL endpoint.
     public static var graphQL: URL { url("https://api.github.com/graphql") }
+    /// `https://uploads.github.com` — where a pasted image is uploaded to.
+    public static var uploads: URL { url("https://uploads.github.com") }
     /// `https://github.com` — where the device flow and token endpoints live.
     public static var web: URL { url("https://github.com") }
     /// The `User-Agent` Shepherd sends. GitHub requires a non-empty one.

@@ -206,6 +206,33 @@ final class WriteRequestTests: XCTestCase {
         XCTAssertEqual(json["start_side"] as? String, "RIGHT")
     }
 
+    func testAnAttachmentIsUploadedScopedToTheRepository() async throws {
+        let transport = MockTransport()
+        await transport.route("/repos/schnaq/review", Fixture.response(json: "{\"id\": 4242}", status: 200))
+        await transport.route(
+            "/user-attachments/assets",
+            Fixture.response(json: "{\"href\": \"https://github.com/user-attachments/assets/abc\"}", status: 201)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let url = try await client.uploadAttachment(
+            Data([0x89, 0x50]),
+            name: "Screenshot.png",
+            contentType: "image/png",
+            repo: repo
+        )
+
+        XCTAssertEqual(url.absoluteString, "https://github.com/user-attachments/assets/abc")
+        let upload = await transport.requests.last
+        XCTAssertEqual(upload?.method, "POST")
+        XCTAssertEqual(
+            upload?.url.absoluteString,
+            "https://uploads.github.com/user-attachments/assets?name=Screenshot.png&content_type=image/png&repository_id=4242"
+        )
+        XCTAssertEqual(upload?.headers["Content-Type"], "image/png")
+        XCTAssertEqual(upload?.body, Data([0x89, 0x50]))
+    }
+
     func testResolveThreadUsesTheGraphQLMutation() async throws {
         let transport = MockTransport()
         let response = try Fixture.response("resolve-thread")
