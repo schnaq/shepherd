@@ -136,6 +136,10 @@ export class MonacoDiffViewer implements ViewerPort {
     this.wireEditor(this.diffEditor.getModifiedEditor(), 'right');
     this.wireEditor(this.diffEditor.getOriginalEditor(), 'left');
 
+    // A gutter press ends wherever the button comes up — on the window rather than the editor, so
+    // a release outside it still ends the press instead of leaving it for an unrelated click.
+    this.container.ownerDocument.defaultView?.addEventListener('mouseup', this.endGutterPress);
+
     this.diffEditor.getModifiedEditor().onDidScrollChange(() => {
       const first = this.firstVisibleLine();
       if (first !== null) this.viewportThrottled(first);
@@ -326,6 +330,7 @@ export class MonacoDiffViewer implements ViewerPort {
   // -- lifecycle -----------------------------------------------------------------------------
 
   dispose(): void {
+    this.container.ownerDocument.defaultView?.removeEventListener('mouseup', this.endGutterPress);
     this.viewportThrottled.cancel();
     this.unmountAll();
     this.diffEditor.dispose();
@@ -400,18 +405,10 @@ export class MonacoDiffViewer implements ViewerPort {
         // Widened from whichever end is away from the click, as ⇧-click widens a text selection.
         if (hit.line >= current.start) this.selectLines(editor, current.start, hit.line);
         else this.selectLines(editor, current.end, hit.line);
-      } else if (current === null || current.start === current.end || hit.line < current.start || hit.line > current.end) {
+      } else if (current === null || hit.line < current.start || hit.line > current.end) {
         // A “+” inside a selected range comments on the range; anywhere else, on its own line.
         this.selectLines(editor, hit.line, hit.line);
       }
-    });
-
-    editor.onMouseUp(() => {
-      const press = this.gutterPress;
-      this.gutterPress = null;
-      if (press === null || press.side !== side) return;
-      // A range that crosses into another hunk is not one GitHub takes; the line pressed is.
-      if (!this.commentOnSelection(editor, side)) this.post(makeAddComment(press.line, side));
     });
 
     // The same comment, reached by the keyboard. Until this existed, leaving an inline comment
@@ -460,6 +457,16 @@ export class MonacoDiffViewer implements ViewerPort {
     this.post(makeAddComment(target.line, target.side, target.startLine));
     return true;
   }
+
+  private readonly endGutterPress = (): void => {
+    const press = this.gutterPress;
+    this.gutterPress = null;
+    if (press === null) return;
+    // A range that crosses into another hunk is not one GitHub takes; the line pressed is.
+    if (!this.commentOnSelection(this.editorFor(press.side), press.side)) {
+      this.post(makeAddComment(press.line, press.side));
+    }
+  };
 
   /**
    * Selects whole lines, `anchor` first, so a later ⇧-click widens from it. Up to the start of

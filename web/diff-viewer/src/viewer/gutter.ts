@@ -115,9 +115,6 @@ export function selectedLines(selection: SelectionLines): { start: number; end: 
  * Every line is asked, not just the two ends: the padding between hunks is not commentable, so a
  * range that crosses it spans two hunks, and GitHub refuses a range comment like that along with
  * the whole review it came in.
- *
- * A selection ending at column 1 has selected nothing on its last line — clicking a line number
- * selects up to the start of the *next* one — so that line is left out.
  */
 export function rangeTarget(
   probe: Omit<CursorProbe, 'lineNumber'>,
@@ -144,6 +141,7 @@ export interface LineChange {
  * by what the changes above it added and removed.
  */
 export function originalToModifiedLine(line: number, changes: readonly LineChange[]): number {
+  // The shift left by the last change wholly above `line`; a change at or below it ends the walk.
   let shift = 0;
   for (const change of changes) {
     const originalEnd = change.originalEndLineNumber === 0 ? change.originalStartLineNumber : change.originalEndLineNumber;

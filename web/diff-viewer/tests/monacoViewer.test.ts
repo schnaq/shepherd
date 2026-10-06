@@ -53,10 +53,8 @@ interface FakeCodeEditor {
   decorations: unknown[];
   onMouseLeave(handler: () => void): void;
   onMouseDown(handler: (event: unknown) => void): void;
-  onMouseUp(handler: (event: unknown) => void): void;
-  /** The press and release handlers, so a test can click the gutter itself. */
+  /** The press handler, so a test can click the gutter itself. */
   mouseDownHandler: ((event: unknown) => void) | null;
-  mouseUpHandler: ((event: unknown) => void) | null;
   /** The selection, or `null` for an empty one at the cursor. */
   selection: FakeSelection | null;
   getSelection(): FakeSelection | null;
@@ -105,12 +103,8 @@ function makeCodeEditor(): FakeCodeEditor {
     },
     onMouseLeave: () => undefined,
     mouseDownHandler: null,
-    mouseUpHandler: null,
     onMouseDown: (handler) => {
       editor.mouseDownHandler = handler;
-    },
-    onMouseUp: (handler) => {
-      editor.mouseUpHandler = handler;
     },
     selection: null,
     getSelection: () => {
@@ -683,7 +677,7 @@ describe('ranges and ⌘-click', () => {
   const five = message({ original: 'a\nb\nc\nd\ne', modified: 'a\nb\nc\nd\ne' });
   const press = (editor: FakeCodeEditor, line: number, extra: Record<string, boolean> = {}, type = 2): void => {
     editor.mouseDownHandler?.({ target: { type, position: { lineNumber: line } }, event: { metaKey: false, shiftKey: false, ...extra } });
-    editor.mouseUpHandler?.({});
+    window.dispatchEvent(new MouseEvent('mouseup'));
   };
 
   beforeEach(() => {

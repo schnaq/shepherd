@@ -1380,6 +1380,7 @@ final class ReviewModel {
         try validateAnchor(of: request)
         let existing = draft?.comments.first {
             $0.path == request.path && $0.line == request.line && $0.side == request.side
+                && $0.startLine == request.startLine
         }
         let comment = DraftComment(
             localID: existing?.localID ?? UUID(),
