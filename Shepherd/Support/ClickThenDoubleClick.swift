@@ -54,3 +54,35 @@ enum PointerClick {
         }
     }
 }
+
+extension View {
+    /// Keeps the selected row of a list in view, except when a click put it there.
+    ///
+    /// The inbox, the issue list and the fleet's agent list all follow their selection with a
+    /// short scroll, and all three skip it for a click: the clicked row is under the pointer, so it
+    /// is on screen, and scrolling to it would only move the list away from where the reader is
+    /// looking. `j`/`k`, a restore, a deep link and a clamp after a filter change can all land off
+    /// screen, and those still scroll. The row's tap sets `skipNext` when it changes the selection;
+    /// this consumes it on the change that follows. A VoiceOver press leaves it unset on purpose —
+    /// VoiceOver wants the scroll.
+    /// - Parameters:
+    ///   - selection: The selected row's id; its changes are what scroll.
+    ///   - proxy: The list's scroll proxy.
+    ///   - skipNext: Set by a click so the selection change it causes does not scroll.
+    func scrollsToSelection<ID: Hashable>(
+        _ selection: ID?,
+        proxy: ScrollViewProxy,
+        skipNext: Binding<Bool>
+    ) -> some View {
+        onChange(of: selection) { _, id in
+            if skipNext.wrappedValue {
+                skipNext.wrappedValue = false
+                return
+            }
+            guard let id else { return }
+            withAnimation(.easeOut(duration: 0.12)) {
+                proxy.scrollTo(id, anchor: .center)
+            }
+        }
+    }
+}

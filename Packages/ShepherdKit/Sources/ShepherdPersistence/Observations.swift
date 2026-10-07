@@ -15,19 +15,8 @@ extension DatabaseManager {
     public func observeInbox(
         filter: InboxFilter = InboxFilter()
     ) -> AsyncStream<[PullRequestSummary]> {
-        let writer = self.writer
-        let observation = ValueObservation.tracking { db -> [PullRequestSummary] in
-            try DatabaseManager.loadInbox(db, filter: filter)
-        }
-        return AsyncStream { continuation in
-            let queue = DispatchQueue(label: "com.schnaq.shepherd.observation.inbox")
-            let cancellable = observation.start(
-                in: writer,
-                scheduling: .async(onQueue: queue),
-                onError: { _ in continuation.finish() },
-                onChange: { value in continuation.yield(value) }
-            )
-            continuation.onTermination = { _ in cancellable.cancel() }
+        observeStream(label: "com.schnaq.shepherd.observation.inbox") {
+            try DatabaseManager.loadInbox($0, filter: filter)
         }
     }
 
@@ -38,19 +27,8 @@ extension DatabaseManager {
     /// - Parameter prID: The pull request's node id.
     /// - Returns: A stream of the current draft.
     public func observeDraft(prID: String) -> AsyncStream<ReviewDraft?> {
-        let writer = self.writer
-        let observation = ValueObservation.tracking { db -> ReviewDraft? in
-            try DatabaseManager.loadDraft(db, prID: prID)
-        }
-        return AsyncStream { continuation in
-            let queue = DispatchQueue(label: "com.schnaq.shepherd.observation.draft")
-            let cancellable = observation.start(
-                in: writer,
-                scheduling: .async(onQueue: queue),
-                onError: { _ in continuation.finish() },
-                onChange: { value in continuation.yield(value) }
-            )
-            continuation.onTermination = { _ in cancellable.cancel() }
+        observeStream(label: "com.schnaq.shepherd.observation.draft") {
+            try DatabaseManager.loadDraft($0, prID: prID)
         }
     }
 
@@ -75,19 +53,8 @@ extension DatabaseManager {
     /// - Parameter prID: The pull request's node id.
     /// - Returns: A stream of the current detail.
     public func observePullRequestDetail(prID: String) -> AsyncStream<PullRequestDetail?> {
-        let writer = self.writer
-        let observation = ValueObservation.tracking { db -> PullRequestDetail? in
-            try DatabaseManager.loadPullRequestDetail(db, id: prID)
-        }
-        return AsyncStream { continuation in
-            let queue = DispatchQueue(label: "com.schnaq.shepherd.observation.detail")
-            let cancellable = observation.start(
-                in: writer,
-                scheduling: .async(onQueue: queue),
-                onError: { _ in continuation.finish() },
-                onChange: { value in continuation.yield(value) }
-            )
-            continuation.onTermination = { _ in cancellable.cancel() }
+        observeStream(label: "com.schnaq.shepherd.observation.detail") {
+            try DatabaseManager.loadPullRequestDetail($0, id: prID)
         }
     }
 
@@ -105,19 +72,8 @@ extension DatabaseManager {
     /// - Parameter prID: The pull request's node id.
     /// - Returns: A stream of the stored outcome, or `nil` while there is none.
     public func observePullRequestOutcome(prID: String) -> AsyncStream<PullRequestOutcome?> {
-        let writer = self.writer
-        let observation = ValueObservation.tracking { db -> PullRequestOutcome? in
-            try DatabaseManager.loadPullRequestOutcome(db, prID: prID)
-        }
-        return AsyncStream { continuation in
-            let queue = DispatchQueue(label: "com.schnaq.shepherd.observation.outcome")
-            let cancellable = observation.start(
-                in: writer,
-                scheduling: .async(onQueue: queue),
-                onError: { _ in continuation.finish() },
-                onChange: { value in continuation.yield(value) }
-            )
-            continuation.onTermination = { _ in cancellable.cancel() }
+        observeStream(label: "com.schnaq.shepherd.observation.outcome") {
+            try DatabaseManager.loadPullRequestOutcome($0, prID: prID)
         }
     }
 
@@ -169,27 +125,29 @@ extension DatabaseManager {
     /// - Returns: A stream that finishes when the caller stops iterating or the observation
     ///   fails.
     public func observeOutboxItems() -> AsyncStream<[OutboxItem]> {
-        let writer = self.writer
-        let observation = ValueObservation.tracking { db -> [OutboxItem] in
-            try DatabaseManager.loadOutboxItems(db)
-        }
-        return AsyncStream { continuation in
-            let queue = DispatchQueue(label: "com.schnaq.shepherd.observation.outbox.items")
-            let cancellable = observation.start(
-                in: writer,
-                scheduling: .async(onQueue: queue),
-                onError: { _ in continuation.finish() },
-                onChange: { value in continuation.yield(value) }
-            )
-            continuation.onTermination = { _ in cancellable.cancel() }
+        observeStream(label: "com.schnaq.shepherd.observation.outbox.items") {
+            try DatabaseManager.loadOutboxItems($0)
         }
     }
 
     private func observeOutboxCount(matching predicate: String, label: String) -> AsyncStream<Int> {
-        let writer = self.writer
-        let observation = ValueObservation.tracking { db -> Int in
-            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM outbox WHERE \(predicate)") ?? 0
+        observeStream(label: label) {
+            try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM outbox WHERE \(predicate)") ?? 0
         }
+    }
+
+    /// Builds the `AsyncStream` every observation in this package hands out: a GRDB
+    /// `ValueObservation` of `fetch`, delivered on its own serial queue, finishing on the first
+    /// error and cancelled when the caller stops iterating.
+    /// - Parameters:
+    ///   - label: The delivery queue's label.
+    ///   - fetch: The read to track and re-run.
+    func observeStream<T: Sendable>(
+        label: String,
+        _ fetch: @escaping @Sendable (Database) throws -> T
+    ) -> AsyncStream<T> {
+        let writer = self.writer
+        let observation = ValueObservation.tracking(fetch)
         return AsyncStream { continuation in
             let queue = DispatchQueue(label: label)
             let cancellable = observation.start(

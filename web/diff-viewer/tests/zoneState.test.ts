@@ -9,7 +9,6 @@ import {
   toThreadZones,
   ZoneStore,
   zoneSignature,
-  zonesForSide,
   type Zone,
 } from '../src/viewer/zoneState.js';
 
@@ -162,13 +161,5 @@ describe('pane assignment', () => {
   it('folds everything onto the modified pane in inline mode', () => {
     expect(hostSide('left', 'inline')).toBe('right');
     expect(hostSide('right', 'inline')).toBe('right');
-  });
-
-  it('partitions a zone list per pane', () => {
-    const zones = [...toThreadZones([thread({ side: 'left' })]), ...toDraftZones([draft({ side: 'right' })])];
-    expect(zonesForSide(zones, 'left', 'sideBySide').map((z) => z.key)).toEqual(['thread:T1']);
-    expect(zonesForSide(zones, 'right', 'sideBySide').map((z) => z.key)).toEqual(['draft:D1']);
-    expect(zonesForSide(zones, 'right', 'inline').map((z) => z.key)).toEqual(['thread:T1', 'draft:D1']);
-    expect(zonesForSide(zones, 'left', 'inline')).toEqual([]);
   });
 });

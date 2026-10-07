@@ -397,10 +397,8 @@ final class InboxModel {
     private var sessionsTask: Task<Void, Never>?
     private var trustTask: Task<Void, Never>?
     private var outboxTask: Task<Void, Never>?
-    /// The rows the rounds chips were last computed for, as `id:head` pairs.
-    private var roundsSignature = ""
-    /// The rows the session glyphs were last read for, as `id:head` pairs.
-    private var sessionsSignature = ""
+    /// The rows the rounds chips and the session glyphs were last read for, as `id:head` pairs.
+    private var rowsSignature = ""
 
     /// Creates the model.
     /// - Parameters:
@@ -423,8 +421,7 @@ final class InboxModel {
                 self.storedRows = rows
                 self.hasLoaded = true
                 self.clampSelection()
-                self.refreshReviewRounds()
-                self.refreshSessionReferences()
+                self.refreshHeadDerivedState()
                 self.refreshTrustLanes()
             }
         }
@@ -455,15 +452,23 @@ final class InboxModel {
         outboxTask = nil
     }
 
-    /// Recomputes the rounds chips, but only when the rows they describe have moved.
+    /// Recomputes the rounds chips and re-reads the return addresses, but only when the rows they
+    /// describe have moved.
     ///
-    /// The inbox observation speaks on every write, and the interdiff is real work; the
-    /// signature is the cheap gate — a chip can only change when a pull request appears,
-    /// disappears or gets a new head (ADR 0028).
-    private func refreshReviewRounds() {
+    /// The inbox observation speaks on every write, and the interdiff is real work; the rows' ids
+    /// and head commits are the cheap gate — a chip (ADR 0028) or a glyph (ADR 0030) can only
+    /// change when a pull request appears, disappears or gets a new head. One signature for both,
+    /// built once per emission, because both answer to exactly the same change.
+    private func refreshHeadDerivedState() {
         let signature = allRows.map { "\($0.id):\($0.headRefOid)" }.joined(separator: ",")
-        guard signature != roundsSignature else { return }
-        roundsSignature = signature
+        guard signature != rowsSignature else { return }
+        rowsSignature = signature
+        refreshReviewRounds()
+        refreshSessionReferences()
+    }
+
+    /// Recomputes the rounds chips; gated by ``refreshHeadDerivedState()``.
+    private func refreshReviewRounds() {
         let rows = allRows
         let database = session.database
         let viewerLogin = session.account.login
@@ -479,15 +484,8 @@ final class InboxModel {
         }
     }
 
-    /// Re-reads the return addresses, but only when the rows they describe have moved.
-    ///
-    /// The same cheap gate as ``refreshReviewRounds()``, for the same reason: the inbox
-    /// observation speaks on every write, and a glyph can only change when a pull request
-    /// appears, disappears or gets a new head commit (ADR 0030).
+    /// Re-reads the return addresses; gated by ``refreshHeadDerivedState()``.
     private func refreshSessionReferences() {
-        let signature = allRows.map { "\($0.id):\($0.headRefOid)" }.joined(separator: ",")
-        guard signature != sessionsSignature else { return }
-        sessionsSignature = signature
         let rows = allRows
         let database = session.database
         sessionsTask?.cancel()
@@ -515,7 +513,7 @@ final class InboxModel {
 
     /// Recomputes the lanes and the badges.
     ///
-    /// Deliberately **without** the signature gate ``refreshReviewRounds()`` has, and the
+    /// Deliberately **without** the signature gate ``refreshHeadDerivedState()`` has, and the
     /// difference is the inputs rather than the cost. A rounds chip is a function of the rows and
     /// their heads, so a signature over those is exact. A lane is a function of the rows *and* of
     /// `changed_files` — the sensitive-path exclusion is about paths — and a detail fetch that
@@ -704,6 +702,18 @@ final class InboxModel {
     /// list.
     var hasActiveFilter: Bool {
         provenanceFilter != nil || repoFilter != nil || riskFilter != nil || laneFilter != nil
+    }
+
+    /// Turns every rail facet off — the one inverse of ``hasActiveFilter``.
+    ///
+    /// The header's ✕ and the empty state's "Clear filter" button both clear the same four
+    /// facets; spelling the reset out once keeps a fifth facet from being cleared by one and
+    /// forgotten by the other.
+    func clearFilter() {
+        provenanceFilter = nil
+        repoFilter = nil
+        riskFilter = nil
+        laneFilter = nil
     }
 
     // MARK: - Putting a pull request away
@@ -1530,7 +1540,9 @@ final class InboxModel {
                     number: row.number
                 )
                 try? await self.session.database.savePullRequestDetail(fresh)
-                guard !Task.isCancelled, self.selectedID == selectedID else { return }
+                // An unchanged copy would re-run the prioritiser and restart the same (possibly
+                // paid) summary request the cached apply already has in flight.
+                guard !Task.isCancelled, self.selectedID == selectedID, fresh != self.detail else { return }
                 self.apply(detail: fresh)
             } catch {
                 // Offline is a normal state: the cached copy above is what the user sees.

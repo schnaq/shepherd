@@ -87,36 +87,48 @@ public actor GitHubClient {
     }
 
     private func search(_ query: InboxQuery) async throws -> [PullRequestSummary] {
-        var results: [PullRequestSummary] = []
+        try await sweep(
+            document: GraphQLDocuments.searchPullRequests,
+            rawQuery: query.rawQuery,
+            page: { (data: SearchPullRequestsData) in (data.search?.nodes, data.search?.pageInfo) },
+            map: {
+                ResponseMapping.pullRequestSummary(
+                    from: $0,
+                    relations: query.impliedRelations,
+                    detector: self.detector
+                )
+            }
+        )
+    }
+
+    /// Pages one GraphQL `search` connection — the loop both sweeps (pull requests and issues)
+    /// share, so they differ only in document, payload type and row mapper.
+    private func sweep<Payload: Decodable, Node, Row>(
+        document: String,
+        rawQuery: String,
+        page: (Payload) -> (nodes: [Node?]?, pageInfo: PageInfoDTO?),
+        map: (Node) -> Row?
+    ) async throws -> [Row] {
+        var results: [Row] = []
         var cursor: String? = nil
-        // Five pages of 100 is 500 open pull requests per facet — far beyond any inbox a
-        // human can triage, and a hard stop against a pathological account.
+        // Five pages of 100 is 500 open pull requests (or issues) per facet — far beyond any
+        // inbox a human can triage, and a hard stop against a pathological account.
         for _ in 0..<5 {
             var variables: [String: GraphQLValue] = [
-                "q": .string(query.rawQuery),
+                "q": .string(rawQuery),
                 "first": .int(100),
             ]
             variables["after"] = cursor.map { GraphQLValue.string($0) } ?? .null
 
-            let data: SearchPullRequestsData = try await graphQL(
-                document: GraphQLDocuments.searchPullRequests,
+            let data: Payload = try await graphQL(
+                document: document,
                 variables: variables,
                 resource: "search",
                 isIdempotent: true
             )
-            let nodes = (data.search?.nodes ?? []).compactMap { $0 }
-            for node in nodes {
-                if let summary = ResponseMapping.pullRequestSummary(
-                    from: node,
-                    relations: query.impliedRelations,
-                    detector: detector
-                ) {
-                    results.append(summary)
-                }
-            }
-            guard data.search?.pageInfo?.hasNextPage == true,
-                  let next = data.search?.pageInfo?.endCursor
-            else { break }
+            let (nodes, pageInfo) = page(data)
+            results.append(contentsOf: (nodes ?? []).compactMap { $0 }.compactMap(map))
+            guard pageInfo?.hasNextPage == true, let next = pageInfo?.endCursor else { break }
             cursor = next
         }
         return results
@@ -148,39 +160,19 @@ public actor GitHubClient {
     }
 
     private func searchIssues(_ query: IssueQuery) async throws -> [IssueRowSummary] {
-        var results: [IssueRowSummary] = []
-        var cursor: String? = nil
-        // Five pages of 100, the sweep's own cap: 500 open issues per facet is far beyond any
-        // inbox a human can triage, and a hard stop against a pathological account.
-        for _ in 0..<5 {
-            var variables: [String: GraphQLValue] = [
-                "q": .string(query.rawQuery),
-                "first": .int(100),
-            ]
-            variables["after"] = cursor.map { GraphQLValue.string($0) } ?? .null
-
-            let data: SearchIssuesData = try await graphQL(
-                document: GraphQLDocuments.searchIssues,
-                variables: variables,
-                resource: "search",
-                isIdempotent: true
-            )
-            let nodes = (data.search?.nodes ?? []).compactMap { $0 }
-            for node in nodes {
-                if let summary = ResponseMapping.issueRowSummary(
-                    from: node,
+        // The sweep's own five-page cap applies here too (see `sweep`).
+        try await sweep(
+            document: GraphQLDocuments.searchIssues,
+            rawQuery: query.rawQuery,
+            page: { (data: SearchIssuesData) in (data.search?.nodes, data.search?.pageInfo) },
+            map: {
+                ResponseMapping.issueRowSummary(
+                    from: $0,
                     relations: query.impliedRelations,
-                    detector: detector
-                ) {
-                    results.append(summary)
-                }
+                    detector: self.detector
+                )
             }
-            guard data.search?.pageInfo?.hasNextPage == true,
-                  let next = data.search?.pageInfo?.endCursor
-            else { break }
-            cursor = next
-        }
-        return results
+        )
     }
 
     /// Fetches one issue as an inbox row, by repository and number (ADR 0032).
@@ -230,14 +222,8 @@ public actor GitHubClient {
     ///   - number: The pull request number.
     /// - Returns: The fully populated detail record.
     public func pullRequestDetail(repo: RepoRef, number: Int) async throws -> PullRequestDetail {
-        await detailSemaphore.wait()
-        do {
-            let detail = try await fetchDetail(repo: repo, number: number)
-            await detailSemaphore.signal()
-            return detail
-        } catch {
-            await detailSemaphore.signal()
-            throw error
+        try await detailSemaphore.withPermit {
+            try await self.fetchDetail(repo: repo, number: number)
         }
     }
 
@@ -252,10 +238,18 @@ public actor GitHubClient {
         )
         let pullDTO: RESTPullRequestDTO = try RESTJSON.decode(pullResponse.body)
 
-        let fileList = try await changedFiles(repo: repo, number: number)
-        let commitList = try await commits(repo: repo, number: number)
-        let reviewList = try await reviews(repo: repo, number: number)
-        let threadList = try await reviewThreads(repo: repo, number: number)
+        let headSHA = pullDTO.head?.sha ?? ""
+
+        // The reads below share no inputs (the check runs need only the head SHA, which the pull
+        // request itself just told us), so they run side by side. That puts up to six requests
+        // of one detail in flight at once, on top of ``GitHubConfiguration/maxConcurrentDetailFetches``
+        // details (ADR 0005); a secondary-rate-limit answer still goes through `perform`'s
+        // retry and backoff. They are awaited in the order they used to run in, so when several
+        // fail, the error that surfaces is the same one as before.
+        async let files = changedFiles(repo: repo, number: number)
+        async let commitsRead = commits(repo: repo, number: number)
+        async let reviewsRead = reviews(repo: repo, number: number)
+        async let threads = reviewThreads(repo: repo, number: number)
         // The one read of this fetch whose failure is tolerated (ADR 0032, Sprint 3). Everything
         // else here is the review screen: without the files, the commits or the threads there is
         // nothing to review, so those errors travel. The closing issues are a section *above* the
@@ -265,12 +259,15 @@ public actor GitHubClient {
         // is in the in-app request log like every other request, through
         // ``GitHubConfiguration/requestLogger``, which is this package's only logging channel
         // (Foundation-only, Linux-tested, no `os.log`).
-        let closingIssueList = (try? await closingIssues(repo: repo, number: number)) ?? []
-        let headSHA = pullDTO.head?.sha ?? ""
-        var checkList: [CheckRun] = []
-        if !headSHA.isEmpty {
-            checkList = try await checkRuns(repo: repo, ref: headSHA)
-        }
+        async let closing: [LinkedIssueReference]? = try? closingIssues(repo: repo, number: number)
+        async let checks: [CheckRun] = headSHA.isEmpty ? [] : checkRuns(repo: repo, ref: headSHA)
+
+        let fileList = try await files
+        let commitList = try await commitsRead
+        let reviewList = try await reviewsRead
+        let threadList = try await threads
+        let closingIssueList = await closing ?? []
+        let checkList = try await checks
 
         let reviewDecisionValue = Self.reviewDecision(from: reviewList)
         let rollup = checkList.isEmpty ? nil : CheckRollup(runs: checkList)
@@ -364,24 +361,13 @@ public actor GitHubClient {
     ///   - repo: The repository.
     ///   - number: The pull request number.
     public func changedFiles(repo: RepoRef, number: Int) async throws -> [ChangedFile] {
-        var result: [ChangedFile] = []
-        for page in 1...30 {
-            let response = try await performREST(
-                method: "GET",
-                path: "/repos/\(repo.owner)/\(repo.name)/pulls/\(number)/files",
-                queryItems: [
-                    ("per_page", String(configuration.pageSize)),
-                    ("page", String(page)),
-                ],
-                body: nil,
-                useCache: true,
-                resource: "\(repo.fullName)#\(number) files"
-            )
-            let dtos: [RESTFileDTO] = try RESTJSON.decode(response.body)
-            result.append(contentsOf: dtos.compactMap(ResponseMapping.changedFile(from:)))
-            if dtos.count < configuration.pageSize { break }
-        }
-        return result
+        try await paged(
+            path: "/repos/\(repo.owner)/\(repo.name)/pulls/\(number)/files",
+            resource: "\(repo.fullName)#\(number) files",
+            maxPages: 30,
+            items: { (body: Data) -> [RESTFileDTO] in try RESTJSON.decode(body) },
+            map: ResponseMapping.changedFile(from:)
+        )
     }
 
     /// Fetches the commits of a pull request, following pagination.
@@ -389,26 +375,13 @@ public actor GitHubClient {
     ///   - repo: The repository.
     ///   - number: The pull request number.
     public func commits(repo: RepoRef, number: Int) async throws -> [CommitInfo] {
-        var result: [CommitInfo] = []
-        for page in 1...10 {
-            let response = try await performREST(
-                method: "GET",
-                path: "/repos/\(repo.owner)/\(repo.name)/pulls/\(number)/commits",
-                queryItems: [
-                    ("per_page", String(configuration.pageSize)),
-                    ("page", String(page)),
-                ],
-                body: nil,
-                useCache: true,
-                resource: "\(repo.fullName)#\(number) commits"
-            )
-            let dtos: [RESTCommitDTO] = try RESTJSON.decode(response.body)
-            result.append(
-                contentsOf: dtos.compactMap { ResponseMapping.commit(from: $0, detector: detector) }
-            )
-            if dtos.count < configuration.pageSize { break }
-        }
-        return result
+        try await paged(
+            path: "/repos/\(repo.owner)/\(repo.name)/pulls/\(number)/commits",
+            resource: "\(repo.fullName)#\(number) commits",
+            maxPages: 10,
+            items: { (body: Data) -> [RESTCommitDTO] in try RESTJSON.decode(body) },
+            map: { ResponseMapping.commit(from: $0, detector: self.detector) }
+        )
     }
 
     /// Fetches the submitted reviews of a pull request.
@@ -432,23 +405,45 @@ public actor GitHubClient {
     ///   - repo: The repository.
     ///   - ref: The commit SHA (or any ref).
     public func checkRuns(repo: RepoRef, ref: String) async throws -> [CheckRun] {
-        var result: [CheckRun] = []
-        for page in 1...10 {
+        try await paged(
+            path: "/repos/\(repo.owner)/\(repo.name)/commits/\(ref)/check-runs",
+            resource: "\(repo.fullName) checks for \(ref)",
+            maxPages: 10,
+            items: { (body: Data) -> [RESTCheckRunsDTO.Run] in
+                (try RESTJSON.decode(body) as RESTCheckRunsDTO).checkRuns ?? []
+            },
+            map: ResponseMapping.checkRun(from:)
+        )
+    }
+
+    /// Follows a paginated REST listing (`per_page`/`page`) up to `maxPages`.
+    ///
+    /// Stops at the first short page. The comparison is on the *raw* item count, before
+    /// `map` drops anything it cannot read — a full page of partly unreadable items still
+    /// means there may be more.
+    private func paged<DTO: Decodable, T>(
+        path: String,
+        resource: String,
+        maxPages: Int,
+        items: (Data) throws -> [DTO],
+        map: (DTO) -> T?
+    ) async throws -> [T] {
+        var result: [T] = []
+        for page in 1...maxPages {
             let response = try await performREST(
                 method: "GET",
-                path: "/repos/\(repo.owner)/\(repo.name)/commits/\(ref)/check-runs",
+                path: path,
                 queryItems: [
                     ("per_page", String(configuration.pageSize)),
                     ("page", String(page)),
                 ],
                 body: nil,
                 useCache: true,
-                resource: "\(repo.fullName) checks for \(ref)"
+                resource: resource
             )
-            let dto: RESTCheckRunsDTO = try RESTJSON.decode(response.body)
-            let runs = dto.checkRuns ?? []
-            result.append(contentsOf: runs.compactMap(ResponseMapping.checkRun(from:)))
-            if runs.count < configuration.pageSize { break }
+            let dtos = try items(response.body)
+            result.append(contentsOf: dtos.compactMap(map))
+            if dtos.count < configuration.pageSize { break }
         }
         return result
     }

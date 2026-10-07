@@ -135,6 +135,24 @@ final class DetailParsingTests: XCTestCase {
         XCTAssertEqual(fileRequests.count, 1)
     }
 
+    func testAFullPageAsksForTheNextAndAShortPageStops() async throws {
+        let transport = MockTransport()
+        // Four files fill a page of four, so a second page is read; the empty one ends it.
+        await transport.route("/pulls/128/files", try Fixture.response("pull-files-page"))
+        await transport.route("/pulls/128/files", Fixture.response(json: "[]"))
+        let client = GitHubClient.makeForTesting(
+            transport: transport,
+            configuration: GitHubConfiguration(pageSize: 4)
+        )
+
+        let files = try await client.changedFiles(repo: repo, number: 128)
+
+        XCTAssertEqual(files.count, 4)
+        let urls = await transport.requests.map(\.url.absoluteString)
+        XCTAssertEqual(urls.count, 2)
+        XCTAssertTrue(urls[1].contains("page=2"), urls[1])
+    }
+
     func testReviewThreadsCarryIDsAndResolutionState() async throws {
         let transport = try await makeTransport()
         let client = GitHubClient.makeForTesting(transport: transport)

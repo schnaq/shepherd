@@ -102,6 +102,8 @@ struct ReviewFileListView: View {
                             .font(.system(size: 9, weight: .bold))
                             .foregroundStyle(Theme.success)
                             .frame(width: 12)
+                            // The row's accessibility value already says "Viewed".
+                            .accessibilityHidden(true)
                     } else {
                         Color.clear.frame(width: 12, height: 1)
                     }
@@ -140,7 +142,10 @@ struct ReviewFileListView: View {
             }
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(RowButtonStyle(isSelected: isSelected))
+        // The selection bar and the strikethrough are visual only; VoiceOver hears these.
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityValue(isViewed ? Text(String(localized: "Viewed")) : Text(verbatim: ""))
         .padding(.horizontal, 8)
         .help(priority.file.path)
         // Not for a deleted file: the head has no such path, so the menu could only ever open
@@ -155,32 +160,24 @@ struct ReviewFileListView: View {
     @ViewBuilder
     private var focusHintFooter: some View {
         if let hint = firstHint {
-            VStack(alignment: .leading, spacing: 4) {
-                (
-                    Text(String(localized: "Focus hint: "))
-                        .foregroundStyle(Theme.accentText)
-                        .fontWeight(.semibold)
-                    + Text(hint.reason)
-                        .foregroundStyle(Theme.textSecondary)
-                )
-                .font(.system(size: 11.5))
-                .fixedSize(horizontal: false, vertical: true)
-                Text(hint.file)
-                    .font(Theme.mono(10.5))
-                    .foregroundStyle(Theme.textMuted)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
+            Card(tint: Theme.accent.opacity(0.06), padding: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    (
+                        Text(String(localized: "Focus hint: "))
+                            .foregroundStyle(Theme.accentText)
+                            .fontWeight(.semibold)
+                        + Text(hint.reason)
+                            .foregroundStyle(Theme.textSecondary)
+                    )
+                    .font(.system(size: 11.5))
+                    .fixedSize(horizontal: false, vertical: true)
+                    Text(hint.file)
+                        .font(Theme.mono(10.5))
+                        .foregroundStyle(Theme.textMuted)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
             }
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                Theme.accent.opacity(0.06),
-                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Theme.accent.opacity(0.22), lineWidth: 1)
-            )
             .padding(14)
         }
     }

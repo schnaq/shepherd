@@ -45,23 +45,6 @@ extension DatabaseManager {
         }
     }
 
-    /// Deletes issue index rows by issue id.
-    ///
-    /// Not the ordinary pruning path — that is the `ON DELETE CASCADE` in the v7 migration, which
-    /// happens in the sweep's own transaction. This is for the two cases the cascade cannot
-    /// cover: *Rebuild index* in Settings, and an entry whose model identifier no longer matches.
-    /// - Parameter issueIDs: The issues whose rows go.
-    public func deleteIssueSearchIndexEntries(issueIDs: [String]) async throws {
-        guard !issueIDs.isEmpty else { return }
-        try await writer.write { db in
-            let placeholders = Array(repeating: "?", count: issueIDs.count).joined(separator: ",")
-            try db.execute(
-                sql: "DELETE FROM issue_search_index WHERE issueID IN (\(placeholders))",
-                arguments: StatementArguments(issueIDs)
-            )
-        }
-    }
-
     /// Empties the issue search index. The issues half of *Rebuild index*.
     public func clearIssueSearchIndex() async throws {
         try await writer.write { db in
@@ -76,33 +59,7 @@ extension DatabaseManager {
     /// only make the one line that adds them up harder to write.
     /// - Returns: Row and byte counts plus the newest write, or zeroes for an empty index.
     public func issueSearchIndexStatistics() async throws -> SearchIndexStatistics {
-        try await writer.read { db in
-            guard let row = try Row.fetchOne(
-                db,
-                sql: """
-                    SELECT
-                        COUNT(*) AS entryCount,
-                        COALESCE(SUM(CASE WHEN vector IS NULL THEN 0 ELSE 1 END), 0) AS vectorCount,
-                        COALESCE(SUM(LENGTH(vector)), 0) AS byteCount,
-                        MAX(indexedAt) AS lastIndexedAt
-                    FROM issue_search_index
-                    """
-            ) else { return SearchIndexStatistics() }
-            // Each column bound with an explicit type, for ``searchIndexStatistics()``'s reason:
-            // `Row`'s subscript is generic over every `DatabaseValueConvertible`, and letting
-            // inference run through defaulted optionals inside an initialiser call is the
-            // expression shape that makes the type-checker slow.
-            let entryCount: Int = row["entryCount"] ?? 0
-            let vectorCount: Int = row["vectorCount"] ?? 0
-            let byteCount: Int = row["byteCount"] ?? 0
-            let last: Double? = row["lastIndexedAt"]
-            return SearchIndexStatistics(
-                entryCount: entryCount,
-                vectorCount: vectorCount,
-                vectorByteCount: byteCount,
-                lastIndexedAt: last.map { Date(timeIntervalSince1970: $0) }
-            )
-        }
+        try await indexStatistics(of: .issues)
     }
 
     // MARK: - Sources
@@ -120,7 +77,7 @@ extension DatabaseManager {
         let ids = Array(Set(issueIDs))
         guard !ids.isEmpty else { return [] }
         let sources = try await writer.read { db -> [String: IssueSearchIndexSource] in
-            let placeholders = Array(repeating: "?", count: ids.count).joined(separator: ",")
+            let placeholders = sqlPlaceholders(ids.count)
             let records = try IssueRecord.fetchAll(
                 db,
                 sql: "SELECT * FROM issues WHERE id IN (\(placeholders))",
@@ -151,19 +108,6 @@ extension DatabaseManager {
     /// code path having to announce it.
     /// - Returns: The timestamps, keyed by node id. Issues with no detail fetch are absent.
     public func issueDetailFetchTimestamps() async throws -> [String: Date] {
-        try await writer.read { db in
-            var result: [String: Date] = [:]
-            let rows = try Row.fetchAll(
-                db,
-                sql: "SELECT id, detailFetchedAt FROM issues WHERE detailFetchedAt IS NOT NULL"
-            )
-            for row in rows {
-                guard let id: String = row["id"], let stamp: Double = row["detailFetchedAt"] else {
-                    continue
-                }
-                result[id] = Date(timeIntervalSince1970: stamp)
-            }
-            return result
-        }
+        try await fetchTimestamps(of: .issues)
     }
 }

@@ -84,23 +84,6 @@ extension DatabaseManager {
         }
     }
 
-    /// Deletes index rows by pull-request id.
-    ///
-    /// Not the ordinary pruning path — that is the `ON DELETE CASCADE` in the v3 migration, which
-    /// happens in the sweep's own transaction. This is for the two cases the cascade cannot cover:
-    /// *Rebuild index* in Settings, and an entry whose model identifier no longer matches.
-    /// - Parameter prIDs: The pull requests whose rows go.
-    public func deleteSearchIndexEntries(prIDs: [String]) async throws {
-        guard !prIDs.isEmpty else { return }
-        try await writer.write { db in
-            let placeholders = Array(repeating: "?", count: prIDs.count).joined(separator: ",")
-            try db.execute(
-                sql: "DELETE FROM search_index WHERE prID IN (\(placeholders))",
-                arguments: StatementArguments(prIDs)
-            )
-        }
-    }
-
     /// Empties the search index. Backs *Rebuild index*.
     public func clearSearchIndex() async throws {
         try await writer.write { db in
@@ -111,6 +94,13 @@ extension DatabaseManager {
     /// Measures the index.
     /// - Returns: Row and byte counts plus the newest write, or zeroes for an empty index.
     public func searchIndexStatistics() async throws -> SearchIndexStatistics {
+        try await indexStatistics(of: .pullRequests)
+    }
+
+    /// Measures one search index table — shared by ``searchIndexStatistics()`` and
+    /// ``issueSearchIndexStatistics()``, whose tables have the same columns.
+    /// - Parameter kind: Which index; its table name is the one interpolated into the SQL.
+    func indexStatistics(of kind: SearchIndexKind) async throws -> SearchIndexStatistics {
         try await writer.read { db in
             guard let row = try Row.fetchOne(
                 db,
@@ -120,7 +110,7 @@ extension DatabaseManager {
                         COALESCE(SUM(CASE WHEN vector IS NULL THEN 0 ELSE 1 END), 0) AS vectorCount,
                         COALESCE(SUM(LENGTH(vector)), 0) AS byteCount,
                         MAX(indexedAt) AS lastIndexedAt
-                    FROM search_index
+                    FROM \(kind.indexTable)
                     """
             ) else { return SearchIndexStatistics() }
             // Each column bound with an explicit type: `Row`'s subscript is generic over every
@@ -159,7 +149,7 @@ extension DatabaseManager {
         let ids = Array(Set(prIDs))
         guard !ids.isEmpty else { return [] }
         let sources = try await writer.read { db -> [String: SearchIndexSource] in
-            let placeholders = Array(repeating: "?", count: ids.count).joined(separator: ",")
+            let placeholders = sqlPlaceholders(ids.count)
             let records = try PullRequestRecord.fetchAll(
                 db,
                 sql: "SELECT * FROM pull_requests WHERE id IN (\(placeholders))",
@@ -202,11 +192,18 @@ extension DatabaseManager {
     /// without any code path having to announce it.
     /// - Returns: The timestamps, keyed by node id. Pull requests with no detail fetch are absent.
     public func detailFetchTimestamps() async throws -> [String: Date] {
+        try await fetchTimestamps(of: .pullRequests)
+    }
+
+    /// Reads `detailFetchedAt` keyed by `id` — shared by ``detailFetchTimestamps()`` and
+    /// ``issueDetailFetchTimestamps()``.
+    /// - Parameter kind: Which source table to read.
+    func fetchTimestamps(of kind: SearchIndexKind) async throws -> [String: Date] {
         try await writer.read { db in
             var result: [String: Date] = [:]
             let rows = try Row.fetchAll(
                 db,
-                sql: "SELECT id, detailFetchedAt FROM pull_requests WHERE detailFetchedAt IS NOT NULL"
+                sql: "SELECT id, detailFetchedAt FROM \(kind.sourceTable) WHERE detailFetchedAt IS NOT NULL"
             )
             for row in rows {
                 guard let id: String = row["id"], let stamp: Double = row["detailFetchedAt"] else {
@@ -215,6 +212,32 @@ extension DatabaseManager {
                 result[id] = Date(timeIntervalSince1970: stamp)
             }
             return result
+        }
+    }
+}
+
+/// The two search indexes — pull requests and issues — and the tables behind each.
+///
+/// The shared helpers above interpolate a table name into their SQL, which a bind parameter
+/// cannot carry. Taking the name from this closed set rather than from a `String` means no caller,
+/// present or future, can hand them an arbitrary identifier.
+enum SearchIndexKind {
+    case pullRequests
+    case issues
+
+    /// The index table, whose rows ``DatabaseManager/indexStatistics(of:)`` measures.
+    var indexTable: String {
+        switch self {
+        case .pullRequests: "search_index"
+        case .issues: "issue_search_index"
+        }
+    }
+
+    /// The source table, whose `detailFetchedAt` ``DatabaseManager/fetchTimestamps(of:)`` reads.
+    var sourceTable: String {
+        switch self {
+        case .pullRequests: "pull_requests"
+        case .issues: "issues"
         }
     }
 }

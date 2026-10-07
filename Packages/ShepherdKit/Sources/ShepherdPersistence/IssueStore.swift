@@ -153,8 +153,7 @@ extension DatabaseManager {
                     sql: "DELETE FROM issues WHERE \(DatabaseManager.issuePruneGuardSQL)"
                 )
             } else {
-                let placeholders = Array(repeating: "?", count: keep.count)
-                    .joined(separator: ",")
+                let placeholders = sqlPlaceholders(keep.count)
                 try db.execute(
                     sql: """
                         DELETE FROM issues
@@ -165,6 +164,14 @@ extension DatabaseManager {
                 )
             }
             try DatabaseManager.pruneOrphanedRepos(db)
+        }
+    }
+
+    /// Reads the ids of every cached issue — ``fetchIssues(filter:)`` without decoding the rows,
+    /// for a caller that only asks which ones are still there (``pullRequestIDs()``'s twin).
+    public func issueIDs() async throws -> Set<String> {
+        try await writer.read { db in
+            Set(try String.fetchAll(db, sql: "SELECT id FROM issues"))
         }
     }
 
@@ -381,19 +388,8 @@ extension DatabaseManager {
     public func observeIssues(
         filter: IssueFilter = IssueFilter()
     ) -> AsyncStream<[IssueRowSummary]> {
-        let writer = self.writer
-        let observation = ValueObservation.tracking { db -> [IssueRowSummary] in
-            try DatabaseManager.loadIssues(db, filter: filter)
-        }
-        return AsyncStream { continuation in
-            let queue = DispatchQueue(label: "com.schnaq.shepherd.observation.issues")
-            let cancellable = observation.start(
-                in: writer,
-                scheduling: .async(onQueue: queue),
-                onError: { _ in continuation.finish() },
-                onChange: { value in continuation.yield(value) }
-            )
-            continuation.onTermination = { _ in cancellable.cancel() }
+        observeStream(label: "com.schnaq.shepherd.observation.issues") {
+            try DatabaseManager.loadIssues($0, filter: filter)
         }
     }
 }

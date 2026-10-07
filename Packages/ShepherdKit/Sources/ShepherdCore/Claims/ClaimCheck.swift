@@ -117,9 +117,6 @@ public enum DiffExcerpt {
             self.line = line
             self.baseLine = baseLine
         }
-
-        /// Whether the first excerpt line is a removed line.
-        public var isRemoval: Bool { line == nil }
     }
 
     /// Where `excerpt` occurs in `patch`, or `nil` when it does not.

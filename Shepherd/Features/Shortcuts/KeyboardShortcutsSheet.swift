@@ -107,6 +107,7 @@ struct KeyboardShortcutsSheet: View {
             HStack {
                 Spacer()
                 Button(String(localized: "Done")) { dismiss() }
+                    .buttonStyle(PrimaryButtonStyle())
                     .keyboardShortcut(.defaultAction)
             }
         }

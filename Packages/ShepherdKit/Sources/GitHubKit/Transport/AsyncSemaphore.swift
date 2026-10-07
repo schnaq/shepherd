@@ -42,7 +42,7 @@ public actor AsyncSemaphore {
     /// Runs a body while holding a permit, releasing it even if the body throws.
     /// - Parameter body: The work to perform.
     /// - Returns: Whatever the body returned.
-    public func withPermit<T: Sendable>(_ body: () async throws -> T) async rethrows -> T {
+    public func withPermit<T: Sendable>(_ body: @Sendable () async throws -> T) async rethrows -> T {
         await wait()
         defer { signal() }
         return try await body()

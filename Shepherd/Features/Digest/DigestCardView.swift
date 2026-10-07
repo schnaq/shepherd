@@ -50,13 +50,15 @@ struct DigestCardView: View {
         HStack(spacing: 8) {
             CardTitle(DigestPresentation.greeting.uppercased(), tint: Theme.accentText)
             Text(DigestPresentation.windowDescription(for: report))
-                .font(.system(size: 11))
+                .font(Theme.type(.subheadline))
                 .foregroundStyle(Theme.textMuted)
             Spacer(minLength: 8)
             Button(action: onDismiss) {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Theme.textMuted)
+                    // A 20 pt hit target around the glyph without growing the header row.
+                    .contentShape(Rectangle().inset(by: -5))
             }
             .buttonStyle(.plain)
             .help(String(localized: "Dismiss the digest until tomorrow"))
@@ -67,7 +69,7 @@ struct DigestCardView: View {
     private func row(for section: DigestReport.Section) -> some View {
         HStack(spacing: 8) {
             Image(systemName: DigestPresentation.systemImage(for: section.kind))
-                .font(.system(size: 11))
+                .font(Theme.type(.subheadline))
                 .foregroundStyle(DigestPresentation.tint(for: section.kind))
                 .frame(width: 14)
 
@@ -80,7 +82,7 @@ struct DigestCardView: View {
                 // The leading pull request by name, so the card is concrete. One, not three: the
                 // digest is a glance, and "Show" is right there for the rest.
                 Text("\(lead.slug) \(lead.title)")
-                    .font(.system(size: 11))
+                    .font(Theme.type(.subheadline))
                     .foregroundStyle(Theme.textMuted)
                     .lineLimit(1)
                     .truncationMode(.tail)

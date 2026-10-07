@@ -381,7 +381,6 @@ struct RailRow: View {
     /// What clicking does.
     var action: () -> Void
 
-    @State private var isHovering = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// A row whose count is zero in the current view stays where it is and steps back instead of
@@ -429,14 +428,13 @@ struct RailRow: View {
             // dot, so a repository gaining or losing its binoculars moved everything below it.
             .frame(height: 30)
             .background(
-                isSelected
-                    ? Theme.selection
-                    : (isHovering ? Theme.textMuted.opacity(0.08) : Color.clear),
+                isSelected ? Theme.selection : Color.clear,
                 in: RoundedRectangle(cornerRadius: 6, style: .continuous)
             )
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .onHover { isHovering = $0 }
+        // The hover fill is the shared row style's, so the rail and every other clickable list
+        // lighten the same way.
+        .buttonStyle(RowButtonStyle(isSelected: isSelected))
     }
 }

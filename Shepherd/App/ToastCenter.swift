@@ -1,3 +1,4 @@
+import Accessibility
 import Foundation
 import Observation
 import SwiftUI
@@ -51,6 +52,11 @@ final class ToastCenter {
     /// - Parameter toast: The toast to show.
     func show(_ toast: Toast) {
         toasts.append(toast)
+        // Visual-only otherwise: a toast has no VoiceOver focus path and is gone in 4 or 8 s, so a
+        // failed write would never reach a blind user. A no-op when VoiceOver is off.
+        var spoken = AttributedString(toast.message)
+        if toast.kind == .failure { spoken.accessibilitySpeechAnnouncementPriority = .high }
+        AccessibilityNotification.Announcement(spoken).post()
         let id = toast.id
         let duration = toast.duration
         Task { [weak self] in
@@ -99,6 +105,8 @@ struct ToastStackView: View {
     /// The centre to render.
     let center: ToastCenter
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         // Centred with the stack's own alignment, to match where ``RootView`` places it: two
         // toasts of different widths right-aligned against each other under a centred anchor
@@ -125,7 +133,7 @@ struct ToastStackView: View {
                 .fill(color(for: toast.kind))
                 .frame(width: 7, height: 7)
             Text(toast.message)
-                .font(.system(size: 12))
+                .font(Theme.type(.callout))
                 .foregroundStyle(Theme.text)
                 .lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
@@ -135,7 +143,7 @@ struct ToastStackView: View {
                     center.dismiss(toast.id)
                 }
                 .buttonStyle(.plain)
-                .font(.system(size: 12, weight: .semibold))
+                .font(Theme.type(.callout, weight: .semibold))
                 .foregroundStyle(Theme.accentText)
             }
             Button {
@@ -158,7 +166,7 @@ struct ToastStackView: View {
         // edge and its own depth, so the stroke and the shadow went with the fill, and it follows
         // Reduce Transparency and Increase Contrast by itself, which the hand-drawn card did not.
         .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
     }
 
     private func color(for kind: Toast.Kind) -> Color {

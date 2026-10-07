@@ -219,6 +219,13 @@ struct CommandPaletteView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(16)
         } else {
+            // The cursor's row id, resolved once per render: asking per row re-ran `sections`
+            // (a fuzzy match of every command) for each visible row. Rows match it by identity
+            // rather than by index arithmetic, because the two sections can swap places between
+            // one keystroke and the next (a prose query moves the pull requests above the
+            // commands) and an index computed in the row would then be one section out of date.
+            let flat = groups.flatMap(\.rows)
+            let selectedID = flat.indices.contains(selectionIndex) ? flat[selectionIndex].id : nil
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 1) {
@@ -231,7 +238,7 @@ struct CommandPaletteView: View {
                                 .padding(.top, 10)
                                 .padding(.bottom, 4)
                             ForEach(group.rows) { row in
-                                paletteRow(row)
+                                paletteRow(row, selectedID: selectedID)
                                     .id(row.id)
                             }
                         }
@@ -241,45 +248,33 @@ struct CommandPaletteView: View {
                 }
                 .frame(maxHeight: 330)
                 .onChange(of: selectionIndex) { _, index in
-                    let rows = flatRows
-                    guard index >= 0, index < rows.count else { return }
-                    proxy.scrollTo(rows[index].id, anchor: .center)
+                    guard flat.indices.contains(index) else { return }
+                    proxy.scrollTo(flat[index].id, anchor: .center)
                 }
             }
         }
     }
 
     @ViewBuilder
-    private func paletteRow(_ row: PaletteRow) -> some View {
+    private func paletteRow(_ row: PaletteRow, selectedID: PaletteRow.ID?) -> some View {
         switch row {
         case .command(let matched):
-            commandRow(matched, isSelected: isSelected(row))
+            commandRow(matched, isSelected: row.id == selectedID)
         case .pullRequest(let result):
             Button {
                 open(result)
             } label: {
-                SearchResultRowView(result: result, isSelected: isSelected(row))
+                SearchResultRowView(result: result, isSelected: row.id == selectedID)
             }
             .buttonStyle(.plain)
         case .issue(let result):
             Button {
                 open(result)
             } label: {
-                IssueSearchResultRowView(result: result, isSelected: isSelected(row))
+                IssueSearchResultRowView(result: result, isSelected: row.id == selectedID)
             }
             .buttonStyle(.plain)
         }
-    }
-
-    /// Whether the keyboard cursor is on a row.
-    ///
-    /// By identity rather than by index arithmetic, because the two sections can swap places
-    /// between one keystroke and the next (a prose query moves the pull requests above the
-    /// commands) and an index computed in the row would then be one section out of date.
-    private func isSelected(_ row: PaletteRow) -> Bool {
-        let rows = flatRows
-        guard selectionIndex >= 0, selectionIndex < rows.count else { return false }
-        return rows[selectionIndex].id == row.id
     }
 
     private func commandRow(_ row: MatchedCommand, isSelected: Bool) -> some View {

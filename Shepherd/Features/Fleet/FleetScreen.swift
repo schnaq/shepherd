@@ -21,6 +21,8 @@ struct FleetScreen: View {
 
     @State private var model: FleetModel
     @FocusState private var isListFocused: Bool
+    /// Set by a click on a row so the selection change does not re-centre the list under the pointer.
+    @State private var isClickSelection = false
 
     /// Creates the screen.
     /// - Parameters:
@@ -144,16 +146,21 @@ struct FleetScreen: View {
                                 isSelected: model.selectedAgentID == agent.id
                             )
                             .id(agent.id)
-                            .onTapGesture { model.selectAgent(agent.id) }
+                            .onTapGesture {
+                                if model.selectedAgentID != agent.id { isClickSelection = true }
+                                model.selectAgent(agent.id)
+                            }
+                            // Selected by a tap gesture, so say so: VoiceOver otherwise hears plain text.
+                            .accessibilityAddTraits(
+                                model.selectedAgentID == agent.id ? [.isButton, .isSelected] : .isButton
+                            )
+                            // A button VoiceOver can press: the tap gesture alone is not a
+                            // guaranteed accessibility action. No click flag — VO wants the scroll.
+                            .accessibilityAction { model.selectAgent(agent.id) }
                         }
                     }
                 }
-                .onChange(of: model.selectedAgentID) { _, id in
-                    guard let id else { return }
-                    withAnimation(.easeOut(duration: 0.12)) {
-                        proxy.scrollTo(id, anchor: .center)
-                    }
-                }
+                .scrollsToSelection(model.selectedAgentID, proxy: proxy, skipNext: $isClickSelection)
             }
         }
         // The sidebar column of a `NavigationSplitView`, so the system's glass is its surface and

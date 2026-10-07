@@ -361,6 +361,22 @@ final class InboxStoreTests: XCTestCase {
         XCTAssertEqual(loaded, detail)
     }
 
+    func testCommitsForSeveralPullRequestsSkipThoseWithoutADetail() async throws {
+        let database = try makeDatabase()
+        let detail = PersistenceFixtures.detail()
+        // Both swept, only the first opened: PR_2 is a summary row with no commits column. The
+        // sweep goes first because a sweep prunes whatever it does not list.
+        try await database.savePullRequestSummaries([
+            detail.summary, PersistenceFixtures.summary(id: "PR_2", number: 129)
+        ])
+        try await database.savePullRequestDetail(detail)
+
+        let commits = try await database.commits(prIDs: [detail.id, "PR_2", "PR_ghost"])
+        XCTAssertEqual(commits, [detail.id: detail.commits])
+        let empty = try await database.commits(prIDs: [])
+        XCTAssertTrue(empty.isEmpty)
+    }
+
     func testDetailReplacesChildRowsRatherThanAccumulatingThem() async throws {
         let database = try makeDatabase()
         var detail = PersistenceFixtures.detail()
@@ -1145,7 +1161,7 @@ final class IssueSearchIndexStoreTests: XCTestCase {
         XCTAssertEqual(statistics.lastIndexedAt, PersistenceFixtures.date(0))
     }
 
-    func testDeletingAndClearingRemoveRowsWithoutTouchingTheIssue() async throws {
+    func testClearingRemovesRowsWithoutTouchingTheIssue() async throws {
         let database = try makeDatabase()
         try await database.saveIssueSummaries([
             IssueFixtures.summary(id: "I_1", number: 1),
@@ -1156,12 +1172,8 @@ final class IssueSearchIndexStoreTests: XCTestCase {
             entry(issueID: "I_2"),
         ])
 
-        try await database.deleteIssueSearchIndexEntries(issueIDs: ["I_1"])
-        var entries = try await database.issueSearchIndexEntries()
-        XCTAssertEqual(entries.map(\.issueID), ["I_2"])
-
         try await database.clearIssueSearchIndex()
-        entries = try await database.issueSearchIndexEntries()
+        let entries = try await database.issueSearchIndexEntries()
         XCTAssertTrue(entries.isEmpty)
         let inbox = try await database.fetchIssues()
         XCTAssertEqual(inbox.count, 2, "rebuilding the index must not touch the inbox")

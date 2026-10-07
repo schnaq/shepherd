@@ -74,10 +74,7 @@ struct InboxListView: View {
             if let filter = activeFilterLabel {
                 ChipView(text: filter, color: Theme.accentText)
                 Button {
-                    model.provenanceFilter = nil
-                    model.repoFilter = nil
-                    model.riskFilter = nil
-                    model.laneFilter = nil
+                    model.clearFilter()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 11))
@@ -179,7 +176,10 @@ struct InboxListView: View {
                 EmptyStateView(
                     systemImage: "checkmark.circle",
                     title: String(localized: "Nothing to review"),
-                    message: emptyMessage
+                    message: emptyMessage,
+                    // Only when a facet is on: an unfiltered empty rail has nothing to clear.
+                    action: model.hasActiveFilter
+                        ? (title: String(localized: "Clear filter"), run: { model.clearFilter() }) : nil
                 )
             }
         } else {
@@ -246,19 +246,7 @@ struct InboxListView: View {
                         }
                     }
                 }
-                .onChange(of: model.selectedID) { _, id in
-                    // A click's selection is already in view; `j`/`k`, a restore, a deep link
-                    // and a clamp after a filter change can all land off screen, and those
-                    // still scroll.
-                    if isClickSelection {
-                        isClickSelection = false
-                        return
-                    }
-                    guard let id else { return }
-                    withAnimation(.easeOut(duration: 0.12)) {
-                        proxy.scrollTo(id, anchor: .center)
-                    }
-                }
+                .scrollsToSelection(model.selectedID, proxy: proxy, skipNext: $isClickSelection)
             }
         }
     }

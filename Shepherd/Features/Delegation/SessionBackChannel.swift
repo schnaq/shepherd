@@ -104,7 +104,7 @@ enum SessionBackChannel {
 /// opened yet have no detail and therefore no glyph, which is the honest answer: Shepherd does
 /// not know whether they have a return address.
 enum SessionReturnAddressLoader {
-    /// How many rows one refresh is willing to read a detail for.
+    /// How many rows one refresh is willing to read commits for.
     ///
     /// The same cap and the same reasoning as ``SinceReviewLoader/inboxRowLimit``: the glyph is a
     /// nicety on a list that has to stay instant.
@@ -119,20 +119,13 @@ enum SessionReturnAddressLoader {
         database: DatabaseManager,
         rows: [PullRequestSummary]
     ) async -> [String: SessionReference] {
-        var result: [String: SessionReference] = [:]
-        var read = 0
-        for row in rows {
-            // Machine-authored rows only: a return address is a fact about an agent's commits,
-            // and reading every human pull request's detail to find none would be work spent on
-            // an answer that is known in advance (ADR 0008's facet).
-            guard row.author.kind.isMachine else { continue }
-            guard read < inboxRowLimit else { break }
-            read += 1
-            guard let detail = try? await database.fetchPullRequestDetail(id: row.id),
-                  let reference = SessionReference.mostRecent(in: detail.commits)
-            else { continue }
-            result[row.id] = reference
-        }
-        return result
+        // Machine-authored rows only: a return address is a fact about an agent's commits, and
+        // reading every human pull request's commits to find none would be work spent on an
+        // answer that is known in advance (ADR 0008's facet).
+        let ids = rows.filter { $0.author.kind.isMachine }.prefix(inboxRowLimit).map(\.id)
+        // One batched read of the commits column rather than a full detail read per row — the
+        // trailers are all this needs, and the detail carried every patch along with them.
+        let commits = (try? await database.commits(prIDs: ids)) ?? [:]
+        return commits.compactMapValues { SessionReference.mostRecent(in: $0) }
     }
 }

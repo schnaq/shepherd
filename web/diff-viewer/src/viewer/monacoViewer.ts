@@ -29,7 +29,7 @@ import { gutterHit, hitChanged, originalToModifiedLine, rangeTarget, selectedLin
 import { registerLanguages, resolveLanguage } from './languages.js';
 import { DEFAULT_LOCALE, makeLocale, type ViewerLocale } from './locale.js';
 import type { ViewerPort } from './router.js';
-import { clampFontSize, documentThemeClass, THEME_IDS, THEMES } from './themes.js';
+import { clampFontSize, documentThemeClass, THEME_IDS, themeIdFor, THEMES } from './themes.js';
 import { renderDraftZone, renderThreadZone } from './threadCard.js';
 import { throttle, type Throttled } from './throttle.js';
 import { installMonacoEnvironment } from './workerEnvironment.js';
@@ -249,7 +249,7 @@ export class MonacoDiffViewer implements ViewerPort {
   }
 
   setTheme(message: SetThemeMessage): void {
-    monaco.editor.setTheme(message.theme === 'dark' ? THEME_IDS.dark : THEME_IDS.light);
+    monaco.editor.setTheme(themeIdFor(message.theme));
     this.fontSize = clampFontSize(message.fontSize);
     this.diffEditor.updateOptions({ fontSize: this.fontSize });
 
@@ -361,15 +361,18 @@ export class MonacoDiffViewer implements ViewerPort {
   private wireEditor(editor: monaco.editor.ICodeEditor, side: Side): void {
     this.gutterDecorations.set(side, editor.createDecorationsCollection([]));
 
-    editor.onMouseMove((event) => {
-      const hit = gutterHit({
+    // The gutter cell under the pointer for this pane, or null when it is not a commentable one.
+    const hitFor = (event: monaco.editor.IEditorMouseEvent): GutterHit | null =>
+      gutterHit({
         targetType: event.target.type as number,
         lineNumber: event.target.position?.lineNumber ?? null,
         side,
         lineCount: editor.getModel()?.getLineCount() ?? -1,
         commentable: this.commentable[side],
       });
-      this.arm(hit);
+
+    editor.onMouseMove((event) => {
+      this.arm(hitFor(event));
     });
 
     editor.onMouseLeave(() => {
@@ -389,13 +392,7 @@ export class MonacoDiffViewer implements ViewerPort {
         if (line !== undefined) this.openInEditor(line, side);
         return;
       }
-      const hit = gutterHit({
-        targetType: event.target.type as number,
-        lineNumber: line ?? null,
-        side,
-        lineCount: editor.getModel()?.getLineCount() ?? -1,
-        commentable: this.commentable[side],
-      });
+      const hit = hitFor(event);
       if (hit === null) return;
       this.gutterPress = hit;
       if (event.target.type === monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS) return;

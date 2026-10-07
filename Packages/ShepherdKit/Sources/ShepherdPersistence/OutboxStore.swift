@@ -46,7 +46,7 @@ extension DatabaseManager {
                 arguments: [cutoff, limit]
             )
             guard !ids.isEmpty else { return [] }
-            let placeholders = Array(repeating: "?", count: ids.count).joined(separator: ",")
+            let placeholders = sqlPlaceholders(ids.count)
             try db.execute(
                 sql: """
                     UPDATE outbox
@@ -80,7 +80,7 @@ extension DatabaseManager {
         guard !ids.isEmpty else { return }
         let strings = ids.map(\.uuidString)
         try await writer.write { db in
-            let placeholders = Array(repeating: "?", count: strings.count).joined(separator: ",")
+            let placeholders = sqlPlaceholders(strings.count)
             try db.execute(
                 sql: """
                     UPDATE outbox

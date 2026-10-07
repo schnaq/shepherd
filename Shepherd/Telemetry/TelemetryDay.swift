@@ -7,23 +7,17 @@ import Foundation
 /// describe working hours. The day is also what the heartbeat de-duplicates against, so having one
 /// formatter for both keeps "today" from meaning two things.
 enum TelemetryDay {
-    private static let dayFormatter: DateFormatter = {
+    private static func makeFormatter(_ format: String) -> DateFormatter {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.dateFormat = format
         return formatter
-    }()
+    }
 
-    private static let monthFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM"
-        return formatter
-    }()
+    private static let dayFormatter = makeFormatter("yyyy-MM-dd")
+    private static let monthFormatter = makeFormatter("yyyy-MM")
 
     /// `2026-09-18` in UTC.
     /// - Parameter date: The moment to describe.

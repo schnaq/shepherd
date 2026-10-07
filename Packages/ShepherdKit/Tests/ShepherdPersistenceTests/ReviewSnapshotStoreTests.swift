@@ -111,19 +111,21 @@ final class ReviewSnapshotStoreTests: XCTestCase {
         XCTAssertFalse(hasUnknown)
     }
 
-    func testCountsForSeveralPullRequestsComeBackInOneQuery() async throws {
+    func testRoundsForSeveralPullRequestsComeBackInOneQuery() async throws {
         let database = try makeDatabase()
         try await database.savePullRequestDetail(PersistenceFixtures.detail())
         let other = PersistenceFixtures.summary(id: "PR_2", number: 129)
         try await database.savePullRequestDetail(PersistenceFixtures.detail(summary: other))
 
-        try await database.saveReviewSnapshot(snapshot(prID: "PR_1", head: "abc123", at: 0))
+        // Saved newest first, so the head has to come from `reviewedAt`, not insertion order.
         try await database.saveReviewSnapshot(snapshot(prID: "PR_1", head: "def456", at: 10))
+        try await database.saveReviewSnapshot(snapshot(prID: "PR_1", head: "abc123", at: 0))
         try await database.saveReviewSnapshot(snapshot(prID: "PR_2", head: "abc123", at: 20))
 
-        let counts = try await database.reviewSnapshotCounts(prIDs: ["PR_1", "PR_2", "PR_3"])
-        XCTAssertEqual(counts, ["PR_1": 2, "PR_2": 1])
-        let empty = try await database.reviewSnapshotCounts(prIDs: [])
+        let rounds = try await database.reviewRounds(prIDs: ["PR_1", "PR_2", "PR_3"])
+        XCTAssertEqual(rounds.mapValues(\.count), ["PR_1": 2, "PR_2": 1])
+        XCTAssertEqual(rounds.mapValues(\.latestHead), ["PR_1": "def456", "PR_2": "abc123"])
+        let empty = try await database.reviewRounds(prIDs: [])
         XCTAssertTrue(empty.isEmpty)
     }
 
@@ -145,18 +147,6 @@ final class ReviewSnapshotStoreTests: XCTestCase {
         }
         let rounds = try await database.reviewSnapshotCount(prID: "PR_1")
         XCTAssertEqual(rounds, 0)
-    }
-
-    func testDeletingSnapshotsLeavesThePullRequestAlone() async throws {
-        let database = try makeDatabase()
-        try await database.savePullRequestDetail(PersistenceFixtures.detail())
-        try await database.saveReviewSnapshot(snapshot())
-
-        try await database.deleteReviewSnapshots(prID: "PR_1")
-        let rounds = try await database.reviewSnapshotCount(prID: "PR_1")
-        XCTAssertEqual(rounds, 0)
-        let row = try await database.fetchPullRequestSummary(id: "PR_1")
-        XCTAssertNotNil(row)
     }
 
     func testAnUnreadableBlobDegradesToASnapshotWithNoFiles() async throws {

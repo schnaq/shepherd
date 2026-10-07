@@ -782,16 +782,9 @@ final class AppEnvironment {
                 // `announcesSuccess: false` — the pass announces itself once, as a notification,
                 // and records every merge in the audit log; a toast per row would be a dozen
                 // banners for something nobody was watching. A *failure* still toasts.
-                let actions = PullRequestActions(
-                    session: session,
-                    toasts: self.toasts,
-                    activity: self.activity,
-                    announcesSuccess: false,
-                    telemetry: self.telemetry,
-                    // The one helper in the app whose merges nobody pressed: they are counted as
-                    // the rule's, not the detail screen's (ADR 0036).
-                    mergeSource: .autoRule
-                )
+                // `.autoRule`: the one helper in the app whose merges nobody pressed, counted as
+                // the rule's, not the detail screen's (ADR 0036).
+                let actions = self.unattendedActions(session, source: .autoRule)
                 let queued = await self.autoMerge.run(
                     rows: rows,
                     existingOutbox: inFlight,
@@ -818,14 +811,7 @@ final class AppEnvironment {
             if decisionsArmed {
                 // `announcesSuccess: false` here too: the pass posts its own notification, and
                 // the user is not necessarily looking at the window a toast would land in.
-                let actions = PullRequestActions(
-                    session: session,
-                    toasts: self.toasts,
-                    activity: self.activity,
-                    announcesSuccess: false,
-                    telemetry: self.telemetry,
-                    mergeSource: .whenChecksPass
-                )
+                let actions = self.unattendedActions(session, source: .whenChecksPass)
                 let result = await self.mergeWhenGreen.run(
                     rows: rows,
                     existingOutbox: inFlight,
@@ -900,6 +886,26 @@ final class AppEnvironment {
         return MergeSeriesOutboxSnapshot(items: items, mergedIDs: session.mergedPullRequestIDs)
     }
 
+    /// The action funnel for merges nobody pressed: the auto-merge rules, merge when checks pass
+    /// and merge series.
+    ///
+    /// `announcesSuccess: false`, because each pass announces itself once (a notification, or the
+    /// series' chip and summary) and records every merge in the audit log; a toast per row would
+    /// be a dozen banners for something nobody was watching. A *failure* still toasts.
+    /// - Parameters:
+    ///   - session: The signed-in session the writes go through.
+    ///   - source: Whose merge this is, for telemetry.
+    private func unattendedActions(_ session: SignedInSession, source: MergeSource) -> PullRequestActions {
+        PullRequestActions(
+            session: session,
+            toasts: toasts,
+            activity: activity,
+            announcesSuccess: false,
+            telemetry: telemetry,
+            mergeSource: source
+        )
+    }
+
     /// One pass of every running series, through the same funnel a click uses.
     ///
     /// `announcesSuccess: false`: the series has its chip and its one summary notice, and a
@@ -912,14 +918,7 @@ final class AppEnvironment {
     ///   - alsoQueued: What earlier passes of the same sweep queued.
     private func runMergeSeriesPass(rows: [PullRequestSummary], alsoQueued: Set<String> = []) async {
         guard let session else { return }
-        let actions = PullRequestActions(
-            session: session,
-            toasts: toasts,
-            activity: activity,
-            announcesSuccess: false,
-            telemetry: telemetry,
-            mergeSource: .series
-        )
+        let actions = unattendedActions(session, source: .series)
         await mergeSeries.run(
             rows: rows,
             alsoQueued: alsoQueued,

@@ -384,7 +384,7 @@ struct FleetAgentDetail: View {
                         } label: {
                             openRowLabel(row)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(RowButtonStyle(isSelected: row.id == model.selectedOpenPullRequestID))
                         .help(String(localized: "Open this review"))
                     }
                 }

@@ -102,8 +102,6 @@ struct RepoRecord: Codable, FetchableRecord, PersistableRecord {
         self.owner = repo.owner
         self.name = repo.name
     }
-
-    var repoRef: RepoRef { RepoRef(owner: owner, name: name) }
 }
 
 /// A row of `pull_requests`.
@@ -291,8 +289,12 @@ struct PullRequestRecord: Codable, FetchableRecord, PersistableRecord {
     }
 
     /// The stored commit list, or an empty list when no detail fetch has happened yet.
-    var commits: [CommitInfo] {
-        ColumnCoding.decodeJSON([CommitInfo].self, from: commitsJSON) ?? []
+    var commits: [CommitInfo] { Self.commits(fromJSON: commitsJSON) }
+
+    /// Decodes a `commitsJSON` column — the one rule for it, shared with the batched
+    /// ``DatabaseManager/commits(prIDs:)`` read that selects the column alone.
+    static func commits(fromJSON json: String?) -> [CommitInfo] {
+        ColumnCoding.decodeJSON([CommitInfo].self, from: json) ?? []
     }
 
     /// The stored timeline, or an empty list when no detail fetch has happened yet.
@@ -1166,4 +1168,13 @@ struct IssueSearchIndexRecord: Codable, FetchableRecord, PersistableRecord {
             indexedAt: Date(timeIntervalSince1970: indexedAt)
         )
     }
+}
+
+/// `?,?,?` — the bind placeholders for an `IN (…)` list of `count` values.
+///
+/// Every batched read and prune in this package spells an id list the same way; this is that
+/// spelling once. The caller still passes the values themselves as `StatementArguments`, and still
+/// guards the empty list first: `IN ()` is a syntax error in SQLite.
+func sqlPlaceholders(_ count: Int) -> String {
+    Array(repeating: "?", count: count).joined(separator: ",")
 }

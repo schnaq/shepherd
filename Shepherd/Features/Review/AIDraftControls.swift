@@ -192,52 +192,45 @@ struct AIDraftStatusView: View {
     ///   - badge: The tier that produced the waiting draft, when there is one.
     ///   - preview: The waiting draft, when there is one.
     private func question(badge: String?, preview: String?) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 5) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 10))
-                Text(confirmationTitle)
-                    .font(.system(size: 11, weight: .semibold))
-                Spacer(minLength: 0)
-                if let badge {
-                    Text(badge)
+        Card(tint: Theme.accent.opacity(0.06), padding: 10) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 5) {
+                    Image(systemName: "sparkles")
                         .font(.system(size: 10))
-                        .foregroundStyle(Theme.textMuted)
+                    Text(confirmationTitle)
+                        .font(.system(size: 11, weight: .semibold))
+                    Spacer(minLength: 0)
+                    if let badge {
+                        Text(badge)
+                            .font(.system(size: 10))
+                            .foregroundStyle(Theme.textMuted)
+                    }
                 }
-            }
-            .foregroundStyle(Theme.accentText)
+                .foregroundStyle(Theme.accentText)
 
-            if let preview {
-                ScrollView {
-                    Text(preview)
-                        .font(.system(size: 11.5))
-                        .foregroundStyle(Theme.textSecondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
+                if let preview {
+                    ScrollView {
+                        Text(preview)
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(Theme.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .frame(maxHeight: 96)
                 }
-                .frame(maxHeight: 96)
-            }
 
-            HStack(spacing: 8) {
-                Spacer(minLength: 0)
-                Button(String(localized: "Discard")) { onDiscard() }
-                    .buttonStyle(SecondaryButtonStyle(height: 26))
-                Button(String(localized: "Append")) { onAppend() }
-                    .buttonStyle(SecondaryButtonStyle(height: 26))
-                    .help(String(localized: "Add the draft after what you already wrote"))
-                Button(String(localized: "Replace")) { onReplace() }
-                    .buttonStyle(SecondaryButtonStyle(height: 26, tint: Theme.accentText))
-                    .help(String(localized: "Overwrite the field with the draft"))
+                HStack(spacing: 8) {
+                    Spacer(minLength: 0)
+                    Button(String(localized: "Discard")) { onDiscard() }
+                        .buttonStyle(SecondaryButtonStyle(height: 26))
+                    Button(String(localized: "Append")) { onAppend() }
+                        .buttonStyle(SecondaryButtonStyle(height: 26))
+                        .help(String(localized: "Add the draft after what you already wrote"))
+                    Button(String(localized: "Replace")) { onReplace() }
+                        .buttonStyle(SecondaryButtonStyle(height: 26, tint: Theme.accentText))
+                        .help(String(localized: "Overwrite the field with the draft"))
+                }
             }
         }
-        .padding(10)
-        .background(
-            Theme.accent.opacity(0.06),
-            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Theme.accent.opacity(0.22), lineWidth: 1)
-        )
     }
 }
