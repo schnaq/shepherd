@@ -57,8 +57,8 @@ struct DigestCardView: View {
                 Image(systemName: "xmark")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(Theme.textMuted)
-                    .frame(width: 20, height: 20)
-                    .contentShape(Rectangle())
+                    // A 20 pt hit target around the glyph without growing the header row.
+                    .contentShape(Rectangle().inset(by: -5))
             }
             .buttonStyle(.plain)
             .help(String(localized: "Dismiss the digest until tomorrow"))

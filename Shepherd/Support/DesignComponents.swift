@@ -7,12 +7,15 @@ import SwiftUI
 struct Card<Content: View>: View {
     /// Extra tint behind the card, used by the AI hint card.
     var tint: Color?
+    /// The inset around the contents. 10 for the two tinted accent cards in the review's narrow
+    /// columns, which were drawn that way before they shared this view.
+    var padding: CGFloat = 12
     /// The card's contents.
     @ViewBuilder var content: Content
 
     var body: some View {
         content
-            .padding(12)
+            .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 tint ?? Theme.raised,

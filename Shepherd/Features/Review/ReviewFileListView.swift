@@ -160,7 +160,7 @@ struct ReviewFileListView: View {
     @ViewBuilder
     private var focusHintFooter: some View {
         if let hint = firstHint {
-            Card(tint: Theme.accent.opacity(0.06)) {
+            Card(tint: Theme.accent.opacity(0.06), padding: 10) {
                 VStack(alignment: .leading, spacing: 4) {
                     (
                         Text(String(localized: "Focus hint: "))

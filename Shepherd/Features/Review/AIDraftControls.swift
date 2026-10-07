@@ -192,7 +192,7 @@ struct AIDraftStatusView: View {
     ///   - badge: The tier that produced the waiting draft, when there is one.
     ///   - preview: The waiting draft, when there is one.
     private func question(badge: String?, preview: String?) -> some View {
-        Card(tint: Theme.accent.opacity(0.06)) {
+        Card(tint: Theme.accent.opacity(0.06), padding: 10) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 5) {
                     Image(systemName: "sparkles")
