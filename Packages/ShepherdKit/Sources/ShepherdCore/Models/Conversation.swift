@@ -170,6 +170,11 @@ public struct ConversationReview: Sendable, Codable, Hashable, Identifiable {
         self.viewerCanUpdate = viewerCanUpdate
         self.commitOid = commitOid
     }
+
+    /// Whether the reviewer wrote anything above the verdict — a summary that is not blank.
+    public var hasBody: Bool {
+        !bodyMarkdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 }
 
 /// Another issue or pull request that mentioned this one.

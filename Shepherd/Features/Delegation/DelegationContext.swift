@@ -457,10 +457,9 @@ enum DelegationPrompt {
                 lines.append(String(localized: "Review finding in \(path):"))
             }
             lines.append("")
-            for comment in context.findingComments {
-                let trimmed = comment.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty else { continue }
-                lines.append(contentsOf: trimmed.split(separator: "\n", omittingEmptySubsequences: false).map { "> \($0)" })
+            for comment in context.findingComments
+            where !comment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                lines.append(MarkdownDocument.quoted(comment))
                 lines.append("")
             }
             lines.append(String(localized: "Fix this finding."))

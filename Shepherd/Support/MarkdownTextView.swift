@@ -23,21 +23,20 @@ struct MarkdownText: View {
             // Indexed, because the same line can legitimately appear twice in one body — two
             // list items reading "- packages/ui: Jest green" under different headings are two
             // items, and identifying them by content would collapse them into one.
-            ForEach(Array(blocks.enumerated()), id: \.offset) { _, block in
-                view(for: block)
+            ForEach(Array(ParsedMarkdown.of(markdown).blocks.enumerated()), id: \.offset) { _, part in
+                view(for: part.block, text: part.text)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .textSelection(.enabled)
     }
 
-    private var blocks: [MarkdownBlock] { MarkdownDocument.blocks(from: markdown) }
-
+    /// One block, with `text` its inline Markdown already parsed.
     @ViewBuilder
-    private func view(for block: MarkdownBlock) -> some View {
+    private func view(for block: MarkdownBlock, text: AttributedString) -> some View {
         switch block {
-        case .heading(let level, let text):
-            Text(inline(text))
+        case .heading(let level, _):
+            Text(text)
                 .font(.system(size: headingSize(level), weight: .semibold))
                 .foregroundStyle(Theme.textStrong)
                 .fixedSize(horizontal: false, vertical: true)
@@ -45,13 +44,13 @@ struct MarkdownText: View {
                 // follows rather than floating between two sections.
                 .padding(.top, 6)
 
-        case .paragraph(let text):
-            Text(inline(text))
+        case .paragraph:
+            Text(text)
                 .font(.system(size: size))
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-        case .listItem(let text, let marker, let depth):
+        case .listItem(_, let marker, let depth):
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(verbatim: marker)
                     .font(.system(size: size))
@@ -61,7 +60,7 @@ struct MarkdownText: View {
                     // list does not wobble as the numbers grow.
                     .monospacedDigit()
                     .frame(minWidth: 16, alignment: .leading)
-                Text(inline(text))
+                Text(text)
                     .font(.system(size: size))
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -86,12 +85,12 @@ struct MarkdownText: View {
                     .stroke(Theme.border, lineWidth: 1)
             )
 
-        case .quote(let text):
+        case .quote:
             HStack(alignment: .top, spacing: 8) {
                 Rectangle()
                     .fill(Theme.border)
                     .frame(width: 2)
-                Text(inline(text))
+                Text(text)
                     .font(.system(size: size))
                     .foregroundStyle(Theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -113,9 +112,45 @@ struct MarkdownText: View {
         default: return size
         }
     }
+}
+
+/// One Markdown source, parsed: its blocks, each beside its inline Markdown as an
+/// `AttributedString`, kept process-wide by the source string (``of(_:)``).
+///
+/// ``MarkdownText`` is drawn again whenever the view holding it is, and a tab flip draws every post
+/// on the conversation tab: splitting the blocks and running `AttributedString(markdown:)` once per
+/// block, every time, was most of that redraw — for text that had not changed. A source is parsed
+/// once now and read back after that. A class because `NSCache` holds objects; `NSCache`'s own
+/// eviction is what keeps the cache from growing for ever, and nothing here second-guesses it.
+private final class ParsedMarkdown {
+    /// The blocks in order, each with its text's inline Markdown parsed — empty for a code block,
+    /// which is drawn verbatim, and for a rule, which has no text.
+    let blocks: [(block: MarkdownBlock, text: AttributedString)]
+
+    private init(_ markdown: String) {
+        blocks = MarkdownDocument.blocks(from: markdown).map { block in
+            switch block {
+            case .heading(_, let text), .paragraph(let text), .listItem(let text, _, _), .quote(let text):
+                return (block, Self.inline(text))
+            case .codeBlock, .rule:
+                return (block, AttributedString())
+            }
+        }
+    }
+
+    /// `markdown` parsed, from the cache when it has been parsed before.
+    @MainActor static func of(_ markdown: String) -> ParsedMarkdown {
+        let key = markdown as NSString
+        if let parsed = cache.object(forKey: key) { return parsed }
+        let parsed = ParsedMarkdown(markdown)
+        cache.setObject(parsed, forKey: key)
+        return parsed
+    }
+
+    @MainActor private static let cache = NSCache<NSString, ParsedMarkdown>()
 
     /// Inline Markdown within one block, which is what `AttributedString` is good at.
-    private func inline(_ text: String) -> AttributedString {
+    private static func inline(_ text: String) -> AttributedString {
         (try? AttributedString(
             markdown: text,
             options: AttributedString.MarkdownParsingOptions(

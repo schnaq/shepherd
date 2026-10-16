@@ -675,11 +675,7 @@ final class ReviewModel {
         detailLoadError = nil
         let threadsMoved = fresh.threads != shown.threads
         detail = fresh
-        conversationEntries = ConversationTimeline.entries(
-            conversation: fresh.conversation,
-            commits: fresh.commits,
-            threads: fresh.threads
-        )
+        rebuildConversationEntries(from: fresh)
         priorities = FilePrioritizer.prioritize(
             fresh.files,
             context: PrioritizationContext(totalChangedLines: fresh.summary.churn)
@@ -759,11 +755,7 @@ final class ReviewModel {
         // over a diff that had since arrived on its own until somebody pressed Try again.
         detailLoadError = nil
         self.detail = detail
-        conversationEntries = ConversationTimeline.entries(
-            conversation: detail.conversation,
-            commits: detail.commits,
-            threads: detail.threads
-        )
+        rebuildConversationEntries(from: detail)
         // The one place the tab default is spent, and the flag is what keeps it to the *first*
         // detail: this function runs again for the fresh fetch behind the cached row, for the
         // banner's Reload, and for nothing a reviewer would call a new open.
@@ -784,6 +776,16 @@ final class ReviewModel {
         loadRound(for: detail)
         // The repository only becomes known here, and the draft observation may already have run.
         applyReviewTemplateIfNeeded()
+    }
+
+    /// Rebuilds ``conversationEntries`` from the detail that just reached the screen — called by
+    /// ``apply(_:)`` and ``refresh(_:replacing:)``, the two ways one does.
+    private func rebuildConversationEntries(from detail: PullRequestDetail) {
+        conversationEntries = ConversationTimeline.entries(
+            conversation: detail.conversation,
+            commits: detail.commits,
+            threads: detail.threads
+        )
     }
 
     /// Keeps ``selectedPath`` on a file the current round view actually lists.
@@ -1649,24 +1651,8 @@ final class ReviewModel {
     /// too — and with a blank line after it, so the reply starts as its own paragraph.
     /// - Parameter markdown: The post's Markdown source.
     func quote(_ markdown: String) {
-        conversationDraft = SavedReply.inserting(Self.quoted(markdown), into: conversationDraft) + "\n\n"
+        conversationDraft = SavedReply.inserting(MarkdownDocument.quoted(markdown), into: conversationDraft) + "\n\n"
         composerFocusRequest += 1
-    }
-
-    /// A post as a Markdown quote: `> ` in front of every line and `>` on every blank one, so a
-    /// quoted paragraph break stays inside the quote.
-    ///
-    /// Split on any line break rather than on `"\n"`: whatever was typed on github.com arrives with
-    /// CRLF, which Swift reads as *one* character, so a split on `"\n"` alone found no line at all
-    /// and only the first paragraph went out quoted.
-    /// - Parameter markdown: The post's Markdown source.
-    /// - Returns: The quote, without a trailing line break.
-    static func quoted(_ markdown: String) -> String {
-        markdown
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
-            .map { $0.isEmpty ? ">" : "> \($0)" }
-            .joined(separator: "\n")
     }
 
     /// Shows one file in the diff viewer, scrolled to a line.

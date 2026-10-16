@@ -215,6 +215,11 @@ extension DatabaseManager {
     /// - Parameter detail: The detail record to store.
     public func savePullRequestDetail(_ detail: PullRequestDetail) async throws {
         let fetchedAt = Date().timeIntervalSince1970
+        // Encoded before the transaction rather than inside it: up to five pages of comment bodies
+        // go through `JSONEncoder` here, and every other write in the app waits on this one.
+        let conversation = detail.conversation.map {
+            PullRequestConversationRecord(prID: detail.id, conversation: $0)
+        }
         try await writer.write { db in
             try RepoRecord(detail.repo).save(db)
             let existing = try PullRequestRecord.fetchOne(
@@ -263,12 +268,7 @@ extension DatabaseManager {
             // read that failed or was not made: the stored row stays. An empty conversation is
             // GitHub's answer and replaces it (ADR 0043). Above the checks' early return, like
             // the closing issues below.
-            if let conversation = detail.conversation {
-                try PullRequestConversationRecord(
-                    prID: detail.id,
-                    conversation: conversation
-                ).save(db)
-            }
+            try conversation?.save(db)
 
             try db.execute(
                 sql: "DELETE FROM changed_files WHERE prID = ?",

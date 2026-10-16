@@ -540,7 +540,8 @@ public enum GraphQLDocuments {
     /// Each comment also names the review it was submitted in, which is what hangs a thread under
     /// that review in the conversation tab, and carries its reactions and the viewer's
     /// permissions on it (ADR 0043). `diffHunk` is deliberately not selected: GitHub sends the
-    /// whole hunk, and hunks of hundreds of lines are ordinary.
+    /// whole hunk, and hunks of hundreds of lines are ordinary. The author's avatar is asked for at
+    /// 48 pixels, the 24 points it is drawn at on a Retina screen.
     public static let reviewThreads = """
     query ShepherdReviewThreads(
       $owner: String!, $name: String!, $number: Int!, $first: Int!, $after: String
@@ -568,7 +569,7 @@ public enum GraphQLDocuments {
                   viewerCanUpdate
                   viewerCanDelete
                   pullRequestReview { id }
-                  author { __typename login avatarUrl }
+                  author { __typename login avatarUrl(size: 48) }
                   reactionGroups { content viewerHasReacted reactors { totalCount } }
                 }
               }
@@ -587,7 +588,9 @@ public enum GraphQLDocuments {
     /// rather than the newest, which are the ones a reviewer opened the tab to read. The
     /// `itemTypes` list is explicit: a type GitHub adds later is not sent until it is mapped.
     /// Fragments that share a field name share its type, so every node decodes into one
-    /// ``TimelineItemDTO``. Validated live, at a cost of 1 point (2026-10-16).
+    /// ``TimelineItemDTO``. An author's avatar comes at 48 pixels, the 24 points it is drawn at; an
+    /// event's actor comes without one, because an event row draws none. Validated live, at a
+    /// cost of 1 point (2026-10-16).
     public static let pullRequestConversation = """
     query ShepherdPullRequestConversation($owner: String!, $name: String!, $number: Int!, $before: String) {
       repository(owner: $owner, name: $name) {
@@ -610,37 +613,37 @@ public enum GraphQLDocuments {
               __typename
               ... on IssueComment {
                 id databaseId body createdAt lastEditedAt url isMinimized minimizedReason
-                author { __typename login avatarUrl }
+                author { __typename login avatarUrl(size: 48) }
                 viewerCanUpdate viewerCanDelete
                 reactionGroups { content viewerHasReacted reactors { totalCount } }
               }
               ... on PullRequestReview {
                 id databaseId body state createdAt submittedAt lastEditedAt url
-                author { __typename login avatarUrl }
+                author { __typename login avatarUrl(size: 48) }
                 viewerCanUpdate
                 reactionGroups { content viewerHasReacted reactors { totalCount } }
                 commit { oid }
               }
-              ... on HeadRefForcePushedEvent { id createdAt actor { __typename login avatarUrl } beforeCommit { oid } afterCommit { oid } }
-              ... on LabeledEvent { id createdAt actor { __typename login avatarUrl } label { name color } }
-              ... on UnlabeledEvent { id createdAt actor { __typename login avatarUrl } label { name color } }
-              ... on AssignedEvent { id createdAt actor { __typename login avatarUrl } assignee { __typename ... on User { login } ... on Bot { login } ... on Mannequin { login } ... on Organization { login } } }
-              ... on UnassignedEvent { id createdAt actor { __typename login avatarUrl } assignee { __typename ... on User { login } ... on Bot { login } ... on Mannequin { login } ... on Organization { login } } }
-              ... on ReviewRequestedEvent { id createdAt actor { __typename login avatarUrl } requestedReviewer { __typename ... on User { login } ... on Bot { login } ... on Mannequin { login } ... on Team { name } } }
-              ... on ReviewRequestRemovedEvent { id createdAt actor { __typename login avatarUrl } requestedReviewer { __typename ... on User { login } ... on Bot { login } ... on Mannequin { login } ... on Team { name } } }
-              ... on RenamedTitleEvent { id createdAt actor { __typename login avatarUrl } previousTitle currentTitle }
-              ... on ReadyForReviewEvent { id createdAt actor { __typename login avatarUrl } }
-              ... on ConvertToDraftEvent { id createdAt actor { __typename login avatarUrl } }
-              ... on MergedEvent { id createdAt actor { __typename login avatarUrl } commit { oid } mergeRefName }
-              ... on ClosedEvent { id createdAt actor { __typename login avatarUrl } }
-              ... on ReopenedEvent { id createdAt actor { __typename login avatarUrl } }
-              ... on HeadRefDeletedEvent { id createdAt actor { __typename login avatarUrl } headRefName }
-              ... on HeadRefRestoredEvent { id createdAt actor { __typename login avatarUrl } }
-              ... on BaseRefChangedEvent { id createdAt actor { __typename login avatarUrl } previousRefName currentRefName }
-              ... on CrossReferencedEvent { id createdAt actor { __typename login avatarUrl } willCloseTarget source { __typename ... on Issue { number title url repository { name owner { login } } } ... on PullRequest { number title url repository { name owner { login } } } } }
-              ... on ReviewDismissedEvent { id createdAt actor { __typename login avatarUrl } dismissalMessage }
-              ... on AutoMergeEnabledEvent { id createdAt actor { __typename login avatarUrl } }
-              ... on AutoMergeDisabledEvent { id createdAt actor { __typename login avatarUrl } }
+              ... on HeadRefForcePushedEvent { id createdAt actor { __typename login } beforeCommit { oid } afterCommit { oid } }
+              ... on LabeledEvent { id createdAt actor { __typename login } label { name color } }
+              ... on UnlabeledEvent { id createdAt actor { __typename login } label { name color } }
+              ... on AssignedEvent { id createdAt actor { __typename login } assignee { __typename ... on User { login } ... on Bot { login } ... on Mannequin { login } ... on Organization { login } } }
+              ... on UnassignedEvent { id createdAt actor { __typename login } assignee { __typename ... on User { login } ... on Bot { login } ... on Mannequin { login } ... on Organization { login } } }
+              ... on ReviewRequestedEvent { id createdAt actor { __typename login } requestedReviewer { __typename ... on User { login } ... on Bot { login } ... on Mannequin { login } ... on Team { name } } }
+              ... on ReviewRequestRemovedEvent { id createdAt actor { __typename login } requestedReviewer { __typename ... on User { login } ... on Bot { login } ... on Mannequin { login } ... on Team { name } } }
+              ... on RenamedTitleEvent { id createdAt actor { __typename login } previousTitle currentTitle }
+              ... on ReadyForReviewEvent { id createdAt actor { __typename login } }
+              ... on ConvertToDraftEvent { id createdAt actor { __typename login } }
+              ... on MergedEvent { id createdAt actor { __typename login } commit { oid } mergeRefName }
+              ... on ClosedEvent { id createdAt actor { __typename login } }
+              ... on ReopenedEvent { id createdAt actor { __typename login } }
+              ... on HeadRefDeletedEvent { id createdAt actor { __typename login } headRefName }
+              ... on HeadRefRestoredEvent { id createdAt actor { __typename login } }
+              ... on BaseRefChangedEvent { id createdAt actor { __typename login } previousRefName currentRefName }
+              ... on CrossReferencedEvent { id createdAt actor { __typename login } willCloseTarget source { __typename ... on Issue { number title url repository { name owner { login } } } ... on PullRequest { number title url repository { name owner { login } } } } }
+              ... on ReviewDismissedEvent { id createdAt actor { __typename login } dismissalMessage }
+              ... on AutoMergeEnabledEvent { id createdAt actor { __typename login } }
+              ... on AutoMergeDisabledEvent { id createdAt actor { __typename login } }
             }
           }
         }

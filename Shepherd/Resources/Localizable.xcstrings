@@ -2481,16 +2481,6 @@
         }
       }
     },
-    ", including yours": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": ", darunter deine"
-          }
-        }
-      }
-    },
     "1 comment thread.": {
       "localizations": {
         "de": {
@@ -14591,6 +14581,16 @@
         }
       }
     },
+    "including yours": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "darunter deine"
+          }
+        }
+      }
+    },
     "it carries %@": {
       "localizations": {
         "de": {
@@ -15487,16 +15487,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "· nicht in diesem Diff"
-          }
-        }
-      }
-    },
-    "· was line %lld": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "· war Zeile %lld"
           }
         }
       }

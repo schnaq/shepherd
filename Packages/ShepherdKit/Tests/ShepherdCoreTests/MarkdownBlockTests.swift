@@ -44,6 +44,82 @@ final class MarkdownBlockTests: XCTestCase {
         XCTAssertEqual(MarkdownDocument.blocks(from: "Press <kbd>⌘K</kbd>"), [.paragraph("Press <kbd>⌘K</kbd>")])
     }
 
+    /// A review that names a tag is writing about it, and a code span is code: rewriting it left
+    /// "Use `` and `\n` in bodies" on screen.
+    func testLeavesTagsAndCommentsInsideCodeSpansAlone() {
+        let source = "Use `<details>` and `<br>` in bodies, never `<!-- x -->`."
+        XCTAssertEqual(MarkdownDocument.blocks(from: source), [.paragraph(source)])
+        // Outside the span the same line still breaks.
+        XCTAssertEqual(
+            MarkdownDocument.blocks(from: "`<br>` breaks<br>here"),
+            [.paragraph("`<br>` breaks\nhere")]
+        )
+    }
+
+    /// Only a line that is nothing but the markup unwraps; in a sentence the tag is prose.
+    func testLeavesAMidLineDetailsTagInProseAlone() {
+        let source = "Wrap the log in <details> so it folds."
+        XCTAssertEqual(MarkdownDocument.blocks(from: source), [.paragraph(source)])
+    }
+
+    /// The other shape bots write: the opening tag and the summary on one line.
+    func testUnwrapsDetailsAndSummaryWrittenOnOneLine() {
+        XCTAssertEqual(
+            MarkdownDocument.blocks(from: "<details><summary>Full log</summary>\n\nok\n</details>"),
+            [.paragraph("**Full log**"), .paragraph("ok")]
+        )
+    }
+
+    // MARK: - CRLF (what github.com sends for anything typed there)
+
+    func testACRLFParagraphStaysOneParagraph() {
+        XCTAssertEqual(
+            MarkdownDocument.blocks(from: "one\r\ntwo\r\n\r\nthree"),
+            [.paragraph("one\ntwo"), .paragraph("three")]
+        )
+    }
+
+    func testACRLFFenceKeepsItsCodeExactly() {
+        XCTAssertEqual(
+            MarkdownDocument.blocks(from: "```swift\r\nlet a = 1\r\n\r\nlet b = 2\r\n```"),
+            [.codeBlock(code: "let a = 1\n\nlet b = 2", language: "swift")]
+        )
+    }
+
+    func testCRLFListItemsAreItemsOfOneList() {
+        XCTAssertEqual(
+            MarkdownDocument.blocks(from: "- one\r\n- two\r\n    - deeper"),
+            [
+                .listItem(text: "one", marker: "•", depth: 0),
+                .listItem(text: "two", marker: "•", depth: 0),
+                .listItem(text: "deeper", marker: "◦", depth: 1),
+            ]
+        )
+    }
+
+    // MARK: - Quoting
+
+    func testAQuoteMarksEveryLineOfAnLFBody() {
+        XCTAssertEqual(
+            MarkdownDocument.quoted("Looks good.\nOne nit below."),
+            "> Looks good.\n> One nit below."
+        )
+    }
+
+    func testAQuoteKeepsEveryParagraphOfACRLFBodyInsideIt() {
+        // What github.com sends for a comment typed there. Swift reads CRLF as one character, so
+        // a split on "\n" alone quoted the first paragraph and sent the rest unquoted.
+        XCTAssertEqual(
+            MarkdownDocument.quoted("First paragraph.\r\n\r\nSecond paragraph,\r\nsecond line."),
+            "> First paragraph.\n>\n> Second paragraph,\n> second line."
+        )
+    }
+
+    func testAQuoteDropsTheTrailingLineBreak() {
+        XCTAssertEqual(MarkdownDocument.quoted("Only line.\n"), "> Only line.")
+        XCTAssertEqual(MarkdownDocument.quoted("Only line.\r\n"), "> Only line.")
+    }
+
     // MARK: - Headings
 
     func testReadsHeadings() {

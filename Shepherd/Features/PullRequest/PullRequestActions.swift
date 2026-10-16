@@ -179,18 +179,13 @@ struct PullRequestActions {
         commentDatabaseID: Int,
         body: String
     ) async -> OutboxWriteOutcome? {
-        await activity.run(summary.id, .reply) { () async -> OutboxWriteOutcome? in
-            do {
-                let outcome = try await enqueue(
-                    .replyToComment(commentDatabaseID: commentDatabaseID, body: body),
-                    on: summary
-                )
-                announce(outcome, of: .reply, on: summary)
-                return outcome
-            } catch {
-                toasts.failure(error, context: String(localized: "Could not queue the reply"))
-                return nil
-            }
+        await activity.run(summary.id, .reply) {
+            await queue(
+                .replyToComment(commentDatabaseID: commentDatabaseID, body: body),
+                on: summary,
+                as: .reply,
+                failureContext: String(localized: "Could not queue the reply")
+            )
         } ?? nil
     }
 
@@ -202,20 +197,18 @@ struct PullRequestActions {
     /// - Returns: Whether the comment is on its way — sent or queued. `false` when it could not be
     ///   queued or GitHub refused it, so the composer can stay open with the text still in it.
     func addReviewComment(_ comment: DraftComment, on summary: PullRequestSummary) async -> Bool {
-        await activity.run(summary.id, .reply) {
-            do {
-                let outcome = try await enqueue(
-                    .addReviewComment(comment, commitOid: summary.headRefOid),
-                    on: summary
-                )
-                announce(outcome, of: .comment, on: summary)
-                if case .failed = outcome { return false }
-                return true
-            } catch {
-                toasts.failure(error, context: String(localized: "Could not queue the comment"))
-                return false
-            }
-        } ?? false
+        let outcome = await activity.run(summary.id, .reply) {
+            await queue(
+                .addReviewComment(comment, commitOid: summary.headRefOid),
+                on: summary,
+                as: .comment,
+                failureContext: String(localized: "Could not queue the comment")
+            )
+        } ?? nil
+        switch outcome {
+        case .sent?, .queued?, .parked?: return true
+        case .failed?, nil: return false
+        }
     }
 
     /// Resolves or unresolves a review thread.
@@ -223,31 +216,17 @@ struct PullRequestActions {
     ///   - summary: The pull request.
     ///   - threadID: The thread's GraphQL node id.
     ///   - resolved: The state to move to.
-    /// - Returns: What became of the row, or `nil` when nothing was written — the same thread
-    ///   already being toggled, or a local write that failed.
-    @discardableResult
-    func setThread(
-        on summary: PullRequestSummary,
-        threadID: String,
-        resolved: Bool
-    ) async -> OutboxWriteOutcome? {
+    func setThread(on summary: PullRequestSummary, threadID: String, resolved: Bool) async {
         // Keyed by the *thread*, not the pull request: a card can show a dozen conversations,
         // and resolving one of them is no reason for the other eleven buttons to report a write.
-        await activity.run(threadID, .thread) { () async -> OutboxWriteOutcome? in
-            do {
-                let outcome = try await enqueue(
-                    resolved
-                        ? .resolveThread(threadID: threadID)
-                        : .unresolveThread(threadID: threadID),
-                    on: summary
-                )
-                announce(outcome, of: .thread(resolved: resolved), on: summary)
-                return outcome
-            } catch {
-                toasts.failure(error, context: String(localized: "Could not update the thread"))
-                return nil
-            }
-        } ?? nil
+        await activity.run(threadID, .thread) {
+            await queue(
+                resolved ? .resolveThread(threadID: threadID) : .unresolveThread(threadID: threadID),
+                on: summary,
+                as: .thread(resolved: resolved),
+                failureContext: String(localized: "Could not update the thread")
+            )
+        }
     }
 
     // MARK: - Conversation
@@ -268,15 +247,13 @@ struct PullRequestActions {
     func comment(on summary: PullRequestSummary, body: String) async -> OutboxWriteOutcome? {
         let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        return await activity.run(summary.id, .comment) { () async -> OutboxWriteOutcome? in
-            do {
-                let outcome = try await enqueue(.addPullRequestComment(body: trimmed), on: summary)
-                announce(outcome, of: .comment, on: summary)
-                return outcome
-            } catch {
-                toasts.failure(error, context: String(localized: "Could not queue the comment"))
-                return nil
-            }
+        return await activity.run(summary.id, .comment) {
+            await queue(
+                .addPullRequestComment(body: trimmed),
+                on: summary,
+                as: .comment,
+                failureContext: String(localized: "Could not queue the comment")
+            )
         } ?? nil
     }
 
@@ -887,6 +864,31 @@ struct PullRequestActions {
             return
         }
         toasts.show(toast)
+    }
+
+    /// ``enqueue(_:on:)`` with its toasts: the outcome announced, or the local write's failure
+    /// said in `failureContext`'s words. The body every write that waits for its outcome shares;
+    /// each keeps its own ``activity`` key and guards in front of it.
+    /// - Parameters:
+    ///   - action: The mutation.
+    ///   - summary: The pull request it targets.
+    ///   - write: What the user asked for, for the toast.
+    ///   - failureContext: What the toast says when the row could not be written at all.
+    /// - Returns: What became of the row, or `nil` when it could not be written.
+    private func queue(
+        _ action: OutboxAction,
+        on summary: PullRequestSummary,
+        as write: WriteKind,
+        failureContext: String
+    ) async -> OutboxWriteOutcome? {
+        do {
+            let outcome = try await enqueue(action, on: summary)
+            announce(outcome, of: write, on: summary)
+            return outcome
+        } catch {
+            toasts.failure(error, context: failureContext)
+            return nil
+        }
     }
 
     /// Writes one row and waits for the drain to say what became of it

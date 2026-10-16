@@ -900,10 +900,7 @@ struct InlineCommentComposer: View {
     }
 
     /// Nothing to send yet: an empty field, or an image still uploading into it.
-    private var isBlank: Bool {
-        commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || PastedImage.containsPendingUpload(commentText)
-    }
+    private var isBlank: Bool { !PastedImage.isSendable(commentText) }
 
     /// Appends a ```` ```suggestion ```` block holding the commented lines. Offered on the head
     /// side only: a suggestion changes the new file. Built on press rather than per render,
@@ -938,10 +935,9 @@ struct InlineCommentComposer: View {
             toasts: environment.toasts,
             activity: environment.activity
         )
+        // The published comment reaches its line through the app's re-read once GitHub has it
+        // (`AppEnvironment.rereadAfterConversationWrite(_:)`), not through this sheet.
         guard await actions.addReviewComment(comment, on: summary) else { return }
-        // Fetched again so the published comment shows on its line now rather than at the next
-        // sweep — harmless when it is still queued.
-        model.load()
         dismiss()
     }
 
@@ -1149,7 +1145,7 @@ struct ThreadPopover: View {
             }
             .frame(maxHeight: 260)
             Divider().overlay(Theme.border)
-            ThreadReplyBar(thread: thread, summary: summary, actions: actions, replyText: $replyText) { _ in
+            ThreadReplyBar(thread: thread, summary: summary, actions: actions, replyText: $replyText) {
                 onClose()
             }
             .padding(12)
@@ -1258,25 +1254,9 @@ struct ThreadCommentView: View {
     let translations: TranslationCoordinator
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            AvatarView(actor: comment.author, size: 24)
+        VStack(alignment: .leading, spacing: 4) {
+            AuthorLine(author: comment.author, date: comment.createdAt, isEdited: comment.isEdited)
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text(comment.author.bestName)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.textStrong)
-                    if let identity = comment.author.kind.agentIdentity {
-                        ChipView(text: identity.displayName, color: Theme.agent, size: 10)
-                    }
-                    HStack(spacing: 4) {
-                        RelativeDateText(date: comment.createdAt, style: .long)
-                        if comment.isEdited {
-                            Text(verbatim: "· " + String(localized: "edited"))
-                        }
-                    }
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textMuted)
-                }
                 TranslatableMarkdownText(
                     markdown: comment.bodyMarkdown,
                     translations: translations
@@ -1285,6 +1265,9 @@ struct ThreadCommentView: View {
                     ReactionSummaryView(reactions: comment.reactions)
                 }
             }
+            // Under the name rather than under the avatar, the way GitHub indents a thread's
+            // comments: the avatar's 24 points and the line's spacing.
+            .padding(.leading, 32)
         }
     }
 }

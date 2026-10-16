@@ -110,7 +110,8 @@ enum ConversationEventText {
         }
     }
 
-    /// A commit SHA as GitHub abbreviates it.
+    /// A commit SHA as GitHub abbreviates it — ``ShepherdCore/CommitInfo/shortOid`` for the ones an
+    /// event carries as a plain string.
     private static func short(_ oid: String) -> String {
         String(oid.prefix(7))
     }

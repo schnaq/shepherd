@@ -4,8 +4,9 @@ import ShepherdCore
 import XCTest
 @testable import ShepherdPersistence
 
-/// The store side of ADR 0043: the conversation document on `pull_requests` and the review
-/// comment's extra columns, written by `savePullRequestDetail` and read back by both detail reads.
+/// The store side of ADR 0043: the conversation document in `pull_request_conversations` and the
+/// review comment's extra columns, written by `savePullRequestDetail` and read back by both detail
+/// reads.
 final class ConversationStoreTests: XCTestCase {
     // MARK: - Fixtures
 
@@ -100,6 +101,25 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertEqual(fetched?.conversation, saved.conversation)
         XCTAssertEqual(fetched?.threads.first?.comments.first, Self.richComment())
         XCTAssertEqual(fetched, saved, "and nothing else moved")
+    }
+
+    /// Most comments carry no reaction, and `[]` written out for each of them is a column of
+    /// noise; `NULL` reads back as the same empty list.
+    func testACommentWithoutReactionsStoresNull() async throws {
+        let database = try DatabaseManager.inMemory()
+        var detail = Self.detail()
+        detail.threads[0].comments[0].reactions = []
+        try await database.savePullRequestDetail(detail)
+
+        let nullRows = try await database.writer.read { db in
+            try Int.fetchOne(
+                db,
+                sql: "SELECT COUNT(*) FROM review_comments WHERE id = 'PRRC_1' AND reactionsJSON IS NULL"
+            )
+        }
+        XCTAssertEqual(nullRows, 1, "NULL, not \"[]\"")
+        let fetched = try await database.fetchPullRequestDetail(id: detail.id)
+        XCTAssertEqual(fetched?.threads.first?.comments.first?.reactions, [])
     }
 
     func testTheObservationCarriesTheConversationAndTheCommentExtrasToo() async throws {

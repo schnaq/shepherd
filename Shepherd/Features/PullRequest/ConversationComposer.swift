@@ -17,6 +17,9 @@ struct ConversationComposer: View {
     let summary: PullRequestSummary
 
     var body: some View {
+        // Once per body rather than per use: it runs a pattern over the whole draft, and the
+        // body is evaluated on every keystroke.
+        let canSend = PastedImage.isSendable(model.conversationDraft)
         Card {
             VStack(alignment: .leading, spacing: 8) {
                 CardTitle(String(localized: "ADD A COMMENT"))
@@ -43,7 +46,7 @@ struct ConversationComposer: View {
                             close()
                         } label: {
                             Text(
-                                hasText
+                                canSend
                                     ? String(localized: "Comment and close")
                                     : String(localized: "Close without a comment")
                             )
@@ -66,7 +69,7 @@ struct ConversationComposer: View {
                             ? KeyboardShortcut(.return, modifiers: .command)
                             : nil
                     )
-                    .disabled(!hasText)
+                    .disabled(!canSend)
                     .busy(actions.activity.isRunning(summary.id, .comment))
                     .help(String(localized: "Post the comment (⌘⏎ while you type)"))
                 }
@@ -77,24 +80,17 @@ struct ConversationComposer: View {
         .onDisappear { model.isConversationComposerFocused = false }
     }
 
-    /// Whether the text is worth sending: not blank, and no pasted image still uploading into it.
-    private var hasText: Bool {
-        !model.conversationDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !PastedImage.containsPendingUpload(model.conversationDraft)
-    }
-
     /// Posts the draft, and empties the field only once the outbox has it.
     ///
     /// A comment GitHub refused keeps its text, so it can be fixed and sent again; so does one
-    /// that was never written. Words typed while the write ran are not thrown away with it. Only a
-    /// comment that actually reached GitHub re-reads the pull request — a queued one is the
-    /// toast's news, and a re-read offline would only put a failure banner over the tab.
+    /// that was never written. Words typed while the write ran are not thrown away with it. What
+    /// puts the posted comment into the stream is the app's re-read once GitHub has it
+    /// (`AppEnvironment.rereadAfterConversationWrite(_:)`), not this field.
     private func post() async {
         let text = model.conversationDraft
         guard let outcome = await actions.comment(on: summary, body: text) else { return }
         if case .failed = outcome { return }
         if model.conversationDraft == text { model.conversationDraft = "" }
-        if case .sent = outcome { model.load() }
     }
 
     /// Hands the draft to the close the way the sheet does: taken, emptied, queued.

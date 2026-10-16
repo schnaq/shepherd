@@ -35,6 +35,9 @@ public struct CommitInfo: Sendable, Codable, Hashable, Identifiable {
     /// `CommitInfo` is identified by its ``oid``.
     public var id: String { oid }
 
+    /// The SHA as GitHub abbreviates it: its first seven characters.
+    public var shortOid: String { String(oid.prefix(7)) }
+
     /// Extracts `Key: value` trailer lines from a commit message body.
     ///
     /// Only lines that look like a git trailer are returned: a key made of letters and
