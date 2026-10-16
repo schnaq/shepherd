@@ -91,9 +91,11 @@ public enum OutboxAction: Sendable, Codable, Hashable {
     case closePullRequest(comment: String?)
     /// Add the viewer's reaction to a post, or take it back (ADR 0043).
     ///
-    /// One row per click with the direction in it, and rows are not merged: an add and a removal
-    /// queued offline reach GitHub in the order they were clicked, which is what lets the last
-    /// click win. Addressed to the *post* — the description, a comment, a review, an inline
+    /// One row per click with the direction in it. The drain sends due rows in `createdAt` order
+    /// and never merges them; undoing a click whose row is still pending is the caller's job —
+    /// it cancels that row (``ShepherdPersistence/DatabaseManager/cancelPendingOutboxItem(id:)``)
+    /// instead of queuing the opposite, and queues the opposite only behind a row the drain has
+    /// already claimed. Addressed to the *post* — the description, a comment, a review, an inline
     /// comment — by its node id, while the row's own target fields name the pull request it
     /// belongs to, so the drain announces the write for the pull request.
     /// - Parameters:

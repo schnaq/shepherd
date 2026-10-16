@@ -340,8 +340,7 @@ final class ModelCodingTests: XCTestCase {
     }
 
     func testAReactRowRoundTripsInBothDirectionsForEveryContent() throws {
-        // ADR 0043: a click is one row, and "take it back" is a second row rather than a change
-        // to the first, so the direction travels with the row.
+        // ADR 0043: a click is one row with its direction in it, for every content.
         var actions = ReactionContent.allCases.map {
             OutboxAction.react(subjectID: "IC_kwDOComment1", content: $0, adding: true)
         }

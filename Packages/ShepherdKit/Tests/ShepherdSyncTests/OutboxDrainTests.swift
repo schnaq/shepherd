@@ -130,9 +130,10 @@ final class OutboxDrainTests: XCTestCase {
         XCTAssertNil(row, "a sent row leaves the queue")
     }
 
-    func testAReactionAndItsTakingBackAreSentInTheOrderTheyWereClicked() async throws {
-        // A double click is two rows, and they are not merged: the second has to reach GitHub
-        // second, or the reaction the user took back is the one that stays.
+    func testAnAddAndARemovalOfTheSameReactionAreBothSentInTheOrderTheyWereQueued() async throws {
+        // The drain sends due rows in `createdAt` order and never merges them, so an add queued
+        // before a removal reaches GitHub first and both are sent. Cancelling a still-pending
+        // inverse instead of queuing it is the app's job (ADR 0043, B), not this drain's.
         let github = MockGitHub()
         let store = try DatabaseManager.inMemory()
         _ = try await enqueue(
