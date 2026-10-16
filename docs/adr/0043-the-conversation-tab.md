@@ -48,7 +48,11 @@ description's.
 - **Tolerated:** like `closingIssuesReferences` (ADR 0032), a failure of this one read does not
   fail the detail. The detail then carries `conversation == nil`, which the store reads as
   "unknown" and does not write through: the conversation the database already holds stays on
-  screen. A transient error must not empty a chat.
+  screen. A transient error must not empty a chat. One refinement: an answer that carries both
+  `data` and `errors` — one node GitHub would not resolve for this token, a cross-reference behind
+  SAML enforcement — is kept, and the nodes GitHub nulled are dropped, because refusing the whole
+  read for one of them would leave that pull request's tab empty on every fetch. A rate limit still
+  fails the read, and so does a page whose items came back `null`: that is a page lost, not a node.
 - **GitHub already hides reply-only reviews.** A reply typed under an existing thread is, in
   GitHub's model, a review of its own with one comment and no body; `timelineItems` leaves those out
   (verified against cli/cli#14569: sixteen reviews, two in the timeline). Shepherd does the same
