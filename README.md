@@ -154,7 +154,7 @@ arrive too — under *Watched* until you are involved in one.
 | `g a` `g r` `g s` | Group by agent / repo / review state | | `m` | Merge… |
 | `⌘K` | Command palette &amp; pull-request search | | `r f` · `⇧⌘⏎` | Start a focus review session |
 | `⌘R` | Sync now | | `d` `n` `esc` | In a session: done & next · next · end |
-| `⌘⏎` | Submit the pending review | | | |
+| `⌘⏎` | Submit the pending review (in the conversation's comment field: post the comment) | | | |
 
 Two-keystroke sequences forget an unfinished prefix after 1.5 s, so a stray `r` never swallows the
 next key.

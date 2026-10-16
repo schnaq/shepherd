@@ -99,8 +99,9 @@ buttons and outbox actions and no migration. In A they are shown, not offered.
 The intelligence cards stay where they are (claims vs. evidence, the recurring finding, the issues
 it closes, the stack), because they are read before the discussion. Then the description, drawn as
 the first post — author, time, *edited*, reactions. Then the stream. Then the checks, which is
-where GitHub has them, beside its merge box. Then a composer: *Post comment* (⌘⏎) and *Comment and
-close* / *Close without a comment*, with saved replies and ⌘V image paste — the same field and the
+where GitHub has them, beside its merge box. Then a composer: *Post comment* (⌘⏎ while the field
+has the keyboard — everywhere else ⌘⏎ stays the toolbar's *Review*) and *Comment and close* /
+*Close without a comment*, with saved replies and ⌘V image paste — the same field and the
 same two writes as the *Comment…* sheet (ADR 0005's 2026-09-14 amendment), no new action.
 *Quote reply* on any post puts the post, quoted, into that composer. The *Commits* card goes: its
 rows, trailers included, are the stream's commit groups.
