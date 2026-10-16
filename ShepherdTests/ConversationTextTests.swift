@@ -4,34 +4,12 @@ import XCTest
 
 @testable import Shepherd
 
-/// The conversation tab's own text that is not an event (ADR 0043): a post as *Quote reply* puts
-/// it into the comment field, and the heading of a commit group — which carries the catalog's only
-/// plural with two arguments. English, because the app tests run with `-testLanguage en`.
+/// The conversation tab's own rules that are not an event (ADR 0043): the heading of a commit
+/// group — which carries the catalog's only plural with two arguments — and which threads start
+/// folded. English, because the app tests run with `-testLanguage en`. *Quote reply*'s quoting is
+/// ShepherdCore's (`MarkdownBlockTests`).
 @MainActor
 final class ConversationTextTests: XCTestCase {
-    // MARK: - Quote reply
-
-    func testAQuoteMarksEveryLineOfAnLFBody() {
-        XCTAssertEqual(
-            ReviewModel.quoted("Looks good.\nOne nit below."),
-            "> Looks good.\n> One nit below."
-        )
-    }
-
-    func testAQuoteKeepsEveryParagraphOfACRLFBodyInsideIt() {
-        // What github.com sends for a comment typed there. Swift reads CRLF as one character, so
-        // a split on "\n" alone quoted the first paragraph and sent the rest unquoted.
-        XCTAssertEqual(
-            ReviewModel.quoted("First paragraph.\r\n\r\nSecond paragraph,\r\nsecond line."),
-            "> First paragraph.\n>\n> Second paragraph,\n> second line."
-        )
-    }
-
-    func testAQuoteDropsTheTrailingLineBreak() {
-        XCTAssertEqual(ReviewModel.quoted("Only line.\n"), "> Only line.")
-        XCTAssertEqual(ReviewModel.quoted("Only line.\r\n"), "> Only line.")
-    }
-
     // MARK: - Commit groups
 
     private static let claude = ShepherdCore.Actor(

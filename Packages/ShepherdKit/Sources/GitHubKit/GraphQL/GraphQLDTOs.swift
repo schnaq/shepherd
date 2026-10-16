@@ -236,20 +236,9 @@ struct TimelineItemDTO: Decodable {
     struct Participant: Decodable {
         var login: String?
         var name: String?
-    }
 
-    /// The issue or pull request a cross-reference came from.
-    struct Source: Decodable {
-        var typename: String?
-        var number: Int?
-        var title: String?
-        var url: String?
-        var repository: GraphQLRepositoryDTO?
-
-        private enum CodingKeys: String, CodingKey {
-            case typename = "__typename"
-            case number, title, url, repository
-        }
+        /// What an event sentence names it by: the login, or a team's name.
+        var handle: String? { login ?? name }
     }
 
     var typename: String?
@@ -284,7 +273,8 @@ struct TimelineItemDTO: Decodable {
     var beforeCommit: Commit?
     var afterCommit: Commit?
     var willCloseTarget: Bool?
-    var source: Source?
+    /// The issue or pull request a cross-reference came from.
+    var source: LinkedPullRequestNodeDTO?
     var dismissalMessage: String?
 
     private enum CodingKeys: String, CodingKey {
@@ -498,22 +488,26 @@ struct IssueByNumberData: Decodable {
     var repository: Repository?
 }
 
-/// One pull request as an issue's links carry it.
+/// One pull request as an issue's links carry it — or, in a pull request's conversation, the issue
+/// or pull request a cross-reference came from (ADR 0043).
 ///
-/// The three shapes that can produce it — `closedByPullRequestsReferences.nodes`,
+/// The three shapes on the issue side — `closedByPullRequestsReferences.nodes`,
 /// `CrossReferencedEvent.source` and `ConnectedEvent.subject` — select the same five fields, so
-/// they decode into the same DTO and there is one mapping rather than three.
+/// they decode into the same DTO and there is one mapping rather than three. The conversation's
+/// cross-reference selects `url` and neither `state` nor `author`; a field a document did not
+/// select is simply `nil`.
 struct LinkedPullRequestNodeDTO: Decodable {
     var typename: String?
     var number: Int?
     var title: String?
     var state: String?
+    var url: String?
     var repository: GraphQLRepositoryDTO?
     var author: GraphQLActorDTO?
 
     private enum CodingKeys: String, CodingKey {
         case typename = "__typename"
-        case number, title, state, repository, author
+        case number, title, state, url, repository, author
     }
 }
 

@@ -74,9 +74,7 @@ public enum ConversationTimeline {
                 return (comment.createdAt, .comment(comment))
             case .review(let review):
                 let started = threadsByReview[review.id] ?? []
-                let isSilent = review.state == .commented
-                    && review.bodyMarkdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    && started.isEmpty
+                let isSilent = review.state == .commented && !review.hasBody && started.isEmpty
                 return isSilent ? nil : (review.createdAt, .review(review, threads: started))
             case .event(let event):
                 return (event.createdAt, .event(event))

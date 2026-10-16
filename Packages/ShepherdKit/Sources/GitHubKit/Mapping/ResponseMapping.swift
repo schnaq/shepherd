@@ -840,11 +840,9 @@ public enum ResponseMapping {
             return node.assignee?.login.map { .unassigned(login: $0) }
         case "ReviewRequestedEvent":
             // A team has no login; it is named by its name.
-            let reviewer = node.requestedReviewer?.login ?? node.requestedReviewer?.name
-            return reviewer.map { .reviewRequested(reviewer: $0) }
+            return node.requestedReviewer?.handle.map { .reviewRequested(reviewer: $0) }
         case "ReviewRequestRemovedEvent":
-            let reviewer = node.requestedReviewer?.login ?? node.requestedReviewer?.name
-            return reviewer.map { .reviewRequestRemoved(reviewer: $0) }
+            return node.requestedReviewer?.handle.map { .reviewRequestRemoved(reviewer: $0) }
         case "RenamedTitleEvent":
             guard let from = node.previousTitle, let to = node.currentTitle else { return nil }
             return .renamed(from: from, to: to)
@@ -878,7 +876,7 @@ public enum ResponseMapping {
     /// Maps the source of a cross-reference, or `nil` without the number and repository it is
     /// identified by — ``linkedPullRequest(from:detector:)``'s rule, for either kind of source.
     static func conversationReference(
-        from source: TimelineItemDTO.Source
+        from source: LinkedPullRequestNodeDTO
     ) -> ConversationReference? {
         guard let number = source.number,
               let repoName = source.repository?.name,

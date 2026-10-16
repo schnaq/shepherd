@@ -1649,24 +1649,8 @@ final class ReviewModel {
     /// too — and with a blank line after it, so the reply starts as its own paragraph.
     /// - Parameter markdown: The post's Markdown source.
     func quote(_ markdown: String) {
-        conversationDraft = SavedReply.inserting(Self.quoted(markdown), into: conversationDraft) + "\n\n"
+        conversationDraft = SavedReply.inserting(MarkdownDocument.quoted(markdown), into: conversationDraft) + "\n\n"
         composerFocusRequest += 1
-    }
-
-    /// A post as a Markdown quote: `> ` in front of every line and `>` on every blank one, so a
-    /// quoted paragraph break stays inside the quote.
-    ///
-    /// Split on any line break rather than on `"\n"`: whatever was typed on github.com arrives with
-    /// CRLF, which Swift reads as *one* character, so a split on `"\n"` alone found no line at all
-    /// and only the first paragraph went out quoted.
-    /// - Parameter markdown: The post's Markdown source.
-    /// - Returns: The quote, without a trailing line break.
-    static func quoted(_ markdown: String) -> String {
-        markdown
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
-            .map { $0.isEmpty ? ">" : "> \($0)" }
-            .joined(separator: "\n")
     }
 
     /// Shows one file in the diff viewer, scrolled to a line.

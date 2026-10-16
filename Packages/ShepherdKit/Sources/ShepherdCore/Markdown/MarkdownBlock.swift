@@ -59,7 +59,12 @@ public enum MarkdownDocument {
             flushQuote()
         }
 
-        for rawLine in markdown.components(separatedBy: .newlines) {
+        // Split on any line break rather than on `CharacterSet.newlines`: whatever was typed on
+        // github.com arrives with CRLF, which Swift reads as *one* character and the character set
+        // as two — so every line break became a paragraph break, and a fence gained a blank line
+        // between every two lines of its code.
+        for piece in markdown.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline) {
+            let rawLine = String(piece)
             // Inside a fence every line is literal until the closing fence, which is the whole
             // point of a fence: a `#` in a shell snippet is a comment and a `-` is a flag.
             if var open = fence {
@@ -133,73 +138,97 @@ public enum MarkdownDocument {
         return blocks
     }
 
+    /// A body as a Markdown quote: `> ` in front of every line and `>` on every blank one, so a
+    /// quoted paragraph break stays inside the quote.
+    ///
+    /// What *Quote reply* puts into the comment field and what a delegation task quotes a review
+    /// comment as. Split on any line break rather than on `"\n"`, for ``blocks(from:)``'s reason:
+    /// a body typed on github.com arrives with CRLF, a split on `"\n"` alone found no line break in
+    /// it at all, and only the first paragraph went out quoted.
+    /// - Parameter markdown: The body as Markdown source.
+    /// - Returns: The quote, without a trailing line break.
+    public static func quoted(_ markdown: String) -> String {
+        markdown
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+            .map { $0.isEmpty ? ">" : "> \($0)" }
+            .joined(separator: "\n")
+    }
+
     // MARK: - HTML
 
     /// One line with the HTML GitHub renders and this parser would otherwise print taken care of:
     /// `<!-- comments -->` vanish (an unterminated one swallows the lines after it, as on GitHub),
-    /// `<details>` unwraps, a `<summary>` becomes a bold line, and `<br>` breaks the line. Every
-    /// other tag is left exactly as written — a `<kbd>` shown as text says more than one dropped.
+    /// `<br>` breaks the line, and `<details>` and `<summary>` unwrap — the summary into a bold
+    /// line — when they stand on a line of their own, which is how bots write them. Every other
+    /// tag is left exactly as written — a `<kbd>` shown as text says more than one dropped.
+    ///
+    /// Nothing inside a code span is touched, and neither is a `<details>` in the middle of a
+    /// sentence: a review that names the `<br>` tag in backticks is writing *about* the tag, and
+    /// rewriting it left an empty pair of backticks where the tag's name had been.
     /// - Parameters:
     ///   - line: The line as written.
     ///   - isInComment: Whether an HTML comment is open, carried from line to line.
     /// - Returns: The line without that markup; the same string when it had none.
     private static func unwrappingHTML(in line: String, isInComment: inout Bool) -> String {
+        guard isInComment || line.contains("<") else { return line }
+        if !isInComment, let markup = wholeLineMarkup(line.trimmingCharacters(in: .whitespaces)) {
+            return markup
+        }
+
         var text = ""
         var rest = Substring(line)
         while !rest.isEmpty {
             if isInComment {
+                // Inside a comment a backtick is comment text, not the start of code.
                 guard let end = rest.range(of: "-->") else { break }
                 rest = rest[end.upperBound...]
                 isInComment = false
-            } else if let start = rest.range(of: "<!--") {
-                text += rest[..<start.lowerBound]
-                rest = rest[start.upperBound...]
+                continue
+            }
+            // Prose runs to whichever opens first: a comment, or a code span.
+            let tick = rest.firstIndex(of: "`")
+            if let open = rest.range(of: "<!--"), tick.map({ open.lowerBound < $0 }) ?? true {
+                text += lineBreak.applied(to: String(rest[..<open.lowerBound]))
+                rest = rest[open.upperBound...]
                 isInComment = true
+            } else if let tick {
+                text += lineBreak.applied(to: String(rest[..<tick]))
+                // The span, backticks and all, as written; one left open runs to the line's end.
+                let afterTick = rest.index(after: tick)
+                let end = rest[afterTick...].firstIndex(of: "`").map { rest.index(after: $0) } ?? rest.endIndex
+                text += rest[tick..<end]
+                rest = rest[end...]
             } else {
-                text += rest
+                text += lineBreak.applied(to: String(rest))
                 break
             }
-        }
-        guard text.contains("<") else { return text }
-
-        if let summary = summaryPattern {
-            let range = NSRange(text.startIndex..., in: text)
-            for match in summary.matches(in: text, range: range).reversed() {
-                guard let whole = Range(match.range, in: text),
-                      let inner = Range(match.range(at: 1), in: text) else { continue }
-                let label = text[inner].trimmingCharacters(in: .whitespaces)
-                text.replaceSubrange(whole, with: label.isEmpty ? "" : "**\(label)**")
-            }
-        }
-        for (pattern, replacement) in [(detailsPattern, ""), (breakPattern, "\n")] {
-            guard let pattern else { continue }
-            text = pattern.stringByReplacingMatches(
-                in: text,
-                range: NSRange(text.startIndex..., in: text),
-                withTemplate: replacement
-            )
         }
         return text.hasSuffix("\n") ? String(text.dropLast()) : text
     }
 
-    /// `<summary>label</summary>` on one line; a lone opening or closing tag is caught by
-    /// ``detailsPattern``.
-    private static let summaryPattern = try? NSRegularExpression(
-        pattern: "<summary>(.*?)</summary>",
-        options: [.caseInsensitive]
-    )
+    /// What a line that is `<details>` or `<summary>` markup and nothing else becomes: nothing, or
+    /// its summary as a bold line.
+    /// - Parameter trimmed: The line, without its surrounding spaces.
+    /// - Returns: The replacement, or `nil` when the line is more than that markup.
+    private static func wholeLineMarkup(_ trimmed: String) -> String? {
+        if lonelyTagLine.matches(trimmed) { return "" }
+        guard let label = summaryLine.firstCapture(in: trimmed)?.trimmingCharacters(in: .whitespaces) else {
+            return nil
+        }
+        return label.isEmpty ? "" : "**\(label)**"
+    }
 
-    /// `<details>`, `<details open>`, `</details>`, and a `<summary>` split over lines.
-    private static let detailsPattern = try? NSRegularExpression(
-        pattern: "</?(?:details|summary)(?:\\s[^>]*)?>",
-        options: [.caseInsensitive]
-    )
+    /// `<details>`, `<details open>`, `</details>`, and a `<summary>` or `</summary>` whose label
+    /// is on the lines between them.
+    private static let lonelyTagLine = ClaimPattern(#"^</?(?:details(?:\s[^>]*)?|summary)>$"#)
+
+    /// `<summary>label</summary>`, with the `<details>` that opens it in front where a bot wrote
+    /// both on one line.
+    private static let summaryLine = ClaimPattern(#"^(?:<details(?:\s[^>]*)?>\s*)?<summary>(.*)</summary>$"#)
 
     /// `<br>`, `<br/>` and `<br />`.
-    private static let breakPattern = try? NSRegularExpression(
-        pattern: "<br\\s*/?>",
-        options: [.caseInsensitive]
-    )
+    private static let lineBreak = InlineRewrite(#"(?i)<br\s*/?>"#, template: "\n")
 
     // MARK: - Line shapes
 

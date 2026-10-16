@@ -271,7 +271,6 @@ struct ConversationReviewView: View {
 
     var body: some View {
         let verdict = Self.verdict(review.state)
-        let hasBody = !review.bodyMarkdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         VStack(alignment: .leading, spacing: 8) {
             PostHeader(
                 model: model,
@@ -281,11 +280,11 @@ struct ConversationReviewView: View {
                 tint: verdict.tint,
                 date: review.createdAt,
                 isEdited: review.isEdited,
-                markdown: hasBody ? review.bodyMarkdown : "",
+                markdown: review.hasBody ? review.bodyMarkdown : "",
                 url: review.url
             )
             .padding(.horizontal, 12)
-            if hasBody {
+            if review.hasBody {
                 ConversationPostView(
                     model: model,
                     translations: translations,
@@ -501,7 +500,7 @@ struct ConversationCommitsView: View {
             }
             ForEach(commits) { commit in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(verbatim: String(commit.oid.prefix(7)))
+                    Text(verbatim: commit.shortOid)
                         .font(Theme.mono(.subheadline))
                         .foregroundStyle(Theme.accentText)
                     VStack(alignment: .leading, spacing: 2) {

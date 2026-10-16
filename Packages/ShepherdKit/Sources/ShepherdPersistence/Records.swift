@@ -411,7 +411,8 @@ struct ReviewCommentRecord: Codable, FetchableRecord, PersistableRecord {
     var pendingLocalID: String?
     /// The node id of the review the comment was submitted in (v11, ADR 0043).
     var reviewID: String?
-    /// `[ReactionGroup]` as JSON, `NULL` on a row stored before v11.
+    /// `[ReactionGroup]` as JSON; `NULL` for a comment nobody reacted to — most of them — and on a
+    /// row stored before v11. Both read back as no reactions.
     var reactionsJSON: String?
     var viewerCanUpdate: Bool
     var viewerCanDelete: Bool
@@ -435,7 +436,7 @@ struct ReviewCommentRecord: Codable, FetchableRecord, PersistableRecord {
         self.createdAt = comment.createdAt.timeIntervalSince1970
         self.pendingLocalID = comment.pendingLocalID?.uuidString
         self.reviewID = comment.reviewID
-        self.reactionsJSON = ColumnCoding.encodeJSON(comment.reactions)
+        self.reactionsJSON = comment.reactions.isEmpty ? nil : ColumnCoding.encodeJSON(comment.reactions)
         self.viewerCanUpdate = comment.viewerCanUpdate
         self.viewerCanDelete = comment.viewerCanDelete
         self.isEdited = comment.isEdited
