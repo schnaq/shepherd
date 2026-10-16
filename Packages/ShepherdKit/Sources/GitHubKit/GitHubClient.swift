@@ -355,7 +355,9 @@ public actor GitHubClient {
     ///
     /// A page GitHub answered only in part is kept: a node it would not resolve (a reference
     /// from a repository behind SAML enforcement) arrives as `null` and is dropped. Refusing
-    /// the page would leave that pull request's conversation unreadable on every fetch.
+    /// the page would leave that pull request's conversation unreadable on every fetch. A page
+    /// whose items were refused as a whole fails the read instead: kept, it would be stored over
+    /// the conversation the store already has, up to a hundred items short.
     /// - Parameters:
     ///   - repo: The repository.
     ///   - number: The pull request number.
@@ -385,6 +387,12 @@ public actor GitHubClient {
             )
             guard let pullRequest = data.repository?.pullRequest else {
                 throw GitHubError.notFound(resource: "\(repo.fullName)#\(number)")
+            }
+            // A refused connection: `nodes` is `null` beside an error; an empty page is `[]`.
+            guard pullRequest.timelineItems?.nodes != nil else {
+                throw GitHubError.graphQL(
+                    messages: ["GitHub refused the timeline of \(repo.fullName)#\(number)"]
+                )
             }
             pages.append(pullRequest)
             guard pullRequest.timelineItems?.pageInfo?.hasPreviousPage == true,

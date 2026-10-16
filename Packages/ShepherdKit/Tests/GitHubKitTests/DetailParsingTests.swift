@@ -72,6 +72,33 @@ final class DetailParsingTests: XCTestCase {
         XCTAssertEqual(detail.threads.count, 2)
     }
 
+    func testAPageWhoseItemsWereRefusedFailsTheRead() async throws {
+        // GitHub refused the whole connection: `nodes` is `null` beside an error, not an empty
+        // page. Kept, it would be stored over the conversation the store has and empty a chat
+        // on a transient error (ADR 0043); failed, the detail carries `nil`, "unknown".
+        let transport = try await makeTransport()
+        await transport.route(
+            "ShepherdPullRequestConversation",
+            Fixture.response(json: """
+            {"data":{"repository":{"pullRequest":{
+              "timelineItems":{"pageInfo":{"hasPreviousPage":false},"nodes":null}}}},
+             "errors":[{"type":"FORBIDDEN","message":"Resource protected by SAML enforcement."}]}
+            """)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            _ = try await client.pullRequestConversation(repo: repo, number: 128)
+            XCTFail("expected a GraphQL error")
+        } catch GitHubError.graphQL {
+            // Expected: a refused page fails the read rather than reading as an empty one.
+        }
+        let detail = try await client.pullRequestDetail(repo: repo, number: 128)
+        XCTAssertNil(detail.conversation)
+        XCTAssertEqual(detail.files.count, 4)
+        XCTAssertEqual(detail.threads.count, 2)
+    }
+
     func testTheDetailFetchReadsMergeStateStatusFromRESTsMergeableState() async throws {
         // REST's `mergeable_state` carries the same values as GraphQL's `mergeStateStatus`, so a
         // detail fetch does not wipe the `behind` the sweep stored (ADR 0041).
