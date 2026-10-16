@@ -8,6 +8,11 @@ import XCTest
 final class OutboxDrainTests: XCTestCase {
     private let repo = SyncFixtures.repo
     private let now = Date(timeIntervalSince1970: 1_788_162_000)
+    /// GitHub's answer to a removal of a reaction the viewer does not have, as the client throws
+    /// it — verified live on 2026-10-16, and word for word what a real permission refusal says.
+    private let refusedRemoval = GitHubError.graphQL(
+        messages: ["n2o does not have the correct permissions to execute `RemoveReaction`"]
+    )
 
     private func makeEngine(
         github: MockGitHub,
@@ -161,13 +166,17 @@ final class OutboxDrainTests: XCTestCase {
         )
         let remaining = try await store.allOutboxItems()
         XCTAssertTrue(remaining.isEmpty)
+        let probes = await github.reactionProbes
+        XCTAssertTrue(probes.isEmpty, "a removal GitHub took needs no read")
     }
 
-    func testARemovalGitHubFindsNothingToRemoveForIsSentRatherThanFailed() async throws {
-        // The retry after an answer that was lost finds the reaction gone. That is the state the
-        // row asked for, and a failed row would say otherwise.
+    func testARefusedRemovalOfAReactionThatIsGoneIsSent() async throws {
+        // What the retry of a removal whose answer was lost meets: GitHub's FORBIDDEN for a
+        // reaction that is not there. One read of the post says it is gone, which is the state
+        // the row asked for, and a failed row would say otherwise.
         let github = MockGitHub()
-        await github.setReactionError(.graphQL(messages: ["Reaction not found."]))
+        await github.setReactionError(refusedRemoval)
+        await github.scriptReactionProbe(stillReacted: false)
         let store = try DatabaseManager.inMemory()
         let id = try await enqueue(
             .react(subjectID: "IC_kwDOComment1", content: .heart, adding: false),
@@ -187,31 +196,96 @@ final class OutboxDrainTests: XCTestCase {
         )
         let row = try await store.outboxItem(id: id)
         XCTAssertNil(row, "a sent row leaves the queue")
+        let probes = await github.reactionProbes
+        XCTAssertEqual(probes, ["IC_kwDOComment1 HEART"], "the row's post and emoji, asked once")
     }
 
-    func testAReactionRefusedForAnyOtherReasonIsAFailure() async throws {
-        // Only a removal is satisfied by "there is none" — an add GitHub cannot find a reaction
-        // for did not do what was asked — and only GitHub's not-found says there is none.
-        let refusals: [(adding: Bool, message: String)] = [
-            (true, "Reaction not found."),
-            (false, "Resource not accessible by integration"),
-        ]
-        for refusal in refusals {
-            let github = MockGitHub()
-            await github.setReactionError(.graphQL(messages: [refusal.message]))
-            let store = try DatabaseManager.inMemory()
-            let id = try await enqueue(
-                .react(subjectID: "IC_kwDOComment1", content: .heart, adding: refusal.adding),
-                in: store
-            )
-            let engine = makeEngine(github: github, store: store)
+    func testARefusedRemovalOfAReactionStillThereFailsWithGitHubsRefusal() async throws {
+        // The same FORBIDDEN with the reaction still on the post: a real refusal.
+        let github = MockGitHub()
+        await github.setReactionError(refusedRemoval)
+        await github.scriptReactionProbe(stillReacted: true)
+        let store = try DatabaseManager.inMemory()
+        let id = try await enqueue(
+            .react(subjectID: "IC_kwDOComment1", content: .heart, adding: false),
+            in: store
+        )
+        let engine = makeEngine(github: github, store: store)
 
-            let emitted = await drainCollectingEvents(engine)
+        let emitted = await drainCollectingEvents(engine)
 
-            XCTAssertTrue(sentMutations(in: emitted).isEmpty, refusal.message)
-            let row = try await store.outboxItem(id: id)
-            XCTAssertEqual(row?.state, .failed, refusal.message)
-        }
+        XCTAssertTrue(sentMutations(in: emitted).isEmpty, "nothing was removed")
+        let row = try await store.outboxItem(id: id)
+        XCTAssertEqual(row?.state, .failed)
+        XCTAssertEqual(row?.lastErrorCode.flatMap(GitHubError.init(storageCode:)), refusedRemoval)
+        let probes = await github.reactionProbes
+        XCTAssertEqual(probes.count, 1, "the refusal is checked, once")
+    }
+
+    func testARefusedRemovalWhoseReadFailsKeepsGitHubsRefusal() async throws {
+        // A read that could not be made says nothing about the reaction, so the refusal stands as
+        // GitHub gave it — its words, and not retried — rather than as the read's own failure.
+        let github = MockGitHub()
+        await github.setReactionError(refusedRemoval)
+        await github.scriptReactionProbe(stillReacted: false, error: .transport(message: "offline"))
+        let store = try DatabaseManager.inMemory()
+        let id = try await enqueue(
+            .react(subjectID: "IC_kwDOComment1", content: .heart, adding: false),
+            in: store
+        )
+        let engine = makeEngine(github: github, store: store)
+
+        let emitted = await drainCollectingEvents(engine)
+
+        XCTAssertTrue(sentMutations(in: emitted).isEmpty)
+        let row = try await store.outboxItem(id: id)
+        XCTAssertEqual(row?.state, .failed, "failed as the refusal is, not backed off as the read")
+        XCTAssertEqual(row?.lastErrorCode.flatMap(GitHubError.init(storageCode:)), refusedRemoval)
+    }
+
+    func testARefusedAddFailsWithoutReadingThePost() async throws {
+        // GitHub answers an add of a reaction already there with success, so a refused add is a
+        // refusal and nothing is read — not even with the reaction scripted as there.
+        let github = MockGitHub()
+        let refusal = GitHubError.graphQL(messages: ["Resource not accessible by integration"])
+        await github.setReactionError(refusal)
+        await github.scriptReactionProbe(stillReacted: true)
+        let store = try DatabaseManager.inMemory()
+        let id = try await enqueue(
+            .react(subjectID: "IC_kwDOComment1", content: .heart, adding: true),
+            in: store
+        )
+        let engine = makeEngine(github: github, store: store)
+
+        let emitted = await drainCollectingEvents(engine)
+
+        XCTAssertTrue(sentMutations(in: emitted).isEmpty)
+        let row = try await store.outboxItem(id: id)
+        XCTAssertEqual(row?.state, .failed)
+        XCTAssertEqual(row?.lastErrorCode.flatMap(GitHubError.init(storageCode:)), refusal)
+        let probes = await github.reactionProbes
+        XCTAssertTrue(probes.isEmpty)
+    }
+
+    func testARemovalThatDidNotReachGitHubIsRetriedWithoutReadingThePost() async throws {
+        // Only a refusal is read about. A dropped connection is retried like every write's, even
+        // with the reaction scripted as gone.
+        let github = MockGitHub()
+        await github.setReactionError(.transport(message: "offline"))
+        await github.scriptReactionProbe(stillReacted: false)
+        let store = try DatabaseManager.inMemory()
+        let id = try await enqueue(
+            .react(subjectID: "IC_kwDOComment1", content: .heart, adding: false),
+            in: store
+        )
+        let engine = makeEngine(github: github, store: store)
+
+        await engine.drainOutbox()
+
+        let row = try await store.outboxItem(id: id)
+        XCTAssertEqual(row?.state, .pending, "retried after a backoff")
+        let probes = await github.reactionProbes
+        XCTAssertTrue(probes.isEmpty)
     }
 
     func testASingleInlineCommentIsSentWithItsCommit() async throws {

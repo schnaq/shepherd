@@ -36,6 +36,12 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
     var updateBranchError: GitHubError?
     /// What every reaction call throws, when a test wants GitHub to refuse it (ADR 0043).
     var reactionError: GitHubError?
+    /// What the "is the viewer's reaction still there?" read answers. Unscripted it is still
+    /// there, so a refusal stands — the conservative answer, which the merged probe's `false` is
+    /// for a merge.
+    var viewerStillReacted = true
+    /// What that read throws, when a test wants it to fail.
+    var reactionProbeError: GitHubError?
     /// What the already-merged probe answers, keyed by number. A missing key answers `false` —
     /// "GitHub has not merged this", which is what every test that never scripts it means.
     var mergedPullRequests: [Int: Bool] = [:]
@@ -68,6 +74,9 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
     private(set) var unresolvedThreads: [String] = []
     /// Every reaction the engine sent, in the order it sent them.
     private(set) var reactions: [ReactionCall] = []
+    /// `subjectID CONTENT` for every "is the viewer's reaction still there?" read, in order. The
+    /// claim worth asserting is that it is made *only* when a removal came back refused.
+    private(set) var reactionProbes: [String] = []
     private(set) var replies: [(commentID: Int, body: String)] = []
     private(set) var reviewComments: [(comment: DraftComment, commitOid: String)] = []
     private(set) var merges: [(number: Int, method: MergeMethod, sha: String?)] = []
@@ -164,6 +173,12 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
 
     func setReactionError(_ error: GitHubError?) {
         reactionError = error
+    }
+
+    /// Scripts what the "is the viewer's reaction still there?" read answers, or throws.
+    func scriptReactionProbe(stillReacted: Bool, error: GitHubError? = nil) {
+        viewerStillReacted = stillReacted
+        reactionProbeError = error
     }
 
     /// Scripts what the already-merged probe answers for one pull request.
@@ -275,6 +290,12 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
     func setReaction(subjectID: String, content: ReactionContent, adding: Bool) async throws {
         if let reactionError { throw reactionError }
         reactions.append(ReactionCall(subjectID: subjectID, content: content, adding: adding))
+    }
+
+    func viewerHasReacted(subjectID: String, content: ReactionContent) async throws -> Bool {
+        reactionProbes.append("\(subjectID) \(content.rawValue)")
+        if let reactionProbeError { throw reactionProbeError }
+        return viewerStillReacted
     }
 
     func mergePullRequest(

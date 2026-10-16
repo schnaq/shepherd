@@ -331,9 +331,10 @@ struct PullRequestActions {
     /// retry's backoff would otherwise be sent behind it and leave the reaction the reviewer took
     /// back. It decides nothing, so the click's own row is queued all the same. Nothing on this Mac
     /// could decide it: the stored detail lags every row still in flight or landed but not yet
-    /// re-read. The cost is at most one redundant mutation, and both are idempotent — GitHub
-    /// answers an add of a reaction already there with that reaction, and the drain takes a
-    /// removal of one already gone for done.
+    /// re-read. The cost is at most one redundant mutation and one read, and neither direction
+    /// leaves a failed row: GitHub answers an add of a reaction already there with success, and
+    /// refuses a removal of one that is not there with the `FORBIDDEN` of a real permission
+    /// refusal, which the drain tells apart by reading the post's reactions once (ADR 0043).
     ///
     /// Static, over the database alone, so the sequence it exists for runs against a real outbox
     /// in the tests.
