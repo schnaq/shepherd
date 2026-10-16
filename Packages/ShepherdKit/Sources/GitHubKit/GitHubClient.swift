@@ -1150,38 +1150,20 @@ public actor GitHubClient {
     /// there needs the reaction's own id, which would mean a read before every removal.
     ///
     /// Adding one the viewer already has is answered with that reaction, so a retried add needs
-    /// no care. A removal of one that is already gone should be a success as well — the state
-    /// asked for is the state there is — and GitHub does not document whether it says so with an
-    /// empty answer or with an error. An error whose message says the reaction was not found is
-    /// taken for the second; anything else about a removal, and any error about an add, is
-    /// thrown.
+    /// no care. A removal of one that is already gone may be answered with an error, which is
+    /// thrown like any other: what a refusal is worth is the drain's to decide
+    /// (``isReactionGone(_:)``), as it is for every write here.
     /// - Parameters:
     ///   - subjectID: The post's GraphQL node id — the pull request's own for the description.
     ///   - content: Which reaction.
     ///   - adding: `true` to add the viewer's reaction, `false` to take it away.
     public func setReaction(subjectID: String, content: ReactionContent, adding: Bool) async throws {
-        do {
-            let _: ReactionData = try await graphQL(
-                document: adding ? GraphQLDocuments.addReaction : GraphQLDocuments.removeReaction,
-                variables: ["subjectId": .string(subjectID), "content": .string(content.rawValue)],
-                resource: adding ? "add reaction" : "remove reaction",
-                isIdempotent: false
-            )
-        } catch GitHubError.graphQL(let messages)
-            where !adding && messages.allSatisfy(Self.saysReactionIsGone)
-        {
-            return
-        }
-    }
-
-    /// Whether a GraphQL error message says the reaction a removal asked about is not there.
-    ///
-    /// A guess at GitHub's wording, deliberately narrow: if it says something else, the removal
-    /// fails where the user can see it, and the fix is one more phrase here — where a wider match
-    /// would swallow a removal that did not happen.
-    private static func saysReactionIsGone(_ message: String) -> Bool {
-        let text = message.lowercased()
-        return text.contains("reaction") && text.contains("not found")
+        let _: ReactionData = try await graphQL(
+            document: adding ? GraphQLDocuments.addReaction : GraphQLDocuments.removeReaction,
+            variables: ["subjectId": .string(subjectID), "content": .string(content.rawValue)],
+            resource: adding ? "add reaction" : "remove reaction",
+            isIdempotent: false
+        )
     }
 
     /// Takes a pull request out of draft state. GraphQL-only.
@@ -1358,6 +1340,24 @@ public actor GitHubClient {
     public static func isMergeAlreadyUnderWay(_ message: String) -> Bool {
         func has(_ word: String) -> Bool { message.range(of: word, options: .caseInsensitive) != nil }
         return has("already") && (has("enqueued") || has("in progress") || has("merge request"))
+    }
+
+    /// Whether an error from ``setReaction(subjectID:content:adding:)`` says the reaction is not
+    /// there (ADR 0043). The drain asks it about a removal only, and sends such a row rather than
+    /// failing it: the state the removal asked for is the state there is — the retry after an
+    /// answer that was lost finds nothing left to remove.
+    ///
+    /// GitHub does not document what it answers a removal of a missing reaction with, so this is
+    /// a guess at its wording, and deliberately narrow: a GraphQL error whose every message
+    /// mentions a reaction and "not found", ignoring case. If GitHub says something else, the
+    /// removal fails where the user can see it and the fix is one more phrase here — where a
+    /// wider match would take a removal that did not happen for done.
+    public static func isReactionGone(_ error: GitHubError) -> Bool {
+        guard case .graphQL(let messages) = error, !messages.isEmpty else { return false }
+        return messages.allSatisfy { message in
+            let text = message.lowercased()
+            return text.contains("reaction") && text.contains("not found")
+        }
     }
 
     /// Whether a pull request is part of a GitHub stack right now (ADR 0042).

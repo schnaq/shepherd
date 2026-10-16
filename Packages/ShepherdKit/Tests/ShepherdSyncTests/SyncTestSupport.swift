@@ -34,6 +34,8 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
     var mergeError: GitHubError?
     /// What every update-branch call throws, when a test wants GitHub to refuse it (ADR 0041).
     var updateBranchError: GitHubError?
+    /// What every reaction call throws, when a test wants GitHub to refuse it (ADR 0043).
+    var reactionError: GitHubError?
     /// What the already-merged probe answers, keyed by number. A missing key answers `false` —
     /// "GitHub has not merged this", which is what every test that never scripts it means.
     var mergedPullRequests: [Int: Bool] = [:]
@@ -160,6 +162,10 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
         updateBranchError = error
     }
 
+    func setReactionError(_ error: GitHubError?) {
+        reactionError = error
+    }
+
     /// Scripts what the already-merged probe answers for one pull request.
     func setIsMerged(_ isMerged: Bool, number: Int) {
         mergedPullRequests[number] = isMerged
@@ -267,6 +273,7 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
     }
 
     func setReaction(subjectID: String, content: ReactionContent, adding: Bool) async throws {
+        if let reactionError { throw reactionError }
         reactions.append(ReactionCall(subjectID: subjectID, content: content, adding: adding))
     }
 

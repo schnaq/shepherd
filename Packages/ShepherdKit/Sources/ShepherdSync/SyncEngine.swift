@@ -1150,7 +1150,14 @@ public actor SyncEngine {
             // The post's node id from the action, not `item.prID`: the two are the same only for
             // the description. The row's target fields name the pull request, which is what the
             // sent event announces and the app re-reads by.
-            try await github.setReaction(subjectID: subjectID, content: content, adding: adding)
+            do {
+                try await github.setReaction(subjectID: subjectID, content: content, adding: adding)
+            } catch let error as GitHubError where !adding && GitHubClient.isReactionGone(error) {
+                // Nothing left to remove is what the removal asked for — the retry after an answer
+                // that was lost, a reaction taken back on github.com meanwhile — so the row is
+                // sent, the way a merge GitHub had already landed is. Only a removal: an add that
+                // is refused did not do what was asked.
+            }
             return .sent
 
         case .merge(let method, let expectedHeadOid, _):

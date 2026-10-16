@@ -346,10 +346,9 @@ final class WriteRequestTests: XCTestCase {
         try await client.setReaction(subjectID: "IC_1", content: .heart, adding: false)
     }
 
-    func testRemovingAReactionGitHubSaysIsNotThereCountsAsDone() async throws {
-        // The retry after a connection dropped *after* GitHub took the reaction away finds
-        // nothing to remove. If GitHub answers that with an error, the state the user asked
-        // for is the one they have, and a failed row would say otherwise.
+    func testARemovalGitHubSaysIsNotThereIsThrownForTheDrainToJudge() async throws {
+        // The client translates the answer and decides nothing: whether "not found" means done is
+        // the drain's call (`isReactionGone`), as it is for every other write's refusal.
         let transport = MockTransport()
         await transport.route(
             "ShepherdRemoveReaction",
@@ -360,36 +359,19 @@ final class WriteRequestTests: XCTestCase {
         )
         let client = GitHubClient.makeForTesting(transport: transport)
 
-        try await client.setReaction(subjectID: "IC_1", content: .heart, adding: false)
-
-        let requests = await transport.requests
-        XCTAssertEqual(requests.count, 1, "the tolerance reads the answer, it does not ask again")
-    }
-
-    func testTheSameMessageOnAnAddIsStillAFailure() async throws {
-        // Only a removal is satisfied by "there is none": an add that GitHub cannot find a
-        // reaction for did not do what was asked.
-        let transport = MockTransport()
-        await transport.route(
-            "ShepherdAddReaction",
-            Fixture.response(json: """
-            {"data":{"addReaction":null},
-             "errors":[{"type":"NOT_FOUND","path":["addReaction"],"message":"Reaction not found."}]}
-            """)
-        )
-        let client = GitHubClient.makeForTesting(transport: transport)
-
         do {
-            try await client.setReaction(subjectID: "IC_1", content: .heart, adding: true)
+            try await client.setReaction(subjectID: "IC_1", content: .heart, adding: false)
             XCTFail("expected a GraphQL error")
         } catch GitHubError.graphQL(let messages) {
             XCTAssertEqual(messages, ["Reaction not found."])
         }
     }
 
-    func testAnyOtherRemovalErrorStillFails() async throws {
+    func testOnlyAGraphQLNotFoundAboutTheReactionReadsAsGone() {
+        XCTAssertTrue(GitHubClient.isReactionGone(.graphQL(messages: ["Reaction not found."])))
+        XCTAssertTrue(GitHubClient.isReactionGone(.graphQL(messages: ["REACTION NOT FOUND"])))
         // A subject GitHub cannot resolve, a permission, a message that mentions a reaction in
-        // passing: none of them says "the reaction is gone", so none is swallowed.
+        // passing: none of them says "the reaction is gone".
         let refusals = [
             "Could not resolve to a node with the global id of 'IC_gone'.",
             "Resource not accessible by integration",
@@ -397,43 +379,13 @@ final class WriteRequestTests: XCTestCase {
             "Something went wrong while executing your query.",
         ]
         for refusal in refusals {
-            let transport = MockTransport()
-            await transport.route(
-                "ShepherdRemoveReaction",
-                Fixture.response(json: """
-                {"data":{"removeReaction":null},
-                 "errors":[{"type":"NOT_FOUND","path":["removeReaction"],"message":"\(refusal)"}]}
-                """)
-            )
-            let client = GitHubClient.makeForTesting(transport: transport)
-
-            do {
-                try await client.setReaction(subjectID: "IC_gone", content: .heart, adding: false)
-                XCTFail("expected a GraphQL error for “\(refusal)”")
-            } catch GitHubError.graphQL(let messages) {
-                XCTAssertEqual(messages, [refusal])
-            }
+            XCTAssertFalse(GitHubClient.isReactionGone(.graphQL(messages: [refusal])), refusal)
         }
-    }
-
-    func testANotFoundBesideAnotherErrorStillFails() async throws {
         // Every message has to say it: a second error means something else went wrong as well.
-        let transport = MockTransport()
-        await transport.route(
-            "ShepherdRemoveReaction",
-            Fixture.response(json: """
-            {"data":{"removeReaction":null},
-             "errors":[{"message":"Reaction not found."},{"message":"Forbidden"}]}
-            """)
-        )
-        let client = GitHubClient.makeForTesting(transport: transport)
-
-        do {
-            try await client.setReaction(subjectID: "IC_1", content: .heart, adding: false)
-            XCTFail("expected a GraphQL error")
-        } catch GitHubError.graphQL(let messages) {
-            XCTAssertEqual(messages, ["Reaction not found.", "Forbidden"])
-        }
+        XCTAssertFalse(GitHubClient.isReactionGone(.graphQL(messages: ["Reaction not found.", "Forbidden"])))
+        XCTAssertFalse(GitHubClient.isReactionGone(.graphQL(messages: [])), "no message says nothing")
+        // GraphQL's answer only: a REST 404 names a resource, not a reaction.
+        XCTAssertFalse(GitHubClient.isReactionGone(.notFound(resource: "remove reaction")))
     }
 
     func testAReactionIsNeverReplayedAfterAConnectionFailure() async throws {

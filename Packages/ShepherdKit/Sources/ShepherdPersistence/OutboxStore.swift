@@ -353,25 +353,21 @@ extension DatabaseManager {
     /// the row between the two, and a row in ``ShepherdCore/OutboxState/sending`` is in flight —
     /// GitHub may already have it — so deleting it would take back nothing and hide a write that
     /// landed. The `state = 'pending'` guard makes the check and the delete one statement, as
-    /// ``retryOutboxItem(id:)``'s guard does for its own, and a claimed row is answered the other
-    /// way: by queuing the inverse behind it. A row waiting out a backoff is still pending and is
-    /// cancelled; a failed or parked row has owners of its own (Settings → Sync, the conflict
-    /// alert) and is left to them.
+    /// ``retryOutboxItem(id:)``'s guard does for its own: a row is cancelled only while it is
+    /// pending, one waiting out a backoff included, and any other row is left as it is — a claimed
+    /// one to the drain, a failed or parked one to its own owners (Settings → Sync, the conflict
+    /// alert).
     ///
-    /// The guard is the state, not the attempt count: a pending row that was tried before may have
-    /// reached GitHub with its answer lost, and a caller for whom that matters reads
-    /// ``ShepherdCore/OutboxItem/attemptCount`` first.
+    /// A primitive, with no policy in it. The one built on it — a reaction click cancels the row
+    /// it undoes and queues its own all the same — is the app's, in
+    /// `PullRequestActions.writeReaction`.
     /// - Parameter id: The row's identity.
-    /// - Returns: `true` when the row was still pending and is gone. `false` when it had been
-    ///   claimed, parked or given up on, or was not there any more — sent looks the same — and the
-    ///   caller then queues the inverse.
-    public func cancelPendingOutboxItem(id: UUID) async throws -> Bool {
+    public func cancelPendingOutboxItem(id: UUID) async throws {
         try await writer.write { db in
             try db.execute(
                 sql: "DELETE FROM outbox WHERE id = ? AND state = ?",
                 arguments: [id.uuidString, OutboxState.pending.rawValue]
             )
-            return db.changesCount > 0
         }
     }
 }

@@ -132,8 +132,10 @@ final class OutboxDrainTests: XCTestCase {
 
     func testAnAddAndARemovalOfTheSameReactionAreBothSentInTheOrderTheyWereQueued() async throws {
         // The drain sends due rows in `createdAt` order and never merges them, so an add queued
-        // before a removal reaches GitHub first and both are sent. Cancelling a still-pending
-        // inverse instead of queuing it is the app's job (ADR 0043, B), not this drain's.
+        // before a removal reaches GitHub first and both are sent. The store cancels a row only
+        // while it is pending, and the policy built on that — cancel the row a click undoes, queue
+        // the click's own all the same — is the app's (`PullRequestActions.writeReaction`), not
+        // this drain's.
         let github = MockGitHub()
         let store = try DatabaseManager.inMemory()
         _ = try await enqueue(
@@ -159,6 +161,57 @@ final class OutboxDrainTests: XCTestCase {
         )
         let remaining = try await store.allOutboxItems()
         XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testARemovalGitHubFindsNothingToRemoveForIsSentRatherThanFailed() async throws {
+        // The retry after an answer that was lost finds the reaction gone. That is the state the
+        // row asked for, and a failed row would say otherwise.
+        let github = MockGitHub()
+        await github.setReactionError(.graphQL(messages: ["Reaction not found."]))
+        let store = try DatabaseManager.inMemory()
+        let id = try await enqueue(
+            .react(subjectID: "IC_kwDOComment1", content: .heart, adding: false),
+            in: store
+        )
+        let engine = makeEngine(github: github, store: store)
+
+        let emitted = await drainCollectingEvents(engine)
+
+        XCTAssertEqual(sentMutations(in: emitted).map(\.kind), [.reactionChanged])
+        XCTAssertFalse(
+            emitted.contains { event in
+                if case .syncFailed = event { return true }
+                return false
+            },
+            "nothing went wrong"
+        )
+        let row = try await store.outboxItem(id: id)
+        XCTAssertNil(row, "a sent row leaves the queue")
+    }
+
+    func testAReactionRefusedForAnyOtherReasonIsAFailure() async throws {
+        // Only a removal is satisfied by "there is none" — an add GitHub cannot find a reaction
+        // for did not do what was asked — and only GitHub's not-found says there is none.
+        let refusals: [(adding: Bool, message: String)] = [
+            (true, "Reaction not found."),
+            (false, "Resource not accessible by integration"),
+        ]
+        for refusal in refusals {
+            let github = MockGitHub()
+            await github.setReactionError(.graphQL(messages: [refusal.message]))
+            let store = try DatabaseManager.inMemory()
+            let id = try await enqueue(
+                .react(subjectID: "IC_kwDOComment1", content: .heart, adding: refusal.adding),
+                in: store
+            )
+            let engine = makeEngine(github: github, store: store)
+
+            let emitted = await drainCollectingEvents(engine)
+
+            XCTAssertTrue(sentMutations(in: emitted).isEmpty, refusal.message)
+            let row = try await store.outboxItem(id: id)
+            XCTAssertEqual(row?.state, .failed, refusal.message)
+        }
     }
 
     func testASingleInlineCommentIsSentWithItsCommit() async throws {

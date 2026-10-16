@@ -92,12 +92,12 @@ public enum OutboxAction: Sendable, Codable, Hashable {
     /// Add the viewer's reaction to a post, or take it back (ADR 0043).
     ///
     /// One row per click with the direction in it. The drain sends due rows in `createdAt` order
-    /// and never merges them; undoing a click whose row is still pending is the caller's job —
-    /// it cancels that row (``ShepherdPersistence/DatabaseManager/cancelPendingOutboxItem(id:)``)
-    /// instead of queuing the opposite, and queues the opposite only behind a row the drain has
-    /// already claimed. Addressed to the *post* — the description, a comment, a review, an inline
-    /// comment — by its node id, while the row's own target fields name the pull request it
-    /// belongs to, so the drain announces the write for the pull request.
+    /// and never merges them, and the store cancels a row only while it is still pending
+    /// (``ShepherdPersistence/DatabaseManager/cancelPendingOutboxItem(id:)``). The policy built on
+    /// the two — a click cancels the row it undoes and queues its own all the same — is the app's,
+    /// in `PullRequestActions.writeReaction`. Addressed to the *post* — the description, a
+    /// comment, a review, an inline comment — by its node id, while the row's own target fields
+    /// name the pull request it belongs to, so the drain announces the write for the pull request.
     /// - Parameters:
     ///   - subjectID: The GraphQL node id of the post.
     ///   - content: Which of the eight reactions.
@@ -654,11 +654,16 @@ public enum OutboxWriteOutcome: Sendable, Hashable {
     /// **Correct only for an id no other caller can already know.** A missing row reads as
     /// ``sent`` because the drain deletes a row it sent — but so does *Discard* in
     /// Settings → Sync (`DatabaseManager.deleteOutboxItem(id:)`, ADR 0006's 2026-09-03
-    /// amendment), and from here the two are indistinguishable. What makes the reading safe is
+    /// amendment), and so does a cancel (`DatabaseManager.cancelPendingOutboxItem(id:)`,
+    /// ADR 0043), and from here the three are indistinguishable. What makes the reading safe is
     /// the caller rather than the row: `PullRequestActions.enqueue` reads back only an id it has
     /// just minted and has handed to nobody, so nothing can have discarded that row in between.
-    /// An id that came from somewhere a user could have reached — a list, a screen that has been
-    /// open for a while — needs the row's own state instead.
+    /// A reaction click's row is the exception: the next click on the same emoji finds it in the
+    /// outbox and cancels it while it is still pending, and the first click's read-back then
+    /// says ``sent``. Harmless there, because the cancelling click queued its own row, and a
+    /// reaction's ``sent`` neither toasts nor takes the click off the bar. An id that came from
+    /// somewhere a user could have reached — a list, a screen that has been open for a while —
+    /// needs the row's own state instead.
     /// - Parameter row: The row as the outbox holds it now, or `nil` when it is no longer there.
     public init(row: OutboxItem?) {
         guard let row else {
