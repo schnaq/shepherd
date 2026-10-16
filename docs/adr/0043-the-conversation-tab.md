@@ -67,6 +67,9 @@ review is not in the timeline (a page that was cut, a pending review of the view
 its own at the time of its first comment. The stream therefore replaces both the *Activity* card and
 *Conversations not on the current diff* — every thread is in it, with its *outdated* and *resolved*
 chips, and resolved or outdated ones start collapsed, as on GitHub.
+GitHub also records a `ClosedEvent` with every merge, by the same person, within a second of the
+`MergedEvent`; its own page draws only the merge, so the stream drops a close at or after a merge
+(a merged pull request cannot be reopened, so an earlier close and reopen still show).
 
 `diffHunk` is **not** fetched. GitHub sends the whole hunk, and hunks of 500 lines are ordinary
 (cli/cli#14569). A thread shows its `path:line` (or "was line N") and a **Show in diff** button
@@ -103,7 +106,10 @@ where GitHub has them, beside its merge box. Then a composer: *Post comment* (�
 has the keyboard — everywhere else ⌘⏎ stays the toolbar's *Review*) and *Comment and close* /
 *Close without a comment*, with saved replies and ⌘V image paste — the same field and the
 same two writes as the *Comment…* sheet (ADR 0005's 2026-09-14 amendment), no new action.
-*Quote reply* on any post puts the post, quoted, into that composer. The *Commits* card goes: its
+*Quote reply* on any post puts the post, quoted, into that composer. A half-written reply in a thread, and which
+threads the reviewer folded or unfolded, live in the review screen's model rather than in the
+cards, so a trip to *Files* — *Show in diff* is one — does not lose them; resolving a thread folds
+it, reopening it unfolds it. The *Commits* card goes: its
 rows, trailers included, are the stream's commit groups.
 
 A thread in the stream uses the same reply bar as the thread popover in the diff — one view, not a
