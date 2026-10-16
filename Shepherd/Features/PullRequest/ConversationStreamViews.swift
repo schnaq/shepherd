@@ -13,8 +13,9 @@ import SwiftUI
 /// request and for every inbox emission the stack card reads, and each of those used to walk every
 /// post and thread of a long conversation again. The model, the actions and the translation cache
 /// are what the rows act through rather than what they show, so they stay out of the comparison;
-/// what a row does read off the model — a thread's fold, the reviewer's reaction clicks — reaches
-/// that card through observation, and a reply being typed under a thread redraws that card alone.
+/// what a row does read off the model reaches it through observation — a thread's fold reaches
+/// that card, the reviewer's reaction clicks only the reaction bars (``PostReactions``) — and a
+/// reply being typed under a thread redraws that card alone.
 ///
 /// A plain `VStack`, not a lazy one: a lazy container may drop a row's `@State` once it scrolls
 /// away, and a hidden comment the reviewer asked to see would hide again. A thread's reply and
@@ -148,7 +149,7 @@ struct ConversationPostView: View {
                     )
                     PostBody(
                         markdown: markdown,
-                        reactions: ReactionBar(subjectID: subjectID, stored: reactions, model: model, actions: actions),
+                        reactions: PostReactions(subjectID: subjectID, stored: reactions, model: model, actions: actions),
                         translations: translations
                     )
                 }
@@ -188,7 +189,7 @@ struct PostBody: View {
     /// The post as Markdown source; empty only for a description nobody wrote.
     let markdown: String
     /// The reactions under it.
-    let reactions: ReactionBar
+    let reactions: PostReactions
     /// The tab's translation cache.
     let translations: TranslationCoordinator
 
@@ -201,7 +202,7 @@ struct PostBody: View {
             } else {
                 TranslatableMarkdownText(markdown: markdown, translations: translations)
             }
-            if !reactions.isEmpty {
+            if reactions.isDrawn {
                 reactions
             }
         }
@@ -376,26 +377,24 @@ struct ReactionBar: View {
     /// A click on an emoji, with whether the viewer's reaction is on it now.
     let onToggle: @MainActor (ReactionContent, Bool) -> Void
 
-    /// Whether there is nothing to draw: no reactions, and none to add.
-    var isEmpty: Bool { groups.isEmpty && !canReact }
-
     var body: some View {
         HStack(spacing: 6) {
             ForEach(groups, id: \.content) { group in
-                if canReact {
-                    Button {
-                        onToggle(group.content, group.viewerHasReacted)
-                    } label: {
+                Group {
+                    if canReact {
+                        Button {
+                            onToggle(group.content, group.viewerHasReacted)
+                        } label: {
+                            Self.capsule(group)
+                        }
+                        .buttonStyle(.plain)
+                        .help(Self.action(for: group))
+                        .accessibilityHint(Text(verbatim: Self.action(for: group)))
+                    } else {
                         Self.capsule(group)
                     }
-                    .buttonStyle(.plain)
-                    .help(Self.action(for: group))
-                    .accessibilityLabel(Text(verbatim: Self.spokenLabel(for: group)))
-                    .accessibilityHint(Text(verbatim: Self.action(for: group)))
-                } else {
-                    Self.capsule(group)
-                        .accessibilityLabel(Text(verbatim: Self.spokenLabel(for: group)))
                 }
+                .accessibilityLabel(Text(verbatim: Self.spokenLabel(for: group)))
             }
             if canReact {
                 Menu {
@@ -411,11 +410,7 @@ struct ReactionBar: View {
                     Image(systemName: "face.smiling")
                         .font(Theme.type(.subheadline))
                         .foregroundStyle(Theme.textSecondary)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 2)
-                        .background(Theme.control, in: Capsule(style: .continuous))
-                        .overlay(Capsule(style: .continuous).stroke(Theme.border, lineWidth: 1))
-                        .contentShape(Capsule(style: .continuous))
+                        .reactionChip(fill: Theme.control)
                 }
                 // `.button` runs the label through the button style, so the capsule is drawn as
                 // written; the borderless style draws a label of its own.
@@ -434,14 +429,7 @@ struct ReactionBar: View {
         Text(verbatim: "\(group.content.emoji) \(group.count)")
             .font(Theme.type(.subheadline))
             .foregroundStyle(Theme.text)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 2)
-            .background(
-                group.viewerHasReacted ? Theme.chipBackground(Theme.accentText) : Theme.control,
-                in: Capsule(style: .continuous)
-            )
-            .overlay(Capsule(style: .continuous).stroke(Theme.border, lineWidth: 1))
-            .contentShape(Capsule(style: .continuous))
+            .reactionChip(fill: group.viewerHasReacted ? Theme.chipBackground(Theme.accentText) : Theme.control)
     }
 
     /// What pressing a capsule does — its tooltip, and what a screen reader says after its label.
@@ -477,34 +465,56 @@ struct ReactionBar: View {
     }
 }
 
-extension ReactionBar {
-    /// One post's bar on the review screen: the stored groups with the reviewer's clicks laid over
-    /// them, taking a click where GitHub lets the viewer react.
-    ///
-    /// Built in the body of the view that draws the post and never in ``ConversationStream``'s:
-    /// the overlay is read here, and the stream is compared by its entries, which a click does not
-    /// change.
-    /// - Parameters:
-    ///   - subjectID: The post's node id — the pull request's own for the description.
-    ///   - stored: The post's groups as stored.
-    ///   - reviewID: The review the post belongs to — a review's own row, a thread comment — or
-    ///     `nil` for the description and a comment. A post of the viewer's pending review takes
-    ///     no reaction: GitHub's page does not show it yet.
-    ///   - model: The review model, which holds the clicks and writes them.
-    ///   - actions: The write actions.
-    init(
-        subjectID: String,
-        stored: [ReactionGroup],
-        review reviewID: String? = nil,
-        model: ReviewModel,
-        actions: PullRequestActions
-    ) {
-        let isPending = reviewID.map(model.pendingReviewIDs.contains) ?? false
-        self.init(
-            // ponytail: every bar reads the whole overlay, so one click re-evaluates every post;
-            // a per-post slice of it if a long conversation ever stutters.
+private extension View {
+    /// The capsule a reaction is drawn in, and the smiley beside them in the same one, so the two
+    /// cannot drift into two looks.
+    /// - Parameter fill: The capsule's background.
+    func reactionChip(fill: Color) -> some View {
+        padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(fill, in: Capsule(style: .continuous))
+            .overlay(Capsule(style: .continuous).stroke(Theme.border, lineWidth: 1))
+            .contentShape(Capsule(style: .continuous))
+    }
+}
+
+/// One post's reaction bar on the review screen: the stored groups with the reviewer's clicks laid
+/// over them, taking a click where GitHub lets the viewer react.
+///
+/// A view of its own, and the only one that reads the clicks (``ReviewModel/reactionOverlay``), so
+/// a click re-runs the bars and not the posts around them. A post asks ``isDrawn`` instead, which
+/// reads what the post already shows and two flags a sweep rarely changes.
+struct PostReactions: View {
+    /// The post's node id — the pull request's own for the description.
+    let subjectID: String
+    /// The post's groups as stored.
+    let stored: [ReactionGroup]
+    /// The review the post belongs to — a review's own row, a thread comment — or `nil` for the
+    /// description and a comment. A post of the viewer's pending review takes no reaction:
+    /// GitHub's page does not show it yet.
+    var review: String?
+    /// The review model, which holds the clicks and writes them.
+    let model: ReviewModel
+    /// The write actions.
+    let actions: PullRequestActions
+
+    /// Whether the post draws a bar at all: one with reactions on it, or one the viewer may react
+    /// to. Off the stored groups rather than the shown ones, which would make every post read the
+    /// clicks.
+    var isDrawn: Bool { !stored.isEmpty || canReact }
+
+    /// Whether the viewer may react to this post.
+    private var canReact: Bool {
+        model.canReact && !(review.map(model.pendingReviewIDs.contains) ?? false)
+    }
+
+    var body: some View {
+        ReactionBar(
+            // ponytail: every bar reads the whole overlay, so one click re-runs every bar on the
+            // screen (the posts around them stay put); a per-post slice of it if a long
+            // conversation ever stutters.
             groups: ReviewModel.displayed(stored, subjectID: subjectID, overlay: model.reactionOverlay),
-            canReact: model.canReact && !isPending,
+            canReact: canReact,
             onToggle: { content, isOn in
                 model.toggleReaction(subjectID: subjectID, content: content, currentlyReacted: isOn, actions: actions)
             }
@@ -530,7 +540,7 @@ struct ConversationReviewView: View {
 
     var body: some View {
         let verdict = Self.verdict(review.state)
-        let reactions = ReactionBar(
+        let reactions = PostReactions(
             subjectID: review.id,
             stored: review.reactions,
             review: review.id,
@@ -556,9 +566,9 @@ struct ConversationReviewView: View {
                 Card {
                     PostBody(markdown: review.bodyMarkdown, reactions: reactions, translations: translations)
                 }
-            } else if !reactions.groups.isEmpty {
+            } else if !review.reactions.isEmpty {
                 // A verdict without words has no card to carry its reactions, so they sit under
-                // the row, past the avatar — and still take a click.
+                // the row, past the avatar — and still take a click. No smiley without them.
                 reactions
                     .padding(.leading, 44)
             }

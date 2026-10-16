@@ -285,34 +285,40 @@ struct PullRequestActions {
 
     // MARK: - Reactions (ADR 0043, B)
 
-    /// The first half of a reaction click: puts it on disk, and nothing else.
+    /// A reaction click: its row written at once, then drained, read back and announced in a task
+    /// of its own.
     ///
-    /// Split from the drain because a click the bar shows has to be in the outbox at once, like
-    /// every write (ADR 0006): a drain can hang on a bad network for a minute, and a click waiting
-    /// behind it would live only on screen. The caller runs these one after another and
-    /// ``settleReaction(_:on:)`` beside them, so the rows are written in click order — which is
-    /// the order the drain claims them in.
+    /// Returns once the row is on disk, not once it is sent, because a click the bar shows has to
+    /// be in the outbox at once, like every write (ADR 0006): a drain can hang on a bad network for
+    /// a minute, and a click waiting behind it would live only on screen. The caller runs these one
+    /// after another and awaits the returned tasks beside them, so the rows are written in click
+    /// order — which is the order the drain claims them in.
+    ///
+    /// No toast unless the row was refused: the bar already shows the click
+    /// (``ReviewModel/reactionOverlay``), a reviewer may press three emojis in a row, and a toast
+    /// per emoji would be noise. No ``activity`` key either, for the same three emojis.
     /// - Parameters:
     ///   - summary: The pull request the post belongs to.
     ///   - subjectID: The post's node id — the pull request's own for the description.
     ///   - content: Which reaction.
     ///   - adding: `true` to add the viewer's reaction, `false` to take it back.
-    /// - Returns: The click's row, or `nil` when the outbox could not be read or written —
-    ///   toasted here.
-    func persistReaction(
+    /// - Returns: The running task that settles the click's row, with what became of it; `nil` when
+    ///   nothing was written because the outbox could not be read or written — toasted here.
+    func react(
         on summary: PullRequestSummary,
         subjectID: String,
         content: ReactionContent,
         adding: Bool
-    ) async -> OutboxItem? {
+    ) async -> Task<OutboxWriteOutcome, Never>? {
         do {
-            return try await Self.writeReaction(
+            let item = try await Self.writeReaction(
                 subjectID: subjectID,
                 content: content,
                 adding: adding,
                 on: summary,
                 in: session.database
             )
+            return settle(item, as: .reaction, on: summary)
         } catch {
             toasts.failure(error, context: String(localized: "Could not queue the reaction"))
             return nil
@@ -323,11 +329,11 @@ struct PullRequestActions {
     ///
     /// The cancel only makes sure the undone row can never land after this click: a row in a
     /// retry's backoff would otherwise be sent behind it and leave the reaction the reviewer took
-    /// back. It decides nothing, so the click's own row is queued whatever it answered. Nothing on
-    /// this Mac could decide it: the stored detail lags every row still in flight or landed but not
-    /// yet re-read. The cost is at most one redundant mutation, and both are idempotent — GitHub
-    /// answers an add of a reaction already there with that reaction, and the kit takes a removal
-    /// of one already gone for done.
+    /// back. It decides nothing, so the click's own row is queued all the same. Nothing on this Mac
+    /// could decide it: the stored detail lags every row still in flight or landed but not yet
+    /// re-read. The cost is at most one redundant mutation, and both are idempotent — GitHub
+    /// answers an add of a reaction already there with that reaction, and the drain takes a
+    /// removal of one already gone for done.
     ///
     /// Static, over the database alone, so the sequence it exists for runs against a real outbox
     /// in the tests.
@@ -354,25 +360,9 @@ struct PullRequestActions {
             prID: summary.id,
             in: items
         ) {
-            // `false` means the drain claimed it first, which changes nothing here either.
-            _ = try await database.cancelPendingOutboxItem(id: undone.id)
+            try await database.cancelPendingOutboxItem(id: undone.id)
         }
         return try await write(.react(subjectID: subjectID, content: content, adding: adding), on: summary, in: database)
-    }
-
-    /// The second half of a reaction click: drains, and reads back what became of its row.
-    ///
-    /// No toast unless the row was refused: the bar already shows the click
-    /// (``ReviewModel/reactionOverlay``), a reviewer may press three emojis in a row, and a toast
-    /// per emoji would be noise. No ``activity`` key either, for the same three emojis.
-    /// - Parameters:
-    ///   - item: The row ``persistReaction(on:subjectID:content:adding:)`` wrote.
-    ///   - summary: The pull request the post belongs to.
-    /// - Returns: What became of the row.
-    func settleReaction(_ item: OutboxItem, on summary: PullRequestSummary) async -> OutboxWriteOutcome {
-        let outcome = await drainAndReadBack(item)
-        announce(outcome, of: .reaction, on: summary)
-        return outcome
     }
 
     /// The still-waiting row a reaction click undoes: the same post and emoji on the same pull
@@ -1056,7 +1046,28 @@ struct PullRequestActions {
         as kind: WriteKind
     ) async throws {
         let item = try await Self.write(action, on: summary, in: session.database)
-        Task { announce(await drainAndReadBack(item), of: kind, on: summary) }
+        settle(item, as: kind, on: summary)
+    }
+
+    /// Drains, reads back what became of the row (``drainAndReadBack(_:)``) and announces it, in a
+    /// task of its own: for a write whose row is on disk and whose caller does not wait for GitHub
+    /// — ``enqueueInBackground(_:on:as:)``'s, and a reaction click's.
+    /// - Parameters:
+    ///   - item: The row just written.
+    ///   - kind: What the user asked for, for the toast.
+    ///   - summary: The pull request it targets.
+    /// - Returns: The task, already running, with what became of the row.
+    @discardableResult
+    private func settle(
+        _ item: OutboxItem,
+        as kind: WriteKind,
+        on summary: PullRequestSummary
+    ) -> Task<OutboxWriteOutcome, Never> {
+        Task {
+            let outcome = await drainAndReadBack(item)
+            announce(outcome, of: kind, on: summary)
+            return outcome
+        }
     }
 
     private static func write(

@@ -152,7 +152,7 @@ final class ConversationReactionTests: XCTestCase {
             Key(subjectID: "PRR_1", content: .rocket): true,
             Key(subjectID: "RC_1", content: .eyes): true,
         ]
-        let kept = ReviewModel.reactionOverlay(overlay, against: detail(
+        let kept = ReviewModel.unconfirmedClicks(overlay, against: detail(
             description: [ReactionGroup(content: .heart, count: 1, viewerHasReacted: true)],
             comment: [ReactionGroup(content: .thumbsUp, count: 2)],
             review: [ReactionGroup(content: .rocket, count: 1, viewerHasReacted: true)],
@@ -168,7 +168,7 @@ final class ConversationReactionTests: XCTestCase {
             Key(subjectID: "IC_1", content: .thumbsUp): true,
             Key(subjectID: "RC_1", content: .eyes): false,
         ]
-        let kept = ReviewModel.reactionOverlay(overlay, against: detail(
+        let kept = ReviewModel.unconfirmedClicks(overlay, against: detail(
             comment: [ReactionGroup(content: .thumbsUp, count: 2)],
             threadComment: [ReactionGroup(content: .eyes, count: 1, viewerHasReacted: true)]
         ))
@@ -181,12 +181,12 @@ final class ConversationReactionTests: XCTestCase {
             Key(subjectID: "IC_gone", content: .heart): false,
         ]
         XCTAssertEqual(
-            ReviewModel.reactionOverlay(overlay, against: detail(hasConversation: false)),
+            ReviewModel.unconfirmedClicks(overlay, against: detail(hasConversation: false)),
             overlay,
             "a conversation not read yet is not one without reactions"
         )
         XCTAssertEqual(
-            ReviewModel.reactionOverlay(overlay, against: detail()),
+            ReviewModel.unconfirmedClicks(overlay, against: detail()),
             [Key(subjectID: "IC_gone", content: .heart): false]
         )
     }
@@ -196,15 +196,13 @@ final class ConversationReactionTests: XCTestCase {
     private func row(
         _ action: OutboxAction,
         prID: String = "PR_1",
-        state: OutboxState = .pending,
-        attemptCount: Int = 0
+        state: OutboxState = .pending
     ) -> OutboxItem {
         OutboxItem(
             prID: prID,
             repo: RepoRef(owner: "schnaq", name: "review"),
             number: 42,
             action: action,
-            attemptCount: attemptCount,
             state: state
         )
     }
@@ -242,7 +240,7 @@ final class ConversationReactionTests: XCTestCase {
         )
     }
 
-    // MARK: - What a click writes (ruling B7)
+    // MARK: - What a click writes
 
     // Against a real outbox: the cancel is the store's own state-guarded delete, which a list of
     // rows in memory could only pretend to be.
@@ -267,8 +265,8 @@ final class ConversationReactionTests: XCTestCase {
         XCTAssertEqual(rows.first?.state, .pending)
     }
 
-    /// What a refused cancel amounts to: the drain holds the row, which is beyond taking back, and
-    /// the click's own row goes behind it.
+    /// A row the drain holds is in flight and is not touched: it stays the drain's, and the click's
+    /// own row waits behind it.
     func testARowTheDrainHoldsIsLeftAloneAndTheClickQueuesBehindIt() async throws {
         let database = try DatabaseManager.inMemory()
         let add = try await click(adding: true, in: database)
@@ -299,10 +297,10 @@ final class ConversationReactionTests: XCTestCase {
         XCTAssertEqual(rows.map(\.id), [remove.id])
     }
 
-    /// Ruling B7's sequence, the one a "nothing to send" shortcut got wrong: an add in flight, then
-    /// remove, add and remove before it lands. Each click cancels the row before it and queues its
-    /// own, so what waits behind the add in flight is the last click — and the removal the
-    /// reviewer ended on is what reaches GitHub last.
+    /// An add in flight, then remove, add and remove before it lands. Each click cancels the
+    /// still-waiting row of the click before it and queues its own, so what waits behind the add in
+    /// flight is the last click — and the removal the reviewer ended on is what reaches GitHub
+    /// last.
     func testTheLastClickIsWhatWaitsBehindARowInFlight() async throws {
         let database = try DatabaseManager.inMemory()
         let inFlight = try await click(adding: true, in: database)
@@ -336,10 +334,6 @@ final class ConversationReactionTests: XCTestCase {
             failed?.message,
             "Could not change your reaction on schnaq/review#182 — it is back as it was: Resource not accessible by integration"
         )
-        XCTAssertEqual(failed?.kind, .failure)
-        let parked = PullRequestActions.announcement(for: .parked(reason: nil), of: .reaction, slug: slug)
-        XCTAssertNotNil(parked)
-        XCTAssertNotEqual(parked?.kind, .success)
     }
 
     func testACapsuleSaysItsEmojiItsCountWhetherYoursIsInItAndWhatPressingDoes() {

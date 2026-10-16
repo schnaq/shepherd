@@ -1261,7 +1261,7 @@ struct ThreadCommentView: View {
     let actions: PullRequestActions
 
     var body: some View {
-        let reactions = ReactionBar(
+        let reactions = PostReactions(
             subjectID: comment.id,
             stored: comment.reactions,
             review: comment.reviewID,
@@ -1275,7 +1275,7 @@ struct ThreadCommentView: View {
                     markdown: comment.bodyMarkdown,
                     translations: translations
                 )
-                if !reactions.isEmpty {
+                if reactions.isDrawn {
                     reactions
                 }
             }

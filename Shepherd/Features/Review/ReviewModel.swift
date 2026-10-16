@@ -304,7 +304,7 @@ final class ReviewModel {
     /// viewer's reaction on, `false` off (ADR 0043, B).
     ///
     /// What makes a click visible at once and an offline click visible until it is sent. A key
-    /// goes when a detail reaching the screen agrees with it (``reactionOverlay(_:against:)``) —
+    /// goes when a detail reaching the screen agrees with it (``unconfirmedClicks(_:against:)``) —
     /// not when its write is sent, because the re-read after a send can still carry the state
     /// from before it and would flicker the reaction off and on. It also goes when the click could
     /// not be written, and when the click's own drain saw its row refused. A refusal that comes
@@ -318,7 +318,7 @@ final class ReviewModel {
     /// Whether GitHub lets the viewer react on this pull request's posts — not on a locked
     /// conversation or in an archived repository, and not before the conversation has been read.
     ///
-    /// Stored, and set only when it changes (``rebuildConversationEntries(from:replacing:)``), for
+    /// Stored, and set only when it changes (``syncReactionState(from:)``), for
     /// ``threadFoldFlips``'s reason: every post's bar reads it, and read off ``detail`` it would
     /// re-evaluate every post on every refresh of the checks.
     private(set) var canReact = false
@@ -720,7 +720,8 @@ final class ReviewModel {
         }
     }
 
-    /// The overlay keys a detail does not agree with yet (ADR 0043, B).
+    /// The clicks a detail does not show yet: the overlay keys it does not agree with
+    /// (ADR 0043, B).
     ///
     /// A key goes once the detail shows the viewer's reaction the way the click wanted it. A post
     /// the detail does not carry keeps its key: the conversation is `nil` until it has been read,
@@ -730,7 +731,7 @@ final class ReviewModel {
     ///   - overlay: ``reactionOverlay`` as it stands.
     ///   - detail: The detail reaching the screen.
     /// - Returns: The keys to keep.
-    static func reactionOverlay(_ overlay: [ReactionKey: Bool], against detail: PullRequestDetail) -> [ReactionKey: Bool] {
+    static func unconfirmedClicks(_ overlay: [ReactionKey: Bool], against detail: PullRequestDetail) -> [ReactionKey: Bool] {
         guard !overlay.isEmpty else { return overlay }
         var stored: [String: [ReactionGroup]] = [:]
         if let conversation = detail.conversation {
@@ -937,7 +938,8 @@ final class ReviewModel {
 
     /// Rebuilds ``conversationEntries`` from the detail that just reached the screen — called by
     /// ``apply(_:)`` and ``refresh(_:replacing:)``, the two ways one does — and carries the
-    /// threads' fold flips across it (``foldFlips(_:from:to:)``).
+    /// threads' fold flips and the reaction bars' state across it (``foldFlips(_:from:to:)``,
+    /// ``syncReactionState(from:)``).
     /// - Parameters:
     ///   - detail: The detail now on screen.
     ///   - shown: The one it replaced, or `nil` for the first.
@@ -947,8 +949,23 @@ final class ReviewModel {
             // Only when it moved: every thread card reads it, and a sweep rarely changes it.
             if flips != threadFoldFlips { threadFoldFlips = flips }
         }
-        // The same rule for the same reason: every post's reaction bar reads these three.
-        let overlay = Self.reactionOverlay(reactionOverlay, against: detail)
+        syncReactionState(from: detail)
+        conversationEntries = ConversationTimeline.entries(
+            conversation: detail.conversation,
+            commits: detail.commits,
+            threads: detail.threads
+        )
+    }
+
+    /// Brings what the reaction bars read up to the detail that just reached the screen: the
+    /// clicks it does not show yet (``unconfirmedClicks(_:against:)``), ``canReact`` and
+    /// ``pendingReviewIDs``.
+    ///
+    /// Each is set only when it changed, for ``threadFoldFlips``'s reason: every bar reads them,
+    /// and a sweep rarely changes them.
+    /// - Parameter detail: The detail now on screen.
+    private func syncReactionState(from detail: PullRequestDetail) {
+        let overlay = Self.unconfirmedClicks(reactionOverlay, against: detail)
         if overlay != reactionOverlay { reactionOverlay = overlay }
         let reacts = detail.conversation?.viewerCanReact == true
         if reacts != canReact { canReact = reacts }
@@ -957,11 +974,6 @@ final class ReviewModel {
             return review.id
         })
         if pending != pendingReviewIDs { pendingReviewIDs = pending }
-        conversationEntries = ConversationTimeline.entries(
-            conversation: detail.conversation,
-            commits: detail.commits,
-            threads: detail.threads
-        )
     }
 
     /// Keeps ``selectedPath`` on a file the current round view actually lists.
@@ -1858,7 +1870,7 @@ final class ReviewModel {
         let previous = reactionWrites
         reactionWrites = Task { [weak self] in
             await previous?.value
-            guard let item = await actions.persistReaction(
+            guard let settling = await actions.react(
                 on: summary,
                 subjectID: subjectID,
                 content: content,
@@ -1867,8 +1879,9 @@ final class ReviewModel {
                 self?.dropClick(key, ifStill: adding)
                 return
             }
+            // Outside the chain: the next click's row is written without waiting for this drain.
             Task { [weak self] in
-                switch await actions.settleReaction(item, on: summary) {
+                switch await settling.value {
                 case .sent, .queued: break
                 case .parked, .failed: self?.dropClick(key, ifStill: adding)
                 }
