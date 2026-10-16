@@ -107,17 +107,22 @@ same two writes as the *Comment…* sheet (ADR 0005's 2026-09-14 amendment), no 
 rows, trailers included, are the stream's commit groups.
 
 A thread in the stream uses the same reply bar as the thread popover in the diff — one view, not a
-third copy — with *Reply*, *Resolve*/*Unresolve*, *Delegate…* and the saved replies. After a
-write from this tab comes back **sent**, the screen re-reads the pull request, so the comment
-appears without waiting for the next sweep; a write that is only queued is said by the toast, as
-before.
+third copy — with *Reply*, *Resolve*/*Unresolve*, *Delegate…* and the saved replies. Once a
+comment, a reply, a thread's resolution or a review has **reached** GitHub, Shepherd re-reads that
+pull request once, a second later and coalesced per pull request, so it appears without waiting
+for the next sweep — whichever surface wrote it (this tab, the diff's popover, a write the outbox
+sent later). The open screen takes the stored detail through its own observation. A write that is
+only queued is said by the toast, as before.
 
 ### Bot bodies
 
 Agent and bot comments are written in GitHub's HTML-flavoured Markdown: `<!-- markers -->`,
 `<details><summary>`, `<br>`. `MarkdownDocument` rendered those as literal text. A narrow pre-pass
-drops HTML comments, unwraps `<details>`, turns `<summary>` into a bold line and `<br>` into a line
-break; every other tag is left as it is written. A comment GitHub reports as minimized (hidden as
+drops HTML comments and turns `<br>` into a line break — both only outside backtick code spans, so a
+review that *discusses* `<br>` reads verbatim — and unwraps `<details>` and turns `<summary>` into a
+bold line only where the tag is the whole line, which is how bots write them; every other tag is
+left as it is written. The parser also splits lines on any line break, so a comment typed on
+github.com (CRLF) no longer renders every line as a paragraph of its own. A comment GitHub reports as minimized (hidden as
 off-topic, outdated, spam …) starts collapsed behind one line.
 
 ### B: reactions are the second GraphQL write

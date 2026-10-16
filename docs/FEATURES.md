@@ -334,9 +334,10 @@ reads as text rather than as markup. The checks come after the stream, where Git
 At the bottom is a comment field: **Post comment** (⌘⏎), **Comment and close**, saved replies and
 ⌘V screenshots — the same two writes as the *Comment…* sheet, queued in the outbox like everything
 else, so a comment written on the train goes out when the network comes back. *Quote reply* on any
-post drops it, quoted, into that field. Once GitHub has the comment the screen re-reads the pull
-request, so it appears at once rather than with the next sweep; a colleague's comment arrives with
-the sweep, the way a new check does.
+post drops it, quoted, into that field. Once GitHub has a comment, a reply, a resolved thread or a
+review, Shepherd re-reads that pull request a second later, so it appears at once rather than with
+the next sweep, wherever it was written; a colleague's comment arrives with the sweep, the way a new
+check does.
 
 It is one more GraphQL read per changed pull request, measured at one point of GitHub's rate
 limit, read newest first and capped at 500 entries — a conversation longer than that says
