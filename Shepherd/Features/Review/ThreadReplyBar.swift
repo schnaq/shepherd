@@ -17,7 +17,8 @@ struct ThreadReplyBar: View {
     /// The write actions.
     let actions: PullRequestActions
     /// What is typed in the field, held by the caller: the stream folds a thread away once it is
-    /// resolved, which takes this bar off screen, and a reply being written must outlive that.
+    /// resolved, which takes this bar off screen, and a switch of tab takes the whole stream; a
+    /// reply being written must outlive both (``ReviewModel/threadReplyDrafts``).
     @Binding var replyText: String
     /// Called after a reply, a resolve toggle or *Delegate…*: the popover closes on it. The stream
     /// passes nothing — the thread stays where it is, and what the write changed arrives with the

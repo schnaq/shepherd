@@ -39,6 +39,11 @@ public enum ConversationTimeline {
     ///   review is not in the timeline stands on its own at the time of its first comment.
     /// - A `COMMENT` review with no words and no thread of its own says nothing and is left out;
     ///   a verdict without words is kept, because the verdict is what it says.
+    /// - A close from the merge on is left out. GitHub records a `ClosedEvent` with every merge,
+    ///   by the same person and within a second of it, and its own page shows only the merge; a
+    ///   merged pull request cannot be reopened, so every later close is that echo. A close and
+    ///   reopen before the merge stay. Here rather than in the read, so a conversation stored
+    ///   before this rule is drawn by it too.
     /// - When the conversation was cut (``PullRequestConversation/hasEarlierItems``), commits and
     ///   threads older than its first item are left out with the items they sat between.
     /// - Parameters:
@@ -68,6 +73,11 @@ public enum ConversationTimeline {
             }
         }
 
+        let mergedAt = items.lazy.compactMap { item -> Date? in
+            guard case .event(let event) = item, case .merged = event.event else { return nil }
+            return event.createdAt
+        }.first
+
         let timeline: [(date: Date, entry: ConversationEntry)] = items.compactMap { item in
             switch item {
             case .comment(let comment):
@@ -77,6 +87,7 @@ public enum ConversationTimeline {
                 let isSilent = review.state == .commented && !review.hasBody && started.isEmpty
                 return isSilent ? nil : (review.createdAt, .review(review, threads: started))
             case .event(let event):
+                if case .closed = event.event, let mergedAt, event.createdAt >= mergedAt { return nil }
                 return (event.createdAt, .event(event))
             }
         }

@@ -696,8 +696,8 @@ enum DatabaseSchema {
     /// v11 (ADR 0043): the conversation tab.
     ///
     /// - **The timeline is one JSON document, in a table of its own.** Not a column of
-    ///   `pull_requests`, as `timelineJSON` is: the inbox and the search index read every row of
-    ///   that table whole, and a conversation is up to five pages of comment bodies. Keyed by
+    ///   `pull_requests`, as `timelineJSON` is: the inbox query reads every row of that table
+    ///   whole on every observation, and a conversation is up to five pages of comment bodies. Keyed by
     ///   `prID` and cascading with it, like `pull_request_closing_issues`, so it is pruned with its
     ///   pull request and a sweep's upsert of the row never touches it.
     /// - **A review comment's review, reactions and the viewer's permissions are columns**, because

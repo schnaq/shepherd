@@ -99,6 +99,51 @@ final class DetailParsingTests: XCTestCase {
         XCTAssertEqual(detail.threads.count, 2)
     }
 
+    func testAPageOfNothingButNullsIsARefusedPageToo() async throws {
+        // Every node of the page refused, answered as a list of `null`s rather than as `null`.
+        // Kept, it would map to an empty page and empty the stored conversation (ADR 0043).
+        let transport = try await makeTransport()
+        await transport.route(
+            "ShepherdPullRequestConversation",
+            Fixture.response(json: """
+            {"data":{"repository":{"pullRequest":{
+              "timelineItems":{"pageInfo":{"hasPreviousPage":false},"nodes":[null,null]}}}},
+             "errors":[{"type":"FORBIDDEN","message":"Resource protected by SAML enforcement."}]}
+            """)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            _ = try await client.pullRequestConversation(repo: repo, number: 128)
+            XCTFail("expected a GraphQL error")
+        } catch GitHubError.graphQL {
+            // Expected: as refused as `nodes: null`.
+        }
+        let detail = try await client.pullRequestDetail(repo: repo, number: 128)
+        XCTAssertNil(detail.conversation)
+        XCTAssertEqual(detail.files.count, 4)
+        XCTAssertEqual(detail.threads.count, 2)
+    }
+
+    func testAnEmptyPageIsAnEmptyConversationRatherThanARefusedOne() async throws {
+        // A pull request nothing has happened on yet: `nodes: []` and no error. That is GitHub's
+        // answer, and it is stored; read as refused, every quiet pull request would stay "unknown".
+        let transport = try await makeTransport()
+        await transport.route(
+            "ShepherdPullRequestConversation",
+            Fixture.response(json: """
+            {"data":{"repository":{"pullRequest":{
+              "timelineItems":{"pageInfo":{"hasPreviousPage":false},"nodes":[]}}}}}
+            """)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let detail = try await client.pullRequestDetail(repo: repo, number: 128)
+
+        XCTAssertEqual(detail.conversation?.items, [])
+        XCTAssertEqual(detail.conversation?.hasEarlierItems, false)
+    }
+
     func testTheDetailFetchReadsMergeStateStatusFromRESTsMergeableState() async throws {
         // REST's `mergeable_state` carries the same values as GraphQL's `mergeStateStatus`, so a
         // detail fetch does not wipe the `behind` the sweep stored (ADR 0041).

@@ -346,6 +346,31 @@ final class ConversationParsingTests: XCTestCase {
         XCTAssertTrue(conversation.viewerCanReact)
     }
 
+    func testALaterPageThatIsRefusedFailsTheWholeRead() async throws {
+        // The newest page arrived and the one before it was refused. Kept, the newest page alone
+        // would be stored over the whole conversation the store has (ADR 0043).
+        let transport = MockTransport()
+        await transport.route("ShepherdPullRequestConversation", try Fixture.response("pull-conversation-page-newest"))
+        await transport.route(
+            "ShepherdPullRequestConversation",
+            Fixture.response(json: """
+            {"data":{"repository":{"pullRequest":{
+              "timelineItems":{"pageInfo":{"hasPreviousPage":false},"nodes":[null]}}}},
+             "errors":[{"type":"FORBIDDEN","message":"Resource protected by SAML enforcement."}]}
+            """)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            _ = try await client.pullRequestConversation(repo: repo, number: 128)
+            XCTFail("expected a GraphQL error")
+        } catch GitHubError.graphQL {
+            // Expected: the first page is not passed off as the conversation.
+        }
+        let requests = await transport.requests
+        XCTAssertEqual(requests.count, 2, "the first page was read, and the second asked for")
+    }
+
     func testStopsAfterFivePagesAndSaysThereIsMore() async throws {
         // The newest page is the only answer and repeats: GitHub always says there is more.
         let (conversation, transport) = try await read("pull-conversation-page-newest")

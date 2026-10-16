@@ -30,6 +30,8 @@ struct ConversationComposer: View {
                     focusRequest: model.composerFocusRequest,
                     onFocusChange: { model.isConversationComposerFocused = $0 }
                 )
+                // The card's title is a heading the field does not carry; VoiceOver reads this.
+                .accessibilityLabel(String(localized: "Add a comment"))
                 HStack(spacing: 8) {
                     SavedReplyMenu(
                         replies: environment.settings.usableSavedReplies,

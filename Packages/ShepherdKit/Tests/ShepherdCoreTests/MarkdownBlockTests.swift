@@ -19,6 +19,23 @@ final class MarkdownBlockTests: XCTestCase {
         )
     }
 
+    /// A `<!--` in a sentence is the syntax being written about. Read as an open comment, it hid
+    /// everything after it — the next paragraph included.
+    func testAnOpenerInTheMiddleOfALineWithoutAnEndIsProse() {
+        XCTAssertEqual(
+            MarkdownDocument.blocks(from: "Use <!-- to start a comment.\n\nThe next paragraph."),
+            [.paragraph("Use <!-- to start a comment."), .paragraph("The next paragraph.")]
+        )
+    }
+
+    /// The shape bots hide their state in: an opener at the start of a line, the end lines later.
+    func testACommentOpeningALineStillHidesTheLinesUntilItsEnd() {
+        XCTAssertEqual(
+            MarkdownDocument.blocks(from: "Before\n\n  <!-- state\n{\"runs\": 3}\n-->\nAfter"),
+            [.paragraph("Before"), .paragraph("After")]
+        )
+    }
+
     func testLeavesAnHTMLCommentInsideAFenceAlone() {
         XCTAssertEqual(
             MarkdownDocument.blocks(from: "```html\n<!-- kept -->\n```"),
@@ -30,6 +47,19 @@ final class MarkdownBlockTests: XCTestCase {
         XCTAssertEqual(
             MarkdownDocument.blocks(from: "<details open>\n<summary> Full log </summary>\n\n- one\n\n</details>"),
             [.paragraph("**Full log**"), .listItem(text: "one", marker: "•", depth: 0)]
+        )
+    }
+
+    /// A label is drawn bold as a whole, so the emphasis bots wrap inside it goes, and a `<code>`
+    /// is a code span.
+    func testASummaryLabelLosesItsEmphasisTagsAndKeepsItsCode() {
+        XCTAssertEqual(
+            MarkdownDocument.blocks(from: "<summary>:warning: <b>Different runtime environments detected</b></summary>"),
+            [.paragraph("**:warning: Different runtime environments detected**")]
+        )
+        XCTAssertEqual(
+            MarkdownDocument.blocks(from: "<details><summary><strong>Ran</strong> <code>swift test</code></summary>"),
+            [.paragraph("**Ran `swift test`**")]
         )
     }
 
@@ -118,6 +148,27 @@ final class MarkdownBlockTests: XCTestCase {
     func testAQuoteDropsTheTrailingLineBreak() {
         XCTAssertEqual(MarkdownDocument.quoted("Only line.\n"), "> Only line.")
         XCTAssertEqual(MarkdownDocument.quoted("Only line.\r\n"), "> Only line.")
+    }
+
+    /// A bot finds its own comment again by its `<!-- marker -->`; quoted, the marker would be in
+    /// the reviewer's reply. A comment-only line leaves no bare `>` behind, and a comment inside a
+    /// code span or a fence is code.
+    func testAQuoteLeavesHTMLCommentsOut() {
+        let body = """
+        <!-- ccr-overview-v2 -->
+        Looks good.<!-- inline -->
+        <!-- one
+        two -->
+        See `<!-- kept -->`.
+
+        ```html
+        <!-- kept too -->
+        ```
+        """
+        XCTAssertEqual(
+            MarkdownDocument.quoted(body),
+            "> Looks good.\n> See `<!-- kept -->`.\n>\n> ```html\n> <!-- kept too -->\n> ```"
+        )
     }
 
     // MARK: - Headings

@@ -479,6 +479,8 @@ final class AppEnvironment {
         // account's pull requests into the database about to be erased.
         rereadTasks.values.forEach { $0.cancel() }
         rereadTasks = [:]
+        // And the comments it read: parsed bodies stay in memory for as long as the app runs.
+        MarkdownText.forgetParsedBodies()
         if let current {
             await current.shutdown()
             do {

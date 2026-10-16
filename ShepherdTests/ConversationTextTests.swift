@@ -5,8 +5,9 @@ import XCTest
 @testable import Shepherd
 
 /// The conversation tab's own rules that are not an event (ADR 0043): the heading of a commit
-/// group — which carries the catalog's only plural with two arguments — and which threads start
-/// folded. English, because the app tests run with `-testLanguage en`. *Quote reply*'s quoting is
+/// group — which carries the catalog's only plural with two arguments — which threads start
+/// folded, and what a fold becomes once the thread is resolved or reopened. English, because the
+/// app tests run with `-testLanguage en`. *Quote reply*'s quoting is
 /// ShepherdCore's (`MarkdownBlockTests`).
 @MainActor
 final class ConversationTextTests: XCTestCase {
@@ -70,5 +71,55 @@ final class ConversationTextTests: XCTestCase {
         XCTAssertTrue(
             ConversationThreadView.isExpanded(ReviewThread(id: "RT_resolved", isResolved: true), isFlipped: true)
         )
+    }
+
+    // MARK: - A fold across a change of resolution
+
+    /// Whether `fresh` is drawn open once it replaces `shown`, given the flips the reviewer made.
+    private func isExpanded(after flips: Set<String>, from shown: ReviewThread, to fresh: ReviewThread) -> Bool {
+        let carried = ReviewModel.foldFlips(flips, from: [shown], to: [fresh])
+        return ConversationThreadView.isExpanded(fresh, isFlipped: carried.contains(fresh.id))
+    }
+
+    func testResolvingAThreadFoldsIt() {
+        let open = ReviewThread(id: "RT_1")
+        let resolved = ReviewThread(id: "RT_1", isResolved: true)
+        XCTAssertFalse(isExpanded(after: [], from: open, to: resolved), "from its own reply bar")
+        XCTAssertFalse(isExpanded(after: ["RT_1"], from: open, to: resolved), "folded by hand before")
+        let outdated = ReviewThread(id: "RT_1", isOutdated: true)
+        XCTAssertFalse(
+            isExpanded(after: ["RT_1"], from: outdated, to: ReviewThread(id: "RT_1", isResolved: true, isOutdated: true)),
+            "an outdated thread the reviewer had unfolded"
+        )
+    }
+
+    /// T5-7: Unresolve on a thread the reviewer had unfolded folded it, because the flip stayed.
+    func testUnresolvingAThreadOpensIt() {
+        XCTAssertTrue(isExpanded(
+            after: ["RT_1"],
+            from: ReviewThread(id: "RT_1", isResolved: true),
+            to: ReviewThread(id: "RT_1")
+        ))
+        XCTAssertTrue(
+            isExpanded(
+                after: ["RT_1"],
+                from: ReviewThread(id: "RT_1", isResolved: true, isOutdated: true),
+                to: ReviewThread(id: "RT_1", isOutdated: true)
+            ),
+            "an outdated thread starts folded, and still opens"
+        )
+    }
+
+    func testAFlipOutlivesADetailThatLeftItsThreadAsItWas() {
+        let carried = ReviewModel.foldFlips(
+            ["RT_open", "RT_resolved", "RT_new"],
+            from: [ReviewThread(id: "RT_open"), ReviewThread(id: "RT_resolved", isResolved: true)],
+            to: [
+                ReviewThread(id: "RT_open"),
+                ReviewThread(id: "RT_resolved", isResolved: true),
+                ReviewThread(id: "RT_new", isResolved: true),
+            ]
+        )
+        XCTAssertEqual(carried, ["RT_open", "RT_resolved", "RT_new"])
     }
 }

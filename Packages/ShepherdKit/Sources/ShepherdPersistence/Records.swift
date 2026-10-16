@@ -1145,8 +1145,8 @@ struct PullRequestClosingIssueRecord: Codable, FetchableRecord, PersistableRecor
 /// A row of `pull_request_conversations` (v11, ADR 0043): the whole conversation as one JSON
 /// document.
 ///
-/// A table of its own rather than a column of ``PullRequestRecord``, because the inbox and the
-/// search index read every `pull_requests` row whole and a conversation is up to five pages of
+/// A table of its own rather than a column of ``PullRequestRecord``, because the inbox query reads
+/// every `pull_requests` row whole on every observation and a conversation is up to five pages of
 /// comment bodies. No row means *unknown*, which is not the same as a row holding an empty
 /// conversation: the first is a read that did not happen, the second is GitHub's answer.
 struct PullRequestConversationRecord: Codable, FetchableRecord, PersistableRecord {

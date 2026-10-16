@@ -263,6 +263,23 @@ final class ReviewModel {
     /// than the stream above it; held here rather than in the field so it survives a trip to the
     /// Files tab.
     var conversationDraft = ""
+    /// What is typed under each thread of the conversation tab, by thread id; an empty reply has
+    /// no entry.
+    ///
+    /// Here beside ``conversationDraft`` for its reason: the tab is rebuilt every time it is shown
+    /// — *Show in diff* and `t` both leave it — and a reply half written must outlive that. Not
+    /// observed, because every thread card would then be redrawn on a keystroke under any one of
+    /// them: a card draws from its own copy, taken from here when it appears and written back with
+    /// every change (``ConversationThreadView``).
+    @ObservationIgnored var threadReplyDrafts: [String: String] = [:]
+    /// The threads of the conversation tab the reviewer folded or unfolded away from how they
+    /// start, by id.
+    ///
+    /// Here for ``threadReplyDrafts``'s reason, and observed: it changes on a click, not on a
+    /// keystroke. A flip rather than an "is expanded" flag, so a thread keeps starting the way
+    /// GitHub draws it (``ConversationThreadView/isExpanded(_:isFlipped:)``); every detail that
+    /// arrives carries it across with ``foldFlips(_:from:to:)``.
+    var threadFoldFlips: Set<String> = []
     /// How many times something asked for the keyboard in the conversation tab's comment field —
     /// *Quote reply* does. A counter for ``focusEditorRequest``'s reason: asking twice has to move
     /// the focus twice.
@@ -449,8 +466,10 @@ final class ReviewModel {
                 guard !Task.isCancelled else { return }
                 // An equal detail was already applied — by the cached read above, or by
                 // ``received(_:)`` reacting to the save — so applying it again would only re-run
-                // the prioritiser and reload the round for nothing.
-                if fresh != self.detail { self.apply(fresh) }
+                // the prioritiser and reload the round for nothing. Compared and applied with the
+                // conversation on screen kept where this fetch could not read one.
+                let fetched = ReviewModel.keepingConversation(of: self.detail, in: fresh)
+                if fetched != self.detail { self.apply(fetched) }
                 self.onDidLoadDetail?(self.prID)
                 // After the apply, which clears the banner: this notice is about the apply that
                 // just happened, so it has to outlive it.
@@ -596,6 +615,54 @@ final class ReviewModel {
         shown == nil
     }
 
+    /// The detail ``load()`` puts on the screen, with the conversation on screen kept when the
+    /// fetch could not read one (ADR 0043).
+    ///
+    /// A failed conversation read is tolerated, and the detail then carries `nil` — "unknown",
+    /// which the store does not write over the copy it has. Applied as it came, the same `nil`
+    /// emptied the conversation tab until the observation brought the stored copy back. Pure and
+    /// `static` for ``change(shown:fresh:)``'s reason.
+    /// - Parameters:
+    ///   - shown: The detail the screen is showing, or `nil` when it is showing none.
+    ///   - fresh: The detail GitHub just returned.
+    /// - Returns: `fresh`, carrying `shown`'s conversation when its own is `nil`.
+    static func keepingConversation(of shown: PullRequestDetail?, in fresh: PullRequestDetail) -> PullRequestDetail {
+        guard fresh.conversation == nil else { return fresh }
+        var kept = fresh
+        kept.conversation = shown?.conversation
+        return kept
+    }
+
+    /// The fold flips that still mean what the reviewer meant once a new detail arrives
+    /// (ADR 0043).
+    ///
+    /// A flip is relative to how its thread starts, and a resolved thread starts folded, so a
+    /// change of resolution turned the flip around with it: Unresolve on a thread the reviewer
+    /// had unfolded folded it. A thread whose resolution changed therefore drops its flip for the
+    /// one that shows what the change said — Resolve folds the thread, as on GitHub, and Unresolve
+    /// opens it, an outdated one too, which starts folded and so needs a flip to be open. Every
+    /// other flip stays. Applied where every detail arrives rather than on the card, because a
+    /// thread is also resolved from the diff's popover, while the conversation tab is not drawn.
+    ///
+    /// Pure and `static` for ``change(shown:fresh:)``'s reason.
+    /// - Parameters:
+    ///   - flips: ``threadFoldFlips`` as it stands.
+    ///   - shown: The threads on screen.
+    ///   - fresh: The threads arriving.
+    /// - Returns: The flips to keep.
+    static func foldFlips(_ flips: Set<String>, from shown: [ReviewThread], to fresh: [ReviewThread]) -> Set<String> {
+        let wasResolved = Dictionary(shown.map { ($0.id, $0.isResolved) }, uniquingKeysWith: { first, _ in first })
+        var kept = flips
+        for thread in fresh where wasResolved[thread.id].map({ $0 != thread.isResolved }) == true {
+            if thread.isOutdated && !thread.isResolved {
+                kept.insert(thread.id)
+            } else {
+                kept.remove(thread.id)
+            }
+        }
+        return kept
+    }
+
     /// Classifies an observed detail against the one on screen.
     ///
     /// The head commit is the whole rule, and the equality check in front of it is behaviour rule
@@ -675,7 +742,7 @@ final class ReviewModel {
         detailLoadError = nil
         let threadsMoved = fresh.threads != shown.threads
         detail = fresh
-        rebuildConversationEntries(from: fresh)
+        rebuildConversationEntries(from: fresh, replacing: shown)
         priorities = FilePrioritizer.prioritize(
             fresh.files,
             context: PrioritizationContext(totalChangedLines: fresh.summary.churn)
@@ -744,6 +811,7 @@ final class ReviewModel {
     }
 
     private func apply(_ detail: PullRequestDetail) {
+        let shown = self.detail
         // Applying *is* the answer to the banner, from wherever the call came: what was being
         // held back is now what the screen shows. The "it ended" notice is the one that survives,
         // because it is not about a document anybody could reload.
@@ -755,7 +823,7 @@ final class ReviewModel {
         // over a diff that had since arrived on its own until somebody pressed Try again.
         detailLoadError = nil
         self.detail = detail
-        rebuildConversationEntries(from: detail)
+        rebuildConversationEntries(from: detail, replacing: shown)
         // The one place the tab default is spent, and the flag is what keeps it to the *first*
         // detail: this function runs again for the fresh fetch behind the cached row, for the
         // banner's Reload, and for nothing a reviewer would call a new open.
@@ -779,8 +847,17 @@ final class ReviewModel {
     }
 
     /// Rebuilds ``conversationEntries`` from the detail that just reached the screen — called by
-    /// ``apply(_:)`` and ``refresh(_:replacing:)``, the two ways one does.
-    private func rebuildConversationEntries(from detail: PullRequestDetail) {
+    /// ``apply(_:)`` and ``refresh(_:replacing:)``, the two ways one does — and carries the
+    /// threads' fold flips across it (``foldFlips(_:from:to:)``).
+    /// - Parameters:
+    ///   - detail: The detail now on screen.
+    ///   - shown: The one it replaced, or `nil` for the first.
+    private func rebuildConversationEntries(from detail: PullRequestDetail, replacing shown: PullRequestDetail?) {
+        if let shown {
+            let flips = Self.foldFlips(threadFoldFlips, from: shown.threads, to: detail.threads)
+            // Only when it moved: every thread card reads it, and a sweep rarely changes it.
+            if flips != threadFoldFlips { threadFoldFlips = flips }
+        }
         conversationEntries = ConversationTimeline.entries(
             conversation: detail.conversation,
             commits: detail.commits,

@@ -102,6 +102,12 @@ struct MarkdownText: View {
         }
     }
 
+    /// Forgets every body parsed so far. Called on sign-out, so the leaving account's comments do
+    /// not stay in memory after the database they came from is erased.
+    @MainActor static func forgetParsedBodies() {
+        ParsedMarkdown.cache.removeAllObjects()
+    }
+
     /// How much bigger a heading is than the body. Three steps for six levels, because a body
     /// that uses `#####` is not asking for a fifth distinct size — it is asking for "smaller".
     private func headingSize(_ level: Int) -> CGFloat {
@@ -120,8 +126,10 @@ struct MarkdownText: View {
 /// ``MarkdownText`` is drawn again whenever the view holding it is, and a tab flip draws every post
 /// on the conversation tab: splitting the blocks and running `AttributedString(markdown:)` once per
 /// block, every time, was most of that redraw — for text that had not changed. A source is parsed
-/// once now and read back after that. A class because `NSCache` holds objects; `NSCache`'s own
-/// eviction is what keeps the cache from growing for ever, and nothing here second-guesses it.
+/// once now and read back after that. A class because `NSCache` holds objects. The cache keeps a
+/// few hundred sources — a long conversation's worth — and lets go of more under memory pressure;
+/// sign-out empties it (``MarkdownText/forgetParsedBodies()``), because what it holds is the
+/// leaving account's comments.
 private final class ParsedMarkdown {
     /// The blocks in order, each with its text's inline Markdown parsed — empty for a code block,
     /// which is drawn verbatim, and for a rule, which has no text.
@@ -147,7 +155,11 @@ private final class ParsedMarkdown {
         return parsed
     }
 
-    @MainActor private static let cache = NSCache<NSString, ParsedMarkdown>()
+    @MainActor fileprivate static let cache: NSCache<NSString, ParsedMarkdown> = {
+        let cache = NSCache<NSString, ParsedMarkdown>()
+        cache.countLimit = 300
+        return cache
+    }()
 
     /// Inline Markdown within one block, which is what `AttributedString` is good at.
     private static func inline(_ text: String) -> AttributedString {

@@ -12,11 +12,15 @@ import SwiftUI
 /// no other time: the tab around it is re-evaluated for the claims card, for *Quote reply*'s focus
 /// request and for every inbox emission the stack card reads, and each of those used to walk every
 /// post and thread of a long conversation again. The model, the actions and the translation cache
-/// are what the rows act through rather than what they show, so they stay out of the comparison.
+/// are what the rows act through rather than what they show, so they stay out of the comparison;
+/// the one thing a row does read off the model, a thread's fold, reaches that card through
+/// observation, and a reply being typed under a thread redraws that card alone.
 ///
-/// A plain `VStack`, not a lazy one: a lazy container may drop a thread card's `@State` — a reply
-/// half written, a fold the reviewer flipped — once the card scrolls away. Every entry keeps its
-/// stable ``ShepherdCore/ConversationEntry/id`` for the same reason.
+/// A plain `VStack`, not a lazy one: a lazy container may drop a row's `@State` once it scrolls
+/// away, and a hidden comment the reviewer asked to see would hide again. A thread's reply and
+/// fold are the model's (``ReviewModel/threadReplyDrafts``, ``ReviewModel/threadFoldFlips``) and
+/// outlive their card either way. Every entry keeps its stable
+/// ``ShepherdCore/ConversationEntry/id`` so that `@State` stays with the row it belongs to.
 struct ConversationStream: View, Equatable {
     /// The entries, oldest first.
     let entries: [ConversationEntry]
@@ -139,7 +143,12 @@ struct ConversationPostView: View {
                 }
             }
             .accessibilityElement(children: .contain)
-            .accessibilityLabel(Text(verbatim: PostHeader.spokenLabel(author: author, verb: verb, date: date)))
+            .accessibilityLabel(Text(verbatim: PostHeader.spokenLabel(
+                author: author,
+                verb: verb,
+                date: date,
+                isEdited: isEdited
+            )))
         }
     }
 
@@ -274,9 +283,15 @@ private struct PostHeader: View {
         .accessibilityLabel(String(localized: "More actions"))
     }
 
-    /// What a post — or a review — is announced as: who, what, when.
-    static func spokenLabel(author: ShepherdCore.Actor, verb: String, date: Date) -> String {
-        SpokenRow.sentence([author.bestName, verb, RelativeDate.long(date)])
+    /// What a post — or a review — is announced as: who, what, when, and "edited" where the line
+    /// above it says so.
+    static func spokenLabel(author: ShepherdCore.Actor, verb: String, date: Date, isEdited: Bool) -> String {
+        SpokenRow.sentence([
+            author.bestName,
+            verb,
+            RelativeDate.long(date),
+            isEdited ? String(localized: "edited") : nil,
+        ])
     }
 }
 
@@ -436,7 +451,8 @@ struct ConversationReviewView: View {
         .accessibilityLabel(Text(verbatim: PostHeader.spokenLabel(
             author: review.author,
             verb: verdict.sentence,
-            date: review.createdAt
+            date: review.createdAt,
+            isEdited: review.isEdited
         )))
     }
 
@@ -464,7 +480,8 @@ struct ConversationReviewView: View {
 /// review is not in the timeline. Resolved and outdated threads start collapsed, as on GitHub, and
 /// the reply bar is the diff popover's own (``ThreadReplyBar``).
 struct ConversationThreadView: View {
-    /// The review model, for *Show in diff*.
+    /// The review model, for *Show in diff* and for what the card keeps beyond its own life: the
+    /// reply being typed and the reviewer's fold.
     let model: ReviewModel
     /// The write actions.
     let actions: PullRequestActions
@@ -475,16 +492,15 @@ struct ConversationThreadView: View {
     /// The thread.
     let thread: ReviewThread
 
-    /// Whether the reviewer flipped the thread away from how it starts. A flip rather than an
-    /// "is expanded" flag, so a thread resolved from its own reply bar folds away by itself.
-    @State private var isFlipped = false
-    /// What is typed in the reply bar. Held here, on the card that stays on screen, rather than in
-    /// the bar: folding the thread away — by hand, or because it was just resolved — removes the
-    /// bar, and must not take a half-written reply with it.
+    /// What is typed in the reply bar — the copy this card draws from, so a keystroke redraws this
+    /// card and not the stream. The one that outlives the card is the model's
+    /// (``ReviewModel/threadReplyDrafts``), taken when the card appears and written with every
+    /// change (``reply``): the tab is rebuilt whenever it is shown, and folding the thread away —
+    /// by hand, or because it was just resolved — takes the bar off screen as well.
     @State private var replyText = ""
 
     private var isExpanded: Bool {
-        Self.isExpanded(thread, isFlipped: isFlipped)
+        Self.isExpanded(thread, isFlipped: model.threadFoldFlips.contains(thread.id))
     }
 
     /// Whether a thread shows its comments and its reply bar: an open one does until the reviewer
@@ -506,12 +522,27 @@ struct ConversationThreadView: View {
                     ForEach(thread.comments) { comment in
                         ThreadCommentView(comment: comment, translations: translations)
                     }
-                    ThreadReplyBar(thread: thread, summary: summary, actions: actions, replyText: $replyText)
+                    ThreadReplyBar(thread: thread, summary: summary, actions: actions, replyText: reply)
                 }
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Text(verbatim: spokenLabel))
+        .onAppear { replyText = model.threadReplyDrafts[thread.id] ?? "" }
+    }
+
+    /// The reply bar's text, written to this card's copy and to the model's at once — not through
+    /// an `onChange` of the copy, which a card already gone never runs: a reply that finishes
+    /// sending after *Show in diff* has to clear the draft it sent, or the tab would offer it
+    /// again.
+    private var reply: Binding<String> {
+        Binding(
+            get: { replyText },
+            set: { text in
+                replyText = text
+                model.threadReplyDrafts[thread.id] = text.isEmpty ? nil : text
+            }
+        )
     }
 
     /// The thread as the screen reader names it — where it is, and whether it is settled — so a
@@ -525,41 +556,45 @@ struct ConversationThreadView: View {
         ])
     }
 
+    /// The thread's row: everything up to *Show in diff* is one button that folds the thread, so
+    /// the whole row is the target rather than the 12-point chevron in front of it.
     private var header: some View {
         HStack(spacing: 6) {
             Button {
-                isFlipped.toggle()
+                model.threadFoldFlips.formSymmetricDifference([thread.id])
             } label: {
-                Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                    .font(Theme.type(.footnote, weight: .semibold))
-                    .foregroundStyle(Theme.textMuted)
-                    .frame(width: 12)
-                    .contentShape(Rectangle())
+                HStack(spacing: 6) {
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(Theme.type(.footnote, weight: .semibold))
+                        .foregroundStyle(Theme.textMuted)
+                        .frame(width: 12)
+                    Image(systemName: "doc.text")
+                        .font(Theme.type(.subheadline))
+                        .foregroundStyle(Theme.textMuted)
+                        .accessibilityHidden(true)
+                    Text(thread.path ?? String(localized: "Pull request conversation"))
+                        .font(Theme.mono(.subheadline))
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                    if let anchor {
+                        Text(anchor)
+                            .font(Theme.type(.subheadline))
+                            .foregroundStyle(Theme.textMuted)
+                    }
+                    if thread.isOutdated {
+                        ChipView(text: String(localized: "outdated"), color: Theme.pending, size: 10)
+                    }
+                    if thread.isResolved {
+                        ChipView(text: String(localized: "resolved"), color: Theme.success, size: 10)
+                    }
+                    Spacer(minLength: 4)
+                }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help(chevronLabel)
             .accessibilityLabel(chevronLabel)
-            Image(systemName: "doc.text")
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.textMuted)
-                .accessibilityHidden(true)
-            Text(thread.path ?? String(localized: "Pull request conversation"))
-                .font(Theme.mono(.subheadline))
-                .foregroundStyle(Theme.textSecondary)
-                .lineLimit(1)
-                .truncationMode(.head)
-            if let anchor {
-                Text(anchor)
-                    .font(Theme.type(.subheadline))
-                    .foregroundStyle(Theme.textMuted)
-            }
-            if thread.isOutdated {
-                ChipView(text: String(localized: "outdated"), color: Theme.pending, size: 10)
-            }
-            if thread.isResolved {
-                ChipView(text: String(localized: "resolved"), color: Theme.success, size: 10)
-            }
-            Spacer(minLength: 4)
             if thread.isAnchoredInCurrentDiff, let path = thread.path {
                 Button(String(localized: "Show in diff")) {
                     model.reveal(path: path, line: thread.line)
@@ -569,7 +604,7 @@ struct ConversationThreadView: View {
         }
     }
 
-    /// What the chevron does, in words: it shows or hides the comments and the reply bar.
+    /// What the row does, in words: it shows or hides the comments and the reply bar.
     private var chevronLabel: String {
         isExpanded ? String(localized: "Hide conversation") : String(localized: "Show conversation")
     }

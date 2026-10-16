@@ -36,6 +36,10 @@ final class ConversationTimelineTests: XCTestCase {
         )
     }
 
+    private func event(_ id: String, _ event: ConversationEvent, at offset: TimeInterval) -> ConversationItem {
+        .event(ConversationEventItem(id: id, createdAt: Fixtures.date(offset), actor: alice, event: event))
+    }
+
     private func commit(_ oid: String, at offset: TimeInterval) -> CommitInfo {
         CommitInfo(oid: oid, messageHeadline: oid, author: alice, committedDate: Fixtures.date(offset))
     }
@@ -128,6 +132,38 @@ final class ConversationTimelineTests: XCTestCase {
         let entries = ConversationTimeline.entries(conversation: conversation, commits: [], threads: [])
 
         XCTAssertEqual(ids(entries), ["review:R1", "comment:C1"])
+    }
+
+    // MARK: - The close GitHub records with every merge
+
+    func testTheCloseThatComesWithAMergeIsLeftOut() {
+        // cli/cli#65: merged 19:17:15, closed 19:17:16, by the same person.
+        let conversation = PullRequestConversation(items: [
+            event("ME1", .merged(commitOid: "abc", into: "main"), at: 100),
+            event("CE1", .closed, at: 101),
+        ])
+        let entries = ConversationTimeline.entries(conversation: conversation, commits: [], threads: [])
+
+        XCTAssertEqual(ids(entries), ["event:ME1"])
+    }
+
+    func testACloseAndReopenBeforeTheMergeAreKept() {
+        let conversation = PullRequestConversation(items: [
+            event("CE1", .closed, at: 10),
+            event("RE1", .reopened, at: 20),
+            event("ME1", .merged(commitOid: "abc", into: "main"), at: 30),
+            event("CE2", .closed, at: 30),
+        ])
+        let entries = ConversationTimeline.entries(conversation: conversation, commits: [], threads: [])
+
+        XCTAssertEqual(ids(entries), ["event:CE1", "event:RE1", "event:ME1"])
+    }
+
+    func testACloseWithoutAMergeIsKept() {
+        let conversation = PullRequestConversation(items: [comment("C1", at: 10), event("CE1", .closed, at: 20)])
+        let entries = ConversationTimeline.entries(conversation: conversation, commits: [], threads: [])
+
+        XCTAssertEqual(ids(entries), ["comment:C1", "event:CE1"])
     }
 
     func testAThreadWithoutCommentsIsNotDrawn() {

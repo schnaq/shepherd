@@ -2791,6 +2791,16 @@
         }
       }
     },
+    "Add a comment": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentar hinzufügen"
+          }
+        }
+      }
+    },
     "Add a suggestion": {
       "localizations": {
         "de": {
@@ -2987,6 +2997,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Kommentar veröffentlichen (⌘⏎ beim Schreiben)"
+          }
+        }
+      }
+    },
+    "Post the comment, while typing on Conversation": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beim Schreiben unter Unterhaltung: Kommentar veröffentlichen"
           }
         }
       }

@@ -70,6 +70,7 @@ struct KeyboardShortcutsSheet: View {
             ]),
             Group(title: String(localized: "Writing and merging"), shortcuts: [
                 Shortcut(keys: ["⌘⏎"], label: String(localized: "Open the submit sheet; Merge in its dialog")),
+                Shortcut(keys: ["⌘⏎"], label: String(localized: "Post the comment, while typing on Conversation")),
                 Shortcut(keys: ["⇧⌘⏎"], label: String(localized: "Merge when checks pass, in the merge dialog")),
                 Shortcut(keys: ["⇧⌘D"], label: String(localized: "Draft with AI")),
                 Shortcut(keys: ["⌥E"], label: String(localized: "Explain the selected lines")),
