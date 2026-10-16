@@ -42,6 +42,7 @@ public enum MarkdownDocument {
         var paragraph: [String] = []
         var quote: [String] = []
         var fence: (language: String?, lines: [String])?
+        var isInHTMLComment = false
 
         func flushParagraph() {
             guard !paragraph.isEmpty else { return }
@@ -59,19 +60,26 @@ public enum MarkdownDocument {
         }
 
         for rawLine in markdown.components(separatedBy: .newlines) {
-            let line = rawLine.replacingOccurrences(of: "\t", with: "    ")
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-
             // Inside a fence every line is literal until the closing fence, which is the whole
             // point of a fence: a `#` in a shell snippet is a comment and a `-` is a flag.
             if var open = fence {
-                if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
+                let fenceLine = rawLine.trimmingCharacters(in: .whitespaces)
+                if fenceLine.hasPrefix("```") || fenceLine.hasPrefix("~~~") {
                     blocks.append(.codeBlock(code: open.lines.joined(separator: "\n"), language: open.language))
                     fence = nil
                 } else {
                     open.lines.append(rawLine)
                     fence = open
                 }
+                continue
+            }
+
+            // Outside a fence, the few HTML shapes GitHub renders and bots write (ADR 0043). A line
+            // that was markup and nothing else is skipped without ending the paragraph around it.
+            let unwrapped = unwrappingHTML(in: rawLine, isInComment: &isInHTMLComment)
+            let line = unwrapped.replacingOccurrences(of: "\t", with: "    ")
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty, unwrapped != rawLine {
                 continue
             }
 
@@ -124,6 +132,74 @@ public enum MarkdownDocument {
         flushProse()
         return blocks
     }
+
+    // MARK: - HTML
+
+    /// One line with the HTML GitHub renders and this parser would otherwise print taken care of:
+    /// `<!-- comments -->` vanish (an unterminated one swallows the lines after it, as on GitHub),
+    /// `<details>` unwraps, a `<summary>` becomes a bold line, and `<br>` breaks the line. Every
+    /// other tag is left exactly as written — a `<kbd>` shown as text says more than one dropped.
+    /// - Parameters:
+    ///   - line: The line as written.
+    ///   - isInComment: Whether an HTML comment is open, carried from line to line.
+    /// - Returns: The line without that markup; the same string when it had none.
+    private static func unwrappingHTML(in line: String, isInComment: inout Bool) -> String {
+        var text = ""
+        var rest = Substring(line)
+        while !rest.isEmpty {
+            if isInComment {
+                guard let end = rest.range(of: "-->") else { break }
+                rest = rest[end.upperBound...]
+                isInComment = false
+            } else if let start = rest.range(of: "<!--") {
+                text += rest[..<start.lowerBound]
+                rest = rest[start.upperBound...]
+                isInComment = true
+            } else {
+                text += rest
+                break
+            }
+        }
+        guard text.contains("<") else { return text }
+
+        if let summary = summaryPattern {
+            let range = NSRange(text.startIndex..., in: text)
+            for match in summary.matches(in: text, range: range).reversed() {
+                guard let whole = Range(match.range, in: text),
+                      let inner = Range(match.range(at: 1), in: text) else { continue }
+                let label = text[inner].trimmingCharacters(in: .whitespaces)
+                text.replaceSubrange(whole, with: label.isEmpty ? "" : "**\(label)**")
+            }
+        }
+        for (pattern, replacement) in [(detailsPattern, ""), (breakPattern, "\n")] {
+            guard let pattern else { continue }
+            text = pattern.stringByReplacingMatches(
+                in: text,
+                range: NSRange(text.startIndex..., in: text),
+                withTemplate: replacement
+            )
+        }
+        return text.hasSuffix("\n") ? String(text.dropLast()) : text
+    }
+
+    /// `<summary>label</summary>` on one line; a lone opening or closing tag is caught by
+    /// ``detailsPattern``.
+    private static let summaryPattern = try? NSRegularExpression(
+        pattern: "<summary>(.*?)</summary>",
+        options: [.caseInsensitive]
+    )
+
+    /// `<details>`, `<details open>`, `</details>`, and a `<summary>` split over lines.
+    private static let detailsPattern = try? NSRegularExpression(
+        pattern: "</?(?:details|summary)(?:\\s[^>]*)?>",
+        options: [.caseInsensitive]
+    )
+
+    /// `<br>`, `<br/>` and `<br />`.
+    private static let breakPattern = try? NSRegularExpression(
+        pattern: "<br\\s*/?>",
+        options: [.caseInsensitive]
+    )
 
     // MARK: - Line shapes
 

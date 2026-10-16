@@ -8,6 +8,42 @@ import XCTest
 /// level — headings, lists, fenced code — which is why a body rendered with it alone showed
 /// "## Summary" and "- **Trigger row**" as literal text.
 final class MarkdownBlockTests: XCTestCase {
+    // MARK: - HTML that GitHub renders (ADR 0043)
+
+    /// Bots open their comments with markers like `<!-- ccr-overview-v2 -->`; GitHub never shows
+    /// them, so neither may the conversation tab.
+    func testDropsHTMLCommentsOnTheirOwnLineInlineAndAcrossLines() {
+        XCTAssertEqual(
+            MarkdownDocument.blocks(from: "<!-- marker -->\nHello <!-- hidden --> there\n<!-- one\ntwo -->\nAfter"),
+            [.paragraph("Hello  there\nAfter")]
+        )
+    }
+
+    func testLeavesAnHTMLCommentInsideAFenceAlone() {
+        XCTAssertEqual(
+            MarkdownDocument.blocks(from: "```html\n<!-- kept -->\n```"),
+            [.codeBlock(code: "<!-- kept -->", language: "html")]
+        )
+    }
+
+    func testUnwrapsDetailsAndDrawsTheSummaryAsABoldLine() {
+        XCTAssertEqual(
+            MarkdownDocument.blocks(from: "<details open>\n<summary> Full log </summary>\n\n- one\n\n</details>"),
+            [.paragraph("**Full log**"), .listItem(text: "one", marker: "•", depth: 0)]
+        )
+    }
+
+    func testTurnsBreakTagsIntoLineBreaks() {
+        XCTAssertEqual(
+            MarkdownDocument.blocks(from: "first<br>second<BR/>third<br />"),
+            [.paragraph("first\nsecond\nthird")]
+        )
+    }
+
+    func testKeepsEveryOtherTagAsItIsWritten() {
+        XCTAssertEqual(MarkdownDocument.blocks(from: "Press <kbd>⌘K</kbd>"), [.paragraph("Press <kbd>⌘K</kbd>")])
+    }
+
     // MARK: - Headings
 
     func testReadsHeadings() {
