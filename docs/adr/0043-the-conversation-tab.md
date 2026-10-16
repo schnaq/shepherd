@@ -137,8 +137,10 @@ off-topic, outdated, spam …) starts collapsed behind one line.
 beside thread resolution: REST has no reaction endpoint for a pull-request *review* at all, and
 removing a reaction through REST needs the reaction's own id, which would mean a read before every
 removal. One outbox action, `react(subjectID:content:adding:)`. What the bar shows is GitHub's
-state plus the net of the viewer's queued rows, in order, so a click is visible at once and an
-offline click stays visible until it is sent; rows are not coalesced.
+state plus the reviewer's own clicks, so a click is visible at once and an offline click stays
+visible until it is sent. A click that undoes one still waiting in the outbox cancels that row
+instead of queuing its opposite: a row in a retry's backoff could otherwise be sent after the
+click that undid it, and leave the reaction the reviewer took back.
 
 ### C: edits and deletes are REST, gated by GitHub's own flags
 
