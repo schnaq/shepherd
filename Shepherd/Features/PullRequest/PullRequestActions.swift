@@ -285,32 +285,42 @@ struct PullRequestActions {
 
     // MARK: - Reactions (ADR 0043, B)
 
-    /// Adds the viewer's reaction to a post, or takes it back.
+    /// What the first half of a reaction click left on disk.
+    enum ReactionWrite: Equatable {
+        /// The click's own row, waiting for ``settleReaction(_:on:)``.
+        case queued(OutboxItem)
+        /// Nothing to send: the click cancelled a row that never left, and the stored detail
+        /// already shows what the click wants.
+        case nothingToSend
+    }
+
+    /// The first half of a reaction click: puts it on disk, and nothing else.
     ///
-    /// No ``activity`` key and no toast unless it went wrong: the bar already shows the click
-    /// (``ReviewModel/reactionOverlay``), a reviewer may press three emojis in a row, and a toast
-    /// per emoji would be noise. It waits for the drain all the same, because the caller takes a
-    /// refused click back off the screen.
+    /// Split from the drain because a click the bar shows has to be in the outbox at once, like
+    /// every write (ADR 0006): a drain can hang on a bad network for a minute, and a click waiting
+    /// behind it would live only on screen. The caller runs these one after another and
+    /// ``settleReaction(_:on:)`` beside them, so the rows are written in click order — which is
+    /// the order the drain claims them in.
     ///
     /// A click that undoes one whose row is still waiting cancels that row instead of queuing its
     /// opposite: a row in a retry's backoff would otherwise be sent *after* the click that undid
-    /// it. The opposite is still queued behind a row the drain had already claimed, and behind one
-    /// that was tried before (``needsReactionRow(undoing:cancelled:)``).
+    /// it. ``needsReactionRow(undoing:cancelled:adding:storedHasReacted:)`` says when the click
+    /// still needs a row of its own.
     /// - Parameters:
     ///   - summary: The pull request the post belongs to.
     ///   - subjectID: The post's node id — the pull request's own for the description.
     ///   - content: Which reaction.
     ///   - adding: `true` to add the viewer's reaction, `false` to take it back.
-    /// - Returns: What became of the click's row — `.sent` as well when the click only cancelled
-    ///   the row it undid, so nothing is left to send — or `nil` when the outbox could not be read
-    ///   or written, which is toasted here.
-    @discardableResult
-    func react(
+    ///   - storedHasReacted: Whether the stored detail shows the viewer's reaction there.
+    /// - Returns: What is on disk now, or `nil` when the outbox could not be read or written —
+    ///   toasted here.
+    func persistReaction(
         on summary: PullRequestSummary,
         subjectID: String,
         content: ReactionContent,
-        adding: Bool
-    ) async -> OutboxWriteOutcome? {
+        adding: Bool,
+        storedHasReacted: Bool
+    ) async -> ReactionWrite? {
         do {
             let items = try await session.database.allOutboxItems()
             let undone = Self.queuedReaction(
@@ -324,17 +334,32 @@ struct PullRequestActions {
             if let undone {
                 cancelled = try await session.database.cancelPendingOutboxItem(id: undone.id)
             }
-            guard Self.needsReactionRow(undoing: undone, cancelled: cancelled) else { return .sent }
-            let outcome = try await enqueue(
-                .react(subjectID: subjectID, content: content, adding: adding),
-                on: summary
-            )
-            announce(outcome, of: .reaction, on: summary)
-            return outcome
+            guard Self.needsReactionRow(
+                undoing: undone,
+                cancelled: cancelled,
+                adding: adding,
+                storedHasReacted: storedHasReacted
+            ) else { return .nothingToSend }
+            return .queued(try await write(.react(subjectID: subjectID, content: content, adding: adding), on: summary))
         } catch {
             toasts.failure(error, context: String(localized: "Could not queue the reaction"))
             return nil
         }
+    }
+
+    /// The second half of a reaction click: drains, and reads back what became of its row.
+    ///
+    /// No toast unless the row was refused: the bar already shows the click
+    /// (``ReviewModel/reactionOverlay``), a reviewer may press three emojis in a row, and a toast
+    /// per emoji would be noise. No ``activity`` key either, for the same three emojis.
+    /// - Parameters:
+    ///   - item: The row ``persistReaction(on:subjectID:content:adding:storedHasReacted:)`` wrote.
+    ///   - summary: The pull request the post belongs to.
+    /// - Returns: What became of the row.
+    func settleReaction(_ item: OutboxItem, on summary: PullRequestSummary) async -> OutboxWriteOutcome {
+        let outcome = await drainAndReadBack(item)
+        announce(outcome, of: .reaction, on: summary)
+        return outcome
     }
 
     /// The still-waiting row a reaction click undoes: the same post and emoji on the same pull
@@ -365,18 +390,26 @@ struct PullRequestActions {
     /// Whether a reaction click still needs a row of its own once the row it undoes has been dealt
     /// with (ADR 0043, B).
     ///
-    /// Nothing to undo, or a row the drain claimed first — the cancel refused — and the opposite
-    /// goes behind it. A row cancelled before it was ever tried never left, so the click has
-    /// nothing to send. A row cancelled after an attempt may have reached GitHub with its answer
-    /// lost on the way back, and only the opposite makes sure.
+    /// Nothing to undo, or a row the drain claimed first — the cancel refused — and the click's
+    /// row goes behind it. A cancelled row that had been tried may have reached GitHub with its
+    /// answer lost, and only a row of the click's own makes sure. A cancelled row that never left
+    /// changed nothing on GitHub, but whatever went before it may have: the click is spared its
+    /// row only when the stored detail already shows what it wants.
     /// - Parameters:
     ///   - row: The row the click undoes, or `nil` when there was none.
     ///   - cancelled: Whether ``ShepherdPersistence/DatabaseManager/cancelPendingOutboxItem(id:)``
     ///     took it out.
+    ///   - adding: The click's direction.
+    ///   - storedHasReacted: Whether the stored detail shows the viewer's reaction there.
     /// - Returns: `true` when the click's own row has to be queued.
-    static func needsReactionRow(undoing row: OutboxItem?, cancelled: Bool) -> Bool {
+    static func needsReactionRow(
+        undoing row: OutboxItem?,
+        cancelled: Bool,
+        adding: Bool,
+        storedHasReacted: Bool
+    ) -> Bool {
         guard let row, cancelled else { return true }
-        return row.attemptCount > 0
+        return row.attemptCount > 0 || storedHasReacted != adding
     }
 
     // MARK: - Merge

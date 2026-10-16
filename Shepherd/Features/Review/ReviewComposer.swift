@@ -1261,7 +1261,13 @@ struct ThreadCommentView: View {
     let actions: PullRequestActions
 
     var body: some View {
-        let reactions = ReactionBar(subjectID: comment.id, stored: comment.reactions, model: model, actions: actions)
+        let reactions = ReactionBar(
+            subjectID: comment.id,
+            stored: comment.reactions,
+            review: comment.reviewID,
+            model: model,
+            actions: actions
+        )
         VStack(alignment: .leading, spacing: 4) {
             AuthorLine(author: comment.author, date: comment.createdAt, isEdited: comment.isEdited)
             VStack(alignment: .leading, spacing: 4) {

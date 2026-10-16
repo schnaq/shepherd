@@ -363,8 +363,10 @@ struct AuthorLine: View {
 /// filled when one of them is yours, and a smiley that offers all eight (ADR 0043, B).
 ///
 /// Where the viewer may react a capsule is a button that adds or takes back the viewer's own, as
-/// on GitHub, and so is an emoji in the smiley's popover. Where GitHub says they may not — a locked
+/// on GitHub, and so is an emoji in the smiley's menu. Where GitHub says they may not — a locked
 /// conversation, an archived repository — the capsules are only read and the smiley is not drawn.
+/// A menu rather than a popover, because the bar also sits in the diff's thread popover, and a
+/// popover opened from inside another one is a thing nobody here could check by eye.
 struct ReactionBar: View {
     /// The groups to draw, in GitHub's order — the stored ones with the reviewer's clicks laid
     /// over them (``ReviewModel/displayed(_:subjectID:overlay:)``).
@@ -373,9 +375,6 @@ struct ReactionBar: View {
     let canReact: Bool
     /// A click on an emoji, with whether the viewer's reaction is on it now.
     let onToggle: @MainActor (ReactionContent, Bool) -> Void
-
-    /// Whether the smiley's popover is open.
-    @State private var isPickerShown = false
 
     /// Whether there is nothing to draw: no reactions, and none to add.
     var isEmpty: Bool { groups.isEmpty && !canReact }
@@ -399,8 +398,15 @@ struct ReactionBar: View {
                 }
             }
             if canReact {
-                Button {
-                    isPickerShown = true
+                Menu {
+                    // The eight, in GitHub's order, each with its name; one the viewer already
+                    // used is checked, and choosing it takes it back, as on GitHub.
+                    ForEach(ReactionContent.allCases, id: \.self) { content in
+                        let isOn = groups.contains { $0.content == content && $0.viewerHasReacted }
+                        Toggle(isOn: Binding(get: { isOn }, set: { _ in onToggle(content, isOn) })) {
+                            Text(verbatim: "\(content.emoji)  \(Self.name(of: content))")
+                        }
+                    }
                 } label: {
                     Image(systemName: "face.smiling")
                         .font(Theme.type(.subheadline))
@@ -411,40 +417,16 @@ struct ReactionBar: View {
                         .overlay(Capsule(style: .continuous).stroke(Theme.border, lineWidth: 1))
                         .contentShape(Capsule(style: .continuous))
                 }
+                // `.button` runs the label through the button style, so the capsule is drawn as
+                // written; the borderless style draws a label of its own.
+                .menuStyle(.button)
                 .buttonStyle(.plain)
+                .menuIndicator(.hidden)
+                .fixedSize()
                 .help(String(localized: "Add a reaction"))
                 .accessibilityLabel(String(localized: "Add a reaction"))
-                .popover(isPresented: $isPickerShown, arrowEdge: .bottom) { picker }
             }
         }
-    }
-
-    /// The eight, in GitHub's order. One the viewer already used is marked, and pressing it takes
-    /// it back, as on GitHub.
-    private var picker: some View {
-        HStack(spacing: 2) {
-            ForEach(ReactionContent.allCases, id: \.self) { content in
-                let isOn = groups.contains { $0.content == content && $0.viewerHasReacted }
-                Button {
-                    isPickerShown = false
-                    onToggle(content, isOn)
-                } label: {
-                    Text(verbatim: content.emoji)
-                        .font(Theme.type(.title3))
-                        .padding(5)
-                        .background(
-                            isOn ? Theme.chipBackground(Theme.accentText) : Color.clear,
-                            in: RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        )
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help(Self.name(of: content))
-                .accessibilityLabel(Text(verbatim: Self.name(of: content)))
-                .accessibilityAddTraits(isOn ? .isSelected : [])
-            }
-        }
-        .padding(6)
     }
 
     /// One capsule: the emoji and its count, filled when one of them is the viewer's.
@@ -505,20 +487,24 @@ extension ReactionBar {
     /// - Parameters:
     ///   - subjectID: The post's node id — the pull request's own for the description.
     ///   - stored: The post's groups as stored.
+    ///   - reviewID: The review the post belongs to — a review's own row, a thread comment — or
+    ///     `nil` for the description and a comment. A post of the viewer's pending review takes
+    ///     no reaction: GitHub's page does not show it yet.
     ///   - model: The review model, which holds the clicks and writes them.
     ///   - actions: The write actions.
-    ///   - canReact: `false` where this post takes no reaction even though the pull request does —
-    ///     the viewer's own pending review, which GitHub's page does not show yet.
     init(
         subjectID: String,
         stored: [ReactionGroup],
+        review reviewID: String? = nil,
         model: ReviewModel,
-        actions: PullRequestActions,
-        canReact: Bool = true
+        actions: PullRequestActions
     ) {
+        let isPending = reviewID.map(model.pendingReviewIDs.contains) ?? false
         self.init(
+            // ponytail: every bar reads the whole overlay, so one click re-evaluates every post;
+            // a per-post slice of it if a long conversation ever stutters.
             groups: ReviewModel.displayed(stored, subjectID: subjectID, overlay: model.reactionOverlay),
-            canReact: canReact && model.canReact,
+            canReact: model.canReact && !isPending,
             onToggle: { content, isOn in
                 model.toggleReaction(subjectID: subjectID, content: content, currentlyReacted: isOn, actions: actions)
             }
@@ -547,9 +533,9 @@ struct ConversationReviewView: View {
         let reactions = ReactionBar(
             subjectID: review.id,
             stored: review.reactions,
+            review: review.id,
             model: model,
-            actions: actions,
-            canReact: review.state != .pending
+            actions: actions
         )
         VStack(alignment: .leading, spacing: 8) {
             PostHeader(
@@ -678,7 +664,11 @@ struct ConversationThreadView: View {
     /// what the field holds before it clears it, and a card already gone has no copy to compare.
     private var reply: Binding<String> {
         Binding(
-            get: { model.threadReplyDrafts[thread.id] ?? replyText },
+            // The card's copy read first, so SwiftUI tracks it: the model's is not observed.
+            get: {
+                let own = replyText
+                return model.threadReplyDrafts[thread.id] ?? own
+            },
             set: { text in
                 replyText = text
                 model.threadReplyDrafts[thread.id] = text.isEmpty ? nil : text

@@ -168,6 +168,23 @@ final class ConversationReactionTests: XCTestCase {
         XCTAssertEqual(kept, overlay)
     }
 
+    /// What B4 compares a click against, and what the clearing rule reads: every kind of post, and
+    /// none of the conversation's before it has been read.
+    func testTheStoredReactionsCoverEveryPostByItsNodeID() {
+        let heart = [ReactionGroup(content: .heart, count: 1, viewerHasReacted: true)]
+        let stored = ReviewModel.storedReactions(in: detail(
+            description: heart,
+            comment: heart,
+            review: heart,
+            threadComment: heart
+        ))
+        XCTAssertEqual(stored, ["PR_1": heart, "IC_1": heart, "PRR_1": heart, "RC_1": heart])
+        XCTAssertEqual(
+            ReviewModel.storedReactions(in: detail(threadComment: heart, hasConversation: false)),
+            ["RC_1": heart]
+        )
+    }
+
     func testAPostTheDetailDoesNotCarryKeepsItsClick() {
         let overlay: [Key: Bool] = [
             Key(subjectID: "IC_1", content: .thumbsUp): false,
@@ -235,25 +252,63 @@ final class ConversationReactionTests: XCTestCase {
         )
     }
 
-    func testWithNothingToUndoTheClickQueuesItsOwnRow() {
-        XCTAssertTrue(PullRequestActions.needsReactionRow(undoing: nil, cancelled: false))
+    private func needsRow(undoing row: OutboxItem?, cancelled: Bool, adding: Bool, stored: Bool) -> Bool {
+        PullRequestActions.needsReactionRow(
+            undoing: row,
+            cancelled: cancelled,
+            adding: adding,
+            storedHasReacted: stored
+        )
     }
 
-    func testARowCancelledBeforeItWasTriedNeedsNoOpposite() {
+    func testWithNothingToUndoTheClickQueuesItsOwnRow() {
+        XCTAssertTrue(needsRow(undoing: nil, cancelled: false, adding: true, stored: false))
+        XCTAssertTrue(
+            needsRow(undoing: nil, cancelled: false, adding: true, stored: true),
+            "the stored detail is only spared a row behind a cancel"
+        )
+    }
+
+    func testARowCancelledBeforeItWasTriedNeedsNothingWhenTheStoredStateIsTheWantedOne() {
         let waiting = row(.react(subjectID: "IC_1", content: .heart, adding: true))
-        XCTAssertFalse(PullRequestActions.needsReactionRow(undoing: waiting, cancelled: true))
+        XCTAssertFalse(needsRow(undoing: waiting, cancelled: true, adding: false, stored: false))
+    }
+
+    /// Ruling B4: what went before the cancelled row may have landed, so only a stored state that
+    /// already is the wanted one spares the click its row.
+    func testARowCancelledBeforeItWasTriedStillNeedsOneWhenTheStoredStateIsNotTheWantedOne() {
+        let waiting = row(.react(subjectID: "IC_1", content: .heart, adding: true))
+        XCTAssertTrue(needsRow(undoing: waiting, cancelled: true, adding: false, stored: true))
     }
 
     /// A row tried before may have reached GitHub with its answer lost on the way back.
     func testARowCancelledAfterAnAttemptStillGetsItsOpposite() {
         let retried = row(.react(subjectID: "IC_1", content: .heart, adding: true), attemptCount: 1)
-        XCTAssertTrue(PullRequestActions.needsReactionRow(undoing: retried, cancelled: true))
+        XCTAssertTrue(needsRow(undoing: retried, cancelled: true, adding: false, stored: false))
     }
 
     /// The drain claimed the row between the read and the cancel: it may be on GitHub by now.
     func testARowTheDrainClaimedFirstGetsItsOpposite() {
         let claimed = row(.react(subjectID: "IC_1", content: .heart, adding: true))
-        XCTAssertTrue(PullRequestActions.needsReactionRow(undoing: claimed, cancelled: false))
+        XCTAssertTrue(needsRow(undoing: claimed, cancelled: false, adding: false, stored: false))
+    }
+
+    /// Ruling B4's sequence: an add that was tried, then undone, then wanted again. The add may
+    /// or may not have landed; the stored detail does not show it, so the last click still queues
+    /// a row rather than trusting the cancel.
+    func testAnAddTriedThenUndoneThenWantedAgainIsQueuedAgain() {
+        // The add was tried once and is waiting out its backoff.
+        let add = row(.react(subjectID: "IC_1", content: .heart, adding: true), attemptCount: 1)
+
+        // Remove: cancels the add, and queues its own row anyway, because the add was tried.
+        XCTAssertEqual(undone(byAdding: false, in: [add])?.id, add.id)
+        XCTAssertTrue(needsRow(undoing: add, cancelled: true, adding: false, stored: false))
+        let remove = row(.react(subjectID: "IC_1", content: .heart, adding: false))
+
+        // Add again: cancels the removal, which never left — and still queues a row, because the
+        // stored detail does not show the reaction this click wants.
+        XCTAssertEqual(undone(byAdding: true, in: [remove])?.id, remove.id)
+        XCTAssertTrue(needsRow(undoing: remove, cancelled: true, adding: true, stored: false))
     }
 
     // MARK: - What is said about it
