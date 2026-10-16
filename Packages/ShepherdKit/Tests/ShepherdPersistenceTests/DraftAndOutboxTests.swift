@@ -412,6 +412,117 @@ final class OutboxStoreTests: XCTestCase {
         XCTAssertTrue(stored.isEmpty)
     }
 
+    // MARK: - Cancelling a row that has not left yet (ADR 0043, B)
+
+    func testCancellingARowThatIsStillPendingDeletesItAndSaysSo() async throws {
+        let database = try DatabaseManager.inMemory()
+        let queued = item(action: .react(subjectID: "IC_1", content: .heart, adding: true))
+        try await database.enqueue(queued)
+
+        let cancelled = try await database.cancelPendingOutboxItem(id: queued.id)
+
+        XCTAssertTrue(cancelled)
+        let stored = try await database.outboxItem(id: queued.id)
+        XCTAssertNil(stored, "nothing is left to be sent")
+    }
+
+    func testCancellingARowTheDrainHasClaimedLeavesItInFlight() async throws {
+        // The guard the primitive exists for: a read of the row followed by a plain delete could
+        // remove a row the drain claimed in between, and a claimed row may already be at GitHub.
+        // The answer is `false`, and the caller queues the inverse after it instead.
+        let database = try DatabaseManager.inMemory()
+        let queued = item(action: .react(subjectID: "IC_1", content: .heart, adding: true))
+        try await database.enqueue(queued)
+        let claimed = try await database.claimReadyOutboxItems(now: now, limit: 10)
+        XCTAssertEqual(claimed.first?.state, .sending)
+
+        let cancelled = try await database.cancelPendingOutboxItem(id: queued.id)
+
+        XCTAssertFalse(cancelled)
+        let stored = try await database.outboxItem(id: queued.id)
+        XCTAssertEqual(stored?.state, .sending, "the row is still the drain's")
+        XCTAssertEqual(stored?.attemptCount, 1, "and its attempt is not thrown away")
+    }
+
+    func testCancellingARowWaitingOutABackoffStillWorks() async throws {
+        // A retryable failure puts the row back to pending with a later due time. That is where a
+        // click that undoes it arrives — and where the inverse, queued instead, would be claimed
+        // first and then overtaken by the retry.
+        let database = try DatabaseManager.inMemory()
+        let queued = item(action: .react(subjectID: "IC_1", content: .heart, adding: true))
+        try await database.enqueue(queued)
+        _ = try await database.claimReadyOutboxItems(now: now, limit: 10)
+        try await database.markOutboxItemFailed(id: queued.id, error: "offline", now: now)
+        let waiting = try await database.outboxItem(id: queued.id)
+        XCTAssertEqual(waiting?.state, .pending)
+        XCTAssertGreaterThan(waiting?.nextAttemptAt ?? .distantPast, now)
+
+        let cancelled = try await database.cancelPendingOutboxItem(id: queued.id)
+
+        XCTAssertTrue(cancelled)
+        let stored = try await database.outboxItem(id: queued.id)
+        XCTAssertNil(stored)
+    }
+
+    func testCancellingARowTheDrainGaveUpOnLeavesItForSettings() async throws {
+        // A failed row already has an owner — Retry and Discard in Settings → Sync — and a click
+        // on a post is neither.
+        let database = try DatabaseManager.inMemory()
+        let doomed = item(action: .react(subjectID: "IC_1", content: .heart, adding: true))
+        try await database.enqueue(doomed)
+        try await database.markOutboxItemFailed(
+            id: doomed.id,
+            error: "403 Forbidden",
+            now: now,
+            retriable: false
+        )
+
+        let cancelled = try await database.cancelPendingOutboxItem(id: doomed.id)
+
+        XCTAssertFalse(cancelled)
+        let stored = try await database.outboxItem(id: doomed.id)
+        XCTAssertEqual(stored?.state, .failed)
+        XCTAssertEqual(stored?.lastError, "403 Forbidden")
+    }
+
+    func testCancellingAParkedRowLeavesItForTheConflictAlert() async throws {
+        let database = try DatabaseManager.inMemory()
+        let parked = item(action: .react(subjectID: "IC_1", content: .heart, adding: true))
+        try await database.enqueue(parked)
+        try await database.markOutboxItemConflicted(id: parked.id, reason: "head moved")
+
+        let cancelled = try await database.cancelPendingOutboxItem(id: parked.id)
+
+        XCTAssertFalse(cancelled)
+        let stored = try await database.outboxItem(id: parked.id)
+        XCTAssertEqual(stored?.state, .conflicted)
+    }
+
+    func testCancellingARowThatIsNotThereSaysNo() async throws {
+        // Sent and gone looks exactly like this, and the caller's answer to it is the same as to
+        // a claimed row: queue the inverse.
+        let database = try DatabaseManager.inMemory()
+
+        let cancelled = try await database.cancelPendingOutboxItem(id: UUID())
+
+        XCTAssertFalse(cancelled)
+    }
+
+    func testCancellingOneRowLeavesTheOthersQueued() async throws {
+        let database = try DatabaseManager.inMemory()
+        let first = item(action: .react(subjectID: "IC_1", content: .heart, adding: true))
+        var second = item(action: .react(subjectID: "IC_2", content: .heart, adding: true))
+        second.createdAt = first.createdAt.addingTimeInterval(1)
+        try await database.enqueue(first)
+        try await database.enqueue(second)
+
+        let cancelled = try await database.cancelPendingOutboxItem(id: first.id)
+
+        XCTAssertTrue(cancelled)
+        let remaining = try await database.allOutboxItems()
+        XCTAssertEqual(remaining.map(\.id), [second.id])
+    }
+
     func testDequeueRespectsTheLimitAndOrdersOldestFirst() async throws {
         let database = try DatabaseManager.inMemory()
         for index in 0..<5 {
