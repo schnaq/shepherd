@@ -227,7 +227,9 @@ struct ConversationView: View {
         let conversation = model.detail?.conversation
         return ConversationPostView(
             model: model,
+            actions: actions,
             translations: translations,
+            subjectID: summary.id,
             author: summary.author,
             verb: String(localized: "opened this pull request"),
             date: summary.createdAt,

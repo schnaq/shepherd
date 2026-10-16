@@ -259,6 +259,7 @@ final class ModelCodingTests: XCTestCase {
             .addPullRequestComment(body: "One thought."),
             .closePullRequest(comment: "Superseded."),
             .addReviewComment(DraftComment(path: "a.swift", line: 1, body: "Nit"), commitOid: "abc"),
+            .react(subjectID: "IC_1", content: .eyes, adding: true),
         ]
         XCTAssertTrue(actions.allSatisfy { $0.basedOnIssueUpdatedAt == nil })
         XCTAssertTrue(actions.allSatisfy { !$0.targetsIssue })
@@ -336,6 +337,59 @@ final class ModelCodingTests: XCTestCase {
         XCTAssertThrowsError(
             try JSONDecoder().decode(OutboxAction.self, from: Data(#"{"updateBranch":{}}"#.utf8))
         )
+    }
+
+    func testAReactRowRoundTripsInBothDirectionsForEveryContent() throws {
+        // ADR 0043: a click is one row with its direction in it, for every content.
+        var actions = ReactionContent.allCases.map {
+            OutboxAction.react(subjectID: "IC_kwDOComment1", content: $0, adding: true)
+        }
+        actions.append(.react(subjectID: "PRR_kwDOReview1", content: .heart, adding: false))
+        for action in actions {
+            let data = try JSONEncoder().encode(action)
+            XCTAssertEqual(try JSONDecoder().decode(OutboxAction.self, from: data), action)
+            XCTAssertEqual(action.kind, "react")
+            // No `updatedAt` to compare: a reaction says what it says whatever else has happened
+            // to the post, and is not an issue write.
+            XCTAssertNil(action.basedOnIssueUpdatedAt)
+            XCTAssertFalse(action.targetsIssue)
+        }
+    }
+
+    func testAReactRowIsStoredUnderTheKeysAndTheGitHubContentName() throws {
+        // The payload column keeps these bytes for as long as a row is queued, so the keys and
+        // the content's spelling are written down here rather than left to whatever the
+        // encoder does. Contains-checks, because a three-key object has no defined key order.
+        let stored = String(
+            decoding: try JSONEncoder().encode(
+                OutboxAction.react(subjectID: "PRR_kwDOReview1", content: .thumbsUp, adding: false)
+            ),
+            as: UTF8.self
+        )
+        XCTAssertTrue(stored.hasPrefix(#"{"react":{"#), stored)
+        XCTAssertTrue(stored.contains(#""subjectID":"PRR_kwDOReview1""#), stored)
+        XCTAssertTrue(stored.contains(#""content":"THUMBS_UP""#), stored)
+        XCTAssertTrue(stored.contains(#""adding":false"#), stored)
+
+        let literal = Data(
+            #"{"react":{"subjectID":"IC_kwDOComment1","content":"ROCKET","adding":true}}"#.utf8
+        )
+        XCTAssertEqual(
+            try JSONDecoder().decode(OutboxAction.self, from: literal),
+            .react(subjectID: "IC_kwDOComment1", content: .rocket, adding: true)
+        )
+    }
+
+    func testAReactRowWithoutADirectionOrAKnownContentIsNotGuessedAt() {
+        // There is no honest default for either: guessing "add" would put back a reaction the
+        // user meant to take away. Such a row fails to decode and the claim skips it, the way
+        // it skips a row written by a build that knew a ninth content.
+        let withoutDirection = Data(#"{"react":{"subjectID":"IC_1","content":"HEART"}}"#.utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(OutboxAction.self, from: withoutDirection))
+        let unknownContent = Data(
+            #"{"react":{"subjectID":"IC_1","content":"WHALE","adding":true}}"#.utf8
+        )
+        XCTAssertThrowsError(try JSONDecoder().decode(OutboxAction.self, from: unknownContent))
     }
 
     func testTheCloseReasonsAreGitHubsOwnTwoWords() {

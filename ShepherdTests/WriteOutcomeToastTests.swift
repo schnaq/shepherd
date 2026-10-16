@@ -40,6 +40,7 @@ final class WriteOutcomeToastTests: XCTestCase {
             .close(withComment: true),
             .close(withComment: false),
             .updateBranch,
+            .reaction,
         ]
     }
 
@@ -141,16 +142,13 @@ final class WriteOutcomeToastTests: XCTestCase {
 
     func testEveryWriteTellsQueuedApartFromSent() {
         for write in everyWrite {
+            // A merge is silent when it lands and a reaction either way — the bar already shows
+            // the click — and both are silent here on purpose.
             guard let queued = PullRequestActions.announcement(
                 for: .queued,
                 of: write,
                 slug: slug
-            ) else {
-                XCTFail("\(write) says nothing about being queued")
-                continue
-            }
-            // Only a merge is silent when it lands, and it is silent here on purpose.
-            guard let sent = PullRequestActions.announcement(
+            ), let sent = PullRequestActions.announcement(
                 for: .sent,
                 of: write,
                 slug: slug

@@ -137,8 +137,15 @@ off-topic, outdated, spam …) starts collapsed behind one line.
 beside thread resolution: REST has no reaction endpoint for a pull-request *review* at all, and
 removing a reaction through REST needs the reaction's own id, which would mean a read before every
 removal. One outbox action, `react(subjectID:content:adding:)`. What the bar shows is GitHub's
-state plus the net of the viewer's queued rows, in order, so a click is visible at once and an
-offline click stays visible until it is sent; rows are not coalesced.
+state plus the reviewer's own clicks, so a click is visible at once and an offline click stays
+visible until it is sent. A click that undoes one still waiting in the outbox cancels that row,
+because a row in a retry's backoff could otherwise be sent after the click that undid it and leave
+the reaction the reviewer took back — and queues its own row all the same: the stored detail lags
+every row in flight or landed, so nothing on the Mac can tell that the click's row is unneeded, and
+a redundant one costs one idempotent mutation. The click's row is on disk without waiting for any
+drain: a click the bar shows never waits for the network to be saved. A refusal the click's own
+drain sees takes the click back off the bar; one that a later drain meets shows in Settings → Sync,
+and the bar corrects itself when the screen is reopened.
 
 ### C: edits and deletes are REST, gated by GitHub's own flags
 
@@ -160,4 +167,6 @@ answered `405` on a merged pull request is (ADR 0005's 2026-09-05 amendment).
   and is erased with everything else on sign-out.
 - The *Comment…* sheet stays for the inbox panel, which has no room for a timeline.
 - The GitHub App's permissions for B's and C's writes cannot be checked from a `gh` token; they are
-  tested with the app's own token in `schnaq/shepherd-playground` before each of those releases.
+  checked with the app's own token in `schnaq/shepherd-playground`. As with ⌘V image upload (1.11.0)
+  the check follows the release rather than gating it, because a refusal is harmless: the click is
+  taken back with a toast, and the failed row says GitHub's own words in Settings → Sync.

@@ -241,7 +241,7 @@ struct ReviewScreen: View {
             arrowEdge: .trailing
         ) {
             if let thread = model.activeThread, let summary = model.summary {
-                ThreadPopover(thread: thread, summary: summary, actions: actions) {
+                ThreadPopover(thread: thread, summary: summary, model: model, actions: actions) {
                     model.activeThreadID = nil
                 }
             }

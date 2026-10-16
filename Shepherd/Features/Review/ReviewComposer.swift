@@ -1113,6 +1113,9 @@ struct ThreadPopover: View {
     let thread: ReviewThread
     /// The pull request the thread belongs to.
     let summary: PullRequestSummary
+    /// The review model, for the comments' reactions (ADR 0043, B) — the same clicks the
+    /// conversation tab shows.
+    let model: ReviewModel
     /// The write actions.
     let actions: PullRequestActions
     /// Closes the popover.
@@ -1138,7 +1141,7 @@ struct ThreadPopover: View {
                         ThreadDigestCard(state: digest)
                     }
                     ForEach(thread.comments) { comment in
-                        ThreadCommentView(comment: comment, translations: translations)
+                        ThreadCommentView(comment: comment, translations: translations, model: model, actions: actions)
                     }
                 }
                 .padding(12)
@@ -1252,8 +1255,19 @@ struct ThreadCommentView: View {
     let comment: ReviewComment
     /// The screen's translation cache.
     let translations: TranslationCoordinator
+    /// The review model, for the comment's reactions (ADR 0043, B).
+    let model: ReviewModel
+    /// The write actions, for the same.
+    let actions: PullRequestActions
 
     var body: some View {
+        let reactions = PostReactions(
+            subjectID: comment.id,
+            stored: comment.reactions,
+            review: comment.reviewID,
+            model: model,
+            actions: actions
+        )
         VStack(alignment: .leading, spacing: 4) {
             AuthorLine(author: comment.author, date: comment.createdAt, isEdited: comment.isEdited)
             VStack(alignment: .leading, spacing: 4) {
@@ -1261,8 +1275,8 @@ struct ThreadCommentView: View {
                     markdown: comment.bodyMarkdown,
                     translations: translations
                 )
-                if !comment.reactions.isEmpty {
-                    ReactionSummaryView(reactions: comment.reactions)
+                if reactions.isDrawn {
+                    reactions
                 }
             }
             // Under the name rather than under the avatar, the way GitHub indents a thread's

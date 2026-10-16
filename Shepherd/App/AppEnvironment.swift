@@ -694,8 +694,10 @@ final class AppEnvironment {
     /// The detail re-reads a sent conversation write asks for, one per pull request.
     @ObservationIgnored private var rereadTasks: [String: Task<Void, Never>] = [:]
 
-    /// Re-reads a pull request's detail soon after a comment, a reply, a thread's resolution or a
-    /// review reached GitHub, so it shows without waiting for the next sweep (ADR 0043).
+    /// Re-reads a pull request's detail soon after a comment, a reply, a thread's resolution, a
+    /// review or a reaction reached GitHub, so it shows without waiting for the next sweep
+    /// (ADR 0043). For a reaction it is the confirmation: the click is on the bar already, and the
+    /// re-read is the detail that takes it over (`ReviewModel.reactionOverlay`).
     ///
     /// One place rather than one per button: the conversation tab's composer, a thread's reply bar
     /// in the stream, the diff's popover and a write a later drain sent all end here. The detail is
@@ -711,7 +713,7 @@ final class AppEnvironment {
         guard case .mutationSent(let sent) = event else { return }
         switch sent.kind {
         case .pullRequestCommentAdded, .replyPosted, .reviewCommentPosted, .threadResolved,
-             .threadUnresolved, .reviewSubmitted:
+             .threadUnresolved, .reviewSubmitted, .reactionChanged:
             break
         default:
             return

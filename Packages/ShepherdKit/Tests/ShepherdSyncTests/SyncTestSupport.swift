@@ -10,6 +10,13 @@ import ShepherdPersistence
 /// point of the sweep is that it *does not* fetch details for pull requests that did not
 /// change.
 actor MockGitHub: PullRequestFetching, BranchDeleting {
+    /// One reaction the drain asked GitHub to add or take back (ADR 0043).
+    struct ReactionCall: Equatable {
+        var subjectID: String
+        var content: ReactionContent
+        var adding: Bool
+    }
+
     /// One entry per sweep, consumed in order. The last entry repeats.
     var searchResults: [[PullRequestSummary]] = []
     /// Details keyed by `owner/name#number`; missing keys are synthesised from the summary.
@@ -27,6 +34,8 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
     var mergeError: GitHubError?
     /// What every update-branch call throws, when a test wants GitHub to refuse it (ADR 0041).
     var updateBranchError: GitHubError?
+    /// What every reaction call throws, when a test wants GitHub to refuse it (ADR 0043).
+    var reactionError: GitHubError?
     /// What the already-merged probe answers, keyed by number. A missing key answers `false` —
     /// "GitHub has not merged this", which is what every test that never scripts it means.
     var mergedPullRequests: [Int: Bool] = [:]
@@ -57,6 +66,8 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
     private(set) var submittedDrafts: [ReviewDraft] = []
     private(set) var resolvedThreads: [String] = []
     private(set) var unresolvedThreads: [String] = []
+    /// Every reaction the engine sent, in the order it sent them.
+    private(set) var reactions: [ReactionCall] = []
     private(set) var replies: [(commentID: Int, body: String)] = []
     private(set) var reviewComments: [(comment: DraftComment, commitOid: String)] = []
     private(set) var merges: [(number: Int, method: MergeMethod, sha: String?)] = []
@@ -149,6 +160,10 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
 
     func setUpdateBranchError(_ error: GitHubError?) {
         updateBranchError = error
+    }
+
+    func setReactionError(_ error: GitHubError?) {
+        reactionError = error
     }
 
     /// Scripts what the already-merged probe answers for one pull request.
@@ -255,6 +270,11 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
 
     func unresolveThread(id: String) async throws {
         unresolvedThreads.append(id)
+    }
+
+    func setReaction(subjectID: String, content: ReactionContent, adding: Bool) async throws {
+        if let reactionError { throw reactionError }
+        reactions.append(ReactionCall(subjectID: subjectID, content: content, adding: adding))
     }
 
     func mergePullRequest(

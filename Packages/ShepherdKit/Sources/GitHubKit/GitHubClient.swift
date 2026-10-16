@@ -25,7 +25,8 @@ public enum MergeMethod: String, Sendable, Codable, Hashable, CaseIterable {
 ///   GitHub resolved out of it (ADR 0032); and the conversation, because one query answers the
 ///   whole timeline with every post's reactions and the viewer's permissions on it (ADR 0043).
 /// - **Writes** are REST, except thread resolution and "ready for review", which are
-///   GraphQL-only.
+///   GraphQL-only, and reactions, which are GraphQL because REST cannot react to a review at all
+///   (ADR 0043).
 public actor GitHubClient {
     private let configuration: GitHubConfiguration
     private let transport: any HTTPTransport
@@ -1144,6 +1145,27 @@ public actor GitHubClient {
         )
     }
 
+    /// Adds the viewer's reaction to a post, or takes it back (ADR 0043). GraphQL, by the post's
+    /// node id: REST has no reaction endpoint for a pull-request review at all, and removing one
+    /// there needs the reaction's own id, which would mean a read before every removal.
+    ///
+    /// Adding one the viewer already has is answered with that reaction, so a retried add needs
+    /// no care. A removal of one that is already gone may be answered with an error, which is
+    /// thrown like any other: what a refusal is worth is the drain's to decide
+    /// (``isReactionGone(_:)``), as it is for every write here.
+    /// - Parameters:
+    ///   - subjectID: The post's GraphQL node id — the pull request's own for the description.
+    ///   - content: Which reaction.
+    ///   - adding: `true` to add the viewer's reaction, `false` to take it away.
+    public func setReaction(subjectID: String, content: ReactionContent, adding: Bool) async throws {
+        let _: ReactionData = try await graphQL(
+            document: adding ? GraphQLDocuments.addReaction : GraphQLDocuments.removeReaction,
+            variables: ["subjectId": .string(subjectID), "content": .string(content.rawValue)],
+            resource: adding ? "add reaction" : "remove reaction",
+            isIdempotent: false
+        )
+    }
+
     /// Takes a pull request out of draft state. GraphQL-only.
     /// - Parameter pullRequestID: The pull request's GraphQL node id.
     public func markReadyForReview(pullRequestID: String) async throws {
@@ -1318,6 +1340,24 @@ public actor GitHubClient {
     public static func isMergeAlreadyUnderWay(_ message: String) -> Bool {
         func has(_ word: String) -> Bool { message.range(of: word, options: .caseInsensitive) != nil }
         return has("already") && (has("enqueued") || has("in progress") || has("merge request"))
+    }
+
+    /// Whether an error from ``setReaction(subjectID:content:adding:)`` says the reaction is not
+    /// there (ADR 0043). The drain asks it about a removal only, and sends such a row rather than
+    /// failing it: the state the removal asked for is the state there is — the retry after an
+    /// answer that was lost finds nothing left to remove.
+    ///
+    /// GitHub does not document what it answers a removal of a missing reaction with, so this is
+    /// a guess at its wording, and deliberately narrow: a GraphQL error whose every message
+    /// mentions a reaction and "not found", ignoring case. If GitHub says something else, the
+    /// removal fails where the user can see it and the fix is one more phrase here — where a
+    /// wider match would take a removal that did not happen for done.
+    public static func isReactionGone(_ error: GitHubError) -> Bool {
+        guard case .graphQL(let messages) = error, !messages.isEmpty else { return false }
+        return messages.allSatisfy { message in
+            let text = message.lowercased()
+            return text.contains("reaction") && text.contains("not found")
+        }
     }
 
     /// Whether a pull request is part of a GitHub stack right now (ADR 0042).

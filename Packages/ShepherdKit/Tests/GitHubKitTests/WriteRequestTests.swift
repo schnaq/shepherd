@@ -41,6 +41,13 @@ private struct ReplyRequestBody: Decodable {
     var body: String
 }
 
+/// A GraphQL request body: the document and the variables it is sent with. Every variable a
+/// reaction mutation takes is a string, so a plain dictionary reads them all.
+private struct GraphQLRequestEnvelope: Decodable {
+    var query: String
+    var variables: [String: String]
+}
+
 private struct LabelsRequestBody: Decodable {
     var labels: [String]
 }
@@ -276,6 +283,132 @@ final class WriteRequestTests: XCTestCase {
         let text = bodyText(request)
         XCTAssertTrue(text.contains("markPullRequestReadyForReview"))
         XCTAssertTrue(text.contains("PR_1"))
+    }
+
+    // MARK: - Reactions (ADR 0043)
+
+    func testAddReactionSendsTheAddMutationWithTheSubjectAndTheContentName() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "ShepherdAddReaction",
+            Fixture.response(json: #"{"data":{"addReaction":{"reaction":{"content":"THUMBS_UP"}}}}"#)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        try await client.setReaction(subjectID: "IC_kwDOComment1", content: .thumbsUp, adding: true)
+
+        let request = await transport.onlyRequest()
+        XCTAssertEqual(request?.method, "POST")
+        XCTAssertEqual(request?.url.absoluteString, "https://api.github.com/graphql")
+        let body = try decodeBody(GraphQLRequestEnvelope.self, from: request)
+        XCTAssertTrue(body.query.contains("mutation ShepherdAddReaction"), body.query)
+        XCTAssertTrue(body.query.contains("addReaction(input:"), body.query)
+        XCTAssertFalse(body.query.contains("removeReaction"), body.query)
+        // The enum's GraphQL name, not Swift's case name: `thumbsUp` would be a validation error.
+        XCTAssertEqual(
+            body.variables,
+            ["subjectId": "IC_kwDOComment1", "content": "THUMBS_UP"]
+        )
+    }
+
+    func testRemoveReactionSendsTheRemoveMutation() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "ShepherdRemoveReaction",
+            Fixture.response(json: #"{"data":{"removeReaction":{"reaction":{"content":"THUMBS_DOWN"}}}}"#)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        try await client.setReaction(subjectID: "PRR_kwDOReview1", content: .thumbsDown, adding: false)
+
+        let request = await transport.onlyRequest()
+        let body = try decodeBody(GraphQLRequestEnvelope.self, from: request)
+        XCTAssertTrue(body.query.contains("mutation ShepherdRemoveReaction"), body.query)
+        XCTAssertTrue(body.query.contains("removeReaction(input:"), body.query)
+        XCTAssertFalse(body.query.contains("addReaction"), body.query)
+        XCTAssertEqual(
+            body.variables,
+            ["subjectId": "PRR_kwDOReview1", "content": "THUMBS_DOWN"]
+        )
+    }
+
+    func testARemovalGitHubAnswersWithNoReactionIsStillASuccess() async throws {
+        // What the mutation may say about a reaction that is already gone, if it says it with a
+        // success: nothing to return. The DTO must not turn that into a decoding failure, which
+        // would leave a failed row behind for something that is as the user asked.
+        let transport = MockTransport()
+        await transport.route(
+            "ShepherdRemoveReaction",
+            Fixture.response(json: #"{"data":{"removeReaction":{"reaction":null}}}"#)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        try await client.setReaction(subjectID: "IC_1", content: .heart, adding: false)
+    }
+
+    func testARemovalGitHubSaysIsNotThereIsThrownForTheDrainToJudge() async throws {
+        // The client translates the answer and decides nothing: whether "not found" means done is
+        // the drain's call (`isReactionGone`), as it is for every other write's refusal.
+        let transport = MockTransport()
+        await transport.route(
+            "ShepherdRemoveReaction",
+            Fixture.response(json: """
+            {"data":{"removeReaction":null},
+             "errors":[{"type":"NOT_FOUND","path":["removeReaction"],"message":"Reaction not found."}]}
+            """)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            try await client.setReaction(subjectID: "IC_1", content: .heart, adding: false)
+            XCTFail("expected a GraphQL error")
+        } catch GitHubError.graphQL(let messages) {
+            XCTAssertEqual(messages, ["Reaction not found."])
+        }
+    }
+
+    func testOnlyAGraphQLNotFoundAboutTheReactionReadsAsGone() {
+        XCTAssertTrue(GitHubClient.isReactionGone(.graphQL(messages: ["Reaction not found."])))
+        XCTAssertTrue(GitHubClient.isReactionGone(.graphQL(messages: ["REACTION NOT FOUND"])))
+        // A subject GitHub cannot resolve, a permission, a message that mentions a reaction in
+        // passing: none of them says "the reaction is gone".
+        let refusals = [
+            "Could not resolve to a node with the global id of 'IC_gone'.",
+            "Resource not accessible by integration",
+            "Cannot remove a reaction from a locked conversation.",
+            "Something went wrong while executing your query.",
+        ]
+        for refusal in refusals {
+            XCTAssertFalse(GitHubClient.isReactionGone(.graphQL(messages: [refusal])), refusal)
+        }
+        // Every message has to say it: a second error means something else went wrong as well.
+        XCTAssertFalse(GitHubClient.isReactionGone(.graphQL(messages: ["Reaction not found.", "Forbidden"])))
+        XCTAssertFalse(GitHubClient.isReactionGone(.graphQL(messages: [])), "no message says nothing")
+        // GraphQL's answer only: a REST 404 names a resource, not a reaction.
+        XCTAssertFalse(GitHubClient.isReactionGone(.notFound(resource: "remove reaction")))
+    }
+
+    func testAReactionIsNeverReplayedAfterAConnectionFailure() async throws {
+        // Like every GraphQL mutation: the method cannot say it is not a query, so the call
+        // site does. A reaction that may have landed is retried by its outbox row, which can
+        // tell the outcome apart, and not by the transport.
+        let transport = MockTransport()
+        await transport.failNext(1, with: .transport(message: "offline"))
+        await transport.route(
+            "ShepherdAddReaction",
+            Fixture.response(json: #"{"data":{"addReaction":{"reaction":{"content":"EYES"}}}}"#)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            try await client.setReaction(subjectID: "IC_1", content: .eyes, adding: true)
+            XCTFail("expected the connection failure to surface")
+        } catch GitHubError.transport {
+            // Expected: surfaced to the drain, which backs the row off.
+        }
+
+        let requests = await transport.requests
+        XCTAssertEqual(requests.count, 1)
     }
 
     // MARK: - Merge

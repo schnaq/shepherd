@@ -292,6 +292,40 @@ final class ReviewModel {
     /// focus change and not while somebody types.
     var isConversationComposerFocused = false
 
+    /// One reaction on one post — what ``reactionOverlay`` is keyed by (ADR 0043, B).
+    struct ReactionKey: Hashable {
+        /// The post's node id — the pull request's own for the description.
+        var subjectID: String
+        /// Which reaction.
+        var content: ReactionContent
+    }
+
+    /// The reviewer's reaction clicks that the stored detail does not show yet: `true` wants the
+    /// viewer's reaction on, `false` off (ADR 0043, B).
+    ///
+    /// What makes a click visible at once and an offline click visible until it is sent. A key
+    /// goes when a detail reaching the screen agrees with it (``unconfirmedClicks(_:against:)``) —
+    /// not when its write is sent, because the re-read after a send can still carry the state
+    /// from before it and would flicker the reaction off and on. It also goes when the click could
+    /// not be written, and when the click's own drain saw its row refused. A refusal that comes
+    /// later — from a drain the click did not wait for, which is what a click gets whose row
+    /// another click's drain is still sending — leaves its key until the screen closes; the failed
+    /// row is in Settings → Sync. Observed: it changes on a click.
+    private(set) var reactionOverlay: [ReactionKey: Bool] = [:]
+    /// The last of this screen's reaction rows being written; each waits for the one before
+    /// (``toggleReaction(subjectID:content:currentlyReacted:actions:)``).
+    @ObservationIgnored private var reactionWrites: Task<Void, Never>?
+    /// Whether GitHub lets the viewer react on this pull request's posts — not on a locked
+    /// conversation or in an archived repository, and not before the conversation has been read.
+    ///
+    /// Stored, and set only when it changes (``syncReactionState(from:)``), for
+    /// ``threadFoldFlips``'s reason: every post's bar reads it, and read off ``detail`` it would
+    /// re-evaluate every post on every refresh of the checks.
+    private(set) var canReact = false
+    /// The viewer's reviews that are still pending, by node id. Their posts take no reaction —
+    /// GitHub's page does not show them yet. Stored for ``canReact``'s reason.
+    private(set) var pendingReviewIDs: Set<String> = []
+
     /// The provider router.
     var intelligence: IntelligenceRouter = .disabled
 
@@ -663,6 +697,62 @@ final class ReviewModel {
         return kept
     }
 
+    /// A post's reactions as its bar shows them: GitHub's stored groups with the reviewer's clicks
+    /// laid over them (ADR 0043, B).
+    ///
+    /// A click moves its group by one and marks it as the viewer's or not; a group that reaches
+    /// zero goes, and a new one takes its place in GitHub's order of the eight, which is
+    /// ``ShepherdCore/ReactionContent``'s. Pure and `static` for ``change(shown:fresh:)``'s reason.
+    /// - Parameters:
+    ///   - groups: The post's groups as stored.
+    ///   - subjectID: The post's node id.
+    ///   - overlay: ``reactionOverlay``.
+    /// - Returns: The groups to draw.
+    static func displayed(_ groups: [ReactionGroup], subjectID: String, overlay: [ReactionKey: Bool]) -> [ReactionGroup] {
+        guard !overlay.isEmpty else { return groups }
+        return ReactionContent.allCases.compactMap { content in
+            let stored = groups.first { $0.content == content }
+            guard let wanted = overlay[ReactionKey(subjectID: subjectID, content: content)],
+                  wanted != (stored?.viewerHasReacted ?? false)
+            else { return stored }
+            let count = (stored?.count ?? 0) + (wanted ? 1 : -1)
+            return count > 0 ? ReactionGroup(content: content, count: count, viewerHasReacted: wanted) : nil
+        }
+    }
+
+    /// The clicks a detail does not show yet: the overlay keys it does not agree with
+    /// (ADR 0043, B).
+    ///
+    /// A key goes once the detail shows the viewer's reaction the way the click wanted it. A post
+    /// the detail does not carry keeps its key: the conversation is `nil` until it has been read,
+    /// and "not read" is not "not reacted". Pure and `static` for ``change(shown:fresh:)``'s
+    /// reason.
+    /// - Parameters:
+    ///   - overlay: ``reactionOverlay`` as it stands.
+    ///   - detail: The detail reaching the screen.
+    /// - Returns: The keys to keep.
+    static func unconfirmedClicks(_ overlay: [ReactionKey: Bool], against detail: PullRequestDetail) -> [ReactionKey: Bool] {
+        guard !overlay.isEmpty else { return overlay }
+        var stored: [String: [ReactionGroup]] = [:]
+        if let conversation = detail.conversation {
+            stored[detail.summary.id] = conversation.descriptionReactions
+            for item in conversation.items {
+                switch item {
+                case .comment(let comment): stored[comment.id] = comment.reactions
+                case .review(let review): stored[review.id] = review.reactions
+                case .event: break
+                }
+            }
+        }
+        for comment in detail.threads.flatMap(\.comments) {
+            stored[comment.id] = comment.reactions
+        }
+        return overlay.filter { key, wanted in
+            guard let groups = stored[key.subjectID] else { return true }
+            return groups.contains { $0.content == key.content && $0.viewerHasReacted } != wanted
+        }
+    }
+
     /// Classifies an observed detail against the one on screen.
     ///
     /// The head commit is the whole rule, and the equality check in front of it is behaviour rule
@@ -848,7 +938,8 @@ final class ReviewModel {
 
     /// Rebuilds ``conversationEntries`` from the detail that just reached the screen — called by
     /// ``apply(_:)`` and ``refresh(_:replacing:)``, the two ways one does — and carries the
-    /// threads' fold flips across it (``foldFlips(_:from:to:)``).
+    /// threads' fold flips and the reaction bars' state across it (``foldFlips(_:from:to:)``,
+    /// ``syncReactionState(from:)``).
     /// - Parameters:
     ///   - detail: The detail now on screen.
     ///   - shown: The one it replaced, or `nil` for the first.
@@ -858,11 +949,31 @@ final class ReviewModel {
             // Only when it moved: every thread card reads it, and a sweep rarely changes it.
             if flips != threadFoldFlips { threadFoldFlips = flips }
         }
+        syncReactionState(from: detail)
         conversationEntries = ConversationTimeline.entries(
             conversation: detail.conversation,
             commits: detail.commits,
             threads: detail.threads
         )
+    }
+
+    /// Brings what the reaction bars read up to the detail that just reached the screen: the
+    /// clicks it does not show yet (``unconfirmedClicks(_:against:)``), ``canReact`` and
+    /// ``pendingReviewIDs``.
+    ///
+    /// Each is set only when it changed, for ``threadFoldFlips``'s reason: every bar reads them,
+    /// and a sweep rarely changes them.
+    /// - Parameter detail: The detail now on screen.
+    private func syncReactionState(from detail: PullRequestDetail) {
+        let overlay = Self.unconfirmedClicks(reactionOverlay, against: detail)
+        if overlay != reactionOverlay { reactionOverlay = overlay }
+        let reacts = detail.conversation?.viewerCanReact == true
+        if reacts != canReact { canReact = reacts }
+        let pending = Set((detail.conversation?.items ?? []).compactMap { item -> String? in
+            guard case .review(let review) = item, review.state == .pending else { return nil }
+            return review.id
+        })
+        if pending != pendingReviewIDs { pendingReviewIDs = pending }
     }
 
     /// Keeps ``selectedPath`` on a file the current round view actually lists.
@@ -1730,6 +1841,57 @@ final class ReviewModel {
     func quote(_ markdown: String) {
         conversationDraft = SavedReply.inserting(MarkdownDocument.quoted(markdown), into: conversationDraft) + "\n\n"
         composerFocusRequest += 1
+    }
+
+    /// A click on a reaction: on the bar at once, then on disk, then sent (ADR 0043, B).
+    ///
+    /// The rows are written one after another, each once the one before is on disk: a click
+    /// cancels the row the click before it left in the outbox, and two clicks reading the outbox
+    /// at once would each miss the other's row and could write an add *behind* the removal that
+    /// followed it. That is local work and takes no time; the drains run beside it, so a click
+    /// never waits for the network to reach the disk. A click that could not be written, or whose
+    /// drain saw its row refused, comes back off the bar — unless a later click on the same emoji
+    /// has moved it since.
+    /// - Parameters:
+    ///   - subjectID: The post's node id — the pull request's own for the description.
+    ///   - content: Which reaction.
+    ///   - currentlyReacted: Whether the bar shows the viewer's reaction on it now.
+    ///   - actions: The write helper.
+    func toggleReaction(
+        subjectID: String,
+        content: ReactionContent,
+        currentlyReacted: Bool,
+        actions: PullRequestActions
+    ) {
+        guard let summary else { return }
+        let key = ReactionKey(subjectID: subjectID, content: content)
+        let adding = !currentlyReacted
+        reactionOverlay[key] = adding
+        let previous = reactionWrites
+        reactionWrites = Task { [weak self] in
+            await previous?.value
+            guard let settling = await actions.react(
+                on: summary,
+                subjectID: subjectID,
+                content: content,
+                adding: adding
+            ) else {
+                self?.dropClick(key, ifStill: adding)
+                return
+            }
+            // Outside the chain: the next click's row is written without waiting for this drain.
+            Task { [weak self] in
+                switch await settling.value {
+                case .sent, .queued: break
+                case .parked, .failed: self?.dropClick(key, ifStill: adding)
+                }
+            }
+        }
+    }
+
+    /// Drops a click's key, unless a later click on the same emoji has moved it since.
+    private func dropClick(_ key: ReactionKey, ifStill adding: Bool) {
+        if reactionOverlay[key] == adding { reactionOverlay[key] = nil }
     }
 
     /// Shows one file in the diff viewer, scrolled to a line.
