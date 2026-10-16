@@ -352,6 +352,10 @@ public actor GitHubClient {
     /// Read newest first, at most five pages of 100. A longer conversation loses its *oldest*
     /// items and says so in ``PullRequestConversation/hasEarlierItems``, rather than losing the
     /// newest, which are the ones a reviewer is there to read.
+    ///
+    /// A page GitHub answered only in part is kept: a node it would not resolve (a reference
+    /// from a repository behind SAML enforcement) arrives as `null` and is dropped. Refusing
+    /// the page would leave that pull request's conversation unreadable on every fetch.
     /// - Parameters:
     ///   - repo: The repository.
     ///   - number: The pull request number.
@@ -376,7 +380,8 @@ public actor GitHubClient {
                     "before": cursor.map { GraphQLValue.string($0) } ?? .null,
                 ],
                 resource: "\(repo.fullName)#\(number) conversation",
-                isIdempotent: true
+                isIdempotent: true,
+                acceptsPartialData: true
             )
             guard let pullRequest = data.repository?.pullRequest else {
                 throw GitHubError.notFound(resource: "\(repo.fullName)#\(number)")
@@ -1650,12 +1655,18 @@ public actor GitHubClient {
     /// - Parameter isIdempotent: `true` for queries, `false` for mutations. GraphQL always
     ///   travels by `POST`, so the HTTP method cannot answer this: only the caller knows
     ///   whether replaying the document after a dropped connection is safe.
+    /// - Parameter acceptsPartialData: `true` to keep the `data` of an answer that also carries
+    ///   `errors`. GitHub nulls what it would not resolve (a node behind SAML enforcement) and
+    ///   answers the rest. Only the conversation read sets it (ADR 0043), because its mapper
+    ///   drops the nulled nodes; every other read would rather fail than act on half an answer.
+    ///   A rate limit throws either way.
     private func graphQL<Payload: Decodable>(
         document: String,
         variables: [String: GraphQLValue],
         resource: String,
         isIdempotent: Bool,
-        cacheKey: String? = nil
+        cacheKey: String? = nil,
+        acceptsPartialData: Bool = false
     ) async throws -> Payload {
         let body = try RESTJSON.encodeGraphQL(
             GraphQLRequestBody(query: document, variables: variables)
@@ -1676,6 +1687,9 @@ public actor GitHubClient {
             let messages = errors.compactMap(\.message)
             if errors.contains(where: { $0.type == "RATE_LIMITED" }) {
                 throw GitHubError.rateLimited(retryAfter: nil, resetAt: latestRateLimit?.resetAt)
+            }
+            if acceptsPartialData, let data = envelope.data {
+                return data
             }
             throw GitHubError.graphQL(messages: messages.isEmpty ? ["Unknown error"] : messages)
         }

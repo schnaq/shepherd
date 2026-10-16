@@ -29,17 +29,18 @@ final class ConversationParsingTests: XCTestCase {
     func testMapsEveryItemKindInGitHubsOrder() async throws {
         let conversation = try await read("pull-conversation").conversation
 
-        // Twenty-two types in the table, in the order GitHub sent them; the `SubscribedEvent`
-        // between the comment and the review is not one of them and is gone.
-        XCTAssertEqual(conversation.items.count, 22)
+        // All twenty-two types in the table, reviews and cross-references twice, in the order
+        // GitHub sent them; the `SubscribedEvent` between the comment and the first review is
+        // not one of them and is gone.
+        XCTAssertEqual(conversation.items.count, 24)
         XCTAssertEqual(conversation.items.map(\.id), [
             "LE_kwDOLabeled", "AE_kwDOAssigned", "RRE_kwDORequested", "IC_kwDOCommentOne",
             "PRR_kwDOReviewOne", "HRFPE_kwDOForcePushed", "RDE_kwDODismissed",
             "RRRE_kwDORequestRemoved", "ULE_kwDOUnlabeled", "UAE_kwDOUnassigned",
             "RTE_kwDORenamed", "CTDE_kwDODraft", "RFRE_kwDOReady", "CRE_kwDOCrossReferenced",
-            "BRCE_kwDOBaseChanged", "AMEE_kwDOAutoMergeOn", "AMDE_kwDOAutoMergeOff",
-            "CE_kwDOClosed", "REE_kwDOReopened", "ME_kwDOMerged", "HRDE_kwDOBranchDeleted",
-            "HRRE_kwDOBranchRestored",
+            "CRE_kwDOIssueReference", "BRCE_kwDOBaseChanged", "AMEE_kwDOAutoMergeOn",
+            "AMDE_kwDOAutoMergeOff", "CE_kwDOClosed", "REE_kwDOReopened", "ME_kwDOMerged",
+            "HRDE_kwDOBranchDeleted", "HRRE_kwDOBranchRestored", "PRR_kwDOReviewPending",
         ])
     }
 
@@ -83,13 +84,22 @@ final class ConversationParsingTests: XCTestCase {
         XCTAssertEqual(review.commitOid, "1111111111111111111111111111111111111111")
         XCTAssertEqual(review.databaseID, 3001)
         XCTAssertEqual(review.bodyMarkdown, "The store should not force-unwrap the token.")
-        XCTAssertFalse(review.isEdited)
+        XCTAssertTrue(review.isEdited)
         XCTAssertEqual(
             review.url,
             URL(string: "https://github.com/schnaq/review/pull/128#pullrequestreview-3001")
         )
         XCTAssertEqual(review.reactions, [ReactionGroup(content: .rocket, count: 1)])
         XCTAssertTrue(review.viewerCanUpdate)
+
+        // The viewer's pending review has no submission yet, so its creation dates it.
+        guard case .review(let pending)? = conversation.items.first(where: {
+            $0.id == "PRR_kwDOReviewPending"
+        }) else { return XCTFail("the pending review is missing") }
+        XCTAssertEqual(pending.createdAt, GitHubTimestamp.parse("2026-08-31T09:10:00Z"))
+        XCTAssertEqual(pending.state, .pending)
+        XCTAssertFalse(pending.isEdited)
+        XCTAssertTrue(pending.reactions.isEmpty)
 
         // The other verdicts, and a word this build does not know, which claims nothing.
         XCTAssertEqual(ResponseMapping.reviewState("APPROVED"), .approved)
@@ -160,6 +170,19 @@ final class ConversationParsingTests: XCTestCase {
                     isPullRequest: true,
                     url: URL(string: "https://github.com/schnaq/shepherd-web/pull/7")
                 ),
+                willClose: false
+            )
+        )
+        XCTAssertEqual(
+            event("CRE_kwDOIssueReference")?.event,
+            .crossReferenced(
+                ConversationReference(
+                    repo: RepoRef(owner: "schnaq", name: "review"),
+                    number: 142,
+                    title: "Uploads fail silently",
+                    isPullRequest: false,
+                    url: URL(string: "https://github.com/schnaq/review/issues/142")
+                ),
                 willClose: true
             )
         )
@@ -199,7 +222,10 @@ final class ConversationParsingTests: XCTestCase {
             #""__typename":"ReviewRequestedEvent","requestedReviewer":{"__typename":"Team"}"#,
             #""__typename":"ReviewRequestRemovedEvent""#,
             #""__typename":"RenamedTitleEvent","previousTitle":"WIP: token store""#,
+            #""__typename":"RenamedTitleEvent","currentTitle":"Refactor the token store""#,
             #""__typename":"CrossReferencedEvent","source":{"__typename":"Issue","title":"x"}"#,
+            #""__typename":"CrossReferencedEvent","source":{"number":7}"#,
+            #""__typename":"CrossReferencedEvent","source":{"number":7,"repository":{"name":"x"}}"#,
             #""label":{"name":"agent"}"#,
         ] {
             XCTAssertNil(try item(#"{\#(stamp),\#(fields)}"#), fields)
@@ -236,6 +262,57 @@ final class ConversationParsingTests: XCTestCase {
             XCTFail("expected notFound")
         } catch GitHubError.notFound {
             // Expected: the same answer the head probe gives.
+        }
+    }
+
+    // MARK: - Partial answers
+
+    func testAConversationWithAFailedNodeKeepsEverythingElse() async throws {
+        // GitHub refused two nodes (behind SAML enforcement) and answered the rest. Refusing
+        // the whole page would leave this pull request's tab empty on every fetch.
+        let conversation = try await read("pull-conversation-partial").conversation
+
+        XCTAssertEqual(conversation.items.map(\.id), ["IC_kwDOBefore", "IC_kwDOAfter"])
+        XCTAssertTrue(conversation.viewerCanReact)
+    }
+
+    func testARateLimitedConversationReadStillFails() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "ShepherdPullRequestConversation",
+            Fixture.response(json: """
+            {"data":{"repository":{"pullRequest":{"timelineItems":{"nodes":[]}}}},
+             "errors":[{"type":"RATE_LIMITED","message":"API rate limit exceeded"}]}
+            """)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            _ = try await client.pullRequestConversation(repo: repo, number: 128)
+            XCTFail("expected rateLimited")
+        } catch GitHubError.rateLimited {
+            // Expected: a rate limit is not a partial answer.
+        }
+    }
+
+    func testOtherReadsStillRefuseAPartialAnswer() async throws {
+        // The conversation is the only read that keeps half an answer; the head probe that
+        // guards a review submission must not act on one.
+        let transport = MockTransport()
+        await transport.route(
+            "ShepherdPullRequestHead",
+            Fixture.response(json: """
+            {"data":{"repository":{"pullRequest":{"id":"PR_kwDOAgentOne","headRefOid":"3f1a9c0d"}}},
+             "errors":[{"type":"FORBIDDEN","message":"Resource protected by SAML enforcement."}]}
+            """)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            _ = try await client.headRefOid(repo: repo, number: 128)
+            XCTFail("expected a GraphQL error")
+        } catch GitHubError.graphQL {
+            // Expected: no change for every read that keeps the default.
         }
     }
 

@@ -52,7 +52,7 @@ final class DetailParsingTests: XCTestCase {
 
         let detail = try await client.pullRequestDetail(repo: repo, number: 128)
 
-        XCTAssertEqual(detail.conversation?.items.count, 22)
+        XCTAssertEqual(detail.conversation?.items.count, 24)
         XCTAssertEqual(detail.conversation?.viewerCanReact, true)
         XCTAssertEqual(detail.files.count, 4)
         XCTAssertEqual(detail.threads.count, 2)

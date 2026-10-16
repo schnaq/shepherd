@@ -72,7 +72,7 @@
               "state": "CHANGES_REQUESTED",
               "createdAt": "2026-08-31T07:00:00Z",
               "submittedAt": "2026-08-31T07:15:00Z",
-              "lastEditedAt": null,
+              "lastEditedAt": "2026-08-31T07:20:00Z",
               "url": "https://github.com/schnaq/review/pull/128#pullrequestreview-3001",
               "author": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" },
               "viewerCanUpdate": true,
@@ -143,13 +143,27 @@
               "id": "CRE_kwDOCrossReferenced",
               "createdAt": "2026-08-31T08:25:00Z",
               "actor": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" },
-              "willCloseTarget": true,
+              "willCloseTarget": false,
               "source": {
                 "__typename": "PullRequest",
                 "number": 7,
                 "title": "Use the new token store",
                 "url": "https://github.com/schnaq/shepherd-web/pull/7",
                 "repository": { "name": "shepherd-web", "owner": { "login": "schnaq" } }
+              }
+            },
+            {
+              "__typename": "CrossReferencedEvent",
+              "id": "CRE_kwDOIssueReference",
+              "createdAt": "2026-08-31T08:26:00Z",
+              "actor": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" },
+              "willCloseTarget": true,
+              "source": {
+                "__typename": "Issue",
+                "number": 142,
+                "title": "Uploads fail silently",
+                "url": "https://github.com/schnaq/review/issues/142",
+                "repository": { "name": "review", "owner": { "login": "schnaq" } }
               }
             },
             {
@@ -204,6 +218,21 @@
               "id": "HRRE_kwDOBranchRestored",
               "createdAt": "2026-08-31T09:05:00Z",
               "actor": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" }
+            },
+            {
+              "__typename": "PullRequestReview",
+              "id": "PRR_kwDOReviewPending",
+              "databaseId": 3002,
+              "body": "",
+              "state": "PENDING",
+              "createdAt": "2026-08-31T09:10:00Z",
+              "submittedAt": null,
+              "lastEditedAt": null,
+              "url": "https://github.com/schnaq/review/pull/128#pullrequestreview-3002",
+              "author": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" },
+              "viewerCanUpdate": true,
+              "reactionGroups": [],
+              "commit": { "oid": "3f1a9c0d5b7e2a4c6d8f0b1a2c3e4d5f60718293" }
             }
           ]
         }
