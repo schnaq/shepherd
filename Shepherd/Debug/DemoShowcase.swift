@@ -216,6 +216,10 @@ enum ShowcaseFiles {
         ]
     }
 
+    /// The review that started the first thread, which the conversation (``DemoSeed``) shows as
+    /// Sophie's request for changes — so the thread is drawn under it (ADR 0043).
+    static let changesRequestedReviewID = "PRR_demo_changes"
+
     /// Three threads: an open question to the agent, a resolved one, and the viewer's own.
     static func threads(author: Actor, reviewer: Actor, other: Actor) -> [ReviewThread] {
         let viewer = Actor(login: DemoSeed.viewerLogin, displayName: "Jonas Weber", kind: .human)
@@ -225,7 +229,7 @@ enum ShowcaseFiles {
                 path: rowWriteState.path,
                 line: 62,
                 comments: [
-                    comment("RC_demo_1", 9001, reviewer, hoursAgo: 1.5, """
+                    comment("RC_demo_1", 9001, reviewer, hoursAgo: 1.5, review: changesRequestedReviewID, """
                         Is `merging` above `parked` what we want? A parked review on a pull request \
                         that is being merged is the one case where the reviewer still has to act.
                         """),
@@ -262,11 +266,15 @@ enum ShowcaseFiles {
         ]
     }
 
+    /// One thread comment. Every comment belongs to a review on GitHub; one the conversation does
+    /// not list — a reply, which GitHub leaves out of the timeline — gets a review of its own, so
+    /// a thread it starts is drawn on its own in the stream.
     private static func comment(
         _ id: String,
         _ databaseID: Int,
         _ author: Actor,
         hoursAgo: Double,
+        review: String? = nil,
         _ body: String
     ) -> ReviewComment {
         ReviewComment(
@@ -274,7 +282,8 @@ enum ShowcaseFiles {
             databaseID: databaseID,
             author: author,
             bodyMarkdown: body,
-            createdAt: Date().addingTimeInterval(-hoursAgo * 3_600)
+            createdAt: Date().addingTimeInterval(-hoursAgo * 3_600),
+            reviewID: review ?? "PRR_\(id)"
         )
     }
 

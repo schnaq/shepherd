@@ -132,9 +132,20 @@ Names are normative; fields listed are the required minimum.
   apart
 - `PullRequestDetail` — summary + `bodyMarkdown`, `commits: [CommitInfo]`,
   `files: [ChangedFile]`, `threads: [ReviewThread]`, `timeline: [TimelineEvent]`,
-  `checks: [CheckRun]`, `closingIssues: [LinkedIssueReference]`. Its decoding is tolerant of
-  every list being absent and of the summary alone being present, which is what lets a record
-  encoded before a field existed still decode (ADR 0032's Sprint 3 amendment)
+  `checks: [CheckRun]`, `closingIssues: [LinkedIssueReference]`,
+  `conversation: PullRequestConversation?`. Its decoding is tolerant of every list being absent
+  and of the summary alone being present, which is what lets a record encoded before a field
+  existed still decode (ADR 0032's Sprint 3 amendment). A `nil` conversation means the read did
+  not happen or failed — *unknown*, not empty (ADR 0043)
+- `PullRequestConversation` (`Models/Conversation.swift`) — the conversation tab's model
+  (ADR 0043): the description's `descriptionReactions`, `isDescriptionEdited`,
+  `viewerCanUpdateDescription` and `viewerCanReact`; `items: [ConversationItem]`, oldest first;
+  and `hasEarlierItems` when the newest-first read stopped before the start. An item is a
+  `ConversationComment`, a `ConversationReview` (with its `State`) or a `ConversationEventItem`,
+  whose `ConversationEvent` is an enum of values — a label's name, a title's two spellings, a
+  branch, a `ConversationReference` — and never words, which are the app's. Reactions are
+  `[ReactionGroup]` (`content: ReactionContent`, `count`, `viewerHasReacted`), only the groups
+  somebody used
 - `LinkedIssueReference` (`Models/Issue.swift`) — an issue a pull request will close: `repo`,
   `number`, `title`, `state: IssueSummary.State`. `LinkedPullRequestReference`'s mirror image and
   deliberately not an `IssueRowSummary` — `closingIssuesReferences` carries four fields, the issue
@@ -145,7 +156,10 @@ Names are normative; fields listed are the required minimum.
   `isViewed: Bool` (local state)
 - `ReviewThread` — `id`, `path?`, `line?`, `side` (`.left/.right`), `isResolved`,
   `isOutdated`, `comments: [ReviewComment]`
-- `ReviewComment` — `id`, `author: Actor`, `bodyMarkdown`, `createdAt`, `pendingLocalID?`
+- `ReviewComment` — `id`, `databaseID?`, `author: Actor`, `bodyMarkdown`, `createdAt`,
+  `pendingLocalID?`, and since ADR 0043 `reviewID?` (the review it was submitted in, which places
+  its thread in the conversation), `reactions: [ReactionGroup]`, `viewerCanUpdate`,
+  `viewerCanDelete`, `isEdited`, `url?`
 - `ReviewDraft` — local pending review: `prID`, `verdict?` (`.approve/.requestChanges/.comment`),
   `summaryBody`, `comments: [DraftComment]`, `basedOnHeadOid` (staleness check)
 - `DraftComment` — `localID` (UUID), `path`, `line`, `side`, `startLine?`, `body`
@@ -168,6 +182,13 @@ Pure logic in `ShepherdCore` (all unit-tested):
   Reasons are human-readable strings shown in the UI. `category(of:)` and `isLockfile(_:)` are the
   public classifications other features borrow rather than restate (ADR 0026).
 - `InboxGrouper` — sections by facet (provenance / repo / review state) + sorting.
+- `ConversationTimeline.entries(conversation:commits:threads:) -> [ConversationEntry]`
+  (`Review/`) — the conversation tab's stream (ADR 0043). GitHub's items keep GitHub's order; the
+  REST commits are slotted in by date and run together into groups; a thread hangs under the
+  review its first comment was submitted in, or stands alone at its first comment when that
+  review is not in the timeline; a wordless `COMMENT` review without threads is left out, and so
+  is the `ClosedEvent` GitHub records with every merge. Pure, so it applies to a stored
+  conversation as much as to a fresh one.
 - `Claim` / `ClaimExtractor` / `EvidenceChecker` / `ClaimsEvidenceReport` (`Claims/`) — the whole
   of "what it says beside what Shepherd found" as values (ADR 0026).
   `ClaimExtractor.extract(from:) -> [Claim]` reads four claim shapes (`testsAdded`,
@@ -453,8 +474,8 @@ Tables mirror core models (`repos`, `pull_requests`, `changed_files`, `review_th
 `review_comments`, `review_drafts`, `draft_comments`, `check_runs`, `sync_state`, `outbox`,
 `etags`, `viewed_files`, `agent_registry_overrides`, `search_index`, `triage_verdicts`,
 `review_snapshots`, `pull_request_outcomes`, `issues`, `issue_search_index`,
-`issue_linked_pull_requests`, `pull_request_closing_issues`).
-Append-only migrator — currently `v1` through `v7`. `v3` is the search index (ADR 0019: one
+`issue_linked_pull_requests`, `pull_request_closing_issues`, `pull_request_conversations`).
+Append-only migrator — currently `v1` through `v11`. `v3` is the search index (ADR 0019: one
 row per pull request holding the document hash, the model identifier and a `Float32` vector, pruned
 by an `ON DELETE CASCADE` onto `pull_requests` rather than by a sweep of its own); `v4` is
 `triage_verdicts` (ADR 0023: one row per pull request holding `kind`, `risk`, the one-sentence
@@ -502,6 +523,26 @@ a node id, and it exists because a link is written the way GitHub writes it, `ow
 `SearchIndexStore` operation for operation and reports through the same `SearchIndexStatistics`.
 `DatabaseManager.changedFilePaths(prIDs:)` reads the cached diffs' paths and statuses **without**
 their patches, which is all the trust lane's sensitive-path exclusion needs.
+
+`v11` is the conversation tab (ADR 0043): one new table, and six columns on `review_comments` that
+are each nullable or default to `0`, so a comment stored before it reads back as "never read" and
+the next detail fetch fills it in. The new table's two columns are `NOT NULL`: it starts empty,
+and a row is only ever written whole.
+
+- `pull_request_conversations` — the `PullRequestConversation` as one JSON document, keyed by
+  `prID` (`json NOT NULL`) and pruned by an `ON DELETE CASCADE` onto `pull_requests`. A table of
+  its own rather than a `pull_requests` column like `timelineJSON`, because the inbox query reads
+  every row of that table whole on every observation and a conversation is up to five pages of
+  comment bodies. A sweep's upsert never touches it. No row means *unknown*, not empty: a detail
+  fetch that read no conversation leaves the row alone, while a fetched empty one replaces it.
+- `review_comments.reviewID` — the node id of the review the comment was submitted in; the first
+  comment's places a thread under its review.
+- `review_comments.reactionsJSON` — the comment's `[ReactionGroup]`.
+- `review_comments.viewerCanUpdate` — whether GitHub lets the viewer edit it.
+- `review_comments.viewerCanDelete` — whether GitHub lets the viewer delete it.
+- `review_comments.isEdited` — whether it was edited after it was posted.
+- `review_comments.url` — the comment on github.com.
+
 `ValueObservation` publishers feed the UI. The **outbox** stores every outbound mutation (submit review, reply,
 resolve, merge — and, since ADR 0032's Sprint 4a amendment, comment on / label / assign / close /
 reopen an *issue*) as a row with retry/backoff state so writes survive crash/offline. There is no

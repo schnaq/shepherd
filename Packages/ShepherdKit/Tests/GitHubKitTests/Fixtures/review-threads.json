@@ -20,6 +20,14 @@
                     "databaseId": 987654321,
                     "body": "This should not force-unwrap.",
                     "createdAt": "2026-08-31T07:00:00Z",
+                    "lastEditedAt": "2026-08-31T07:05:00Z",
+                    "url": "https://github.com/schnaq/review/pull/128#discussion_r987654321",
+                    "viewerCanUpdate": true,
+                    "viewerCanDelete": true,
+                    "pullRequestReview": { "id": "PRR_kwDOReviewOne" },
+                    "reactionGroups": [
+                      { "content": "THUMBS_UP", "viewerHasReacted": true, "reactors": { "totalCount": 1 } }
+                    ],
                     "author": {
                       "__typename": "User",
                       "login": "octocat",

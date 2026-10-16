@@ -42,6 +42,7 @@ public enum MarkdownDocument {
         var paragraph: [String] = []
         var quote: [String] = []
         var fence: (language: String?, lines: [String])?
+        var isInHTMLComment = false
 
         func flushParagraph() {
             guard !paragraph.isEmpty else { return }
@@ -58,14 +59,16 @@ public enum MarkdownDocument {
             flushQuote()
         }
 
-        for rawLine in markdown.components(separatedBy: .newlines) {
-            let line = rawLine.replacingOccurrences(of: "\t", with: "    ")
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-
+        // Split on any line break rather than on `CharacterSet.newlines`: whatever was typed on
+        // github.com arrives with CRLF, which Swift reads as *one* character and the character set
+        // as two — so every line break became a paragraph break, and a fence gained a blank line
+        // between every two lines of its code.
+        for piece in markdown.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline) {
+            let rawLine = String(piece)
             // Inside a fence every line is literal until the closing fence, which is the whole
             // point of a fence: a `#` in a shell snippet is a comment and a `-` is a flag.
             if var open = fence {
-                if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
+                if isFence(rawLine) {
                     blocks.append(.codeBlock(code: open.lines.joined(separator: "\n"), language: open.language))
                     fence = nil
                 } else {
@@ -75,7 +78,16 @@ public enum MarkdownDocument {
                 continue
             }
 
-            if trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~") {
+            // Outside a fence, the few HTML shapes GitHub renders and bots write (ADR 0043). A line
+            // that was markup and nothing else is skipped without ending the paragraph around it.
+            let unwrapped = unwrappingHTML(in: rawLine, isInComment: &isInHTMLComment)
+            let line = unwrapped.replacingOccurrences(of: "\t", with: "    ")
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty, unwrapped != rawLine {
+                continue
+            }
+
+            if isFence(trimmed) {
                 flushProse()
                 let info = String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)
                 fence = (language: info.isEmpty ? nil : info, lines: [])
@@ -124,6 +136,159 @@ public enum MarkdownDocument {
         flushProse()
         return blocks
     }
+
+    /// A body as a Markdown quote: `> ` in front of every line and `>` on every blank one, so a
+    /// quoted paragraph break stays inside the quote.
+    ///
+    /// What *Quote reply* puts into the comment field and what a delegation task quotes a review
+    /// comment as. Split on any line break rather than on `"\n"`, for ``blocks(from:)``'s reason:
+    /// a body typed on github.com arrives with CRLF, a split on `"\n"` alone found no line break in
+    /// it at all, and only the first paragraph went out quoted.
+    ///
+    /// HTML comments are left out, by the rules ``blocks(from:)`` hides them by — outside code
+    /// spans and fences — and a line that was a comment and nothing else goes with it rather than
+    /// leaving a bare `>` behind. A bot's `<!-- marker -->` is how it finds its own comment again,
+    /// and the reviewer's reply is not it.
+    /// - Parameter markdown: The body as Markdown source.
+    /// - Returns: The quote, without a trailing line break.
+    public static func quoted(_ markdown: String) -> String {
+        var lines: [String] = []
+        var isInFence = false
+        var isInComment = false
+        for piece in markdown.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline) {
+            let line = String(piece)
+            if isInFence {
+                if isFence(line) { isInFence = false }
+                lines.append(line)
+                continue
+            }
+            let text = removingComments(from: line, isInComment: &isInComment) { $0 }
+            if text != line, text.trimmingCharacters(in: .whitespaces).isEmpty { continue }
+            if isFence(text) { isInFence = true }
+            lines.append(text)
+        }
+        return lines.joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+            .map { $0.isEmpty ? ">" : "> \($0)" }
+            .joined(separator: "\n")
+    }
+
+    /// Whether a line opens or closes a fenced code block.
+    private static func isFence(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        return trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~")
+    }
+
+    // MARK: - HTML
+
+    /// One line with the HTML GitHub renders and this parser would otherwise print taken care of:
+    /// `<!-- comments -->` vanish (``removingComments(from:isInComment:prose:)``), `<br>` breaks
+    /// the line, and `<details>` and `<summary>` unwrap — the summary into a bold line — when they
+    /// stand on a line of their own, which is how bots write them. Every other tag is left exactly
+    /// as written — a `<kbd>` shown as text says more than one dropped.
+    ///
+    /// Nothing inside a code span is touched, and neither is a `<details>` in the middle of a
+    /// sentence: a review that names the `<br>` tag in backticks is writing *about* the tag, and
+    /// rewriting it left an empty pair of backticks where the tag's name had been.
+    /// - Parameters:
+    ///   - line: The line as written.
+    ///   - isInComment: Whether an HTML comment is open, carried from line to line.
+    /// - Returns: The line without that markup; the same string when it had none.
+    private static func unwrappingHTML(in line: String, isInComment: inout Bool) -> String {
+        guard isInComment || line.contains("<") else { return line }
+        if !isInComment, let markup = wholeLineMarkup(line.trimmingCharacters(in: .whitespaces)) {
+            return markup
+        }
+        return removingComments(from: line, isInComment: &isInComment, prose: lineBreak.applied(to:))
+    }
+
+    /// One line without its HTML comments, with `prose` applied to what is left outside code spans.
+    ///
+    /// A comment that ends on its own line vanishes wherever it stands. One that opens a line and
+    /// does not end on it runs on to the line that ends it, as on GitHub — which is how a bot hides
+    /// a block of its state. A `<!--` further along a line with no `-->` after it is prose: "Use
+    /// <!-- to start a comment" is about the syntax, and read as an open comment it swallowed the
+    /// rest of the body. Inside a code span nothing is a comment.
+    /// - Parameters:
+    ///   - line: The line as written.
+    ///   - isInComment: Whether an HTML comment is open, carried from line to line.
+    ///   - prose: What becomes of the text outside comments and code spans.
+    /// - Returns: The line without its comments; the same string when it had none.
+    private static func removingComments(
+        from line: String,
+        isInComment: inout Bool,
+        prose: (String) -> String
+    ) -> String {
+        guard isInComment || line.contains("<") else { return line }
+        var text = ""
+        var rest = Substring(line)
+        while !rest.isEmpty {
+            if isInComment {
+                // Inside a comment a backtick is comment text, not the start of code.
+                guard let end = rest.range(of: "-->") else { break }
+                rest = rest[end.upperBound...]
+                isInComment = false
+                continue
+            }
+            // Prose runs to whichever opens first: a comment, or a code span.
+            let tick = rest.firstIndex(of: "`")
+            if let open = rest.range(of: "<!--"), tick.map({ open.lowerBound < $0 }) ?? true {
+                if let end = rest[open.upperBound...].range(of: "-->") {
+                    text += prose(String(rest[..<open.lowerBound]))
+                    rest = rest[end.upperBound...]
+                } else if line[..<open.lowerBound].allSatisfy(\.isWhitespace) {
+                    isInComment = true
+                    break
+                } else {
+                    text += prose(String(rest[..<open.upperBound]))
+                    rest = rest[open.upperBound...]
+                }
+            } else if let tick {
+                text += prose(String(rest[..<tick]))
+                // The span, backticks and all, as written; one left open runs to the line's end.
+                let afterTick = rest.index(after: tick)
+                let end = rest[afterTick...].firstIndex(of: "`").map { rest.index(after: $0) } ?? rest.endIndex
+                text += rest[tick..<end]
+                rest = rest[end...]
+            } else {
+                text += prose(String(rest))
+                break
+            }
+        }
+        return text.hasSuffix("\n") ? String(text.dropLast()) : text
+    }
+
+    /// What a line that is `<details>` or `<summary>` markup and nothing else becomes: nothing, or
+    /// its summary as a bold line.
+    ///
+    /// The label is bold as a whole, so the emphasis tags bots put inside it go, and a `<code>`
+    /// becomes the code span it is.
+    /// - Parameter trimmed: The line, without its surrounding spaces.
+    /// - Returns: The replacement, or `nil` when the line is more than that markup.
+    private static func wholeLineMarkup(_ trimmed: String) -> String? {
+        if lonelyTagLine.matches(trimmed) { return "" }
+        guard let label = summaryLine.firstCapture(in: trimmed) else { return nil }
+        let text = labelCode.applied(to: labelEmphasis.applied(to: label)).trimmingCharacters(in: .whitespaces)
+        return text.isEmpty ? "" : "**\(text)**"
+    }
+
+    /// `<b>`, `<strong>`, `<i>` and `<em>`, opening or closing.
+    private static let labelEmphasis = InlineRewrite(#"(?i)</?(?:b|strong|i|em)>"#, template: "")
+
+    /// `<code>` and `</code>`, each the backtick it stands for.
+    private static let labelCode = InlineRewrite(#"(?i)</?code>"#, template: "`")
+
+    /// `<details>`, `<details open>`, `</details>`, and a `<summary>` or `</summary>` whose label
+    /// is on the lines between them.
+    private static let lonelyTagLine = ClaimPattern(#"^</?(?:details(?:\s[^>]*)?|summary)>$"#)
+
+    /// `<summary>label</summary>`, with the `<details>` that opens it in front where a bot wrote
+    /// both on one line.
+    private static let summaryLine = ClaimPattern(#"^(?:<details(?:\s[^>]*)?>\s*)?<summary>(.*)</summary>$"#)
+
+    /// `<br>`, `<br/>` and `<br />`.
+    private static let lineBreak = InlineRewrite(#"(?i)<br\s*/?>"#, template: "\n")
 
     // MARK: - Line shapes
 

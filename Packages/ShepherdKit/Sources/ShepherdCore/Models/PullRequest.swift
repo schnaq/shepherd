@@ -336,6 +336,10 @@ public struct PullRequestDetail: Sendable, Codable, Hashable, Identifiable {
     /// (`GitHubClient.pullRequestDetail(repo:number:)`) — the "Closes" section is simply not
     /// drawn either way.
     public var closingIssues: [LinkedIssueReference]
+    /// GitHub's timeline and the description's reactions (ADR 0043), or `nil` when the read was
+    /// not made or failed — which the store treats as "unknown" and does not write over the copy
+    /// it already holds.
+    public var conversation: PullRequestConversation?
 
     /// Creates a detail record.
     public init(
@@ -346,7 +350,8 @@ public struct PullRequestDetail: Sendable, Codable, Hashable, Identifiable {
         threads: [ReviewThread] = [],
         timeline: [TimelineEvent] = [],
         checks: [CheckRun] = [],
-        closingIssues: [LinkedIssueReference] = []
+        closingIssues: [LinkedIssueReference] = [],
+        conversation: PullRequestConversation? = nil
     ) {
         self.summary = summary
         self.bodyMarkdown = bodyMarkdown
@@ -356,6 +361,7 @@ public struct PullRequestDetail: Sendable, Codable, Hashable, Identifiable {
         self.timeline = timeline
         self.checks = checks
         self.closingIssues = closingIssues
+        self.conversation = conversation
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -367,6 +373,7 @@ public struct PullRequestDetail: Sendable, Codable, Hashable, Identifiable {
         case timeline
         case checks
         case closingIssues
+        case conversation
     }
 
     /// Decodes a detail record, tolerating every list being absent.
@@ -389,6 +396,10 @@ public struct PullRequestDetail: Sendable, Codable, Hashable, Identifiable {
             [LinkedIssueReference].self,
             forKey: .closingIssues
         ) ?? []
+        conversation = try container.decodeIfPresent(
+            PullRequestConversation.self,
+            forKey: .conversation
+        )
     }
 
     /// `PullRequestDetail` shares the identity of its ``summary``.

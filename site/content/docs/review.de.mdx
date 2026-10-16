@@ -10,7 +10,7 @@ description: Einen Diff lesen, Zeilen kommentieren, ein Urteil abschicken, und w
 Der Review-Bildschirm hat zwei Tabs. Mit `t` wechselst du zwischen ihnen.
 
 - **Dateien** zeigt die geänderten Dateien und den Diff.
-- **Unterhaltung** zeigt Beschreibung, Commits, Checks und Review-Threads.
+- **Unterhaltung** zeigt die ganze Unterhaltung wie auf GitHub: Beschreibung, alle Kommentare und Reviews, Review-Threads, Commits, Ereignisse und Checks.
 
 Ein Agent-Pull-Request öffnet auf **Unterhaltung**, wenn seine Beschreibung etwas behauptet, zum Beispiel hinzugefügte Tests oder keine Breaking Changes. Alles andere öffnet auf **Dateien**. Schalte das unter Einstellungen → Darstellung mit **Pull Requests von Agents auf „Conversation“ öffnen** aus.
 
@@ -99,7 +99,7 @@ Meldet GitHub, dass der Pull Request während des Lesens aktualisiert wurde, zei
 
 ### Offline und die Outbox
 
-Beim Abschicken spricht Shepherd nicht direkt mit GitHub. Das Review kommt in eine lokale Warteschlange, die Outbox, und wird so schnell wie möglich gesendet. Sie übersteht einen Absturz und eine unterbrochene Verbindung. Die Warteschlange trägt auch Antworten, Thread-Auflösungen und Merges.
+Beim Abschicken spricht Shepherd nicht direkt mit GitHub. Das Review kommt in eine lokale Warteschlange, die Outbox, und wird so schnell wie möglich gesendet. Sie übersteht einen Absturz und eine unterbrochene Verbindung. Die Warteschlange trägt auch Kommentare, Antworten, Thread-Auflösungen und Merges.
 
 Ein Hinweis sagt dir, in welchem Fall du bist:
 
@@ -119,6 +119,25 @@ Ein Review ist an den Head-Commit gebunden, auf dem du es geschrieben hast. Beko
 Dein Draft bleibt erhalten. Die Titelleiste und Einstellungen → Sync zählen das Review weiter als **nicht gesendet**, bis du dich darum gekümmert hast, und du bekommst eine Mitteilung **Review nicht gesendet**. Wurden in einem Sweep mehrere Reviews geparkt, kommen die Hinweise nacheinander.
 
 Ein schnelles Urteil ohne Inline-Kommentare ist an den Head gebunden, den du beim Klicken gesehen hast. Inline-Kommentare behalten den Commit, auf dem du sie geschrieben hast.
+
+## Die Unterhaltung
+
+Der Tab **Unterhaltung** liest sich wie die Seite des Pull Requests auf GitHub. Von oben nach unten:
+
+1. Die Beschreibung, als erster Beitrag.
+2. Alles, was passiert ist, das Älteste zuerst: Kommentare, Reviews mit ihrem Text, Commits und Ereignisse wie Labels, angeforderte Reviews, Force-Pushes, geänderte Titel, Merges und Schließungen.
+3. Die Checks.
+4. Ein Kommentarfeld.
+
+Ein Review zeigt die Threads, die es begonnen hat, jeweils mit Datei und Zeile. **Im Diff zeigen** öffnet die Zeile im Tab Dateien. Aufgelöste und veraltete Threads sind zuerst eingeklappt. **Antworten**, **Auflösen** und **Delegieren…** funktionieren wie im Diff.
+
+Schreib in das Feld unten und klicke auf **Kommentieren** oder drücke `⌘⏎`. **Kommentieren & schließen** schickt deinen Kommentar und schließt den Pull Request. Ist das Feld leer, heißt der Button **Ohne Kommentar schließen**. Gespeicherte Antworten und Screenshots per ⌘V funktionieren auch hier. Ein Kommentar, den du offline schreibst, wartet wie ein Review in der Outbox.
+
+Um auf einen Beitrag zu antworten, öffne sein **⋯**-Menü und wähle **Mit Zitat antworten**. Der Beitrag landet als Zitat im Kommentarfeld. Im selben Menü findest du **Link kopieren** und **Auf GitHub öffnen**.
+
+Reaktionen stehen unter jedem Beitrag. Ein Kommentar, den jemand auf GitHub ausgeblendet hat, ist zuerst eingeklappt. Mit **Zeigen** liest du ihn.
+
+Neue Kommentare kommen mit dem nächsten Abgleich, so wie neue Checks. Eine sehr lange Unterhaltung zeigt ihre neuesten 500 Einträge und einen Link zum Rest auf GitHub.
 
 ## Seit deinem Review
 

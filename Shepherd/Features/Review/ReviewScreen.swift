@@ -732,7 +732,7 @@ struct ReviewToolbar: ToolbarContent {
             Button(action: onDelegate) {
                 Label(
                     String(localized: "Delegate…"),
-                    systemImage: "arrow.uturn.backward.badge.clock"
+                    systemImage: "terminal"
                 )
                 .labelStyle(.titleAndIcon)
                 // The agent colour the header's button had, on the label only: the capsule is
@@ -780,9 +780,19 @@ struct ReviewToolbar: ToolbarContent {
                 .labelStyle(.titleAndIcon)
                 .foregroundStyle(Theme.accentText)
             }
-            // ⌘⏎ came along from the composer bar, which used to hold the submit button.
-            .keyboardShortcut(.return, modifiers: .command)
-            .help(String(localized: "Submit review (⌘⏎)"))
+            // ⌘⏎ came along from the composer bar, which used to hold the submit button. While the
+            // conversation tab's comment field has the keyboard, it is *Post comment*'s instead.
+            .keyboardShortcut(
+                model.isConversationComposerFocused
+                    ? nil
+                    : KeyboardShortcut(.return, modifiers: .command)
+            )
+            // Without the shortcut while it is *Post comment*'s, so the tooltip drops it too.
+            .help(
+                model.isConversationComposerFocused
+                    ? String(localized: "Submit review")
+                    : String(localized: "Submit review (⌘⏎)")
+            )
             // Dark while a verdict is going out, so ⌘⏎ held down cannot open a second sheet onto
             // a review that is already on its way.
             .disabled(model.hasEndedOnGitHub || isSubmittingVerdict)

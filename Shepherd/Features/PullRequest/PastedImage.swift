@@ -55,6 +55,12 @@ enum PastedImage {
         text.contains(/!\[Uploading [^\]]*…\]\([0-9A-F-]{36}\)/)
     }
 
+    /// Whether a comment is worth sending: not blank, and no pasted image still uploading into it.
+    /// What every comment field's send button asks, so the fields cannot disagree about it.
+    static func isSendable(_ text: String) -> Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !containsPendingUpload(text)
+    }
+
     /// The image on the pasteboard, or `nil` when the paste is text — which the field then
     /// pastes as it always did.
     ///

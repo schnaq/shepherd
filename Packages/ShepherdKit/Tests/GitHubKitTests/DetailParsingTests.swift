@@ -42,6 +42,108 @@ final class DetailParsingTests: XCTestCase {
         XCTAssertEqual(detail.timeline.count, 5)
     }
 
+    func testDetailFetchCarriesTheConversation() async throws {
+        let transport = try await makeTransport()
+        await transport.route(
+            "ShepherdPullRequestConversation",
+            try Fixture.response("pull-conversation")
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let detail = try await client.pullRequestDetail(repo: repo, number: 128)
+
+        XCTAssertEqual(detail.conversation?.items.count, 24)
+        XCTAssertEqual(detail.conversation?.viewerCanReact, true)
+        XCTAssertEqual(detail.files.count, 4)
+        XCTAssertEqual(detail.threads.count, 2)
+    }
+
+    func testAConversationThatCannotBeReadLeavesTheDetailIntact() async throws {
+        // No route for the document: the mock answers 501. `nil` is "unknown", which the store
+        // does not write over the conversation it already holds (ADR 0043).
+        let transport = try await makeTransport()
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let detail = try await client.pullRequestDetail(repo: repo, number: 128)
+
+        XCTAssertNil(detail.conversation)
+        XCTAssertEqual(detail.number, 128)
+        XCTAssertEqual(detail.files.count, 4)
+        XCTAssertEqual(detail.threads.count, 2)
+    }
+
+    func testAPageWhoseItemsWereRefusedFailsTheRead() async throws {
+        // GitHub refused the whole connection: `nodes` is `null` beside an error, not an empty
+        // page. Kept, it would be stored over the conversation the store has and empty a chat
+        // on a transient error (ADR 0043); failed, the detail carries `nil`, "unknown".
+        let transport = try await makeTransport()
+        await transport.route(
+            "ShepherdPullRequestConversation",
+            Fixture.response(json: """
+            {"data":{"repository":{"pullRequest":{
+              "timelineItems":{"pageInfo":{"hasPreviousPage":false},"nodes":null}}}},
+             "errors":[{"type":"FORBIDDEN","message":"Resource protected by SAML enforcement."}]}
+            """)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            _ = try await client.pullRequestConversation(repo: repo, number: 128)
+            XCTFail("expected a GraphQL error")
+        } catch GitHubError.graphQL {
+            // Expected: a refused page fails the read rather than reading as an empty one.
+        }
+        let detail = try await client.pullRequestDetail(repo: repo, number: 128)
+        XCTAssertNil(detail.conversation)
+        XCTAssertEqual(detail.files.count, 4)
+        XCTAssertEqual(detail.threads.count, 2)
+    }
+
+    func testAPageOfNothingButNullsIsARefusedPageToo() async throws {
+        // Every node of the page refused, answered as a list of `null`s rather than as `null`.
+        // Kept, it would map to an empty page and empty the stored conversation (ADR 0043).
+        let transport = try await makeTransport()
+        await transport.route(
+            "ShepherdPullRequestConversation",
+            Fixture.response(json: """
+            {"data":{"repository":{"pullRequest":{
+              "timelineItems":{"pageInfo":{"hasPreviousPage":false},"nodes":[null,null]}}}},
+             "errors":[{"type":"FORBIDDEN","message":"Resource protected by SAML enforcement."}]}
+            """)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            _ = try await client.pullRequestConversation(repo: repo, number: 128)
+            XCTFail("expected a GraphQL error")
+        } catch GitHubError.graphQL {
+            // Expected: as refused as `nodes: null`.
+        }
+        let detail = try await client.pullRequestDetail(repo: repo, number: 128)
+        XCTAssertNil(detail.conversation)
+        XCTAssertEqual(detail.files.count, 4)
+        XCTAssertEqual(detail.threads.count, 2)
+    }
+
+    func testAnEmptyPageIsAnEmptyConversationRatherThanARefusedOne() async throws {
+        // A pull request nothing has happened on yet: `nodes: []` and no error. That is GitHub's
+        // answer, and it is stored; read as refused, every quiet pull request would stay "unknown".
+        let transport = try await makeTransport()
+        await transport.route(
+            "ShepherdPullRequestConversation",
+            Fixture.response(json: """
+            {"data":{"repository":{"pullRequest":{
+              "timelineItems":{"pageInfo":{"hasPreviousPage":false},"nodes":[]}}}}}
+            """)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let detail = try await client.pullRequestDetail(repo: repo, number: 128)
+
+        XCTAssertEqual(detail.conversation?.items, [])
+        XCTAssertEqual(detail.conversation?.hasEarlierItems, false)
+    }
+
     func testTheDetailFetchReadsMergeStateStatusFromRESTsMergeableState() async throws {
         // REST's `mergeable_state` carries the same values as GraphQL's `mergeStateStatus`, so a
         // detail fetch does not wipe the `behind` the sweep stored (ADR 0041).
@@ -172,6 +274,30 @@ final class DetailParsingTests: XCTestCase {
         XCTAssertEqual(first.comments[0].databaseID, 987_654_321)
         XCTAssertEqual(first.comments[0].author.kind, .human)
         XCTAssertEqual(first.comments[1].author.kind.agentIdentity?.id, "claude-code")
+
+        // ADR 0043: the review a comment was submitted in, which is what hangs the thread under
+        // that review in the conversation, plus its reactions and the viewer's permissions.
+        let root = first.comments[0]
+        XCTAssertEqual(root.reviewID, "PRR_kwDOReviewOne")
+        XCTAssertTrue(root.isEdited)
+        XCTAssertEqual(
+            root.url,
+            URL(string: "https://github.com/schnaq/review/pull/128#discussion_r987654321")
+        )
+        XCTAssertEqual(
+            root.reactions,
+            [ReactionGroup(content: .thumbsUp, count: 1, viewerHasReacted: true)]
+        )
+        XCTAssertTrue(root.viewerCanUpdate)
+        XCTAssertTrue(root.viewerCanDelete)
+        // A comment GitHub sent none of those fields for keeps the defaults.
+        let reply = first.comments[1]
+        XCTAssertNil(reply.reviewID)
+        XCTAssertFalse(reply.isEdited)
+        XCTAssertNil(reply.url)
+        XCTAssertTrue(reply.reactions.isEmpty)
+        XCTAssertFalse(reply.viewerCanUpdate)
+        XCTAssertFalse(reply.viewerCanDelete)
 
         let second = threads[1]
         XCTAssertTrue(second.isResolved)

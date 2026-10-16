@@ -12,10 +12,13 @@ struct GraphQLErrorDTO: Decodable {
     var type: String?
 }
 
-/// A GraphQL `pageInfo` fragment.
+/// A GraphQL `pageInfo` fragment, read forwards (`hasNextPage`, `endCursor`) or, by the
+/// conversation, backwards (`hasPreviousPage`, `startCursor`).
 struct PageInfoDTO: Decodable {
     var hasNextPage: Bool?
     var endCursor: String?
+    var hasPreviousPage: Bool?
+    var startCursor: String?
 }
 
 /// A GitHub `Actor` (`User`, `Bot`, `Organization`, `Mannequin`, …).
@@ -164,11 +167,125 @@ struct ReviewThreadDTO: Decodable {
 
 /// One comment inside a review thread.
 struct ReviewCommentDTO: Decodable {
+    struct Review: Decodable {
+        var id: String?
+    }
     var id: String?
     var databaseId: Int?
     var body: String?
     var createdAt: String?
+    var lastEditedAt: String?
+    var url: String?
+    var viewerCanUpdate: Bool?
+    var viewerCanDelete: Bool?
+    /// The review the comment was submitted in (ADR 0043).
+    var pullRequestReview: Review?
     var author: GraphQLActorDTO?
+    var reactionGroups: [ReactionGroupDTO?]?
+}
+
+// MARK: - Conversation (ADR 0043)
+
+/// One `ReactionGroup`: a reaction, how many people left it, and whether the viewer did.
+struct ReactionGroupDTO: Decodable {
+    struct Reactors: Decodable {
+        var totalCount: Int?
+    }
+    var content: String?
+    var viewerHasReacted: Bool?
+    var reactors: Reactors?
+}
+
+/// The payload of ``GraphQLDocuments/pullRequestConversation``: the description's flags and
+/// reactions beside one page of the timeline.
+struct PullRequestConversationData: Decodable {
+    struct Repository: Decodable {
+        struct PullRequest: Decodable {
+            struct TimelineConnection: Decodable {
+                var pageInfo: PageInfoDTO?
+                var nodes: [TimelineItemDTO?]?
+            }
+            var viewerCanUpdate: Bool?
+            var viewerCanReact: Bool?
+            var lastEditedAt: String?
+            var reactionGroups: [ReactionGroupDTO?]?
+            var timelineItems: TimelineConnection?
+        }
+        var pullRequest: PullRequest?
+    }
+    var repository: Repository?
+}
+
+/// One node of the conversation's timeline, whichever of the document's types it is.
+///
+/// One struct for all twenty-two rather than one per type: the fragments give a shared field
+/// name the same type everywhere, so a node fills whichever fields its type selected, and the
+/// mapper reads `__typename` to know which those are.
+struct TimelineItemDTO: Decodable {
+    struct Commit: Decodable {
+        var oid: String?
+    }
+
+    struct Label: Decodable {
+        var name: String?
+        var color: String?
+    }
+
+    /// An assignee or a requested reviewer: a user, bot or mannequin by `login`, a team by
+    /// `name`.
+    struct Participant: Decodable {
+        var login: String?
+        var name: String?
+
+        /// What an event sentence names it by: the login, or a team's name.
+        var handle: String? { login ?? name }
+    }
+
+    var typename: String?
+    var id: String?
+    var createdAt: String?
+    // Comments and reviews.
+    var databaseId: Int?
+    var body: String?
+    var lastEditedAt: String?
+    var url: String?
+    var author: GraphQLActorDTO?
+    var viewerCanUpdate: Bool?
+    var viewerCanDelete: Bool?
+    var reactionGroups: [ReactionGroupDTO?]?
+    var isMinimized: Bool?
+    var minimizedReason: String?
+    var state: String?
+    var submittedAt: String?
+    /// A review's head commit, or the commit a merge produced.
+    var commit: Commit?
+    // Events.
+    var actor: GraphQLActorDTO?
+    var label: Label?
+    var assignee: Participant?
+    var requestedReviewer: Participant?
+    var previousTitle: String?
+    var currentTitle: String?
+    var mergeRefName: String?
+    var headRefName: String?
+    var previousRefName: String?
+    var currentRefName: String?
+    var beforeCommit: Commit?
+    var afterCommit: Commit?
+    var willCloseTarget: Bool?
+    /// The issue or pull request a cross-reference came from.
+    var source: LinkedPullRequestNodeDTO?
+    var dismissalMessage: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case typename = "__typename"
+        case id, createdAt
+        case databaseId, body, lastEditedAt, url, author, viewerCanUpdate, viewerCanDelete
+        case reactionGroups, isMinimized, minimizedReason, state, submittedAt, commit
+        case actor, label, assignee, requestedReviewer, previousTitle, currentTitle
+        case mergeRefName, headRefName, previousRefName, currentRefName
+        case beforeCommit, afterCommit, willCloseTarget, source, dismissalMessage
+    }
 }
 
 // MARK: - Closing issues (ADR 0032, the pull-request side of the link)
@@ -371,22 +488,26 @@ struct IssueByNumberData: Decodable {
     var repository: Repository?
 }
 
-/// One pull request as an issue's links carry it.
+/// One pull request as an issue's links carry it — or, in a pull request's conversation, the issue
+/// or pull request a cross-reference came from (ADR 0043).
 ///
-/// The three shapes that can produce it — `closedByPullRequestsReferences.nodes`,
+/// The three shapes on the issue side — `closedByPullRequestsReferences.nodes`,
 /// `CrossReferencedEvent.source` and `ConnectedEvent.subject` — select the same five fields, so
-/// they decode into the same DTO and there is one mapping rather than three.
+/// they decode into the same DTO and there is one mapping rather than three. The conversation's
+/// cross-reference selects `url` and neither `state` nor `author`; a field a document did not
+/// select is simply `nil`.
 struct LinkedPullRequestNodeDTO: Decodable {
     var typename: String?
     var number: Int?
     var title: String?
     var state: String?
+    var url: String?
     var repository: GraphQLRepositoryDTO?
     var author: GraphQLActorDTO?
 
     private enum CodingKeys: String, CodingKey {
         case typename = "__typename"
-        case number, title, state, repository, author
+        case number, title, state, url, repository, author
     }
 }
 

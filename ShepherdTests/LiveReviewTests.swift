@@ -143,6 +143,35 @@ final class LiveReviewTests: XCTestCase {
         )
     }
 
+    // MARK: - A conversation that could not be read is not an empty one (ADR 0043)
+
+    private func detail(conversation: PullRequestConversation?) -> PullRequestDetail {
+        var made = self.detail(headRefOid: "head-1", commits: [commit("c1", at: 0)])
+        made.conversation = conversation
+        return made
+    }
+
+    func testAFetchThatCouldNotReadTheConversationKeepsTheOneOnScreen() {
+        let stored = PullRequestConversation(hasEarlierItems: true)
+        let kept = ReviewModel.keepingConversation(of: detail(conversation: stored), in: detail(conversation: nil))
+        XCTAssertEqual(kept.conversation, stored)
+        XCTAssertEqual(kept.summary, detail(conversation: nil).summary, "everything else is the fetch's")
+    }
+
+    func testAConversationTheFetchDidReadWins() {
+        let read = PullRequestConversation(viewerCanReact: true)
+        let kept = ReviewModel.keepingConversation(
+            of: detail(conversation: PullRequestConversation(hasEarlierItems: true)),
+            in: detail(conversation: read)
+        )
+        XCTAssertEqual(kept.conversation, read)
+    }
+
+    func testWithNothingOnScreenTheFetchIsAppliedAsItCame() {
+        let fresh = detail(conversation: nil)
+        XCTAssertEqual(ReviewModel.keepingConversation(of: nil, in: fresh), fresh)
+    }
+
     // MARK: - A moved head is held back
 
     func testAPushIsHeldBackWithTheNumberOfNewCommits() {

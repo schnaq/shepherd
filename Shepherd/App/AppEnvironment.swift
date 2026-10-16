@@ -475,6 +475,12 @@ final class AppEnvironment {
         clearPendingDeepLink()
         // So do parked conflicts: they name pull requests of the account that is leaving.
         draftConflicts.removeAll()
+        // And the re-reads still waiting after a write: they would fetch and store the leaving
+        // account's pull requests into the database about to be erased.
+        rereadTasks.values.forEach { $0.cancel() }
+        rereadTasks = [:]
+        // And the comments it read: parsed bodies stay in memory for as long as the app runs.
+        MarkdownText.forgetParsedBodies()
         if let current {
             await current.shutdown()
             do {
@@ -614,6 +620,7 @@ final class AppEnvironment {
             draftConflicts.raise(conflict)
         }
         confirmMerge(event)
+        rereadAfterConversationWrite(event)
         followBranchUpdate(event)
         advanceMergeSeries(event)
         // Fire-and-forget by construction: the coordinator spawns its own task and swallows
@@ -683,6 +690,51 @@ final class AppEnvironment {
         }
         scheduleSyncAfterMerge()
     }
+
+    /// The detail re-reads a sent conversation write asks for, one per pull request.
+    @ObservationIgnored private var rereadTasks: [String: Task<Void, Never>] = [:]
+
+    /// Re-reads a pull request's detail soon after a comment, a reply, a thread's resolution or a
+    /// review reached GitHub, so it shows without waiting for the next sweep (ADR 0043).
+    ///
+    /// One place rather than one per button: the conversation tab's composer, a thread's reply bar
+    /// in the stream, the diff's popover and a write a later drain sent all end here. The detail is
+    /// stored, and an open review screen takes it the way it takes a sweep's, through its own
+    /// observation (`ReviewModel.observeDetail()` → `.refresh`). Only a *sent* write counts — one
+    /// that is merely queued changed nothing on GitHub yet, and a read offline would fail.
+    ///
+    /// Coalesced per pull request, with ``scheduleSyncAfterMerge()``'s short delay: a reply and a
+    /// resolve a second apart share one read. A failure is ignored, because the sweep reads the
+    /// same detail on its own schedule; a sign-out cancels whatever is still waiting.
+    /// - Parameter event: The event the sync engine emitted.
+    private func rereadAfterConversationWrite(_ event: SyncEvent) {
+        guard case .mutationSent(let sent) = event else { return }
+        switch sent.kind {
+        case .pullRequestCommentAdded, .replyPosted, .reviewCommentPosted, .threadResolved,
+             .threadUnresolved, .reviewSubmitted:
+            break
+        default:
+            return
+        }
+        guard rereadTasks[sent.prID] == nil, let session else { return }
+        rereadTasks[sent.prID] = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(AppEnvironment.rereadAfterWriteDelay))
+            // Cleared on every exit, a cancelled one included, for the coalescing guard's sake —
+            // the same rule as ``scheduleSyncAfterMerge()``.
+            self?.rereadTasks[sent.prID] = nil
+            guard !Task.isCancelled,
+                  let detail = try? await session.github.pullRequestDetail(repo: sent.repo, number: sent.number),
+                  // A sign-out during the read: its database is being erased, and this account's
+                  // pull request must not be written back into it.
+                  !Task.isCancelled
+            else { return }
+            try? await session.database.savePullRequestDetail(detail)
+        }
+    }
+
+    /// How long a sent conversation write waits before its re-read: long enough for a burst of
+    /// writes to share one, short enough to feel immediate.
+    static let rereadAfterWriteDelay: Double = 1
 
     /// Sweeps soon after GitHub accepted an *Update branch* (ADR 0041).
     ///

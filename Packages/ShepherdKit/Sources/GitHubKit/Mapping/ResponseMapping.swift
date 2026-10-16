@@ -616,7 +616,13 @@ public enum ResponseMapping {
                     bodyMarkdown: commentDTO.body ?? "",
                     createdAt: commentDTO.createdAt.flatMap(GitHubTimestamp.parse)
                         ?? Date(timeIntervalSince1970: 0),
-                    pendingLocalID: nil
+                    pendingLocalID: nil,
+                    reviewID: commentDTO.pullRequestReview?.id,
+                    reactions: reactionGroups(commentDTO.reactionGroups),
+                    viewerCanUpdate: commentDTO.viewerCanUpdate ?? false,
+                    viewerCanDelete: commentDTO.viewerCanDelete ?? false,
+                    isEdited: commentDTO.lastEditedAt != nil,
+                    url: commentDTO.url.flatMap { URL(string: $0) }
                 )
             }
         // `line` is deliberately *not* backfilled from `originalLine`. GraphQL nulls `line`
@@ -692,6 +698,213 @@ public enum ResponseMapping {
         return events.sorted { lhs, rhs in
             if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
             return lhs.id < rhs.id
+        }
+    }
+
+    // MARK: - Conversation (ADR 0043)
+
+    /// Assembles the pages of one conversation read.
+    ///
+    /// The pages arrive newest first and each one's nodes oldest first, so reversing the pages
+    /// puts the whole timeline oldest first; nothing is sorted, because GitHub's order is the
+    /// order. The description's fields are the first page's — the freshest answer — and whether
+    /// earlier items exist is the last page's.
+    /// - Parameters:
+    ///   - pages: The pull-request objects of the pages read, in the order they were read.
+    ///   - detector: The agent detector to classify authors and actors with.
+    /// - Returns: The conversation.
+    static func conversation(
+        from pages: [PullRequestConversationData.Repository.PullRequest],
+        detector: AgentDetector
+    ) -> PullRequestConversation {
+        let newest = pages.first
+        return PullRequestConversation(
+            descriptionReactions: reactionGroups(newest?.reactionGroups),
+            isDescriptionEdited: newest?.lastEditedAt != nil,
+            viewerCanUpdateDescription: newest?.viewerCanUpdate ?? false,
+            viewerCanReact: newest?.viewerCanReact ?? false,
+            items: pages.reversed().flatMap { page in
+                (page.timelineItems?.nodes ?? []).compactMap { $0 }.compactMap {
+                    conversationItem(from: $0, detector: detector)
+                }
+            },
+            hasEarlierItems: pages.last?.timelineItems?.pageInfo?.hasPreviousPage == true
+        )
+    }
+
+    /// Maps one timeline node, or drops it: a type this build does not map, or a node without
+    /// the id and the date every item is keyed and ordered by.
+    static func conversationItem(
+        from node: TimelineItemDTO,
+        detector: AgentDetector
+    ) -> ConversationItem? {
+        guard let id = node.id,
+              let createdAt = node.createdAt.flatMap(GitHubTimestamp.parse)
+        else { return nil }
+        switch node.typename {
+        case "IssueComment":
+            return .comment(
+                conversationComment(from: node, id: id, createdAt: createdAt, detector: detector)
+            )
+        case "PullRequestReview":
+            return .review(
+                conversationReview(from: node, id: id, createdAt: createdAt, detector: detector)
+            )
+        default:
+            guard let event = conversationEvent(from: node) else { return nil }
+            return .event(
+                ConversationEventItem(
+                    id: id,
+                    createdAt: createdAt,
+                    // GitHub's `null` actor is a deleted account: no actor, rather than "ghost".
+                    actor: node.actor.map { makeActor(from: $0, detector: detector) },
+                    event: event
+                )
+            )
+        }
+    }
+
+    /// Maps an `IssueComment`. The minimized reason is lowercased because the model promises
+    /// GitHub's documented lowercase words, whatever case the wire carries.
+    static func conversationComment(
+        from node: TimelineItemDTO,
+        id: String,
+        createdAt: Date,
+        detector: AgentDetector
+    ) -> ConversationComment {
+        ConversationComment(
+            id: id,
+            databaseID: node.databaseId,
+            author: makeActor(from: node.author, detector: detector),
+            bodyMarkdown: node.body ?? "",
+            createdAt: createdAt,
+            isEdited: node.lastEditedAt != nil,
+            url: node.url.flatMap { URL(string: $0) },
+            reactions: reactionGroups(node.reactionGroups),
+            viewerCanUpdate: node.viewerCanUpdate ?? false,
+            viewerCanDelete: node.viewerCanDelete ?? false,
+            isMinimized: node.isMinimized ?? false,
+            minimizedReason: node.minimizedReason?.lowercased()
+        )
+    }
+
+    /// Maps a `PullRequestReview`, dated by its submission: `createdAt` is when the review was
+    /// started, which can be hours before anybody could read it.
+    static func conversationReview(
+        from node: TimelineItemDTO,
+        id: String,
+        createdAt: Date,
+        detector: AgentDetector
+    ) -> ConversationReview {
+        ConversationReview(
+            id: id,
+            databaseID: node.databaseId,
+            author: makeActor(from: node.author, detector: detector),
+            state: reviewState(node.state),
+            bodyMarkdown: node.body ?? "",
+            createdAt: node.submittedAt.flatMap(GitHubTimestamp.parse) ?? createdAt,
+            isEdited: node.lastEditedAt != nil,
+            url: node.url.flatMap { URL(string: $0) },
+            reactions: reactionGroups(node.reactionGroups),
+            viewerCanUpdate: node.viewerCanUpdate ?? false,
+            commitOid: node.commit?.oid
+        )
+    }
+
+    /// Maps GraphQL's `PullRequestReviewState`. A state this build does not know reads as a
+    /// plain comment, the one verdict that claims nothing.
+    static func reviewState(_ raw: String?) -> ConversationReview.State {
+        switch raw?.uppercased() ?? "" {
+        case "APPROVED": return .approved
+        case "CHANGES_REQUESTED": return .changesRequested
+        case "DISMISSED": return .dismissed
+        case "PENDING": return .pending
+        default: return .commented
+        }
+    }
+
+    /// Maps an event node onto its values.
+    ///
+    /// `nil` for a type this build does not map and for an event missing what it is about — a
+    /// label without a name, an assignment without an assignee: the app would have to print a
+    /// sentence with a hole in it, so the event is dropped rather than filled in.
+    static func conversationEvent(from node: TimelineItemDTO) -> ConversationEvent? {
+        switch node.typename {
+        case "LabeledEvent":
+            return node.label?.name.map { .labeled(name: $0, color: node.label?.color) }
+        case "UnlabeledEvent":
+            return node.label?.name.map { .unlabeled(name: $0, color: node.label?.color) }
+        case "AssignedEvent":
+            return node.assignee?.login.map { .assigned(login: $0) }
+        case "UnassignedEvent":
+            return node.assignee?.login.map { .unassigned(login: $0) }
+        case "ReviewRequestedEvent":
+            // A team has no login; it is named by its name.
+            return node.requestedReviewer?.handle.map { .reviewRequested(reviewer: $0) }
+        case "ReviewRequestRemovedEvent":
+            return node.requestedReviewer?.handle.map { .reviewRequestRemoved(reviewer: $0) }
+        case "RenamedTitleEvent":
+            guard let from = node.previousTitle, let to = node.currentTitle else { return nil }
+            return .renamed(from: from, to: to)
+        case "ReadyForReviewEvent": return .readyForReview
+        case "ConvertToDraftEvent": return .convertedToDraft
+        case "ClosedEvent": return .closed
+        case "ReopenedEvent": return .reopened
+        case "HeadRefRestoredEvent": return .headRefRestored
+        case "AutoMergeEnabledEvent": return .autoMergeEnabled
+        case "AutoMergeDisabledEvent": return .autoMergeDisabled
+        case "MergedEvent":
+            return .merged(commitOid: node.commit?.oid, into: node.mergeRefName)
+        case "HeadRefDeletedEvent":
+            return .headRefDeleted(branch: node.headRefName)
+        case "BaseRefChangedEvent":
+            return .baseRefChanged(from: node.previousRefName, to: node.currentRefName)
+        case "HeadRefForcePushedEvent":
+            return .forcePushed(fromOid: node.beforeCommit?.oid, toOid: node.afterCommit?.oid)
+        case "CrossReferencedEvent":
+            guard let reference = node.source.flatMap(conversationReference(from:)) else {
+                return nil
+            }
+            return .crossReferenced(reference, willClose: node.willCloseTarget ?? false)
+        case "ReviewDismissedEvent":
+            return .reviewDismissed(message: node.dismissalMessage)
+        default:
+            return nil
+        }
+    }
+
+    /// Maps the source of a cross-reference, or `nil` without the number and repository it is
+    /// identified by — ``linkedPullRequest(from:detector:)``'s rule, for either kind of source.
+    static func conversationReference(
+        from source: LinkedPullRequestNodeDTO
+    ) -> ConversationReference? {
+        guard let number = source.number,
+              let repoName = source.repository?.name,
+              let repoOwner = source.repository?.owner?.login
+        else { return nil }
+        return ConversationReference(
+            repo: RepoRef(owner: repoOwner, name: repoName),
+            number: number,
+            title: source.title ?? "",
+            isPullRequest: source.typename == "PullRequest",
+            url: source.url.flatMap { URL(string: $0) }
+        )
+    }
+
+    /// Maps a post's `reactionGroups`, keeping the ones somebody used.
+    ///
+    /// GitHub answers all eight for every post, most of them at zero. A content this build does
+    /// not know — a ninth reaction GitHub might add — is dropped rather than failing the page.
+    static func reactionGroups(_ dtos: [ReactionGroupDTO?]?) -> [ReactionGroup] {
+        (dtos ?? []).compactMap { dto in
+            guard let content = dto?.content.flatMap(ReactionContent.init(rawValue:)),
+                  let count = dto?.reactors?.totalCount, count > 0
+            else { return nil }
+            return ReactionGroup(
+                content: content,
+                count: count,
+                viewerHasReacted: dto?.viewerHasReacted ?? false
+            )
         }
     }
 

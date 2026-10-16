@@ -22,6 +22,20 @@ public struct ReviewComment: Sendable, Codable, Hashable, Identifiable {
     public var createdAt: Date
     /// Set while a locally drafted comment has not been published yet.
     public var pendingLocalID: UUID?
+    /// The node id of the review this comment was submitted in (ADR 0043).
+    ///
+    /// The first comment's is what places a thread under its review in the conversation tab.
+    public var reviewID: String?
+    /// The reactions anybody left on the comment.
+    public var reactions: [ReactionGroup]
+    /// Whether GitHub lets the viewer edit the comment.
+    public var viewerCanUpdate: Bool
+    /// Whether GitHub lets the viewer delete the comment.
+    public var viewerCanDelete: Bool
+    /// Whether the comment was edited after it was posted.
+    public var isEdited: Bool
+    /// The comment on github.com.
+    public var url: URL?
 
     /// Creates a review comment.
     public init(
@@ -30,7 +44,13 @@ public struct ReviewComment: Sendable, Codable, Hashable, Identifiable {
         author: Actor,
         bodyMarkdown: String,
         createdAt: Date,
-        pendingLocalID: UUID? = nil
+        pendingLocalID: UUID? = nil,
+        reviewID: String? = nil,
+        reactions: [ReactionGroup] = [],
+        viewerCanUpdate: Bool = false,
+        viewerCanDelete: Bool = false,
+        isEdited: Bool = false,
+        url: URL? = nil
     ) {
         self.id = id
         self.databaseID = databaseID
@@ -38,6 +58,35 @@ public struct ReviewComment: Sendable, Codable, Hashable, Identifiable {
         self.bodyMarkdown = bodyMarkdown
         self.createdAt = createdAt
         self.pendingLocalID = pendingLocalID
+        self.reviewID = reviewID
+        self.reactions = reactions
+        self.viewerCanUpdate = viewerCanUpdate
+        self.viewerCanDelete = viewerCanDelete
+        self.isEdited = isEdited
+        self.url = url
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, databaseID, author, bodyMarkdown, createdAt, pendingLocalID
+        case reviewID, reactions, viewerCanUpdate, viewerCanDelete, isEdited, url
+    }
+
+    /// Decodes a comment, tolerating the ADR 0043 fields being absent: a detail encoded before
+    /// they existed carries no key for them.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        databaseID = try container.decodeIfPresent(Int.self, forKey: .databaseID)
+        author = try container.decode(Actor.self, forKey: .author)
+        bodyMarkdown = try container.decode(String.self, forKey: .bodyMarkdown)
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        pendingLocalID = try container.decodeIfPresent(UUID.self, forKey: .pendingLocalID)
+        reviewID = try container.decodeIfPresent(String.self, forKey: .reviewID)
+        reactions = try container.decodeIfPresent([ReactionGroup].self, forKey: .reactions) ?? []
+        viewerCanUpdate = try container.decodeIfPresent(Bool.self, forKey: .viewerCanUpdate) ?? false
+        viewerCanDelete = try container.decodeIfPresent(Bool.self, forKey: .viewerCanDelete) ?? false
+        isEdited = try container.decodeIfPresent(Bool.self, forKey: .isEdited) ?? false
+        url = try container.decodeIfPresent(URL.self, forKey: .url)
     }
 }
 

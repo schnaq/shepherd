@@ -10,7 +10,7 @@ Open a pull request from the inbox with `⏎` or a double-click. Press `esc` to 
 The review screen has two tabs. Press `t` to switch between them.
 
 - **Files** shows the changed files and the diff.
-- **Conversation** shows the description, commits, checks and review threads.
+- **Conversation** shows the whole conversation, as on GitHub: the description, every comment and review, the review threads, commits, events and checks.
 
 An agent's pull request opens on **Conversation** when its description claims something, such as tests added or nothing breaking. Everything else opens on **Files**. Turn this off in Settings → Appearance with **Open agent pull requests on Conversation**.
 
@@ -99,7 +99,7 @@ If GitHub reports the pull request as updated while you are reading, a strip abo
 
 ### Offline and the outbox
 
-Submitting does not talk to GitHub directly. The review goes into a local queue, the outbox, and is sent as soon as possible. It survives a crash and a lost connection. The queue also carries replies, thread resolves and merges.
+Submitting does not talk to GitHub directly. The review goes into a local queue, the outbox, and is sent as soon as possible. It survives a crash and a lost connection. The queue also carries comments, replies, thread resolves and merges.
 
 A toast tells you which case you are in:
 
@@ -119,6 +119,25 @@ A review is pinned to the head commit you wrote it on. If the pull request gets 
 Your draft is kept. The title bar and Settings → Sync keep counting the review as **not sent** until you deal with it, and you get a **Review not sent** notification. If several reviews were parked in one run, the alerts come one after another.
 
 A quick verdict with no inline comments is pinned to the head you saw when you clicked it. Inline comments keep the commit you wrote them on.
+
+## The conversation
+
+The **Conversation** tab reads like the pull request's page on GitHub. From top to bottom:
+
+1. The description, as the first post.
+2. Everything that happened, oldest first: comments, reviews with their text, commits, and events such as labels, review requests, force-pushes, title changes, merges and closes.
+3. The checks.
+4. A comment field.
+
+A review shows the threads it started, each with its file and line. **Show in diff** opens that line on the Files tab. Resolved and outdated threads start collapsed. **Reply**, **Resolve** and **Delegate…** work as they do in the diff.
+
+Type in the field at the bottom and click **Post comment**, or press `⌘⏎`. **Comment and close** posts your comment and closes the pull request. With an empty field, the button reads **Close without a comment**. Saved replies and ⌘V screenshots work here too. A comment you write offline waits in the outbox, like a review.
+
+To answer one post, open its **⋯** menu and pick **Quote reply**. The post goes into the comment field as a quote. The same menu has **Copy link** and **Open on GitHub**.
+
+Reactions show under each post. A comment that somebody hid on GitHub starts collapsed. Click **Show** to read it.
+
+New comments arrive with the next sync, the same way new checks do. A very long conversation shows its newest 500 entries, with a link to the rest on GitHub.
 
 ## Since your review
 

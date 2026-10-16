@@ -900,10 +900,7 @@ struct InlineCommentComposer: View {
     }
 
     /// Nothing to send yet: an empty field, or an image still uploading into it.
-    private var isBlank: Bool {
-        commentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || PastedImage.containsPendingUpload(commentText)
-    }
+    private var isBlank: Bool { !PastedImage.isSendable(commentText) }
 
     /// Appends a ```` ```suggestion ```` block holding the commented lines. Offered on the head
     /// side only: a suggestion changes the new file. Built on press rather than per render,
@@ -938,10 +935,9 @@ struct InlineCommentComposer: View {
             toasts: environment.toasts,
             activity: environment.activity
         )
+        // The published comment reaches its line through the app's re-read once GitHub has it
+        // (`AppEnvironment.rereadAfterConversationWrite(_:)`), not through this sheet.
         guard await actions.addReviewComment(comment, on: summary) else { return }
-        // Fetched again so the published comment shows on its line now rather than at the next
-        // sweep — harmless when it is still queued.
-        model.load()
         dismiss()
     }
 
@@ -1122,14 +1118,11 @@ struct ThreadPopover: View {
     /// Closes the popover.
     var onClose: () -> Void
 
-    @State private var replyText = ""
     /// The popover's own translation cache (ADR 0020), so a translated comment stays translated
     /// while the reviewer scrolls the thread — and is gone when the popover is.
     @State private var translations = TranslationCoordinator()
-    /// The saved replies that fit this thread, best first, or empty for the plain menu.
-    @State private var suggestedReplyIDs: [SavedReply.ID] = []
-    /// Whether the embeddings for this thread have already been spent.
-    @State private var hasRequestedSuggestions = false
+    /// What is typed in the reply bar, held here because the bar takes it as a binding.
+    @State private var replyText = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -1152,7 +1145,10 @@ struct ThreadPopover: View {
             }
             .frame(maxHeight: 260)
             Divider().overlay(Theme.border)
-            replyBar
+            ThreadReplyBar(thread: thread, summary: summary, actions: actions, replyText: $replyText) {
+                onClose()
+            }
+            .padding(12)
         }
         .frame(width: 380)
         .background(Theme.panel)
@@ -1160,13 +1156,10 @@ struct ThreadPopover: View {
         // would do something (plan §3.G, ADR 0007).
         .task { await environment.threadDigests.prepare() }
         // The popover's content keeps its `@State` when the reviewer clicks a different comment
-        // card while it is open, so the suggestions have to be told that the conversation under
-        // them changed — otherwise the second thread would be offered the first thread's replies.
+        // card while it is open, so a digest still being written for the thread the reviewer just
+        // left is a digest nobody will read: it is stopped rather than left running on the
+        // battery. The reply bar resets its own suggestions the same way.
         .onChange(of: thread.id) { previous, _ in
-            suggestedReplyIDs = []
-            hasRequestedSuggestions = false
-            // And a digest still being written for the thread the reviewer just left is a digest
-            // nobody will read, so it is stopped rather than left running on the battery.
             environment.threadDigests.cancel(for: previous)
         }
     }
@@ -1208,120 +1201,6 @@ struct ThreadPopover: View {
         .frame(height: 34)
     }
 
-    private var replyBar: some View {
-        VStack(spacing: 8) {
-            HStack(alignment: .bottom, spacing: 6) {
-                TextField(String(localized: "Reply…"), text: $replyText, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12))
-                    // A growing field, so the full Writing Tools panel has somewhere to put its
-                    // result: this is review prose like any other composer (ADR 0020).
-                    .writingToolsBehavior(.complete)
-                    .lineLimit(1...4)
-                    .padding(8)
-                    .background(
-                        Theme.control,
-                        in: RoundedRectangle(cornerRadius: 6, style: .continuous)
-                    )
-                SavedReplyMenu(
-                    replies: environment.settings.usableSavedReplies,
-                    suggestedIDs: suggestedReplyIDs,
-                    onInsert: { snippet in
-                        replyText = SavedReply.inserting(snippet, into: replyText)
-                    },
-                    onWillOpen: { requestSavedReplySuggestions() },
-                    height: 30
-                )
-            }
-
-            HStack(spacing: 8) {
-                Button {
-                    Task {
-                        await actions.setThread(
-                            on: summary,
-                            threadID: thread.id,
-                            resolved: !thread.isResolved
-                        )
-                        onClose()
-                    }
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: thread.isResolved ? "arrow.uturn.backward" : "checkmark")
-                            .font(.system(size: 10, weight: .bold))
-                        Text(thread.isResolved
-                            ? String(localized: "Unresolve")
-                            : String(localized: "Resolve"))
-                    }
-                }
-                .buttonStyle(SecondaryButtonStyle(height: 28))
-                .busy(isTogglingThread)
-
-                Button {
-                    environment.startDelegation(
-                        .reviewFinding(summary, thread: thread)
-                    )
-                    onClose()
-                } label: {
-                    HStack(spacing: 5) {
-                        Image(systemName: "arrow.uturn.backward.badge.clock")
-                            .font(.system(size: 10, weight: .bold))
-                        Text(String(localized: "Delegate…"))
-                    }
-                }
-                .buttonStyle(SecondaryButtonStyle(height: 28, tint: Theme.agent))
-                .help(String(localized: "Hand this finding to your local coding agent"))
-
-                Spacer()
-
-                Button {
-                    Task { await sendReply() }
-                } label: {
-                    Text(String(localized: "Reply"))
-                }
-                .buttonStyle(PrimaryButtonStyle())
-                .busy(isReplying)
-                .disabled(replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    || replyTargetID == nil)
-                .help(replyTargetID == nil
-                    ? String(localized: "GitHub did not send a database id for this thread, so Shepherd cannot reply to it here.")
-                    : String(localized: "Queue a reply"))
-            }
-        }
-        .padding(12)
-    }
-
-    private var replyTargetID: Int? {
-        thread.comments.compactMap(\.databaseID).last
-    }
-
-    /// Whether this pull request already has a reply on its way to the outbox.
-    private var isReplying: Bool { actions.activity.isRunning(summary.id, .reply) }
-
-    /// Whether *this* thread is already being resolved or reopened. Keyed by the thread, so the
-    /// popover for one conversation says nothing about another.
-    private var isTogglingThread: Bool { actions.activity.isRunning(thread.id, .thread) }
-
-    /// Spends the embeddings that fill the menu's "Suggested" section, at most once per popover.
-    ///
-    /// This is the surface the feature was designed for: a thread has a conversation in it, so
-    /// there is something real to rank against. Called from the menu's hover, so a reviewer who
-    /// only types a reply never pays for a vector, and guarded so that a pointer crossing the
-    /// button repeatedly costs one.
-    private func requestSavedReplySuggestions() {
-        guard !hasRequestedSuggestions else { return }
-        hasRequestedSuggestions = true
-        // Read out of the view before the task, so the closure captures values rather than views.
-        let comments = thread.comments.map(\.bodyMarkdown)
-        let replies = environment.settings.usableSavedReplies
-        let coordinator = environment.savedReplySuggestions
-        Task {
-            suggestedReplyIDs = await coordinator.suggestions(
-                forThreadComments: comments,
-                replies: replies
-            )
-        }
-    }
-
     // MARK: - Thread digest
 
     /// The card's state for this thread, or `nil` when there is no card yet (plan §3.G).
@@ -1350,7 +1229,7 @@ struct ThreadPopover: View {
     ///
     /// Values are read out of the view before the task, so the closure captures a `Sendable`
     /// thread id, a `Sendable` array of comments and the `@MainActor` coordinator rather than the
-    /// view — the same shape ``requestSavedReplySuggestions()`` uses beside it.
+    /// view — the same shape ``ThreadReplyBar``'s saved-reply suggestions use.
     private func requestThreadDigest() {
         let threadID = thread.id
         let comments = thread.comments
@@ -1359,15 +1238,6 @@ struct ThreadPopover: View {
         Task {
             await coordinator.digest(for: threadID, comments: comments, isResolved: isResolved)
         }
-    }
-
-    private func sendReply() async {
-        guard let target = replyTargetID else { return }
-        let text = replyText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        replyText = ""
-        await actions.reply(on: summary, commentDatabaseID: target, body: text)
-        onClose()
     }
 }
 
@@ -1384,25 +1254,20 @@ struct ThreadCommentView: View {
     let translations: TranslationCoordinator
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            AvatarView(actor: comment.author, size: 24)
+        VStack(alignment: .leading, spacing: 4) {
+            AuthorLine(author: comment.author, date: comment.createdAt, isEdited: comment.isEdited)
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text(comment.author.bestName)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(Theme.textStrong)
-                    if let identity = comment.author.kind.agentIdentity {
-                        ChipView(text: identity.displayName, color: Theme.agent, size: 10)
-                    }
-                    RelativeDateText(date: comment.createdAt, style: .long)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Theme.textMuted)
-                }
                 TranslatableMarkdownText(
                     markdown: comment.bodyMarkdown,
                     translations: translations
                 )
+                if !comment.reactions.isEmpty {
+                    ReactionSummaryView(reactions: comment.reactions)
+                }
             }
+            // Under the name rather than under the avatar, the way GitHub indents a thread's
+            // comments: the avatar's 24 points and the line's spacing.
+            .padding(.leading, 32)
         }
     }
 }

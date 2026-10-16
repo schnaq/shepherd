@@ -100,25 +100,17 @@ enum RecurringFindingRule {
 
     /// Renders comment bodies as one Markdown block quote.
     ///
-    /// Every line is prefixed, the way ``DelegationPrompt/defaultTask(for:)`` does it, because a
-    /// comment can be several paragraphs and a block quote with unprefixed lines in it stops being
-    /// a quote halfway through.
+    /// Every line is prefixed (``ShepherdCore/MarkdownDocument/quoted(_:)``, which
+    /// ``DelegationPrompt/defaultTask(for:)`` quotes with too), because a comment can be several
+    /// paragraphs and a block quote with unprefixed lines in it stops being a quote halfway through.
     /// - Parameter bodies: The comment bodies.
     static func blockQuote(_ bodies: [String]) -> String {
-        var blocks: [String] = []
-        for body in bodies {
-            let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { continue }
-            blocks.append(
-                trimmed
-                    .split(separator: "\n", omittingEmptySubsequences: false)
-                    .map { "> \($0)" }
-                    .joined(separator: "\n")
-            )
-        }
-        // A quoted blank line between the quotes, so three separate comments read as three
-        // comments rather than as one run-on paragraph.
-        return blocks.joined(separator: "\n>\n")
+        bodies
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .map(MarkdownDocument.quoted)
+            // A quoted blank line between the quotes, so three separate comments read as three
+            // comments rather than as one run-on paragraph.
+            .joined(separator: "\n>\n")
     }
 }
 

@@ -1,7 +1,12 @@
 import ShepherdCore
 import SwiftUI
 
-/// The review screen's second tab: description, commits, checks and unanchored threads.
+/// The review screen's second tab: GitHub's conversation, read in full and answered in place
+/// (ADR 0043).
+///
+/// Top to bottom: the intelligence cards, which are read before the discussion; the description
+/// as the first post; the stream — comments, reviews with their threads, commits, events — in
+/// GitHub's order; the checks, where GitHub has them; and a comment field.
 struct ConversationView: View {
     @Environment(AppEnvironment.self) private var environment
     /// The review model.
@@ -30,21 +35,53 @@ struct ConversationView: View {
     @State private var claims = ClaimsEvidenceModel()
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                claimsCard
-                recurringFinding
-                closingIssues
-                stack
-                description
-                timeline
-                commits
-                checks
-                threads
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    claimsCard
+                    recurringFinding
+                    closingIssues
+                    stack
+                    if let summary = model.summary {
+                        descriptionPost(summary)
+                        // Said where the stream starts when GitHub has older items than Shepherd
+                        // read: the read keeps the newest ones, which are the ones a reviewer is
+                        // here for.
+                        if model.detail?.conversation?.hasEarlierItems == true {
+                            StreamNoticeRow(
+                                symbol: "clock.arrow.circlepath",
+                                text: String(localized: "Earlier activity is on GitHub"),
+                                buttonTitle: String(localized: "Open on GitHub")
+                            ) { actions.openOnGitHub(summary) }
+                        }
+                        // Left out when empty rather than drawn empty, which would still take a
+                        // place in this stack and double the gap around it.
+                        if !model.conversationEntries.isEmpty {
+                            ConversationStream(
+                                entries: model.conversationEntries,
+                                summary: summary,
+                                model: model,
+                                actions: actions,
+                                translations: translations
+                            )
+                            .equatable()
+                        }
+                    }
+                    checks
+                    if let summary = model.summary {
+                        ConversationComposer(model: model, actions: actions, summary: summary)
+                            .id(Self.composerID)
+                    }
+                }
+                .padding(18)
+                .frame(maxWidth: 860, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(18)
-            .frame(maxWidth: 860, alignment: .leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // *Quote reply* has just filled the field and asked for the keyboard; the field has to
+            // be on screen to take it.
+            .onChange(of: model.composerFocusRequest) {
+                withAnimation { proxy.scrollTo(Self.composerID, anchor: .bottom) }
+            }
         }
         .background(Theme.background)
         .onChange(of: model.detail, initial: true) { _, detail in
@@ -180,99 +217,29 @@ struct ConversationView: View {
         }
     }
 
-    @ViewBuilder
-    private var description: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 8) {
-                CardTitle(String(localized: "DESCRIPTION"))
-                if let body = model.detail?.bodyMarkdown, !body.isEmpty {
-                    TranslatableMarkdownText(markdown: body, translations: translations)
-                } else {
-                    Text(String(localized: "No description."))
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.textMuted)
-                }
-            }
-        }
-    }
+    // MARK: - The conversation (ADR 0043)
 
-    /// The condensed activity list.
-    ///
-    /// Deliberately *not* translatable (ADR 0020). A `TimelineEvent.summary` is either one of
-    /// Shepherd's own fixed words ("Approved", "Requested changes", "Commented") or a commit
-    /// message headline — never a comment body, because `ResponseMapping.timeline(commits:…)`
-    /// builds the list from commits and reviews rather than from GitHub's timeline API. There is no
-    /// third-party prose here to offer a translation of; the comment bodies themselves are
-    /// translatable where they are actually rendered, in ``ThreadCommentView``.
-    @ViewBuilder
-    private var timeline: some View {
-        let events = model.detail?.timeline ?? []
-        if !events.isEmpty {
-            Card {
-                VStack(alignment: .leading, spacing: 8) {
-                    CardTitle(String(localized: "ACTIVITY"))
-                    ForEach(events.suffix(12)) { event in
-                        HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: symbol(for: event.kind))
-                                .font(.system(size: 10))
-                                .foregroundStyle(color(for: event.kind))
-                                .frame(width: 14)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(event.summary)
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(Theme.text)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                HStack(spacing: 6) {
-                                    Text(event.author.bestName)
-                                    RelativeDateText(date: event.createdAt, style: .long)
-                                }
-                                .font(.system(size: 11))
-                                .foregroundStyle(Theme.textMuted)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
+    /// What ``ScrollViewReader`` scrolls to when *Quote reply* fills the comment field.
+    private static let composerID = "composer"
 
-    @ViewBuilder
-    private var commits: some View {
-        let list = model.detail?.commits ?? []
-        Card {
-            VStack(alignment: .leading, spacing: 8) {
-                CardTitle(String(localized: "COMMITS · \(list.count)"))
-                if list.isEmpty {
-                    Text(String(localized: "No commits fetched yet."))
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.textMuted)
-                } else {
-                    ForEach(list) { commit in
-                        HStack(alignment: .top, spacing: 8) {
-                            Text(String(commit.oid.prefix(7)))
-                                .font(Theme.mono(11))
-                                .foregroundStyle(Theme.accentText)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(commit.messageHeadline)
-                                    .font(.system(size: 12))
-                                    .foregroundStyle(Theme.text)
-                                    .lineLimit(2)
-                                if !commit.trailers.isEmpty {
-                                    Text(commit.trailers.joined(separator: " · "))
-                                        .font(Theme.mono(10.5))
-                                        .foregroundStyle(Theme.textMuted)
-                                        .lineLimit(1)
-                                }
-                            }
-                            Spacer(minLength: 4)
-                            RelativeDateText(date: commit.committedDate)
-                                .font(.system(size: 11))
-                                .foregroundStyle(Theme.textMuted)
-                        }
-                    }
-                }
-            }
-        }
+    /// The description, drawn as the conversation's first post.
+    private func descriptionPost(_ summary: PullRequestSummary) -> some View {
+        let conversation = model.detail?.conversation
+        return ConversationPostView(
+            model: model,
+            translations: translations,
+            author: summary.author,
+            verb: String(localized: "opened this pull request"),
+            date: summary.createdAt,
+            markdown: model.detail?.bodyMarkdown ?? "",
+            isEdited: conversation?.isDescriptionEdited ?? false,
+            reactions: conversation?.descriptionReactions ?? [],
+            url: AppConfig.pullRequestURL(
+                owner: summary.repo.owner,
+                name: summary.repo.name,
+                number: summary.number
+            )
+        )
     }
 
     @ViewBuilder
@@ -422,109 +389,5 @@ struct ConversationView: View {
             },
             onClose: { diagnosis.dismiss() }
         )
-    }
-
-    @ViewBuilder
-    private var threads: some View {
-        let list = model.unanchoredThreads
-        if !list.isEmpty {
-            Card {
-                VStack(alignment: .leading, spacing: 12) {
-                    // Pull-request-level threads, threads whose anchor GitHub reports as lost,
-                    // and outdated ones — an outdated thread's line points into an older
-                    // commit's diff, so it cannot be drawn on the current one.
-                    CardTitle(String(localized: "CONVERSATIONS NOT ON THE CURRENT DIFF"))
-                    ForEach(list) { thread in
-                        VStack(alignment: .leading, spacing: 8) {
-                            threadAnchorLabel(thread)
-                            ForEach(thread.comments) { comment in
-                                ThreadCommentView(comment: comment, translations: translations)
-                            }
-                            if let summary = model.summary {
-                                HStack(spacing: 8) {
-                                    Button {
-                                        Task {
-                                            await actions.setThread(
-                                                on: summary,
-                                                threadID: thread.id,
-                                                resolved: !thread.isResolved
-                                            )
-                                        }
-                                    } label: {
-                                        Text(
-                                            thread.isResolved
-                                                ? String(localized: "Unresolve")
-                                                : String(localized: "Resolve")
-                                        )
-                                    }
-                                    .buttonStyle(SecondaryButtonStyle(height: 26))
-                                    // Keyed by the thread, so a card showing a dozen
-                                    // conversations spins the one button that was pressed.
-                                    .busy(actions.activity.isRunning(thread.id, .thread))
-
-                                    Button(String(localized: "Delegate this finding…")) {
-                                        environment.startDelegation(
-                                            .reviewFinding(summary, thread: thread)
-                                        )
-                                    }
-                                    .buttonStyle(SecondaryButtonStyle(height: 26, tint: Theme.agent))
-                                }
-                            }
-                        }
-                        Divider().overlay(Theme.hairline)
-                    }
-                }
-            }
-        }
-    }
-
-    /// Where a thread that cannot be drawn on the diff used to point.
-    ///
-    /// Outdated threads keep an `originalLine` from the commit they were written against. It
-    /// is shown, never used to position anything: the current diff no longer has that line.
-    @ViewBuilder
-    private func threadAnchorLabel(_ thread: ReviewThread) -> some View {
-        if let path = thread.path {
-            HStack(spacing: 6) {
-                Text(path)
-                    .font(Theme.mono(11))
-                    .lineLimit(1)
-                    .truncationMode(.head)
-                if let original = thread.originalLine {
-                    Text(String(localized: "· was line \(original)"))
-                        .font(.system(size: 11))
-                }
-                if thread.isOutdated {
-                    ChipView(text: String(localized: "outdated"), color: Theme.pending, size: 10)
-                }
-                if thread.isResolved {
-                    ChipView(text: String(localized: "resolved"), color: Theme.success, size: 10)
-                }
-            }
-            .foregroundStyle(Theme.textMuted)
-        }
-    }
-
-    private func symbol(for kind: TimelineEvent.Kind) -> String {
-        switch kind {
-        case .commit: return "circle.fill"
-        case .reviewApproved: return "checkmark.circle"
-        case .reviewChangesRequested: return "exclamationmark.circle"
-        case .reviewCommented, .comment: return "bubble.left"
-        case .merged: return "arrow.triangle.merge"
-        case .closed: return "xmark.circle"
-        case .reopened: return "arrow.clockwise.circle"
-        case .readyForReview: return "eye"
-        case .other: return "circle"
-        }
-    }
-
-    private func color(for kind: TimelineEvent.Kind) -> Color {
-        switch kind {
-        case .reviewApproved, .merged: return Theme.success
-        case .reviewChangesRequested, .closed: return Theme.failure
-        case .commit: return Theme.textMuted
-        default: return Theme.accentText
-        }
     }
 }

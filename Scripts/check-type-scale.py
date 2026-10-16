@@ -77,6 +77,12 @@ MIGRATED = (
     "Shepherd/Features/Inbox/AddLocalRepositorySheet.swift",
     # The stack card (ADR 0042), on the scale from birth.
     "Shepherd/Features/PullRequest/PullRequestStackCard.swift",
+    # The conversation tab's stream and comment field (ADR 0043), on the scale from birth, and the
+    # thread reply bar, which moved onto it when it left the diff's popover.
+    "Shepherd/Features/PullRequest/ConversationStreamViews.swift",
+    "Shepherd/Features/PullRequest/ConversationEventText.swift",
+    "Shepherd/Features/PullRequest/ConversationComposer.swift",
+    "Shepherd/Features/Review/ThreadReplyBar.swift",
 )
 
 # A fixed point size, either spelling: SwiftUI's own or `Theme.mono`'s numeric overload. `\s*`

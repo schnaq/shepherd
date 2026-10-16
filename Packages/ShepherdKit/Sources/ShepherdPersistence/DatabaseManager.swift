@@ -65,6 +65,7 @@ public final class DatabaseManager: Sendable {
         migrator.registerMigration("v8", migrate: DatabaseSchema.addV8)
         migrator.registerMigration("v9", migrate: DatabaseSchema.addV9)
         migrator.registerMigration("v10", migrate: DatabaseSchema.addV10)
+        migrator.registerMigration("v11", migrate: DatabaseSchema.addV11)
         return migrator
     }
 
@@ -161,6 +162,7 @@ enum DatabaseSchema {
         "issue_search_index",
         "issue_linked_pull_requests",
         "pull_request_closing_issues",
+        "pull_request_conversations",
     ]
 
     static func createV1(_ db: Database) throws {
@@ -689,5 +691,29 @@ enum DatabaseSchema {
         try db.execute(sql: "ALTER TABLE pull_requests ADD COLUMN stackSize INTEGER")
         try db.execute(sql: "ALTER TABLE pull_requests ADD COLUMN stackPosition INTEGER")
         try db.execute(sql: "ALTER TABLE pull_requests ADD COLUMN stackBaseRef TEXT")
+    }
+
+    /// v11 (ADR 0043): the conversation tab.
+    ///
+    /// - **The timeline is one JSON document, in a table of its own.** Not a column of
+    ///   `pull_requests`, as `timelineJSON` is: the inbox query reads every row of that table
+    ///   whole on every observation, and a conversation is up to five pages of comment bodies. Keyed by
+    ///   `prID` and cascading with it, like `pull_request_closing_issues`, so it is pruned with its
+    ///   pull request and a sweep's upsert of the row never touches it.
+    /// - **A review comment's review, reactions and the viewer's permissions are columns**, because
+    ///   a thread is rebuilt row by row.
+    static func addV11(_ db: Database) throws {
+        try db.execute(sql: """
+            CREATE TABLE pull_request_conversations (
+                prID TEXT PRIMARY KEY NOT NULL REFERENCES pull_requests(id) ON DELETE CASCADE,
+                json TEXT NOT NULL
+            )
+            """)
+        try db.execute(sql: "ALTER TABLE review_comments ADD COLUMN reviewID TEXT")
+        try db.execute(sql: "ALTER TABLE review_comments ADD COLUMN reactionsJSON TEXT")
+        try db.execute(sql: "ALTER TABLE review_comments ADD COLUMN viewerCanUpdate INTEGER NOT NULL DEFAULT 0")
+        try db.execute(sql: "ALTER TABLE review_comments ADD COLUMN viewerCanDelete INTEGER NOT NULL DEFAULT 0")
+        try db.execute(sql: "ALTER TABLE review_comments ADD COLUMN isEdited INTEGER NOT NULL DEFAULT 0")
+        try db.execute(sql: "ALTER TABLE review_comments ADD COLUMN url TEXT")
     }
 }
