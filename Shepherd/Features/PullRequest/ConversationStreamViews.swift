@@ -3,8 +3,8 @@ import ShepherdCore
 import SwiftUI
 
 // The conversation tab's stream (ADR 0043) and its rows, one view per kind of entry. They draw what
-// the model already holds and fetch nothing; the only writes are the thread reply bar's, through
-// `PullRequestActions`.
+// the model already holds and fetch nothing; the writes are the thread reply bars' and the reaction
+// bars', through `PullRequestActions`.
 
 /// Every entry after the description, in GitHub's order.
 ///
@@ -13,8 +13,8 @@ import SwiftUI
 /// request and for every inbox emission the stack card reads, and each of those used to walk every
 /// post and thread of a long conversation again. The model, the actions and the translation cache
 /// are what the rows act through rather than what they show, so they stay out of the comparison;
-/// the one thing a row does read off the model, a thread's fold, reaches that card through
-/// observation, and a reply being typed under a thread redraws that card alone.
+/// what a row does read off the model — a thread's fold, the reviewer's reaction clicks — reaches
+/// that card through observation, and a reply being typed under a thread redraws that card alone.
 ///
 /// A plain `VStack`, not a lazy one: a lazy container may drop a row's `@State` once it scrolls
 /// away, and a hidden comment the reviewer asked to see would hide again. A thread's reply and
@@ -52,7 +52,9 @@ struct ConversationStream: View, Equatable {
         case .comment(let comment):
             ConversationPostView(
                 model: model,
+                actions: actions,
                 translations: translations,
+                subjectID: comment.id,
                 author: comment.author,
                 verb: String(localized: "commented"),
                 date: comment.createdAt,
@@ -93,10 +95,15 @@ struct ConversationStream: View, Equatable {
 /// One view for both, so the two cannot drift into two looks. The words a reviewer wrote above a
 /// verdict are the same ``PostBody`` in a card of the review's own, under the review's row.
 struct ConversationPostView: View {
-    /// The review model, for *Quote reply*.
+    /// The review model, for *Quote reply* and the reactions.
     let model: ReviewModel
+    /// The write actions, for the reactions.
+    let actions: PullRequestActions
     /// The tab's translation cache.
     let translations: TranslationCoordinator
+    /// The post's node id, which is what a reaction is addressed to — the pull request's own for
+    /// the description.
+    let subjectID: String
     /// Who wrote it.
     let author: ShepherdCore.Actor
     /// What they did, after their name: "opened this pull request", "commented".
@@ -139,7 +146,11 @@ struct ConversationPostView: View {
                         markdown: markdown,
                         url: url
                     )
-                    PostBody(markdown: markdown, reactions: reactions, translations: translations)
+                    PostBody(
+                        markdown: markdown,
+                        reactions: ReactionBar(subjectID: subjectID, stored: reactions, model: model, actions: actions),
+                        translations: translations
+                    )
                 }
             }
             .accessibilityElement(children: .contain)
@@ -176,8 +187,8 @@ struct ConversationPostView: View {
 struct PostBody: View {
     /// The post as Markdown source; empty only for a description nobody wrote.
     let markdown: String
-    /// The reactions anybody left on it.
-    let reactions: [ReactionGroup]
+    /// The reactions under it.
+    let reactions: ReactionBar
     /// The tab's translation cache.
     let translations: TranslationCoordinator
 
@@ -191,7 +202,7 @@ struct PostBody: View {
                 TranslatableMarkdownText(markdown: markdown, translations: translations)
             }
             if !reactions.isEmpty {
-                ReactionSummaryView(reactions: reactions)
+                reactions
             }
         }
     }
@@ -349,27 +360,113 @@ struct AuthorLine: View {
 }
 
 /// The reactions under a post, the way GitHub draws them: one capsule per emoji with its count,
-/// filled when one of them is yours. Read-only until phase B adds the buttons (ADR 0043).
-struct ReactionSummaryView: View {
-    /// The groups somebody used.
-    let reactions: [ReactionGroup]
+/// filled when one of them is yours, and a smiley that offers all eight (ADR 0043, B).
+///
+/// Where the viewer may react a capsule is a button that adds or takes back the viewer's own, as
+/// on GitHub, and so is an emoji in the smiley's popover. Where GitHub says they may not — a locked
+/// conversation, an archived repository — the capsules are only read and the smiley is not drawn.
+struct ReactionBar: View {
+    /// The groups to draw, in GitHub's order — the stored ones with the reviewer's clicks laid
+    /// over them (``ReviewModel/displayed(_:subjectID:overlay:)``).
+    let groups: [ReactionGroup]
+    /// Whether the viewer may react here.
+    let canReact: Bool
+    /// A click on an emoji, with whether the viewer's reaction is on it now.
+    let onToggle: @MainActor (ReactionContent, Bool) -> Void
+
+    /// Whether the smiley's popover is open.
+    @State private var isPickerShown = false
+
+    /// Whether there is nothing to draw: no reactions, and none to add.
+    var isEmpty: Bool { groups.isEmpty && !canReact }
 
     var body: some View {
         HStack(spacing: 6) {
-            ForEach(reactions, id: \.content) { group in
-                Text(verbatim: "\(group.content.emoji) \(group.count)")
-                    .font(Theme.type(.subheadline))
-                    .foregroundStyle(Theme.text)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2)
-                    .background(
-                        group.viewerHasReacted ? Theme.chipBackground(Theme.accentText) : Theme.control,
-                        in: Capsule(style: .continuous)
-                    )
-                    .overlay(Capsule(style: .continuous).stroke(Theme.border, lineWidth: 1))
+            ForEach(groups, id: \.content) { group in
+                if canReact {
+                    Button {
+                        onToggle(group.content, group.viewerHasReacted)
+                    } label: {
+                        Self.capsule(group)
+                    }
+                    .buttonStyle(.plain)
+                    .help(Self.action(for: group))
                     .accessibilityLabel(Text(verbatim: Self.spokenLabel(for: group)))
+                    .accessibilityHint(Text(verbatim: Self.action(for: group)))
+                } else {
+                    Self.capsule(group)
+                        .accessibilityLabel(Text(verbatim: Self.spokenLabel(for: group)))
+                }
+            }
+            if canReact {
+                Button {
+                    isPickerShown = true
+                } label: {
+                    Image(systemName: "face.smiling")
+                        .font(Theme.type(.subheadline))
+                        .foregroundStyle(Theme.textSecondary)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(Theme.control, in: Capsule(style: .continuous))
+                        .overlay(Capsule(style: .continuous).stroke(Theme.border, lineWidth: 1))
+                        .contentShape(Capsule(style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .help(String(localized: "Add a reaction"))
+                .accessibilityLabel(String(localized: "Add a reaction"))
+                .popover(isPresented: $isPickerShown, arrowEdge: .bottom) { picker }
             }
         }
+    }
+
+    /// The eight, in GitHub's order. One the viewer already used is marked, and pressing it takes
+    /// it back, as on GitHub.
+    private var picker: some View {
+        HStack(spacing: 2) {
+            ForEach(ReactionContent.allCases, id: \.self) { content in
+                let isOn = groups.contains { $0.content == content && $0.viewerHasReacted }
+                Button {
+                    isPickerShown = false
+                    onToggle(content, isOn)
+                } label: {
+                    Text(verbatim: content.emoji)
+                        .font(Theme.type(.title3))
+                        .padding(5)
+                        .background(
+                            isOn ? Theme.chipBackground(Theme.accentText) : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(Self.name(of: content))
+                .accessibilityLabel(Text(verbatim: Self.name(of: content)))
+                .accessibilityAddTraits(isOn ? .isSelected : [])
+            }
+        }
+        .padding(6)
+    }
+
+    /// One capsule: the emoji and its count, filled when one of them is the viewer's.
+    private static func capsule(_ group: ReactionGroup) -> some View {
+        Text(verbatim: "\(group.content.emoji) \(group.count)")
+            .font(Theme.type(.subheadline))
+            .foregroundStyle(Theme.text)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 2)
+            .background(
+                group.viewerHasReacted ? Theme.chipBackground(Theme.accentText) : Theme.control,
+                in: Capsule(style: .continuous)
+            )
+            .overlay(Capsule(style: .continuous).stroke(Theme.border, lineWidth: 1))
+            .contentShape(Capsule(style: .continuous))
+    }
+
+    /// What pressing a capsule does — its tooltip, and what a screen reader says after its label.
+    static func action(for group: ReactionGroup) -> String {
+        group.viewerHasReacted
+            ? String(localized: "Remove your reaction")
+            : String(localized: "Add your reaction")
     }
 
     /// One capsule in words — "Thumbs up. 2 reactions. including yours." — because the fill is
@@ -398,6 +495,37 @@ struct ReactionSummaryView: View {
     }
 }
 
+extension ReactionBar {
+    /// One post's bar on the review screen: the stored groups with the reviewer's clicks laid over
+    /// them, taking a click where GitHub lets the viewer react.
+    ///
+    /// Built in the body of the view that draws the post and never in ``ConversationStream``'s:
+    /// the overlay is read here, and the stream is compared by its entries, which a click does not
+    /// change.
+    /// - Parameters:
+    ///   - subjectID: The post's node id — the pull request's own for the description.
+    ///   - stored: The post's groups as stored.
+    ///   - model: The review model, which holds the clicks and writes them.
+    ///   - actions: The write actions.
+    ///   - canReact: `false` where this post takes no reaction even though the pull request does —
+    ///     the viewer's own pending review, which GitHub's page does not show yet.
+    init(
+        subjectID: String,
+        stored: [ReactionGroup],
+        model: ReviewModel,
+        actions: PullRequestActions,
+        canReact: Bool = true
+    ) {
+        self.init(
+            groups: ReviewModel.displayed(stored, subjectID: subjectID, overlay: model.reactionOverlay),
+            canReact: canReact && model.canReact,
+            onToggle: { content, isOn in
+                model.toggleReaction(subjectID: subjectID, content: content, currentlyReacted: isOn, actions: actions)
+            }
+        )
+    }
+}
+
 /// A review in the stream: who gave which verdict and when, the words above it, and the threads
 /// its comments started, indented under it as GitHub draws them.
 struct ConversationReviewView: View {
@@ -416,6 +544,13 @@ struct ConversationReviewView: View {
 
     var body: some View {
         let verdict = Self.verdict(review.state)
+        let reactions = ReactionBar(
+            subjectID: review.id,
+            stored: review.reactions,
+            model: model,
+            actions: actions,
+            canReact: review.state != .pending
+        )
         VStack(alignment: .leading, spacing: 8) {
             PostHeader(
                 model: model,
@@ -433,8 +568,13 @@ struct ConversationReviewView: View {
             // the menu — so no header here, and no spoken label of the card's own either.
             if review.hasBody {
                 Card {
-                    PostBody(markdown: review.bodyMarkdown, reactions: review.reactions, translations: translations)
+                    PostBody(markdown: review.bodyMarkdown, reactions: reactions, translations: translations)
                 }
+            } else if !reactions.groups.isEmpty {
+                // A verdict without words has no card to carry its reactions, so they sit under
+                // the row, past the avatar — and still take a click.
+                reactions
+                    .padding(.leading, 44)
             }
             ForEach(threads) { thread in
                 ConversationThreadView(
@@ -520,7 +660,7 @@ struct ConversationThreadView: View {
                 header
                 if isExpanded {
                     ForEach(thread.comments) { comment in
-                        ThreadCommentView(comment: comment, translations: translations)
+                        ThreadCommentView(comment: comment, translations: translations, model: model, actions: actions)
                     }
                     ThreadReplyBar(thread: thread, summary: summary, actions: actions, replyText: reply)
                 }
@@ -534,10 +674,11 @@ struct ConversationThreadView: View {
     /// The reply bar's text, written to this card's copy and to the model's at once — not through
     /// an `onChange` of the copy, which a card already gone never runs: a reply that finishes
     /// sending after *Show in diff* has to clear the draft it sent, or the tab would offer it
-    /// again.
+    /// again. Read from the model's first for the same reason: the bar compares what it sent with
+    /// what the field holds before it clears it, and a card already gone has no copy to compare.
     private var reply: Binding<String> {
         Binding(
-            get: { replyText },
+            get: { model.threadReplyDrafts[thread.id] ?? replyText },
             set: { text in
                 replyText = text
                 model.threadReplyDrafts[thread.id] = text.isEmpty ? nil : text

@@ -339,6 +339,13 @@ review, Shepherd re-reads that pull request a second later, so it appears at onc
 the next sweep, wherever it was written; a colleague's comment arrives with the sweep, the way a new
 check does.
 
+Reactions work as on GitHub, on every post — the description, a comment, a review, a comment in a
+thread, in the stream and in the diff's popover: click a reaction to add yours or take it back, or
+the smiley for all eight. The click shows at once and goes through the outbox, so one made offline
+stays on the bar until it is sent, and clicking twice before the first one left cancels it rather
+than sending both. A reaction GitHub refuses goes back off the bar, with a toast saying so. On a
+locked conversation or in an archived repository the reactions are shown but not offered.
+
 It is one more GraphQL read per changed pull request, measured at one point of GitHub's rate
 limit, read newest first and capped at 500 entries — a conversation longer than that says
 *Earlier activity is on GitHub* at the top rather than losing its latest comments. A read that

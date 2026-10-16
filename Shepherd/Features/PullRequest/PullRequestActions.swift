@@ -283,6 +283,102 @@ struct PullRequestActions {
         }
     }
 
+    // MARK: - Reactions (ADR 0043, B)
+
+    /// Adds the viewer's reaction to a post, or takes it back.
+    ///
+    /// No ``activity`` key and no toast unless it went wrong: the bar already shows the click
+    /// (``ReviewModel/reactionOverlay``), a reviewer may press three emojis in a row, and a toast
+    /// per emoji would be noise. It waits for the drain all the same, because the caller takes a
+    /// refused click back off the screen.
+    ///
+    /// A click that undoes one whose row is still waiting cancels that row instead of queuing its
+    /// opposite: a row in a retry's backoff would otherwise be sent *after* the click that undid
+    /// it. The opposite is still queued behind a row the drain had already claimed, and behind one
+    /// that was tried before (``needsReactionRow(undoing:cancelled:)``).
+    /// - Parameters:
+    ///   - summary: The pull request the post belongs to.
+    ///   - subjectID: The post's node id — the pull request's own for the description.
+    ///   - content: Which reaction.
+    ///   - adding: `true` to add the viewer's reaction, `false` to take it back.
+    /// - Returns: What became of the click's row — `.sent` as well when the click only cancelled
+    ///   the row it undid, so nothing is left to send — or `nil` when the outbox could not be read
+    ///   or written, which is toasted here.
+    @discardableResult
+    func react(
+        on summary: PullRequestSummary,
+        subjectID: String,
+        content: ReactionContent,
+        adding: Bool
+    ) async -> OutboxWriteOutcome? {
+        do {
+            let items = try await session.database.allOutboxItems()
+            let undone = Self.queuedReaction(
+                undoneBy: adding,
+                subjectID: subjectID,
+                content: content,
+                prID: summary.id,
+                in: items
+            )
+            var cancelled = false
+            if let undone {
+                cancelled = try await session.database.cancelPendingOutboxItem(id: undone.id)
+            }
+            guard Self.needsReactionRow(undoing: undone, cancelled: cancelled) else { return .sent }
+            let outcome = try await enqueue(
+                .react(subjectID: subjectID, content: content, adding: adding),
+                on: summary
+            )
+            announce(outcome, of: .reaction, on: summary)
+            return outcome
+        } catch {
+            toasts.failure(error, context: String(localized: "Could not queue the reaction"))
+            return nil
+        }
+    }
+
+    /// The still-waiting row a reaction click undoes: the same post and emoji on the same pull
+    /// request, the other direction, and not claimed by the drain yet. The newest, should there be
+    /// two.
+    /// - Parameters:
+    ///   - adding: The click's direction; the row it undoes went the other way.
+    ///   - subjectID: The post's node id.
+    ///   - content: Which reaction.
+    ///   - prID: The pull request's node id.
+    ///   - items: The outbox, oldest first.
+    /// - Returns: The row to cancel, or `nil` when there is none.
+    static func queuedReaction(
+        undoneBy adding: Bool,
+        subjectID: String,
+        content: ReactionContent,
+        prID: String,
+        in items: [OutboxItem]
+    ) -> OutboxItem? {
+        items.last { item in
+            guard item.prID == prID, item.state == .pending,
+                  case .react(let rowSubject, let rowContent, let rowAdding) = item.action
+            else { return false }
+            return rowSubject == subjectID && rowContent == content && rowAdding != adding
+        }
+    }
+
+    /// Whether a reaction click still needs a row of its own once the row it undoes has been dealt
+    /// with (ADR 0043, B).
+    ///
+    /// Nothing to undo, or a row the drain claimed first — the cancel refused — and the opposite
+    /// goes behind it. A row cancelled before it was ever tried never left, so the click has
+    /// nothing to send. A row cancelled after an attempt may have reached GitHub with its answer
+    /// lost on the way back, and only the opposite makes sure.
+    /// - Parameters:
+    ///   - row: The row the click undoes, or `nil` when there was none.
+    ///   - cancelled: Whether ``ShepherdPersistence/DatabaseManager/cancelPendingOutboxItem(id:)``
+    ///     took it out.
+    /// - Returns: `true` when the click's own row has to be queued.
+    static func needsReactionRow(undoing row: OutboxItem?, cancelled: Bool) -> Bool {
+        guard let row, cancelled else { return true }
+        return row.attemptCount > 0
+    }
+
     // MARK: - Merge
 
     /// Merges a pull request.
@@ -612,6 +708,8 @@ struct PullRequestActions {
         case close(withComment: Bool)
         /// Bringing the head branch up to date with its base (a merge series' step, ADR 0041).
         case updateBranch
+        /// The viewer's reaction on a post, added or taken back (ADR 0043, B).
+        case reaction
     }
 
     /// Why this verdict would be refused on this pull request, or `nil` when it would not.
@@ -698,7 +796,8 @@ struct PullRequestActions {
             guard let message = sentMessage(write, slug: slug) else { return nil }
             return Toast(message: message, kind: .success)
         case .queued:
-            return Toast(message: queuedMessage(write, slug: slug), kind: .success)
+            guard let message = queuedMessage(write, slug: slug) else { return nil }
+            return Toast(message: message, kind: .success)
         case .parked:
             // A warning rather than a failure, because nothing is lost: the draft is still on
             // disk, and the alert this sentence points at is where it is re-applied or discarded
@@ -750,14 +849,18 @@ struct PullRequestActions {
                 : String(localized: "Closed \(slug).")
         case .updateBranch:
             return String(localized: "Updated the branch of \(slug).")
+        case .reaction:
+            // The bar says it: the capsule changed on the click.
+            return nil
         }
     }
 
-    /// What to say about a write that is on disk but has not landed yet.
+    /// What to say about a write that is on disk but has not landed yet, or `nil` when the
+    /// screen already shows it.
     ///
     /// Not a failure and not a lie: an offline approval, a backoff or a drain that is still
     /// running is the ordinary local-first promise (ADR 0006), and the queue keeps it.
-    private static func queuedMessage(_ write: WriteKind, slug: String) -> String {
+    private static func queuedMessage(_ write: WriteKind, slug: String) -> String? {
         switch write {
         case .review(.approve):
             return String(localized: "Approval queued for \(slug).")
@@ -784,6 +887,10 @@ struct PullRequestActions {
             return String(localized: "Close queued for \(slug).")
         case .updateBranch:
             return String(localized: "Branch update queued for \(slug).")
+        case .reaction:
+            // The click stays on the bar until it is sent, which is the whole of what a toast
+            // would add.
+            return nil
         }
     }
 
@@ -806,8 +913,8 @@ struct PullRequestActions {
             // Nothing parks these two either: neither is pinned to the head commit, and a
             // comment says what it says however the pull request has moved since.
             return String(localized: "Not sent — \(slug) changed since you started.")
-        case .reply, .thread, .readyForReview:
-            // Nothing parks these three today — only a review draft and a merge are checked
+        case .reply, .thread, .readyForReview, .reaction:
+            // Nothing parks these four today — only a review draft and a merge are checked
             // against the head commit — but the outcome is read off the queue rather than
             // guessed, so the sentence exists for the day the drain learns to park one of them.
             // It points at no alert, because only a parked *review* raises one (ADR 0006).
@@ -834,6 +941,9 @@ struct PullRequestActions {
             return String(localized: "Could not close \(slug)")
         case .updateBranch:
             return String(localized: "Could not update the branch of \(slug)")
+        case .reaction:
+            // Says what the screen did about it: the caller takes the click back off the bar.
+            return String(localized: "Could not change your reaction on \(slug) — it is back as it was")
         }
     }
 

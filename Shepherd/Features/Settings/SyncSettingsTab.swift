@@ -357,6 +357,10 @@ struct SyncSettingsTab: View {
             return comment == nil
                 ? String(localized: "Close a pull request")
                 : String(localized: "Comment and close")
+        case .react(_, _, let adding):
+            // Two names for the two directions: an add and a removal are two different things to
+            // re-send or discard.
+            return adding ? String(localized: "Add a reaction") : String(localized: "Remove a reaction")
         }
     }
 

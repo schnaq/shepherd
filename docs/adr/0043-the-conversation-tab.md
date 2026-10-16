@@ -140,7 +140,9 @@ removal. One outbox action, `react(subjectID:content:adding:)`. What the bar sho
 state plus the reviewer's own clicks, so a click is visible at once and an offline click stays
 visible until it is sent. A click that undoes one still waiting in the outbox cancels that row
 instead of queuing its opposite: a row in a retry's backoff could otherwise be sent after the
-click that undid it, and leave the reaction the reviewer took back.
+click that undid it, and leave the reaction the reviewer took back. A cancelled row that had been
+tried before gets its opposite queued all the same, because that attempt may have landed with its
+answer lost.
 
 ### C: edits and deletes are REST, gated by GitHub's own flags
 
