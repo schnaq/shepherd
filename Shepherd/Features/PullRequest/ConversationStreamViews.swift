@@ -360,7 +360,18 @@ struct ConversationThreadView: View {
     @State private var replyText = ""
 
     private var isExpanded: Bool {
-        isFlipped != (thread.isResolved || thread.isOutdated)
+        Self.isExpanded(thread, isFlipped: isFlipped)
+    }
+
+    /// Whether a thread shows its comments and its reply bar: an open one does until the reviewer
+    /// folds it, a resolved or outdated one only once they unfold it — so a thread resolved from
+    /// its own bar folds by itself.
+    /// - Parameters:
+    ///   - thread: The thread.
+    ///   - isFlipped: Whether the reviewer flipped it away from how it starts.
+    /// - Returns: `true` when the thread is drawn open.
+    static func isExpanded(_ thread: ReviewThread, isFlipped: Bool) -> Bool {
+        isFlipped == (thread.isResolved || thread.isOutdated)
     }
 
     var body: some View {

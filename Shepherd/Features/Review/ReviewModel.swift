@@ -270,8 +270,9 @@ final class ReviewModel {
     /// Whether the conversation tab's comment field has the keyboard.
     ///
     /// Who ⌘⏎ belongs to: *Post comment* while somebody is typing a comment, the toolbar's
-    /// *Review* everywhere else. Set by ``ConversationComposer`` when the focus moves and at no
-    /// other time, so the toolbar redraws on a focus change and never on a keystroke.
+    /// *Review* everywhere else. Set by ``ConversationComposer`` when the focus moves, and cleared
+    /// by it when the field leaves the screen — never on a keystroke, so the toolbar redraws on a
+    /// focus change and not while somebody types.
     var isConversationComposerFocused = false
 
     /// The provider router.
