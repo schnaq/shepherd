@@ -167,4 +167,6 @@ answered `405` on a merged pull request is (ADR 0005's 2026-09-05 amendment).
   and is erased with everything else on sign-out.
 - The *Comment…* sheet stays for the inbox panel, which has no room for a timeline.
 - The GitHub App's permissions for B's and C's writes cannot be checked from a `gh` token; they are
-  tested with the app's own token in `schnaq/shepherd-playground` before each of those releases.
+  checked with the app's own token in `schnaq/shepherd-playground`. As with ⌘V image upload (1.11.0)
+  the check follows the release rather than gating it, because a refusal is harmless: the click is
+  taken back with a toast, and the failed row says GitHub's own words in Settings → Sync.
