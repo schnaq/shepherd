@@ -106,9 +106,9 @@ struct RepoRecord: Codable, FetchableRecord, PersistableRecord {
 
 /// A row of `pull_requests`.
 ///
-/// Holds the inbox row plus the three detail collections that have no table of their own
-/// (commits, the condensed timeline and the conversation), stored as JSON so that the table list
-/// in `docs/ARCHITECTURE.md` stays exactly as specified.
+/// Holds the inbox row plus the two detail collections that have no table of their own
+/// (commits and the condensed timeline), stored as JSON so that the table list in
+/// `docs/ARCHITECTURE.md` stays exactly as specified.
 struct PullRequestRecord: Codable, FetchableRecord, PersistableRecord {
     static let databaseTableName = "pull_requests"
 
@@ -153,9 +153,6 @@ struct PullRequestRecord: Codable, FetchableRecord, PersistableRecord {
     var bodyMarkdown: String?
     var commitsJSON: String?
     var timelineJSON: String?
-    /// The `PullRequestConversation` document, or `NULL` while none was ever read — which is
-    /// *unknown*, not empty (v11, ADR 0043).
-    var conversationJSON: String?
     var detailFetchedAt: Double?
 
     /// Builds a row from an inbox summary, preserving any detail columns already stored.
@@ -198,7 +195,6 @@ struct PullRequestRecord: Codable, FetchableRecord, PersistableRecord {
         self.bodyMarkdown = existing?.bodyMarkdown
         self.commitsJSON = existing?.commitsJSON
         self.timelineJSON = existing?.timelineJSON
-        self.conversationJSON = existing?.conversationJSON
         self.detailFetchedAt = existing?.detailFetchedAt
     }
 
@@ -304,12 +300,6 @@ struct PullRequestRecord: Codable, FetchableRecord, PersistableRecord {
     /// The stored timeline, or an empty list when no detail fetch has happened yet.
     var timeline: [TimelineEvent] {
         ColumnCoding.decodeJSON([TimelineEvent].self, from: timelineJSON) ?? []
-    }
-
-    /// The stored conversation, or `nil` when none was ever read — which callers must not take
-    /// for an empty one (ADR 0043).
-    var conversation: PullRequestConversation? {
-        ColumnCoding.decodeJSON(PullRequestConversation.self, from: conversationJSON)
     }
 }
 
@@ -1148,6 +1138,31 @@ struct PullRequestClosingIssueRecord: Codable, FetchableRecord, PersistableRecor
             title: issueTitle,
             state: IssueSummary.State(rawValue: issueState) ?? .unknown
         )
+    }
+}
+
+/// A row of `pull_request_conversations` (v11, ADR 0043): the whole conversation as one JSON
+/// document.
+///
+/// A table of its own rather than a column of ``PullRequestRecord``, because the inbox and the
+/// search index read every `pull_requests` row whole and a conversation is up to five pages of
+/// comment bodies. No row means *unknown*, which is not the same as a row holding an empty
+/// conversation: the first is a read that did not happen, the second is GitHub's answer.
+struct PullRequestConversationRecord: Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = "pull_request_conversations"
+
+    var prID: String
+    var json: String
+
+    init(prID: String, conversation: PullRequestConversation) {
+        self.prID = prID
+        self.json = ColumnCoding.encodeJSON(conversation)
+    }
+
+    /// The stored conversation, or `nil` when the document no longer decodes — which reads as
+    /// unknown rather than failing the detail fetch, like every other JSON column in this file.
+    var conversation: PullRequestConversation? {
+        ColumnCoding.decodeJSON(PullRequestConversation.self, from: json)
     }
 }
 

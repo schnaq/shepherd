@@ -75,10 +75,10 @@ extension DatabaseManager {
 
     /// Stores the result of one inbox sweep.
     ///
-    /// Rows are upserted, keeping the detail columns (body, commits, timeline, conversation) of
-    /// any pull request that was already fetched in detail. When `pruneMissing` is `true` — the
-    /// normal case for a full sweep — pull requests that are no longer in the result set are
-    /// deleted, which is how merged and closed pull requests leave the inbox.
+    /// Rows are upserted, keeping the detail columns (body, commits, timeline) of any pull
+    /// request that was already fetched in detail. When `pruneMissing` is `true` — the normal
+    /// case for a full sweep — pull requests that are no longer in the result set are deleted,
+    /// which is how merged and closed pull requests leave the inbox.
     /// - Parameters:
     ///   - summaries: The rows the sweep returned.
     ///   - pruneMissing: Whether to delete rows absent from `summaries`.
@@ -253,17 +253,22 @@ extension DatabaseManager {
                 // sweep, which writes GraphQL's `null` through (ADR 0042).
                 record.keepStack(from: existing)
             }
-            if let conversation = detail.conversation {
-                // `nil` is a read that failed or was not made, so the copy the record already
-                // carries from `existing` stays. An empty conversation is GitHub's answer and
-                // replaces it (ADR 0043).
-                record.conversationJSON = ColumnCoding.encodeJSON(conversation)
-            }
             record.bodyMarkdown = detail.bodyMarkdown
             record.commitsJSON = ColumnCoding.encodeJSON(detail.commits)
             record.timelineJSON = ColumnCoding.encodeJSON(detail.timeline)
             record.detailFetchedAt = fetchedAt
             try record.save(db)
+
+            // A table of its own, so a sweep neither carries it forward nor wipes it. `nil` is a
+            // read that failed or was not made: the stored row stays. An empty conversation is
+            // GitHub's answer and replaces it (ADR 0043). Above the checks' early return, like
+            // the closing issues below.
+            if let conversation = detail.conversation {
+                try PullRequestConversationRecord(
+                    prID: detail.id,
+                    conversation: conversation
+                ).save(db)
+            }
 
             try db.execute(
                 sql: "DELETE FROM changed_files WHERE prID = ?",
@@ -428,6 +433,13 @@ extension DatabaseManager {
             arguments: [id]
         )
 
+        // No row, or a document this build cannot decode, is "unknown" — never an empty one.
+        let conversation = try PullRequestConversationRecord.fetchOne(
+            db,
+            sql: "SELECT * FROM pull_request_conversations WHERE prID = ?",
+            arguments: [id]
+        )?.conversation
+
         return PullRequestDetail(
             summary: record.summary,
             bodyMarkdown: record.bodyMarkdown ?? "",
@@ -437,7 +449,7 @@ extension DatabaseManager {
             timeline: record.timeline,
             checks: checkRecords.map(\.checkRun),
             closingIssues: closingIssueRecords.map(\.reference),
-            conversation: record.conversation
+            conversation: conversation
         )
     }
 

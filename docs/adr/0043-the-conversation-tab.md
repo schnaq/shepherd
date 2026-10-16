@@ -77,11 +77,12 @@ request) — every sentence is the app's, through `String(localized:)`, because 
 user-visible strings (CONTRIBUTING). Commits are not fetched a second time: the REST list the
 detail fetch already reads is placed into the stream by date, consecutive commits as one group.
 
-Persistence is migration **v11**: `pull_requests.conversationJSON` for the document (carried
-forward by `PullRequestRecord.init(summary:existing:)`, like `timelineJSON`, so a sweep's upsert
-cannot wipe it), and on `review_comments` the columns `reviewID`, `reactionsJSON`,
-`viewerCanUpdate`, `viewerCanDelete`, `isEdited` and `url`. The condensed `timeline` is left
-exactly as it is: ADR 0028's retroactive baseline reads it.
+Persistence is migration **v11**: the document gets a table of its own, `pull_request_conversations`
+(`prID`, `json`, cascading with `pull_requests`), rather than a column like `timelineJSON` — the
+inbox and the search index read every `pull_requests` row whole, and a conversation is up to five
+pages of comment bodies. A sweep's upsert of the row never touches it. On `review_comments` the
+columns `reviewID`, `reactionsJSON`, `viewerCanUpdate`, `viewerCanDelete`, `isEdited` and `url`.
+The condensed `timeline` is left exactly as it is: ADR 0028's retroactive baseline reads it.
 
 Reactions and the viewer's permissions are fetched and stored from A onwards, so B and C add
 buttons and outbox actions and no migration. In A they are shown, not offered.

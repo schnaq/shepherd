@@ -453,7 +453,7 @@ Tables mirror core models (`repos`, `pull_requests`, `changed_files`, `review_th
 `review_comments`, `review_drafts`, `draft_comments`, `check_runs`, `sync_state`, `outbox`,
 `etags`, `viewed_files`, `agent_registry_overrides`, `search_index`, `triage_verdicts`,
 `review_snapshots`, `pull_request_outcomes`, `issues`, `issue_search_index`,
-`issue_linked_pull_requests`, `pull_request_closing_issues`).
+`issue_linked_pull_requests`, `pull_request_closing_issues`, `pull_request_conversations`).
 Append-only migrator — currently `v1` through `v11`. `v3` is the search index (ADR 0019: one
 row per pull request holding the document hash, the model identifier and a `Float32` vector, pruned
 by an `ON DELETE CASCADE` onto `pull_requests` rather than by a sweep of its own); `v4` is
@@ -503,13 +503,16 @@ a node id, and it exists because a link is written the way GitHub writes it, `ow
 `DatabaseManager.changedFilePaths(prIDs:)` reads the cached diffs' paths and statuses **without**
 their patches, which is all the trust lane's sensitive-path exclusion needs.
 
-`v11` is the conversation tab (ADR 0043): no new table, only columns, and every one is nullable or
-defaults to `0`, so a row stored before it reads back as "never read" and the next detail fetch
-fills it in.
+`v11` is the conversation tab (ADR 0043): one new table and six columns on `review_comments`, every
+column nullable or defaulting to `0`, so a row stored before it reads back as "never read" and the
+next detail fetch fills it in.
 
-- `pull_requests.conversationJSON` — the `PullRequestConversation` document, beside `commitsJSON`
-  and `timelineJSON`. `NULL` means *unknown*, not empty: a sweep's upsert carries it forward and a
-  detail fetch that read no conversation leaves it alone, while a fetched empty one replaces it.
+- `pull_request_conversations` — the `PullRequestConversation` as one JSON document, keyed by
+  `prID` (`json NOT NULL`) and pruned by an `ON DELETE CASCADE` onto `pull_requests`. A table of
+  its own rather than a `pull_requests` column like `timelineJSON`, because the inbox and the
+  search index read every row of that table whole and a conversation is up to five pages of
+  comment bodies. A sweep's upsert never touches it. No row means *unknown*, not empty: a detail
+  fetch that read no conversation leaves the row alone, while a fetched empty one replaces it.
 - `review_comments.reviewID` — the node id of the review the comment was submitted in; the first
   comment's places a thread under its review.
 - `review_comments.reactionsJSON` — the comment's `[ReactionGroup]`.

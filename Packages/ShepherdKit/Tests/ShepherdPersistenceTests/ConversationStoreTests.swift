@@ -113,6 +113,32 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertEqual(observed??.threads.first?.comments.first, Self.richComment())
     }
 
+    func testTheObservationFiresWhenOnlyTheConversationRowChanges() async throws {
+        let database = try DatabaseManager.inMemory()
+        let detail = Self.detail()
+        try await database.savePullRequestDetail(detail)
+
+        var iterator = database.observePullRequestDetail(prID: detail.id).makeAsyncIterator()
+        let first = await iterator.next()
+        XCTAssertEqual(first??.conversation, Self.conversation())
+
+        // Straight into the table rather than through `savePullRequestDetail`, which would
+        // rewrite the `pull_requests` row too and fire the observation for that reason alone.
+        var changed = Self.conversation()
+        changed.viewerCanReact = false
+        let json = ColumnCoding.encodeJSON(changed)
+        let prID = detail.id
+        try await database.writer.write { db in
+            try db.execute(
+                sql: "UPDATE pull_request_conversations SET json = ? WHERE prID = ?",
+                arguments: [json, prID]
+            )
+        }
+
+        let second = await iterator.next()
+        XCTAssertEqual(second??.conversation, changed)
+    }
+
     // MARK: - Unknown is not empty
 
     func testADetailWithoutAConversationKeepsTheStoredOne() async throws {
@@ -133,7 +159,9 @@ final class ConversationStoreTests: XCTestCase {
         let detail = Self.detail()
         try await database.savePullRequestDetail(detail)
 
-        // The sweep rewrites the row from a search result, which carries no detail columns.
+        // The sweep rewrites the `pull_requests` row from a search result. The conversation sits
+        // in a table of its own, so there is nothing to carry forward: the upsert has to neither
+        // touch it nor cascade it away.
         var swept = detail.summary
         swept.title = "Refactor the token store, again"
         try await database.savePullRequestSummaries([swept])
@@ -156,9 +184,59 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertEqual(fetched?.conversation, PullRequestConversation())
     }
 
+    func testADocumentThisBuildCannotDecodeReadsAsUnknownAndDoesNotFailTheFetch() async throws {
+        let database = try DatabaseManager.inMemory()
+        let detail = Self.detail()
+        try await database.savePullRequestDetail(detail)
+
+        // A document from a build whose model differed, or a damaged one.
+        let id = detail.id
+        try await database.writer.write { db in
+            try db.execute(
+                sql: "UPDATE pull_request_conversations SET json = ? WHERE prID = ?",
+                arguments: [#"{"items": 7}"#, id]
+            )
+        }
+
+        let fetched = try await database.fetchPullRequestDetail(id: id)
+        XCTAssertNil(fetched?.conversation, "unknown, which is not an empty conversation")
+        XCTAssertEqual(fetched?.threads, detail.threads, "and the rest of the detail still loads")
+    }
+
+    // MARK: - The cascade
+
+    func testTheConversationLeavesWithItsPullRequest() async throws {
+        let database = try DatabaseManager.inMemory()
+        try await database.savePullRequestDetail(Self.detail())
+        let before = try await conversationRowCount(database)
+        XCTAssertEqual(before, 1)
+
+        // The pull request was merged, so the next sweep prunes it, and the row goes with it.
+        try await database.savePullRequestSummaries([])
+
+        let after = try await conversationRowCount(database)
+        XCTAssertEqual(after, 0)
+    }
+
+    func testErasingEverythingEmptiesTheConversationTable() async throws {
+        let database = try DatabaseManager.inMemory()
+        try await database.savePullRequestDetail(Self.detail())
+
+        try await database.eraseAllData()
+
+        let remaining = try await conversationRowCount(database)
+        XCTAssertEqual(remaining, 0)
+    }
+
+    private func conversationRowCount(_ database: DatabaseManager) async throws -> Int {
+        try await database.writer.read { db in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM pull_request_conversations") ?? -1
+        }
+    }
+
     // MARK: - The upgrade
 
-    func testV11AddsTheColumnsAndRowsStoredBeforeItReadBackWithoutThem() async throws {
+    func testV11AddsTheTableAndTheCommentColumnsAndOldRowsReadBackWithoutThem() async throws {
         // A database migrated only as far as v10, holding a pull request, a thread and a comment
         // an older build stored.
         let queue = try DatabaseQueue()
@@ -193,12 +271,31 @@ final class ConversationStoreTests: XCTestCase {
 
         let database = try DatabaseManager(writer: queue)
 
-        let pullRequestColumns = try await database.writer.read { db in
-            try db.columns(in: "pull_requests")
+        // The document is a table of its own, not a column of `pull_requests`: the inbox reads
+        // every row of that table whole, on every observation.
+        try await database.writer.read { db in
+            let pullRequestColumns = try db.columns(in: "pull_requests").map(\.name)
+            XCTAssertFalse(pullRequestColumns.contains("conversationJSON"))
+
+            let columns = try db.columns(in: "pull_request_conversations")
+            XCTAssertEqual(columns.map(\.name), ["prID", "json"])
+            XCTAssertEqual(columns.last?.type, "TEXT")
+            XCTAssertEqual(columns.last?.isNotNull, true)
+            XCTAssertEqual(try db.primaryKey("pull_request_conversations").columns, ["prID"])
+
+            let parents = try String.fetchAll(
+                db,
+                sql: """
+                    SELECT "table" FROM pragma_foreign_key_list('pull_request_conversations')
+                    """
+            )
+            XCTAssertEqual(parents, ["pull_requests"])
+            let onDelete = try String.fetchAll(
+                db,
+                sql: "SELECT on_delete FROM pragma_foreign_key_list('pull_request_conversations')"
+            )
+            XCTAssertEqual(onDelete, ["CASCADE"], "pruned with its pull request")
         }
-        let document = try XCTUnwrap(pullRequestColumns.first { $0.name == "conversationJSON" })
-        XCTAssertEqual(document.type, "TEXT")
-        XCTAssertFalse(document.isNotNull, "additive: no existing row has a conversation")
 
         let commentColumns = try await database.writer.read { db in
             try db.columns(in: "review_comments")
