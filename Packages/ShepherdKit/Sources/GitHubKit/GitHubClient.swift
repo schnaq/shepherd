@@ -19,10 +19,11 @@ public enum MergeMethod: String, Sendable, Codable, Hashable, CaseIterable {
 ///
 /// - **Reads of the inbox** go through one GraphQL `search` sweep per facet.
 /// - **Detail reads** combine REST (`/pulls/{n}`, `/files`, `/commits`, `/reviews`,
-///   `/check-runs`) with two GraphQL queries: review threads, because thread ids — and the
-///   mutations that resolve them — exist only in GraphQL, and the issues the pull request
+///   `/check-runs`) with three GraphQL queries: review threads, because thread ids — and the
+///   mutations that resolve them — exist only in GraphQL; the issues the pull request
 ///   closes, because REST carries the description's `closes #123` text but not the references
-///   GitHub resolved out of it (ADR 0032).
+///   GitHub resolved out of it (ADR 0032); and the conversation, because one query answers the
+///   whole timeline with every post's reactions and the viewer's permissions on it (ADR 0043).
 /// - **Writes** are REST, except thread resolution and "ready for review", which are
 ///   GraphQL-only.
 public actor GitHubClient {
@@ -241,7 +242,7 @@ public actor GitHubClient {
         let headSHA = pullDTO.head?.sha ?? ""
 
         // The reads below share no inputs (the check runs need only the head SHA, which the pull
-        // request itself just told us), so they run side by side. That puts up to six requests
+        // request itself just told us), so they run side by side. That puts up to seven requests
         // of one detail in flight at once, on top of ``GitHubConfiguration/maxConcurrentDetailFetches``
         // details (ADR 0005); a secondary-rate-limit answer still goes through `perform`'s
         // retry and backoff. They are awaited in the order they used to run in, so when several
@@ -250,16 +251,23 @@ public actor GitHubClient {
         async let commitsRead = commits(repo: repo, number: number)
         async let reviewsRead = reviews(repo: repo, number: number)
         async let threads = reviewThreads(repo: repo, number: number)
-        // The one read of this fetch whose failure is tolerated (ADR 0032, Sprint 3). Everything
-        // else here is the review screen: without the files, the commits or the threads there is
-        // nothing to review, so those errors travel. The closing issues are a section *above* the
-        // description, and a pull request whose links GitHub declined to resolve — a token that
-        // cannot see the issues' repository, one field erroring inside an otherwise fine
-        // response — is still a pull request worth reviewing. The attempt is not lost either: it
-        // is in the in-app request log like every other request, through
-        // ``GitHubConfiguration/requestLogger``, which is this package's only logging channel
-        // (Foundation-only, Linux-tested, no `os.log`).
+        // The first of the two reads of this fetch whose failure is tolerated (ADR 0032,
+        // Sprint 3); the conversation below is the second. Everything else here is the review
+        // screen: without the files, the commits or the threads there is nothing to review, so
+        // those errors travel. The closing issues are a section *above* the description, and a
+        // pull request whose links GitHub declined to resolve — a token that cannot see the
+        // issues' repository, one field erroring inside an otherwise fine response — is still a
+        // pull request worth reviewing. The attempt is not lost either: it is in the in-app
+        // request log like every other request, through ``GitHubConfiguration/requestLogger``,
+        // which is this package's only logging channel (Foundation-only, Linux-tested, no
+        // `os.log`).
         async let closing: [LinkedIssueReference]? = try? closingIssues(repo: repo, number: number)
+        // Tolerated, like the closing issues (ADR 0043): a conversation that could not be read is
+        // `nil`, which the store reads as "unknown" and does not write over the copy it has.
+        async let conversationRead: PullRequestConversation? = try? pullRequestConversation(
+            repo: repo,
+            number: number
+        )
         async let checks: [CheckRun] = headSHA.isEmpty ? [] : checkRuns(repo: repo, ref: headSHA)
 
         let fileList = try await files
@@ -299,7 +307,8 @@ public actor GitHubClient {
                 detector: detector
             ),
             checks: checkList,
-            closingIssues: closingIssueList
+            closingIssues: closingIssueList,
+            conversation: await conversationRead
         )
     }
 
@@ -335,6 +344,63 @@ public actor GitHubClient {
             isIdempotent: true
         )
         return ResponseMapping.closingIssues(from: data)
+    }
+
+    /// Fetches a pull request's conversation: GitHub's timeline, oldest first, and what the
+    /// description carries (ADR 0043).
+    ///
+    /// Read newest first, at most five pages of 100. A longer conversation loses its *oldest*
+    /// items and says so in ``PullRequestConversation/hasEarlierItems``, rather than losing the
+    /// newest, which are the ones a reviewer is there to read.
+    ///
+    /// A page GitHub answered only in part is kept: a node it would not resolve (a reference
+    /// from a repository behind SAML enforcement) arrives as `null` and is dropped. Refusing
+    /// the page would leave that pull request's conversation unreadable on every fetch. A page
+    /// whose items were refused as a whole fails the read instead: kept, it would be stored over
+    /// the conversation the store already has, up to a hundred items short.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - number: The pull request number.
+    /// - Returns: The conversation.
+    /// - Throws: ``GitHubError/notFound(resource:)`` when the repository has no such pull
+    ///   request, and any ``GitHubError`` the request maps to. ``pullRequestDetail(repo:number:)``
+    ///   tolerates every one of them and carries `nil`; a caller that asks on its own gets the
+    ///   error.
+    public func pullRequestConversation(
+        repo: RepoRef,
+        number: Int
+    ) async throws -> PullRequestConversation {
+        var pages: [PullRequestConversationData.Repository.PullRequest] = []
+        var cursor: String? = nil
+        for _ in 0..<5 {
+            let data: PullRequestConversationData = try await graphQL(
+                document: GraphQLDocuments.pullRequestConversation,
+                variables: [
+                    "owner": .string(repo.owner),
+                    "name": .string(repo.name),
+                    "number": .int(number),
+                    "before": cursor.map { GraphQLValue.string($0) } ?? .null,
+                ],
+                resource: "\(repo.fullName)#\(number) conversation",
+                isIdempotent: true,
+                acceptsPartialData: true
+            )
+            guard let pullRequest = data.repository?.pullRequest else {
+                throw GitHubError.notFound(resource: "\(repo.fullName)#\(number)")
+            }
+            // A refused connection: `nodes` is `null` beside an error; an empty page is `[]`.
+            guard pullRequest.timelineItems?.nodes != nil else {
+                throw GitHubError.graphQL(
+                    messages: ["GitHub refused the timeline of \(repo.fullName)#\(number)"]
+                )
+            }
+            pages.append(pullRequest)
+            guard pullRequest.timelineItems?.pageInfo?.hasPreviousPage == true,
+                  let previous = pullRequest.timelineItems?.pageInfo?.startCursor
+            else { break }
+            cursor = previous
+        }
+        return ResponseMapping.conversation(from: pages, detector: detector)
     }
 
     /// Derives an aggregate review decision from the review listing.
@@ -1597,12 +1663,18 @@ public actor GitHubClient {
     /// - Parameter isIdempotent: `true` for queries, `false` for mutations. GraphQL always
     ///   travels by `POST`, so the HTTP method cannot answer this: only the caller knows
     ///   whether replaying the document after a dropped connection is safe.
+    /// - Parameter acceptsPartialData: `true` to keep the `data` of an answer that also carries
+    ///   `errors`. GitHub nulls what it would not resolve (a node behind SAML enforcement) and
+    ///   answers the rest. Only the conversation read sets it (ADR 0043), because its mapper
+    ///   drops the nulled nodes; every other read would rather fail than act on half an answer.
+    ///   A rate limit throws either way.
     private func graphQL<Payload: Decodable>(
         document: String,
         variables: [String: GraphQLValue],
         resource: String,
         isIdempotent: Bool,
-        cacheKey: String? = nil
+        cacheKey: String? = nil,
+        acceptsPartialData: Bool = false
     ) async throws -> Payload {
         let body = try RESTJSON.encodeGraphQL(
             GraphQLRequestBody(query: document, variables: variables)
@@ -1623,6 +1695,9 @@ public actor GitHubClient {
             let messages = errors.compactMap(\.message)
             if errors.contains(where: { $0.type == "RATE_LIMITED" }) {
                 throw GitHubError.rateLimited(retryAfter: nil, resetAt: latestRateLimit?.resetAt)
+            }
+            if acceptsPartialData, let data = envelope.data {
+                return data
             }
             throw GitHubError.graphQL(messages: messages.isEmpty ? ["Unknown error"] : messages)
         }

@@ -536,6 +536,11 @@ public enum GraphQLDocuments {
 
     /// Review threads with their node ids — the only way to get the ids that
     /// `resolveReviewThread` needs (ADR 0005).
+    ///
+    /// Each comment also names the review it was submitted in, which is what hangs a thread under
+    /// that review in the conversation tab, and carries its reactions and the viewer's
+    /// permissions on it (ADR 0043). `diffHunk` is deliberately not selected: GitHub sends the
+    /// whole hunk, and hunks of hundreds of lines are ordinary.
     public static let reviewThreads = """
     query ShepherdReviewThreads(
       $owner: String!, $name: String!, $number: Int!, $first: Int!, $after: String
@@ -558,9 +563,84 @@ public enum GraphQLDocuments {
                   databaseId
                   body
                   createdAt
+                  lastEditedAt
+                  url
+                  viewerCanUpdate
+                  viewerCanDelete
+                  pullRequestReview { id }
                   author { __typename login avatarUrl }
+                  reactionGroups { content viewerHasReacted reactors { totalCount } }
                 }
               }
+            }
+          }
+        }
+      }
+    }
+    """
+
+    /// A pull request's conversation (ADR 0043): GitHub's timeline — comments, reviews and
+    /// twenty kinds of event — beside what the description carries (its reactions, whether it
+    /// was edited, whether the viewer may edit it or react at all).
+    ///
+    /// Read **backwards**, `last: 100, before:`, so the client's page cap cuts the oldest items
+    /// rather than the newest, which are the ones a reviewer opened the tab to read. The
+    /// `itemTypes` list is explicit: a type GitHub adds later is not sent until it is mapped.
+    /// Fragments that share a field name share its type, so every node decodes into one
+    /// ``TimelineItemDTO``. Validated live, at a cost of 1 point (2026-10-16).
+    public static let pullRequestConversation = """
+    query ShepherdPullRequestConversation($owner: String!, $name: String!, $number: Int!, $before: String) {
+      repository(owner: $owner, name: $name) {
+        pullRequest(number: $number) {
+          viewerCanUpdate
+          viewerCanReact
+          lastEditedAt
+          reactionGroups { content viewerHasReacted reactors { totalCount } }
+          timelineItems(last: 100, before: $before, itemTypes: [
+            ISSUE_COMMENT, PULL_REQUEST_REVIEW, HEAD_REF_FORCE_PUSHED_EVENT, LABELED_EVENT,
+            UNLABELED_EVENT, ASSIGNED_EVENT, UNASSIGNED_EVENT, REVIEW_REQUESTED_EVENT,
+            REVIEW_REQUEST_REMOVED_EVENT, RENAMED_TITLE_EVENT, READY_FOR_REVIEW_EVENT,
+            CONVERT_TO_DRAFT_EVENT, MERGED_EVENT, CLOSED_EVENT, REOPENED_EVENT,
+            HEAD_REF_DELETED_EVENT, HEAD_REF_RESTORED_EVENT, BASE_REF_CHANGED_EVENT,
+            CROSS_REFERENCED_EVENT, REVIEW_DISMISSED_EVENT, AUTO_MERGE_ENABLED_EVENT,
+            AUTO_MERGE_DISABLED_EVENT
+          ]) {
+            pageInfo { hasPreviousPage startCursor }
+            nodes {
+              __typename
+              ... on IssueComment {
+                id databaseId body createdAt lastEditedAt url isMinimized minimizedReason
+                author { __typename login avatarUrl }
+                viewerCanUpdate viewerCanDelete
+                reactionGroups { content viewerHasReacted reactors { totalCount } }
+              }
+              ... on PullRequestReview {
+                id databaseId body state createdAt submittedAt lastEditedAt url
+                author { __typename login avatarUrl }
+                viewerCanUpdate
+                reactionGroups { content viewerHasReacted reactors { totalCount } }
+                commit { oid }
+              }
+              ... on HeadRefForcePushedEvent { id createdAt actor { __typename login avatarUrl } beforeCommit { oid } afterCommit { oid } }
+              ... on LabeledEvent { id createdAt actor { __typename login avatarUrl } label { name color } }
+              ... on UnlabeledEvent { id createdAt actor { __typename login avatarUrl } label { name color } }
+              ... on AssignedEvent { id createdAt actor { __typename login avatarUrl } assignee { __typename ... on User { login } ... on Bot { login } ... on Mannequin { login } ... on Organization { login } } }
+              ... on UnassignedEvent { id createdAt actor { __typename login avatarUrl } assignee { __typename ... on User { login } ... on Bot { login } ... on Mannequin { login } ... on Organization { login } } }
+              ... on ReviewRequestedEvent { id createdAt actor { __typename login avatarUrl } requestedReviewer { __typename ... on User { login } ... on Bot { login } ... on Mannequin { login } ... on Team { name } } }
+              ... on ReviewRequestRemovedEvent { id createdAt actor { __typename login avatarUrl } requestedReviewer { __typename ... on User { login } ... on Bot { login } ... on Mannequin { login } ... on Team { name } } }
+              ... on RenamedTitleEvent { id createdAt actor { __typename login avatarUrl } previousTitle currentTitle }
+              ... on ReadyForReviewEvent { id createdAt actor { __typename login avatarUrl } }
+              ... on ConvertToDraftEvent { id createdAt actor { __typename login avatarUrl } }
+              ... on MergedEvent { id createdAt actor { __typename login avatarUrl } commit { oid } mergeRefName }
+              ... on ClosedEvent { id createdAt actor { __typename login avatarUrl } }
+              ... on ReopenedEvent { id createdAt actor { __typename login avatarUrl } }
+              ... on HeadRefDeletedEvent { id createdAt actor { __typename login avatarUrl } headRefName }
+              ... on HeadRefRestoredEvent { id createdAt actor { __typename login avatarUrl } }
+              ... on BaseRefChangedEvent { id createdAt actor { __typename login avatarUrl } previousRefName currentRefName }
+              ... on CrossReferencedEvent { id createdAt actor { __typename login avatarUrl } willCloseTarget source { __typename ... on Issue { number title url repository { name owner { login } } } ... on PullRequest { number title url repository { name owner { login } } } } }
+              ... on ReviewDismissedEvent { id createdAt actor { __typename login avatarUrl } dismissalMessage }
+              ... on AutoMergeEnabledEvent { id createdAt actor { __typename login avatarUrl } }
+              ... on AutoMergeDisabledEvent { id createdAt actor { __typename login avatarUrl } }
             }
           }
         }

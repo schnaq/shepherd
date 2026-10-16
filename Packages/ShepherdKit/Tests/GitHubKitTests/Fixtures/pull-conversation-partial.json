@@ -1,0 +1,54 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "viewerCanUpdate": true,
+        "viewerCanReact": true,
+        "lastEditedAt": null,
+        "reactionGroups": [],
+        "timelineItems": {
+          "pageInfo": { "hasPreviousPage": false, "startCursor": "CUR0" },
+          "nodes": [
+            {
+              "__typename": "IssueComment",
+              "id": "IC_kwDOBefore",
+              "databaseId": 2201,
+              "body": "Linked from the internal tracker.",
+              "createdAt": "2026-08-31T06:00:00Z",
+              "author": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" }
+            },
+            null,
+            {
+              "__typename": "CrossReferencedEvent",
+              "id": "CRE_kwDOBehindSAML",
+              "createdAt": "2026-08-31T06:05:00Z",
+              "actor": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" },
+              "willCloseTarget": false,
+              "source": null
+            },
+            {
+              "__typename": "IssueComment",
+              "id": "IC_kwDOAfter",
+              "databaseId": 2202,
+              "body": "Thanks, the tracker is updated.",
+              "createdAt": "2026-08-31T06:10:00Z",
+              "author": { "__typename": "Bot", "login": "claude[bot]", "avatarUrl": "https://avatars.githubusercontent.com/in/1?v=4" }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "errors": [
+    {
+      "type": "FORBIDDEN",
+      "path": ["repository", "pullRequest", "timelineItems", "nodes", 1],
+      "message": "Resource protected by organization SAML enforcement. You must grant your OAuth token access to this organization."
+    },
+    {
+      "type": "FORBIDDEN",
+      "path": ["repository", "pullRequest", "timelineItems", "nodes", 2, "source"],
+      "message": "Resource protected by organization SAML enforcement. You must grant your OAuth token access to this organization."
+    }
+  ]
+}

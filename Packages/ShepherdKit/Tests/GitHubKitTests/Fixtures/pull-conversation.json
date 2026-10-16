@@ -1,0 +1,242 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "viewerCanUpdate": true,
+        "viewerCanReact": true,
+        "lastEditedAt": "2026-08-31T06:10:00Z",
+        "reactionGroups": [
+          { "content": "THUMBS_UP", "viewerHasReacted": true, "reactors": { "totalCount": 2 } },
+          { "content": "THUMBS_DOWN", "viewerHasReacted": false, "reactors": { "totalCount": 0 } },
+          { "content": "LAUGH", "viewerHasReacted": false, "reactors": { "totalCount": 0 } },
+          { "content": "HOORAY", "viewerHasReacted": false, "reactors": { "totalCount": 0 } },
+          { "content": "CONFUSED", "viewerHasReacted": false, "reactors": { "totalCount": 0 } },
+          { "content": "HEART", "viewerHasReacted": false, "reactors": { "totalCount": 1 } },
+          { "content": "ROCKET", "viewerHasReacted": false, "reactors": { "totalCount": 0 } },
+          { "content": "EYES", "viewerHasReacted": false, "reactors": { "totalCount": 0 } }
+        ],
+        "timelineItems": {
+          "pageInfo": { "hasPreviousPage": false, "startCursor": "Y3Vyc29yOnYyOjE=" },
+          "nodes": [
+            {
+              "__typename": "LabeledEvent",
+              "id": "LE_kwDOLabeled",
+              "createdAt": "2026-08-31T06:00:00Z",
+              "actor": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" },
+              "label": { "name": "agent", "color": "5319e7" }
+            },
+            {
+              "__typename": "AssignedEvent",
+              "id": "AE_kwDOAssigned",
+              "createdAt": "2026-08-31T06:01:00Z",
+              "actor": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" },
+              "assignee": { "__typename": "Bot", "login": "claude[bot]" }
+            },
+            {
+              "__typename": "ReviewRequestedEvent",
+              "id": "RRE_kwDORequested",
+              "createdAt": "2026-08-31T06:02:00Z",
+              "actor": { "__typename": "Bot", "login": "claude[bot]", "avatarUrl": "https://avatars.githubusercontent.com/in/1?v=4" },
+              "requestedReviewer": { "__typename": "Team", "name": "reviewers" }
+            },
+            {
+              "__typename": "IssueComment",
+              "id": "IC_kwDOCommentOne",
+              "databaseId": 2001,
+              "body": "Unrelated: the office printer is out of toner again.",
+              "createdAt": "2026-08-31T06:30:00Z",
+              "lastEditedAt": "2026-08-31T06:35:00Z",
+              "url": "https://github.com/schnaq/review/pull/128#issuecomment-2001",
+              "isMinimized": true,
+              "minimizedReason": "OFF-TOPIC",
+              "author": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" },
+              "viewerCanUpdate": true,
+              "viewerCanDelete": true,
+              "reactionGroups": [
+                { "content": "THUMBS_UP", "viewerHasReacted": false, "reactors": { "totalCount": 1 } },
+                { "content": "LAUGH", "viewerHasReacted": false, "reactors": { "totalCount": 0 } },
+                { "content": "EYES", "viewerHasReacted": true, "reactors": { "totalCount": 2 } },
+                { "content": "PARTY_PARROT", "viewerHasReacted": false, "reactors": { "totalCount": 3 } }
+              ]
+            },
+            {
+              "__typename": "SubscribedEvent",
+              "id": "SE_kwDOSubscribed",
+              "createdAt": "2026-08-31T06:31:00Z"
+            },
+            {
+              "__typename": "PullRequestReview",
+              "id": "PRR_kwDOReviewOne",
+              "databaseId": 3001,
+              "body": "The store should not force-unwrap the token.",
+              "state": "CHANGES_REQUESTED",
+              "createdAt": "2026-08-31T07:00:00Z",
+              "submittedAt": "2026-08-31T07:15:00Z",
+              "lastEditedAt": "2026-08-31T07:20:00Z",
+              "url": "https://github.com/schnaq/review/pull/128#pullrequestreview-3001",
+              "author": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" },
+              "viewerCanUpdate": true,
+              "reactionGroups": [
+                { "content": "ROCKET", "viewerHasReacted": false, "reactors": { "totalCount": 1 } },
+                { "content": "HEART", "viewerHasReacted": false, "reactors": { "totalCount": 0 } }
+              ],
+              "commit": { "oid": "1111111111111111111111111111111111111111" }
+            },
+            {
+              "__typename": "HeadRefForcePushedEvent",
+              "id": "HRFPE_kwDOForcePushed",
+              "createdAt": "2026-08-31T07:40:00Z",
+              "actor": { "__typename": "Bot", "login": "claude[bot]", "avatarUrl": "https://avatars.githubusercontent.com/in/1?v=4" },
+              "beforeCommit": { "oid": "1111111111111111111111111111111111111111" },
+              "afterCommit": { "oid": "3f1a9c0d5b7e2a4c6d8f0b1a2c3e4d5f60718293" }
+            },
+            {
+              "__typename": "ReviewDismissedEvent",
+              "id": "RDE_kwDODismissed",
+              "createdAt": "2026-08-31T07:45:00Z",
+              "actor": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" },
+              "dismissalMessage": "Fixed by the force-push."
+            },
+            {
+              "__typename": "ReviewRequestRemovedEvent",
+              "id": "RRRE_kwDORequestRemoved",
+              "createdAt": "2026-08-31T07:50:00Z",
+              "actor": { "__typename": "Bot", "login": "claude[bot]", "avatarUrl": "https://avatars.githubusercontent.com/in/1?v=4" },
+              "requestedReviewer": { "__typename": "User", "login": "n2o" }
+            },
+            {
+              "__typename": "UnlabeledEvent",
+              "id": "ULE_kwDOUnlabeled",
+              "createdAt": "2026-08-31T07:55:00Z",
+              "actor": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" },
+              "label": { "name": "wip", "color": "fbca04" }
+            },
+            {
+              "__typename": "UnassignedEvent",
+              "id": "UAE_kwDOUnassigned",
+              "createdAt": "2026-08-31T08:00:00Z",
+              "actor": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" },
+              "assignee": { "__typename": "Bot", "login": "claude[bot]" }
+            },
+            {
+              "__typename": "RenamedTitleEvent",
+              "id": "RTE_kwDORenamed",
+              "createdAt": "2026-08-31T08:05:00Z",
+              "actor": { "__typename": "Bot", "login": "claude[bot]", "avatarUrl": "https://avatars.githubusercontent.com/in/1?v=4" },
+              "previousTitle": "WIP: token store",
+              "currentTitle": "Refactor the token store"
+            },
+            {
+              "__typename": "ConvertToDraftEvent",
+              "id": "CTDE_kwDODraft",
+              "createdAt": "2026-08-31T08:10:00Z",
+              "actor": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" }
+            },
+            {
+              "__typename": "ReadyForReviewEvent",
+              "id": "RFRE_kwDOReady",
+              "createdAt": "2026-08-31T08:20:00Z",
+              "actor": { "__typename": "Bot", "login": "claude[bot]", "avatarUrl": "https://avatars.githubusercontent.com/in/1?v=4" }
+            },
+            {
+              "__typename": "CrossReferencedEvent",
+              "id": "CRE_kwDOCrossReferenced",
+              "createdAt": "2026-08-31T08:25:00Z",
+              "actor": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" },
+              "willCloseTarget": false,
+              "source": {
+                "__typename": "PullRequest",
+                "number": 7,
+                "title": "Use the new token store",
+                "url": "https://github.com/schnaq/shepherd-web/pull/7",
+                "repository": { "name": "shepherd-web", "owner": { "login": "schnaq" } }
+              }
+            },
+            {
+              "__typename": "CrossReferencedEvent",
+              "id": "CRE_kwDOIssueReference",
+              "createdAt": "2026-08-31T08:26:00Z",
+              "actor": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" },
+              "willCloseTarget": true,
+              "source": {
+                "__typename": "Issue",
+                "number": 142,
+                "title": "Uploads fail silently",
+                "url": "https://github.com/schnaq/review/issues/142",
+                "repository": { "name": "review", "owner": { "login": "schnaq" } }
+              }
+            },
+            {
+              "__typename": "BaseRefChangedEvent",
+              "id": "BRCE_kwDOBaseChanged",
+              "createdAt": "2026-08-31T08:30:00Z",
+              "actor": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" },
+              "previousRefName": "main",
+              "currentRefName": "release/1.12"
+            },
+            {
+              "__typename": "AutoMergeEnabledEvent",
+              "id": "AMEE_kwDOAutoMergeOn",
+              "createdAt": "2026-08-31T08:35:00Z",
+              "actor": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" }
+            },
+            {
+              "__typename": "AutoMergeDisabledEvent",
+              "id": "AMDE_kwDOAutoMergeOff",
+              "createdAt": "2026-08-31T08:40:00Z",
+              "actor": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" }
+            },
+            {
+              "__typename": "ClosedEvent",
+              "id": "CE_kwDOClosed",
+              "createdAt": "2026-08-31T08:45:00Z",
+              "actor": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" }
+            },
+            {
+              "__typename": "ReopenedEvent",
+              "id": "REE_kwDOReopened",
+              "createdAt": "2026-08-31T08:50:00Z",
+              "actor": null
+            },
+            {
+              "__typename": "MergedEvent",
+              "id": "ME_kwDOMerged",
+              "createdAt": "2026-08-31T09:00:00Z",
+              "actor": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" },
+              "commit": { "oid": "3f1a9c0d5b7e2a4c6d8f0b1a2c3e4d5f60718293" },
+              "mergeRefName": "release/1.12"
+            },
+            {
+              "__typename": "HeadRefDeletedEvent",
+              "id": "HRDE_kwDOBranchDeleted",
+              "createdAt": "2026-08-31T09:01:00Z",
+              "actor": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" },
+              "headRefName": "claude/refactor-token-store"
+            },
+            {
+              "__typename": "HeadRefRestoredEvent",
+              "id": "HRRE_kwDOBranchRestored",
+              "createdAt": "2026-08-31T09:05:00Z",
+              "actor": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" }
+            },
+            {
+              "__typename": "PullRequestReview",
+              "id": "PRR_kwDOReviewPending",
+              "databaseId": 3002,
+              "body": "",
+              "state": "PENDING",
+              "createdAt": "2026-08-31T09:10:00Z",
+              "submittedAt": null,
+              "lastEditedAt": null,
+              "url": "https://github.com/schnaq/review/pull/128#pullrequestreview-3002",
+              "author": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" },
+              "viewerCanUpdate": true,
+              "reactionGroups": [],
+              "commit": { "oid": "3f1a9c0d5b7e2a4c6d8f0b1a2c3e4d5f60718293" }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

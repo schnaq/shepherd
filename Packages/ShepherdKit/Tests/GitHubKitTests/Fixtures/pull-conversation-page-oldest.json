@@ -1,0 +1,27 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "viewerCanUpdate": false,
+        "viewerCanReact": false,
+        "lastEditedAt": "2026-08-31T05:00:00Z",
+        "reactionGroups": [
+          { "content": "THUMBS_DOWN", "viewerHasReacted": false, "reactors": { "totalCount": 4 } }
+        ],
+        "timelineItems": {
+          "pageInfo": { "hasPreviousPage": false, "startCursor": "CUR0" },
+          "nodes": [
+            {
+              "__typename": "IssueComment",
+              "id": "IC_kwDOOldestOne",
+              "databaseId": 2100,
+              "body": "Picking this up.",
+              "createdAt": "2026-08-31T06:00:00Z",
+              "author": { "__typename": "Bot", "login": "claude[bot]", "avatarUrl": "https://avatars.githubusercontent.com/in/1?v=4" }
+            }
+          ]
+        }
+      }
+    }
+  }
+}
