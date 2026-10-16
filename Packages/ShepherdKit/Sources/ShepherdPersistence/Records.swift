@@ -409,6 +409,14 @@ struct ReviewCommentRecord: Codable, FetchableRecord, PersistableRecord {
     var bodyMarkdown: String
     var createdAt: Double
     var pendingLocalID: String?
+    /// The node id of the review the comment was submitted in (v11, ADR 0043).
+    var reviewID: String?
+    /// `[ReactionGroup]` as JSON, `NULL` on a row stored before v11.
+    var reactionsJSON: String?
+    var viewerCanUpdate: Bool
+    var viewerCanDelete: Bool
+    var isEdited: Bool
+    var url: String?
     var sortIndex: Int
 
     init(threadID: String, comment: ReviewComment, sortIndex: Int) {
@@ -426,6 +434,12 @@ struct ReviewCommentRecord: Codable, FetchableRecord, PersistableRecord {
         self.bodyMarkdown = comment.bodyMarkdown
         self.createdAt = comment.createdAt.timeIntervalSince1970
         self.pendingLocalID = comment.pendingLocalID?.uuidString
+        self.reviewID = comment.reviewID
+        self.reactionsJSON = ColumnCoding.encodeJSON(comment.reactions)
+        self.viewerCanUpdate = comment.viewerCanUpdate
+        self.viewerCanDelete = comment.viewerCanDelete
+        self.isEdited = comment.isEdited
+        self.url = comment.url?.absoluteString
         self.sortIndex = sortIndex
     }
 
@@ -447,7 +461,13 @@ struct ReviewCommentRecord: Codable, FetchableRecord, PersistableRecord {
             ),
             bodyMarkdown: bodyMarkdown,
             createdAt: Date(timeIntervalSince1970: createdAt),
-            pendingLocalID: pendingLocalID.flatMap { UUID(uuidString: $0) }
+            pendingLocalID: pendingLocalID.flatMap { UUID(uuidString: $0) },
+            reviewID: reviewID,
+            reactions: ColumnCoding.decodeJSON([ReactionGroup].self, from: reactionsJSON) ?? [],
+            viewerCanUpdate: viewerCanUpdate,
+            viewerCanDelete: viewerCanDelete,
+            isEdited: isEdited,
+            url: url.flatMap { URL(string: $0) }
         )
     }
 }
@@ -1118,6 +1138,31 @@ struct PullRequestClosingIssueRecord: Codable, FetchableRecord, PersistableRecor
             title: issueTitle,
             state: IssueSummary.State(rawValue: issueState) ?? .unknown
         )
+    }
+}
+
+/// A row of `pull_request_conversations` (v11, ADR 0043): the whole conversation as one JSON
+/// document.
+///
+/// A table of its own rather than a column of ``PullRequestRecord``, because the inbox and the
+/// search index read every `pull_requests` row whole and a conversation is up to five pages of
+/// comment bodies. No row means *unknown*, which is not the same as a row holding an empty
+/// conversation: the first is a read that did not happen, the second is GitHub's answer.
+struct PullRequestConversationRecord: Codable, FetchableRecord, PersistableRecord {
+    static let databaseTableName = "pull_request_conversations"
+
+    var prID: String
+    var json: String
+
+    init(prID: String, conversation: PullRequestConversation) {
+        self.prID = prID
+        self.json = ColumnCoding.encodeJSON(conversation)
+    }
+
+    /// The stored conversation, or `nil` when the document no longer decodes — which reads as
+    /// unknown rather than failing the detail fetch, like every other JSON column in this file.
+    var conversation: PullRequestConversation? {
+        ColumnCoding.decodeJSON(PullRequestConversation.self, from: json)
     }
 }
 

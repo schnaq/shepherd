@@ -210,7 +210,8 @@ extension DatabaseManager {
     // MARK: - Detail
 
     /// Stores a full detail fetch, replacing the pull request's files, threads, checks and the
-    /// issues it closes.
+    /// issues it closes. The conversation is replaced only when the fetch carries one
+    /// (``PullRequestDetail/conversation``); `nil` keeps what is stored.
     /// - Parameter detail: The detail record to store.
     public func savePullRequestDetail(_ detail: PullRequestDetail) async throws {
         let fetchedAt = Date().timeIntervalSince1970
@@ -257,6 +258,17 @@ extension DatabaseManager {
             record.timelineJSON = ColumnCoding.encodeJSON(detail.timeline)
             record.detailFetchedAt = fetchedAt
             try record.save(db)
+
+            // A table of its own, so a sweep neither carries it forward nor wipes it. `nil` is a
+            // read that failed or was not made: the stored row stays. An empty conversation is
+            // GitHub's answer and replaces it (ADR 0043). Above the checks' early return, like
+            // the closing issues below.
+            if let conversation = detail.conversation {
+                try PullRequestConversationRecord(
+                    prID: detail.id,
+                    conversation: conversation
+                ).save(db)
+            }
 
             try db.execute(
                 sql: "DELETE FROM changed_files WHERE prID = ?",
@@ -421,6 +433,13 @@ extension DatabaseManager {
             arguments: [id]
         )
 
+        // No row, or a document this build cannot decode, is "unknown" — never an empty one.
+        let conversation = try PullRequestConversationRecord.fetchOne(
+            db,
+            sql: "SELECT * FROM pull_request_conversations WHERE prID = ?",
+            arguments: [id]
+        )?.conversation
+
         return PullRequestDetail(
             summary: record.summary,
             bodyMarkdown: record.bodyMarkdown ?? "",
@@ -429,7 +448,8 @@ extension DatabaseManager {
             threads: threads,
             timeline: record.timeline,
             checks: checkRecords.map(\.checkRun),
-            closingIssues: closingIssueRecords.map(\.reference)
+            closingIssues: closingIssueRecords.map(\.reference),
+            conversation: conversation
         )
     }
 
