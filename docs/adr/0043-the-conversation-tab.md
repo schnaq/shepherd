@@ -77,9 +77,13 @@ request) — every sentence is the app's, through `String(localized:)`, because 
 user-visible strings (CONTRIBUTING). Commits are not fetched a second time: the REST list the
 detail fetch already reads is placed into the stream by date, consecutive commits as one group.
 
-Persistence is migration **v11**: `pull_requests.conversationJSON` for the document (carried
-forward by `PullRequestRecord.init(summary:existing:)`, like `timelineJSON`, so a sweep's upsert
-cannot wipe it), and on `review_comments` the columns `reviewID`, `reactionsJSON`,
+Persistence is migration **v11**: a table of its own, `pull_request_conversations` (one JSON
+document per pull request, keyed by `prID` and cascading with it, like
+`pull_request_closing_issues`), rather than a column on `pull_requests` — the inbox query reads
+every `pull_requests` row in full on every observation, and every pull request's comment bodies
+have no business riding along with it. A sweep never touches that table, so its
+upsert of the inbox row cannot wipe a conversation, and a detail whose conversation is `nil` leaves
+the stored one alone. On `review_comments` v11 adds the columns `reviewID`, `reactionsJSON`,
 `viewerCanUpdate`, `viewerCanDelete`, `isEdited` and `url`. The condensed `timeline` is left
 exactly as it is: ADR 0028's retroactive baseline reads it.
 
