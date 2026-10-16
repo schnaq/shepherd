@@ -303,7 +303,8 @@ final class ReviewModel {
     /// The reviewer's reaction clicks that the stored detail does not show yet: `true` wants the
     /// viewer's reaction on, `false` off (ADR 0043, B).
     ///
-    /// What makes a click visible at once and an offline click visible until it is sent. A key
+    /// What makes a click visible at once and, while this screen is open, an offline click visible
+    /// until it is sent. A key
     /// goes when a detail reaching the screen agrees with it (``unconfirmedClicks(_:against:)``) —
     /// not when its write is sent, because the re-read after a send can still carry the state
     /// from before it and would flicker the reaction off and on. It also goes when the click could

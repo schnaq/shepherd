@@ -332,7 +332,7 @@ struct PullRequestActions {
     /// back. It decides nothing, so the click's own row is queued all the same. Nothing on this Mac
     /// could decide it: the stored detail lags every row still in flight or landed but not yet
     /// re-read. The cost is at most one redundant mutation and one read, and neither direction
-    /// leaves a failed row: GitHub answers an add of a reaction already there with success, and
+    /// leaves a failed row unless that one read fails: GitHub answers an add of a reaction already there with success, and
     /// refuses a removal of one that is not there with the `FORBIDDEN` of a real permission
     /// refusal, which the drain tells apart by reading the post's reactions once (ADR 0043).
     ///
@@ -900,8 +900,8 @@ struct PullRequestActions {
         case .updateBranch:
             return String(localized: "Branch update queued for \(slug).")
         case .reaction:
-            // The click stays on the bar until it is sent, which is the whole of what a toast
-            // would add.
+            // While the screen is open the click stays on the bar until it is sent, which is the
+            // whole of what a toast would add.
             return nil
         }
     }
