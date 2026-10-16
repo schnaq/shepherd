@@ -426,7 +426,82 @@ enum DemoSeed {
                     title: "Failed writes are only visible in Settings → Sync",
                     state: .open
                 )]
-                : []
+                : [],
+            conversation: isShowcase ? showcaseConversation(author: sample.author) : nil
+        )
+    }
+
+    /// The showcase's conversation tab (ADR 0043): a question from a person, the agent's test
+    /// report in GitHub's HTML-flavoured Markdown, a force-push, both verdicts — the request for
+    /// changes is the review that started the first thread — and the events in between.
+    private static func showcaseConversation(author: Actor) -> PullRequestConversation {
+        func hoursAgo(_ hours: Double) -> Date { Date().addingTimeInterval(-hours * 3_600) }
+        return PullRequestConversation(
+            descriptionReactions: [ReactionGroup(content: .thumbsUp, count: 2, viewerHasReacted: true)],
+            viewerCanReact: true,
+            items: [
+                .event(ConversationEventItem(
+                    id: "LE_demo_1",
+                    createdAt: hoursAgo(18.3),
+                    actor: author,
+                    event: .labeled(name: "outbox", color: "1d76db")
+                )),
+                .event(ConversationEventItem(
+                    id: "RRE_demo_1",
+                    createdAt: hoursAgo(18.3),
+                    actor: author,
+                    event: .reviewRequested(reviewer: viewerLogin)
+                )),
+                .comment(ConversationComment(
+                    id: "IC_demo_1",
+                    databaseID: 7001,
+                    author: tobias,
+                    bodyMarkdown: "Could the row also say *when* the write failed? \"Failed\" on its own reads as if it just happened.",
+                    createdAt: hoursAgo(3.4)
+                )),
+                .event(ConversationEventItem(
+                    id: "HRFPE_demo_1",
+                    createdAt: hoursAgo(1.9),
+                    actor: author,
+                    event: .forcePushed(
+                        fromOid: "b81f5d2e0c4a7396d1e8f02a5c7b3e9d4f6a1c08",
+                        toOid: "3f2c1ab8e6d04c7b9a15f3e2d8c07b4a6e91f5d2"
+                    )
+                )),
+                .comment(ConversationComment(
+                    id: "IC_demo_2",
+                    databaseID: 7002,
+                    author: author,
+                    bodyMarkdown: """
+                        <!-- shepherd-demo:test-report -->
+                        **Test report** for `3f2c1ab`
+
+                        <details>
+                        <summary>2 suites, 41 tests passed</summary>
+
+                        - `RowWriteStateTests`: 12 passed
+                        - `OutboxStoreTests`: 29 passed
+                        </details>
+                        """,
+                    createdAt: hoursAgo(1.8)
+                )),
+                .review(ConversationReview(
+                    id: ShowcaseFiles.changesRequestedReviewID,
+                    databaseID: 8001,
+                    author: sophie,
+                    state: .changesRequested,
+                    bodyMarkdown: "One question about the precedence before this goes in.",
+                    createdAt: hoursAgo(1.5)
+                )),
+                .review(ConversationReview(
+                    id: "PRR_demo_approval",
+                    databaseID: 8002,
+                    author: tobias,
+                    state: .approved,
+                    bodyMarkdown: "The retry toasts the way it should. Approving once Sophie's question is settled.",
+                    createdAt: hoursAgo(0.5)
+                )),
+            ]
         )
     }
 

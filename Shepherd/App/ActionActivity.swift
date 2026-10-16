@@ -46,6 +46,8 @@ final class ActionActivity {
         case viewed
         /// Taking a pull request out of draft state.
         case readyForReview
+        /// A comment on the pull request's conversation.
+        case comment
         /// A whole bulk-triage plan (ADR 0015), which targets no single row and is keyed
         /// `"bulk"`.
         case bulk
