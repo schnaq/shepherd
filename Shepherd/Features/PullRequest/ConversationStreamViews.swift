@@ -354,6 +354,10 @@ struct ConversationThreadView: View {
     /// Whether the reviewer flipped the thread away from how it starts. A flip rather than an
     /// "is expanded" flag, so a thread resolved from its own reply bar folds away by itself.
     @State private var isFlipped = false
+    /// What is typed in the reply bar. Held here, on the card that stays on screen, rather than in
+    /// the bar: folding the thread away — by hand, or because it was just resolved — removes the
+    /// bar, and must not take a half-written reply with it.
+    @State private var replyText = ""
 
     private var isExpanded: Bool {
         isFlipped != (thread.isResolved || thread.isOutdated)
@@ -367,7 +371,12 @@ struct ConversationThreadView: View {
                     ForEach(thread.comments) { comment in
                         ThreadCommentView(comment: comment, translations: translations)
                     }
-                    ThreadReplyBar(thread: thread, summary: summary, actions: actions) { outcome in
+                    ThreadReplyBar(
+                        thread: thread,
+                        summary: summary,
+                        actions: actions,
+                        replyText: $replyText
+                    ) { outcome in
                         // A write that reached GitHub is read back at once, so it shows without
                         // waiting for the next sweep. A queued one is the toast's news: a re-read
                         // then would only put a failure banner over the tab.
@@ -376,6 +385,27 @@ struct ConversationThreadView: View {
                 }
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text(verbatim: spokenLabel))
+    }
+
+    /// The thread as the screen reader names it — where it is, and whether it is settled — so a
+    /// folded thread is more than a "Show" button among others (ADR 0033).
+    private var spokenLabel: String {
+        let anchor: String?
+        if let line = thread.line, !thread.isOutdated {
+            anchor = String(localized: "line \(line)")
+        } else if let original = thread.originalLine {
+            anchor = String(localized: "was line \(original)")
+        } else {
+            anchor = nil
+        }
+        return SpokenRow.sentence([
+            thread.path ?? String(localized: "Pull request conversation"),
+            anchor,
+            thread.isOutdated ? String(localized: "outdated") : nil,
+            thread.isResolved ? String(localized: "resolved") : nil,
+        ])
     }
 
     private var header: some View {
@@ -390,8 +420,8 @@ struct ConversationThreadView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .help(isExpanded ? String(localized: "Hide") : String(localized: "Show"))
-            .accessibilityLabel(isExpanded ? String(localized: "Hide") : String(localized: "Show"))
+            .help(chevronLabel)
+            .accessibilityLabel(chevronLabel)
             Image(systemName: "doc.text")
                 .font(Theme.type(.subheadline))
                 .foregroundStyle(Theme.textMuted)
@@ -416,6 +446,11 @@ struct ConversationThreadView: View {
                 .buttonStyle(SecondaryButtonStyle(height: 22))
             }
         }
+    }
+
+    /// What the chevron does, in words: it shows or hides the comments and the reply bar.
+    private var chevronLabel: String {
+        isExpanded ? String(localized: "Hide conversation") : String(localized: "Show conversation")
     }
 
     /// Where the thread points: its line on the current diff, or — once the diff has moved on —

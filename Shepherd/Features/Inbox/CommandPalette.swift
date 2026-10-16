@@ -681,7 +681,7 @@ struct CommandPaletteView: View {
                     id: "delegate",
                     section: review,
                     title: String(localized: "Delegate to agent"),
-                    systemImage: "arrow.uturn.backward.badge.clock"
+                    systemImage: "terminal"
                 ) {
                     environment.request(.delegate)
                 }

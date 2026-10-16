@@ -1125,6 +1125,8 @@ struct ThreadPopover: View {
     /// The popover's own translation cache (ADR 0020), so a translated comment stays translated
     /// while the reviewer scrolls the thread — and is gone when the popover is.
     @State private var translations = TranslationCoordinator()
+    /// What is typed in the reply bar, held here because the bar takes it as a binding.
+    @State private var replyText = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -1147,8 +1149,10 @@ struct ThreadPopover: View {
             }
             .frame(maxHeight: 260)
             Divider().overlay(Theme.border)
-            ThreadReplyBar(thread: thread, summary: summary, actions: actions) { _ in onClose() }
-                .padding(12)
+            ThreadReplyBar(thread: thread, summary: summary, actions: actions, replyText: $replyText) { _ in
+                onClose()
+            }
+            .padding(12)
         }
         .frame(width: 380)
         .background(Theme.panel)

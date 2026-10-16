@@ -24,7 +24,8 @@ struct ConversationComposer: View {
                     text: $model.conversationDraft,
                     height: 96,
                     imageUpload: ImageUploadTarget(repo: summary.repo, actions: actions),
-                    focusRequest: model.composerFocusRequest
+                    focusRequest: model.composerFocusRequest,
+                    onFocusChange: { model.isConversationComposerFocused = $0 }
                 )
                 HStack(spacing: 8) {
                     SavedReplyMenu(
@@ -57,12 +58,23 @@ struct ConversationComposer: View {
                         Text(String(localized: "Post comment"))
                     }
                     .buttonStyle(PrimaryButtonStyle())
-                    .keyboardShortcut(.return, modifiers: .command)
+                    // ⌘⏎ is the toolbar's *Review* everywhere else on this screen; it is this
+                    // button's only while the field has the keyboard, so one key never means two
+                    // things at once.
+                    .keyboardShortcut(
+                        model.isConversationComposerFocused
+                            ? KeyboardShortcut(.return, modifiers: .command)
+                            : nil
+                    )
                     .disabled(!hasText)
                     .busy(actions.activity.isRunning(summary.id, .comment))
+                    .help(String(localized: "Post the comment (⌘⏎ while you type)"))
                 }
             }
         }
+        // The field can leave the screen with the keyboard in it — a switch to the Files tab — and
+        // then reports no focus change of its own; ⌘⏎ has to go back to *Review* regardless.
+        .onDisappear { model.isConversationComposerFocused = false }
     }
 
     /// Whether the text is worth sending: not blank, and no pasted image still uploading into it.

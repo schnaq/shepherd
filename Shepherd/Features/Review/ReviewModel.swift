@@ -267,6 +267,12 @@ final class ReviewModel {
     /// *Quote reply* does. A counter for ``focusEditorRequest``'s reason: asking twice has to move
     /// the focus twice.
     private(set) var composerFocusRequest = 0
+    /// Whether the conversation tab's comment field has the keyboard.
+    ///
+    /// Who ⌘⏎ belongs to: *Post comment* while somebody is typing a comment, the toolbar's
+    /// *Review* everywhere else. Set by ``ConversationComposer`` when the focus moves and at no
+    /// other time, so the toolbar redraws on a focus change and never on a keystroke.
+    var isConversationComposerFocused = false
 
     /// The provider router.
     var intelligence: IntelligenceRouter = .disabled
@@ -1642,13 +1648,24 @@ final class ReviewModel {
     /// too — and with a blank line after it, so the reply starts as its own paragraph.
     /// - Parameter markdown: The post's Markdown source.
     func quote(_ markdown: String) {
-        let quoted = markdown
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .map { "> \($0)" }
-            .joined(separator: "\n")
-        conversationDraft = SavedReply.inserting(quoted, into: conversationDraft) + "\n\n"
+        conversationDraft = SavedReply.inserting(Self.quoted(markdown), into: conversationDraft) + "\n\n"
         composerFocusRequest += 1
+    }
+
+    /// A post as a Markdown quote: `> ` in front of every line and `>` on every blank one, so a
+    /// quoted paragraph break stays inside the quote.
+    ///
+    /// Split on any line break rather than on `"\n"`: whatever was typed on github.com arrives with
+    /// CRLF, which Swift reads as *one* character, so a split on `"\n"` alone found no line at all
+    /// and only the first paragraph went out quoted.
+    /// - Parameter markdown: The post's Markdown source.
+    /// - Returns: The quote, without a trailing line break.
+    static func quoted(_ markdown: String) -> String {
+        markdown
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+            .map { $0.isEmpty ? ">" : "> \($0)" }
+            .joined(separator: "\n")
     }
 
     /// Shows one file in the diff viewer, scrolled to a line.

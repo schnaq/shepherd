@@ -6,7 +6,8 @@ import SwiftUI
 ///
 /// One view for both places a thread is answered: the popover over the diff (``ThreadPopover``)
 /// and the conversation tab's stream (``ConversationThreadView``, ADR 0043). It was the popover's
-/// own bar and moved out unchanged, so the two cannot drift into two reply bars.
+/// own bar and moved out whole, so the two cannot drift into two reply bars; only the typed text
+/// stays with the caller.
 struct ThreadReplyBar: View {
     @Environment(AppEnvironment.self) private var environment
     /// The thread being answered.
@@ -15,12 +16,14 @@ struct ThreadReplyBar: View {
     let summary: PullRequestSummary
     /// The write actions.
     let actions: PullRequestActions
+    /// What is typed in the field, held by the caller: the stream folds a thread away once it is
+    /// resolved, which takes this bar off screen, and a reply being written must outlive that.
+    @Binding var replyText: String
     /// Called after a reply or a resolve toggle with what became of the write (`nil` when nothing
     /// was written), and with `nil` after *Delegate…*. The popover closes on it; the stream
     /// re-reads the pull request when the write was sent.
     var onDone: @MainActor (OutboxWriteOutcome?) -> Void
 
-    @State private var replyText = ""
     /// The saved replies that fit this thread, best first, or empty for the plain menu.
     @State private var suggestedReplyIDs: [SavedReply.ID] = []
     /// Whether the embeddings for this thread have already been spent.
@@ -80,7 +83,7 @@ struct ThreadReplyBar: View {
                     onDone(nil)
                 } label: {
                     HStack(spacing: 5) {
-                        Image(systemName: "arrow.uturn.backward.badge.clock")
+                        Image(systemName: "terminal")
                             .font(Theme.type(.footnote, weight: .bold))
                         Text(String(localized: "Delegate…"))
                     }

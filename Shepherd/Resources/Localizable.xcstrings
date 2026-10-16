@@ -2961,6 +2961,16 @@
         }
       }
     },
+    "Hide conversation": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unterhaltung ausblenden"
+          }
+        }
+      }
+    },
     "Hooray": {
       "localizations": {
         "de": {
@@ -2981,6 +2991,16 @@
         }
       }
     },
+    "Post the comment (⌘⏎ while you type)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentar veröffentlichen (⌘⏎ beim Schreiben)"
+          }
+        }
+      }
+    },
     "Quote reply": {
       "localizations": {
         "de": {
@@ -2997,6 +3017,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rakete"
+          }
+        }
+      }
+    },
+    "Show conversation": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unterhaltung zeigen"
           }
         }
       }
@@ -15347,6 +15377,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Turns"
+          }
+        }
+      }
+    },
+    "was line %lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "war Zeile %lld"
           }
         }
       }

@@ -184,6 +184,9 @@ struct ComposerTextEditor: View {
     /// Bumped to put the keyboard in this field, as *Quote reply* does after filling it. A counter
     /// rather than a flag, because asking twice has to move the focus twice.
     var focusRequest = 0
+    /// Told when the field gains or loses the keyboard, for a caller whose shortcut should only
+    /// apply while somebody is typing here (the conversation tab's ⌘⏎).
+    var onFocusChange: ((Bool) -> Void)?
 
     @FocusState private var isFocused: Bool
     @State private var pasteMonitor: Any?
@@ -192,6 +195,7 @@ struct ComposerTextEditor: View {
         TextEditor(text: text)
             .focused($isFocused)
             .onChange(of: focusRequest) { isFocused = true }
+            .onChange(of: isFocused) { _, focused in onFocusChange?(focused) }
             .font(.system(size: size))
             .foregroundStyle(textColor)
             .writingToolsBehavior(.complete)
