@@ -787,7 +787,12 @@ struct ReviewToolbar: ToolbarContent {
                     ? nil
                     : KeyboardShortcut(.return, modifiers: .command)
             )
-            .help(String(localized: "Submit review (⌘⏎)"))
+            // Without the shortcut while it is *Post comment*'s, so the tooltip drops it too.
+            .help(
+                model.isConversationComposerFocused
+                    ? String(localized: "Submit review")
+                    : String(localized: "Submit review (⌘⏎)")
+            )
             // Dark while a verdict is going out, so ⌘⏎ held down cannot open a second sheet onto
             // a review that is already on its way.
             .disabled(model.hasEndedOnGitHub || isSubmittingVerdict)

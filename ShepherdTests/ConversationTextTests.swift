@@ -75,4 +75,22 @@ final class ConversationTextTests: XCTestCase {
         // An author GitHub could not resolve names nobody, and one commit is still singular.
         XCTAssertEqual(ConversationCommitsView.title(for: commits([nil])), "1 commit")
     }
+
+    // MARK: - Folding a thread
+
+    func testAnOpenThreadStartsOpenAndASettledOneStartsFolded() {
+        let open = ReviewThread(id: "RT_open")
+        let resolved = ReviewThread(id: "RT_resolved", isResolved: true)
+        let outdated = ReviewThread(id: "RT_outdated", isOutdated: true)
+        XCTAssertTrue(ConversationThreadView.isExpanded(open, isFlipped: false))
+        XCTAssertFalse(ConversationThreadView.isExpanded(resolved, isFlipped: false))
+        XCTAssertFalse(ConversationThreadView.isExpanded(outdated, isFlipped: false))
+    }
+
+    func testFlippingAThreadTurnsItTheOtherWay() {
+        XCTAssertFalse(ConversationThreadView.isExpanded(ReviewThread(id: "RT_open"), isFlipped: true))
+        XCTAssertTrue(
+            ConversationThreadView.isExpanded(ReviewThread(id: "RT_resolved", isResolved: true), isFlipped: true)
+        )
+    }
 }
