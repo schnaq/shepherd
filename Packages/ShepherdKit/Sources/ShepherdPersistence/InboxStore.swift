@@ -75,10 +75,10 @@ extension DatabaseManager {
 
     /// Stores the result of one inbox sweep.
     ///
-    /// Rows are upserted, keeping the detail columns (body, commits, timeline) of any pull
-    /// request that was already fetched in detail. When `pruneMissing` is `true` — the normal
-    /// case for a full sweep — pull requests that are no longer in the result set are deleted,
-    /// which is how merged and closed pull requests leave the inbox.
+    /// Rows are upserted, keeping the detail columns (body, commits, timeline, conversation) of
+    /// any pull request that was already fetched in detail. When `pruneMissing` is `true` — the
+    /// normal case for a full sweep — pull requests that are no longer in the result set are
+    /// deleted, which is how merged and closed pull requests leave the inbox.
     /// - Parameters:
     ///   - summaries: The rows the sweep returned.
     ///   - pruneMissing: Whether to delete rows absent from `summaries`.
@@ -210,7 +210,8 @@ extension DatabaseManager {
     // MARK: - Detail
 
     /// Stores a full detail fetch, replacing the pull request's files, threads, checks and the
-    /// issues it closes.
+    /// issues it closes. The conversation is replaced only when the fetch carries one
+    /// (``PullRequestDetail/conversation``); `nil` keeps what is stored.
     /// - Parameter detail: The detail record to store.
     public func savePullRequestDetail(_ detail: PullRequestDetail) async throws {
         let fetchedAt = Date().timeIntervalSince1970
@@ -251,6 +252,12 @@ extension DatabaseManager {
                 // synchronous endpoint GitHub refuses; keeping it wrongly lasts until the next
                 // sweep, which writes GraphQL's `null` through (ADR 0042).
                 record.keepStack(from: existing)
+            }
+            if let conversation = detail.conversation {
+                // `nil` is a read that failed or was not made, so the copy the record already
+                // carries from `existing` stays. An empty conversation is GitHub's answer and
+                // replaces it (ADR 0043).
+                record.conversationJSON = ColumnCoding.encodeJSON(conversation)
             }
             record.bodyMarkdown = detail.bodyMarkdown
             record.commitsJSON = ColumnCoding.encodeJSON(detail.commits)
@@ -429,7 +436,8 @@ extension DatabaseManager {
             threads: threads,
             timeline: record.timeline,
             checks: checkRecords.map(\.checkRun),
-            closingIssues: closingIssueRecords.map(\.reference)
+            closingIssues: closingIssueRecords.map(\.reference),
+            conversation: record.conversation
         )
     }
 

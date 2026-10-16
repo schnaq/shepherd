@@ -454,7 +454,7 @@ Tables mirror core models (`repos`, `pull_requests`, `changed_files`, `review_th
 `etags`, `viewed_files`, `agent_registry_overrides`, `search_index`, `triage_verdicts`,
 `review_snapshots`, `pull_request_outcomes`, `issues`, `issue_search_index`,
 `issue_linked_pull_requests`, `pull_request_closing_issues`).
-Append-only migrator — currently `v1` through `v7`. `v3` is the search index (ADR 0019: one
+Append-only migrator — currently `v1` through `v11`. `v3` is the search index (ADR 0019: one
 row per pull request holding the document hash, the model identifier and a `Float32` vector, pruned
 by an `ON DELETE CASCADE` onto `pull_requests` rather than by a sweep of its own); `v4` is
 `triage_verdicts` (ADR 0023: one row per pull request holding `kind`, `risk`, the one-sentence
@@ -502,6 +502,22 @@ a node id, and it exists because a link is written the way GitHub writes it, `ow
 `SearchIndexStore` operation for operation and reports through the same `SearchIndexStatistics`.
 `DatabaseManager.changedFilePaths(prIDs:)` reads the cached diffs' paths and statuses **without**
 their patches, which is all the trust lane's sensitive-path exclusion needs.
+
+`v11` is the conversation tab (ADR 0043): no new table, only columns, and every one is nullable or
+defaults to `0`, so a row stored before it reads back as "never read" and the next detail fetch
+fills it in.
+
+- `pull_requests.conversationJSON` — the `PullRequestConversation` document, beside `commitsJSON`
+  and `timelineJSON`. `NULL` means *unknown*, not empty: a sweep's upsert carries it forward and a
+  detail fetch that read no conversation leaves it alone, while a fetched empty one replaces it.
+- `review_comments.reviewID` — the node id of the review the comment was submitted in; the first
+  comment's places a thread under its review.
+- `review_comments.reactionsJSON` — the comment's `[ReactionGroup]`.
+- `review_comments.viewerCanUpdate` — whether GitHub lets the viewer edit it.
+- `review_comments.viewerCanDelete` — whether GitHub lets the viewer delete it.
+- `review_comments.isEdited` — whether it was edited after it was posted.
+- `review_comments.url` — the comment on github.com.
+
 `ValueObservation` publishers feed the UI. The **outbox** stores every outbound mutation (submit review, reply,
 resolve, merge — and, since ADR 0032's Sprint 4a amendment, comment on / label / assign / close /
 reopen an *issue*) as a row with retry/backoff state so writes survive crash/offline. There is no

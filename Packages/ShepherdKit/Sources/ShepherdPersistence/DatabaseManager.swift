@@ -65,6 +65,7 @@ public final class DatabaseManager: Sendable {
         migrator.registerMigration("v8", migrate: DatabaseSchema.addV8)
         migrator.registerMigration("v9", migrate: DatabaseSchema.addV9)
         migrator.registerMigration("v10", migrate: DatabaseSchema.addV10)
+        migrator.registerMigration("v11", migrate: DatabaseSchema.addV11)
         return migrator
     }
 
@@ -689,5 +690,18 @@ enum DatabaseSchema {
         try db.execute(sql: "ALTER TABLE pull_requests ADD COLUMN stackSize INTEGER")
         try db.execute(sql: "ALTER TABLE pull_requests ADD COLUMN stackPosition INTEGER")
         try db.execute(sql: "ALTER TABLE pull_requests ADD COLUMN stackBaseRef TEXT")
+    }
+
+    /// v11 (ADR 0043): the conversation tab. The timeline is one JSON document beside the other
+    /// detail collections; a review comment's review, reactions and the viewer's permissions are
+    /// columns, because a thread is rebuilt row by row.
+    static func addV11(_ db: Database) throws {
+        try db.execute(sql: "ALTER TABLE pull_requests ADD COLUMN conversationJSON TEXT")
+        try db.execute(sql: "ALTER TABLE review_comments ADD COLUMN reviewID TEXT")
+        try db.execute(sql: "ALTER TABLE review_comments ADD COLUMN reactionsJSON TEXT")
+        try db.execute(sql: "ALTER TABLE review_comments ADD COLUMN viewerCanUpdate INTEGER NOT NULL DEFAULT 0")
+        try db.execute(sql: "ALTER TABLE review_comments ADD COLUMN viewerCanDelete INTEGER NOT NULL DEFAULT 0")
+        try db.execute(sql: "ALTER TABLE review_comments ADD COLUMN isEdited INTEGER NOT NULL DEFAULT 0")
+        try db.execute(sql: "ALTER TABLE review_comments ADD COLUMN url TEXT")
     }
 }

@@ -106,9 +106,9 @@ struct RepoRecord: Codable, FetchableRecord, PersistableRecord {
 
 /// A row of `pull_requests`.
 ///
-/// Holds the inbox row plus the two detail collections that have no table of their own
-/// (commits and the condensed timeline), stored as JSON so that the table list in
-/// `docs/ARCHITECTURE.md` stays exactly as specified.
+/// Holds the inbox row plus the three detail collections that have no table of their own
+/// (commits, the condensed timeline and the conversation), stored as JSON so that the table list
+/// in `docs/ARCHITECTURE.md` stays exactly as specified.
 struct PullRequestRecord: Codable, FetchableRecord, PersistableRecord {
     static let databaseTableName = "pull_requests"
 
@@ -153,6 +153,9 @@ struct PullRequestRecord: Codable, FetchableRecord, PersistableRecord {
     var bodyMarkdown: String?
     var commitsJSON: String?
     var timelineJSON: String?
+    /// The `PullRequestConversation` document, or `NULL` while none was ever read — which is
+    /// *unknown*, not empty (v11, ADR 0043).
+    var conversationJSON: String?
     var detailFetchedAt: Double?
 
     /// Builds a row from an inbox summary, preserving any detail columns already stored.
@@ -195,6 +198,7 @@ struct PullRequestRecord: Codable, FetchableRecord, PersistableRecord {
         self.bodyMarkdown = existing?.bodyMarkdown
         self.commitsJSON = existing?.commitsJSON
         self.timelineJSON = existing?.timelineJSON
+        self.conversationJSON = existing?.conversationJSON
         self.detailFetchedAt = existing?.detailFetchedAt
     }
 
@@ -300,6 +304,12 @@ struct PullRequestRecord: Codable, FetchableRecord, PersistableRecord {
     /// The stored timeline, or an empty list when no detail fetch has happened yet.
     var timeline: [TimelineEvent] {
         ColumnCoding.decodeJSON([TimelineEvent].self, from: timelineJSON) ?? []
+    }
+
+    /// The stored conversation, or `nil` when none was ever read — which callers must not take
+    /// for an empty one (ADR 0043).
+    var conversation: PullRequestConversation? {
+        ColumnCoding.decodeJSON(PullRequestConversation.self, from: conversationJSON)
     }
 }
 
@@ -409,6 +419,14 @@ struct ReviewCommentRecord: Codable, FetchableRecord, PersistableRecord {
     var bodyMarkdown: String
     var createdAt: Double
     var pendingLocalID: String?
+    /// The node id of the review the comment was submitted in (v11, ADR 0043).
+    var reviewID: String?
+    /// `[ReactionGroup]` as JSON, `NULL` on a row stored before v11.
+    var reactionsJSON: String?
+    var viewerCanUpdate: Bool
+    var viewerCanDelete: Bool
+    var isEdited: Bool
+    var url: String?
     var sortIndex: Int
 
     init(threadID: String, comment: ReviewComment, sortIndex: Int) {
@@ -426,6 +444,12 @@ struct ReviewCommentRecord: Codable, FetchableRecord, PersistableRecord {
         self.bodyMarkdown = comment.bodyMarkdown
         self.createdAt = comment.createdAt.timeIntervalSince1970
         self.pendingLocalID = comment.pendingLocalID?.uuidString
+        self.reviewID = comment.reviewID
+        self.reactionsJSON = ColumnCoding.encodeJSON(comment.reactions)
+        self.viewerCanUpdate = comment.viewerCanUpdate
+        self.viewerCanDelete = comment.viewerCanDelete
+        self.isEdited = comment.isEdited
+        self.url = comment.url?.absoluteString
         self.sortIndex = sortIndex
     }
 
@@ -447,7 +471,13 @@ struct ReviewCommentRecord: Codable, FetchableRecord, PersistableRecord {
             ),
             bodyMarkdown: bodyMarkdown,
             createdAt: Date(timeIntervalSince1970: createdAt),
-            pendingLocalID: pendingLocalID.flatMap { UUID(uuidString: $0) }
+            pendingLocalID: pendingLocalID.flatMap { UUID(uuidString: $0) },
+            reviewID: reviewID,
+            reactions: ColumnCoding.decodeJSON([ReactionGroup].self, from: reactionsJSON) ?? [],
+            viewerCanUpdate: viewerCanUpdate,
+            viewerCanDelete: viewerCanDelete,
+            isEdited: isEdited,
+            url: url.flatMap { URL(string: $0) }
         )
     }
 }
