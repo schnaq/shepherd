@@ -62,7 +62,11 @@ final class OutboxDrainTests: XCTestCase {
         _ action: OutboxAction,
         in store: DatabaseManager,
         number: Int = 1,
-        id: UUID = UUID()
+        id: UUID = UUID(),
+        // Distinct, for a test that asserts on the order of two rows: the drain claims in
+        // `createdAt` order, and two rows queued at the same instant would be ordered by a
+        // tie-break the test should not depend on.
+        queuedAfter offset: TimeInterval = 0
     ) async throws -> UUID {
         try await store.enqueue(
             OutboxItem(
@@ -71,7 +75,7 @@ final class OutboxDrainTests: XCTestCase {
                 repo: repo,
                 number: number,
                 action: action,
-                createdAt: now,
+                createdAt: now.addingTimeInterval(offset),
                 attemptCount: 0,
                 nextAttemptAt: Date(timeIntervalSince1970: 0),
                 lastError: nil,
@@ -93,6 +97,66 @@ final class OutboxDrainTests: XCTestCase {
 
         let resolved = await github.resolvedThreads
         XCTAssertEqual(resolved, ["PRRT_1"])
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testAReactionIsSentThroughThePortAndAnnouncedForThePullRequest() async throws {
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        let id = try await enqueue(
+            .react(subjectID: "IC_kwDOComment1", content: .rocket, adding: true),
+            in: store
+        )
+        // No issue writer, on purpose: a reaction is a GraphQL write on the same port as a
+        // thread's resolution, so an engine built without the issue port has to be able to
+        // send it.
+        let engine = makeEngine(github: github, store: store)
+
+        let sent = sentMutations(in: await drainCollectingEvents(engine))
+
+        let calls = await github.reactions
+        XCTAssertEqual(
+            calls,
+            [MockGitHub.ReactionCall(subjectID: "IC_kwDOComment1", content: .rocket, adding: true)],
+            "the subject is the one the row names, which is not the pull request's id"
+        )
+        XCTAssertEqual(sent.map(\.kind), [.reactionChanged])
+        // Announced for the pull request: that is what the app re-reads the detail by.
+        XCTAssertEqual(sent.map(\.prID), ["PR_1"])
+        XCTAssertEqual(sent.map(\.repo), [repo])
+        XCTAssertEqual(sent.map(\.number), [1])
+        let row = try await store.outboxItem(id: id)
+        XCTAssertNil(row, "a sent row leaves the queue")
+    }
+
+    func testAnAddAndARemovalOfTheSameReactionAreBothSentInTheOrderTheyWereQueued() async throws {
+        // The drain sends due rows in `createdAt` order and never merges them, so an add queued
+        // before a removal reaches GitHub first and both are sent. Cancelling a still-pending
+        // inverse instead of queuing it is the app's job (ADR 0043, B), not this drain's.
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(
+            .react(subjectID: "IC_kwDOComment1", content: .heart, adding: true),
+            in: store
+        )
+        _ = try await enqueue(
+            .react(subjectID: "IC_kwDOComment1", content: .heart, adding: false),
+            in: store,
+            queuedAfter: 1
+        )
+        let engine = makeEngine(github: github, store: store)
+
+        await engine.drainOutbox()
+
+        let calls = await github.reactions
+        XCTAssertEqual(
+            calls,
+            [
+                MockGitHub.ReactionCall(subjectID: "IC_kwDOComment1", content: .heart, adding: true),
+                MockGitHub.ReactionCall(subjectID: "IC_kwDOComment1", content: .heart, adding: false),
+            ]
+        )
         let remaining = try await store.allOutboxItems()
         XCTAssertTrue(remaining.isEmpty)
     }
@@ -461,6 +525,15 @@ final class OutboxDrainTests: XCTestCase {
         XCTAssertEqual(
             SyncEngine.sentKind(for: .updateBranch(expectedHeadOid: "head-1")),
             .branchUpdated
+        )
+        XCTAssertEqual(
+            SyncEngine.sentKind(for: .react(subjectID: "IC_1", content: .eyes, adding: true)),
+            .reactionChanged
+        )
+        XCTAssertEqual(
+            SyncEngine.sentKind(for: .react(subjectID: "IC_1", content: .eyes, adding: false)),
+            .reactionChanged,
+            "taking a reaction back is the same kind of change as adding one"
         )
         // A stacked merge is announced by how far GitHub got (ADR 0042); `failed` is no send.
         XCTAssertEqual(

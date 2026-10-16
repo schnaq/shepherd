@@ -89,6 +89,20 @@ public enum OutboxAction: Sendable, Codable, Hashable {
     /// was still queued would be a close with the explanation missing.
     /// - Parameter comment: What to post before closing, or `nil` to close without a word.
     case closePullRequest(comment: String?)
+    /// Add the viewer's reaction to a post, or take it back (ADR 0043).
+    ///
+    /// One row per click with the direction in it. The drain sends due rows in `createdAt` order
+    /// and never merges them; undoing a click whose row is still pending is the caller's job —
+    /// it cancels that row (``ShepherdPersistence/DatabaseManager/cancelPendingOutboxItem(id:)``)
+    /// instead of queuing the opposite, and queues the opposite only behind a row the drain has
+    /// already claimed. Addressed to the *post* — the description, a comment, a review, an inline
+    /// comment — by its node id, while the row's own target fields name the pull request it
+    /// belongs to, so the drain announces the write for the pull request.
+    /// - Parameters:
+    ///   - subjectID: The GraphQL node id of the post.
+    ///   - content: Which of the eight reactions.
+    ///   - adding: `true` to add the viewer's reaction, `false` to take it away.
+    case react(subjectID: String, content: ReactionContent, adding: Bool)
     /// Post a comment on the issue (ADR 0032).
     /// - Parameters:
     ///   - body: The comment as Markdown source.
@@ -130,6 +144,7 @@ public enum OutboxAction: Sendable, Codable, Hashable {
         case .updateBranch: return "updateBranch"
         case .addPullRequestComment: return "addPullRequestComment"
         case .closePullRequest: return "closePullRequest"
+        case .react: return "react"
         case .addIssueComment: return "addIssueComment"
         case .addIssueLabel: return "addIssueLabel"
         case .addIssueAssignee: return "addIssueAssignee"
@@ -153,7 +168,8 @@ public enum OutboxAction: Sendable, Codable, Hashable {
              .reopenIssue(let updatedAt):
             return updatedAt
         case .submitReview, .replyToComment, .addReviewComment, .resolveThread, .unresolveThread,
-             .merge, .markReadyForReview, .updateBranch, .addPullRequestComment, .closePullRequest:
+             .merge, .markReadyForReview, .updateBranch, .addPullRequestComment, .closePullRequest,
+             .react:
             return nil
         }
     }
@@ -187,6 +203,7 @@ public enum OutboxAction: Sendable, Codable, Hashable {
         case markReadyForReview, updateBranch
         case addIssueComment, addIssueLabel, addIssueAssignee, closeIssue, reopenIssue
         case addPullRequestComment, closePullRequest
+        case react
     }
 
     /// The payload keys of ``submitReview(_:)`` — one unlabelled value, so `_0`.
@@ -227,6 +244,11 @@ public enum OutboxAction: Sendable, Codable, Hashable {
     /// The payload keys of ``closePullRequest(comment:)``.
     private enum ClosePullRequestKeys: String, CodingKey {
         case comment
+    }
+
+    /// The payload keys of ``react(subjectID:content:adding:)``.
+    private enum ReactKeys: String, CodingKey {
+        case subjectID, content, adding
     }
 
     /// The payload keys of ``addIssueComment(body:basedOnUpdatedAt:)``.
@@ -319,6 +341,11 @@ public enum OutboxAction: Sendable, Codable, Hashable {
             // `encodeIfPresent`, so a close with nothing to say writes no key at all rather than
             // a null — and reads back as `nil` through the same door an older row would.
             try nested.encodeIfPresent(comment, forKey: .comment)
+        case .react(let subjectID, let content, let adding):
+            var nested = container.nestedContainer(keyedBy: ReactKeys.self, forKey: .react)
+            try nested.encode(subjectID, forKey: .subjectID)
+            try nested.encode(content, forKey: .content)
+            try nested.encode(adding, forKey: .adding)
         case .addIssueComment(let body, let basedOnUpdatedAt):
             var nested = container.nestedContainer(
                 keyedBy: IssueCommentKeys.self,
@@ -454,6 +481,18 @@ public enum OutboxAction: Sendable, Codable, Hashable {
             )
             let comment = try nested.decodeIfPresent(String.self, forKey: .comment)
             self = .closePullRequest(comment: comment)
+        case .react:
+            let nested = try container.nestedContainer(keyedBy: ReactKeys.self, forKey: .react)
+            // All three are required, and not read tolerantly like the merge's branch flag: no
+            // older row exists, and there is no honest default for a missing direction — "add"
+            // would put back a reaction the user meant to take away. A row that does not decode
+            // is skipped by the claim, the way one written by a build that knew a ninth content
+            // is.
+            self = .react(
+                subjectID: try nested.decode(String.self, forKey: .subjectID),
+                content: try nested.decode(ReactionContent.self, forKey: .content),
+                adding: try nested.decode(Bool.self, forKey: .adding)
+            )
         case .addIssueComment:
             let nested = try container.nestedContainer(
                 keyedBy: IssueCommentKeys.self,

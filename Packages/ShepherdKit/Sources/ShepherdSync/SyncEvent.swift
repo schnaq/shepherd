@@ -162,6 +162,10 @@ public struct SentMutation: Sendable, Hashable, Codable {
         case pullRequestCommentAdded
         /// A pull request was closed. `true` when a comment went out with it.
         case pullRequestClosed(withComment: Bool)
+        /// The viewer's reaction on one of the pull request's posts was added or taken back
+        /// (ADR 0043). One kind for both directions: what the app does about it — re-reading the
+        /// detail — is the same.
+        case reactionChanged
     }
 
     /// The pull request's node id.

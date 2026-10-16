@@ -39,6 +39,8 @@ public protocol PullRequestFetching: Sendable {
     func resolveThread(id: String) async throws
     /// Unresolves a review thread.
     func unresolveThread(id: String) async throws
+    /// Adds the viewer's reaction to a post, or takes it back (ADR 0043).
+    func setReaction(subjectID: String, content: ReactionContent, adding: Bool) async throws
     /// Merges a pull request.
     func mergePullRequest(
         repo: RepoRef,

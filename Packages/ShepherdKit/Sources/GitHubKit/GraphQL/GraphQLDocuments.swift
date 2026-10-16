@@ -752,6 +752,23 @@ public enum GraphQLDocuments {
     }
     """
 
+    /// Add the viewer's reaction to a post — the description, a comment, a review or an inline
+    /// comment — by its node id (ADR 0043). GraphQL because REST has no reaction endpoint for a
+    /// pull-request review at all; one document then serves every kind of post.
+    public static let addReaction = """
+    mutation ShepherdAddReaction($subjectId: ID!, $content: ReactionContent!) {
+      addReaction(input: { subjectId: $subjectId, content: $content }) { reaction { content } }
+    }
+    """
+
+    /// Take the viewer's reaction back, by the post and the content. REST deletes by the
+    /// reaction's own id, which would mean a read before every removal.
+    public static let removeReaction = """
+    mutation ShepherdRemoveReaction($subjectId: ID!, $content: ReactionContent!) {
+      removeReaction(input: { subjectId: $subjectId, content: $content }) { reaction { content } }
+    }
+    """
+
     /// Take a pull request out of draft state. GraphQL-only.
     public static let markPullRequestReadyForReview = """
     mutation ShepherdMarkReady($pullRequestId: ID!) {
