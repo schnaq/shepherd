@@ -29,10 +29,7 @@ struct PullRequestCommentSheet: View {
     @Binding var text: String
 
     /// Whether the text is worth sending.
-    private var hasText: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && !PastedImage.containsPendingUpload(text)
-    }
+    private var hasText: Bool { PastedImage.isSendable(text) }
 
     /// Hands the composed text to one of the two writes and closes the sheet.
     ///

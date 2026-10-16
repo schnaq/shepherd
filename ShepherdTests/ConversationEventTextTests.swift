@@ -114,9 +114,10 @@ final class ConversationEventTextTests: XCTestCase {
             title: "Use the new retry",
             isPullRequest: true
         )
-        let text = sentence(.crossReferenced(reference, willClose: false))
-        XCTAssertEqual(text, "Sophie Müller mentioned this in schnaq/review#1024 Use the new retry")
-        XCTAssertTrue(text.contains("schnaq/review#1024"), text)
+        XCTAssertEqual(
+            sentence(.crossReferenced(reference, willClose: false)),
+            "Sophie Müller mentioned this in schnaq/review#1024 Use the new retry"
+        )
     }
 
     func testDismissedReviewAndAutoMerge() {

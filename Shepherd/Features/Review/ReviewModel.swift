@@ -675,11 +675,7 @@ final class ReviewModel {
         detailLoadError = nil
         let threadsMoved = fresh.threads != shown.threads
         detail = fresh
-        conversationEntries = ConversationTimeline.entries(
-            conversation: fresh.conversation,
-            commits: fresh.commits,
-            threads: fresh.threads
-        )
+        rebuildConversationEntries(from: fresh)
         priorities = FilePrioritizer.prioritize(
             fresh.files,
             context: PrioritizationContext(totalChangedLines: fresh.summary.churn)
@@ -759,11 +755,7 @@ final class ReviewModel {
         // over a diff that had since arrived on its own until somebody pressed Try again.
         detailLoadError = nil
         self.detail = detail
-        conversationEntries = ConversationTimeline.entries(
-            conversation: detail.conversation,
-            commits: detail.commits,
-            threads: detail.threads
-        )
+        rebuildConversationEntries(from: detail)
         // The one place the tab default is spent, and the flag is what keeps it to the *first*
         // detail: this function runs again for the fresh fetch behind the cached row, for the
         // banner's Reload, and for nothing a reviewer would call a new open.
@@ -784,6 +776,16 @@ final class ReviewModel {
         loadRound(for: detail)
         // The repository only becomes known here, and the draft observation may already have run.
         applyReviewTemplateIfNeeded()
+    }
+
+    /// Rebuilds ``conversationEntries`` from the detail that just reached the screen — called by
+    /// ``apply(_:)`` and ``refresh(_:replacing:)``, the two ways one does.
+    private func rebuildConversationEntries(from detail: PullRequestDetail) {
+        conversationEntries = ConversationTimeline.entries(
+            conversation: detail.conversation,
+            commits: detail.commits,
+            threads: detail.threads
+        )
     }
 
     /// Keeps ``selectedPath`` on a file the current round view actually lists.

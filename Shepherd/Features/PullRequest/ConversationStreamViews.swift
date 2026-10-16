@@ -2,15 +2,92 @@ import AppKit
 import ShepherdCore
 import SwiftUI
 
-// The rows of the conversation tab's stream (ADR 0043), one view per kind of entry. They draw what
+// The conversation tab's stream (ADR 0043) and its rows, one view per kind of entry. They draw what
 // the model already holds and fetch nothing; the only writes are the thread reply bar's, through
 // `PullRequestActions`.
 
-/// One post of the conversation: the description, a comment, or the words above a review.
+/// Every entry after the description, in GitHub's order.
 ///
-/// One view for all three, so the description and a comment cannot drift into two looks. Under a
-/// review the header is left out — the review's own row already says who and when, and carries
-/// the menu — and so is the spoken label that header would give the card.
+/// A view of its own, compared by what it draws, so it is re-diffed when the entries change and at
+/// no other time: the tab around it is re-evaluated for the claims card, for *Quote reply*'s focus
+/// request and for every inbox emission the stack card reads, and each of those used to walk every
+/// post and thread of a long conversation again. The model, the actions and the translation cache
+/// are what the rows act through rather than what they show, so they stay out of the comparison.
+///
+/// A plain `VStack`, not a lazy one: a lazy container may drop a thread card's `@State` — a reply
+/// half written, a fold the reviewer flipped — once the card scrolls away. Every entry keeps its
+/// stable ``ShepherdCore/ConversationEntry/id`` for the same reason.
+struct ConversationStream: View, Equatable {
+    /// The entries, oldest first.
+    let entries: [ConversationEntry]
+    /// The pull request, for the threads' writes.
+    let summary: PullRequestSummary
+    /// The review model, for *Quote reply* and *Show in diff*.
+    let model: ReviewModel
+    /// The write actions, for the threads' reply bars.
+    let actions: PullRequestActions
+    /// The tab's translation cache.
+    let translations: TranslationCoordinator
+
+    nonisolated static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.summary.id == rhs.summary.id && lhs.entries == rhs.entries
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ForEach(entries) { entry in
+                self.entry(entry)
+            }
+        }
+    }
+
+    /// One entry of the stream.
+    @ViewBuilder
+    private func entry(_ entry: ConversationEntry) -> some View {
+        switch entry {
+        case .comment(let comment):
+            ConversationPostView(
+                model: model,
+                translations: translations,
+                author: comment.author,
+                verb: String(localized: "commented"),
+                date: comment.createdAt,
+                markdown: comment.bodyMarkdown,
+                isEdited: comment.isEdited,
+                reactions: comment.reactions,
+                url: comment.url,
+                isMinimized: comment.isMinimized,
+                minimizedReason: comment.minimizedReason
+            )
+        case .review(let review, let threads):
+            ConversationReviewView(
+                model: model,
+                actions: actions,
+                summary: summary,
+                translations: translations,
+                review: review,
+                threads: threads
+            )
+        case .thread(let thread):
+            ConversationThreadView(
+                model: model,
+                actions: actions,
+                summary: summary,
+                translations: translations,
+                thread: thread
+            )
+        case .commits(let commits):
+            ConversationCommitsView(commits: commits)
+        case .event(let event):
+            ConversationEventRow(item: event)
+        }
+    }
+}
+
+/// One post of the conversation, header and all: the description or a comment.
+///
+/// One view for both, so the two cannot drift into two looks. The words a reviewer wrote above a
+/// verdict are the same ``PostBody`` in a card of the review's own, under the review's row.
 struct ConversationPostView: View {
     /// The review model, for *Quote reply*.
     let model: ReviewModel
@@ -23,7 +100,7 @@ struct ConversationPostView: View {
     /// When.
     let date: Date
     /// The post as Markdown source. Empty only for a description nobody wrote: GitHub refuses an
-    /// empty comment, and a review without words draws no post.
+    /// empty comment.
     let markdown: String
     /// Whether it was edited after it was posted.
     var isEdited = false
@@ -31,8 +108,6 @@ struct ConversationPostView: View {
     var reactions: [ReactionGroup] = []
     /// The post on github.com.
     var url: URL?
-    /// Whether to draw who, what and when above the body.
-    var showsHeader = true
     /// Whether a maintainer hid it (off-topic, outdated, spam …).
     var isMinimized = false
     /// GitHub's word for why it is hidden, or `nil` when it gave none.
@@ -43,20 +118,14 @@ struct ConversationPostView: View {
 
     var body: some View {
         if isMinimized && !isRevealed {
-            hiddenRow
-        } else if showsHeader {
-            card
-                .accessibilityElement(children: .contain)
-                .accessibilityLabel(Text(verbatim: PostHeader.spokenLabel(author: author, verb: verb, date: date)))
+            StreamNoticeRow(
+                symbol: "eye.slash",
+                text: Self.hiddenSentence(reason: minimizedReason),
+                buttonTitle: String(localized: "Show")
+            ) { isRevealed = true }
         } else {
-            card
-        }
-    }
-
-    private var card: some View {
-        Card {
-            VStack(alignment: .leading, spacing: 8) {
-                if showsHeader {
+            Card {
+                VStack(alignment: .leading, spacing: 8) {
                     PostHeader(
                         model: model,
                         author: author,
@@ -66,37 +135,12 @@ struct ConversationPostView: View {
                         markdown: markdown,
                         url: url
                     )
-                }
-                if markdown.isEmpty {
-                    Text(String(localized: "No description."))
-                        .font(Theme.type(.callout))
-                        .foregroundStyle(Theme.textMuted)
-                } else {
-                    TranslatableMarkdownText(markdown: markdown, translations: translations)
-                }
-                if !reactions.isEmpty {
-                    ReactionSummaryView(reactions: reactions)
+                    PostBody(markdown: markdown, reactions: reactions, translations: translations)
                 }
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(Text(verbatim: PostHeader.spokenLabel(author: author, verb: verb, date: date)))
         }
-    }
-
-    /// A hidden comment: one line saying why, and the button that shows it anyway.
-    private var hiddenRow: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "eye.slash")
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.textMuted)
-                .frame(width: 14)
-                .accessibilityHidden(true)
-            Text(Self.hiddenSentence(reason: minimizedReason))
-                .font(Theme.type(.callout))
-                .foregroundStyle(Theme.textMuted)
-            Spacer(minLength: 4)
-            Button(String(localized: "Show")) { isRevealed = true }
-                .buttonStyle(SecondaryButtonStyle(height: 22))
-        }
-        .padding(.horizontal, 12)
     }
 
     /// "Hidden — off-topic", in GitHub's word for why; "Hidden comment" for a reason this build
@@ -115,6 +159,62 @@ struct ConversationPostView: View {
         default: return String(localized: "Hidden comment")
         }
         return String(localized: "Hidden — \(why)")
+    }
+}
+
+/// What a post says — the description, a comment, or a reviewer's words above the verdict — and
+/// the reactions under it. The card around it is the caller's.
+struct PostBody: View {
+    /// The post as Markdown source; empty only for a description nobody wrote.
+    let markdown: String
+    /// The reactions anybody left on it.
+    let reactions: [ReactionGroup]
+    /// The tab's translation cache.
+    let translations: TranslationCoordinator
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if markdown.isEmpty {
+                Text(String(localized: "No description."))
+                    .font(Theme.type(.callout))
+                    .foregroundStyle(Theme.textMuted)
+            } else {
+                TranslatableMarkdownText(markdown: markdown, translations: translations)
+            }
+            if !reactions.isEmpty {
+                ReactionSummaryView(reactions: reactions)
+            }
+        }
+    }
+}
+
+/// A one-line notice in the stream where a post would be — a hidden comment, the earlier activity
+/// that is only on GitHub — with the one button that does something about it.
+struct StreamNoticeRow: View {
+    /// The SF Symbol in front.
+    let symbol: String
+    /// The line.
+    let text: String
+    /// The button's title.
+    let buttonTitle: String
+    /// What the button does.
+    let action: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: symbol)
+                .font(Theme.type(.subheadline))
+                .foregroundStyle(Theme.textMuted)
+                .frame(width: 14)
+                .accessibilityHidden(true)
+            Text(text)
+                .font(Theme.type(.callout))
+                .foregroundStyle(Theme.textMuted)
+            Spacer(minLength: 4)
+            Button(buttonTitle, action: action)
+                .buttonStyle(SecondaryButtonStyle(height: 22))
+        }
+        .padding(.horizontal, 12)
     }
 }
 
@@ -142,31 +242,7 @@ private struct PostHeader: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            AvatarView(actor: author, size: 24)
-            Text(author.bestName)
-                .font(Theme.type(.callout, weight: .semibold))
-                .foregroundStyle(Theme.textStrong)
-                .lineLimit(1)
-            if let identity = author.kind.agentIdentity {
-                ChipView(text: identity.displayName, color: Theme.agent, size: 10)
-            }
-            HStack(spacing: 4) {
-                if let symbol {
-                    Image(systemName: symbol)
-                        .accessibilityHidden(true)
-                }
-                Text(verb)
-            }
-            .font(Theme.type(.callout))
-            .foregroundStyle(tint)
-            RelativeDateText(date: date, style: .long)
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.textMuted)
-            if isEdited {
-                Text(verbatim: "· " + String(localized: "edited"))
-                    .font(Theme.type(.subheadline))
-                    .foregroundStyle(Theme.textMuted)
-            }
+            AuthorLine(author: author, verb: verb, symbol: symbol, tint: tint, date: date, isEdited: isEdited)
             Spacer(minLength: 4)
             if !markdown.isEmpty || url != nil {
                 menu
@@ -198,9 +274,62 @@ private struct PostHeader: View {
         .accessibilityLabel(String(localized: "More actions"))
     }
 
-    /// What a post — or a review — is announced as: "<name>, <verb>, <when>".
+    /// What a post — or a review — is announced as: who, what, when.
     static func spokenLabel(author: ShepherdCore.Actor, verb: String, date: Date) -> String {
-        "\(author.bestName), \(verb), \(RelativeDate.long(date))"
+        SpokenRow.sentence([author.bestName, verb, RelativeDate.long(date)])
+    }
+}
+
+/// Who wrote something and when — the avatar, the name, the agent chip, how long ago, and
+/// "· edited" — with what they did between the name and the time, as GitHub writes it.
+///
+/// The line above a post, a review and a thread comment, in the stream and in the diff's popover,
+/// so the three cannot drift into three looks.
+struct AuthorLine: View {
+    /// Who.
+    let author: ShepherdCore.Actor
+    /// What they did, after the name — "commented", "approved these changes" — or `nil` for a
+    /// thread comment, which says only who and when.
+    var verb: String?
+    /// The verdict's symbol in front of the verb, for a review.
+    var symbol: String?
+    /// The verb's colour: muted for a post, the verdict's own for a review.
+    var tint = Theme.textMuted
+    /// When.
+    let date: Date
+    /// Whether it was edited after it was posted.
+    var isEdited = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            AvatarView(actor: author, size: 24)
+            Text(author.bestName)
+                .font(Theme.type(.callout, weight: .semibold))
+                .foregroundStyle(Theme.textStrong)
+                .lineLimit(1)
+            if let identity = author.kind.agentIdentity {
+                ChipView(text: identity.displayName, color: Theme.agent, size: 10)
+            }
+            if let verb {
+                HStack(spacing: 4) {
+                    if let symbol {
+                        Image(systemName: symbol)
+                            .accessibilityHidden(true)
+                    }
+                    Text(verb)
+                }
+                .font(Theme.type(.callout))
+                .foregroundStyle(tint)
+            }
+            HStack(spacing: 4) {
+                RelativeDateText(date: date, style: .long)
+                if isEdited {
+                    Text(verbatim: "· " + String(localized: "edited"))
+                }
+            }
+            .font(Theme.type(.subheadline))
+            .foregroundStyle(Theme.textMuted)
+        }
     }
 }
 
@@ -228,14 +357,15 @@ struct ReactionSummaryView: View {
         }
     }
 
-    /// One capsule in words — "Thumbs up, 2 reactions, including yours" — because the fill is
+    /// One capsule in words — "Thumbs up. 2 reactions. including yours." — because the fill is
     /// what marks your own, and colour is never the only carrier.
     static func spokenLabel(for group: ReactionGroup) -> String {
-        let reaction = Self.name(of: group.content)
         let count = group.count
-        let total = String(localized: "\(count) reactions")
-        let yours = group.viewerHasReacted ? String(localized: ", including yours") : ""
-        return "\(reaction), \(total)\(yours)"
+        return SpokenRow.sentence([
+            Self.name(of: group.content),
+            String(localized: "\(count) reactions"),
+            group.viewerHasReacted ? String(localized: "including yours") : nil,
+        ])
     }
 
     /// GitHub's name for a reaction. The emoji alone would be read out by its Unicode name.
@@ -284,17 +414,12 @@ struct ConversationReviewView: View {
                 url: review.url
             )
             .padding(.horizontal, 12)
+            // The words under the review's own row, which already says who and when and carries
+            // the menu — so no header here, and no spoken label of the card's own either.
             if review.hasBody {
-                ConversationPostView(
-                    model: model,
-                    translations: translations,
-                    author: review.author,
-                    verb: verdict.sentence,
-                    date: review.createdAt,
-                    markdown: review.bodyMarkdown,
-                    reactions: review.reactions,
-                    showsHeader: false
-                )
+                Card {
+                    PostBody(markdown: review.bodyMarkdown, reactions: review.reactions, translations: translations)
+                }
             }
             ForEach(threads) { thread in
                 ConversationThreadView(
@@ -339,7 +464,7 @@ struct ConversationReviewView: View {
 /// review is not in the timeline. Resolved and outdated threads start collapsed, as on GitHub, and
 /// the reply bar is the diff popover's own (``ThreadReplyBar``).
 struct ConversationThreadView: View {
-    /// The review model, for *Show in diff* and the re-read after a write.
+    /// The review model, for *Show in diff*.
     let model: ReviewModel
     /// The write actions.
     let actions: PullRequestActions
@@ -381,17 +506,7 @@ struct ConversationThreadView: View {
                     ForEach(thread.comments) { comment in
                         ThreadCommentView(comment: comment, translations: translations)
                     }
-                    ThreadReplyBar(
-                        thread: thread,
-                        summary: summary,
-                        actions: actions,
-                        replyText: $replyText
-                    ) { outcome in
-                        // A write that reached GitHub is read back at once, so it shows without
-                        // waiting for the next sweep. A queued one is the toast's news: a re-read
-                        // then would only put a failure banner over the tab.
-                        if case .sent? = outcome { model.load() }
-                    }
+                    ThreadReplyBar(thread: thread, summary: summary, actions: actions, replyText: $replyText)
                 }
             }
         }
@@ -402,15 +517,7 @@ struct ConversationThreadView: View {
     /// The thread as the screen reader names it — where it is, and whether it is settled — so a
     /// folded thread is more than a "Show" button among others (ADR 0033).
     private var spokenLabel: String {
-        let anchor: String?
-        if let line = thread.line, !thread.isOutdated {
-            anchor = String(localized: "line \(line)")
-        } else if let original = thread.originalLine {
-            anchor = String(localized: "was line \(original)")
-        } else {
-            anchor = nil
-        }
-        return SpokenRow.sentence([
+        SpokenRow.sentence([
             thread.path ?? String(localized: "Pull request conversation"),
             anchor,
             thread.isOutdated ? String(localized: "outdated") : nil,
@@ -441,7 +548,11 @@ struct ConversationThreadView: View {
                 .foregroundStyle(Theme.textSecondary)
                 .lineLimit(1)
                 .truncationMode(.head)
-            anchor
+            if let anchor {
+                Text(anchor)
+                    .font(Theme.type(.subheadline))
+                    .foregroundStyle(Theme.textMuted)
+            }
             if thread.isOutdated {
                 ChipView(text: String(localized: "outdated"), color: Theme.pending, size: 10)
             }
@@ -463,19 +574,17 @@ struct ConversationThreadView: View {
         isExpanded ? String(localized: "Hide conversation") : String(localized: "Show conversation")
     }
 
-    /// Where the thread points: its line on the current diff, or — once the diff has moved on —
-    /// the line it was written against, which is shown and never used to position anything.
-    @ViewBuilder
-    private var anchor: some View {
+    /// Where the thread points, in words, for the header and the spoken label alike: its line on
+    /// the current diff, or — once the diff has moved on — the line it was written against, which
+    /// is shown and never used to position anything. `nil` for a thread on no line.
+    private var anchor: String? {
         if let line = thread.line, !thread.isOutdated {
-            Text(String(localized: "line \(line)"))
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.textMuted)
-        } else if let original = thread.originalLine {
-            Text(String(localized: "· was line \(original)"))
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.textMuted)
+            return String(localized: "line \(line)")
         }
+        if let original = thread.originalLine {
+            return String(localized: "was line \(original)")
+        }
+        return nil
     }
 }
 

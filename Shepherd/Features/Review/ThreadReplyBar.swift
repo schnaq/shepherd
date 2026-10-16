@@ -19,10 +19,10 @@ struct ThreadReplyBar: View {
     /// What is typed in the field, held by the caller: the stream folds a thread away once it is
     /// resolved, which takes this bar off screen, and a reply being written must outlive that.
     @Binding var replyText: String
-    /// Called after a reply or a resolve toggle with what became of the write (`nil` when nothing
-    /// was written), and with `nil` after *Delegate…*. The popover closes on it; the stream
-    /// re-reads the pull request when the write was sent.
-    var onDone: @MainActor (OutboxWriteOutcome?) -> Void
+    /// Called after a reply, a resolve toggle or *Delegate…*: the popover closes on it. The stream
+    /// passes nothing — the thread stays where it is, and what the write changed arrives with the
+    /// app's re-read once GitHub has it (`AppEnvironment.rereadAfterConversationWrite(_:)`).
+    var onDone: @MainActor () -> Void = {}
 
     /// The saved replies that fit this thread, best first, or empty for the plain menu.
     @State private var suggestedReplyIDs: [SavedReply.ID] = []
@@ -58,11 +58,8 @@ struct ThreadReplyBar: View {
             HStack(spacing: 8) {
                 Button {
                     Task {
-                        onDone(await actions.setThread(
-                            on: summary,
-                            threadID: thread.id,
-                            resolved: !thread.isResolved
-                        ))
+                        await actions.setThread(on: summary, threadID: thread.id, resolved: !thread.isResolved)
+                        onDone()
                     }
                 } label: {
                     HStack(spacing: 5) {
@@ -80,7 +77,7 @@ struct ThreadReplyBar: View {
                     environment.startDelegation(
                         .reviewFinding(summary, thread: thread)
                     )
-                    onDone(nil)
+                    onDone()
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "terminal")
@@ -159,13 +156,12 @@ struct ThreadReplyBar: View {
         let typed = replyText
         let text = typed.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        let outcome = await actions.reply(on: summary, commentDatabaseID: target, body: text)
-        switch outcome {
+        switch await actions.reply(on: summary, commentDatabaseID: target, body: text) {
         case .sent?, .queued?, .parked?:
             if replyText == typed { replyText = "" }
         case .failed?, nil:
             break
         }
-        onDone(outcome)
+        onDone()
     }
 }

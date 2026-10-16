@@ -44,11 +44,27 @@ struct ConversationView: View {
                     stack
                     if let summary = model.summary {
                         descriptionPost(summary)
+                        // Said where the stream starts when GitHub has older items than Shepherd
+                        // read: the read keeps the newest ones, which are the ones a reviewer is
+                        // here for.
                         if model.detail?.conversation?.hasEarlierItems == true {
-                            earlierActivity(summary)
+                            StreamNoticeRow(
+                                symbol: "clock.arrow.circlepath",
+                                text: String(localized: "Earlier activity is on GitHub"),
+                                buttonTitle: String(localized: "Open on GitHub")
+                            ) { actions.openOnGitHub(summary) }
                         }
-                        ForEach(model.conversationEntries) { entry in
-                            self.entry(entry, summary: summary)
+                        // Left out when empty rather than drawn empty, which would still take a
+                        // place in this stack and double the gap around it.
+                        if !model.conversationEntries.isEmpty {
+                            ConversationStream(
+                                entries: model.conversationEntries,
+                                summary: summary,
+                                model: model,
+                                actions: actions,
+                                translations: translations
+                            )
+                            .equatable()
                         }
                     }
                     checks
@@ -224,67 +240,6 @@ struct ConversationView: View {
                 number: summary.number
             )
         )
-    }
-
-    /// Said where the stream starts when GitHub has older items than Shepherd read: the read keeps
-    /// the newest ones, which are the ones a reviewer is here for.
-    private func earlierActivity(_ summary: PullRequestSummary) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "clock.arrow.circlepath")
-                .font(Theme.type(.subheadline))
-                .foregroundStyle(Theme.textMuted)
-                .frame(width: 14)
-                .accessibilityHidden(true)
-            Text(String(localized: "Earlier activity is on GitHub"))
-                .font(Theme.type(.callout))
-                .foregroundStyle(Theme.textMuted)
-            Spacer(minLength: 4)
-            Button(String(localized: "Open on GitHub")) { actions.openOnGitHub(summary) }
-                .buttonStyle(SecondaryButtonStyle(height: 22))
-        }
-        .padding(.horizontal, 12)
-    }
-
-    /// One entry of the stream.
-    @ViewBuilder
-    private func entry(_ entry: ConversationEntry, summary: PullRequestSummary) -> some View {
-        switch entry {
-        case .comment(let comment):
-            ConversationPostView(
-                model: model,
-                translations: translations,
-                author: comment.author,
-                verb: String(localized: "commented"),
-                date: comment.createdAt,
-                markdown: comment.bodyMarkdown,
-                isEdited: comment.isEdited,
-                reactions: comment.reactions,
-                url: comment.url,
-                isMinimized: comment.isMinimized,
-                minimizedReason: comment.minimizedReason
-            )
-        case .review(let review, let threads):
-            ConversationReviewView(
-                model: model,
-                actions: actions,
-                summary: summary,
-                translations: translations,
-                review: review,
-                threads: threads
-            )
-        case .thread(let thread):
-            ConversationThreadView(
-                model: model,
-                actions: actions,
-                summary: summary,
-                translations: translations,
-                thread: thread
-            )
-        case .commits(let commits):
-            ConversationCommitsView(commits: commits)
-        case .event(let event):
-            ConversationEventRow(item: event)
-        }
     }
 
     @ViewBuilder
