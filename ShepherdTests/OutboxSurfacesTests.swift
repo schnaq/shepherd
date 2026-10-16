@@ -43,6 +43,8 @@ final class OutboxSurfacesTests: XCTestCase {
             .addPullRequestComment(body: "one thought"),
             .closePullRequest(comment: "superseded"),
             .closePullRequest(comment: nil),
+            .react(subjectID: "IC_1", content: .heart, adding: true),
+            .react(subjectID: "IC_1", content: .heart, adding: false),
         ]
     }
 

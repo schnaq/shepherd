@@ -206,7 +206,10 @@ bumping a dependency that ships inside the app also means a line in
     limit, made only for a pull request whose `updatedAt` moved, like the rest of the detail; the
     review-threads query reads a few more fields per comment (its review, reactions, the viewer's
     permissions). No new host, and the comment it posts is the existing
-    `POST /repos/…/issues/{n}/comments` outbox row.
+    `POST /repos/…/issues/{n}/comments` outbox row. Its **reactions** (ADR 0043, B) are two
+    GraphQL mutations on that same endpoint, `addReaction` and `removeReaction` by the post's node
+    id — one ordinary outbox row per click, with no read before it — because REST has no reaction
+    endpoint for a review at all. Still no new host.
     The issues *section* (ADR 0032's Sprint 2
     amendment) adds two per-issue reads on that same host, each made only when somebody asks for
     that one issue: the ETag-cached `GET /repos/…/issues/{n}` the claims card already makes, used

@@ -82,7 +82,7 @@ struct MergeSeriesOutboxSnapshot: Sendable, Equatable {
         case .merge, .updateBranch: return true
         case .submitReview, .replyToComment, .addReviewComment, .resolveThread, .unresolveThread,
              .markReadyForReview,
-             .addPullRequestComment, .closePullRequest, .addIssueComment, .addIssueLabel,
+             .addPullRequestComment, .closePullRequest, .react, .addIssueComment, .addIssueLabel,
              .addIssueAssignee, .closeIssue, .reopenIssue:
             return false
         }

@@ -271,7 +271,8 @@ final class WebhookCoordinator {
             case .replyPosted, .reviewCommentPosted, .threadResolved, .threadUnresolved,
                  .markedReadyForReview,
                  .branchUpdated, .mergeEnqueued, .mergeStarted, .issueCommentAdded, .issueLabelAdded,
-                 .issueAssigneeAdded, .issueReopened, .pullRequestCommentAdded, .pullRequestClosed:
+                 .issueAssigneeAdded, .issueReopened, .pullRequestCommentAdded, .pullRequestClosed,
+                 .reactionChanged:
                 // Sent, and deliberately not events this version promises. A comment, a label,
                 // an assignee and a reopen are the issue-side twins of the four pull-request
                 // writes above them, and mapping any of them later is an additive change. A

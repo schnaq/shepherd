@@ -2801,6 +2801,16 @@
         }
       }
     },
+    "Add a reaction": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reaktion hinzufügen"
+          }
+        }
+      }
+    },
     "Add a suggestion": {
       "localizations": {
         "de": {
@@ -2827,6 +2837,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zum Review hinzufügen"
+          }
+        }
+      }
+    },
+    "Add your reaction": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Reaktion hinzufügen"
           }
         }
       }
@@ -2907,6 +2927,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Link kopieren"
+          }
+        }
+      }
+    },
+    "Could not change your reaction on %@ — it is back as it was": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Reaktion auf %@ konnte nicht geändert werden — sie ist wieder wie vorher"
+          }
+        }
+      }
+    },
+    "Could not queue the reaction": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Reaktion konnte nicht eingereiht werden"
           }
         }
       }
@@ -3017,6 +3057,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Mit Zitat antworten"
+          }
+        }
+      }
+    },
+    "Remove a reaction": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reaktion entfernen"
+          }
+        }
+      }
+    },
+    "Remove your reaction": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Reaktion entfernen"
           }
         }
       }
