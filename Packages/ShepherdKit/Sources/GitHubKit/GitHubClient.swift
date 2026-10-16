@@ -25,7 +25,8 @@ public enum MergeMethod: String, Sendable, Codable, Hashable, CaseIterable {
 ///   GitHub resolved out of it (ADR 0032); and the conversation, because one query answers the
 ///   whole timeline with every post's reactions and the viewer's permissions on it (ADR 0043).
 /// - **Writes** are REST, except thread resolution and "ready for review", which are
-///   GraphQL-only.
+///   GraphQL-only, and reactions, which are GraphQL because REST cannot react to a review at all
+///   (ADR 0043).
 public actor GitHubClient {
     private let configuration: GitHubConfiguration
     private let transport: any HTTPTransport
@@ -1142,6 +1143,45 @@ public actor GitHubClient {
             resource: "unresolve thread",
             isIdempotent: false
         )
+    }
+
+    /// Adds the viewer's reaction to a post, or takes it back (ADR 0043). GraphQL, by the post's
+    /// node id: REST has no reaction endpoint for a pull-request review at all, and removing one
+    /// there needs the reaction's own id, which would mean a read before every removal.
+    ///
+    /// Adding one the viewer already has is answered with that reaction, so a retried add needs
+    /// no care. A removal of one that is already gone should be a success as well — the state
+    /// asked for is the state there is — and GitHub does not document whether it says so with an
+    /// empty answer or with an error. An error whose message says the reaction was not found is
+    /// taken for the second; anything else about a removal, and any error about an add, is
+    /// thrown.
+    /// - Parameters:
+    ///   - subjectID: The post's GraphQL node id — the pull request's own for the description.
+    ///   - content: Which reaction.
+    ///   - adding: `true` to add the viewer's reaction, `false` to take it away.
+    public func setReaction(subjectID: String, content: ReactionContent, adding: Bool) async throws {
+        do {
+            let _: ReactionData = try await graphQL(
+                document: adding ? GraphQLDocuments.addReaction : GraphQLDocuments.removeReaction,
+                variables: ["subjectId": .string(subjectID), "content": .string(content.rawValue)],
+                resource: adding ? "add reaction" : "remove reaction",
+                isIdempotent: false
+            )
+        } catch GitHubError.graphQL(let messages)
+            where !adding && messages.allSatisfy(Self.saysReactionIsGone)
+        {
+            return
+        }
+    }
+
+    /// Whether a GraphQL error message says the reaction a removal asked about is not there.
+    ///
+    /// A guess at GitHub's wording, deliberately narrow: if it says something else, the removal
+    /// fails where the user can see it, and the fix is one more phrase here — where a wider match
+    /// would swallow a removal that did not happen.
+    private static func saysReactionIsGone(_ message: String) -> Bool {
+        let text = message.lowercased()
+        return text.contains("reaction") && text.contains("not found")
     }
 
     /// Takes a pull request out of draft state. GraphQL-only.

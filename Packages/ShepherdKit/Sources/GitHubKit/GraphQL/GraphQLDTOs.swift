@@ -380,6 +380,23 @@ struct ResolveThreadData: Decodable {
     var unresolveReviewThread: Payload?
 }
 
+/// The payload of the add/remove reaction mutations (ADR 0043).
+///
+/// Nothing is read from it, and so everything is optional and `content` is a plain string rather
+/// than ``ShepherdCore/ReactionContent``: a removal GitHub answers with no reaction, or an add
+/// that names a content this build does not know, must not turn a write that landed into a
+/// decoding failure and a failed row.
+struct ReactionData: Decodable {
+    struct Payload: Decodable {
+        struct Reaction: Decodable {
+            var content: String?
+        }
+        var reaction: Reaction?
+    }
+    var addReaction: Payload?
+    var removeReaction: Payload?
+}
+
 /// The payload of the ready-for-review mutation.
 struct MarkReadyData: Decodable {
     struct Payload: Decodable {
