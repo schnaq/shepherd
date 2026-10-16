@@ -285,15 +285,6 @@ struct PullRequestActions {
 
     // MARK: - Reactions (ADR 0043, B)
 
-    /// What the first half of a reaction click left on disk.
-    enum ReactionWrite: Equatable {
-        /// The click's own row, waiting for ``settleReaction(_:on:)``.
-        case queued(OutboxItem)
-        /// Nothing to send: the click cancelled a row that never left, and the stored detail
-        /// already shows what the click wants.
-        case nothingToSend
-    }
-
     /// The first half of a reaction click: puts it on disk, and nothing else.
     ///
     /// Split from the drain because a click the bar shows has to be in the outbox at once, like
@@ -301,50 +292,72 @@ struct PullRequestActions {
     /// behind it would live only on screen. The caller runs these one after another and
     /// ``settleReaction(_:on:)`` beside them, so the rows are written in click order — which is
     /// the order the drain claims them in.
-    ///
-    /// A click that undoes one whose row is still waiting cancels that row instead of queuing its
-    /// opposite: a row in a retry's backoff would otherwise be sent *after* the click that undid
-    /// it. ``needsReactionRow(undoing:cancelled:adding:storedHasReacted:)`` says when the click
-    /// still needs a row of its own.
     /// - Parameters:
     ///   - summary: The pull request the post belongs to.
     ///   - subjectID: The post's node id — the pull request's own for the description.
     ///   - content: Which reaction.
     ///   - adding: `true` to add the viewer's reaction, `false` to take it back.
-    ///   - storedHasReacted: Whether the stored detail shows the viewer's reaction there.
-    /// - Returns: What is on disk now, or `nil` when the outbox could not be read or written —
+    /// - Returns: The click's row, or `nil` when the outbox could not be read or written —
     ///   toasted here.
     func persistReaction(
         on summary: PullRequestSummary,
         subjectID: String,
         content: ReactionContent,
-        adding: Bool,
-        storedHasReacted: Bool
-    ) async -> ReactionWrite? {
+        adding: Bool
+    ) async -> OutboxItem? {
         do {
-            let items = try await session.database.allOutboxItems()
-            let undone = Self.queuedReaction(
-                undoneBy: adding,
+            return try await Self.writeReaction(
                 subjectID: subjectID,
                 content: content,
-                prID: summary.id,
-                in: items
-            )
-            var cancelled = false
-            if let undone {
-                cancelled = try await session.database.cancelPendingOutboxItem(id: undone.id)
-            }
-            guard Self.needsReactionRow(
-                undoing: undone,
-                cancelled: cancelled,
                 adding: adding,
-                storedHasReacted: storedHasReacted
-            ) else { return .nothingToSend }
-            return .queued(try await write(.react(subjectID: subjectID, content: content, adding: adding), on: summary))
+                on: summary,
+                in: session.database
+            )
         } catch {
             toasts.failure(error, context: String(localized: "Could not queue the reaction"))
             return nil
         }
+    }
+
+    /// Writes a reaction click's row, after taking out the still-waiting row it undoes.
+    ///
+    /// The cancel only makes sure the undone row can never land after this click: a row in a
+    /// retry's backoff would otherwise be sent behind it and leave the reaction the reviewer took
+    /// back. It decides nothing, so the click's own row is queued whatever it answered. Nothing on
+    /// this Mac could decide it: the stored detail lags every row still in flight or landed but not
+    /// yet re-read. The cost is at most one redundant mutation, and both are idempotent — GitHub
+    /// answers an add of a reaction already there with that reaction, and the kit takes a removal
+    /// of one already gone for done.
+    ///
+    /// Static, over the database alone, so the sequence it exists for runs against a real outbox
+    /// in the tests.
+    /// - Parameters:
+    ///   - subjectID: The post's node id.
+    ///   - content: Which reaction.
+    ///   - adding: The click's direction.
+    ///   - summary: The pull request the post belongs to.
+    ///   - database: The outbox.
+    /// - Returns: The click's row.
+    /// - Throws: When the outbox could not be read or written.
+    static func writeReaction(
+        subjectID: String,
+        content: ReactionContent,
+        adding: Bool,
+        on summary: PullRequestSummary,
+        in database: DatabaseManager
+    ) async throws -> OutboxItem {
+        let items = try await database.allOutboxItems()
+        if let undone = queuedReaction(
+            undoneBy: adding,
+            subjectID: subjectID,
+            content: content,
+            prID: summary.id,
+            in: items
+        ) {
+            // `false` means the drain claimed it first, which changes nothing here either.
+            _ = try await database.cancelPendingOutboxItem(id: undone.id)
+        }
+        return try await write(.react(subjectID: subjectID, content: content, adding: adding), on: summary, in: database)
     }
 
     /// The second half of a reaction click: drains, and reads back what became of its row.
@@ -353,7 +366,7 @@ struct PullRequestActions {
     /// (``ReviewModel/reactionOverlay``), a reviewer may press three emojis in a row, and a toast
     /// per emoji would be noise. No ``activity`` key either, for the same three emojis.
     /// - Parameters:
-    ///   - item: The row ``persistReaction(on:subjectID:content:adding:storedHasReacted:)`` wrote.
+    ///   - item: The row ``persistReaction(on:subjectID:content:adding:)`` wrote.
     ///   - summary: The pull request the post belongs to.
     /// - Returns: What became of the row.
     func settleReaction(_ item: OutboxItem, on summary: PullRequestSummary) async -> OutboxWriteOutcome {
@@ -385,31 +398,6 @@ struct PullRequestActions {
             else { return false }
             return rowSubject == subjectID && rowContent == content && rowAdding != adding
         }
-    }
-
-    /// Whether a reaction click still needs a row of its own once the row it undoes has been dealt
-    /// with (ADR 0043, B).
-    ///
-    /// Nothing to undo, or a row the drain claimed first — the cancel refused — and the click's
-    /// row goes behind it. A cancelled row that had been tried may have reached GitHub with its
-    /// answer lost, and only a row of the click's own makes sure. A cancelled row that never left
-    /// changed nothing on GitHub, but whatever went before it may have: the click is spared its
-    /// row only when the stored detail already shows what it wants.
-    /// - Parameters:
-    ///   - row: The row the click undoes, or `nil` when there was none.
-    ///   - cancelled: Whether ``ShepherdPersistence/DatabaseManager/cancelPendingOutboxItem(id:)``
-    ///     took it out.
-    ///   - adding: The click's direction.
-    ///   - storedHasReacted: Whether the stored detail shows the viewer's reaction there.
-    /// - Returns: `true` when the click's own row has to be queued.
-    static func needsReactionRow(
-        undoing row: OutboxItem?,
-        cancelled: Bool,
-        adding: Bool,
-        storedHasReacted: Bool
-    ) -> Bool {
-        guard let row, cancelled else { return true }
-        return row.attemptCount > 0 || storedHasReacted != adding
     }
 
     // MARK: - Merge
@@ -1046,7 +1034,7 @@ struct PullRequestActions {
         _ action: OutboxAction,
         on summary: PullRequestSummary
     ) async throws -> OutboxWriteOutcome {
-        let item = try await write(action, on: summary)
+        let item = try await Self.write(action, on: summary, in: session.database)
         return await drainAndReadBack(item)
     }
 
@@ -1067,18 +1055,22 @@ struct PullRequestActions {
         on summary: PullRequestSummary,
         as kind: WriteKind
     ) async throws {
-        let item = try await write(action, on: summary)
+        let item = try await Self.write(action, on: summary, in: session.database)
         Task { announce(await drainAndReadBack(item), of: kind, on: summary) }
     }
 
-    private func write(_ action: OutboxAction, on summary: PullRequestSummary) async throws -> OutboxItem {
+    private static func write(
+        _ action: OutboxAction,
+        on summary: PullRequestSummary,
+        in database: DatabaseManager
+    ) async throws -> OutboxItem {
         let item = OutboxItem(
             prID: summary.id,
             repo: summary.repo,
             number: summary.number,
             action: action
         )
-        try await session.database.enqueue(item)
+        try await database.enqueue(item)
         return item
     }
 

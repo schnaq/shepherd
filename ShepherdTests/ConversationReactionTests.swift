@@ -1,13 +1,14 @@
 import Foundation
 import ShepherdCore
+import ShepherdPersistence
 import XCTest
 
 @testable import Shepherd
 
 /// Reacting in the conversation tab (ADR 0043, B): what the bar shows once the reviewer has
-/// clicked, when a click stops being the screen's and becomes GitHub's, what a click does to the
-/// row it undoes, and what is said about it. English, because the app tests run with
-/// `-testLanguage en`. The row, the mutation and the drain are ShepherdKit's (`OutboxDrainTests`).
+/// clicked, when a click stops being the screen's and becomes GitHub's, what a click writes to the
+/// outbox, and what is said about it. English, because the app tests run with
+/// `-testLanguage en`. The mutation and the drain are ShepherdKit's (`OutboxDrainTests`).
 @MainActor
 final class ConversationReactionTests: XCTestCase {
     private typealias Key = ReviewModel.ReactionKey
@@ -74,6 +75,26 @@ final class ConversationReactionTests: XCTestCase {
 
     // MARK: - When a click stops being the screen's
 
+    private static let author = ShepherdCore.Actor(login: "octocat", kind: .human)
+    private static let moment = Date(timeIntervalSince1970: 1_000)
+    private var summary: PullRequestSummary {
+        PullRequestSummary(
+            id: "PR_1",
+            repo: RepoRef(owner: "schnaq", name: "review"),
+            number: 42,
+            title: "Retry the flaky upload",
+            author: Self.author,
+            updatedAt: Self.moment,
+            createdAt: Self.moment,
+            additions: 1,
+            deletions: 0,
+            changedFiles: 1,
+            headRefName: "feature",
+            headRefOid: "abc123",
+            baseRefName: "main"
+        )
+    }
+
     private func detail(
         description: [ReactionGroup] = [],
         comment: [ReactionGroup] = [],
@@ -81,24 +102,10 @@ final class ConversationReactionTests: XCTestCase {
         threadComment: [ReactionGroup] = [],
         hasConversation: Bool = true
     ) -> PullRequestDetail {
-        let author = ShepherdCore.Actor(login: "octocat", kind: .human)
-        let moment = Date(timeIntervalSince1970: 1_000)
+        let author = Self.author
+        let moment = Self.moment
         return PullRequestDetail(
-            summary: PullRequestSummary(
-                id: "PR_1",
-                repo: RepoRef(owner: "schnaq", name: "review"),
-                number: 42,
-                title: "Retry the flaky upload",
-                author: author,
-                updatedAt: moment,
-                createdAt: moment,
-                additions: 1,
-                deletions: 0,
-                changedFiles: 1,
-                headRefName: "feature",
-                headRefOid: "abc123",
-                baseRefName: "main"
-            ),
+            summary: summary,
             threads: [
                 ReviewThread(
                     id: "RT_1",
@@ -168,23 +175,6 @@ final class ConversationReactionTests: XCTestCase {
         XCTAssertEqual(kept, overlay)
     }
 
-    /// What B4 compares a click against, and what the clearing rule reads: every kind of post, and
-    /// none of the conversation's before it has been read.
-    func testTheStoredReactionsCoverEveryPostByItsNodeID() {
-        let heart = [ReactionGroup(content: .heart, count: 1, viewerHasReacted: true)]
-        let stored = ReviewModel.storedReactions(in: detail(
-            description: heart,
-            comment: heart,
-            review: heart,
-            threadComment: heart
-        ))
-        XCTAssertEqual(stored, ["PR_1": heart, "IC_1": heart, "PRR_1": heart, "RC_1": heart])
-        XCTAssertEqual(
-            ReviewModel.storedReactions(in: detail(threadComment: heart, hasConversation: false)),
-            ["RC_1": heart]
-        )
-    }
-
     func testAPostTheDetailDoesNotCarryKeepsItsClick() {
         let overlay: [Key: Bool] = [
             Key(subjectID: "IC_1", content: .thumbsUp): false,
@@ -252,63 +242,83 @@ final class ConversationReactionTests: XCTestCase {
         )
     }
 
-    private func needsRow(undoing row: OutboxItem?, cancelled: Bool, adding: Bool, stored: Bool) -> Bool {
-        PullRequestActions.needsReactionRow(
-            undoing: row,
-            cancelled: cancelled,
+    // MARK: - What a click writes (ruling B7)
+
+    // Against a real outbox: the cancel is the store's own state-guarded delete, which a list of
+    // rows in memory could only pretend to be.
+
+    /// One click on the heart under `IC_1`, written the way the bar writes it.
+    private func click(adding: Bool, in database: DatabaseManager) async throws -> OutboxItem {
+        try await PullRequestActions.writeReaction(
+            subjectID: "IC_1",
+            content: .heart,
             adding: adding,
-            storedHasReacted: stored
+            on: summary,
+            in: database
         )
     }
 
-    func testWithNothingToUndoTheClickQueuesItsOwnRow() {
-        XCTAssertTrue(needsRow(undoing: nil, cancelled: false, adding: true, stored: false))
-        XCTAssertTrue(
-            needsRow(undoing: nil, cancelled: false, adding: true, stored: true),
-            "the stored detail is only spared a row behind a cancel"
+    func testWithNothingToUndoTheClickQueuesItsOwnRow() async throws {
+        let database = try DatabaseManager.inMemory()
+        let add = try await click(adding: true, in: database)
+        let rows = try await database.allOutboxItems()
+        XCTAssertEqual(rows.map(\.id), [add.id])
+        XCTAssertEqual(rows.first?.action, .react(subjectID: "IC_1", content: .heart, adding: true))
+        XCTAssertEqual(rows.first?.state, .pending)
+    }
+
+    /// What a refused cancel amounts to: the drain holds the row, which is beyond taking back, and
+    /// the click's own row goes behind it.
+    func testARowTheDrainHoldsIsLeftAloneAndTheClickQueuesBehindIt() async throws {
+        let database = try DatabaseManager.inMemory()
+        let add = try await click(adding: true, in: database)
+        _ = try await database.claimReadyOutboxItems()
+        let remove = try await click(adding: false, in: database)
+        let rows = try await database.allOutboxItems()
+        XCTAssertEqual(Set(rows.map(\.id)), [add.id, remove.id])
+        XCTAssertEqual(rows.first { $0.id == add.id }?.state, .sending)
+        XCTAssertEqual(rows.first { $0.id == remove.id }?.state, .pending)
+    }
+
+    func testAClickCancelsARowThatNeverLeftAndStillQueuesItsOwn() async throws {
+        let database = try DatabaseManager.inMemory()
+        _ = try await click(adding: true, in: database)
+        let remove = try await click(adding: false, in: database)
+        let rows = try await database.allOutboxItems()
+        XCTAssertEqual(rows.map(\.id), [remove.id], "the add can no longer land after the removal")
+    }
+
+    /// A tried row may have landed with its answer lost; the click's own row makes sure either way.
+    func testAClickCancelsATriedRowInBackoffAndStillQueuesItsOwn() async throws {
+        let database = try DatabaseManager.inMemory()
+        let add = try await click(adding: true, in: database)
+        _ = try await database.claimReadyOutboxItems()
+        try await database.markOutboxItemFailed(id: add.id, error: "502 Bad Gateway", retriable: true)
+        let remove = try await click(adding: false, in: database)
+        let rows = try await database.allOutboxItems()
+        XCTAssertEqual(rows.map(\.id), [remove.id])
+    }
+
+    /// Ruling B7's sequence, the one a "nothing to send" shortcut got wrong: an add in flight, then
+    /// remove, add and remove before it lands. Each click cancels the row before it and queues its
+    /// own, so what waits behind the add in flight is the last click — and the removal the
+    /// reviewer ended on is what reaches GitHub last.
+    func testTheLastClickIsWhatWaitsBehindARowInFlight() async throws {
+        let database = try DatabaseManager.inMemory()
+        let inFlight = try await click(adding: true, in: database)
+        _ = try await database.claimReadyOutboxItems()
+        _ = try await click(adding: false, in: database)
+        _ = try await click(adding: true, in: database)
+        let last = try await click(adding: false, in: database)
+        let rows = try await database.allOutboxItems()
+        XCTAssertEqual(Set(rows.map(\.id)), [inFlight.id, last.id])
+        let waiting = rows.filter { $0.state == .pending }
+        XCTAssertEqual(waiting.map(\.id), [last.id])
+        XCTAssertEqual(
+            waiting.first?.action,
+            .react(subjectID: "IC_1", content: .heart, adding: false),
+            "the last click was a removal"
         )
-    }
-
-    func testARowCancelledBeforeItWasTriedNeedsNothingWhenTheStoredStateIsTheWantedOne() {
-        let waiting = row(.react(subjectID: "IC_1", content: .heart, adding: true))
-        XCTAssertFalse(needsRow(undoing: waiting, cancelled: true, adding: false, stored: false))
-    }
-
-    /// Ruling B4: what went before the cancelled row may have landed, so only a stored state that
-    /// already is the wanted one spares the click its row.
-    func testARowCancelledBeforeItWasTriedStillNeedsOneWhenTheStoredStateIsNotTheWantedOne() {
-        let waiting = row(.react(subjectID: "IC_1", content: .heart, adding: true))
-        XCTAssertTrue(needsRow(undoing: waiting, cancelled: true, adding: false, stored: true))
-    }
-
-    /// A row tried before may have reached GitHub with its answer lost on the way back.
-    func testARowCancelledAfterAnAttemptStillGetsItsOpposite() {
-        let retried = row(.react(subjectID: "IC_1", content: .heart, adding: true), attemptCount: 1)
-        XCTAssertTrue(needsRow(undoing: retried, cancelled: true, adding: false, stored: false))
-    }
-
-    /// The drain claimed the row between the read and the cancel: it may be on GitHub by now.
-    func testARowTheDrainClaimedFirstGetsItsOpposite() {
-        let claimed = row(.react(subjectID: "IC_1", content: .heart, adding: true))
-        XCTAssertTrue(needsRow(undoing: claimed, cancelled: false, adding: false, stored: false))
-    }
-
-    /// Ruling B4's sequence: an add that was tried, then undone, then wanted again. The add may
-    /// or may not have landed; the stored detail does not show it, so the last click still queues
-    /// a row rather than trusting the cancel.
-    func testAnAddTriedThenUndoneThenWantedAgainIsQueuedAgain() {
-        // The add was tried once and is waiting out its backoff.
-        let add = row(.react(subjectID: "IC_1", content: .heart, adding: true), attemptCount: 1)
-
-        // Remove: cancels the add, and queues its own row anyway, because the add was tried.
-        XCTAssertEqual(undone(byAdding: false, in: [add])?.id, add.id)
-        XCTAssertTrue(needsRow(undoing: add, cancelled: true, adding: false, stored: false))
-        let remove = row(.react(subjectID: "IC_1", content: .heart, adding: false))
-
-        // Add again: cancels the removal, which never left — and still queues a row, because the
-        // stored detail does not show the reaction this click wants.
-        XCTAssertEqual(undone(byAdding: true, in: [remove])?.id, remove.id)
-        XCTAssertTrue(needsRow(undoing: remove, cancelled: true, adding: true, stored: false))
     }
 
     // MARK: - What is said about it

@@ -138,12 +138,14 @@ beside thread resolution: REST has no reaction endpoint for a pull-request *revi
 removing a reaction through REST needs the reaction's own id, which would mean a read before every
 removal. One outbox action, `react(subjectID:content:adding:)`. What the bar shows is GitHub's
 state plus the reviewer's own clicks, so a click is visible at once and an offline click stays
-visible until it is sent. A click that undoes one still waiting in the outbox cancels that row
-instead of queuing its opposite: a row in a retry's backoff could otherwise be sent after the
-click that undid it, and leave the reaction the reviewer took back. The click still queues a row of
-its own behind a cancelled row that had been tried — that attempt may have landed with its answer
-lost — and whenever the stored detail does not already show what the click wants. The click's row
-is on disk before any drain runs: a click the bar shows never waits for the network to be saved.
+visible until it is sent. A click that undoes one still waiting in the outbox cancels that row,
+because a row in a retry's backoff could otherwise be sent after the click that undid it and leave
+the reaction the reviewer took back — and queues its own row all the same: the stored detail lags
+every row in flight or landed, so nothing on the Mac can tell that the click's row is unneeded, and
+a redundant one costs one idempotent mutation. The click's row is on disk without waiting for any
+drain: a click the bar shows never waits for the network to be saved. A refusal the click's own
+drain sees takes the click back off the bar; one that a later drain meets shows in Settings → Sync,
+and the bar corrects itself when the screen is reopened.
 
 ### C: edits and deletes are REST, gated by GitHub's own flags
 

@@ -306,10 +306,11 @@ final class ReviewModel {
     /// What makes a click visible at once and an offline click visible until it is sent. A key
     /// goes when a detail reaching the screen agrees with it (``reactionOverlay(_:against:)``) —
     /// not when its write is sent, because the re-read after a send can still carry the state
-    /// from before it and would flicker the reaction off and on. It also goes at once when the
-    /// click had nothing to send, and when the click's own drain saw its row refused. A row
-    /// refused later, by a drain the click did not wait for, leaves its key until the screen
-    /// closes; the failed row is in Settings → Sync. Observed: it changes on a click.
+    /// from before it and would flicker the reaction off and on. It also goes when the click could
+    /// not be written, and when the click's own drain saw its row refused. A refusal that comes
+    /// later — from a drain the click did not wait for, which is what a click gets whose row
+    /// another click's drain is still sending — leaves its key until the screen closes; the failed
+    /// row is in Settings → Sync. Observed: it changes on a click.
     private(set) var reactionOverlay: [ReactionKey: Bool] = [:]
     /// The last of this screen's reaction rows being written; each waits for the one before
     /// (``toggleReaction(subjectID:content:currentlyReacted:actions:)``).
@@ -731,19 +732,6 @@ final class ReviewModel {
     /// - Returns: The keys to keep.
     static func reactionOverlay(_ overlay: [ReactionKey: Bool], against detail: PullRequestDetail) -> [ReactionKey: Bool] {
         guard !overlay.isEmpty else { return overlay }
-        let stored = storedReactions(in: detail)
-        return overlay.filter { key, wanted in
-            guard let groups = stored[key.subjectID] else { return true }
-            return groups.contains { $0.content == key.content && $0.viewerHasReacted } != wanted
-        }
-    }
-
-    /// Every post's stored reactions, by the post's node id: the description's under the pull
-    /// request's, each comment's and review's, and every thread comment's. A conversation not read
-    /// yet adds nothing, so its posts are missing rather than empty.
-    /// - Parameter detail: The detail to read.
-    /// - Returns: The groups, by post.
-    static func storedReactions(in detail: PullRequestDetail) -> [String: [ReactionGroup]] {
         var stored: [String: [ReactionGroup]] = [:]
         if let conversation = detail.conversation {
             stored[detail.summary.id] = conversation.descriptionReactions
@@ -758,7 +746,10 @@ final class ReviewModel {
         for comment in detail.threads.flatMap(\.comments) {
             stored[comment.id] = comment.reactions
         }
-        return stored
+        return overlay.filter { key, wanted in
+            guard let groups = stored[key.subjectID] else { return true }
+            return groups.contains { $0.content == key.content && $0.viewerHasReacted } != wanted
+        }
     }
 
     /// Classifies an observed detail against the one on screen.
@@ -1842,13 +1833,13 @@ final class ReviewModel {
 
     /// A click on a reaction: on the bar at once, then on disk, then sent (ADR 0043, B).
     ///
-    /// The rows are written one after another, each once the one before is on disk: whether a
-    /// click cancels the row it undoes or queues its own depends on what the click before it left
-    /// in the outbox, and two clicks reading the outbox at once could queue an add *behind* the
-    /// removal that followed it. That is local work and takes no time; the drains run beside it,
-    /// so a click never waits for the network to reach the disk. A click that could not be
-    /// written, or whose drain saw its row refused, comes back off the bar — unless a later click
-    /// on the same emoji has moved it since.
+    /// The rows are written one after another, each once the one before is on disk: a click
+    /// cancels the row the click before it left in the outbox, and two clicks reading the outbox
+    /// at once would each miss the other's row and could write an add *behind* the removal that
+    /// followed it. That is local work and takes no time; the drains run beside it, so a click
+    /// never waits for the network to reach the disk. A click that could not be written, or whose
+    /// drain saw its row refused, comes back off the bar — unless a later click on the same emoji
+    /// has moved it since.
     /// - Parameters:
     ///   - subjectID: The post's node id — the pull request's own for the description.
     ///   - content: Which reaction.
@@ -1867,39 +1858,22 @@ final class ReviewModel {
         let previous = reactionWrites
         reactionWrites = Task { [weak self] in
             await previous?.value
-            // As stored when the row is decided rather than at the click: a re-read may have
-            // landed in between. Unknown — the screen closed meanwhile — queues the row.
-            let stored = self?.storedHasReacted(key) ?? !adding
-            switch await actions.persistReaction(
+            guard let item = await actions.persistReaction(
                 on: summary,
                 subjectID: subjectID,
                 content: content,
-                adding: adding,
-                storedHasReacted: stored
-            ) {
-            case .queued(let item)?:
-                Task { [weak self] in
-                    switch await actions.settleReaction(item, on: summary) {
-                    case .sent, .queued: break
-                    case .parked, .failed: self?.dropClick(key, ifStill: adding)
-                    }
+                adding: adding
+            ) else {
+                self?.dropClick(key, ifStill: adding)
+                return
+            }
+            Task { [weak self] in
+                switch await actions.settleReaction(item, on: summary) {
+                case .sent, .queued: break
+                case .parked, .failed: self?.dropClick(key, ifStill: adding)
                 }
-            case .nothingToSend?:
-                // The stored detail already shows what the click wants, so the key adds nothing
-                // the screen does not — and kept until a detail that agrees arrives, it could
-                // hide a change made on github.com in the meantime.
-                self?.dropClick(key, ifStill: adding)
-            case nil:
-                self?.dropClick(key, ifStill: adding)
             }
         }
-    }
-
-    /// Whether the detail on screen shows the viewer's reaction — GitHub's state as last read.
-    private func storedHasReacted(_ key: ReactionKey) -> Bool {
-        guard let detail else { return false }
-        return Self.storedReactions(in: detail)[key.subjectID]?
-            .contains { $0.content == key.content && $0.viewerHasReacted } ?? false
     }
 
     /// Drops a click's key, unless a later click on the same emoji has moved it since.
