@@ -1,0 +1,35 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "viewerCanUpdate": true,
+        "viewerCanReact": true,
+        "lastEditedAt": null,
+        "reactionGroups": [
+          { "content": "HOORAY", "viewerHasReacted": false, "reactors": { "totalCount": 1 } }
+        ],
+        "timelineItems": {
+          "pageInfo": { "hasPreviousPage": true, "startCursor": "CUR1" },
+          "nodes": [
+            {
+              "__typename": "IssueComment",
+              "id": "IC_kwDONewestOne",
+              "databaseId": 2101,
+              "body": "Rebased onto main.",
+              "createdAt": "2026-08-31T10:00:00Z",
+              "author": { "__typename": "Bot", "login": "claude[bot]", "avatarUrl": "https://avatars.githubusercontent.com/in/1?v=4" }
+            },
+            {
+              "__typename": "IssueComment",
+              "id": "IC_kwDONewestTwo",
+              "databaseId": 2102,
+              "body": "Thanks, looks good now.",
+              "createdAt": "2026-08-31T10:05:00Z",
+              "author": { "__typename": "User", "login": "n2o", "avatarUrl": "https://avatars.githubusercontent.com/u/1000001?v=4" }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

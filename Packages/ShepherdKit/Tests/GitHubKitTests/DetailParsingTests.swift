@@ -42,6 +42,36 @@ final class DetailParsingTests: XCTestCase {
         XCTAssertEqual(detail.timeline.count, 5)
     }
 
+    func testDetailFetchCarriesTheConversation() async throws {
+        let transport = try await makeTransport()
+        await transport.route(
+            "ShepherdPullRequestConversation",
+            try Fixture.response("pull-conversation")
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let detail = try await client.pullRequestDetail(repo: repo, number: 128)
+
+        XCTAssertEqual(detail.conversation?.items.count, 22)
+        XCTAssertEqual(detail.conversation?.viewerCanReact, true)
+        XCTAssertEqual(detail.files.count, 4)
+        XCTAssertEqual(detail.threads.count, 2)
+    }
+
+    func testAConversationThatCannotBeReadLeavesTheDetailIntact() async throws {
+        // No route for the document: the mock answers 501. `nil` is "unknown", which the store
+        // does not write over the conversation it already holds (ADR 0043).
+        let transport = try await makeTransport()
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let detail = try await client.pullRequestDetail(repo: repo, number: 128)
+
+        XCTAssertNil(detail.conversation)
+        XCTAssertEqual(detail.number, 128)
+        XCTAssertEqual(detail.files.count, 4)
+        XCTAssertEqual(detail.threads.count, 2)
+    }
+
     func testTheDetailFetchReadsMergeStateStatusFromRESTsMergeableState() async throws {
         // REST's `mergeable_state` carries the same values as GraphQL's `mergeStateStatus`, so a
         // detail fetch does not wipe the `behind` the sweep stored (ADR 0041).
@@ -172,6 +202,30 @@ final class DetailParsingTests: XCTestCase {
         XCTAssertEqual(first.comments[0].databaseID, 987_654_321)
         XCTAssertEqual(first.comments[0].author.kind, .human)
         XCTAssertEqual(first.comments[1].author.kind.agentIdentity?.id, "claude-code")
+
+        // ADR 0043: the review a comment was submitted in, which is what hangs the thread under
+        // that review in the conversation, plus its reactions and the viewer's permissions.
+        let root = first.comments[0]
+        XCTAssertEqual(root.reviewID, "PRR_kwDOReviewOne")
+        XCTAssertTrue(root.isEdited)
+        XCTAssertEqual(
+            root.url,
+            URL(string: "https://github.com/schnaq/review/pull/128#discussion_r987654321")
+        )
+        XCTAssertEqual(
+            root.reactions,
+            [ReactionGroup(content: .thumbsUp, count: 1, viewerHasReacted: true)]
+        )
+        XCTAssertTrue(root.viewerCanUpdate)
+        XCTAssertTrue(root.viewerCanDelete)
+        // A comment GitHub sent none of those fields for keeps the defaults.
+        let reply = first.comments[1]
+        XCTAssertNil(reply.reviewID)
+        XCTAssertFalse(reply.isEdited)
+        XCTAssertNil(reply.url)
+        XCTAssertTrue(reply.reactions.isEmpty)
+        XCTAssertFalse(reply.viewerCanUpdate)
+        XCTAssertFalse(reply.viewerCanDelete)
 
         let second = threads[1]
         XCTAssertTrue(second.isResolved)
