@@ -200,6 +200,13 @@ bumping a dependency that ships inside the app also means a line in
     beside the review-threads query, so it is neither a new host nor a new request — and the CI
     state the issue's list shows for a linked pull request is read out of the local database by
     `(repo, number)`, never fetched.
+    The **conversation tab** (ADR 0043) adds one GraphQL query to that same detail fetch:
+    `timelineItems` — comments, reviews and events, newest first, at most five pages of a hundred —
+    with the description's reactions beside it, on the same endpoint and at one point of the rate
+    limit, made only for a pull request whose `updatedAt` moved, like the rest of the detail; the
+    review-threads query reads a few more fields per comment (its review, reactions, the viewer's
+    permissions). No new host, and the comment it posts is the existing
+    `POST /repos/…/issues/{n}/comments` outbox row.
     The issues *section* (ADR 0032's Sprint 2
     amendment) adds two per-issue reads on that same host, each made only when somebody asks for
     that one issue: the ETag-cached `GET /repos/…/issues/{n}` the claims card already makes, used

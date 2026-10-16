@@ -20,7 +20,7 @@ Everything here stays on your Mac unless a later section says otherwise.
 
 | What | Where | Notes |
 |---|---|---|
-| Pull requests, issues, review threads, your drafts | `~/Library/Application Support/Shepherd/`, SQLite | The source of truth. Deleted by *Sign out & erase local data* |
+| Pull requests and their conversations, issues, review threads, your drafts | `~/Library/Application Support/Shepherd/`, SQLite | The source of truth. Deleted by *Sign out & erase local data* |
 | Unsent writes (approvals, merges, comments) | the same database, as an outbox | So an approval survives a crash or a tunnel |
 | Tokens and API keys | the login Keychain | Never in `UserDefaults`, never in the database |
 | Preferences | `UserDefaults` | Including your telemetry level |

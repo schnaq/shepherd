@@ -318,6 +318,31 @@ keys deliberately do nothing there. A line the diff does not actually contain, o
 blank ones that pad the gaps between hunks, is refused exactly as it is for a click, because GitHub
 refuses a comment on it and the review with it.
 
+### The whole conversation, answered in place
+
+The **Conversation** tab is GitHub's conversation, not a summary of it
+([ADR 0043](adr/0043-the-conversation-tab.md)). Under the claims card and the issues the pull
+request closes, the description stands as the first post — author, time, *edited*, reactions — and
+everything after it runs oldest first: every comment, every review with what its author wrote above
+the inline comments, the threads each review started (file and line, a **Show in diff** button, and
+reply, resolve and *Delegate…* right there), the commits in runs, and the events between them —
+labels, assignments, review requests, force-pushes, title changes, ready-for-review and back to
+draft, merges, closes, cross-references. Resolved and outdated threads start collapsed, a comment a
+maintainer hid starts collapsed, and the HTML bots write — `<!-- markers -->`, `<details>` blocks —
+reads as text rather than as markup. The checks come after the stream, where GitHub puts them.
+
+At the bottom is a comment field: **Post comment** (⌘⏎), **Comment and close**, saved replies and
+⌘V screenshots — the same two writes as the *Comment…* sheet, queued in the outbox like everything
+else, so a comment written on the train goes out when the network comes back. *Quote reply* on any
+post drops it, quoted, into that field. Once GitHub has the comment the screen re-reads the pull
+request, so it appears at once rather than with the next sweep; a colleague's comment arrives with
+the sweep, the way a new check does.
+
+It is one more GraphQL read per changed pull request, measured at one point of GitHub's rate
+limit, read newest first and capped at 500 entries — a conversation longer than that says
+*Earlier activity is on GitHub* at the top rather than losing its latest comments. A read that
+fails leaves the conversation already on the Mac where it was.
+
 ### A diff you can walk, line by line
 
 Settings → Appearance → Diff renderer offers three choices: **Automatic**, **Rich viewer**, and
