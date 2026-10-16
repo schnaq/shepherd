@@ -171,22 +171,27 @@ struct PullRequestActions {
     ///   - summary: The pull request.
     ///   - commentDatabaseID: The REST database id of the comment being replied to.
     ///   - body: The reply text.
+    /// - Returns: What became of the row, or `nil` when nothing was written — a reply already on
+    ///   its way, or a local write that failed.
+    @discardableResult
     func reply(
         on summary: PullRequestSummary,
         commentDatabaseID: Int,
         body: String
-    ) async {
-        await activity.run(summary.id, .reply) {
+    ) async -> OutboxWriteOutcome? {
+        await activity.run(summary.id, .reply) { () async -> OutboxWriteOutcome? in
             do {
                 let outcome = try await enqueue(
                     .replyToComment(commentDatabaseID: commentDatabaseID, body: body),
                     on: summary
                 )
                 announce(outcome, of: .reply, on: summary)
+                return outcome
             } catch {
                 toasts.failure(error, context: String(localized: "Could not queue the reply"))
+                return nil
             }
-        }
+        } ?? nil
     }
 
     /// Posts one inline comment on its own, outside the pending review: GitHub's *Comment* beside
@@ -218,14 +223,17 @@ struct PullRequestActions {
     ///   - summary: The pull request.
     ///   - threadID: The thread's GraphQL node id.
     ///   - resolved: The state to move to.
+    /// - Returns: What became of the row, or `nil` when nothing was written — the same thread
+    ///   already being toggled, or a local write that failed.
+    @discardableResult
     func setThread(
         on summary: PullRequestSummary,
         threadID: String,
         resolved: Bool
-    ) async {
+    ) async -> OutboxWriteOutcome? {
         // Keyed by the *thread*, not the pull request: a card can show a dozen conversations,
         // and resolving one of them is no reason for the other eleven buttons to report a write.
-        await activity.run(threadID, .thread) {
+        await activity.run(threadID, .thread) { () async -> OutboxWriteOutcome? in
             do {
                 let outcome = try await enqueue(
                     resolved
@@ -234,10 +242,12 @@ struct PullRequestActions {
                     on: summary
                 )
                 announce(outcome, of: .thread(resolved: resolved), on: summary)
+                return outcome
             } catch {
                 toasts.failure(error, context: String(localized: "Could not update the thread"))
+                return nil
             }
-        }
+        } ?? nil
     }
 
     // MARK: - Conversation
@@ -251,15 +261,23 @@ struct PullRequestActions {
     /// - Parameters:
     ///   - summary: The pull request.
     ///   - body: The comment as Markdown source.
-    func comment(on summary: PullRequestSummary, body: String) async {
+    /// - Returns: What became of the row, or `nil` when nothing was written — an empty body, a
+    ///   comment already on its way, or a local write that failed. The conversation tab's composer
+    ///   keeps its text on `nil` and on `.failed`.
+    @discardableResult
+    func comment(on summary: PullRequestSummary, body: String) async -> OutboxWriteOutcome? {
         let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        do {
-            let outcome = try await enqueue(.addPullRequestComment(body: trimmed), on: summary)
-            announce(outcome, of: .comment, on: summary)
-        } catch {
-            toasts.failure(error, context: String(localized: "Could not queue the comment"))
-        }
+        guard !trimmed.isEmpty else { return nil }
+        return await activity.run(summary.id, .comment) { () async -> OutboxWriteOutcome? in
+            do {
+                let outcome = try await enqueue(.addPullRequestComment(body: trimmed), on: summary)
+                announce(outcome, of: .comment, on: summary)
+                return outcome
+            } catch {
+                toasts.failure(error, context: String(localized: "Could not queue the comment"))
+                return nil
+            }
+        } ?? nil
     }
 
     /// Closes the pull request, with or without a comment.

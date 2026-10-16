@@ -41,6 +41,186 @@
         }
       }
     },
+    "%@ added %lld commits": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%@ hat %lld Commit hinzugefügt"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%@ hat %lld Commits hinzugefügt"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%@ added %lld commit"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%@ added %lld commits"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%@ added the label %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat das Label %@ hinzugefügt"
+          }
+        }
+      }
+    },
+    "%@ assigned %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat %@ zugewiesen"
+          }
+        }
+      }
+    },
+    "%@ changed the base branch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat den Basis-Branch geändert"
+          }
+        }
+      }
+    },
+    "%@ changed the base branch from %@ to %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat den Basis-Branch von %@ auf %@ geändert"
+          }
+        }
+      }
+    },
+    "%@ changed the title from \"%@\" to \"%@\"": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat den Titel von „%@“ in „%@“ geändert"
+          }
+        }
+      }
+    },
+    "%@ closed this pull request": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat diesen Pull Request geschlossen"
+          }
+        }
+      }
+    },
+    "%@ converted this pull request to a draft": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat diesen Pull Request zu einem Draft gemacht"
+          }
+        }
+      }
+    },
+    "%@ deleted the branch %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat den Branch %@ gelöscht"
+          }
+        }
+      }
+    },
+    "%@ deleted the head branch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat den Head-Branch gelöscht"
+          }
+        }
+      }
+    },
+    "%@ disabled auto-merge": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat Auto-Merge deaktiviert"
+          }
+        }
+      }
+    },
+    "%@ dismissed a review": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat ein Review verworfen"
+          }
+        }
+      }
+    },
+    "%@ enabled auto-merge": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat Auto-Merge aktiviert"
+          }
+        }
+      }
+    },
+    "%@ force-pushed from %@ to %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat von %@ auf %@ force-gepusht"
+          }
+        }
+      }
+    },
+    "%@ force-pushed the branch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat den Branch force-gepusht"
+          }
+        }
+      }
+    },
     "%@ has conflicts with its base branch. Resolve them first.": {
       "localizations": {
         "de": {
@@ -97,6 +277,116 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ ist noch ein Draft — GitHub lehnt den Merge ab, bis er als bereit zum Review markiert ist."
+          }
+        }
+      }
+    },
+    "%@ marked this pull request as ready for review": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat diesen Pull Request als bereit für ein Review markiert"
+          }
+        }
+      }
+    },
+    "%@ mentioned this in %@ %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ hat dies in %2$@ erwähnt: %3$@"
+          }
+        }
+      }
+    },
+    "%@ merged commit %@ into %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat Commit %@ in %@ gemergt"
+          }
+        }
+      }
+    },
+    "%@ merged this pull request": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat diesen Pull Request gemergt"
+          }
+        }
+      }
+    },
+    "%@ removed the label %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat das Label %@ entfernt"
+          }
+        }
+      }
+    },
+    "%@ removed the review request for %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat die Review-Anfrage an %@ zurückgezogen"
+          }
+        }
+      }
+    },
+    "%@ reopened this pull request": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat diesen Pull Request wieder geöffnet"
+          }
+        }
+      }
+    },
+    "%@ requested a review from %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat ein Review von %@ angefordert"
+          }
+        }
+      }
+    },
+    "%@ restored the head branch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat den Head-Branch wiederhergestellt"
+          }
+        }
+      }
+    },
+    "%@ self-assigned this": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat sich selbst zugewiesen"
+          }
+        }
+      }
+    },
+    "%@ unassigned %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat die Zuweisung an %@ aufgehoben"
           }
         }
       }
@@ -684,6 +974,46 @@
                 "stringUnit": {
                   "state": "translated",
                   "value": "%lld comments"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld commits": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Commit"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Commits"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld commit"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld commits"
                 }
               }
             }
@@ -1691,6 +2021,46 @@
         }
       }
     },
+    "%lld reactions": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Reaktion"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Reaktionen"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld reaction"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld reactions"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld reports stored; the %lld newest are kept.": {
       "localizations": {
         "de": {
@@ -2111,6 +2481,16 @@
         }
       }
     },
+    ", including yours": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ", darunter deine"
+          }
+        }
+      }
+    },
     "1 comment thread.": {
       "localizations": {
         "de": {
@@ -2411,12 +2791,12 @@
         }
       }
     },
-    "ACTIVITY": {
+    "ADD A COMMENT": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "AKTIVITÄT"
+            "value": "KOMMENTAR HINZUFÜGEN"
           }
         }
       }
@@ -2507,6 +2887,196 @@
           "stringUnit": {
             "state": "translated",
             "value": "KI-Ausgaben erscheinen immer nur als ausblendbarer Hinweis. Shepherd schickt nie ein Review ab, approvt nichts, mergt nichts und kommentiert nichts für dich."
+          }
+        }
+      }
+    },
+    "Confused": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verwirrt"
+          }
+        }
+      }
+    },
+    "Copy link": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link kopieren"
+          }
+        }
+      }
+    },
+    "Earlier activity is on GitHub": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ältere Aktivität findest du auf GitHub"
+          }
+        }
+      }
+    },
+    "Eyes": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Augen"
+          }
+        }
+      }
+    },
+    "Heart": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Herz"
+          }
+        }
+      }
+    },
+    "Hidden comment": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausgeblendeter Kommentar"
+          }
+        }
+      }
+    },
+    "Hidden — %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausgeblendet — %@"
+          }
+        }
+      }
+    },
+    "Hide conversation": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unterhaltung ausblenden"
+          }
+        }
+      }
+    },
+    "Hooray": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hurra"
+          }
+        }
+      }
+    },
+    "Laugh": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lachen"
+          }
+        }
+      }
+    },
+    "Post the comment (⌘⏎ while you type)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentar veröffentlichen (⌘⏎ beim Schreiben)"
+          }
+        }
+      }
+    },
+    "Quote reply": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mit Zitat antworten"
+          }
+        }
+      }
+    },
+    "Rocket": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rakete"
+          }
+        }
+      }
+    },
+    "Show conversation": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unterhaltung zeigen"
+          }
+        }
+      }
+    },
+    "Show in diff": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Im Diff zeigen"
+          }
+        }
+      }
+    },
+    "Someone": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jemand"
+          }
+        }
+      }
+    },
+    "Thumbs down": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daumen runter"
+          }
+        }
+      }
+    },
+    "Thumbs up": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daumen hoch"
+          }
+        }
+      }
+    },
+    "abuse": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Missbrauch"
           }
         }
       }
@@ -3801,26 +4371,6 @@
         }
       }
     },
-    "COMMITS · %lld": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "COMMITS · %lld"
-          }
-        }
-      }
-    },
-    "CONVERSATIONS NOT ON THE CURRENT DIFF": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "UNTERHALTUNGEN AUSSERHALB DES AKTUELLEN DIFFS"
-          }
-        }
-      }
-    },
     "Cancel": {
       "localizations": {
         "de": {
@@ -5007,16 +5557,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dunkel"
-          }
-        }
-      }
-    },
-    "Delegate this finding…": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Diesen Befund delegieren…"
           }
         }
       }
@@ -6631,6 +7171,56 @@
         }
       }
     },
+    "approved these changes": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hat diese Änderungen approved"
+          }
+        }
+      }
+    },
+    "commented": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hat kommentiert"
+          }
+        }
+      }
+    },
+    "duplicate": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duplikat"
+          }
+        }
+      }
+    },
+    "edited": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bearbeitet"
+          }
+        }
+      }
+    },
+    "has a pending review": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hat ein offenes Review"
+          }
+        }
+      }
+    },
     "just now": {
       "localizations": {
         "de": {
@@ -7677,16 +8267,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Auf dieser Zeile kann kein Kommentar hinterlassen werden."
-          }
-        }
-      }
-    },
-    "No commits fetched yet.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Noch keine Commits geladen."
           }
         }
       }
@@ -9271,6 +9851,26 @@
         }
       }
     },
+    "off-topic": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "nicht zum Thema"
+          }
+        }
+      }
+    },
+    "opened this pull request": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hat diesen Pull Request geöffnet"
+          }
+        }
+      }
+    },
     "rebase-merge": {
       "localizations": {
         "de": {
@@ -10207,6 +10807,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "ÜBERSPRUNGEN (%lld)"
+          }
+        }
+      }
+    },
+    "requested changes": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hat Änderungen angefordert"
+          }
+        }
+      }
+    },
+    "reviewed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hat gereviewt"
+          }
+        }
+      }
+    },
+    "reviewed — dismissed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "hat gereviewt — verworfen"
+          }
+        }
+      }
+    },
+    "spam": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spam"
           }
         }
       }
@@ -14737,6 +15377,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Turns"
+          }
+        }
+      }
+    },
+    "was line %lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "war Zeile %lld"
           }
         }
       }

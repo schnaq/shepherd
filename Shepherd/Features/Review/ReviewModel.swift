@@ -53,7 +53,7 @@ final class ReviewModel {
     enum Tab: String, CaseIterable, Identifiable {
         /// The Monaco diff.
         case files
-        /// Description, commits and checks.
+        /// GitHub's conversation, the checks and a comment field (ADR 0043).
         case conversation
 
         var id: String { rawValue }
@@ -252,6 +252,27 @@ final class ReviewModel {
     var pendingVerdict: ReviewVerdict = .comment
     /// The summary text typed in the submit sheet.
     var summaryText = ""
+    /// The conversation tab's stream (ADR 0043).
+    ///
+    /// Rebuilt by ``apply(_:)`` and ``refresh(_:replacing:)``, the two places a detail reaches the
+    /// screen, and never in a getter: the tab is drawn far more often than the detail changes.
+    private(set) var conversationEntries: [ConversationEntry] = []
+    /// What is typed in the conversation tab's comment field.
+    ///
+    /// Read by ``ConversationComposer`` and nothing else, so a keystroke redraws the field rather
+    /// than the stream above it; held here rather than in the field so it survives a trip to the
+    /// Files tab.
+    var conversationDraft = ""
+    /// How many times something asked for the keyboard in the conversation tab's comment field —
+    /// *Quote reply* does. A counter for ``focusEditorRequest``'s reason: asking twice has to move
+    /// the focus twice.
+    private(set) var composerFocusRequest = 0
+    /// Whether the conversation tab's comment field has the keyboard.
+    ///
+    /// Who ⌘⏎ belongs to: *Post comment* while somebody is typing a comment, the toolbar's
+    /// *Review* everywhere else. Set by ``ConversationComposer`` when the focus moves and at no
+    /// other time, so the toolbar redraws on a focus change and never on a keystroke.
+    var isConversationComposerFocused = false
 
     /// The provider router.
     var intelligence: IntelligenceRouter = .disabled
@@ -653,6 +674,11 @@ final class ReviewModel {
         detailLoadError = nil
         let threadsMoved = fresh.threads != shown.threads
         detail = fresh
+        conversationEntries = ConversationTimeline.entries(
+            conversation: fresh.conversation,
+            commits: fresh.commits,
+            threads: fresh.threads
+        )
         priorities = FilePrioritizer.prioritize(
             fresh.files,
             context: PrioritizationContext(totalChangedLines: fresh.summary.churn)
@@ -732,6 +758,11 @@ final class ReviewModel {
         // over a diff that had since arrived on its own until somebody pressed Try again.
         detailLoadError = nil
         self.detail = detail
+        conversationEntries = ConversationTimeline.entries(
+            conversation: detail.conversation,
+            commits: detail.commits,
+            threads: detail.threads
+        )
         // The one place the tab default is spent, and the flag is what keeps it to the *first*
         // detail: this function runs again for the fresh fetch behind the cached row, for the
         // banner's Reload, and for nothing a reviewer would call a new open.
@@ -1189,15 +1220,6 @@ final class ReviewModel {
         }
     }
 
-    /// Threads that cannot be drawn on the diff, shown in the conversation tab instead.
-    ///
-    /// Pull-request-level conversations, threads whose anchor GitHub reports as lost, and
-    /// outdated threads — an outdated thread's `line` refers to an older commit, so mounting
-    /// it as a view zone would park the conversation on unrelated code.
-    var unanchoredThreads: [ReviewThread] {
-        (detail?.threads ?? []).filter { !$0.isAnchoredInCurrentDiff }
-    }
-
     /// The thread the popover is showing.
     var activeThread: ReviewThread? {
         guard let activeThreadID else { return nil }
@@ -1616,6 +1638,34 @@ final class ReviewModel {
     func requestEditorFocus(side: BridgeSide = .right) {
         focusEditorSide = side
         focusEditorRequest += 1
+    }
+
+    /// *Quote reply*: puts a post, quoted, at the end of the conversation tab's comment field and
+    /// hands that field the keyboard (ADR 0043).
+    ///
+    /// Behind a blank line when the field already holds text — ``ShepherdCore/SavedReply/inserting(_:into:)``'s
+    /// rule, for its reason: a quote glued onto the last line would turn that line into a quote
+    /// too — and with a blank line after it, so the reply starts as its own paragraph.
+    /// - Parameter markdown: The post's Markdown source.
+    func quote(_ markdown: String) {
+        conversationDraft = SavedReply.inserting(Self.quoted(markdown), into: conversationDraft) + "\n\n"
+        composerFocusRequest += 1
+    }
+
+    /// A post as a Markdown quote: `> ` in front of every line and `>` on every blank one, so a
+    /// quoted paragraph break stays inside the quote.
+    ///
+    /// Split on any line break rather than on `"\n"`: whatever was typed on github.com arrives with
+    /// CRLF, which Swift reads as *one* character, so a split on `"\n"` alone found no line at all
+    /// and only the first paragraph went out quoted.
+    /// - Parameter markdown: The post's Markdown source.
+    /// - Returns: The quote, without a trailing line break.
+    static func quoted(_ markdown: String) -> String {
+        markdown
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+            .map { $0.isEmpty ? ">" : "> \($0)" }
+            .joined(separator: "\n")
     }
 
     /// Shows one file in the diff viewer, scrolled to a line.
