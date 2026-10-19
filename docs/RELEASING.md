@@ -21,6 +21,9 @@ Nothing in the app or in CI breaks in the meantime. [§ One-time setup](#one-tim
 list of things to do once; [§ Making a release](#making-a-release) is what happens every time
 afterwards.
 
+The iPhone companion is released on its own, through TestFlight:
+[§ Shepherd for iPhone](#shepherd-for-iphone-testflight).
+
 ---
 
 ## One-time setup
@@ -369,6 +372,81 @@ version *range* could resolve differently on two machines building the same comm
 To bump: change `exactVersion`, run `xcodegen generate`, build, and update Sparkle's version in
 [`NOTICES.md`](../NOTICES.md). A Sparkle major-version bump is an API change and needs a look at
 `Shepherd/Support/UpdateController.swift`.
+
+---
+
+## Shepherd for iPhone (TestFlight)
+
+The iPhone companion (ADR 0044, target `ShepherdPhone`, bundle id `com.schnaq.shepherd.ios`) is
+released separately from the Mac app and by a different route: Apple distributes it, so there is
+no DMG, no notarization, no appcast and no tag. It has its own version — `MARKETING_VERSION` on the
+`ShepherdPhone` target in `project.yml`, bumped by hand — and its build numbers are UTC timestamps
+(`yyDDDHHMM`), so they always go up without anyone keeping count. v1 goes to **internal testers
+only**: members of the App Store Connect team, with no Beta App Review.
+
+### One-time setup (by hand, once)
+
+1. **An Apple account Xcode can sign with.** Either:
+   - sign in to Xcode on the Mac that uploads (Xcode → Settings… → Accounts → +) with an Apple
+     account that is in team `L99L6DPKC7` with the *Admin* or *App Manager* role. Xcode then
+     registers the App ID, creates the App Store profile and signs with a cloud-managed
+     distribution certificate on the first upload; nothing has to be made by hand. Or
+   - create an App Store Connect API key with the **Admin** role (App Store Connect → Users and
+     Access → Integrations → App Store Connect API → +) and keep the `AuthKey_XXXXXXXX.p8` file
+     outside the working tree. The notarization key from step 2 above will *not* do: it has the
+     Developer role, and automatic signing has to create a distribution certificate, which only
+     Admin may. Note the Key ID and the issuer UUID (the same issuer as `NOTARY_API_ISSUER_ID`).
+2. **The App Store Connect app record.** App Store Connect → Apps → + → New App: platform iOS,
+   bundle id `com.schnaq.shepherd.ios` (register it under Certificates, Identifiers & Profiles
+   first if the picker does not offer it), SKU e.g. `shepherd-ios`. The name has to be unique on
+   the store and *Shepherd* may be taken — a fallback such as "Shepherd – PR Review" changes only
+   the store listing; the home screen still says Shepherd. **The bundle id cannot change once
+   this record exists.**
+3. **An internal tester group.** App Store Connect → the app → TestFlight → Internal Testing → +,
+   add the team members who should get builds, and switch on automatic distribution so each
+   processed build reaches them without a click.
+
+### Uploading a build
+
+```bash
+mise run testflight          # or: Scripts/testflight.sh
+```
+
+With an API key instead of the Xcode account:
+
+```bash
+ASC_API_KEY_PATH=~/.appstoreconnect/AuthKey_XXXXXXXX.p8 \
+ASC_API_KEY_ID=XXXXXXXX ASC_API_ISSUER_ID=<issuer uuid> \
+  Scripts/testflight.sh
+```
+
+The script regenerates the project, archives the Release build, refuses to continue if the binary
+imports a cipher (see below), and uploads through `ShepherdPhone/Support/ExportOptions.plist`. The
+build appears in App Store Connect → TestFlight once Apple has processed it, usually within the
+hour, and the internal group gets it from there.
+
+`ALLOW_UNSIGNED=1 Scripts/testflight.sh` archives without signing, runs the same guard and stops —
+the way to prove the pipeline on a machine with no Apple account.
+
+### Export compliance
+
+`ITSAppUsesNonExemptEncryption` is `NO` in `project.yml`, so App Store Connect asks no encryption
+question per build. That is true because the app uses only the system's encryption (HTTPS, the
+Keychain); the CryptoKit it links is SHA-256 and HMAC, which are exempt. The Mac's settings sync
+(AES-GCM, PBKDF2) is exactly what must never reach the phone, and
+`Scripts/check-phone-encryption.sh` enforces it — before every upload and in CI's `ios` job. If it
+fails, decide the export-compliance answer again before changing anything else.
+
+### iPhone troubleshooting
+
+| Symptom | Cause |
+| --- | --- |
+| `No Accounts` / `No profiles for 'com.schnaq.shepherd.ios' were found` | No Apple account in Xcode and no `ASC_API_KEY_PATH`. Step 1. |
+| `A non-HTTP 200 response was received (401)` | The API key, Key ID or issuer is wrong, or the key was revoked. |
+| A permission error about cloud-managed certificates | The API key has the Developer role. Step 1 needs Admin. |
+| `No suitable application records were found` | Step 2 has not been done, or the record has a different bundle id. |
+| `The bundle version must be higher than the previously uploaded version` | Two uploads in the same minute, or a hand-set `BUILD_NUMBER` lower than the last one. |
+| `ITMS-90704` (missing icon) or `ITMS-91053` (missing API declaration) | `ShepherdPhone/Resources/AppIcon.icon` or `PrivacyInfo.xcprivacy` did not reach the bundle, or shared code started using another required-reason API (e.g. `systemUptime`); declare it in the manifest. |
 
 ---
 

@@ -153,3 +153,21 @@ supply — it needs a Mac, VoiceOver, and somebody listening. That is check 2 of
 [`docs/plans/accessibility.md`](../plans/accessibility.md) § "What to check on a Mac", and it now
 decides something sharper than it used to: not whether the native list is worth building — it is
 built — but how much of its wording has to change before it is worth using.
+
+## Amendment 2026-10-19: syntax colour and word diff, from ShepherdCore
+
+The native renderer gets what Monaco always had: syntax colour, and the changed words inside a
+paired removed/added line highlighted. Both come from `ShepherdCore` (`SourceLanguage`,
+`SyntaxHighlighter`, `DiffHighlighting`), a pure-stdlib lexer and a word diff over the stdlib's
+`CollectionDifference`, computed once per file and round from the same reconstruction the list
+already draws — because the iPhone companion (ADR 0044) needs a native diff and has no web view to
+borrow Monaco's.
+
+Both sit on the "free to differ" side of § Three things must agree. Colour and word highlights are
+drawn on top of rows the reconstruction already decided; they never change which lines take a
+comment, what a comment means, or which round is shown. The path → language table moved with them
+(`SourceLanguage`), and `MonacoLanguage` now delegates to it, so both renderers name a file's
+language the same way. The colours sit over the existing diff wash rather than new tokens, and a
+word highlight has to keep 4.5:1 contrast against it — an acceptance check of the phone's diff, and
+of the Mac list when it adopts the highlighting.
+
