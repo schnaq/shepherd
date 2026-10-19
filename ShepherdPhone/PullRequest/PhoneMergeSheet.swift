@@ -9,8 +9,9 @@ import SwiftUI
 /// rules are the Mac sheet's, read off the same values: the method and the delete-branch box write
 /// straight through to ``AppSettings`` (ADR 0015), a stacked pull request says what else the merge
 /// takes along and leaves its branches to GitHub (ADR 0042), and the warning is the Mac's sentence
-/// in the Mac's order. *Merge when checks pass* is not offered: that coordinator only runs while the
-/// Mac app is running (ADR 0037), and the phone does not sweep in the background.
+/// in the Mac's order — at the top here, where the medium detent keeps it in view. *Merge when
+/// checks pass* is not offered: that coordinator only runs while the Mac app is running
+/// (ADR 0037), and the phone does not sweep in the background.
 struct PhoneMergeSheet: View {
     @Environment(\.dismiss) private var dismiss
     /// The pull request to merge.
@@ -51,9 +52,18 @@ struct PhoneMergeSheet: View {
                     }
                 }
 
-                Section(String(localized: "Method")) {
+                // Right under the title, so red CI is on screen at the medium detent beside the
+                // green Merge rather than below the fold.
+                if let warning {
+                    Section {
+                        Label(warning, systemImage: "exclamationmark.triangle")
+                            .font(Theme.type(.subheadline))
+                            .foregroundStyle(summary.mergeBlocker != nil || checkState == .failure ? Theme.failure : Theme.pending)
+                    }
+                }
+
+                Section {
                     MergeMethodPicker(settings: settings)
-                        .labelsHidden()
                 }
 
                 Section {
@@ -65,13 +75,6 @@ struct PhoneMergeSheet: View {
                         : String(localized: "Removes the head branch once the merge has landed. Skipped for forks and for a repository's default branch."))
                 }
 
-                if let warning {
-                    Section {
-                        Label(warning, systemImage: "exclamationmark.triangle")
-                            .font(Theme.type(.subheadline))
-                            .foregroundStyle(summary.mergeBlocker != nil || checkState == .failure ? Theme.failure : Theme.pending)
-                    }
-                }
             }
             .scrollContentBackground(.hidden)
             .background(Theme.background)

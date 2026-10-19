@@ -443,6 +443,13 @@ final class ReviewModel {
         roundTask = nil
     }
 
+    /// ``load()``, awaited until it lands — for the phone's pull-to-refresh (ADR 0044), whose spinner
+    /// would otherwise end on the tap. The same reload, so still the screen's only fetch path.
+    func reload() async {
+        load()
+        await loadTask?.value
+    }
+
     /// Reloads from the cache and from GitHub.
     ///
     /// The screen's only reload: ``start()`` calls it, and so does every Try again — the two

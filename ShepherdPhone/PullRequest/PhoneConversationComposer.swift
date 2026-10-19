@@ -7,8 +7,9 @@ import SwiftUI
 /// The Mac draws this field at the bottom of its conversation tab (`ConversationComposer`); on the
 /// phone a field there would fight the bottom bar and the keyboard, so it is a sheet with detents.
 /// The draft is the model's (``ReviewModel/conversationDraft``), so it survives the sheet closing
-/// and *Quote reply* appends to it. The two writes are the Mac's: *Post comment*, and *Comment and
-/// close* / *Close without a comment* while the pull request is open.
+/// and *Quote reply* appends to it. The two writes are the Mac's: *Comment*, and *Comment and
+/// close* / *Close without a comment* while the pull request is open. Unlike the Mac, the close asks
+/// first: it is the one labelled button under a thumb, and the ⋯ menu's *Close…* asks too.
 struct PhoneConversationComposer: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var model: ReviewModel
@@ -18,6 +19,8 @@ struct PhoneConversationComposer: View {
     var onPosted: () -> Void = {}
 
     @FocusState private var isFocused: Bool
+    /// Whether the close is waiting for its confirmation.
+    @State private var isConfirmingClose = false
 
     var body: some View {
         NavigationStack {
@@ -42,9 +45,19 @@ struct PhoneConversationComposer: View {
                         Button(canSend
                             ? String(localized: "Comment and close")
                             : String(localized: "Close without a comment"), role: .destructive) {
-                            close()
+                            isConfirmingClose = true
                         }
                         .buttonStyle(.bordered)
+                        .confirmationDialog(
+                            String(localized: "Close \(summary.slug)?"),
+                            isPresented: $isConfirmingClose,
+                            titleVisibility: .visible
+                        ) {
+                            Button(String(localized: "Close pull request"), role: .destructive) { close() }
+                            Button(String(localized: "Cancel"), role: .cancel) {}
+                        } message: {
+                            Text(String(localized: "Nothing is merged. It can be reopened on GitHub."))
+                        }
                     }
                 }
             }
@@ -62,7 +75,7 @@ struct PhoneConversationComposer: View {
                         guard !isPosting else { return }
                         Task { await post() }
                     } label: {
-                        Label(String(localized: "Post comment"), systemImage: "arrow.up")
+                        Text(String(localized: "Comment"))
                             .busyLabel(isBusy: isPosting)
                     }
                     .buttonStyle(.glassProminent)

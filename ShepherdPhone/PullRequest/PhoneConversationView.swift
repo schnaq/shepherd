@@ -289,8 +289,10 @@ struct PhonePostCard<Header: View, Content: View>: View {
             content
         }
         .phoneCard()
+        // Not while the post's editor is open: the menu wraps the whole card, so a long press in
+        // the editor's field would open Quote reply / Edit / Delete instead of select and paste.
         .contextMenu {
-            if hasMenu { menuItems }
+            if hasMenu && !isEditorOpen { menuItems }
         }
         .confirmationDialog(
             String(localized: "Delete this comment?"),
@@ -309,6 +311,8 @@ struct PhonePostCard<Header: View, Content: View>: View {
     private var offersQuote: Bool { quotes && !markdown.isEmpty }
 
     private var hasMenu: Bool { offersQuote || url != nil || editing != nil }
+
+    private var isEditorOpen: Bool { editing.map { PhonePostEditor.isOpen(for: $0, in: model) } ?? false }
 
     /// *Quote reply*, *Edit*, *Delete…*, *Copy link*, *Share*, *Open on GitHub* — each only where it
     /// applies, as on the Mac (`PostMenu`).
@@ -847,7 +851,10 @@ struct PhoneThreadView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(isExpanded ? String(localized: "Hide conversation") : String(localized: "Show conversation"))
+            // What the thread is about, as the card announces it; what a tap does is the hint.
+            .accessibilityLabel(Text(verbatim: spokenLabel))
+            .accessibilityHint(isAlwaysExpanded ? ""
+                : isExpanded ? String(localized: "Hide conversation") : String(localized: "Show conversation"))
             if let onShowInDiff, thread.isAnchoredInCurrentDiff, let path = thread.path {
                 Button(String(localized: "Show in diff")) { onShowInDiff(path, thread.line) }
                     .buttonStyle(.bordered)
@@ -1009,7 +1016,10 @@ struct PhoneThreadComment: View {
             }
         }
         .contentShape(Rectangle())
-        .contextMenu { menuItems(editing) }
+        // Not while the editor is open, for ``PhonePostCard``'s reason: the field's own long press.
+        .contextMenu {
+            if !(editing.map { PhonePostEditor.isOpen(for: $0, in: model) } ?? false) { menuItems(editing) }
+        }
         .confirmationDialog(
             String(localized: "Delete this comment?"),
             isPresented: $isConfirmingDelete,
@@ -1122,9 +1132,7 @@ struct PhoneEventRow: View {
                 .foregroundStyle(ConversationEventText.tint(for: item.event))
                 .frame(width: symbolWidth)
                 .accessibilityHidden(true)
-            (Text(ConversationEventText.sentence(for: item)).foregroundStyle(Theme.textSecondary)
-                + Text(verbatim: "  ")
-                + Text(RelativeDate.short(item.createdAt)).foregroundStyle(Theme.textMuted))
+            Text("\(Text(ConversationEventText.sentence(for: item)).foregroundStyle(Theme.textSecondary))  \(Text(RelativeDate.short(item.createdAt)).foregroundStyle(Theme.textMuted))")
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }

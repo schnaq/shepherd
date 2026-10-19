@@ -21,9 +21,10 @@ struct MergeMethodPicker: View {
         #if os(macOS)
         .pickerStyle(.radioGroup)
         #else
-        // A checkmark list rather than segments: at 393 points the three names do not fit a
-        // segmented control without truncating, and they grow with Dynamic Type (ADR 0044).
-        .pickerStyle(.inline)
+        // One "Method" row with a menu rather than segments or a checkmark list: at 393 points the
+        // three names do not fit a segmented control, and three rows push the merge sheet's
+        // branch toggle below its medium detent (ADR 0044).
+        .pickerStyle(.menu)
         #endif
     }
 

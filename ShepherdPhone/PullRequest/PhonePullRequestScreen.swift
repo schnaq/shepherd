@@ -9,7 +9,9 @@ import SwiftUI
 /// `navigationDestination(item:)` *inside* ``PhonePullRequestScreen`` rather than appended to the
 /// router's path: the path is `[PhoneRoute]`, a typed array that cannot carry a second type, and
 /// the files screen has to share this screen's ``ReviewModel`` — the selected file, the drafts and
-/// the round are all on it — which a destination registered here gets for free.
+/// the round are all on it — which a destination registered here gets for free. The price: the
+/// router's path does not know about it, so a path change from the shell (a deep link) leaves it
+/// out — to be settled together with the router.
 struct PhoneFilesDestination: Hashable {
     /// The pull request's node id.
     let prID: String
@@ -120,7 +122,6 @@ struct PhonePullRequestScreen: View {
     @ViewBuilder
     private var content: some View {
         if let summary = model.summary {
-            ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if let notice = model.notice {
@@ -139,7 +140,6 @@ struct PhonePullRequestScreen: View {
                     )
                     filesRow(summary)
                     descriptionPost(summary)
-                        .id("description")
                     if model.detail?.conversation?.hasEarlierItems == true {
                         PhoneStreamNotice(
                             symbol: "clock.arrow.circlepath",
@@ -155,29 +155,13 @@ struct PhonePullRequestScreen: View {
                             actions: actions,
                             onShowInDiff: showInDiff
                         )
-                        .id("conversation")
                     }
                     PhoneChecksCard(checks: model.detail?.checks ?? [])
-                        .id("checks")
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
             }
-            .refreshable { model.load() }
-            #if DEBUG
-            // `SHEPHERD_DEMO_SCROLL=description|conversation|checks`: where a demo capture starts,
-            // on a simulator nobody can scroll — the Mac demo's `SHEPHERD_DEMO_*` switches' kind.
-            // `SHEPHERD_DEMO_PUSH_FILES=1` pushes the files screen the same way.
-            .task {
-                if ProcessInfo.processInfo.environment["SHEPHERD_DEMO_PUSH_FILES"] == "1" {
-                    files = PhoneFilesDestination(prID: model.prID)
-                }
-                guard let target = ProcessInfo.processInfo.environment["SHEPHERD_DEMO_SCROLL"] else { return }
-                try? await Task.sleep(for: .milliseconds(400))
-                proxy.scrollTo(target, anchor: .top)
-            }
-            #endif
-            }
+            .refreshable { await model.reload() }
         } else if model.isMissingFromInbox {
             missingFromInbox
         } else if let error = model.detailLoadErrorCard {
@@ -460,8 +444,8 @@ struct PhonePullRequestHeader: View {
                 .accessibilityAddTraits(.isHeader)
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) { branches(lineLimit: 1) }
-                // Large text: the names wrap rather than shrink to "cl…es", the chip under them.
-                VStack(alignment: .leading, spacing: 6) { branches(lineLimit: 4) }
+                // Large text: the names wrap whole rather than shrink to "cl…es", the chip under them.
+                VStack(alignment: .leading, spacing: 6) { branches(lineLimit: nil) }
             }
             .font(Theme.mono(.footnote))
             .accessibilityElement(children: .combine)
@@ -478,7 +462,7 @@ struct PhonePullRequestHeader: View {
     }
 
     @ViewBuilder
-    private func branches(lineLimit: Int) -> some View {
+    private func branches(lineLimit: Int?) -> some View {
         Label {
             Text(verbatim: "\(summary.headRefName) → \(summary.baseRefName)")
                 .foregroundStyle(Theme.textSecondary)
