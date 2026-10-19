@@ -1,4 +1,6 @@
+#if canImport(AppKit)
 import AppKit
+#endif
 import Foundation
 import GitHubKit
 import ShepherdCore
@@ -654,6 +656,7 @@ struct PullRequestActions {
 
     // MARK: - Local conveniences
 
+    #if os(macOS)
     /// Opens the pull request on github.com.
     /// - Parameter summary: The pull request.
     func openOnGitHub(_ summary: PullRequestSummary) {
@@ -673,6 +676,7 @@ struct PullRequestActions {
         NSPasteboard.general.setString(summary.headRefName, forType: .string)
         toasts.info(String(localized: "Copied \(summary.headRefName)"))
     }
+    #endif
 
     /// Marks a file viewed (or not) for the current head commit.
     /// - Parameters:
