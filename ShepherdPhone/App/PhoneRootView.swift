@@ -116,46 +116,14 @@ private struct PhoneInboxPlaceholder: View {
     var body: some View {
         @Bindable var router = environment.router
         NavigationStack(path: $router.path) {
-            List(model.allRows.sorted { $0.updatedAt > $1.updatedAt }) { row in
-                NavigationLink(value: PhoneRoute.pullRequest(id: row.id)) {
-                    HStack(alignment: .top, spacing: 12) {
-                        AvatarView(
-                            login: row.author.login,
-                            displayName: row.author.displayName,
-                            url: row.author.avatarURL,
-                            size: 32
-                        )
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(row.title)
-                                .font(Theme.type(.body, weight: .medium))
-                                .foregroundStyle(Theme.textStrong)
-                                .lineLimit(2)
-                            HStack(spacing: 6) {
-                                Text(verbatim: "\(row.repo.fullName) #\(row.number)")
-                                RelativeDateText(date: row.updatedAt)
-                            }
-                            .font(Theme.type(.footnote))
-                            .foregroundStyle(Theme.textSecondary)
-                        }
+            PhoneInboxScreen(model: model, onOpenSettings: {})
+                .navigationDestination(for: PhoneRoute.self) { route in
+                    switch route {
+                    case .pullRequest(let id):
+                        let title = model.allRows.first { $0.id == id }?.title ?? ""
+                        ContentUnavailableView(title, systemImage: "arrow.triangle.pull")
                     }
                 }
-            }
-            .overlay {
-                if model.allRows.isEmpty {
-                    ContentUnavailableView(
-                        String(localized: "Nothing needs your review right now."),
-                        systemImage: "tray"
-                    )
-                }
-            }
-            .navigationTitle(String(localized: "Inbox"))
-            .navigationDestination(for: PhoneRoute.self) { route in
-                switch route {
-                case .pullRequest(let id):
-                    let title = model.allRows.first { $0.id == id }?.title ?? ""
-                    ContentUnavailableView(title, systemImage: "arrow.triangle.pull")
-                }
-            }
         }
         .task { model.startObserving() }
     }
