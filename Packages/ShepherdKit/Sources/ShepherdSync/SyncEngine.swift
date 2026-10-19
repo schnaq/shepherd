@@ -1152,11 +1152,19 @@ public actor SyncEngine {
             // sent event announces and the app re-reads by.
             do {
                 try await github.setReaction(subjectID: subjectID, content: content, adding: adding)
-            } catch let error as GitHubError where !adding && GitHubClient.isReactionGone(error) {
-                // Nothing left to remove is what the removal asked for — the retry after an answer
-                // that was lost, a reaction taken back on github.com meanwhile — so the row is
-                // sent, the way a merge GitHub had already landed is. Only a removal: an add that
-                // is refused did not do what was asked.
+            } catch let refusal as GitHubError where !adding && !refusal.isRetryable {
+                // GitHub refuses a removal of a reaction that is not there with the FORBIDDEN it
+                // gives a real permission refusal — the retry of a removal whose answer was lost
+                // meets it, and so does a reaction taken back on github.com meanwhile. One read
+                // of the post tells the two apart, made only on the refusal, as for a refused
+                // merge: gone is what the removal asked for, so the row is sent. Still there, or a
+                // read that fails, leaves GitHub's refusal standing. An add needs no read: GitHub
+                // answers an add of a reaction already there with success.
+                let stillThere = (try? await github.viewerHasReacted(
+                    subjectID: subjectID,
+                    content: content
+                )) ?? true
+                if stillThere { throw refusal }
             }
             return .sent
 

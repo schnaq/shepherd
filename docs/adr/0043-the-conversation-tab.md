@@ -114,11 +114,11 @@ rows, trailers included, are the stream's commit groups.
 
 A thread in the stream uses the same reply bar as the thread popover in the diff — one view, not a
 third copy — with *Reply*, *Resolve*/*Unresolve*, *Delegate…* and the saved replies. Once a
-comment, a reply, a thread's resolution or a review has **reached** GitHub, Shepherd re-reads that
-pull request once, a second later and coalesced per pull request, so it appears without waiting
-for the next sweep — whichever surface wrote it (this tab, the diff's popover, a write the outbox
-sent later). The open screen takes the stored detail through its own observation. A write that is
-only queued is said by the toast, as before.
+comment, a reply, a thread's resolution, a reaction or a review has **reached** GitHub, Shepherd
+re-reads that pull request once, a second later and coalesced per pull request, so it appears
+without waiting for the next sweep — whichever surface wrote it (this tab, the diff's popover, a
+write the outbox sent later). The open screen takes the stored detail through its own observation.
+A write that is only queued is said by the toast, as before — a reaction by its bar instead.
 
 ### Bot bodies
 
@@ -137,15 +137,22 @@ off-topic, outdated, spam …) starts collapsed behind one line.
 beside thread resolution: REST has no reaction endpoint for a pull-request *review* at all, and
 removing a reaction through REST needs the reaction's own id, which would mean a read before every
 removal. One outbox action, `react(subjectID:content:adding:)`. What the bar shows is GitHub's
-state plus the reviewer's own clicks, so a click is visible at once and an offline click stays
-visible until it is sent. A click that undoes one still waiting in the outbox cancels that row,
-because a row in a retry's backoff could otherwise be sent after the click that undid it and leave
-the reaction the reviewer took back — and queues its own row all the same: the stored detail lags
-every row in flight or landed, so nothing on the Mac can tell that the click's row is unneeded, and
-a redundant one costs one idempotent mutation. The click's row is on disk without waiting for any
-drain: a click the bar shows never waits for the network to be saved. A refusal the click's own
-drain sees takes the click back off the bar; one that a later drain meets shows in Settings → Sync,
-and the bar corrects itself when the screen is reopened.
+state plus the reviewer's own clicks, so a click is visible at once, and one made offline stays on
+the bar while the review screen is open; once the screen is closed, the bar shows GitHub's state
+until the queued row is sent and the pull request re-read. A click that undoes one still waiting in
+the outbox cancels that row, because a row in a retry's backoff could otherwise be sent after the
+click that undid it and leave the reaction the reviewer took back — and queues its own row all the
+same: the stored detail lags every row in flight or landed, so nothing on the Mac can tell that the
+click's row is unneeded, and a redundant row costs one mutation and at most one read. An add of a
+reaction the viewer already has succeeds and changes nothing (verified 2026-10-16). A removal of
+one the viewer does not have is refused with `FORBIDDEN` — "does not have the correct permissions
+to execute `RemoveReaction`", the same answer as a real permission refusal (verified the same day)
+— so on a refused removal the drain reads the post's reactions once, the way it reads whether a
+refused merge already landed: the viewer's reaction gone is what the row asked for, and the row is
+sent; still there, or a read that fails, leaves GitHub's refusal standing. The click's row is on
+disk without waiting for any drain: a click the bar shows never waits for the network to be saved.
+A refusal the click's own drain sees takes the click back off the bar; one that a later drain meets
+shows in Settings → Sync, and the bar corrects itself when the screen is reopened.
 
 ### C: edits and deletes are REST, gated by GitHub's own flags
 
@@ -160,7 +167,8 @@ answered `405` on a merged pull request is (ADR 0005's 2026-09-05 amendment).
 
 - No new host. The read is one more GraphQL query on `api.github.com` per changed pull request,
   costing one point; B adds two GraphQL mutations and C five REST calls on the same host with the
-  same token, each an ordinary outbox row.
+  same token, each an ordinary outbox row, and B's drain one GraphQL read of a post's reactions,
+  made only after GitHub refused a removal.
 - Comment bodies stay out of webhooks (ADR 0012) and telemetry (ADR 0036): no new event, no new
   payload field.
 - The conversation is stored locally like every other part of a detail, so the tab reads offline

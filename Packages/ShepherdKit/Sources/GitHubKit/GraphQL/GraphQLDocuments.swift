@@ -769,6 +769,15 @@ public enum GraphQLDocuments {
     }
     """
 
+    /// A post's reaction groups and whether the viewer is in each, by the post's node id
+    /// (ADR 0043). Read by the drain only after GitHub refused a removal — see
+    /// ``GitHubClient/viewerHasReacted(subjectID:content:)``.
+    public static let viewerReactions = """
+    query ShepherdViewerReactions($subjectId: ID!) {
+      node(id: $subjectId) { ... on Reactable { reactionGroups { content viewerHasReacted } } }
+    }
+    """
+
     /// Take a pull request out of draft state. GraphQL-only.
     public static let markPullRequestReadyForReview = """
     mutation ShepherdMarkReady($pullRequestId: ID!) {

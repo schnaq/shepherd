@@ -1149,10 +1149,11 @@ public actor GitHubClient {
     /// node id: REST has no reaction endpoint for a pull-request review at all, and removing one
     /// there needs the reaction's own id, which would mean a read before every removal.
     ///
-    /// Adding one the viewer already has is answered with that reaction, so a retried add needs
-    /// no care. A removal of one that is already gone may be answered with an error, which is
-    /// thrown like any other: what a refusal is worth is the drain's to decide
-    /// (``isReactionGone(_:)``), as it is for every write here.
+    /// Adding one the viewer already has succeeds again (verified 2026-10-16), so a retried add
+    /// needs no care. A removal of one the viewer does not have is refused with `FORBIDDEN` —
+    /// "does not have the correct permissions to execute `RemoveReaction`", word for word what a
+    /// real permission refusal says — and thrown like any other refusal: what it is worth is the
+    /// drain's to decide, by asking ``viewerHasReacted(subjectID:content:)``.
     /// - Parameters:
     ///   - subjectID: The post's GraphQL node id — the pull request's own for the description.
     ///   - content: Which reaction.
@@ -1164,6 +1165,33 @@ public actor GitHubClient {
             resource: adding ? "add reaction" : "remove reaction",
             isIdempotent: false
         )
+    }
+
+    /// Whether the viewer's reaction is on a post right now (ADR 0043).
+    ///
+    /// The read a refused removal is decided by: GitHub refuses a removal of a reaction that is
+    /// not there with the same answer as a real permission refusal, so the post is asked instead,
+    /// the way a refused merge asks ``isPullRequestMerged(repo:number:)``. A query, so a dropped
+    /// connection may replay it, and uncached for that method's reason.
+    ///
+    /// Not tolerant of partial data: a node GitHub nulled behind an error — SAML enforcement, a
+    /// permission — says nothing about the reaction, and reading it as "none" would take a removal
+    /// that did not happen for done. Such an answer is thrown.
+    /// - Parameters:
+    ///   - subjectID: The post's GraphQL node id.
+    ///   - content: Which reaction.
+    /// - Returns: `true` when the post has a group for `content` that includes the viewer;
+    ///   `false` when it has none, the viewer is not in it, or GitHub answered no node at all.
+    public func viewerHasReacted(subjectID: String, content: ReactionContent) async throws -> Bool {
+        let data: ViewerReactionsData = try await graphQL(
+            document: GraphQLDocuments.viewerReactions,
+            variables: ["subjectId": .string(subjectID)],
+            resource: "reactions",
+            isIdempotent: true
+        )
+        return data.node?.reactionGroups?.contains {
+            $0?.content == content.rawValue && $0?.viewerHasReacted == true
+        } ?? false
     }
 
     /// Takes a pull request out of draft state. GraphQL-only.
@@ -1340,24 +1368,6 @@ public actor GitHubClient {
     public static func isMergeAlreadyUnderWay(_ message: String) -> Bool {
         func has(_ word: String) -> Bool { message.range(of: word, options: .caseInsensitive) != nil }
         return has("already") && (has("enqueued") || has("in progress") || has("merge request"))
-    }
-
-    /// Whether an error from ``setReaction(subjectID:content:adding:)`` says the reaction is not
-    /// there (ADR 0043). The drain asks it about a removal only, and sends such a row rather than
-    /// failing it: the state the removal asked for is the state there is — the retry after an
-    /// answer that was lost finds nothing left to remove.
-    ///
-    /// GitHub does not document what it answers a removal of a missing reaction with, so this is
-    /// a guess at its wording, and deliberately narrow: a GraphQL error whose every message
-    /// mentions a reaction and "not found", ignoring case. If GitHub says something else, the
-    /// removal fails where the user can see it and the fix is one more phrase here — where a
-    /// wider match would take a removal that did not happen for done.
-    public static func isReactionGone(_ error: GitHubError) -> Bool {
-        guard case .graphQL(let messages) = error, !messages.isEmpty else { return false }
-        return messages.allSatisfy { message in
-            let text = message.lowercased()
-            return text.contains("reaction") && text.contains("not found")
-        }
     }
 
     /// Whether a pull request is part of a GitHub stack right now (ADR 0042).

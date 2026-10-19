@@ -397,6 +397,14 @@ struct ReactionData: Decodable {
     var removeReaction: Payload?
 }
 
+/// The payload of ``GraphQLDocuments/viewerReactions`` (ADR 0043).
+struct ViewerReactionsData: Decodable {
+    struct Node: Decodable {
+        var reactionGroups: [ReactionGroupDTO?]?
+    }
+    var node: Node?
+}
+
 /// The payload of the ready-for-review mutation.
 struct MarkReadyData: Decodable {
     struct Payload: Decodable {

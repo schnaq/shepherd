@@ -444,6 +444,13 @@ Pure logic in `ShepherdCore` (all unit-tested):
   - `submitReview(_ draft: ReviewDraft, on:) async throws` — REST
     `POST /pulls/{n}/reviews` with full `comments` array; maps verdict to `event`
   - `replyToComment/addReviewComment/resolveThread/unresolveThread/mergePullRequest/markReadyForReview…`
+  - `setReaction(subjectID:content:adding:)` — the viewer's reaction on a post, added or taken back
+    (ADR 0043, B): GraphQL `addReaction`/`removeReaction` by the post's node id, because REST has no
+    reaction endpoint for a review at all. Beside it the one read the drain makes for it,
+    `viewerHasReacted(subjectID:content:)` — `node(id:) { ... on Reactable { reactionGroups } }`,
+    uncached — asked only after GitHub refused a removal: GitHub refuses a removal of a reaction
+    that is not there with the same `FORBIDDEN` as a real permission refusal, so the post's own
+    reactions decide whether the row is sent or keeps the refusal
   - `headBranchContext(repo:number:)` / `deleteBranch(repo:name:)` — the two halves of the merge
     sheet's "delete the branch afterwards" (ADR 0005's 2026-09-05 amendment): one small GraphQL
     read of the head branch, the repository it lives in and the base repository's default branch,
@@ -544,7 +551,7 @@ and a row is only ever written whole.
 - `review_comments.url` — the comment on github.com.
 
 `ValueObservation` publishers feed the UI. The **outbox** stores every outbound mutation (submit review, reply,
-resolve, merge — and, since ADR 0032's Sprint 4a amendment, comment on / label / assign / close /
+resolve, merge, react — and, since ADR 0032's Sprint 4a amendment, comment on / label / assign / close /
 reopen an *issue*) as a row with retry/backoff state so writes survive crash/offline. There is no
 schema change for the issue actions: `outbox.payload` is an opaque blob of the whole
 `OutboxAction`, and `prID`/`repo`/`number` are reused generically as the target's node id,
@@ -557,6 +564,9 @@ rows the user can *act* on, which is why the store also carries `failedOutboxIte
 Settings → Sync names) and `retryOutboxItem(id:)` (back to `pending`, `attemptCount` and
 `nextAttemptAt` reset, guarded on `state = 'failed'` so a row a drain is currently sending cannot be
 pulled out from under it); `deleteOutboxItem(id:)` is the discard on the other button.
+`cancelPendingOutboxItem(id:)` is the one delete no button makes: a reaction click takes back the
+still-waiting row it undoes (ADR 0043, B), guarded on `state = 'pending'` so a row a drain has
+claimed — perhaps already at GitHub — is left to the drain.
 Beside the three counts, `observeOutboxItems()` streams the *rows* themselves (ADR 0006's
 2026-09-04 amendment) — the same `SELECT` as `allOutboxItems()`, shared as
 `DatabaseManager.loadOutboxItems(_:)` so the ordering cannot drift between the two. It exists
@@ -1445,7 +1455,7 @@ layer is only placement.
 ### All writes go through the outbox
 
 `PullRequestActions` is the single write surface (`submitReview`, `reply`, `setThread`,
-`merge`, `markReadyForReview`). Every one of them enqueues an `OutboxItem` and then asks the
+`merge`, `markReadyForReview`, `react`). Every one of them enqueues an `OutboxItem` and then asks the
 sync engine to drain, so a queued approval survives a crash, a quit or an offline period. The
 app never calls a `GitHubClient` mutation directly. The issue triage writes (ADR 0032's Sprint 4a
 amendment) are the same rule on the other kind of node, through `IssueInboxModel`'s own

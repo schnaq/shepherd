@@ -333,9 +333,9 @@ final class WriteRequestTests: XCTestCase {
     }
 
     func testARemovalGitHubAnswersWithNoReactionIsStillASuccess() async throws {
-        // What the mutation may say about a reaction that is already gone, if it says it with a
-        // success: nothing to return. The DTO must not turn that into a decoding failure, which
-        // would leave a failed row behind for something that is as the user asked.
+        // The payload's reaction is nullable in GitHub's schema, and nothing reads it. An answer
+        // without one must not become a decoding failure, which would leave a failed row behind
+        // for a removal that landed.
         let transport = MockTransport()
         await transport.route(
             "ShepherdRemoveReaction",
@@ -346,15 +346,15 @@ final class WriteRequestTests: XCTestCase {
         try await client.setReaction(subjectID: "IC_1", content: .heart, adding: false)
     }
 
-    func testARemovalGitHubSaysIsNotThereIsThrownForTheDrainToJudge() async throws {
-        // The client translates the answer and decides nothing: whether "not found" means done is
-        // the drain's call (`isReactionGone`), as it is for every other write's refusal.
+    func testARemovalOfAReactionTheViewerDoesNotHaveIsThrownForTheDrainToJudge() async throws {
+        // GitHub's answer, verified live on 2026-10-16, is word for word a permission refusal. The
+        // client translates it and decides nothing: the drain reads the post to tell the two apart.
         let transport = MockTransport()
         await transport.route(
             "ShepherdRemoveReaction",
             Fixture.response(json: """
-            {"data":{"removeReaction":null},
-             "errors":[{"type":"NOT_FOUND","path":["removeReaction"],"message":"Reaction not found."}]}
+            {"data":{"removeReaction":null},"errors":[{"type":"FORBIDDEN","path":["removeReaction"],\
+            "message":"n2o does not have the correct permissions to execute `RemoveReaction`"}]}
             """)
         )
         let client = GitHubClient.makeForTesting(transport: transport)
@@ -363,29 +363,75 @@ final class WriteRequestTests: XCTestCase {
             try await client.setReaction(subjectID: "IC_1", content: .heart, adding: false)
             XCTFail("expected a GraphQL error")
         } catch GitHubError.graphQL(let messages) {
-            XCTAssertEqual(messages, ["Reaction not found."])
+            XCTAssertEqual(
+                messages,
+                ["n2o does not have the correct permissions to execute `RemoveReaction`"]
+            )
         }
     }
 
-    func testOnlyAGraphQLNotFoundAboutTheReactionReadsAsGone() {
-        XCTAssertTrue(GitHubClient.isReactionGone(.graphQL(messages: ["Reaction not found."])))
-        XCTAssertTrue(GitHubClient.isReactionGone(.graphQL(messages: ["REACTION NOT FOUND"])))
-        // A subject GitHub cannot resolve, a permission, a message that mentions a reaction in
-        // passing: none of them says "the reaction is gone".
-        let refusals = [
-            "Could not resolve to a node with the global id of 'IC_gone'.",
-            "Resource not accessible by integration",
-            "Cannot remove a reaction from a locked conversation.",
-            "Something went wrong while executing your query.",
-        ]
-        for refusal in refusals {
-            XCTAssertFalse(GitHubClient.isReactionGone(.graphQL(messages: [refusal])), refusal)
+    func testTheReactionReadAsksThePostForItsGroupsAndFindsTheViewersOwn() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "ShepherdViewerReactions",
+            Fixture.response(json: """
+            {"data":{"node":{"reactionGroups":[\
+            {"content":"THUMBS_UP","viewerHasReacted":true},\
+            {"content":"HEART","viewerHasReacted":false}]}}}
+            """)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let hasThumbsUp = try await client.viewerHasReacted(subjectID: "IC_kwDOComment1", content: .thumbsUp)
+
+        XCTAssertTrue(hasThumbsUp)
+        let request = await transport.onlyRequest()
+        XCTAssertEqual(request?.method, "POST")
+        XCTAssertEqual(request?.url.absoluteString, "https://api.github.com/graphql")
+        let body = try decodeBody(GraphQLRequestEnvelope.self, from: request)
+        XCTAssertTrue(body.query.contains("query ShepherdViewerReactions"), body.query)
+        XCTAssertTrue(body.query.contains("node(id: $subjectId)"), body.query)
+        XCTAssertTrue(body.query.contains("... on Reactable"), body.query)
+        XCTAssertTrue(body.query.contains("viewerHasReacted"), body.query)
+        // The post alone: the content is looked for in the answer, every group comes back anyway.
+        XCTAssertEqual(body.variables, ["subjectId": "IC_kwDOComment1"])
+
+        // A group the viewer is not in, and a group the post does not have, are both "no".
+        let hasHeart = try await client.viewerHasReacted(subjectID: "IC_kwDOComment1", content: .heart)
+        XCTAssertFalse(hasHeart)
+        let hasRocket = try await client.viewerHasReacted(subjectID: "IC_kwDOComment1", content: .rocket)
+        XCTAssertFalse(hasRocket)
+    }
+
+    func testTheReactionReadOfANodeGitHubDoesNotAnswerIsNo() async throws {
+        let transport = MockTransport()
+        await transport.route("ShepherdViewerReactions", Fixture.response(json: #"{"data":{"node":null}}"#))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let hasReacted = try await client.viewerHasReacted(subjectID: "IC_gone", content: .heart)
+
+        XCTAssertFalse(hasReacted)
+    }
+
+    func testTheReactionReadThrowsANodeGitHubNulledBehindAnError() async throws {
+        // Not partial data: a node nulled for a permission or SAML says nothing about the
+        // reaction, and reading it as "none" would take a refused removal for done.
+        let transport = MockTransport()
+        await transport.route(
+            "ShepherdViewerReactions",
+            Fixture.response(json: """
+            {"data":{"node":null},"errors":[{"type":"FORBIDDEN","path":["node"],\
+            "message":"Resource protected by organization SAML enforcement."}]}
+            """)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            _ = try await client.viewerHasReacted(subjectID: "IC_1", content: .heart)
+            XCTFail("expected a GraphQL error")
+        } catch GitHubError.graphQL(let messages) {
+            XCTAssertEqual(messages, ["Resource protected by organization SAML enforcement."])
         }
-        // Every message has to say it: a second error means something else went wrong as well.
-        XCTAssertFalse(GitHubClient.isReactionGone(.graphQL(messages: ["Reaction not found.", "Forbidden"])))
-        XCTAssertFalse(GitHubClient.isReactionGone(.graphQL(messages: [])), "no message says nothing")
-        // GraphQL's answer only: a REST 404 names a resource, not a reaction.
-        XCTAssertFalse(GitHubClient.isReactionGone(.notFound(resource: "remove reaction")))
     }
 
     func testAReactionIsNeverReplayedAfterAConnectionFailure() async throws {

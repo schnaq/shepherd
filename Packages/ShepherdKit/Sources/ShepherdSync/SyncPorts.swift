@@ -41,6 +41,13 @@ public protocol PullRequestFetching: Sendable {
     func unresolveThread(id: String) async throws
     /// Adds the viewer's reaction to a post, or takes it back (ADR 0043).
     func setReaction(subjectID: String, content: ReactionContent, adding: Bool) async throws
+    /// Whether the viewer's reaction is on a post right now (ADR 0043).
+    ///
+    /// Asked only when a removal was refused, and only to tell apart the two things GitHub
+    /// refuses one with the same `FORBIDDEN` for: a reaction that is not there, and a real
+    /// permission refusal. The first is what the retry of a removal whose answer was lost finds,
+    /// and failing it would tell the user a reaction they took back is still there.
+    func viewerHasReacted(subjectID: String, content: ReactionContent) async throws -> Bool
     /// Merges a pull request.
     func mergePullRequest(
         repo: RepoRef,

@@ -334,20 +334,21 @@ reads as text rather than as markup. The checks come after the stream, where Git
 At the bottom is a comment field: **Post comment** (⌘⏎), **Comment and close**, saved replies and
 ⌘V screenshots — the same two writes as the *Comment…* sheet, queued in the outbox like everything
 else, so a comment written on the train goes out when the network comes back. *Quote reply* on any
-post drops it, quoted, into that field. Once GitHub has a comment, a reply, a resolved thread or a
-review, Shepherd re-reads that pull request a second later, so it appears at once rather than with
-the next sweep, wherever it was written; a colleague's comment arrives with the sweep, the way a new
-check does.
+post drops it, quoted, into that field. Once GitHub has a comment, a reply, a resolved thread, a
+reaction or a review, Shepherd re-reads that pull request a second later, so it appears at once
+rather than with the next sweep, wherever it was written; a colleague's comment arrives with the
+sweep, the way a new check does.
 
 Reactions work as on GitHub, on every post — the description, a comment, a review, a comment in a
 thread, in the stream and in the diff's popover — except your own pending review, which takes none
 until it is submitted: click a reaction to add yours or take it back, or the smiley for all eight.
-The click shows at once and is in the outbox at once, so one made offline stays on the bar until it
-is sent; a click that undoes one still waiting takes that one out of the outbox, so it can never
-land after the click that undid it. A refusal that arrives while the click waits goes back off the
-bar with a toast; one that arrives later shows in Settings → Sync, and the bar corrects itself when
-the screen is reopened. On a locked conversation or in an archived repository the reactions are
-shown but not offered.
+The click shows at once and is in the outbox at once. One made offline stays on the bar while the
+review screen is open; after closing it, the bar shows GitHub's state until the click is sent and
+the pull request re-read. A click that undoes one still waiting takes that one out of the outbox, so
+it can never land after the click that undid it. A refusal that arrives while the click waits goes
+back off the bar with a toast; one that arrives later shows in Settings → Sync, and the bar corrects
+itself when the screen is reopened. On a locked conversation or in an archived repository the
+reactions are shown but not offered.
 
 It is one more GraphQL read per changed pull request, measured at one point of GitHub's rate
 limit, read newest first and capped at 500 entries — a conversation longer than that says
