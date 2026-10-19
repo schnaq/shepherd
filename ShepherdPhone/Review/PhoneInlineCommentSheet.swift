@@ -34,7 +34,9 @@ struct PhoneInlineCommentSheet: View {
     @State private var isConfirmingDiscard = false
     @FocusState private var isEditorFocused: Bool
 
-    @ScaledMetric(relativeTo: .footnote) private var codeSize: CGFloat = 12
+    /// The quoted lines' size, capped where the diff caps its code (xxxLarge): past it a quoted
+    /// line was a few letters and an ellipsis.
+    private var codeSize: CGFloat { dynamicTypeSize.scaled(12, relativeTo: .footnote, upTo: .xxxLarge) }
 
     var body: some View {
         NavigationStack {
@@ -130,49 +132,55 @@ struct PhoneInlineCommentSheet: View {
         }
     }
 
-    /// The sheet's buttons, side by side above the keyboard (stacked at the accessibility sizes):
-    /// *Comment* — post it alone, now — and the review's own button, the prominent one; *Delete*
-    /// in *Comment*'s place for a pending comment being edited.
+    /// The sheet's buttons, side by side above the keyboard (stacked at the accessibility sizes,
+    /// where side by side cut "Start a review" short): *Comment* — post it alone, now — and the
+    /// review's own button, the prominent one; *Delete* in *Comment*'s place for a pending comment
+    /// being edited. Capped at the first accessibility size, as the diff's floating bar is:
+    /// larger, the two stacked buttons covered the field.
     private var actionBar: some View {
         let layout = dynamicTypeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(spacing: 10))
             : AnyLayout(HStackLayout(spacing: 12))
-        return layout {
-            if startsReview {
-                Button {
-                    Task { await postSingleComment() }
-                } label: {
-                    Text(String(localized: "Comment"))
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.glass)
-                .disabled(isBlank || isSaving)
-            }
-            if let existing = existingComment {
-                Button(role: .destructive) {
-                    Task { await delete(existing) }
-                } label: {
-                    Text(String(localized: "Delete"))
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.glass)
-                .tint(Theme.failure)
-            }
-            Button {
-                Task { await save() }
-            } label: {
-                Text(saveTitle)
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.glassProminent)
-            .tint(Theme.accent)
-            .disabled(isBlank || isSaving)
-        }
+        return layout { actionButtons }
         .font(Theme.type(.body, weight: .semibold))
         .lineLimit(1)
         .controlSize(.large)
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+    }
+
+    @ViewBuilder
+    private var actionButtons: some View {
+        if startsReview {
+            Button {
+                Task { await postSingleComment() }
+            } label: {
+                Text(String(localized: "Comment"))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glass)
+            .disabled(isBlank || isSaving)
+        }
+        if let existing = existingComment {
+            Button(role: .destructive) {
+                Task { await delete(existing) }
+            } label: {
+                Text(String(localized: "Delete"))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glass)
+            .tint(Theme.failure)
+        }
+        Button {
+            Task { await save() }
+        } label: {
+            Text(saveTitle)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.glassProminent)
+        .tint(Theme.accent)
+        .disabled(isBlank || isSaving)
     }
 
     /// The lines being commented on, as they read in the diff — at most six, so a long range does

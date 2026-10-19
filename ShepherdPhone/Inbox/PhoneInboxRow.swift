@@ -96,7 +96,8 @@ struct PhoneInboxRow: View {
         let place = Text(verbatim: "\(row.repo.name) #\(row.number)")
             .font(Theme.mono(.footnote))
             .foregroundStyle(Theme.textSecondary)
-        let age = Text(verbatim: "· " + RelativeDate.short(row.updatedAt))
+        // No-break spaces in "· 24 m", so the dot never ends a line apart from its age.
+        let age = Text(verbatim: "·\u{00A0}" + RelativeDate.short(row.updatedAt).replacingOccurrences(of: " ", with: "\u{00A0}"))
             .font(Theme.type(.footnote))
             .foregroundStyle(Theme.textMuted)
         return Text("\(place) \(age)")

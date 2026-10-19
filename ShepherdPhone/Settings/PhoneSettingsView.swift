@@ -104,35 +104,7 @@ struct PhoneSettingsView: View {
         if let session = environment.session, session.failedOutboxCount > 0 {
             Section {
                 ForEach(failedRows) { item in
-                    HStack(alignment: .firstTextBaseline, spacing: 12) {
-                        // The glyph on the title's line rather than centred on the row, as a
-                        // `Label` would put it beside two lines of text.
-                        Image(systemName: "exclamationmark.icloud")
-                            .font(Theme.type(.body))
-                            .foregroundStyle(Theme.failure)
-                            .accessibilityHidden(true)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(verbatim: "\(item.repo.fullName)#\(item.number) · \(Self.actionName(item.action))")
-                                .font(Theme.type(.body, weight: .medium))
-                                .foregroundStyle(Theme.textStrong)
-                            Text(item.localizedLastError ?? String(localized: "No reason was recorded."))
-                                .font(Theme.type(.footnote))
-                                .foregroundStyle(Theme.textSecondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        // Visible, so the two ways out are not only on a swipe or a long press.
-                        Menu {
-                            failedRowActions(item, session: session)
-                        } label: {
-                            Image(systemName: "ellipsis.circle")
-                                .font(Theme.type(.title3))
-                                .foregroundStyle(Theme.textSecondary)
-                                .frame(minWidth: 44, minHeight: 44)
-                                .contentShape(Rectangle())
-                        }
-                        .accessibilityLabel(String(localized: "More actions"))
-                    }
+                    failedRow(item, session: session)
                     .padding(.vertical, 2)
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
                         Button { retry(item, session: session) } label: {
@@ -153,6 +125,54 @@ struct PhoneSettingsView: View {
                 Text(String(localized: "GitHub refused these writes, or Shepherd could not make them at all, so they will not go out by themselves. Retry one once you have fixed what stopped it, or discard it."))
             }
             .sensoryFeedback(.impact(weight: .light), trigger: failedRows.count) { old, new in new < old }
+        }
+    }
+
+    /// One write that was not sent: the glyph on the title's line (a `Label` would centre it beside
+    /// two lines), what it was and why it failed, and the ⋯ menu — visible, so the two ways out
+    /// are not only on a swipe or a long press. At the accessibility sizes the glyph and the menu
+    /// share a line above the words, which beside them were squeezed to a syllable a line.
+    @ViewBuilder
+    private func failedRow(_ item: OutboxItem, session: SignedInSession) -> some View {
+        let icon = Image(systemName: "exclamationmark.icloud")
+            .font(Theme.type(.body))
+            .foregroundStyle(Theme.failure)
+            .accessibilityHidden(true)
+        let text = VStack(alignment: .leading, spacing: 4) {
+            Text(verbatim: "\(item.repo.fullName)#\(item.number) · \(Self.actionName(item.action))")
+                .font(Theme.type(.body, weight: .medium))
+                .foregroundStyle(Theme.textStrong)
+            Text(item.localizedLastError ?? String(localized: "No reason was recorded."))
+                .font(Theme.type(.footnote))
+                .foregroundStyle(Theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        let menu = Menu {
+            failedRowActions(item, session: session)
+        } label: {
+            Image(systemName: "ellipsis.circle")
+                .font(Theme.type(.title3))
+                .foregroundStyle(Theme.textSecondary)
+                .frame(minWidth: 44, minHeight: 44)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel(String(localized: "More actions"))
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    icon
+                    Spacer(minLength: 8)
+                    menu
+                }
+                text
+            }
+        } else {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                icon
+                text
+                menu
+            }
         }
     }
 
