@@ -47,6 +47,30 @@ final class DeviceFlowTests: XCTestCase {
         XCTAssertFalse(body.contains("client_secret"), "the device flow needs no secret")
     }
 
+    /// The iPhone's case (ADR 0044): the poll in flight when iOS suspended the app fails as a
+    /// lost connection, and the flow must keep polling rather than end right after approval.
+    func testPollingSurvivesAConnectionFailure() async throws {
+        let transport = MockTransport()
+        await transport.failNext(1, with: .transport(message: "NSURLErrorNetworkConnectionLost"))
+        await transport.route("/login/oauth/access_token", try Fixture.response("device-token-success"))
+
+        let sleeper = RecordingSleeper()
+        let grant = DeviceCodeGrant(
+            deviceCode: "device",
+            userCode: "WDJB-MJHT",
+            verificationURI: URL(fileURLWithPath: "/"),
+            expiresIn: 900,
+            interval: 5,
+            issuedAt: Date(timeIntervalSince1970: 0)
+        )
+        let tokens = try await authenticator(transport: transport, sleeper: sleeper)
+            .pollForToken(grant)
+
+        XCTAssertEqual(tokens.accessToken, "ghu_16C7e42F292c6912E7710c838347Ae178B4a")
+        let waits = await sleeper.recorded
+        XCTAssertEqual(waits.count, 2, "one lap for the failure, one for the token")
+    }
+
     func testPollingWaitsThroughAuthorizationPendingAndSlowDown() async throws {
         let transport = MockTransport()
         let pending = try Fixture.response("device-token-pending")

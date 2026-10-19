@@ -146,6 +146,12 @@ public struct DeviceFlowAuthenticator: Sendable {
     ///
     /// Honours GitHub's `interval`, backs off by five seconds on every `slow_down`, and stops
     /// at ``DeviceCodeGrant/expiresAt``.
+    ///
+    /// A poll that fails at the connection level is treated like `authorization_pending`. On the
+    /// iPhone, opening the verification page sends Shepherd to the background, and a poll that was
+    /// in flight when iOS suspended it comes back as a lost connection — right after the user
+    /// approved. Ending the flow there would make them start again with a new code; the next lap
+    /// succeeds instead (ADR 0044). An offline device simply waits until the code expires.
     /// - Parameter grant: The grant returned by ``requestDeviceCode(scopes:)``.
     /// - Returns: The issued credential.
     /// - Throws: ``GitHubError/deviceFlowExpired`` when the code times out,
@@ -163,14 +169,19 @@ public struct DeviceFlowAuthenticator: Sendable {
                 throw GitHubError.deviceFlowExpired
             }
 
-            let response = try await post(
-                path: "/login/oauth/access_token",
-                fields: [
-                    ("client_id", clientID),
-                    ("device_code", grant.deviceCode),
-                    ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
-                ]
-            )
+            let response: HTTPResponse
+            do {
+                response = try await post(
+                    path: "/login/oauth/access_token",
+                    fields: [
+                        ("client_id", clientID),
+                        ("device_code", grant.deviceCode),
+                        ("grant_type", "urn:ietf:params:oauth:grant-type:device_code"),
+                    ]
+                )
+            } catch GitHubError.transport {
+                continue
+            }
             let payload: AccessTokenResponseDTO = try AuthJSON.decode(response.body)
 
             if let error = payload.error {
