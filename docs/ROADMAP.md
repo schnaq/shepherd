@@ -503,8 +503,7 @@ remain and each is a project rather than a label; what they would take is in
   app on the Mac's own review logic (inbox, pull request and conversation, files and native diff,
   verdicts and merge through the same outbox), going to internal TestFlight testers. No push and no
   background refresh in v1. Not on the App Store yet.
-- iPad companion — later. The iPhone target is the starting point, but an iPad wants the Mac's
-  two-column layout rather than the phone's one scroll, so it is its own piece of work.
+- iPad companion — still later; the iPhone target is the starting point.
 
 ## Non-goals
 

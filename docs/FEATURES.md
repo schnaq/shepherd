@@ -1006,7 +1006,8 @@ What the Mac refuses, the phone refuses, for the same reason and in the same wor
 - **Files and a native diff**: the files in review-priority order with *viewed* ticks, and a diff
   with syntax colour and word-level changes, wrapping, its own text size, the published threads
   under their lines, and a comment on one line or a range — with a suggestion block one tap away.
-  Comments collect into a pending review that goes out with the verdict.
+  A comment is posted on its own at once, or starts a pending review that goes out with the
+  verdict, as on GitHub.
 - **Settings**: the account, the watched repositories, and every write GitHub refused, each with
   Retry and Discard. The language follows the iPhone and can be changed for Shepherd alone in the
   Settings app; the whole app is in German too.
