@@ -333,6 +333,9 @@ final class SignedInSession {
     ///   now the flag is accepted and the call is the same as today's; it forwards to
     ///   `SyncEngine.drainOutbox(awaitingInFlight:)` once the engine supports awaiting.
     func drainOutbox(awaitingInFlight: Bool = false) async {
+        // Unlike ``syncNow(awaitingInFlight:)``, where returning early only stops a spinner too
+        // soon, a background task trusting this flag would end while writes are still going out.
+        assert(!awaitingInFlight, "drainOutbox does not await an in-flight drain until ADR 0044 step 9")
         await syncEngine.drainOutbox()
     }
 

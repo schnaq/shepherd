@@ -44,7 +44,7 @@ struct CardTitle: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: 11, weight: .semibold))
+            .font(componentFont(11, .caption, weight: .semibold))
             .kerning(0.6)
             .foregroundStyle(tint ?? Theme.textMuted)
     }
@@ -89,14 +89,14 @@ struct EmptyStateView: View {
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: systemImage)
-                .font(.system(size: 24, weight: .light))
+                .font(componentFont(24, .title2, weight: .light))
                 .foregroundStyle(Theme.textMuted)
             Text(title)
-                .font(.system(size: 13, weight: .medium))
+                .font(componentFont(13, .subheadline, weight: .medium))
                 .foregroundStyle(Theme.textSecondary)
             if let message {
                 Text(message)
-                    .font(.system(size: 12))
+                    .font(componentFont(12, .footnote))
                     .foregroundStyle(Theme.textMuted)
                     .multilineTextAlignment(.center)
             }
@@ -131,12 +131,12 @@ struct LoadingStateView: View {
             ProgressView()
                 .controlSize(.small)
             Text(title)
-                .font(.system(size: 13, weight: .medium))
+                .font(componentFont(13, .subheadline, weight: .medium))
                 .foregroundStyle(Theme.textSecondary)
             if let message {
                 // Not vertically fixed — see ``EmptyStateView``.
                 Text(message)
-                    .font(.system(size: 12))
+                    .font(componentFont(12, .footnote))
                     .foregroundStyle(Theme.textMuted)
                     .multilineTextAlignment(.center)
             }
@@ -402,11 +402,11 @@ private struct FilledButtonBody: View {
 
     var body: some View {
         configuration.label
-            .font(.system(size: 12.5, weight: .semibold))
+            .font(componentFont(12.5, .subheadline, weight: .semibold))
             .foregroundStyle(label)
             .busyLabel(isBusy: isBusy, tint: label)
             .padding(.horizontal, 12)
-            .frame(height: height)
+            .controlHeight(height)
             .background(
                 fill.opacity(configuration.isPressed ? 0.8 : 1),
                 in: RoundedRectangle(cornerRadius: 7, style: .continuous)
@@ -463,11 +463,11 @@ private struct SecondaryButtonBody: View {
 
     var body: some View {
         configuration.label
-            .font(.system(size: 12.5, weight: .medium))
+            .font(componentFont(12.5, .subheadline, weight: .medium))
             .foregroundStyle(tint ?? Theme.text)
             .busyLabel(isBusy: isBusy, tint: tint ?? Theme.text)
             .padding(.horizontal, 12)
-            .frame(height: height)
+            .controlHeight(height)
             .background(
                 Theme.control.opacity(configuration.isPressed ? 0.7 : 1),
                 in: RoundedRectangle(cornerRadius: 7, style: .continuous)
@@ -545,7 +545,7 @@ struct ChipView: View {
 
     var body: some View {
         Text(text)
-            .font(.system(size: size))
+            .font(componentFont(size, size <= 10 ? .caption2 : .caption))
             .foregroundStyle(color)
             .lineLimit(1)
             .padding(.horizontal, 7)
@@ -692,7 +692,7 @@ struct AsyncActionStatusLine: View {
 
     private func line(_ message: String, systemImage: String, tint: Color) -> some View {
         Label(message, systemImage: systemImage)
-            .font(.system(size: 11))
+            .font(componentFont(11, .caption))
             .foregroundStyle(tint)
             // Wraps instead of truncating: these lines are a remote server's own words, and a
             // failure the user cannot read in full is worth nothing.
@@ -837,10 +837,10 @@ struct QueueStatusLine: View {
         textTint: Color
     ) -> some View {
         Image(systemName: systemImage)
-            .font(.system(size: 10))
+            .font(componentFont(10, .caption2))
             .foregroundStyle(symbolTint)
         Text(message)
-            .font(.system(size: 11))
+            .font(componentFont(11, .caption))
             .foregroundStyle(textTint)
     }
 }
@@ -914,4 +914,39 @@ extension View {
         self
         #endif
     }
+
+    /// A button style's height: the fixed control height on the Mac, and on the iPhone at least
+    /// Apple's 44 pt tap target, growing with its Dynamic Type label instead of clipping it
+    /// (ADR 0044). The QueueStatusLine's 22 pt Retry is the case that made the minimum necessary.
+    /// - Parameter height: The Mac control height the style was given.
+    @ViewBuilder fileprivate func controlHeight(_ height: CGFloat) -> some View {
+        #if os(macOS)
+        frame(height: height)
+        #else
+        padding(.vertical, 8).frame(minHeight: max(height, 44))
+        #endif
+    }
+}
+
+/// A shared component's font: the fixed size it was tuned at on the Mac, the named text style on
+/// the iPhone.
+///
+/// These components predate the Mac's type scale and are not on `Scripts/check-type-scale.py`'s
+/// list — several sit in rows with pinned heights — so the Mac keeps its point sizes and looks
+/// exactly as before. The iPhone has no such rows and its users expect Dynamic Type everywhere,
+/// so there the same view takes the text style closest to its role (ADR 0044).
+/// - Parameters:
+///   - size: The Mac point size.
+///   - style: The iPhone text style.
+///   - weight: The weight on both.
+private func componentFont(
+    _ size: CGFloat,
+    _ style: Font.TextStyle,
+    weight: Font.Weight = .regular
+) -> Font {
+    #if os(macOS)
+    return .system(size: size, weight: weight)
+    #else
+    return Theme.type(style, weight: weight)
+    #endif
 }
