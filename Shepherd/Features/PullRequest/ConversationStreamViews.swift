@@ -137,7 +137,7 @@ struct ConversationPostView: View {
         if isMinimized && !isRevealed {
             StreamNoticeRow(
                 symbol: "eye.slash",
-                text: Self.hiddenSentence(reason: minimizedReason),
+                text: ConversationEventText.hiddenSentence(reason: minimizedReason),
                 buttonTitle: String(localized: "Show")
             ) { isRevealed = true }
         } else {
@@ -175,23 +175,6 @@ struct ConversationPostView: View {
         }
     }
 
-    /// "Hidden — off-topic", in GitHub's word for why; "Hidden comment" for a reason this build
-    /// does not know, or for none.
-    /// - Parameter reason: ``ShepherdCore/ConversationComment/minimizedReason``.
-    /// - Returns: The line.
-    static func hiddenSentence(reason: String?) -> String {
-        let why: String
-        switch reason {
-        case "off-topic": why = String(localized: "off-topic")
-        case "outdated": why = String(localized: "outdated")
-        case "resolved": why = String(localized: "resolved")
-        case "duplicate": why = String(localized: "duplicate")
-        case "spam": why = String(localized: "spam")
-        case "abuse": why = String(localized: "abuse")
-        default: return String(localized: "Hidden comment")
-        }
-        return String(localized: "Hidden — \(why)")
-    }
 }
 
 /// What a post says — the description, a comment, or a reviewer's words above the verdict — and
@@ -375,12 +358,9 @@ struct PostMenu: View {
         }
     }
 
-    /// What a delete asks before anything is written: whose comment, from when, and that it
-    /// cannot be undone — GitHub keeps no copy to restore.
+    /// What a delete asks before anything is written — ``ConversationEventText/deleteQuestion(author:date:now:)``.
     static func deleteQuestion(author: ShepherdCore.Actor, date: Date, now: Date = Date()) -> String {
-        let name = author.bestName
-        let when = RelativeDate.long(date, relativeTo: now)
-        return String(localized: "\(name) wrote this comment \(when). It is deleted on GitHub, and that cannot be undone.")
+        ConversationEventText.deleteQuestion(author: author, date: date, now: now)
     }
 }
 
@@ -600,36 +580,13 @@ struct ReactionBar: View {
     }
 
     /// What pressing a capsule does — its tooltip, and what a screen reader says after its label.
-    static func action(for group: ReactionGroup) -> String {
-        group.viewerHasReacted
-            ? String(localized: "Remove your reaction")
-            : String(localized: "Add your reaction")
-    }
+    static func action(for group: ReactionGroup) -> String { ConversationEventText.reactionAction(for: group) }
 
-    /// One capsule in words — "Thumbs up. 2 reactions. including yours." — because the fill is
-    /// what marks your own, and colour is never the only carrier.
-    static func spokenLabel(for group: ReactionGroup) -> String {
-        let count = group.count
-        return SpokenRow.sentence([
-            Self.name(of: group.content),
-            String(localized: "\(count) reactions"),
-            group.viewerHasReacted ? String(localized: "including yours") : nil,
-        ])
-    }
+    /// One capsule in words — "Thumbs up. 2 reactions. including yours."
+    static func spokenLabel(for group: ReactionGroup) -> String { ConversationEventText.reactionSpokenLabel(for: group) }
 
     /// GitHub's name for a reaction. The emoji alone would be read out by its Unicode name.
-    static func name(of content: ReactionContent) -> String {
-        switch content {
-        case .thumbsUp: return String(localized: "Thumbs up")
-        case .thumbsDown: return String(localized: "Thumbs down")
-        case .laugh: return String(localized: "Laugh")
-        case .hooray: return String(localized: "Hooray")
-        case .confused: return String(localized: "Confused")
-        case .heart: return String(localized: "Heart")
-        case .rocket: return String(localized: "Rocket")
-        case .eyes: return String(localized: "Eyes")
-        }
-    }
+    static func name(of content: ReactionContent) -> String { ConversationEventText.reactionName(of: content) }
 }
 
 private extension View {
@@ -706,7 +663,7 @@ struct ConversationReviewView: View {
     let threads: [ReviewThread]
 
     var body: some View {
-        let verdict = Self.verdict(review.state)
+        let verdict = ConversationEventText.verdict(review.state)
         let reactions = PostReactions(
             subjectID: review.id,
             stored: review.reactions,
@@ -766,24 +723,6 @@ struct ConversationReviewView: View {
         )))
     }
 
-    /// The verdict as the review's row says it, with its symbol and colour. The words carry it;
-    /// the colour only repeats them.
-    /// - Parameter state: The review's state.
-    /// - Returns: The sentence after the name, an SF Symbol and its tint.
-    static func verdict(_ state: ConversationReview.State) -> (sentence: String, symbol: String, tint: Color) {
-        switch state {
-        case .approved:
-            return (String(localized: "approved these changes"), "checkmark.circle.fill", Theme.success)
-        case .changesRequested:
-            return (String(localized: "requested changes"), "exclamationmark.circle.fill", Theme.failure)
-        case .commented:
-            return (String(localized: "reviewed"), "eye", Theme.accentText)
-        case .dismissed:
-            return (String(localized: "reviewed — dismissed"), "eye.slash", Theme.textMuted)
-        case .pending:
-            return (String(localized: "has a pending review"), "clock", Theme.pending)
-        }
-    }
 }
 
 /// A review thread in the stream — under the review that started it, or on its own when that
@@ -996,13 +935,7 @@ struct ConversationCommitsView: View {
     /// "Claude Code added 3 commits" when one author pushed them all, "3 commits" otherwise.
     /// - Parameter commits: The group.
     /// - Returns: The heading.
-    static func title(for commits: [CommitInfo]) -> String {
-        let count = commits.count
-        if Set(commits.map(\.author?.login)).count == 1, let name = commits.first?.author?.bestName {
-            return String(localized: "\(name) added \(count) commits")
-        }
-        return String(localized: "\(count) commits")
-    }
+    static func title(for commits: [CommitInfo]) -> String { ConversationEventText.commitsTitle(for: commits) }
 }
 
 /// Something that happened between the posts — a label, a force-push, a merge — in one line.

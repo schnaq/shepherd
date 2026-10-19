@@ -243,7 +243,7 @@ struct ReviewFileHeader: View {
                     .foregroundStyle(Theme.text)
                     .lineLimit(1)
                     .truncationMode(.head)
-                ChipView(text: statusText(file.status), color: statusColor(file.status), size: 10.5)
+                ChipView(text: file.status.localizedLabel, color: file.status.color, size: 10.5)
             }
 
             Spacer(minLength: 8)
@@ -353,23 +353,5 @@ struct ReviewFileHeader: View {
             get: { model.settings.diffUsesInlineMode },
             set: { model.settings.diffUsesInlineMode = $0 }
         )
-    }
-
-    private func statusText(_ status: FileChangeStatus) -> String {
-        switch status {
-        case .added: return String(localized: "new")
-        case .modified: return String(localized: "modified")
-        case .removed: return String(localized: "deleted")
-        case .renamed: return String(localized: "renamed")
-        }
-    }
-
-    private func statusColor(_ status: FileChangeStatus) -> Color {
-        switch status {
-        case .added: return Theme.success
-        case .modified: return Theme.accentText
-        case .removed: return Theme.failure
-        case .renamed: return Theme.pending
-        }
     }
 }

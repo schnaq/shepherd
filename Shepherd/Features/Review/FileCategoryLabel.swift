@@ -24,3 +24,27 @@ extension FileCategory {
         }
     }
 }
+
+extension FileChangeStatus {
+    /// The change kind in a file header's words — "new", "modified", "deleted", "renamed" — shared
+    /// by the Mac's file list and the phone's files screen (ADR 0044), so the catalog's German
+    /// rows apply to both.
+    var localizedLabel: String {
+        switch self {
+        case .added: return String(localized: "new")
+        case .modified: return String(localized: "modified")
+        case .removed: return String(localized: "deleted")
+        case .renamed: return String(localized: "renamed")
+        }
+    }
+
+    /// The change kind's colour: green for new, the accent for modified, red for deleted.
+    var color: Color {
+        switch self {
+        case .added: return Theme.success
+        case .modified: return Theme.accentText
+        case .removed: return Theme.failure
+        case .renamed: return Theme.pending
+        }
+    }
+}

@@ -3,41 +3,6 @@ import GitHubKit
 import ShepherdCore
 import ShepherdPersistence
 
-// The phone's halves of names the shared files use but whose Mac versions cannot be compiled for
-// iOS (ADR 0044). Each is the smallest thing that keeps a shared file unchanged; none of them is
-// a second implementation of review logic.
-
-// MARK: - Local conveniences
-
-/// The two local conveniences `PullRequestActions` keeps behind `#if os(macOS)`, for the iPhone.
-///
-/// The shared ⋯ menu (`PullRequestMoreMenuItems`) calls both. The Mac versions talk to AppKit and
-/// were fenced rather than routed through ``PlatformServices`` because `PullRequestActions.swift`
-/// was being edited on another branch at the time (ADR 0043, C), which has since merged. Routing
-/// the Mac file through ``PlatformServices`` itself, and deleting this extension, is a follow-up.
-extension PullRequestActions {
-    /// Opens the pull request on github.com — in the GitHub app when it claims the link.
-    /// - Parameter summary: The pull request.
-    func openOnGitHub(_ summary: PullRequestSummary) {
-        PlatformServices.open(
-            AppConfig.pullRequestURL(
-                owner: summary.repo.owner,
-                name: summary.repo.name,
-                number: summary.number
-            )
-        )
-    }
-
-    /// Copies the head branch name to the pasteboard.
-    /// - Parameter summary: The pull request.
-    func copyBranch(_ summary: PullRequestSummary) {
-        PlatformServices.copyToPasteboard(summary.headRefName)
-        toasts.info(String(localized: "Copied \(summary.headRefName)"))
-    }
-}
-
-// MARK: - Demo mode
-
 #if DEBUG
 /// The phone's Debug-only demo mode: the app on the Mac demo's sample data (``DemoSeed``), with no
 /// account and no network — the one practical way to look at a busy inbox on a simulator.

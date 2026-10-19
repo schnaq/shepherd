@@ -197,13 +197,18 @@ final class PhoneEnvironment: AccountSigningIn, SyncEventPresenting {
     }
 
     /// Runs a sweep now, from the sync strip's Retry — through the session, never the engine, so
-    /// ``SignedInSession/isSyncing`` and ``SignedInSession/lastSyncedAt`` move with it.
-    func syncNow() async {
-        guard let session else { return }
+    /// ``SignedInSession/isSyncing`` and ``SignedInSession/lastSyncedAt`` move with it. A failure
+    /// is toasted here, once, for every caller.
+    /// - Returns: Whether the sweep ran to the end; `false` without a session too.
+    @discardableResult
+    func syncNow() async -> Bool {
+        guard let session else { return false }
         do {
             try await session.syncNow(awaitingInFlight: true)
+            return true
         } catch {
             toasts.failure(error, context: String(localized: "Sync failed"))
+            return false
         }
     }
 

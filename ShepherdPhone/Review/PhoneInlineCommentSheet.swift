@@ -274,18 +274,9 @@ struct PhoneInlineCommentSheet: View {
     private func insertSuggestion() {
         guard request.path == model.selectedPath,
               let document = model.currentReconstruction?.modified,
-              let block = Self.suggestionBlock(document: document, startLine: request.startLine, line: request.line)
+              let block = SuggestionBlock.make(document: document, startLine: request.startLine, line: request.line)
         else { return }
         text = text.isEmpty ? block : text + "\n" + block
-    }
-
-    /// GitHub's suggestion block over lines `startLine...line` of `document` (1-based), or `nil`
-    /// when they are not in it — the Mac's `SuggestionBlock.make`, which lives in a Mac-only file.
-    static func suggestionBlock(document: String, startLine: Int?, line: Int) -> String? {
-        let lines = document.split(separator: "\n", omittingEmptySubsequences: false)
-        let start = startLine ?? line
-        guard start >= 1, start <= line, line <= lines.count else { return nil }
-        return "```suggestion\n" + lines[(start - 1)..<line].joined(separator: "\n") + "\n```"
     }
 
     private func save() async {

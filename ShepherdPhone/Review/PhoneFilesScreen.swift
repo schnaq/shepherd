@@ -302,8 +302,8 @@ struct PhoneFilesScreen: View {
         let isViewed = model.viewedPaths.contains(priority.file.path)
         return PhoneChipFlow {
             PhoneChip(
-                text: PhoneFilesScreen.statusText(priority.file.status),
-                color: PhoneFilesScreen.statusColor(priority.file.status),
+                text: priority.file.status.localizedLabel,
+                color: priority.file.status.color,
                 size: chipSize
             )
             if !isViewed {
@@ -381,7 +381,7 @@ struct PhoneFilesScreen: View {
         return SpokenRow.sentence([
             file.fileName,
             Self.directory(of: file.path),
-            Self.statusText(file.status),
+            file.status.localizedLabel,
             isViewed ? nil : priority.reasons.prefix(2).map { $0.localizedText() }.joined(separator: ", "),
             DiffCountsView.spokenCounts(additions: file.additions, deletions: file.deletions),
             comments > 0 ? String(localized: "\(comments) comments") : nil,
@@ -416,34 +416,14 @@ struct PhoneFilesScreen: View {
         guard let slash = path.lastIndex(of: "/") else { return nil }
         return String(path[..<slash])
     }
-
-    /// The change kind in the Mac file header's words (`ReviewFileHeader.statusText`), so the
-    /// catalog's German rows apply.
-    static func statusText(_ status: FileChangeStatus) -> String {
-        switch status {
-        case .added: return String(localized: "new")
-        case .modified: return String(localized: "modified")
-        case .removed: return String(localized: "deleted")
-        case .renamed: return String(localized: "renamed")
-        }
-    }
-
-    /// The change kind's colour, the Mac file header's (`ReviewFileHeader.statusColor`).
-    static func statusColor(_ status: FileChangeStatus) -> Color {
-        switch status {
-        case .added: return Theme.success
-        case .modified: return Theme.accentText
-        case .removed: return Theme.failure
-        case .renamed: return Theme.pending
-        }
-    }
 }
 
 /// A rounded pill on the type scale: the Mac's `ChipView`, with a size the caller scales.
 ///
-/// `ChipView` takes its size in points and is drawn with `.system(size:)`, which is right for the
-/// Mac's dense rows and wrong under Dynamic Type; this passes a `@ScaledMetric` through instead,
-/// so a chip grows with the text around it.
+/// `ChipView` takes its size in points and, on iOS, only compares it with 10 to pick `.caption2` or
+/// `.caption`; it never wraps and it cannot take a scaled size or an icon. This one is drawn at the
+/// size the caller scales (a `@ScaledMetric`), so a chip grows with the text around it, and it
+/// wraps.
 struct PhoneChip: View {
     /// The text.
     let text: String

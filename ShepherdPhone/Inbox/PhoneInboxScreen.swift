@@ -107,23 +107,26 @@ struct PhoneInboxScreen: View {
                     .font(Theme.type(.footnote))
                     .foregroundStyle(Theme.textMuted)
             }
-        } else if model.filteredRows.isEmpty {
-            emptyRow { emptyState }
         } else {
-            ForEach(model.sections) { section in
-                Section {
-                    rows(section.items)
-                } header: {
-                    PhoneSectionHeader(section: section)
+            let sections = model.sections
+            if sections.isEmpty {
+                emptyRow { emptyState }
+            } else {
+                ForEach(sections) { section in
+                    Section {
+                        rows(section.items)
+                    } header: {
+                        PhoneSectionHeader(section: section)
+                    }
                 }
-            }
-            if model.smartView == .approvedByMe {
-                // The Mac's honesty about this view, said where the Mac says it in a tooltip.
-                Text(String(localized: "Approximation: pull requests you were asked to review that now carry an approval."))
-                    .font(Theme.type(.footnote))
-                    .foregroundStyle(Theme.textMuted)
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
+                if model.smartView == .approvedByMe {
+                    // The Mac's honesty about this view, said where the Mac says it in a tooltip.
+                    Text(String(localized: "Approximation: pull requests you were asked to review that now carry an approval."))
+                        .font(Theme.type(.footnote))
+                        .foregroundStyle(Theme.textMuted)
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
             }
         }
     }
@@ -397,11 +400,11 @@ struct PhoneInboxScreen: View {
             }
         }
         Divider()
-        ShareLink(item: url(of: row)) {
+        ShareLink(item: AppConfig.pullRequestURL(for: row)) {
             Label(String(localized: "Share…"), systemImage: "square.and.arrow.up")
         }
         Button {
-            PlatformServices.copyToPasteboard(url(of: row).absoluteString)
+            PlatformServices.copyToPasteboard(AppConfig.pullRequestURL(for: row).absoluteString)
             environment.toasts.info(String(localized: "Link copied"))
             quietActionCount += 1
         } label: {
@@ -447,12 +450,7 @@ struct PhoneInboxScreen: View {
     /// like nothing happened.
     private func refresh() async {
         let before = Set(model.allRows.map(\.id))
-        do {
-            try await model.session.syncNow(awaitingInFlight: true)
-        } catch {
-            environment.toasts.failure(error, context: String(localized: "Sync failed"))
-            return
-        }
+        guard await environment.syncNow() else { return }
         // ponytail: compares right after the sweep returns; rows the database observation
         // delivers a hop later miss the haptic. Watch `allRows` during the refresh if that matters.
         if !Set(model.allRows.map(\.id)).isSubset(of: before) {
@@ -473,10 +471,6 @@ struct PhoneInboxScreen: View {
             isMerging: environment.activity.isRunning(row.id, .merge),
             wasMerged: model.session.mergedPullRequestIDs.contains(row.id)
         )
-    }
-
-    private func url(of row: PullRequestSummary) -> URL {
-        AppConfig.pullRequestURL(owner: row.repo.owner, name: row.repo.name, number: row.number)
     }
 
     /// Whether the list is empty because Shepherd has not finished asking GitHub yet — the Mac

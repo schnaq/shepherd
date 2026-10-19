@@ -116,3 +116,97 @@ enum ConversationEventText {
         String(oid.prefix(7))
     }
 }
+
+// MARK: - Shared with the iPhone
+
+/// The sentences the Mac's stream views and the phone's say in the same words, pulled out of both
+/// so a catalog key and its German are written once (ADR 0044).
+extension ConversationEventText {
+    /// "Hidden — off-topic", in GitHub's word for why; "Hidden comment" for a reason this build
+    /// does not know, or for none.
+    /// - Parameter reason: ``ShepherdCore/ConversationComment/minimizedReason``.
+    /// - Returns: The line.
+    static func hiddenSentence(reason: String?) -> String {
+        let why: String
+        switch reason {
+        case "off-topic": why = String(localized: "off-topic")
+        case "outdated": why = String(localized: "outdated")
+        case "resolved": why = String(localized: "resolved")
+        case "duplicate": why = String(localized: "duplicate")
+        case "spam": why = String(localized: "spam")
+        case "abuse": why = String(localized: "abuse")
+        default: return String(localized: "Hidden comment")
+        }
+        return String(localized: "Hidden — \(why)")
+    }
+
+    /// What a delete asks before anything is written: whose comment, from when, and that it
+    /// cannot be undone — GitHub keeps no copy to restore.
+    static func deleteQuestion(author: ShepherdCore.Actor, date: Date, now: Date = Date()) -> String {
+        let name = author.bestName
+        let when = RelativeDate.long(date, relativeTo: now)
+        return String(localized: "\(name) wrote this comment \(when). It is deleted on GitHub, and that cannot be undone.")
+    }
+
+    /// What pressing a capsule does — its tooltip, and what a screen reader says after its label.
+    static func reactionAction(for group: ReactionGroup) -> String {
+        group.viewerHasReacted
+            ? String(localized: "Remove your reaction")
+            : String(localized: "Add your reaction")
+    }
+
+    /// One capsule in words — "Thumbs up. 2 reactions. including yours." — because the fill is
+    /// what marks your own, and colour is never the only carrier.
+    static func reactionSpokenLabel(for group: ReactionGroup) -> String {
+        let count = group.count
+        return SpokenRow.sentence([
+            reactionName(of: group.content),
+            String(localized: "\(count) reactions"),
+            group.viewerHasReacted ? String(localized: "including yours") : nil,
+        ])
+    }
+
+    /// GitHub's name for a reaction. The emoji alone would be read out by its Unicode name.
+    static func reactionName(of content: ReactionContent) -> String {
+        switch content {
+        case .thumbsUp: return String(localized: "Thumbs up")
+        case .thumbsDown: return String(localized: "Thumbs down")
+        case .laugh: return String(localized: "Laugh")
+        case .hooray: return String(localized: "Hooray")
+        case .confused: return String(localized: "Confused")
+        case .heart: return String(localized: "Heart")
+        case .rocket: return String(localized: "Rocket")
+        case .eyes: return String(localized: "Eyes")
+        }
+    }
+
+    /// The verdict as the review's row says it, with its symbol and colour. The words carry it;
+    /// the colour only repeats them.
+    /// - Parameter state: The review's state.
+    /// - Returns: The sentence after the name, an SF Symbol and its tint.
+    static func verdict(_ state: ConversationReview.State) -> (sentence: String, symbol: String, tint: Color) {
+        switch state {
+        case .approved:
+            return (String(localized: "approved these changes"), "checkmark.circle.fill", Theme.success)
+        case .changesRequested:
+            return (String(localized: "requested changes"), "exclamationmark.circle.fill", Theme.failure)
+        case .commented:
+            return (String(localized: "reviewed"), "eye", Theme.accentText)
+        case .dismissed:
+            return (String(localized: "reviewed — dismissed"), "eye.slash", Theme.textMuted)
+        case .pending:
+            return (String(localized: "has a pending review"), "clock", Theme.pending)
+        }
+    }
+
+    /// "Claude Code added 3 commits" when one author pushed them all, "3 commits" otherwise.
+    /// - Parameter commits: The group.
+    /// - Returns: The heading.
+    static func commitsTitle(for commits: [CommitInfo]) -> String {
+        let count = commits.count
+        if Set(commits.map(\.author?.login)).count == 1, let name = commits.first?.author?.bestName {
+            return String(localized: "\(name) added \(count) commits")
+        }
+        return String(localized: "\(count) commits")
+    }
+}

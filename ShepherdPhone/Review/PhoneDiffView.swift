@@ -80,7 +80,7 @@ struct PhoneDiffView: View {
     var body: some View {
         content
             .background(Theme.background)
-            .navigationTitle(Self.fileName(model.selectedPath ?? path))
+            .navigationTitle(PhoneFilesScreen.fileName(model.selectedPath ?? path))
             .navigationSubtitle(PhoneFilesScreen.directory(of: model.selectedPath ?? path) ?? "")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbar }
@@ -400,7 +400,7 @@ struct PhoneDiffView: View {
                     Text(String(localized: "Next file"))
                         .font(Theme.type(.footnote))
                         .foregroundStyle(Theme.textMuted)
-                    Text(verbatim: Self.fileName(path))
+                    Text(verbatim: PhoneFilesScreen.fileName(path))
                         .font(Theme.type(.body, weight: .semibold))
                         .foregroundStyle(Theme.textStrong)
                         .lineLimit(1)
@@ -447,14 +447,7 @@ struct PhoneDiffView: View {
             } label: {
                 HStack(spacing: 8) {
                     if let root = thread.rootComment {
-                        AvatarView(actor: root.author, size: avatarSize)
-                        Text(verbatim: root.author.displayName ?? root.author.login)
-                            .font(Theme.type(.subheadline, weight: .semibold))
-                            .foregroundStyle(Theme.textStrong)
-                            .lineLimit(1)
-                        RelativeDateText(date: root.createdAt)
-                            .font(Theme.type(.footnote))
-                            .foregroundStyle(Theme.textMuted)
+                        authorHeader(of: root.author, at: root.createdAt)
                     }
                     Spacer(minLength: 4)
                     if thread.isResolved {
@@ -475,14 +468,7 @@ struct PhoneDiffView: View {
                     if offset > 0 {
                         Divider().overlay(Theme.hairline)
                         HStack(spacing: 8) {
-                            AvatarView(actor: comment.author, size: avatarSize)
-                            Text(verbatim: comment.author.displayName ?? comment.author.login)
-                                .font(Theme.type(.subheadline, weight: .semibold))
-                                .foregroundStyle(Theme.textStrong)
-                                .lineLimit(1)
-                            RelativeDateText(date: comment.createdAt)
-                                .font(Theme.type(.footnote))
-                                .foregroundStyle(Theme.textMuted)
+                            authorHeader(of: comment.author, at: comment.createdAt)
                         }
                         .accessibilityElement(children: .combine)
                     }
@@ -500,6 +486,19 @@ struct PhoneDiffView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .frame(maxWidth: wraps ? .infinity : viewportWidth, alignment: .leading)
+    }
+
+    /// The avatar, name and date a thread comment opens with — laid out by the caller's stack.
+    @ViewBuilder
+    private func authorHeader(of author: ShepherdCore.Actor, at date: Date) -> some View {
+        AvatarView(actor: author, size: avatarSize)
+        Text(verbatim: author.displayName ?? author.login)
+            .font(Theme.type(.subheadline, weight: .semibold))
+            .foregroundStyle(Theme.textStrong)
+            .lineLimit(1)
+        RelativeDateText(date: date)
+            .font(Theme.type(.footnote))
+            .foregroundStyle(Theme.textMuted)
     }
 
     private func draftCard(_ draft: DraftComment) -> some View {
@@ -653,8 +652,8 @@ struct PhoneDiffView: View {
     @ViewBuilder
     private func lineMenu(_ row: PatchRow, index: Int, content: DiffListContent) -> some View {
         if let anchor = content.anchor(for: content.rows[index]) {
-            if let pick, let span = span(of: pick, in: content), span.startLine != nil,
-                (min(pick.anchor, pick.end)...max(pick.anchor, pick.end)).contains(index)
+            if let pick, (min(pick.anchor, pick.end)...max(pick.anchor, pick.end)).contains(index),
+                let span = span(of: pick, in: content), span.startLine != nil
             {
                 Button {
                     comment(on: span)
@@ -821,7 +820,7 @@ struct PhoneDiffView: View {
     /// is a hash of the path, and a link that lands on the tab is better than a guessed anchor.
     private var filesURL: URL? {
         guard let summary = model.summary else { return nil }
-        let base = AppConfig.pullRequestURL(owner: summary.repo.owner, name: summary.repo.name, number: summary.number)
+        let base = AppConfig.pullRequestURL(for: summary)
         return URL(string: base.absoluteString + "/files")
     }
 
@@ -877,10 +876,6 @@ struct PhoneDiffView: View {
             return String(localized: "Comment on lines \(start)–\(span.line)")
         }
         return String(localized: "Comment on line \(span.line)")
-    }
-
-    private static func fileName(_ path: String) -> String {
-        PhoneFilesScreen.fileName(path)
     }
 
     private static func largestNumber(in row: PatchReconstructor.DiffRow) -> Int {

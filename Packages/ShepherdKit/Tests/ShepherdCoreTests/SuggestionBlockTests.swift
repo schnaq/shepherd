@@ -1,5 +1,6 @@
 import XCTest
-@testable import Shepherd
+
+@testable import ShepherdCore
 
 final class SuggestionBlockTests: XCTestCase {
     private let document = "one\ntwo\nthree\nfour"

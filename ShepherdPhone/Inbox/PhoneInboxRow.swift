@@ -28,8 +28,8 @@ struct PhoneInboxRow: View {
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// The shared chips take a point size rather than a text style, so the phone scales the size
-    /// it hands them: they grow with Dynamic Type instead of staying Mac-small beside large text.
+    /// The size handed to the shared chips. On iOS they draw in a text style, which scales on its
+    /// own, and only compare this with 10 to pick `.caption2` or `.caption`.
     @ScaledMetric(relativeTo: .caption) private var chipSize: CGFloat = 12
     /// The diff counts' size, scaled for the chips' reason.
     @ScaledMetric(relativeTo: .footnote) private var countsSize: CGFloat = 12
@@ -86,7 +86,7 @@ struct PhoneInboxRow: View {
         Text(verbatim: "\(row.repo.name) #\(row.number)")
             .font(Theme.mono(.footnote))
             .foregroundStyle(Theme.textSecondary)
-            .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+            .lineLimit(1)
             .truncationMode(.middle)
     }
 

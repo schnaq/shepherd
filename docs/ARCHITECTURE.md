@@ -142,10 +142,10 @@ The list closes because of a few seams, each cutting one edge that would otherwi
 `AppEnvironment` or AppKit along: `PlatformServices` (pasteboard, browser), `Theme` resolving
 colours on either platform, `SignInModel` talking to an `AccountSigningIn` protocol and
 `SignedInSession` presenting through `SyncEventPresenting`, and `#if os(macOS)` around the few
-Mac-only members of shared files. `ShepherdPhone/Support/MacOnlyStubs.swift` stands in for the
-handful of Mac types the shared files name but the phone never uses (and holds the phone's
-`DemoMode`). Every entry in the list is a promise that the file builds for iOS; CI's `ios` job
-builds the phone on every push, so a Mac change that breaks the promise fails its own pull request.
+Mac-only members of shared files. `ShepherdPhone/Support/PhoneDemoMode.swift` holds the phone's
+Debug-only `DemoMode`. Every entry in the list is a promise that the file builds for iOS; CI's
+`ios` job builds the phone on every push, so a Mac change that breaks the promise fails its own
+pull request.
 
 **`PhoneEnvironment`** is the phone's `AppEnvironment`, minus everything the phone does not run. It
 owns the settings, the token store, the toasts, the router and the signed-in session — and

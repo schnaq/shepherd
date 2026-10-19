@@ -183,7 +183,7 @@ struct PhonePostView: View {
         if isMinimized && !isRevealed {
             PhoneStreamNotice(
                 symbol: "eye.slash",
-                text: Self.hiddenSentence(reason: minimizedReason),
+                text: ConversationEventText.hiddenSentence(reason: minimizedReason),
                 buttonTitle: String(localized: "Show")
             ) { isRevealed = true }
         } else {
@@ -211,21 +211,6 @@ struct PhonePostView: View {
         }
     }
 
-    /// "Hidden — off-topic", in GitHub's word for why; "Hidden comment" otherwise. The Mac's
-    /// sentence (`ConversationPostView.hiddenSentence`), in the same catalog keys.
-    static func hiddenSentence(reason: String?) -> String {
-        let why: String
-        switch reason {
-        case "off-topic": why = String(localized: "off-topic")
-        case "outdated": why = String(localized: "outdated")
-        case "resolved": why = String(localized: "resolved")
-        case "duplicate": why = String(localized: "duplicate")
-        case "spam": why = String(localized: "spam")
-        case "abuse": why = String(localized: "abuse")
-        default: return String(localized: "Hidden comment")
-        }
-        return String(localized: "Hidden — \(why)")
-    }
 
     /// Who, what, when, and "edited" — what a post is announced as (ADR 0033).
     static func spokenLabel(author: ShepherdCore.Actor, verb: String?, date: Date, isEdited: Bool) -> String {
@@ -246,7 +231,6 @@ struct PhonePostCard<Header: View, Content: View>: View {
     let author: ShepherdCore.Actor
     let date: Date
     let markdown: String
-    var quotes = true
     let url: URL?
     let editing: PostEditing?
     /// The post's reactions, for *Add a reaction* in the menu, or `nil` where it takes none.
@@ -293,11 +277,11 @@ struct PhonePostCard<Header: View, Content: View>: View {
             }
             Button(String(localized: "Cancel"), role: .cancel) {}
         } message: {
-            Text(Self.deleteQuestion(author: author, date: date))
+            Text(ConversationEventText.deleteQuestion(author: author, date: date))
         }
     }
 
-    private var offersQuote: Bool { quotes && !markdown.isEmpty }
+    private var offersQuote: Bool { !markdown.isEmpty }
 
     private var hasMenu: Bool { offersQuote || url != nil || editing != nil || (reactions?.canReact ?? false) }
 
@@ -331,13 +315,6 @@ struct PhonePostCard<Header: View, Content: View>: View {
         }
     }
 
-    /// What a delete asks first: whose comment, from when, and that it cannot be undone — the
-    /// Mac's question (`PostMenu.deleteQuestion`), in the same catalog key.
-    static func deleteQuestion(author: ShepherdCore.Actor, date: Date) -> String {
-        let name = author.bestName
-        let when = RelativeDate.long(date)
-        return String(localized: "\(name) wrote this comment \(when). It is deleted on GitHub, and that cannot be undone.")
-    }
 }
 
 /// Who wrote something and when, in two lines: the avatar beside the name and agent chip, and
@@ -602,12 +579,12 @@ struct PhoneReactionBar: View {
                                 capsule(group)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityHint(Text(verbatim: Self.action(for: group)))
+                            .accessibilityHint(Text(verbatim: ConversationEventText.reactionAction(for: group)))
                         } else {
                             capsule(group)
                         }
                     }
-                    .accessibilityLabel(Text(verbatim: Self.spokenLabel(for: group)))
+                    .accessibilityLabel(Text(verbatim: ConversationEventText.reactionSpokenLabel(for: group)))
                 }
                 if canReact {
                     Menu {
@@ -636,36 +613,8 @@ struct PhoneReactionBar: View {
             )
     }
 
-    /// What tapping a capsule does, in words.
-    static func action(for group: ReactionGroup) -> String {
-        group.viewerHasReacted
-            ? String(localized: "Remove your reaction")
-            : String(localized: "Add your reaction")
-    }
 
-    /// One capsule in words — the fill marks your own, and colour is never the only carrier.
-    static func spokenLabel(for group: ReactionGroup) -> String {
-        let count = group.count
-        return SpokenRow.sentence([
-            name(of: group.content),
-            String(localized: "\(count) reactions"),
-            group.viewerHasReacted ? String(localized: "including yours") : nil,
-        ])
-    }
 
-    /// GitHub's name for a reaction; the emoji alone would be read out by its Unicode name.
-    static func name(of content: ReactionContent) -> String {
-        switch content {
-        case .thumbsUp: return String(localized: "Thumbs up")
-        case .thumbsDown: return String(localized: "Thumbs down")
-        case .laugh: return String(localized: "Laugh")
-        case .hooray: return String(localized: "Hooray")
-        case .confused: return String(localized: "Confused")
-        case .heart: return String(localized: "Heart")
-        case .rocket: return String(localized: "Rocket")
-        case .eyes: return String(localized: "Eyes")
-        }
-    }
 }
 
 /// GitHub's eight reactions as menu toggles, on where the viewer has reacted — the bar's smiley and
@@ -678,7 +627,7 @@ struct PhoneReactionToggles: View {
         ForEach(ReactionContent.allCases, id: \.self) { content in
             let isOn = groups.contains { $0.content == content && $0.viewerHasReacted }
             Toggle(isOn: Binding(get: { isOn }, set: { _ in onToggle(content, isOn) })) {
-                Text(verbatim: "\(content.emoji)  \(PhoneReactionBar.name(of: content))")
+                Text(verbatim: "\(content.emoji)  \(ConversationEventText.reactionName(of: content))")
             }
         }
     }
@@ -709,7 +658,7 @@ struct PhoneReviewView: View {
     let onShowInDiff: (String, Int?) -> Void
 
     var body: some View {
-        let verdict = Self.verdict(review.state)
+        let verdict = ConversationEventText.verdict(review.state)
         let reactions = PhonePostReactions(
             subjectID: review.id,
             stored: review.reactions,
@@ -774,22 +723,6 @@ struct PhoneReviewView: View {
         )
     }
 
-    /// The verdict as the review's line says it, with its symbol and colour — the Mac's words
-    /// (`ConversationReviewView.verdict`). The words carry it; the colour only repeats them.
-    static func verdict(_ state: ConversationReview.State) -> (sentence: String, symbol: String, tint: Color) {
-        switch state {
-        case .approved:
-            return (String(localized: "approved these changes"), "checkmark.circle.fill", Theme.success)
-        case .changesRequested:
-            return (String(localized: "requested changes"), "exclamationmark.circle.fill", Theme.failure)
-        case .commented:
-            return (String(localized: "reviewed"), "eye", Theme.accentText)
-        case .dismissed:
-            return (String(localized: "reviewed — dismissed"), "eye.slash", Theme.textMuted)
-        case .pending:
-            return (String(localized: "has a pending review"), "clock", Theme.pending)
-        }
-    }
 }
 
 /// A review thread: where it points, whether it is settled, its comments, and *Resolve* and *Reply*
@@ -808,7 +741,7 @@ struct PhoneThreadView: View {
     let actions: PullRequestActions
     let summary: PullRequestSummary
     let thread: ReviewThread
-    /// *Show in diff*, or `nil` where the diff is what is already showing.
+    /// *Show in diff*, or `nil` in ``PhoneThreadSheet``, which opens over a thread already in view.
     var onShowInDiff: ((String, Int?) -> Void)?
     /// Whether the thread is always open — in ``PhoneThreadSheet``, which exists to show it.
     var isAlwaysExpanded = false
@@ -1077,7 +1010,7 @@ struct PhoneThreadComment: View {
             }
             Button(String(localized: "Cancel"), role: .cancel) {}
         } message: {
-            Text(PhonePostCard<EmptyView, EmptyView>.deleteQuestion(author: comment.author, date: comment.createdAt))
+            Text(ConversationEventText.deleteQuestion(author: comment.author, date: comment.createdAt))
         }
     }
 
@@ -1116,7 +1049,7 @@ struct PhoneCommitsRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label {
-                Text(Self.title(for: commits))
+                Text(ConversationEventText.commitsTitle(for: commits))
                     .foregroundStyle(Theme.textSecondary)
             } icon: {
                 Image(systemName: "point.3.connected.trianglepath.dotted")
@@ -1144,14 +1077,6 @@ struct PhoneCommitsRow: View {
         .padding(.horizontal, 14)
     }
 
-    /// "Claude Code added 3 commits" when one author pushed them all, "3 commits" otherwise.
-    static func title(for commits: [CommitInfo]) -> String {
-        let count = commits.count
-        if Set(commits.map(\.author?.login)).count == 1, let name = commits.first?.author?.bestName {
-            return String(localized: "\(name) added \(count) commits")
-        }
-        return String(localized: "\(count) commits")
-    }
 }
 
 /// Something that happened between the posts — a label, a force-push, a merge — in one line, in

@@ -17,8 +17,6 @@ import SwiftUI
 /// With a ``path`` it is *Show in diff*: that file's diff is pushed straight from the
 /// conversation, so Back returns to the thread it came from rather than to the file list.
 struct PhoneFilesDestination: Hashable {
-    /// The pull request's node id.
-    let prID: String
     /// The file to open at once, or `nil` for the file list.
     var path: String?
     /// The line to scroll that file's diff to.
@@ -122,7 +120,10 @@ struct PhonePullRequestScreen: View {
             .task(id: model.prID) {
                 let prID = model.prID
                 for await items in model.session.database.observeOutboxItems() {
-                    outboxItems = items.filter { $0.prID == prID }
+                    // `@State` redraws on an equal value too, and this stream fires for every pull
+                    // request's rows; only this one's changes are worth a redraw.
+                    let mine = items.filter { $0.prID == prID }
+                    if mine != outboxItems { outboxItems = mine }
                 }
             }
             .sensoryFeedback(.success, trigger: successes)
@@ -222,7 +223,7 @@ struct PhonePullRequestScreen: View {
     /// The row into the file list: how many files, how far through them, how big.
     private func filesRow(_ summary: PullRequestSummary) -> some View {
         Button {
-            files = PhoneFilesDestination(prID: model.prID)
+            files = PhoneFilesDestination()
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: "doc.on.doc")
@@ -276,7 +277,7 @@ struct PhonePullRequestScreen: View {
             markdown: model.descriptionMarkdown,
             isEdited: conversation?.isDescriptionEdited ?? false,
             reactions: conversation?.descriptionReactions ?? [],
-            url: pullRequestURL(summary),
+            url: AppConfig.pullRequestURL(for: summary),
             editing: PostEditing.description(of: summary.id, conversation: conversation)
         )
     }
@@ -296,9 +297,9 @@ struct PhonePullRequestScreen: View {
                     )
                     Divider()
                     Button(String(localized: "Copy link"), systemImage: "link") {
-                        PlatformServices.copyToPasteboard(pullRequestURL(summary).absoluteString)
+                        PlatformServices.copyToPasteboard(AppConfig.pullRequestURL(for: summary).absoluteString)
                     }
-                    ShareLink(item: pullRequestURL(summary), subject: Text(summary.title))
+                    ShareLink(item: AppConfig.pullRequestURL(for: summary), subject: Text(summary.title))
                 } label: {
                     Label(String(localized: "More actions"), systemImage: "ellipsis")
                 }
@@ -410,8 +411,8 @@ struct PhonePullRequestScreen: View {
     private func showInDiff(path: String, line: Int?) {
         model.reveal(path: path, line: line)
         files = model.selectedPath == path
-            ? PhoneFilesDestination(prID: model.prID, path: path, line: line)
-            : PhoneFilesDestination(prID: model.prID)
+            ? PhoneFilesDestination(path: path, line: line)
+            : PhoneFilesDestination()
     }
 
     /// The thread the sheet shows, with the reviewer's edits and deletes laid over it — the sheet
@@ -428,10 +429,6 @@ struct PhonePullRequestScreen: View {
             get: { model.activeThread != nil },
             set: { if !$0 { model.activeThreadID = nil } }
         )
-    }
-
-    private func pullRequestURL(_ summary: PullRequestSummary) -> URL {
-        AppConfig.pullRequestURL(owner: summary.repo.owner, name: summary.repo.name, number: summary.number)
     }
 }
 

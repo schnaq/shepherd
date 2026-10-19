@@ -255,7 +255,7 @@ targets:
           - "Automation/TrackRecordCoordinator.swift"
           - "Automation/WebhookEvent.swift"
           # The demo mode's sample data and its keychain/transport fakes, for the phone's own
-          # `DemoMode` (ShepherdPhone/Support/MacOnlyStubs.swift). By name, never `Debug/*`:
+          # `DemoMode` (ShepherdPhone/Support/PhoneDemoMode.swift). By name, never `Debug/*`:
           # `Debug/DemoMode.swift` builds the Mac's `AppEnvironment`. All three are `#if DEBUG`.
           - "Debug/DemoFakes.swift"
           - "Debug/DemoSeed.swift"
@@ -315,6 +315,7 @@ targets:
           - "Support/KeychainTokenStore.swift"
           - "Support/MarkdownHTML.swift"
           - "Support/MarkdownTextView.swift"
+          - "Support/OutboxActionText.swift"
           - "Support/PlatformServices.swift"
           - "Support/RelativeDateText.swift"
           - "Support/SpokenRow.swift"

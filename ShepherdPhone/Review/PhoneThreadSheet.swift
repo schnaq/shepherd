@@ -1,12 +1,12 @@
 import ShepherdCore
 import SwiftUI
 
-/// One published review thread in a sheet — what the diff opens when a thread's marker is tapped
-/// (``ReviewModel/activeThreadID``), presented by ``PhonePullRequestScreen``.
+/// One published review thread in a sheet — what the conversation's *Reply* opens, and a finding's
+/// jump (``ReviewModel/activeThreadID``), presented by ``PhonePullRequestScreen``.
 ///
 /// The card is the conversation's own (``PhoneThreadView``) — comments, reactions, edits, reply and
-/// *Resolve* — so a thread reads and answers the same in the stream and over the diff. No *Show in
-/// diff*: the diff is what is behind the sheet.
+/// *Resolve* — so a thread reads and answers the same in the stream and in the sheet. No *Show in
+/// diff*: the thread is already the one the reader asked for.
 struct PhoneThreadSheet: View {
     @Environment(\.dismiss) private var dismiss
     let model: ReviewModel

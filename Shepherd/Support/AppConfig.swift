@@ -1,4 +1,5 @@
 import Foundation
+import ShepherdCore
 
 /// Build-time configuration constants.
 ///
@@ -113,6 +114,12 @@ enum AppConfig {
             .appendingPathComponent(name)
             .appendingPathComponent("pull")
             .appendingPathComponent(String(number))
+    }
+
+    /// The URL a pull request lives at on github.com.
+    /// - Parameter summary: The pull request.
+    static func pullRequestURL(for summary: PullRequestSummary) -> URL {
+        pullRequestURL(owner: summary.repo.owner, name: summary.repo.name, number: summary.number)
     }
 
     /// The URL an issue lives at on github.com (ADR 0032).

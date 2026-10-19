@@ -237,11 +237,7 @@ struct ConversationView: View {
             markdown: model.descriptionMarkdown,
             isEdited: conversation?.isDescriptionEdited ?? false,
             reactions: conversation?.descriptionReactions ?? [],
-            url: AppConfig.pullRequestURL(
-                owner: summary.repo.owner,
-                name: summary.repo.name,
-                number: summary.number
-            ),
+            url: AppConfig.pullRequestURL(for: summary),
             editing: PostEditing.description(of: summary.id, conversation: conversation)
         )
     }

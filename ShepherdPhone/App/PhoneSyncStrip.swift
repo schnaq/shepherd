@@ -7,8 +7,9 @@ import SwiftUI
 /// need the user — a working sync says nothing on the phone, because the pull-to-refresh spinner
 /// and the rows themselves already do. The last two never clear by themselves (ADR 0006), so they
 /// stay here for as long as they last, as the Mac's status line keeps "· N not sent": the toast a
-/// parked review raises is a moment, and easily missed under a sheet or while the app is away. A 401 lands here too, as the error's own sentence: nothing on
-/// either platform sends the user back to sign-in on its own, and the phone does not start.
+/// parked review raises is a moment, and easily missed under a sheet or while the app is away. A 401
+/// lands here too, as the error's own sentence: nothing on either platform sends the user back to
+/// sign-in on its own, and the phone does not start.
 ///
 /// Opaque on ``Theme/raised`` rather than glass: it is content in the list, not a control floating
 /// over it (ADR 0040). Placed as the inbox list's first row, it renders nothing while all is well.

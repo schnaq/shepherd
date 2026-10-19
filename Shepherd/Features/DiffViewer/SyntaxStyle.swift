@@ -44,8 +44,8 @@ extension Theme {
 ///
 /// Built once per file off the main thread (``build(rows:path:)``) — tokenizing a whole file is
 /// a single pass because the tokenizer carries state from line to line
-/// (``ShepherdCore/DiffHighlighting``) — and kept with the rows it was built from. A renderer asks ``lines(for:)`` with the rows it is about to
-/// draw and gets `nil` for anything else, so a highlight can never be painted onto a different
+/// (``ShepherdCore/DiffHighlighting``) — and kept with the rows it was built from. A renderer asks
+/// ``lines(for:)`` with the rows it is about to draw and gets `nil` for anything else, so a highlight can never be painted onto a different
 /// file or round whose rows merely happen to be as many. Not part of `DiffListContent`: that
 /// value is `Hashable` and compared on every body pass, and comparing span arrays there would
 /// cost more than drawing the rows.

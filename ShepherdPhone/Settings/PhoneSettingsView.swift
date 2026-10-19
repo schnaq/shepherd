@@ -139,7 +139,7 @@ struct PhoneSettingsView: View {
             .foregroundStyle(Theme.failure)
             .accessibilityHidden(true)
         let text = VStack(alignment: .leading, spacing: 4) {
-            Text(verbatim: "\(item.repo.fullName)#\(item.number) · \(Self.actionName(item.action))")
+            Text(verbatim: "\(item.repo.fullName)#\(item.number) · \(item.action.localizedName)")
                 .font(Theme.type(.body, weight: .medium))
                 .foregroundStyle(Theme.textStrong)
             Text(item.localizedLastError ?? String(localized: "No reason was recorded."))
@@ -207,39 +207,6 @@ struct PhoneSettingsView: View {
     private func reloadFailedRows() async {
         guard let session = environment.session else { return }
         failedRows = (try? await session.database.failedOutboxItems()) ?? []
-    }
-
-    /// What one queued write would have done, in the user's words.
-    ///
-    /// A copy of `SyncSettingsTab.actionName(_:)`, word for word so the German carries over: that
-    /// file builds the Mac's settings window and cannot be compiled for iOS. Exhaustive for the
-    /// same reason — a new ``ShepherdCore/OutboxAction`` case is a compile error here too. At
-    /// integration both should call one shared extension on the action (ADR 0044).
-    private static func actionName(_ action: OutboxAction) -> String {
-        switch action {
-        case .submitReview: return String(localized: "Submit review")
-        case .replyToComment: return String(localized: "Reply")
-        case .addReviewComment: return String(localized: "Comment on a line")
-        case .resolveThread: return String(localized: "Resolve")
-        case .unresolveThread: return String(localized: "Unresolve")
-        case .merge: return String(localized: "Merge")
-        case .markReadyForReview: return String(localized: "Mark ready for review")
-        case .updateBranch: return String(localized: "Update branch")
-        case .addIssueComment: return String(localized: "Comment on an issue")
-        case .addIssueLabel: return String(localized: "Add a label")
-        case .addIssueAssignee: return String(localized: "Add an assignee")
-        case .closeIssue: return String(localized: "Close an issue")
-        case .reopenIssue: return String(localized: "Reopen an issue")
-        case .addPullRequestComment: return String(localized: "Comment on a pull request")
-        case .closePullRequest(let comment):
-            return comment == nil
-                ? String(localized: "Close a pull request")
-                : String(localized: "Comment and close")
-        case .react(_, _, let adding):
-            return adding ? String(localized: "Add a reaction") : String(localized: "Remove a reaction")
-        case .editComment: return String(localized: "Edit a comment")
-        case .deleteComment: return String(localized: "Delete a comment")
-        }
     }
 
     // MARK: - Watched repositories
