@@ -147,6 +147,9 @@ public protocol SyncStoring: Sendable {
     func claimReadyOutboxItems(now: Date, limit: Int) async throws -> [OutboxItem]
     /// Hands back rows that were claimed but never attempted.
     func releaseOutboxItems(ids: [UUID]) async throws
+    /// Hands every claimed row back to the queue with its attempt count kept — the rows a
+    /// cancelled drain could not settle (ADR 0044).
+    func resetInFlightOutboxItems() async throws
     /// Removes a sent outbox row.
     func markOutboxItemSucceeded(id: UUID) async throws
     /// Records a failed attempt and schedules a retry.

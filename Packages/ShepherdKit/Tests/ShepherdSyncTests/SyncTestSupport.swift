@@ -485,6 +485,10 @@ actor MarkRecordingStore: SyncStoring {
         try await wrapped.releaseOutboxItems(ids: ids)
     }
 
+    func resetInFlightOutboxItems() async throws {
+        try await wrapped.resetInFlightOutboxItems()
+    }
+
     func markOutboxItemFailed(
         id: UUID,
         error: String,

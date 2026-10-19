@@ -45,9 +45,10 @@ extension SyncEngine {
             detail = try await github.pullRequestDetail(repo: item.repo, number: item.number)
         } catch let error as GitHubError where !error.isRetryable {
             // A refusal of the *read* — a forbidden or too-large file list, a GraphQL error — says
-            // nothing about the write. Travelling as itself it would fail the row for good, and
-            // Retry in Settings zeroes the attempt count, which skips this check: the very
-            // duplicate it exists to prevent. A retryable error still travels typed.
+            // nothing about the write. Travelling as itself it would fail the row for good with
+            // no word that it may have landed; as undecided it is retried, and Retry in Settings
+            // keeps a count above one so this check runs again (`retryOutboxItem`). A retryable
+            // error still travels typed.
             throw ReplayUndecided(
                 description: "Cannot tell whether an earlier attempt landed: "
                     + (error.errorDescription ?? String(describing: error)),

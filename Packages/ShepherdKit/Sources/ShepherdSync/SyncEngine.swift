@@ -1000,6 +1000,13 @@ public actor SyncEngine {
             isDraining = false
             drainWaiters.resumeAll(with: .success(()))
         }
+        // No drain of this engine was live a moment ago, so a row still in `sending` is one a
+        // cancelled drain stranded: the database checks for cancellation before every write, so
+        // once `stop()` — or the phone's background window closing — cancels a drain, its settle,
+        // fail and release writes all throw and the row stays claimed. Only a relaunch reset it
+        // until now. Back to `pending` with its attempt count kept, so the replay check decides
+        // whether the cut-off attempt landed (ADR 0044).
+        try? await store.resetInFlightOutboxItems()
         repeat {
             drainRequested = false
             await performDrain()
@@ -1192,8 +1199,8 @@ public actor SyncEngine {
             } catch GitHubError.decoding {
                 // Only thrown after GitHub answered 2xx (the request body is plain strings and
                 // cannot fail to encode): the review landed and its answer was unreadable. Failing
-                // the row would let Retry in Settings, which zeroes the attempt count and so skips
-                // the replay check, submit it a second time (ADR 0044).
+                // the row would let Retry in Settings, which zeroes a first attempt's count and so
+                // skips the replay check, submit it a second time (ADR 0044).
             }
             await captureBaseline(for: item, draft: draft)
             try await store.deleteDraft(prID: item.prID)

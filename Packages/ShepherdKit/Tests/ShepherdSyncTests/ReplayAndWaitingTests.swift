@@ -493,6 +493,23 @@ final class ReplayAndWaitingTests: XCTestCase {
         XCTAssertTrue(remaining.isEmpty, "the drain the waiter joined still finished")
     }
 
+    /// The phone's background window closing cancels a drain mid-submit. Its settle writes throw
+    /// once the task is cancelled, so the row stays claimed; the next drain hands it back, and the
+    /// replay check sees the review landed rather than submitting it again (ADR 0044).
+    func testARowACancelledDrainCouldNotSettleIsPickedUpByTheNextDrain() async throws {
+        let (github, store, engine, first) = try await drainParkedInSubmit()
+        let review = ConversationReview(id: "PRR_9", author: me, state: .approved, bodyMarkdown: "Ship it.", createdAt: now.addingTimeInterval(1), commitOid: "head-1")
+        await github.setDetail(detail(items: [.review(review)]), repo: repo, number: 1)
+        first.cancel()
+        await github.openGate()
+        await first.value
+        await engine.drainOutbox()
+        let submitted = await github.submittedDrafts
+        XCTAssertEqual(submitted.count, 1, "the review that landed is not submitted again")
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty, "left behind: \(remaining.map(\.state))")
+    }
+
     /// `stop()` cancels the loop's inline drain; a waiter must not run the skipped lap itself
     /// afterwards, or it would write behind "Sign out & erase".
     func testAWaiterOnACancelledDrainDoesNotRunTheSkippedLap() async throws {
