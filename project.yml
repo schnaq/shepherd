@@ -218,6 +218,165 @@ targets:
         GENERATE_INFOPLIST_FILE: false
         SWIFT_STRICT_CONCURRENCY: complete
 
+  # The iPhone companion (ADR 0044). Its own composition root and screens live in `ShepherdPhone/`;
+  # the review logic does not — it is the Mac's own `ReviewModel`, `InboxModel`, `SignedInSession`
+  # and `PullRequestActions`, compiled a second time from the list below ("Route B"). A list and
+  # not a folder, because most of `Shepherd/` is AppKit, App Intents or the Mac's composition
+  # root, and every entry here is a promise that the file builds for iOS. The `ios` job in
+  # .github/workflows/ci.yml is what keeps that promise honest: a Mac change that gives one of
+  # these files a Mac-only dependency fails CI rather than surprising the next phone build.
+  #
+  # Some entries are here only because a shared type *names* them — `AppSettings`' stored
+  # properties pull in the webhook, S3/SigV4, agent-CLI and editor configuration types,
+  # `PullRequestActions` the optional telemetry, `ReviewModel`/`InboxModel` the intelligence
+  # router — and `PhoneEnvironment` never constructs any of them ("compiled, never instantiated").
+  #
+  # NEVER add `SettingsSync/SettingsSyncCrypto.swift` (AES-GCM, PBKDF2) or
+  # `Automation/WebhookSignature.swift`: `ITSAppUsesNonExemptEncryption` below is NO because this
+  # binary carries no cipher, and Scripts/testflight.sh refuses to upload one that does.
+  ShepherdPhone:
+    type: application
+    platform: iOS
+    deploymentTarget: "27.0"
+    sources:
+      - path: ShepherdPhone
+        excludes:
+          # Read by Scripts/testflight.sh at export time, never bundled.
+          - "Support/ExportOptions.plist"
+      - path: Shepherd
+        includes:
+          # Folder globs on purpose — a new file in either folder is shared by default — and
+          # top level only: `Intelligence/Translation/` reaches `AppEnvironment`.
+          - "Intelligence/*.swift"
+          - "Telemetry/*.swift"
+          - "App/ActionActivity.swift"
+          - "App/SignedInSession.swift"
+          - "App/ToastCenter.swift"
+          - "Automation/TrackRecordCoordinator.swift"
+          - "Automation/WebhookEvent.swift"
+          # The demo mode's sample data and its keychain/transport fakes, for the phone's own
+          # `DemoMode` (ShepherdPhone/Support/MacOnlyStubs.swift). By name, never `Debug/*`:
+          # `Debug/DemoMode.swift` builds the Mac's `AppEnvironment`. All three are `#if DEBUG`.
+          - "Debug/DemoFakes.swift"
+          - "Debug/DemoSeed.swift"
+          - "Debug/DemoShowcase.swift"
+          - "Features/Delegation/DelegationContext.swift"
+          - "Features/Delegation/SessionBackChannel.swift"
+          - "Features/DiffViewer/BridgeProtocol.swift"
+          - "Features/DiffViewer/DiffListContent.swift"
+          - "Features/DiffViewer/DiffRenderer.swift"
+          - "Features/DiffViewer/DiffRowText.swift"
+          - "Features/DiffViewer/DiffViewerContent.swift"
+          - "Features/DiffViewer/MonacoLanguage.swift"
+          - "Features/Inbox/ContentKind.swift"
+          - "Features/Inbox/InboxModel.swift"
+          - "Features/Inbox/InboxSelectionAnchor.swift"
+          - "Features/Inbox/RowWriteState.swift"
+          - "Features/Inbox/TrustLanes.swift"
+          - "Features/Onboarding/SignInModel.swift"
+          - "Features/PullRequest/MergeMethodPicker.swift"
+          - "Features/PullRequest/PullRequestActions.swift"
+          - "Features/PullRequest/PullRequestMoreMenu.swift"
+          - "Features/PullRequest/PullRequestStackCard.swift"
+          - "Features/Review/AIDraftFieldState.swift"
+          - "Features/Review/ReviewModel.swift"
+          - "Features/Review/ReviewUpdateBanner.swift"
+          - "Features/Review/SinceReview.swift"
+          - "Features/Review/SinceReviewFindingsView.swift"
+          - "Features/Triage/TriageCoordinator.swift"
+          - "SettingsSync/S3ObjectClient.swift"
+          - "SettingsSync/SettingsSyncError.swift"
+          - "SettingsSync/SigV4Signer.swift"
+          - "Support/AgentCLI/AgentCLIConfiguration.swift"
+          - "Support/AgentCLI/ShellWords.swift"
+          - "Support/AppConfig.swift"
+          - "Support/AppSettings.swift"
+          - "Support/AsyncActionState.swift"
+          - "Support/AvatarView.swift"
+          - "Support/CanonicalJSON.swift"
+          - "Support/CredentialSafeSession.swift"
+          - "Support/DesignComponents.swift"
+          - "Support/Editor/EditorConfiguration.swift"
+          - "Support/ErrorDescription.swift"
+          - "Support/GitHubErrorText.swift"
+          - "Support/HTTPHeaders.swift"
+          - "Support/HexEncoding.swift"
+          - "Support/KeyboardShortcuts.swift"
+          - "Support/KeychainTokenStore.swift"
+          - "Support/MarkdownHTML.swift"
+          - "Support/MarkdownTextView.swift"
+          - "Support/PlatformServices.swift"
+          - "Support/RelativeDateText.swift"
+          - "Support/SpokenRow.swift"
+          - "Support/Theme.swift"
+      # One String Catalog for both apps, named with its phase for the Mac target's reason. A
+      # phone string is a row in the same file and German comes for free where the Mac already
+      # says the same thing (ADR 0022).
+      - path: Shepherd/Resources/Localizable.xcstrings
+        buildPhase: resources
+    dependencies:
+      - package: ShepherdKit
+        product: ShepherdCore
+      - package: ShepherdKit
+        product: GitHubKit
+      - package: ShepherdKit
+        product: ShepherdPersistence
+      - package: ShepherdKit
+        product: ShepherdSync
+      # Linked because the shared `Intelligence/` files name it; the phone keeps the router at
+      # `.disabled` and never builds a provider. No Sparkle: Apple updates this app.
+      - package: ClaudeForFoundationModels
+        product: ClaudeForFoundationModels
+    info:
+      # Generated by XcodeGen from the keys below, and git-ignored for the Mac plist's reason.
+      path: ShepherdPhone/Support/Info.plist
+      properties:
+        CFBundleDisplayName: Shepherd
+        # Both follow the build settings below, so Scripts/testflight.sh can stamp a fresh build
+        # number with `CURRENT_PROJECT_VERSION=…` and the version is bumped in one place.
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
+        CFBundleIconName: AppIcon
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        # Landscape so a wide diff can be read sideways; never upside down.
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # Export compliance (ADR 0044). The only encryption this app *uses* is the system's:
+        # HTTPS through URLSession and the Keychain. The CryptoKit symbols in the binary are
+        # SHA-256 and HMAC — `SigV4Signer`, compiled in through `AppSettings`, and the App Attest
+        # request signing inside ClaudeForFoundationModels — which authenticate and check
+        # integrity rather than encrypt, and are exempt. No AES, no ChaChaPoly, no CommonCrypto
+        # cipher or key derivation: Scripts/testflight.sh checks the archived binary for exactly
+        # those symbols and refuses to upload if one appears, because this answer would change.
+        ITSAppUsesNonExemptEncryption: false
+        # Deliberately absent in v1 (ADR 0044): `UIBackgroundModes` and
+        # `BGTaskSchedulerPermittedIdentifiers` (no background refresh — the outbox drains in a
+        # `beginBackgroundTask` window instead) and `CFBundleURLTypes` (no `shepherd://` links).
+    settings:
+      base:
+        PRODUCT_NAME: Shepherd
+        PRODUCT_BUNDLE_IDENTIFIER: com.schnaq.shepherd.ios
+        # The phone's own version line, independent of the Mac's; bumped by hand.
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1"
+        # Not offered on Apple Silicon Macs (the real Mac app is right there) or on visionOS.
+        SUPPORTS_MACCATALYST: false
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: false
+        SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: false
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Apple distributes this one, so it is signed by the team with an App Store profile that
+        # Xcode manages — unlike the Mac app's ad-hoc development signature.
+        DEVELOPMENT_TEAM: L99L6DPKC7
+        CODE_SIGN_STYLE: Automatic
+        GENERATE_INFOPLIST_FILE: false
+        SWIFT_VERSION: "6.0"
+        SWIFT_STRICT_CONCURRENCY: complete
+
   ShepherdTests:
     type: bundle.unit-test
     platform: macOS
@@ -272,3 +431,13 @@ schemes:
         ShepherdCLI: all
     run:
       config: Debug
+
+  # The iPhone app (ADR 0044), with an archive action for Scripts/testflight.sh.
+  ShepherdPhone:
+    build:
+      targets:
+        ShepherdPhone: all
+    run:
+      config: Debug
+    archive:
+      config: Release

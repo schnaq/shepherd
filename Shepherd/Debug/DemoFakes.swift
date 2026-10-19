@@ -46,11 +46,16 @@ struct DemoTransport: HTTPTransport {
     }
 }
 
+#if os(macOS)
 /// The demo mode's Spotlight index: accepts everything and writes nothing.
 ///
 /// Core Spotlight is keyed by bundle id, so the real index would be the installed app's: the demo
 /// would put fake pull requests into the developer's Spotlight, and switching the export off would
 /// delete the real app's items along with them.
+///
+/// Mac-only because ``SpotlightIndexing`` lives with the App Intents (`Shepherd/Intents`), which
+/// the iPhone target does not compile; the phone's demo mode shares the two fakes above and has
+/// no Spotlight export to stand in for (ADR 0044).
 struct DemoSpotlightIndex: SpotlightIndexing {
     func index(_ items: [SpotlightItemFields]) async -> Bool { true }
 
@@ -58,4 +63,5 @@ struct DemoSpotlightIndex: SpotlightIndexing {
 
     func deleteDomain() async -> Bool { true }
 }
+#endif
 #endif
