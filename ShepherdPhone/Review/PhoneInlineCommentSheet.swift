@@ -4,16 +4,19 @@ import SwiftUI
 /// The sheet that writes an inline comment on the line or lines picked in ``PhoneDiffView``
 /// (ADR 0044).
 ///
-/// Presented from ``ReviewModel/composerRequest``, which only ``ReviewModel/handle(_:)`` sets — so
-/// it opens for exactly the anchors the Mac's composer opens for — and saved through the model's
+/// Presented from ``ReviewModel/composerRequest`` by the pull request screen, the one presenter for
+/// every screen of the pull request. Only ``ReviewModel/handle(_:)`` sets the request — so it
+/// opens for exactly the anchors the Mac's composer opens for — and it is saved through the model's
 /// own ``ReviewModel/saveDraftComment(_:body:)``, with its anchor check, into the pending review.
 /// The behaviour is the Mac `InlineCommentComposer`'s, in GitHub's words: *Start a review* or
 /// *Add review comment* keeps the comment for the review, *Comment* posts it on its own at once,
 /// and an existing pending comment opens for editing with *Delete* beside it. The Mac's AI draft,
 /// saved replies and session hand-off are not on the phone in v1.
 ///
-/// At its small detent the diff stays live behind it, so the lines being commented on stay in
-/// view while the comment is written.
+/// Typed text is never lost by accident: a swipe down does not close the sheet while it holds
+/// unsaved text, and Cancel asks first. The diff behind is not interactive — a long press there
+/// would replace the request and reopen the sheet empty, and Back would take the sheet with it;
+/// the commented lines are quoted at the top instead.
 struct PhoneInlineCommentSheet: View {
     /// The review model.
     let model: ReviewModel
@@ -25,6 +28,7 @@ struct PhoneInlineCommentSheet: View {
     @State private var text = ""
     @State private var errorMessage: String?
     @State private var saved = 0
+    @State private var isConfirmingDiscard = false
     @FocusState private var isEditorFocused: Bool
 
     @ScaledMetric(relativeTo: .footnote) private var codeSize: CGFloat = 12
@@ -91,9 +95,16 @@ struct PhoneInlineCommentSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(role: .cancel) {
-                        dismiss()
+                        if hasUnsavedText { isConfirmingDiscard = true } else { dismiss() }
                     } label: {
                         Label(String(localized: "Cancel"), systemImage: "xmark")
+                    }
+                    .confirmationDialog(
+                        String(localized: "Discard this comment?"),
+                        isPresented: $isConfirmingDiscard,
+                        titleVisibility: .visible
+                    ) {
+                        Button(String(localized: "Discard"), role: .destructive) { dismiss() }
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -107,7 +118,7 @@ struct PhoneInlineCommentSheet: View {
             }
         }
         .presentationDetents([.fraction(0.5), .large])
-        .presentationBackgroundInteraction(.enabled(upThrough: .fraction(0.5)))
+        .interactiveDismissDisabled(hasUnsavedText)
         .sensoryFeedback(.success, trigger: saved)
         .onAppear {
             text = existingComment?.body ?? ""
@@ -190,6 +201,12 @@ struct PhoneInlineCommentSheet: View {
     }
 
     private var isBlank: Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    /// Whether closing would lose writing: text in a new comment, or a change to a pending one.
+    private var hasUnsavedText: Bool {
+        text.trimmingCharacters(in: .whitespacesAndNewlines)
+            != (existingComment?.body ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     /// Marked on the activity tracker like the Mac's, so a double tap cannot write it twice.
     private var isSaving: Bool { environment.activity.isRunning(model.prID, .reply) }

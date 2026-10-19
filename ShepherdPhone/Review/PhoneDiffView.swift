@@ -13,7 +13,9 @@ import SwiftUI
 ///   on top of it, because `validateAnchor` checks only the two ends and a touch list can pick
 ///   two rows anywhere.
 /// - **What a comment means** is one call: ``ReviewModel/handle(_:)`` with `.addComment`, the
-///   event Monaco's gutter sends and the Mac list's `c` sends.
+///   event Monaco's gutter sends and the Mac list's `c` sends. The composer it opens is not
+///   presented here: the pull request screen presents ``ReviewModel/composerRequest`` for every
+///   screen of the pull request, so one presenter owns the sheet however deep the stack is.
 /// - **Which round shows** is the model's ``ReviewModel/roundView``; this view never picks one.
 ///
 /// Syntax colour and the word diff are outside the contract, as ADR 0034 allows. They are
@@ -54,8 +56,9 @@ struct PhoneDiffView: View {
     @State private var highlights: [String: HighlightedDiff] = [:]
     /// The picked rows: where the pick started and where it ends now. Both are row indices.
     @State private var pick: Pick?
-    /// Threads the reader opened or closed against their default (resolved and outdated start
-    /// closed, the rest open).
+    /// Threads the reader opened or closed against their default (resolved start closed, the rest
+    /// open). Outdated threads never reach the diff: ``ReviewModel/threadsForSelectedFile`` keeps
+    /// only those anchored in it.
     @State private var flippedThreads: Set<String> = []
     /// Whether the initial path has been handed to the model.
     @State private var hasSelectedInitialPath = false
@@ -89,9 +92,6 @@ struct PhoneDiffView: View {
                 if model.selectedPath != path { model.selectedPath = path }
             }
             .onChange(of: model.selectedPath) { _, _ in pick = nil }
-            .sheet(item: composerBinding) { request in
-                PhoneInlineCommentSheet(model: model, request: request)
-            }
             .sensoryFeedback(.selection, trigger: pick)
             .sensoryFeedback(.warning, trigger: refusals)
     }
@@ -160,6 +160,9 @@ struct PhoneDiffView: View {
                 }
             }
             .animation(.snappy, value: picked)
+            // A refresh that changes the rows (a new push) would leave the pick's indices on other
+            // lines; the Mac clamps its cursor for the same reason (`clampDiffRowSelection`).
+            .onChange(of: content.rows) { pick = nil }
             .task(id: content.path) {
                 guard !hasRevealed, content.path == path, let revealing else { return }
                 hasRevealed = true
@@ -191,10 +194,7 @@ struct PhoneDiffView: View {
                 .accessibilityLabel(Text(content.rows[index].spokenSentence(takesComment: false)))
                 .accessibilityAddTraits(.isHeader)
         case .line(let patchRow):
-            let identity = DiffListContent.lineIdentity(of: patchRow)
-            let key = LineNotes.Key(side: identity.side, line: identity.line)
-            let threads = notes.threads[key] ?? []
-            let drafts = notes.drafts[key] ?? []
+            let (threads, drafts) = notes.on(patchRow)
             VStack(alignment: .leading, spacing: 0) {
                 lineRow(
                     patchRow,
@@ -326,7 +326,7 @@ struct PhoneDiffView: View {
     // MARK: - Threads and drafts
 
     private func threadCard(_ thread: ReviewThread) -> some View {
-        let startsClosed = thread.isResolved || thread.isOutdated
+        let startsClosed = thread.isResolved
         let isExpanded = flippedThreads.contains(thread.id) ? startsClosed : !startsClosed
         return VStack(alignment: .leading, spacing: 10) {
             Button {
@@ -352,8 +352,6 @@ struct PhoneDiffView: View {
                     Spacer(minLength: 4)
                     if thread.isResolved {
                         PhoneChip(text: String(localized: "Resolved"), color: Theme.success, size: chipSize)
-                    } else if thread.isOutdated {
-                        PhoneChip(text: String(localized: "Outdated"), color: Theme.pending, size: chipSize)
                     }
                     Image(systemName: "chevron.down")
                         .font(Theme.type(.caption, weight: .semibold))
@@ -453,6 +451,11 @@ struct PhoneDiffView: View {
                 pick?.end = index
                 return
             }
+            // A dimmed row: out of the pick's reach. Refused, as it looks, rather than quietly
+            // starting a new pick there; Cancel on the bar, a tap on the picked line, or the long
+            // press's "Select lines…" starts over.
+            refusals += 1
+            return
         }
         pick = Pick(anchor: index, end: index)
         model.selectDiffRow(index)
@@ -489,53 +492,54 @@ struct PhoneDiffView: View {
 
     /// The floating bar over the bottom of the diff while lines are picked — the one piece of
     /// glass laid over content, because it is a control over the content rather than content.
+    /// Its buttons are not glass themselves: ADR 0040, no glass on glass.
     private func pickBar(_ span: DiffLineRange.Span) -> some View {
-        GlassEffectContainer {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(Self.linesTitle(span))
-                        .font(Theme.type(.subheadline, weight: .semibold))
-                        .foregroundStyle(Theme.textStrong)
-                    Text(span.side == .left ? String(localized: "base") : String(localized: "head"))
-                        .font(Theme.type(.caption))
-                        .foregroundStyle(Theme.textSecondary)
-                }
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-                .layoutPriority(1)
-                .accessibilityElement(children: .combine)
-                Spacer(minLength: 8)
-                Button {
-                    pick = nil
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(Theme.type(.body, weight: .semibold))
-                }
-                .buttonStyle(.glass)
-                .buttonBorderShape(.circle)
-                .controlSize(.large)
-                .accessibilityLabel(Text(String(localized: "Cancel")))
-                Button {
-                    comment(on: span)
-                } label: {
-                    // The word while it fits, the glyph alone when large text leaves no room.
-                    ViewThatFits(in: .horizontal) {
-                        Label(String(localized: "Comment"), systemImage: "text.bubble")
-                            .lineLimit(1)
-                            .fixedSize()
-                        Image(systemName: "text.bubble")
-                    }
-                    .font(Theme.type(.body, weight: .semibold))
-                }
-                .accessibilityLabel(Text(String(localized: "Comment")))
-                .buttonStyle(.glassProminent)
-                .controlSize(.large)
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(Self.linesTitle(span))
+                    .font(Theme.type(.subheadline, weight: .semibold))
+                    .foregroundStyle(Theme.textStrong)
+                Text(span.side == .left ? String(localized: "base") : String(localized: "head"))
+                    .font(Theme.type(.caption))
+                    .foregroundStyle(Theme.textSecondary)
             }
-            .padding(.leading, 18)
-            .padding(.trailing, 8)
-            .padding(.vertical, 8)
-            .glassEffect(.regular, in: .capsule)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .layoutPriority(1)
+            .accessibilityElement(children: .combine)
+            Spacer(minLength: 8)
+            Button {
+                pick = nil
+            } label: {
+                Image(systemName: "xmark")
+                    .font(Theme.type(.body, weight: .semibold))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .tint(Theme.textSecondary)
+            .accessibilityLabel(Text(String(localized: "Cancel")))
+            Button {
+                comment(on: span)
+            } label: {
+                // The word while it fits, the glyph alone when large text leaves no room.
+                ViewThatFits(in: .horizontal) {
+                    Label(String(localized: "Comment"), systemImage: "text.bubble")
+                        .lineLimit(1)
+                        .fixedSize()
+                    Image(systemName: "text.bubble")
+                }
+                .font(Theme.type(.body, weight: .semibold))
+            }
+            .accessibilityLabel(Text(String(localized: "Comment")))
+            .buttonStyle(.borderedProminent)
+            .buttonBorderShape(.capsule)
+            .controlSize(.large)
         }
+        .padding(.leading, 18)
+        .padding(.trailing, 8)
+        .padding(.vertical, 8)
+        .glassEffect(.regular, in: .capsule)
         .dynamicTypeSize(...DynamicTypeSize.accessibility2)
     }
 
@@ -615,6 +619,8 @@ struct PhoneDiffView: View {
                 } label: {
                     Text(String(localized: "Text size"))
                 }
+                // Stepping through sizes is several taps; the menu stays open for them.
+                .menuActionDismissBehavior(.disabled)
                 Divider()
                 if let selected = model.selectedPath {
                     Button {
@@ -685,10 +691,6 @@ struct PhoneDiffView: View {
     /// The files in the list's order — the order next and previous walk.
     private var filePaths: [String] {
         model.buckets.flatMap { $0.files.map(\.file.path) }
-    }
-
-    private var composerBinding: Binding<ReviewModel.ComposerRequest?> {
-        Binding(get: { model.composerRequest }, set: { model.composerRequest = $0 })
     }
 
     /// The pull request's Files tab on github.com. Not the file itself: GitHub's per-file anchor
@@ -798,6 +800,9 @@ private struct LineNotes {
 
     var threads: [Key: [ReviewThread]] = [:]
     var drafts: [Key: [DraftComment]] = [:]
+    /// Whether a context row also carries what hangs on its base side. Not in "Since your
+    /// review", whose base side is the reviewed head and takes no notes.
+    private var includesBaseSide = true
 
     @MainActor
     init(model: ReviewModel, content: DiffListContent) {
@@ -805,6 +810,7 @@ private struct LineNotes {
         // lines of this document; a thread anywhere else would sit on padding. The Mac's
         // `bridgeThreads` draws the same line.
         let visible = model.roundView == .sinceReview ? model.selectedReconstruction?.commentableModifiedLines : nil
+        includesBaseSide = visible == nil
         for thread in model.threadsForSelectedFile {
             guard let line = thread.line, line >= 1 else { continue }
             if let visible, thread.side == .left || !visible.contains(line) { continue }
@@ -813,5 +819,23 @@ private struct LineNotes {
         for draft in model.draft?.comments ?? [] where draft.path == content.path && draft.line >= 1 {
             drafts[Key(side: draft.side, line: draft.line), default: []].append(draft)
         }
+    }
+
+    /// What hangs on a row: the notes on the side and line the row *is*
+    /// (`DiffListContent.lineIdentity(of:)`), and for a context row also those on its base-side
+    /// number. A comment left on the left pane of GitHub's split view, or on the original side
+    /// of the Mac's Monaco, is anchored there; Monaco shows it on the Mac, and on the phone this
+    /// list is the only renderer, so without the second lookup the thread would be counted on
+    /// the file's row and drawn nowhere.
+    func on(_ row: PatchRow) -> (threads: [ReviewThread], drafts: [DraftComment]) {
+        let numbers = DiffListContent.lineNumbers(of: row)
+        let own = Key(side: numbers.identity.side, line: numbers.identity.line)
+        var found = (threads: threads[own] ?? [], drafts: drafts[own] ?? [])
+        if includesBaseSide, case .both(let base, _) = numbers {
+            let left = Key(side: .left, line: base)
+            found.threads += threads[left] ?? []
+            found.drafts += drafts[left] ?? []
+        }
+        return found
     }
 }

@@ -11,15 +11,18 @@ import SwiftUI
 /// list, one row per file with its name over its folder, chips that wrap rather than truncate,
 /// and Viewed on a swipe and on the leading check.
 ///
-/// Tapping a file pushes ``PhoneDiffView`` through a destination this screen registers itself, so
-/// the screen works wherever it is placed in a navigation stack. A push that starts somewhere
-/// else — the conversation's "Show in diff" — pushes ``PhoneDiffView`` with its own destination.
+/// Tapping a file pushes ``PhoneDiffView`` through a destination this screen registers itself.
+/// The screen is itself the pull request screen's pushed destination (`PhoneFilesDestination`),
+/// not a value on the router's path: that path is `[PhoneRoute]` and cannot carry a file, and the
+/// diff has to share this pull request's ``ReviewModel``. A push that starts somewhere else — the
+/// conversation's "Show in diff" — pushes `PhoneDiffView(model:path:revealing:)` itself.
 struct PhoneFilesScreen: View {
     /// The review model of the pull request on screen.
     let model: ReviewModel
 
     @Environment(PhoneEnvironment.self) private var environment
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.dismiss) private var dismiss
     /// The file whose diff is pushed.
     @State private var openedPath: String?
     /// The line to scroll the pushed diff to: a finding's, or `nil` for a file opened from its row.
@@ -113,7 +116,8 @@ struct PhoneFilesScreen: View {
 
     private func bucketHeader(_ bucket: PriorityBucket, count: Int) -> some View {
         // The bucket is named as well as tinted (ADR 0033): colour is never the only carrier.
-        let title = Text(verbatim: "\(bucket.localizedTitle.uppercased()) · \(count)")
+        // No-break spaces, so the count never wraps onto a line of its own.
+        let title = Text(verbatim: "\(bucket.localizedTitle.uppercased())\u{00A0}·\u{00A0}\(count)")
             .font(Theme.type(.footnote, weight: .semibold))
             .kerning(0.5)
             .foregroundStyle(bucket == .generated ? Theme.textMuted : bucket.tint)
@@ -152,9 +156,13 @@ struct PhoneFilesScreen: View {
                     model.jump(to: finding)
                     // `jump` selects the file and the line when the anchor still exists, and
                     // sends a lost anchor to the conversation instead — only the first is a diff.
+                    // The conversation is the pull request screen under this one, which shows
+                    // the thread `jump` opened (`activeThreadID`), so going back is the jump.
                     if model.tab == .files, let path = finding.path, model.selectedPath == path {
                         openedLine = finding.line
                         openedPath = path
+                    } else if model.tab == .conversation {
+                        dismiss()
                     }
                 } label: {
                     HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -439,13 +447,14 @@ struct PhoneChip: View {
                     .imageScale(.small)
             }
             Text(verbatim: text)
-                .lineLimit(1)
         }
         .font(.system(size: size, weight: .medium))
         .foregroundStyle(color)
         .padding(.horizontal, 7)
         .padding(.vertical, 2)
-        .background(Theme.chipBackground(color), in: Capsule(style: .continuous))
+        // A capsule while the chip is one line; a rounded rectangle, not a tall stadium, when a
+        // long reason wraps at the accessibility sizes (``PhoneChipFlow`` proposes the row's width).
+        .background(Theme.chipBackground(color), in: RoundedRectangle(cornerRadius: size * 0.75, style: .continuous))
     }
 }
 
@@ -466,7 +475,7 @@ struct PhoneChipFlow: Layout {
         for row in arrange(subviews, width: bounds.width) {
             var x = bounds.minX
             for index in row.indices {
-                let size = subviews[index].sizeThatFits(.unspecified)
+                let size = subviews[index].sizeThatFits(Self.proposal(width: bounds.width))
                 subviews[index].place(
                     at: CGPoint(x: x, y: bounds.minY + row.y),
                     proposal: ProposedViewSize(width: min(size.width, bounds.width), height: size.height)
@@ -474,6 +483,12 @@ struct PhoneChipFlow: Layout {
                 x += min(size.width, bounds.width) + spacing
             }
         }
+    }
+
+    /// At most the row's width, so a chip longer than the row wraps its text onto a second line
+    /// instead of being cut to fit.
+    private static func proposal(width: CGFloat) -> ProposedViewSize {
+        ProposedViewSize(width: width.isFinite ? width : nil, height: nil)
     }
 
     private struct Row {
@@ -487,7 +502,7 @@ struct PhoneChipFlow: Layout {
         var rows: [Row] = []
         var current = Row()
         for index in subviews.indices {
-            let size = subviews[index].sizeThatFits(.unspecified)
+            let size = subviews[index].sizeThatFits(Self.proposal(width: width))
             let chipWidth = min(size.width, width)
             if !current.indices.isEmpty, current.width + spacing + chipWidth > width {
                 let y = current.y + current.height + spacing
