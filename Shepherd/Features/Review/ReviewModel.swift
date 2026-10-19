@@ -1924,15 +1924,7 @@ final class ReviewModel {
     func delete(_ post: PostEditing, actions: PullRequestActions) {
         guard let summary, post.canDelete else { return }
         endEditing(post.postID)
-        revise {
-            $0.deletedPosts.insert(post.postID)
-            // The delete's write takes a waiting edit of this comment out of the outbox, and that
-            // edit's own drain then reads its row as sent — so its text would outlive a refused
-            // delete, as text that never went out. An edit the drain already holds either lands, and
-            // its re-read brings its text back the way it brings any sent write, or gives way to the
-            // delete.
-            $0.editedBodies[post.postID] = nil
-        }
+        revise { $0.delete(post.postID) }
         chainPostWrite(
             { await actions.delete(on: summary, target: post.target) },
             undo: { [weak self] in self?.revise { $0.drop(deletionOf: post.postID) } }

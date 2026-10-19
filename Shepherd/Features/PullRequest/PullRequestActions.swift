@@ -483,7 +483,7 @@ struct PullRequestActions {
         on summary: PullRequestSummary,
         in database: DatabaseManager
     ) async throws -> OutboxItem {
-        let items = try await database.allOutboxItems()
+        let items = try await database.outboxItems(prID: summary.id)
         for edit in pendingEdits(of: target, prID: summary.id, in: items) {
             try await database.cancelPendingOutboxItem(id: edit.id)
         }

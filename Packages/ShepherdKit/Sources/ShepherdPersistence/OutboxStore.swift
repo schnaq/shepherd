@@ -226,8 +226,8 @@ extension DatabaseManager {
     /// Every row queued against one pull request, in any state, oldest first — the claim's order,
     /// so "older" and "newer" mean here what they mean to the drain.
     ///
-    /// What the drain reads before it sends an edit or a delete of a post, to find the other rows
-    /// about the same post (ADR 0043, C). A row whose payload no longer decodes is skipped, as in
+    /// What the drain reads before it sends an edit or a delete of a post, and the app before it
+    /// queues one, to find the other rows about the same post (ADR 0043, C). A row whose payload no longer decodes is skipped, as in
     /// the other list reads.
     /// - Parameter prID: The pull request's node id.
     /// - Returns: Its rows.

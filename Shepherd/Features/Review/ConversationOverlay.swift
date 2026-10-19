@@ -158,6 +158,18 @@ struct ConversationOverlay: Equatable {
         if editedBodies[postID] == body { editedBodies[postID] = nil }
     }
 
+    /// Hides a comment its delete is queued for, and forgets any edit of it.
+    ///
+    /// The delete's write takes a waiting edit of this comment out of the outbox, and that edit's
+    /// own drain then reads its row as sent — so its text would outlive a refused delete, as text
+    /// that never went out. An edit the drain already holds either lands, and its re-read brings its
+    /// text back the way it brings any sent write, or gives way to the delete.
+    /// - Parameter postID: The comment's node id.
+    mutating func delete(_ postID: String) {
+        deletedPosts.insert(postID)
+        editedBodies[postID] = nil
+    }
+
     /// Drops a delete, so the comment is drawn again.
     /// - Parameter postID: The comment's node id.
     mutating func drop(deletionOf postID: String) {
