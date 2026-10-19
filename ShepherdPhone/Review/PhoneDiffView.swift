@@ -261,7 +261,7 @@ struct PhoneDiffView: View {
             // so the two sides still tell apart.
             Group {
                 if digits <= 3 {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 4) {
                         gutterNumber(numbers.base, digits: digits, color: row.kind == .removed ? tint : nil)
                         gutterNumber(numbers.head, digits: digits, color: row.kind == .added ? tint : nil)
                     }

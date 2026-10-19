@@ -105,21 +105,22 @@ struct PhoneSettingsView: View {
             Section {
                 ForEach(failedRows) { item in
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
-                        Label {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(verbatim: "\(item.repo.fullName)#\(item.number) · \(Self.actionName(item.action))")
-                                    .font(Theme.type(.body, weight: .medium))
-                                    .foregroundStyle(Theme.textStrong)
-                                Text(item.localizedLastError ?? String(localized: "No reason was recorded."))
-                                    .font(Theme.type(.footnote))
-                                    .foregroundStyle(Theme.textSecondary)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        } icon: {
-                            Image(systemName: "exclamationmark.icloud")
-                                .font(Theme.type(.body))
-                                .foregroundStyle(Theme.failure)
+                        // The glyph on the title's line rather than centred on the row, as a
+                        // `Label` would put it beside two lines of text.
+                        Image(systemName: "exclamationmark.icloud")
+                            .font(Theme.type(.body))
+                            .foregroundStyle(Theme.failure)
+                            .accessibilityHidden(true)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(verbatim: "\(item.repo.fullName)#\(item.number) · \(Self.actionName(item.action))")
+                                .font(Theme.type(.body, weight: .medium))
+                                .foregroundStyle(Theme.textStrong)
+                            Text(item.localizedLastError ?? String(localized: "No reason was recorded."))
+                                .font(Theme.type(.footnote))
+                                .foregroundStyle(Theme.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         // Visible, so the two ways out are not only on a swipe or a long press.
                         Menu {
                             failedRowActions(item, session: session)

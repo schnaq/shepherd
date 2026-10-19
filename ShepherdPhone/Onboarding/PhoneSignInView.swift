@@ -50,14 +50,15 @@ struct PhoneSignInView: View {
                 .animation(.snappy, value: model.grant?.userCode)
             }
             .scrollDismissesKeyboard(.interactively)
-            // The field and its button above the keyboard once it is up: left alone, the keyboard
-            // covered "Sign in with token" and half the field. Delayed a beat, because the keyboard's
-            // inset is not there yet when the focus changes.
+            // The field and its button above the keyboard once it is up, with a little air under
+            // the button: left alone, the keyboard covered "Sign in with token" and half the
+            // field. Delayed a beat, because the keyboard's inset is not there yet when the focus
+            // changes.
             .onChange(of: isTokenFieldFocused) { _, focused in
                 guard focused else { return }
                 Task {
                     try? await Task.sleep(for: .milliseconds(350))
-                    withAnimation(.snappy) { proxy.scrollTo(Self.tokenButtonID, anchor: .bottom) }
+                    withAnimation(.snappy) { proxy.scrollTo(Self.tokenButtonID, anchor: UnitPoint(x: 0.5, y: 0.95)) }
                 }
             }
         }
@@ -251,7 +252,6 @@ struct PhoneSignInView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 SecureField(String(localized: "github_pat_…"), text: $model.patText)
                     .font(Theme.mono(.body))
-                    .foregroundStyle(Theme.text)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .textContentType(.password)
@@ -286,14 +286,42 @@ struct PhoneSignInView: View {
                 .foregroundStyle(Theme.textSecondary)
         }
         .tint(Theme.textSecondary)
-        // The chevron takes the foreground style, not the tint: without this it was near-black
-        // beside a grey label.
-        .foregroundStyle(Theme.textSecondary)
+        .disclosureGroupStyle(TokenDisclosureStyle())
         .padding(.horizontal, 4)
     }
 
     /// The token's submit button, scrolled to when the field is focused.
     private static let tokenButtonID = "tokenSubmit"
+
+    /// The system disclosure row with its chevron in the label's grey: the system draws the
+    /// chevron near-black whatever the tint or foreground style, beside a grey label.
+    private struct TokenDisclosureStyle: DisclosureGroupStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            VStack(alignment: .leading, spacing: 0) {
+                Button {
+                    withAnimation(.snappy) { configuration.isExpanded.toggle() }
+                } label: {
+                    HStack(spacing: 8) {
+                        configuration.label
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.down")
+                            .font(Theme.type(.footnote, weight: .semibold))
+                            .foregroundStyle(Theme.textSecondary)
+                            .rotationEffect(.degrees(configuration.isExpanded ? 0 : -90))
+                            .accessibilityHidden(true)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityValue(Text(configuration.isExpanded
+                    ? String(localized: "Expanded")
+                    : String(localized: "Collapsed")))
+                if configuration.isExpanded {
+                    configuration.content
+                }
+            }
+        }
+    }
 
     // MARK: - Errors
 

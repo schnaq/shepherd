@@ -82,6 +82,8 @@ struct PhoneMergeSheet: View {
             .scrollContentBackground(.hidden)
             // The form's own top inset left a blank band under the bar at the medium detent.
             .contentMargins(.top, 8, for: .scrollContent)
+            // Sections a step apart rather than a band of blank space, so more fits the medium detent.
+            .listSectionSpacing(.compact)
             .background(Theme.background)
             .navigationTitle(String(localized: "Merge"))
             // The number alone: the pull request screen under the sheet names the repository.
