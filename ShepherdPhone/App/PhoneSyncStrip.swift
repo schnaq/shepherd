@@ -86,6 +86,8 @@ private struct PhoneSyncStripRow: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// Whether this row's action is in flight.
     @State private var isRunning = false
+    /// One column for every row's glyph, so the texts of a cloud row and a triangle row line up.
+    @ScaledMetric(relativeTo: .subheadline) private var iconWidth: CGFloat = 22
     let systemImage: String
     let title: String
     let detail: String
@@ -107,6 +109,7 @@ private struct PhoneSyncStripRow: View {
                     Image(systemName: systemImage)
                         .font(Theme.type(.subheadline))
                         .foregroundStyle(tint)
+                        .frame(width: iconWidth)
                         .accessibilityHidden(true)
                 }
                 VStack(alignment: .leading, spacing: 2) {
