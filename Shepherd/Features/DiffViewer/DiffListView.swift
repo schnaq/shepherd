@@ -4,10 +4,12 @@ import SwiftUI
 /// The native diff: one row per line, walkable with the keyboard and announced one row at a time.
 ///
 /// The second renderer beside Monaco (`docs/plans/accessible-diff.md`), not a replacement for it
-/// and not a reimplementation of it. Syntax highlighting, word-level intra-line diffs, the
-/// side-by-side layout, folding and the minimap are Monaco's and stay Monaco's; this earns its
-/// place by being a linear, announced list of lines, which is the thing a `WKWebView` full of
-/// canvas is worst at.
+/// and not a reimplementation of it. The side-by-side layout, folding and the minimap are
+/// Monaco's and stay Monaco's; this earns its place by being a linear, announced list of lines,
+/// which is the thing a `WKWebView` full of canvas is worst at. Syntax colour and the word-level
+/// diff are drawn here too, from the same ShepherdCore code the iPhone's diff reads
+/// (``HighlightedDiff``, ADR 0044) — both sit outside ADR 0034's contract, so neither changes
+/// which lines take a comment.
 ///
 /// The construction is the inbox list's, deliberately: `ScrollViewReader` + `LazyVStack`, the
 /// selection as a model property rather than a `List(selection:)` binding, `.focusable()` and
@@ -35,6 +37,10 @@ struct DiffListView: View {
     var onExit: () -> Void
 
     @FocusState private var isFocused: Bool
+    /// The file's coloured lines, once the background pass has built them; drawn only onto the
+    /// rows they were built from (``HighlightedDiff/lines(for:)``), so a file or round switch
+    /// shows plain text for a frame rather than the previous file's colours.
+    @State private var highlighted: HighlightedDiff?
 
     /// A line on one side of the diff: what a thread or a draft comment hangs on.
     private struct LineKey: Hashable {
@@ -47,11 +53,12 @@ struct DiffListView: View {
         // file's threads and the reviewer's draft, and a diff has far more rows than either.
         let threads = threadCounts
         let drafts = draftCounts
+        let lines = highlighted?.lines(for: content.rows)
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(content.rows.indices, id: \.self) { index in
-                        row(at: index, threads: threads, drafts: drafts)
+                        row(at: index, threads: threads, drafts: drafts, line: lines?[index])
                             .id(index)
                     }
                 }
@@ -64,6 +71,15 @@ struct DiffListView: View {
             }
         }
         .background(Theme.background)
+        // Once per file and round, off the main thread: the tokenizer is a single pass over the
+        // whole file, because it carries state from line to line.
+        .task(id: content) {
+            guard highlighted?.lines(for: content.rows) == nil else { return }
+            guard let built = await HighlightedDiff.build(rows: content.rows, path: content.path),
+                !Task.isCancelled
+            else { return }
+            highlighted = built
+        }
         .focusable()
         .focusEffectDisabled()
         .focused($isFocused)
@@ -87,7 +103,12 @@ struct DiffListView: View {
     // MARK: - Rows
 
     @ViewBuilder
-    private func row(at index: Int, threads: [LineKey: Int], drafts: [LineKey: Int]) -> some View {
+    private func row(
+        at index: Int,
+        threads: [LineKey: Int],
+        drafts: [LineKey: Int],
+        line: AttributedString?
+    ) -> some View {
         let value = content.rows[index]
         let isSelected = model.selectedDiffRow == index
         let counts = commentCounts(for: value, threads: threads, drafts: drafts)
@@ -108,6 +129,7 @@ struct DiffListView: View {
             case .line(let patchRow):
                 lineRow(
                     patchRow,
+                    line: line,
                     isSelected: isSelected,
                     commentCount: counts.threads + counts.drafts,
                     opensThreadAt: opensThreadAt
@@ -196,6 +218,7 @@ struct DiffListView: View {
 
     private func lineRow(
         _ row: PatchRow,
+        line: AttributedString?,
         isSelected: Bool,
         commentCount: Int,
         opensThreadAt threadRow: Int?
@@ -217,7 +240,7 @@ struct DiffListView: View {
                 .font(Theme.mono(CGFloat(fontSize), weight: .semibold))
                 .foregroundStyle(markerTint(for: row.kind) ?? Theme.textMuted)
                 .frame(width: 14, alignment: .center)
-            code(row.text)
+            code(row.text, attributed: line)
             commentIndicator(commentCount, opensThreadAt: threadRow)
         }
         .padding(.vertical, 1)
@@ -233,11 +256,20 @@ struct DiffListView: View {
             .padding(.trailing, 6)
     }
 
+    /// - Parameters:
+    ///   - text: The line's text, drawn plain until its colours have been built.
+    ///   - attributed: The coloured line, when it has been.
     @ViewBuilder
-    private func code(_ text: String) -> some View {
-        let line = Text(verbatim: text)
-            .font(Theme.mono(CGFloat(fontSize)))
-            .foregroundStyle(Theme.text)
+    private func code(_ text: String, attributed: AttributedString?) -> some View {
+        let line = Group {
+            if let attributed {
+                Text(attributed)
+            } else {
+                Text(verbatim: text)
+            }
+        }
+        .font(Theme.mono(CGFloat(fontSize)))
+        .foregroundStyle(Theme.text)
         if wraps {
             line
                 .fixedSize(horizontal: false, vertical: true)
