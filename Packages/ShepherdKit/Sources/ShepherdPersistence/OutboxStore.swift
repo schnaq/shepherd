@@ -338,9 +338,8 @@ extension DatabaseManager {
     /// Down to zero for a row only ever attempted once, which cannot have landed unseen; down to
     /// one for a row attempted more than once, so the next claim makes it two and the replay check
     /// (`SyncEngine.previousAttemptLanded`) still asks GitHub first. A row the check gave up on
-    /// after ``ShepherdSync`` could not decide is exactly a row whose earlier attempt may have
-    /// landed, and zeroing it would send it blind — the duplicate the check exists to prevent
-    /// (ADR 0044).
+    /// because it could not decide is exactly a row whose earlier attempt may have landed, and
+    /// zeroing it would send it blind — the duplicate the check exists to prevent (ADR 0044).
     ///
     /// The `state = 'failed'` guard is what makes it safe to call from a screen: a row a drain is
     /// currently sending cannot be yanked back into ``ShepherdCore/OutboxState/pending`` underneath
