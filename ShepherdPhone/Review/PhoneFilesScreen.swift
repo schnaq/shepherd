@@ -22,6 +22,11 @@ struct PhoneFilesScreen: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// The file whose diff is pushed.
     @State private var openedPath: String?
+    /// The line to scroll the pushed diff to: a finding's, or `nil` for a file opened from its row.
+    @State private var openedLine: Int?
+    /// Bumped by every Viewed toggle on this screen, for the haptic — a tap rather than the
+    /// viewed set, which also changes when it loads and when the diff above toggles it.
+    @State private var viewedToggles = 0
     /// Whether the Generated bucket is open. It starts closed: lockfiles and snapshots are the
     /// part of a pull request nobody reads line by line.
     @State private var showsGenerated = false
@@ -39,9 +44,9 @@ struct PhoneFilesScreen: View {
         }
         .background(Theme.background)
         .navigationDestination(item: $openedPath) { path in
-            PhoneDiffView(model: model, path: path)
+            PhoneDiffView(model: model, path: path, revealing: openedLine)
         }
-        .sensoryFeedback(.selection, trigger: model.viewedPaths)
+        .sensoryFeedback(.selection, trigger: viewedToggles)
     }
 
     // MARK: - List
@@ -148,6 +153,7 @@ struct PhoneFilesScreen: View {
                     // `jump` selects the file and the line when the anchor still exists, and
                     // sends a lost anchor to the conversation instead — only the first is a diff.
                     if model.tab == .files, let path = finding.path, model.selectedPath == path {
+                        openedLine = finding.line
                         openedPath = path
                     }
                 } label: {
@@ -196,6 +202,7 @@ struct PhoneFilesScreen: View {
         let comments = commentCount(for: file.path)
         return Button {
             model.selectedPath = file.path
+            openedLine = nil
             openedPath = file.path
         } label: {
             HStack(alignment: .top, spacing: 12) {
@@ -353,6 +360,7 @@ struct PhoneFilesScreen: View {
 
     private func toggleViewed(_ path: String) {
         let actions = environment.actions(for: model.session)
+        viewedToggles += 1
         Task { await model.toggleViewed(path: path, actions: actions) }
     }
 

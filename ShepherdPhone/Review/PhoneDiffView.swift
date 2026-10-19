@@ -32,6 +32,10 @@ struct PhoneDiffView: View {
     /// The file to open with. Next and previous move the model's selection, and the screen
     /// follows the model from then on.
     let path: String
+    /// A head-side line to scroll to when the screen opens — a finding's line. Not
+    /// ``ReviewModel/revealLine``: that value is never cleared, so reading it on open would
+    /// replay an old jump onto every file opened after it.
+    var revealing: Int? = nil
 
     @Environment(PhoneEnvironment.self) private var environment
 
@@ -55,6 +59,11 @@ struct PhoneDiffView: View {
     @State private var flippedThreads: Set<String> = []
     /// Whether the initial path has been handed to the model.
     @State private var hasSelectedInitialPath = false
+    /// Whether ``revealing`` has been scrolled to.
+    @State private var hasRevealed = false
+    /// Bumped by the bottom bar's Viewed button, for its haptic — a tap, not a state: the
+    /// viewed state also changes when the file does.
+    @State private var viewedTaps = 0
     /// Bumped when a tap is refused, for the warning haptic.
     @State private var refusals = 0
     /// The width of the scroll view, so an unwrapped row still fills the screen.
@@ -151,8 +160,16 @@ struct PhoneDiffView: View {
                 }
             }
             .animation(.snappy, value: picked)
-            .task(id: content.path) { reveal(in: content, proxy: proxy) }
-            .onChange(of: model.revealLine) { _, _ in reveal(in: content, proxy: proxy) }
+            .task(id: content.path) {
+                guard !hasRevealed, content.path == path, let revealing else { return }
+                hasRevealed = true
+                reveal(line: revealing, in: content, proxy: proxy)
+            }
+            // A jump made while the screen is up (the Mac's rule: act on a change, never on the
+            // value).
+            .onChange(of: model.revealLine) { _, line in
+                if let line { reveal(line: line, in: content, proxy: proxy) }
+            }
         }
     }
 
@@ -642,6 +659,7 @@ struct PhoneDiffView: View {
                 let isViewed = model.viewedPaths.contains(selected)
                 Button {
                     let actions = environment.actions(for: model.session)
+                    viewedTaps += 1
                     Task { await model.toggleViewed(path: selected, actions: actions) }
                 } label: {
                     // An HStack rather than a `Label`: a bottom bar draws a label as its icon
@@ -655,7 +673,7 @@ struct PhoneDiffView: View {
                 }
                 .tint(isViewed ? Theme.success : nil)
                 .disabled(environment.activity.isRunning(model.prID, .viewed))
-                .sensoryFeedback(.selection, trigger: isViewed)
+                .sensoryFeedback(.selection, trigger: viewedTaps)
             }
         }
     }
@@ -692,9 +710,8 @@ struct PhoneDiffView: View {
         highlights[path] = built
     }
 
-    /// Scrolls to the line ``ReviewModel/revealLine`` names, when it is in this file.
-    private func reveal(in content: DiffListContent, proxy: ScrollViewProxy) {
-        guard let line = model.revealLine else { return }
+    /// Scrolls to a head-side line, when it is in this file.
+    private func reveal(line: Int, in content: DiffListContent, proxy: ScrollViewProxy) {
         let index = content.rows.firstIndex {
             guard case .line(let row) = $0 else { return false }
             return DiffListContent.lineNumbers(of: row).head == line
