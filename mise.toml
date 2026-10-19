@@ -53,13 +53,16 @@ xcodebuild -project Shepherd.xcodeproj -scheme Shepherd -configuration Debug \
 description = "Build the iPhone app for the iOS Simulator (Debug, unsigned) — the same command CI runs"
 depends = ["gen"]
 # A generic destination needs no simulator device, so nothing is booted, created or left behind.
-# The encryption guard runs on the result for the reason the CI job gives (ADR 0044).
-run = """
+# The encryption guard runs on the result for the reason the CI job gives (ADR 0044). Two steps
+# rather than one script, so a failed build stops here instead of the guard passing on an older app.
+run = [
+  """
 xcodebuild -project Shepherd.xcodeproj -scheme ShepherdPhone -configuration Debug \
   -destination 'generic/platform=iOS Simulator' -derivedDataPath "$SHEPHERD_DD_IOS" \
   CODE_SIGNING_ALLOWED=NO build
-Scripts/check-phone-encryption.sh "$SHEPHERD_DD_IOS/Build/Products/Debug-iphonesimulator/Shepherd.app"
-"""
+""",
+  'Scripts/check-phone-encryption.sh "$SHEPHERD_DD_IOS/Build/Products/Debug-iphonesimulator/Shepherd.app"',
+]
 
 [tasks.catalog-reset]
 description = "Undo the string-catalog rewrite an Xcode build leaves behind"

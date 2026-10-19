@@ -388,7 +388,7 @@ only**: members of the App Store Connect team, with no Beta App Review.
 
 1. **An Apple account Xcode can sign with.** Either:
    - sign in to Xcode on the Mac that uploads (Xcode → Settings… → Accounts → +) with an Apple
-     account that is in team `L99L6DPKC7` with the *Admin* or *App Manager* role. Xcode then
+     account that is in team `L99L6DPKC7` with the *Admin* role. Xcode then
      registers the App ID, creates the App Store profile and signs with a cloud-managed
      distribution certificate on the first upload; nothing has to be made by hand. Or
    - create an App Store Connect API key with the **Admin** role (App Store Connect → Users and
