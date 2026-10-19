@@ -110,7 +110,7 @@ public actor SyncEngine {
     public nonisolated let events: AsyncStream<SyncEvent>
     private nonisolated let continuation: AsyncStream<SyncEvent>.Continuation
 
-    private let github: any PullRequestFetching
+    let github: any PullRequestFetching
     private let store: any SyncStoring
     /// Where a submitted review's baseline goes, when the app wired one up (ADR 0028).
     private let snapshots: (any ReviewSnapshotWriting)?
@@ -136,7 +136,7 @@ public actor SyncEngine {
     /// Whether a pull request, by node id, is part of a stack, which decides how the drain merges
     /// it (ADR 0042). See ``StackMembershipLookup``.
     private let isStacked: StackMembershipLookup
-    private let configuration: SyncConfiguration
+    let configuration: SyncConfiguration
     private let sleeper: any Sleeping
     private let now: @Sendable () -> Date
 
@@ -159,6 +159,9 @@ public actor SyncEngine {
     /// The same guard for the outbox drain, which has three callers that routinely overlap.
     private var isDraining = false
     private var drainRequested = false
+    /// Callers waiting for the running sweep or drain to finish (`awaitingInFlight: true`).
+    var sweepWaiters = RunWaiters()
+    var drainWaiters = RunWaiters()
 
     /// Whether the loops are running.
     public private(set) var isRunning = false
@@ -273,9 +276,13 @@ public actor SyncEngine {
     /// Runs one sweep and one outbox drain immediately, outside the loop schedule.
     ///
     /// Used by "Refresh now", by the app coming back to the foreground, and by tests.
-    public func syncNow() async throws {
-        try await performSweep()
-        await drainOutbox()
+    /// - Parameter awaitingInFlight: Whether a call that finds a sweep or drain already running
+    ///   waits for it to finish — with the sweep's outcome — instead of leaving it a request for
+    ///   another lap and returning at once. The iPhone's pull-to-refresh and background drain need
+    ///   that (ADR 0044); the Mac keeps `false`, so a click never blocks behind a slow drain.
+    public func syncNow(awaitingInFlight: Bool = false) async throws {
+        try await performSweep(awaitingInFlight: awaitingInFlight)
+        await drainOutbox(awaitingInFlight: awaitingInFlight)
     }
 
     /// Replaces the facets swept in addition to the configured ones.
@@ -431,17 +438,30 @@ public actor SyncEngine {
     /// once: twice the search calls, twice the detail fetches, and two concurrent
     /// `savePullRequestSummaries(pruneMissing: true)` racing each other. Overlapping requests
     /// are coalesced into a single follow-up pass instead.
-    private func performSweep() async throws {
+    private func performSweep(awaitingInFlight: Bool = false) async throws {
         if isSweeping {
             sweepRequested = true
+            guard awaitingInFlight else { return }
+            // No lap of its own afterwards, even when the run it joined was cancelled: that is
+            // `stop()`, and a sweep after it would write behind "Sign out & erase".
+            try await waitFor(.sweep)
             return
         }
         isSweeping = true
-        defer { isSweeping = false }
-        repeat {
-            sweepRequested = false
-            try await runSweep()
-        } while sweepRequested && !Task.isCancelled
+        var outcome: Result<Void, any Error> = .success(())
+        defer {
+            isSweeping = false
+            sweepWaiters.resumeAll(with: outcome)
+        }
+        do {
+            repeat {
+                sweepRequested = false
+                try await runSweep()
+            } while sweepRequested && !Task.isCancelled
+        } catch {
+            outcome = .failure(error)
+            throw error
+        }
         // Here rather than at the end of `runSweep()`, so the coalescing above stays invisible to
         // consumers: a burst that turned into two passes is still one sweep as far as anybody
         // outside this actor is concerned, and the caller that was folded into a running sweep and
@@ -945,15 +965,23 @@ public actor SyncEngine {
     /// draft's ``ShepherdCore/ReviewDraft/basedOnHeadOid``. If they differ, nothing is sent:
     /// the row is parked as conflicted and a ``SyncEvent/draftConflict(_:)`` is emitted
     /// (ADR 0006).
-    public func drainOutbox() async {
+    /// - Parameter awaitingInFlight: Whether a call that finds a drain already running waits for
+    ///   it, extra lap included, rather than returning at once (ADR 0044). Cancelling the waiter
+    ///   ends the wait, never the drain. See ``syncNow(awaitingInFlight:)``.
+    public func drainOutbox(awaitingInFlight: Bool = false) async {
         if isDraining {
             // Somebody enqueued while a drain was in flight. Do not start a second one — let
             // the running drain take another lap when it is done.
             drainRequested = true
+            guard awaitingInFlight else { return }
+            try? await waitFor(.drain)
             return
         }
         isDraining = true
-        defer { isDraining = false }
+        defer {
+            isDraining = false
+            drainWaiters.resumeAll(with: .success(()))
+        }
         repeat {
             drainRequested = false
             await performDrain()
@@ -1096,6 +1124,11 @@ public actor SyncEngine {
     private func execute(_ item: OutboxItem) async throws -> OutboxOutcome {
         switch item.action {
         case .submitReview(let draft):
+            if try await previousAttemptLanded(item) {
+                await captureBaseline(for: item, draft: draft)
+                try await store.deleteDraft(prID: item.prID)
+                return .sent
+            }
             if !draft.basedOnHeadOid.isEmpty {
                 let head = try await github.headRefOid(repo: item.repo, number: item.number)
                 // The same comparison the bulk-triage dialog warns with, so what the user was
@@ -1118,6 +1151,7 @@ public actor SyncEngine {
             return .sent
 
         case .replyToComment(let commentDatabaseID, let body):
+            if try await previousAttemptLanded(item) { return .sent }
             try await github.replyToComment(
                 repo: item.repo,
                 number: item.number,
@@ -1130,6 +1164,7 @@ public actor SyncEngine {
             // No head-moved check, unlike a review: the comment is pinned to the commit the
             // reviewer read, and GitHub anchors it there — outdated if the lines have moved since,
             // which is what it would be had it been posted a minute earlier.
+            if try await previousAttemptLanded(item) { return .sent }
             try await github.addReviewComment(
                 comment,
                 commitOid: commitOid,
@@ -1265,6 +1300,7 @@ public actor SyncEngine {
             // where a pull request's conversation lives. No staleness probe either — a comment
             // says what it says whatever else has happened to the pull request since, which is
             // why ``OutboxAction/basedOnIssueUpdatedAt`` is `nil` for it.
+            if try await previousAttemptLanded(item) { return .sent }
             try await requireIssueWrites().addIssueComment(
                 repo: item.repo,
                 number: item.number,
@@ -1287,7 +1323,7 @@ public actor SyncEngine {
                 // request is closed or merged, never "not planned".
                 stateReason: nil
             )
-            if let comment, !comment.isEmpty {
+            if let comment, !comment.isEmpty, try await !previousAttemptLanded(item) {
                 do {
                     try await writes.addIssueComment(
                         repo: item.repo,

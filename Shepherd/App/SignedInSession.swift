@@ -308,15 +308,14 @@ final class SignedInSession {
     ///
     /// - Parameter awaitingInFlight: Whether to wait for a drain that is already running instead
     ///   of returning while it is still sending — what a pull-to-refresh on the iPhone needs,
-    ///   because its spinner should stop when the writes it can see have landed (ADR 0044). The
-    ///   engine has no way to wait yet, so for now the flag is accepted and the call is the same
-    ///   as today's; it forwards to `SyncEngine.syncNow(awaitingInFlight:)` once the engine
-    ///   supports awaiting. The parameter lives here rather than only on the engine so the phone
-    ///   never calls the engine directly and skips ``isSyncing`` and ``lastSyncedAt``.
+    ///   because its spinner should stop when the writes it can see have landed (ADR 0044).
+    ///   Forwarded to `SyncEngine.syncNow(awaitingInFlight:)`; the Mac keeps `false`. The
+    ///   parameter lives here rather than only on the engine so the phone never calls the engine
+    ///   directly and skips ``isSyncing`` and ``lastSyncedAt``.
     func syncNow(awaitingInFlight: Bool = false) async throws {
         isSyncing = true
         defer { isSyncing = false }
-        try await syncEngine.syncNow()
+        try await syncEngine.syncNow(awaitingInFlight: awaitingInFlight)
         // Set here as well as from the event below, and not because the event is unreliable: it
         // arrives on the event task a hop later, and ⌘R is the one path where somebody is looking
         // at the indicator at the moment it should change.
@@ -329,11 +328,10 @@ final class SignedInSession {
     ///
     /// - Parameter awaitingInFlight: Whether to wait for a drain that is already running rather
     ///   than leave it a request for another lap and return — what the iPhone needs before it is
-    ///   suspended, since a background task that ends early ends the send with it (ADR 0044). For
-    ///   now the flag is accepted and the call is the same as today's; it forwards to
-    ///   `SyncEngine.drainOutbox(awaitingInFlight:)` once the engine supports awaiting.
+    ///   suspended, since a background task that ends early ends the send with it (ADR 0044).
+    ///   Forwarded to `SyncEngine.drainOutbox(awaitingInFlight:)`; the Mac keeps `false`.
     func drainOutbox(awaitingInFlight: Bool = false) async {
-        await syncEngine.drainOutbox()
+        await syncEngine.drainOutbox(awaitingInFlight: awaitingInFlight)
     }
 
     /// Pull requests whose merge GitHub confirmed during this session.
