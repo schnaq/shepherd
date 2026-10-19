@@ -1026,6 +1026,25 @@ public actor SyncEngine {
                 }
             } catch let error as GitHubError {
                 await handleOutboxFailure(item, error: error)
+            } catch let undecided as ReplayUndecided {
+                // Rescheduled without a word until the limit, then failed so the user decides.
+                // The read's own refusal is what is stored, its English text beside its code, so
+                // Settings → Sync can say it in German (`OutboxItem.localizedLastError`).
+                let givesUp = item.attemptCount >= Self.replayUndecidedAttemptLimit
+                try? await store.markOutboxItemFailed(
+                    id: item.id,
+                    error: Self.describe(undecided.underlying ?? undecided),
+                    errorCode: undecided.underlying?.storageCode,
+                    now: now(),
+                    retriable: !givesUp
+                )
+                if givesUp, !Task.isCancelled {
+                    emit(.syncFailed(Self.failure(
+                        .outbox,
+                        undecided.underlying ?? undecided,
+                        message: undecided.description
+                    )))
+                }
             } catch {
                 try? await store.markOutboxItemFailed(
                     id: item.id,
@@ -1036,7 +1055,9 @@ public actor SyncEngine {
                     now: now(),
                     retriable: true
                 )
-                emit(.syncFailed(Self.failure(.outbox, error)))
+                // A request cut off by `stop()` — the phone's background time running out — is
+                // not news: the row keeps its attempt count and the replay check runs next time.
+                if !Task.isCancelled { emit(.syncFailed(Self.failure(.outbox, error))) }
             }
         }
 
@@ -1118,7 +1139,8 @@ public actor SyncEngine {
             now: now(),
             retriable: error.isRetryable
         )
-        emit(.syncFailed(Self.failure(.outbox, error)))
+        // See the generic catch in `performDrain`: a cancelled send is not a failure to report.
+        if !Task.isCancelled { emit(.syncFailed(Self.failure(.outbox, error))) }
     }
 
     private func execute(_ item: OutboxItem) async throws -> OutboxOutcome {
@@ -1330,7 +1352,25 @@ public actor SyncEngine {
                 // request is closed or merged, never "not planned".
                 stateReason: nil
             )
-            if let comment, !comment.isEmpty, try await !previousAttemptLanded(item) {
+            let commentLanded: Bool
+            do {
+                commentLanded = try await previousAttemptLanded(item)
+            } catch let undecided as ReplayUndecided
+                where item.attemptCount >= Self.replayUndecidedAttemptLimit {
+                // The close has landed; only the comment is in doubt, and failing the row at the
+                // limit would say "could not close" — the lie the refusal path below avoids. So
+                // the row succeeds the same way, without the comment: a second copy is the worse
+                // outcome, and the user is told that it may be missing.
+                emit(.syncFailed(Self.failure(
+                    .outbox,
+                    undecided.underlying ?? undecided,
+                    context: .closedButCommentNotPosted(slug: "\(item.repo.fullName)#\(item.number)"),
+                    message: "\(item.repo.fullName)#\(item.number) was closed, but "
+                        + "the comment may not have been posted: \(undecided.description)"
+                )))
+                return .sent
+            }
+            if let comment, !comment.isEmpty, !commentLanded {
                 do {
                     try await writes.addIssueComment(
                         repo: item.repo,

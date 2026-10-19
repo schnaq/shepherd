@@ -101,6 +101,116 @@ final class ReplayAndWaitingTests: XCTestCase {
         XCTAssertEqual(remaining.first?.attemptCount, 2, "the row stays in doubt")
     }
 
+    /// Drains once and returns every event the drain emitted.
+    private func drainCollectingEvents(_ engine: SyncEngine) async -> [SyncEvent] {
+        let stream = engine.events
+        let collected = Task { () -> [SyncEvent] in
+            var events: [SyncEvent] = []
+            for await event in stream { events.append(event) }
+            return events
+        }
+        await engine.drainOutbox()
+        await engine.shutdown()
+        return await collected.value
+    }
+
+    private func isSyncFailure(_ event: SyncEvent) -> Bool {
+        if case .syncFailed = event { return true } else { return false }
+    }
+
+    /// A refusal of the *read* is not a refusal of the write: failing the row would put it one
+    /// Retry (which zeroes the attempt count and so skips the check) away from a second post.
+    func testARetryWhoseReadIsRefusedStaysQueuedQuietly() async throws {
+        let github = MockGitHub()
+        await github.setDetailError(.forbidden(message: "Resource not accessible by integration"))
+        let store = try DatabaseManager.inMemory()
+        try await enqueue(.replyToComment(commentDatabaseID: 42, body: "Thanks!"), in: store, attempts: 1)
+        let events = await drainCollectingEvents(makeEngine(github: github, store: store))
+        let replies = await github.replies
+        XCTAssertEqual(replies.count, 0)
+        let remaining = try await store.allOutboxItems()
+        XCTAssertEqual(remaining.first?.state, .pending)
+        XCTAssertEqual(remaining.first?.attemptCount, 2)
+        XCTAssertFalse(events.contains(where: isSyncFailure), "no toast per undecided lap")
+    }
+
+    func testAnUndecidedRetryFailsAtTheLimitSoTheUserDecides() async throws {
+        let github = MockGitHub()
+        let refusal = GitHubError.forbidden(message: "Resource not accessible by integration")
+        await github.setDetailError(refusal)
+        let store = try DatabaseManager.inMemory()
+        try await enqueue(
+            .replyToComment(commentDatabaseID: 42, body: "Thanks!"), in: store,
+            attempts: SyncEngine.replayUndecidedAttemptLimit - 1
+        )
+        let events = await drainCollectingEvents(makeEngine(github: github, store: store))
+        let replies = await github.replies
+        XCTAssertEqual(replies.count, 0)
+        let remaining = try await store.allOutboxItems()
+        XCTAssertEqual(remaining.first?.state, .failed)
+        XCTAssertEqual(remaining.first?.lastErrorCode, refusal.storageCode, "typed, so it can be said in German")
+        XCTAssertEqual(remaining.first?.lastError, refusal.errorDescription)
+        XCTAssertTrue(events.contains(where: isSyncFailure))
+    }
+
+    func testAnUndecidedCloseAtTheLimitIsSentWithoutItsComment() async throws {
+        let github = MockGitHub()
+        await github.setDetailError(.forbidden(message: "Resource not accessible by integration"))
+        let writer = MockIssueWriter()
+        let store = try DatabaseManager.inMemory()
+        try await enqueue(
+            .closePullRequest(comment: "Superseded by #191."), in: store,
+            attempts: SyncEngine.replayUndecidedAttemptLimit - 1
+        )
+        let events = await drainCollectingEvents(makeEngine(github: github, store: store, issueWrites: writer))
+        let order = await writer.writeLog
+        XCTAssertEqual(order, ["state:closed"])
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty, "a closed pull request is never a failed close")
+        XCTAssertTrue(events.contains {
+            if case .syncFailed(let failure) = $0, case .closedButCommentNotPosted = failure.context { return true }
+            return false
+        })
+    }
+
+    /// An empty-summary approval on the same commit is told apart by its inline comments.
+    func testARetriedApprovalIsSubmittedWhenTheEarlierOneHadNoneOfItsComments() async throws {
+        let github = MockGitHub()
+        let earlier = ConversationReview(id: "PRR_8", author: me, state: .approved, bodyMarkdown: "", createdAt: now.addingTimeInterval(1), commitOid: "head-1")
+        await github.setDetail(detail(items: [.review(earlier)]), repo: repo, number: 1)
+        await github.setHeadOid("head-1", repo: repo, number: 1)
+        let store = try DatabaseManager.inMemory()
+        let draft = ReviewDraft(
+            prID: "PR_1", verdict: .approve, summaryBody: "",
+            comments: [DraftComment(path: "a.swift", line: 4, body: "Nit")],
+            basedOnHeadOid: "head-1", updatedAt: now
+        )
+        try await store.saveDraft(draft)
+        try await enqueue(.submitReview(draft), in: store, attempts: 1)
+        await makeEngine(github: github, store: store).drainOutbox()
+        let submitted = await github.submittedDrafts
+        XCTAssertEqual(submitted.count, 1, "the earlier bare approval is not this one")
+    }
+
+    func testARetriedApprovalWhoseCommentsLandedIsNotResubmitted() async throws {
+        let github = MockGitHub()
+        let review = ConversationReview(id: "PRR_9", author: me, state: .approved, bodyMarkdown: "", createdAt: now.addingTimeInterval(1), commitOid: "head-1")
+        let inline = ReviewThread(id: "PRRT_9", path: "a.swift", line: 4, comments: [
+            ReviewComment(id: "C9", author: me, bodyMarkdown: "Nit", createdAt: now.addingTimeInterval(1), reviewID: "PRR_9"),
+        ])
+        await github.setDetail(detail(threads: [inline], items: [.review(review)]), repo: repo, number: 1)
+        let store = try DatabaseManager.inMemory()
+        let draft = ReviewDraft(
+            prID: "PR_1", verdict: .approve, summaryBody: "",
+            comments: [DraftComment(path: "a.swift", line: 4, body: "Nit")],
+            basedOnHeadOid: "head-1", updatedAt: now
+        )
+        try await enqueue(.submitReview(draft), in: store, attempts: 1)
+        await makeEngine(github: github, store: store).drainOutbox()
+        let submitted = await github.submittedDrafts
+        XCTAssertEqual(submitted.count, 0)
+    }
+
     func testARetriedReviewThatLandedClearsTheDraftAndIsNotResubmitted() async throws {
         let github = MockGitHub()
         let review = ConversationReview(id: "PRR_9", author: me, state: .approved, bodyMarkdown: "Ship it.", createdAt: now.addingTimeInterval(1), commitOid: "head-1")
@@ -181,6 +291,19 @@ final class ReplayAndWaitingTests: XCTestCase {
         await makeEngine(github: github, store: store).drainOutbox()
         let posted = await github.reviewComments
         XCTAssertEqual(posted.count, 1)
+    }
+
+    func testARetriedReviewCommentOnAnotherLineIsPosted() async throws {
+        let github = MockGitHub()
+        let elsewhere = ReviewThread(id: "PRRT_2", path: "a.swift", line: 12, originalLine: 12, comments: [
+            ReviewComment(id: "C9", databaseID: 99, author: me, bodyMarkdown: "Nit", createdAt: now.addingTimeInterval(2)),
+        ])
+        await github.setDetail(detail(threads: [elsewhere]), repo: repo, number: 1)
+        let store = try DatabaseManager.inMemory()
+        try await enqueue(.addReviewComment(DraftComment(path: "a.swift", line: 4, body: "Nit"), commitOid: "head-1"), in: store, attempts: 1)
+        await makeEngine(github: github, store: store).drainOutbox()
+        let posted = await github.reviewComments
+        XCTAssertEqual(posted.count, 1, "the same nit on another line is another comment")
     }
 
     func testARetriedConversationCommentThatLandedIsNotPostedAgain() async throws {

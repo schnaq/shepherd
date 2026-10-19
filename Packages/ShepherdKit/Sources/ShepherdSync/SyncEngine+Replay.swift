@@ -1,4 +1,5 @@
 import Foundation
+import GitHubKit
 import ShepherdCore
 
 /// Idempotent replay of the writes GitHub cannot deduplicate.
@@ -12,9 +13,19 @@ import ShepherdCore
 extension SyncEngine {
     /// The thrown answer when the read that decides cannot say: the row is retried, never sent
     /// blind.
+    ///
+    /// Retried quietly — no `.syncFailed` per lap, which on the phone would be a toast each time
+    /// — until ``replayUndecidedAttemptLimit``, and then failed so the user decides in
+    /// Settings → Sync rather than the row cycling unseen forever.
     struct ReplayUndecided: Error, CustomStringConvertible {
         var description: String
+        /// The refusal of the read, when it was one: stored as the row's `lastErrorCode` so the
+        /// app can say it in the user's language (ADR 0022).
+        var underlying: GitHubError?
     }
+
+    /// The claimed attempt at which an undecided check stops retrying and fails the row.
+    static let replayUndecidedAttemptLimit = 5
 
     /// How far before the row's `createdAt` a post still counts — the device clock against
     /// GitHub's.
@@ -29,7 +40,20 @@ extension SyncEngine {
         guard let viewer = configuration.viewerLogin, !viewer.isEmpty else {
             throw ReplayUndecided(description: "Cannot tell whether an earlier attempt landed: no signed-in login")
         }
-        let detail = try await github.pullRequestDetail(repo: item.repo, number: item.number)
+        let detail: PullRequestDetail
+        do {
+            detail = try await github.pullRequestDetail(repo: item.repo, number: item.number)
+        } catch let error as GitHubError where !error.isRetryable {
+            // A refusal of the *read* — a forbidden or too-large file list, a GraphQL error — says
+            // nothing about the write. Travelling as itself it would fail the row for good, and
+            // Retry in Settings zeroes the attempt count, which skips this check: the very
+            // duplicate it exists to prevent. A retryable error still travels typed.
+            throw ReplayUndecided(
+                description: "Cannot tell whether an earlier attempt landed: "
+                    + (error.errorDescription ?? String(describing: error)),
+                underlying: error
+            )
+        }
         guard let landed = Self.landed(
             item.action,
             in: detail,
@@ -81,15 +105,27 @@ extension SyncEngine {
             case .comment: .commented
             case nil: .pending
             }
+            let posted = threadComments().map(\.1)
             return items.contains {
                 guard case .review(let review) = $0 else { return false }
                 return isViewer(review.author) && review.createdAt >= cutoff
                     && review.state == state
                     && same(review.bodyMarkdown, draft.summaryBody)
                     && (draft.basedOnHeadOid.isEmpty || review.commitOid == draft.basedOnHeadOid)
+                    // An approval with an empty summary matches any earlier one on the same
+                    // commit; its inline comments are what tell this review apart, and settling
+                    // the wrong one would delete the draft and its comments.
+                    && posted.filter { $0.reviewID == review.id }.count == draft.comments.count
             }
         case .addReviewComment(let comment, _):
-            return threadComments().contains { $0.0.path == comment.path && same($0.1.bodyMarkdown, comment.body) }
+            return threadComments().contains { thread, posted in
+                // `line` is `nil` on an outdated thread, and `originalLine` is the line in the
+                // commit the comment was written against, which a push between attempts leaves
+                // alone.
+                thread.path == comment.path
+                    && (thread.line == nil || thread.line == comment.line || thread.originalLine == comment.line)
+                    && same(posted.bodyMarkdown, comment.body)
+            }
         case .replyToComment(let parentID, let body):
             return threadComments().contains { thread, posted in
                 thread.comments.contains { $0.databaseID == parentID } && same(posted.bodyMarkdown, body)
