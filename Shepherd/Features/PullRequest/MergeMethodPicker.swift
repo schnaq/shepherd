@@ -21,10 +21,11 @@ struct MergeMethodPicker: View {
         #if os(macOS)
         .pickerStyle(.radioGroup)
         #else
-        // A menu rather than the segmented control the spike asked for: "Squash and merge" and
-        // "Rebase and merge" need about 115 pt each at the default size, a third of an iPhone's
-        // width leaves about 100, and at accessibility sizes they need twice that. A menu row
-        // names the chosen method in full at every size (ADR 0044).
+        // One "Method" row with a menu rather than segments or a checkmark list: "Squash and
+        // merge" and "Rebase and merge" need about 115 pt each at the default size, a third of an
+        // iPhone's width leaves about 100, and three rows push the merge sheet's branch toggle
+        // below its medium detent. A menu row names the chosen method in full at every size
+        // (ADR 0044).
         .pickerStyle(.menu)
         #endif
     }

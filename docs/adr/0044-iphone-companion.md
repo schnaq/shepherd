@@ -63,9 +63,12 @@ Every screen is the phone's own, in `ShepherdPhone/`: sign-in, the inbox, the pu
 conversation, the files and the diff, the sheets. The Mac screens are bound to
 `@Environment(AppEnvironment.self)` and to the pointer; reusing them would mean the phone looks like
 a shrunken Mac. One `NavigationStack` with the inbox at the root and values for routes
-(`PhoneRoute`), no tab bar, settings as a sheet. Text is on the type scale from the first line, so
-Dynamic Type works everywhere — `Scripts/check-type-scale.py` checks every file under
-`ShepherdPhone/`, not a list. Glass follows ADR 0040's rule on iOS too: system glass for the control
+(`PhoneRoute`), no tab bar, settings as a sheet. The pull request screen is one scroll — header,
+description, conversation, checks — with the files a push away, rather than the Mac's Files |
+Conversation tabs and their initial-tab rule: on a phone the conversation and the verdict are what
+a reviewer opens it for, and a picker would split a screen that has the width for one column only.
+Text is on the type scale from the first line, so Dynamic Type works everywhere —
+`Scripts/check-type-scale.py` checks every file under `ShepherdPhone/`, not a list. Glass follows ADR 0040's rule on iOS too: system glass for the control
 layer (navigation and toolbars, the prominent action, toasts), opaque content.
 
 Strings go through the one String Catalog (ADR 0022). A phone string is a row in the same file, and
