@@ -18,7 +18,11 @@ struct MergeMethodPicker: View {
             Text(String(localized: "Squash and merge")).tag(MergeMethod.squash)
             Text(String(localized: "Rebase and merge")).tag(MergeMethod.rebase)
         }
+        #if os(macOS)
         .pickerStyle(.radioGroup)
+        #else
+        .pickerStyle(.segmented)
+        #endif
     }
 
     private var methodBinding: Binding<MergeMethod> {

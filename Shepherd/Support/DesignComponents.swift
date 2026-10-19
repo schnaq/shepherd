@@ -147,6 +147,9 @@ struct LoadingStateView: View {
     }
 }
 
+// Mac-only: the image-paste path below listens through `NSEvent`, and the iPhone composes in its
+// own sheet (ADR 0044). If the phone ever reuses this editor, guard only the paste monitor.
+#if os(macOS)
 /// The bordered, control-coloured `TextEditor` every Markdown field in the app uses.
 ///
 /// Extracted because the review summary, the inline comment composer and the two Settings editors
@@ -236,6 +239,7 @@ struct ComposerTextEditor: View {
         }
     }
 }
+#endif
 
 // MARK: - Buttons
 
@@ -418,7 +422,7 @@ private struct FilledButtonBody: View {
             // spinner at 45 % is the bug this arrangement exists to prevent.
             .opacity(isEnabled || isBusy ? 1 : 0.45)
             .onHover { isHovering = $0 }
-            .pointerStyle(isEnabled ? .link : nil)
+            .macLinkPointer(isEnabled)
     }
 }
 
@@ -481,7 +485,7 @@ private struct SecondaryButtonBody: View {
             .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
             .opacity(isEnabled || isBusy ? 1 : 0.45)
             .onHover { isHovering = $0 }
-            .pointerStyle(isEnabled ? .link : nil)
+            .macLinkPointer(isEnabled)
     }
 }
 
@@ -895,5 +899,19 @@ extension View {
     /// - Parameter color: The fill.
     func ownFrameBackground(_ color: Color) -> some View {
         background(color, ignoresSafeAreaEdges: [])
+    }
+
+    /// The pointing-hand cursor over a clickable surface, on the platform that has a cursor.
+    ///
+    /// `pointerStyle(_:)` is macOS-only API, and the button styles that use it are shared with
+    /// the iPhone target (ADR 0044); a touch screen has no pointer to restyle, so there the view
+    /// is returned unchanged.
+    /// - Parameter on: Whether the surface currently takes a click.
+    @ViewBuilder func macLinkPointer(_ on: Bool) -> some View {
+        #if os(macOS)
+        pointerStyle(on ? .link : nil)
+        #else
+        self
+        #endif
     }
 }

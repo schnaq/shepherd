@@ -229,3 +229,7 @@ struct ShepherdMark: View {
             .accessibilityHidden(true)
     }
 }
+
+/// The Mac's sign-in target. Declared here, beside its only caller, so `AppEnvironment.swift`
+/// does not have to change for the iPhone target to share `SignInModel`.
+extension AppEnvironment: AccountSigningIn {}

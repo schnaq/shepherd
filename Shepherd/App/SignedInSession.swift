@@ -231,7 +231,7 @@ final class SignedInSession {
     ///     fires for every issue write, and the consumer is required to be idempotent.
     func start(
         settings: AppSettings,
-        notifications: NotificationManager,
+        notifications: any SyncEventPresenting,
         runsSyncLoop: Bool = true,
         onEvent: @escaping @MainActor (SyncEvent) -> Void,
         onInboxRows: @escaping @MainActor ([PullRequestSummary]) -> Void = { _ in },
@@ -305,7 +305,15 @@ final class SignedInSession {
     }
 
     /// Runs one sweep and outbox drain now (⌘R).
-    func syncNow() async throws {
+    ///
+    /// - Parameter awaitingInFlight: Whether to wait for a drain that is already running instead
+    ///   of returning while it is still sending — what a pull-to-refresh on the iPhone needs,
+    ///   because its spinner should stop when the writes it can see have landed (ADR 0044). The
+    ///   engine has no way to wait yet, so for now the flag is accepted and the call is the same
+    ///   as today's; it forwards to `SyncEngine.syncNow(awaitingInFlight:)` once the engine
+    ///   supports awaiting. The parameter lives here rather than only on the engine so the phone
+    ///   never calls the engine directly and skips ``isSyncing`` and ``lastSyncedAt``.
+    func syncNow(awaitingInFlight: Bool = false) async throws {
         isSyncing = true
         defer { isSyncing = false }
         try await syncEngine.syncNow()
@@ -318,7 +326,13 @@ final class SignedInSession {
     }
 
     /// Pushes the outbox without running a full sweep.
-    func drainOutbox() async {
+    ///
+    /// - Parameter awaitingInFlight: Whether to wait for a drain that is already running rather
+    ///   than leave it a request for another lap and return — what the iPhone needs before it is
+    ///   suspended, since a background task that ends early ends the send with it (ADR 0044). For
+    ///   now the flag is accepted and the call is the same as today's; it forwards to
+    ///   `SyncEngine.drainOutbox(awaitingInFlight:)` once the engine supports awaiting.
+    func drainOutbox(awaitingInFlight: Bool = false) async {
         await syncEngine.drainOutbox()
     }
 
@@ -404,4 +418,19 @@ final class SignedInSession {
             break
         }
     }
+}
+
+/// What turns a sync event into a user-visible notice: `NotificationManager` on the Mac.
+///
+/// A protocol rather than the concrete type because `NotificationManager` reaches the App Intents
+/// entities, and through them `AppEnvironment`, so it cannot be compiled into the iPhone target
+/// (ADR 0044). The phone posts no notifications in its first version and passes a presenter that
+/// ignores the event; the session does not care which it is handed.
+@MainActor
+protocol SyncEventPresenting: AnyObject, Sendable {
+    /// Shows whatever the event warrants under the user's notification settings.
+    /// - Parameters:
+    ///   - event: What the sync engine reported.
+    ///   - settings: The settings that say which events notify.
+    func present(_ event: SyncEvent, settings: AppSettings) async
 }
