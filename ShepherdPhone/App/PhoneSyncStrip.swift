@@ -12,16 +12,13 @@ import SwiftUI
 /// over it (ADR 0040). Placed as the inbox list's first row, it renders nothing while all is well.
 struct PhoneSyncStrip: View {
     @Environment(PhoneEnvironment.self) private var environment
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    /// Whether a Retry is in flight, for the button's busy state.
-    @State private var isRetrying = false
 
     var body: some View {
         if let session = environment.session,
            session.lastSyncError != nil || session.failedOutboxCount > 0 {
             VStack(alignment: .leading, spacing: 12) {
                 if let error = session.lastSyncError {
-                    row(
+                    PhoneSyncStripRow(
                         systemImage: "exclamationmark.triangle.fill",
                         title: String(localized: "Sync failed"),
                         detail: error,
@@ -31,7 +28,7 @@ struct PhoneSyncStrip: View {
                     }
                 }
                 if session.failedOutboxCount > 0 {
-                    row(
+                    PhoneSyncStripRow(
                         systemImage: "exclamationmark.icloud.fill",
                         title: String(localized: "Not sent to GitHub: \(session.failedOutboxCount)"),
                         detail: String(localized: "GitHub refused them or they could not be made. Retry sends them again."),
@@ -53,21 +50,36 @@ struct PhoneSyncStrip: View {
             .transition(.opacity)
         }
     }
+}
 
-    private func row(
-        systemImage: String,
-        title: String,
-        detail: String,
-        lastSyncedAt: Date?,
-        retry: @escaping @MainActor () async -> Void
-    ) -> some View {
+/// One state in ``PhoneSyncStrip``, with its own Retry — and its own busy state, so retrying the
+/// failed writes does not spin the sweep's button too.
+private struct PhoneSyncStripRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// Whether this row's Retry is in flight.
+    @State private var isRetrying = false
+    let systemImage: String
+    let title: String
+    let detail: String
+    let lastSyncedAt: Date?
+    let retry: @MainActor () async -> Void
+
+    var body: some View {
         // Side by side at ordinary sizes; the button drops under the text at the accessibility
         // sizes, where a row of three would squeeze the sentence into a column of single words.
         let layout = dynamicTypeSize.isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10))
             : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 10))
-        return layout {
-            Label {
+        layout {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                // Dropped at the accessibility sizes, where it would push the title into a ragged
+                // column; the title says the same thing in words.
+                if !dynamicTypeSize.isAccessibilitySize {
+                    Image(systemName: systemImage)
+                        .font(Theme.type(.subheadline))
+                        .foregroundStyle(Theme.failure)
+                        .accessibilityHidden(true)
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title)
                         .font(Theme.type(.subheadline, weight: .semibold))
@@ -86,10 +98,6 @@ struct PhoneSyncStrip: View {
                         .foregroundStyle(Theme.textMuted)
                     }
                 }
-            } icon: {
-                Image(systemName: systemImage)
-                    .font(Theme.type(.subheadline))
-                    .foregroundStyle(Theme.failure)
             }
             .accessibilityElement(children: .combine)
             if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 0) }
