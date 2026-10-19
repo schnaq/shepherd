@@ -7,27 +7,72 @@ import SwiftUI
 ///
 /// Values rather than views, so a route can be pushed from anywhere that holds the router — a
 /// row, a toast's action, later a notification — and the stack can be reset to the inbox in one
-/// assignment.
+/// assignment. Routes *inside* a pull request (its files, one file's diff) are that screen's own
+/// and registered there, so they share its ``ReviewModel``; only what can be reached from the
+/// inbox belongs here.
 enum PhoneRoute: Hashable {
     /// One pull request, by node id.
     case pullRequest(id: String)
 }
 
-/// The navigation path of the signed-in screens, owned by ``PhoneEnvironment``.
+/// The navigation path of the signed-in screens, and the review models of the pull requests on
+/// it. Owned by ``PhoneEnvironment``.
+///
+/// The router rather than the screen owns each ``ReviewModel``, because a screen's lifetime is the
+/// wrong one under a `NavigationStack`: `onDisappear` fires when the diff is pushed *on top of*
+/// the pull request, and a model stopped there would be dead under the diff that is reading it.
+/// What the Mac's `ReviewScreen` does in `.task` and `.onDisappear` — `start()` and `stop()` —
+/// happens here instead, keyed on whether the pull request is on the path at all.
 @MainActor
 @Observable
 final class PhoneRouter {
     /// What is pushed on top of the inbox, bottom first.
-    var path: [PhoneRoute] = []
+    ///
+    /// Every change reconciles ``reviewModels``: a pull request that arrives gets a started model
+    /// before its screen is built, one that leaves has its model stopped and dropped.
+    var path: [PhoneRoute] = [] {
+        didSet { reconcileReviewModels() }
+    }
+
+    /// The started model of every pull request on ``path``, by node id.
+    private(set) var reviewModels: [String: ReviewModel] = [:]
+
+    /// Builds a model for the open session; set by ``PhoneEnvironment`` when a session starts and
+    /// cleared by ``reset()``, so no model is ever made against a session that has shut down.
+    @ObservationIgnored var makeReviewModel: (@MainActor (String) -> ReviewModel)?
+
+    /// The started model for a pull request on the path, or `nil` when there is no session.
+    /// - Parameter id: The pull request's node id.
+    func reviewModel(for id: String) -> ReviewModel? {
+        reviewModels[id]
+    }
+
+    /// Back to the inbox with every model stopped, and no factory: sign-out.
+    func reset() {
+        makeReviewModel = nil
+        path = []
+    }
+
+    private func reconcileReviewModels() {
+        let onPath = Set(path.map { route in
+            switch route {
+            case .pullRequest(let id): id
+            }
+        })
+        for (id, model) in reviewModels where !onPath.contains(id) {
+            model.stop()
+            reviewModels[id] = nil
+        }
+        guard let makeReviewModel else { return }
+        for id in onPath where reviewModels[id] == nil {
+            let model = makeReviewModel(id)
+            model.start()
+            reviewModels[id] = model
+        }
+    }
 }
 
 /// The phone's one window: launch, sign-in or the signed-in stack, by ``PhoneEnvironment/phase``.
-///
-/// The screens behind it are placeholders that prove the wiring — a real session, the Mac's
-/// `InboxModel` reading the real database — until the phone's own sign-in, inbox and review
-/// screens replace them (ADR 0044, phase 1). Their copy is deliberately made of keys the String
-/// Catalog already carries, so Scripts/check-localization.py stays green before the phone's own
-/// German rows exist.
 struct PhoneRootView: View {
     @Environment(PhoneEnvironment.self) private var environment
 
@@ -37,9 +82,9 @@ struct PhoneRootView: View {
             case .launching:
                 ProgressView()
             case .signedOut:
-                PhoneSignInPlaceholder()
+                PhoneSignInView()
             case .signedIn(let session):
-                PhoneInboxPlaceholder(model: InboxModel(session: session, settings: environment.settings))
+                PhoneSignedInView(session: session, settings: environment.settings)
                     // A new session is a new inbox: without the id SwiftUI would keep the first
                     // model's `@State` across a sign-out and sign-in.
                     .id(ObjectIdentifier(session))
@@ -50,113 +95,106 @@ struct PhoneRootView: View {
         .overlay(alignment: .bottom) {
             ToastStackView(center: environment.toasts)
         }
+        .sensoryFeedback(.success, trigger: environment.signInCount)
     }
 }
 
-/// Stand-in for the phone's sign-in screen: the device flow and nothing else.
-private struct PhoneSignInPlaceholder: View {
+/// The signed-in stack: the inbox at the root, ``PhoneRoute`` destinations above it, and the
+/// settings sheet.
+///
+/// The inbox's ``InboxModel`` lives here, as `InboxScreen` holds it on the Mac, so it outlives
+/// every push and pop of the stack above it.
+private struct PhoneSignedInView: View {
     @Environment(PhoneEnvironment.self) private var environment
-    @State private var model = SignInModel()
+    let session: SignedInSession
+    @State private var inbox: InboxModel
 
-    var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-            Image(systemName: "hare")
-                .font(.largeTitle)
-                .foregroundStyle(Theme.agent)
-                .accessibilityHidden(true)
-            VStack(spacing: 8) {
-                Text(String(localized: "Shepherd"))
-                    .font(Theme.type(.largeTitle, weight: .bold))
-                    .foregroundStyle(Theme.textStrong)
-                Text(String(localized: "One review inbox for everything your agents open."))
-                    .font(Theme.type(.body))
-                    .foregroundStyle(Theme.textSecondary)
-                    .multilineTextAlignment(.center)
-            }
-            if let grant = model.grant {
-                VStack(spacing: 6) {
-                    Text(String(localized: "ENTER THIS CODE ON GITHUB"))
-                        .font(Theme.type(.caption, weight: .semibold))
-                        .foregroundStyle(Theme.textMuted)
-                    Text(verbatim: grant.userCode)
-                        .font(Theme.type(.title, weight: .semibold).monospaced())
-                        .foregroundStyle(Theme.textStrong)
-                        .textSelection(.enabled)
-                }
-            }
-            if let message = model.errorMessage {
-                Text(message)
-                    .font(Theme.type(.footnote))
-                    .foregroundStyle(Theme.failure)
-                    .multilineTextAlignment(.center)
-            }
-            Spacer()
-            Button {
-                model.startDeviceFlow(environment: environment)
-            } label: {
-                Text(String(localized: "Sign in with GitHub"))
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.glassProminent)
-            .controlSize(.large)
-            .disabled(!model.isDeviceFlowConfigured || model.isBusy)
-        }
-        .padding(.horizontal, 24)
-        .padding(.bottom, 16)
+    init(session: SignedInSession, settings: AppSettings) {
+        self.session = session
+        _inbox = State(initialValue: InboxModel(session: session, settings: settings))
     }
-}
-
-/// Stand-in for the phone's inbox: every stored pull request, newest activity first, on the
-/// Mac's `InboxModel`.
-private struct PhoneInboxPlaceholder: View {
-    @Environment(PhoneEnvironment.self) private var environment
-    @State var model: InboxModel
 
     var body: some View {
+        @Bindable var environment = environment
         @Bindable var router = environment.router
         NavigationStack(path: $router.path) {
-            List(model.allRows.sorted { $0.updatedAt > $1.updatedAt }) { row in
-                NavigationLink(value: PhoneRoute.pullRequest(id: row.id)) {
-                    HStack(alignment: .top, spacing: 12) {
-                        AvatarView(
-                            login: row.author.login,
-                            displayName: row.author.displayName,
-                            url: row.author.avatarURL,
-                            size: 32
-                        )
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(row.title)
-                                .font(Theme.type(.body, weight: .medium))
-                                .foregroundStyle(Theme.textStrong)
-                                .lineLimit(2)
-                            HStack(spacing: 6) {
-                                Text(verbatim: "\(row.repo.fullName) #\(row.number)")
-                                RelativeDateText(date: row.updatedAt)
-                            }
-                            .font(Theme.type(.footnote))
-                            .foregroundStyle(Theme.textSecondary)
+            // Replaced by U2's `PhoneInboxScreen(model: inbox)` at integration.
+            PhoneInboxPlaceholder(model: inbox)
+                .navigationDestination(for: PhoneRoute.self) { route in
+                    switch route {
+                    case .pullRequest(let id):
+                        if let model = router.reviewModel(for: id) {
+                            // Replaced by U3's `PhonePullRequestScreen(model: model)`.
+                            PhonePullRequestPlaceholder(model: model)
+                        } else {
+                            ContentUnavailableView(
+                                String(localized: "Pull request not available"),
+                                systemImage: "arrow.triangle.pull"
+                            )
                         }
                     }
                 }
+        }
+        .task { inbox.startObserving() }
+        .sheet(isPresented: $environment.isSettingsPresented) {
+            PhoneSettingsView()
+        }
+        #if DEBUG
+        // `-PhoneShowSettings YES` opens the sheet at launch, so the settings screen can be
+        // screenshotted on a simulator nobody can tap.
+        .onAppear {
+            if UserDefaults.standard.bool(forKey: "PhoneShowSettings") {
+                environment.isSettingsPresented = true
             }
-            .overlay {
-                if model.allRows.isEmpty {
-                    ContentUnavailableView(
-                        String(localized: "Nothing needs your review right now."),
-                        systemImage: "tray"
-                    )
-                }
-            }
-            .navigationTitle(String(localized: "Inbox"))
-            .navigationDestination(for: PhoneRoute.self) { route in
-                switch route {
-                case .pullRequest(let id):
-                    let title = model.allRows.first { $0.id == id }?.title ?? ""
-                    ContentUnavailableView(title, systemImage: "arrow.triangle.pull")
+        }
+        #endif
+    }
+}
+
+/// Stand-in for the phone's inbox until U2's screen lands: every stored pull request, newest
+/// activity first, on the Mac's `InboxModel`, under the sync strip and with the settings button.
+private struct PhoneInboxPlaceholder: View {
+    let model: InboxModel
+
+    var body: some View {
+        List {
+            PhoneSyncStrip()
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+            ForEach(model.allRows.sorted { $0.updatedAt > $1.updatedAt }) { row in
+                NavigationLink(value: PhoneRoute.pullRequest(id: row.id)) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(verbatim: "\(row.repo.name) #\(row.number)")
+                            .font(Theme.mono(.footnote))
+                            .foregroundStyle(Theme.textSecondary)
+                        Text(row.title)
+                            .font(Theme.type(.body))
+                            .foregroundStyle(Theme.textStrong)
+                            .lineLimit(2)
+                    }
                 }
             }
         }
-        .task { model.startObserving() }
+        .listStyle(.plain)
+        .navigationTitle(String(localized: "Inbox"))
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                PhoneSettingsButton()
+            }
+        }
+    }
+}
+
+/// Stand-in for the pull request screen until U3's lands, on the router's started model.
+private struct PhonePullRequestPlaceholder: View {
+    let model: ReviewModel
+
+    var body: some View {
+        ContentUnavailableView(
+            model.summary?.title ?? "",
+            systemImage: "arrow.triangle.pull"
+        )
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
