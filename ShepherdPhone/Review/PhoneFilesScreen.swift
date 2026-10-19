@@ -46,6 +46,8 @@ struct PhoneFilesScreen: View {
             }
         }
         .background(Theme.background)
+        .navigationTitle(String(localized: "Files"))
+        .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $openedPath) { path in
             PhoneDiffView(model: model, path: path, revealing: openedLine)
         }
