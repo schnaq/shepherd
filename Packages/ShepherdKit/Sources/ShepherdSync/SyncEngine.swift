@@ -467,11 +467,12 @@ public actor SyncEngine {
                 try await runSweep()
             } while sweepRequested && !Task.isCancelled
         } catch {
-            // A run `stop()` cut off is a cancellation to whoever joined it, whatever the cut-off
-            // request threw (a transport error, for `URLError.cancelled`): the phone's
-            // pull-to-refresh then says nothing rather than "Sync failed" (ADR 0044).
-            outcome = .failure(Task.isCancelled ? CancellationError() : error)
-            throw error
+            // A run `stop()` cut off is a cancellation, to its caller and to whoever joined it,
+            // whatever the cut-off request threw (a transport error, for `URLError.cancelled`):
+            // the phone's pull-to-refresh then says nothing rather than "Sync failed" (ADR 0044).
+            let reported = Task.isCancelled ? CancellationError() : error
+            outcome = .failure(reported)
+            throw reported
         }
         // Here rather than at the end of `runSweep()`, so the coalescing above stays invisible to
         // consumers: a burst that turned into two passes is still one sweep as far as anybody

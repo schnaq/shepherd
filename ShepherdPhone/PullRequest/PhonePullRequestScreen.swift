@@ -10,8 +10,9 @@ import SwiftUI
 /// router's path: the path is `[PhoneRoute]`, a typed array that cannot carry a second type, and
 /// the files screen has to share this screen's ``ReviewModel`` — the selected file, the drafts and
 /// the round are all on it — which a destination registered here gets for free. The price: the
-/// router's path does not know about it, so a path change from the shell (a deep link) leaves it
-/// out — to be settled together with the router.
+/// router's path does not know about it, so resetting the path to the inbox drops it with this
+/// screen, and a route set from outside could only reach the pull request, never its files — fine
+/// while the phone has no deep links (ADR 0044).
 ///
 /// With a ``path`` it is *Show in diff*: that file's diff is pushed straight from the
 /// conversation, so Back returns to the thread it came from rather than to the file list.
