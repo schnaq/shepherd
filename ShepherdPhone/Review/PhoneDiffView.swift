@@ -1,5 +1,6 @@
 import ShepherdCore
 import SwiftUI
+import UIKit
 
 /// One file's diff on the iPhone: a unified list of lines with syntax colour and word-level
 /// changes, the review threads under the lines they hang on, and a way to comment on a line or
@@ -40,14 +41,13 @@ struct PhoneDiffView: View {
     var revealing: Int? = nil
 
     @Environment(PhoneEnvironment.self) private var environment
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     /// Whether long lines wrap. On by default: a phone is narrower than most lines.
     @AppStorage("phoneDiffWrapsLines") private var wraps = true
     /// The reader's own multiplier on the code size, on top of Dynamic Type.
     @AppStorage("phoneDiffTextScale") private var textScale = 1.0
 
-    @ScaledMetric(relativeTo: .footnote) private var baseCodeSize: CGFloat = 12
-    @ScaledMetric(relativeTo: .caption2) private var gutterSize: CGFloat = 11
     @ScaledMetric(relativeTo: .subheadline) private var bodySize: CGFloat = 15
     @ScaledMetric(relativeTo: .caption) private var chipSize: CGFloat = 12
     @ScaledMetric(relativeTo: .footnote) private var avatarSize: CGFloat = 22
@@ -127,7 +127,9 @@ struct PhoneDiffView: View {
         let lines = highlights[content.path]?.lines(for: content.rows)
         let window = pick.flatMap { reachableWindow(from: $0.anchor, in: content) }
         let picked = pick.flatMap { span(of: $0, in: content) }
-        let digits = String(content.rows.reduce(0) { max($0, Self.ownNumber(of: $1) ?? 0) }).count
+        // Measured over both sides' numbers, which the two-column gutter draws.
+        let digits = max(String(content.rows.reduce(0) { max($0, Self.largestNumber(in: $1)) }).count, 2)
+        let nextPath = self.nextPath
         return ScrollViewReader { proxy in
             ScrollView(wraps ? .vertical : [.vertical, .horizontal]) {
                 LazyVStack(alignment: .leading, spacing: 0) {
@@ -139,14 +141,18 @@ struct PhoneDiffView: View {
                             notes: notes,
                             isPicked: pick.map { min($0.anchor, $0.end)...max($0.anchor, $0.end) }?.contains(index) ?? false,
                             isDimmed: window.map { !$0.contains(index) } ?? false,
-                            digits: max(digits, 2)
+                            digits: digits
                         )
                         .id(index)
                     }
+                    if let nextPath {
+                        nextFileFooter(nextPath)
+                    }
                 }
                 .padding(.bottom, picked == nil ? 12 : 88)
-                // Dense rows stop growing at the third accessibility size, as every list row in
-                // the app does (ADR 0044): beyond it a line of code is a word per row.
+                // The thread cards stop growing at the third accessibility size, as every list row
+                // in the app does (ADR 0044). The code itself stops earlier, at xxxLarge
+                // (``codeMetric(_:relativeTo:)``).
                 .dynamicTypeSize(...DynamicTypeSize.accessibility3)
             }
             .id(content.path)
@@ -189,6 +195,7 @@ struct PhoneDiffView: View {
         switch content.rows[index] {
         case .hunk(let originalStart, let modifiedStart):
             hunkRow(originalStart: originalStart, modifiedStart: modifiedStart)
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 .frame(minWidth: wraps ? nil : viewportWidth, alignment: .leading)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Text(content.rows[index].spokenSentence(takesComment: false)))
@@ -206,6 +213,7 @@ struct PhoneDiffView: View {
                     isDimmed: isDimmed,
                     digits: digits
                 )
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(Text(spokenSentence(for: content.rows[index], content: content, threads: threads.count, drafts: drafts.count)))
                 .accessibilityAddTraits(isPicked ? [.isSelected, .isButton] : .isButton)
@@ -245,14 +253,26 @@ struct PhoneDiffView: View {
     ) -> some View {
         let tint = SyntaxStyle.tint(for: row.kind)
         let identity = DiffListContent.lineIdentity(of: row)
+        let numbers = DiffListContent.lineNumbers(of: row)
         return HStack(alignment: .firstTextBaseline, spacing: 0) {
-            // One gutter, with the row's own number — the same number its comment would anchor
-            // to and its sentence announces (`DiffListContent.lineIdentity(of:)`). Sized by a
-            // hidden run of eights so it grows with Dynamic Type and fits the widest number.
-            ZStack(alignment: .trailing) {
-                Text(verbatim: String(repeating: "8", count: digits)).hidden()
-                Text(verbatim: String(identity.line))
-                    .foregroundStyle(row.kind == .context ? Theme.textMuted : tint ?? Theme.textMuted)
+            // Two columns, base and head, while the numbers are short enough for both to fit:
+            // one column interleaved them ("59, 60, 54, 55, 61") wherever a hunk removed and
+            // added lines. Past three digits the row's own number alone (the one its comment
+            // anchors to, `DiffListContent.lineIdentity(of:)`), a removed line's in a muted red
+            // so the two sides still tell apart.
+            Group {
+                if digits <= 3 {
+                    HStack(spacing: 6) {
+                        gutterNumber(numbers.base, digits: digits, color: row.kind == .removed ? tint : nil)
+                        gutterNumber(numbers.head, digits: digits, color: row.kind == .added ? tint : nil)
+                    }
+                } else {
+                    gutterNumber(
+                        identity.line,
+                        digits: digits,
+                        color: row.kind == .removed ? Theme.failure.opacity(0.7) : row.kind == .added ? tint : nil
+                    )
+                }
             }
             .font(Theme.mono(gutterSize))
             .fixedSize()
@@ -273,7 +293,8 @@ struct PhoneDiffView: View {
                     .padding(.horizontal, 6)
                     .padding(.vertical, 1)
                     .background(Theme.chipBackground(Theme.accent), in: Capsule())
-                    .padding(.horizontal, 6)
+                    .padding(.leading, 6)
+                    .padding(.trailing, 12)
                     .accessibilityHidden(true)
             }
         }
@@ -292,9 +313,46 @@ struct PhoneDiffView: View {
         .contextMenu { lineMenu(row, index: index, content: content) }
     }
 
+    /// One gutter number, right-aligned in a column sized by a hidden run of eights so it grows
+    /// with the text and fits the widest number; blank for the side a row does not have.
+    private func gutterNumber(_ number: Int?, digits: Int, color: Color?) -> some View {
+        ZStack(alignment: .trailing) {
+            Text(verbatim: String(repeating: "8", count: digits)).hidden()
+            if let number {
+                Text(verbatim: String(number))
+                    .foregroundStyle(color ?? Theme.textMuted)
+            }
+        }
+    }
+
     @ViewBuilder
     private func code(_ text: String, attributed: AttributedString?) -> some View {
-        let line = Group {
+        if wraps {
+            // A hanging indent: the leading whitespace becomes a hidden run of the same width, so
+            // a wrapped line continues under its own first character instead of at column 0,
+            // where a continuation read as a new statement.
+            let indent = Self.hangingIndent(text, attributed: attributed, maxColumns: maxIndentColumns)
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                if indent.columns > 0 {
+                    Text(verbatim: String(repeating: "0", count: indent.columns))
+                        .font(Theme.mono(codeSize))
+                        .fixedSize()
+                        .hidden()
+                }
+                codeText(indent.text, attributed: indent.attributed)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.trailing, 8)
+        } else {
+            codeText(text, attributed: attributed)
+                .fixedSize()
+                .padding(.trailing, 16)
+        }
+    }
+
+    private func codeText(_ text: String, attributed: AttributedString?) -> some View {
+        Group {
             if let attributed {
                 Text(attributed)
             } else {
@@ -303,16 +361,66 @@ struct PhoneDiffView: View {
         }
         .font(Theme.mono(codeSize))
         .foregroundStyle(Theme.text)
-        if wraps {
-            line
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.trailing, 8)
-        } else {
-            line
-                .fixedSize()
-                .padding(.trailing, 16)
+    }
+
+    /// The deepest hanging indent, in columns: about 40 % of the screen, so deeply nested code
+    /// keeps room for its words at large text sizes.
+    private var maxIndentColumns: Int {
+        Int(max(viewportWidth, 200) * 0.4 / (codeSize * 0.6))
+    }
+
+    /// A line split into its indent, in columns (a tab counts four), and the rest. The highlighted
+    /// line is cut by the same characters; when it does not start with the same whitespace — it
+    /// always should — the line is drawn whole, without the indent.
+    static func hangingIndent(
+        _ text: String,
+        attributed: AttributedString?,
+        maxColumns: Int
+    ) -> (columns: Int, text: String, attributed: AttributedString?) {
+        let leading = text.prefix { $0 == " " || $0 == "\t" }
+        guard !leading.isEmpty else { return (0, text, attributed) }
+        var rest = attributed
+        if let attributed {
+            let characters = attributed.characters
+            guard characters.count >= leading.count,
+                  characters.prefix(leading.count).allSatisfy({ $0 == " " || $0 == "\t" })
+            else { return (0, text, attributed) }
+            rest = AttributedString(attributed[characters.index(characters.startIndex, offsetBy: leading.count)...])
         }
+        let columns = leading.reduce(0) { $0 + ($1 == "\t" ? 4 : 1) }
+        return (min(columns, maxColumns), String(text.dropFirst(leading.count)), rest)
+    }
+
+    /// The way on at the end of a file, so a short one does not end in a blank screen.
+    private func nextFileFooter(_ path: String) -> some View {
+        Button {
+            model.moveFileSelection(by: 1)
+        } label: {
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(String(localized: "Next file"))
+                        .font(Theme.type(.footnote))
+                        .foregroundStyle(Theme.textMuted)
+                    Text(verbatim: Self.fileName(path))
+                        .font(Theme.type(.body, weight: .semibold))
+                        .foregroundStyle(Theme.textStrong)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Spacer(minLength: 8)
+                Image(systemName: "arrow.right")
+                    .font(Theme.type(.body, weight: .semibold))
+                    .foregroundStyle(Theme.accentText)
+                    .accessibilityHidden(true)
+            }
+            .phoneCard()
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 12)
+        .padding(.top, 24)
+        .frame(maxWidth: wraps ? .infinity : viewportWidth, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 
     private func rowBackground(tint: Color?, isPicked: Bool) -> Color {
@@ -686,7 +794,30 @@ struct PhoneDiffView: View {
 
     // MARK: - Helpers
 
-    private var codeSize: CGFloat { baseCodeSize * textScale }
+    private var codeSize: CGFloat { codeMetric(12, relativeTo: .footnote) * textScale }
+
+    private var gutterSize: CGFloat { codeMetric(11, relativeTo: .caption2) }
+
+    /// A size scaled as `@ScaledMetric(relativeTo:)` scales it, but no further than xxxLarge.
+    ///
+    /// Code is the one text that must not grow with the accessibility sizes: at the largest one a
+    /// line of it was a word per row. Past xxxLarge the diff's own Text size menu takes over. Not
+    /// `.dynamicTypeSize(...)` on the rows alone, because a metric is resolved where it is
+    /// declared — here, outside any cap — and reaches the rows as a fixed point size.
+    private func codeMetric(_ base: CGFloat, relativeTo style: UIFont.TextStyle) -> CGFloat {
+        let category = UIContentSizeCategory(min(dynamicTypeSize, .xxxLarge))
+        return UIFontMetrics(forTextStyle: style)
+            .scaledValue(for: base, compatibleWith: UITraitCollection(preferredContentSizeCategory: category))
+    }
+
+    /// The file after the one on screen in the list's order, or `nil` at the last.
+    private var nextPath: String? {
+        let paths = filePaths
+        guard let selected = model.selectedPath, let position = paths.firstIndex(of: selected),
+              position + 1 < paths.count
+        else { return nil }
+        return paths[position + 1]
+    }
 
     /// The files in the list's order — the order next and previous walk.
     private var filePaths: [String] {
@@ -759,9 +890,10 @@ struct PhoneDiffView: View {
         PhoneFilesScreen.fileName(path)
     }
 
-    private static func ownNumber(of row: PatchReconstructor.DiffRow) -> Int? {
-        guard case .line(let line) = row else { return nil }
-        return DiffListContent.lineIdentity(of: line).line
+    private static func largestNumber(in row: PatchReconstructor.DiffRow) -> Int {
+        guard case .line(let line) = row else { return 0 }
+        let numbers = DiffListContent.lineNumbers(of: line)
+        return max(numbers.base ?? 0, numbers.head ?? 0)
     }
 
     private static func marker(for kind: PatchRow.Kind) -> String {

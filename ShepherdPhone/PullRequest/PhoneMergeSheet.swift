@@ -14,6 +14,7 @@ import SwiftUI
 /// (ADR 0037), and the phone does not sweep in the background.
 struct PhoneMergeSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// The pull request to merge.
     let summary: PullRequestSummary
     /// The freshest CI state the presenting screen knows (``ReviewModel/checkRollup``).
@@ -36,10 +37,12 @@ struct PhoneMergeSheet: View {
                             .font(Theme.type(.headline))
                             .foregroundStyle(Theme.textStrong)
                             .lineLimit(3)
+                        // One line, cut in the middle, while that keeps both names readable; whole at
+                        // the accessibility sizes, where one line was "claude…-codes".
                         Text(verbatim: "\(summary.headRefName) → \(summary.baseRefName)")
                             .font(Theme.mono(.footnote))
                             .foregroundStyle(Theme.textSecondary)
-                            .lineLimit(1)
+                            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1)
                             .truncationMode(.middle)
                     }
                     .padding(.vertical, 2)
@@ -77,13 +80,18 @@ struct PhoneMergeSheet: View {
 
             }
             .scrollContentBackground(.hidden)
+            // The form's own top inset left a blank band under the bar at the medium detent.
+            .contentMargins(.top, 8, for: .scrollContent)
             .background(Theme.background)
             .navigationTitle(String(localized: "Merge"))
-            .navigationSubtitle(summary.slug)
+            // The number alone: the pull request screen under the sheet names the repository.
+            .navigationSubtitle("#" + String(summary.number))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // The icon-only close every sheet of the app uses: a word here ("Abbrechen") pushed
+                // the title off centre and cut it short.
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "Cancel"), role: .cancel) { dismiss() }
+                    Button(role: .close) { dismiss() }
                 }
                 // The sheet's confirmation, where iOS puts one: always in reach at the medium
                 // detent, which a button at the end of the form would not be.

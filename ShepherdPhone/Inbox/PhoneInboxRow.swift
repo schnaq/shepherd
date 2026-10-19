@@ -41,16 +41,14 @@ struct PhoneInboxRow: View {
     var body: some View {
         Group {
             if dynamicTypeSize.isAccessibilitySize {
-                // At the accessibility sizes a leading avatar column would leave the title a few
-                // words per line, so the row stacks: avatar beside the place line, then the title
-                // and the chips across the whole width.
+                // At the accessibility sizes the avatar goes, as Mail drops its pictures there: a
+                // leading column — or one beside the place line — left a few words per line. The
+                // CI dot it carried leads the place line instead, which is one wrapping sentence,
+                // then the title and the chips take the whole width.
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack(alignment: .center, spacing: 12) {
-                        avatar
-                        VStack(alignment: .leading, spacing: 2) {
-                            place
-                            age
-                        }
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        CheckDotView(state: row.checkRollup?.state, size: min(dotSize, 16))
+                        placeAndAge
                     }
                     title
                     chips
@@ -90,6 +88,19 @@ struct PhoneInboxRow: View {
             .foregroundStyle(Theme.textSecondary)
             .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
             .truncationMode(.middle)
+    }
+
+    /// Place and age as one wrapping sentence, for the accessibility sizes: two views side by side
+    /// stacked "shepherd", "#412" and "24 m" on three lines.
+    private var placeAndAge: some View {
+        let place = Text(verbatim: "\(row.repo.name) #\(row.number)")
+            .font(Theme.mono(.footnote))
+            .foregroundStyle(Theme.textSecondary)
+        let age = Text(verbatim: "· " + RelativeDate.short(row.updatedAt))
+            .font(Theme.type(.footnote))
+            .foregroundStyle(Theme.textMuted)
+        return Text("\(place) \(age)")
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private var age: some View {
@@ -234,8 +245,6 @@ struct PhoneSectionHeader: View {
     /// The dot in front of the title, or `nil` for none (``InboxRowText/sectionDot(for:)``).
     var dot: Color?
 
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
     /// A header for one of the model's sections.
     /// - Parameter section: The section.
     init(section: InboxSection) {
@@ -260,17 +269,12 @@ struct PhoneSectionHeader: View {
                     .fill(dot)
                     .frame(width: 8, height: 8)
             }
-            Text(title)
-                .textCase(.uppercase)
-                .font(Theme.type(.footnote, weight: .semibold))
-                .kerning(0.5)
-                .foregroundStyle(Theme.textSecondary)
-            Text(verbatim: "· \(count)")
-                .font(Theme.type(.footnote))
-                .foregroundStyle(Theme.textMuted)
-                .monospacedDigit()
+            // One `Text`, so the count stays with the title rather than floating beside a wrapped
+            // one; shrunk a little before it is cut, never wrapped.
+            Text("\(Text(title.uppercased()).font(Theme.type(.footnote, weight: .semibold)).kerning(0.5).foregroundStyle(Theme.textSecondary)) \(Text(verbatim: "· \(count)").font(Theme.type(.footnote)).foregroundStyle(Theme.textMuted).monospacedDigit())")
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
-        .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
         // Tighter than the plain list's own header padding, which left the header floating
         // between the smart-view pills and its rows (the space above it is the list's and stays).
         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))

@@ -22,6 +22,7 @@ import SwiftUI
 ///   pull request screen's merge sheet; the row's context menu opens that screen instead.
 struct PhoneInboxScreen: View {
     @Environment(PhoneEnvironment.self) private var environment
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// The inbox model — the Mac's own.
     let model: InboxModel
     /// Opens the settings sheet, which the root owns.
@@ -57,9 +58,13 @@ struct PhoneInboxScreen: View {
         .environment(\.defaultMinListRowHeight, 0)
         .scrollContentBackground(.hidden)
         .background(Theme.background)
-        // While searching, the results span every smart view, so the title stops naming one.
-        .navigationTitle(isSearching ? String(localized: "Search") : model.smartView.title)
-        .navigationBarTitleDisplayMode(.large)
+        // "Inbox" rather than the smart view: the selected pill right under the title already names
+        // it, and twice in a row read as a stutter. "Search" while searching, whose results span
+        // every smart view.
+        .navigationTitle(isSearching ? String(localized: "Search") : String(localized: "Inbox"))
+        // Inline at the accessibility sizes, where a large title is a line of its own that still
+        // truncates and pushes the first row down a screen.
+        .navigationBarTitleDisplayMode(dynamicTypeSize.isAccessibilitySize ? .inline : .large)
         .toolbar { toolbar }
         .searchable(
             text: $query,
@@ -134,6 +139,9 @@ struct PhoneInboxScreen: View {
                     write: writeState(for: row)
                 )
             }
+            // No chevron, as in Mail: every row opens, so it says nothing, and it cost the title
+            // a word per line.
+            .navigationLinkIndicatorVisibility(.hidden)
             .listRowBackground(Color.clear)
             .listRowSeparatorTint(Theme.hairline)
             .swipeActions(edge: .leading, allowsFullSwipe: false) {
@@ -241,8 +249,8 @@ struct PhoneInboxScreen: View {
                 // Nothing below: the next section header brings the plain list's own padding,
                 // and any more left that header floating away from the pills it belongs to.
                 .padding(.top, 6)
-                // Capped: the large title above already names the selected view, and a pill wider
-                // than the screen is a scroller with one visible stop.
+                // Capped: a pill wider than the screen is a scroller with one visible stop, and the
+                // selected one is still read out in full by VoiceOver.
                 .dynamicTypeSize(...DynamicTypeSize.accessibility1)
             }
             .scrollIndicators(.hidden)
@@ -511,6 +519,10 @@ private struct SmartViewPill: View {
             HStack(spacing: 6) {
                 Image(systemName: view.systemImage)
                     .imageScale(.small)
+                    // The button says everything in its own label; left visible to VoiceOver, the
+                    // symbol's automatic name ("Selected" for the checkmark) lands on the button
+                    // as a trait it does not have.
+                    .accessibilityHidden(true)
                 Text(view.title)
                 Text(verbatim: "\(count)")
                     .monospacedDigit()

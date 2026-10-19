@@ -540,12 +540,17 @@ struct PhonePullRequestHeader: View {
             .fixedSize()
     }
 
-    /// "7 of 9 checks passed" when somebody counted, "3 checks" when only the sweep's verdict and
-    /// total are known — the Mac's `ChecksSummaryView` rule: the sweep's rollup carries no split,
-    /// and "0 of 3" would be a fact nobody measured.
+    /// "1 of 9 checks failing" while any fails, "7 of 9 checks passed" otherwise, "3 checks" when
+    /// only the sweep's verdict and total are known — the Mac's `ChecksSummaryView` rule: the
+    /// sweep's rollup carries no split, and "0 of 3" would be a fact nobody measured. Failures
+    /// lead, as the inbox row's "1 check failing" does, so the red dot beside the words and the
+    /// row the reviewer tapped say the same thing.
     static func checksText(_ rollup: CheckRollup) -> String {
         let hasCounts = rollup.successCount + rollup.failureCount + rollup.pendingCount > 0
         guard hasCounts else { return String(localized: "\(rollup.total) checks") }
+        if rollup.failureCount > 0 {
+            return String(localized: "\(rollup.failureCount) of \(rollup.total) checks failing")
+        }
         return String(localized: "\(rollup.successCount) of \(rollup.total) checks passed")
     }
 

@@ -20,13 +20,12 @@ struct PhoneSyncStrip: View {
            session.lastSyncError != nil || session.failedOutboxCount > 0 || session.conflictedOutboxCount > 0 {
             // Red while anything failed; amber when all that is left is a parked review.
             let tint = session.lastSyncError != nil || session.failedOutboxCount > 0 ? Theme.failure : Theme.pending
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 8) {
                 if let error = session.lastSyncError {
                     PhoneSyncStripRow(
                         systemImage: "exclamationmark.triangle.fill",
                         title: String(localized: "Sync failed"),
                         detail: error,
-                        lastSyncedAt: session.lastSyncedAt,
                         action: PhoneSyncStripAction(title: String(localized: "Retry")) {
                             await environment.syncNow()
                         }
@@ -34,12 +33,11 @@ struct PhoneSyncStrip: View {
                 }
                 if session.failedOutboxCount > 0 {
                     // No Retry here: a failed write is one retrying cannot fix by itself, so the
-                    // choice — send again or discard — is made row by row in Settings.
+                    // choice — send again or discard — is made row by row in Settings, whose
+                    // footer says why.
                     PhoneSyncStripRow(
                         systemImage: "exclamationmark.icloud.fill",
-                        title: String(localized: "Not sent to GitHub: \(session.failedOutboxCount)"),
-                        detail: String(localized: "GitHub refused them or they could not be made. Retry or discard them in Settings."),
-                        lastSyncedAt: nil,
+                        title: String(localized: "\(session.failedOutboxCount) not sent"),
                         action: PhoneSyncStripAction(title: String(localized: "Show")) {
                             environment.isSettingsPresented = true
                         }
@@ -51,16 +49,13 @@ struct PhoneSyncStrip: View {
                     PhoneSyncStripRow(
                         systemImage: "exclamationmark.triangle.fill",
                         title: String(localized: "\(session.conflictedOutboxCount) conflicted — needs your attention."),
-                        detail: String(
-                            localized: "These pull requests got new commits after the review was queued, so nothing was sent. Open each one and check your draft against the new commit."
-                        ),
                         tint: Theme.pending,
-                        lastSyncedAt: nil,
                         action: nil
                     )
                 }
             }
-            .padding(14)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.raised, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
@@ -68,7 +63,10 @@ struct PhoneSyncStrip: View {
                     .strokeBorder(tint.opacity(0.35), lineWidth: 1)
             )
             .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.vertical, 6)
+            // A status line, not the screen's subject: past the first accessibility size it would
+            // take the whole first screen, the way the pills above it would.
+            .dynamicTypeSize(...DynamicTypeSize.accessibility1)
             .transition(.opacity)
         }
     }
@@ -80,60 +78,45 @@ private struct PhoneSyncStripAction {
     let perform: @MainActor () async -> Void
 }
 
-/// One state in ``PhoneSyncStrip``, with its own button — and its own busy state, so one row's
-/// action does not spin another's.
+/// One state in ``PhoneSyncStrip``: its glyph, a few words and its button — one line, so the strip
+/// stays a strip — with its own busy state, so one row's action does not spin another's.
 private struct PhoneSyncStripRow: View {
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// Whether this row's action is in flight.
     @State private var isRunning = false
     /// One column for every row's glyph, so the texts of a cloud row and a triangle row line up.
-    @ScaledMetric(relativeTo: .subheadline) private var iconWidth: CGFloat = 22
+    @ScaledMetric(relativeTo: .subheadline) private var iconWidth: CGFloat = 20
     let systemImage: String
     let title: String
-    let detail: String
+    /// The sync error's own sentence, under the title — the only detail the strip keeps, because
+    /// it is the one thing that says what went wrong (a 401 among them).
+    var detail: String?
     var tint: Color = Theme.failure
-    let lastSyncedAt: Date?
     let action: PhoneSyncStripAction?
 
     var body: some View {
-        // Side by side at ordinary sizes; the button drops under the text at the accessibility
-        // sizes, where a row of three would squeeze the sentence into a column of single words.
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10))
-            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 10))
-        layout {
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                // Dropped at the accessibility sizes, where it would push the title into a ragged
-                // column; the title says the same thing in words.
-                if !dynamicTypeSize.isAccessibilitySize {
-                    Image(systemName: systemImage)
-                        .font(Theme.type(.subheadline))
-                        .foregroundStyle(tint)
-                        .frame(width: iconWidth)
-                        .accessibilityHidden(true)
-                }
-                VStack(alignment: .leading, spacing: 2) {
+        HStack(alignment: .center, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(Theme.type(.subheadline))
+                    .foregroundStyle(tint)
+                    .frame(width: iconWidth)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 1) {
                     Text(title)
                         .font(Theme.type(.subheadline, weight: .semibold))
                         .foregroundStyle(Theme.textStrong)
-                    Text(detail)
-                        .font(Theme.type(.footnote))
-                        .foregroundStyle(Theme.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let lastSyncedAt {
-                        HStack(spacing: 4) {
-                            Text(String(localized: "Synced"))
-                            Text(verbatim: "·")
-                            RelativeDateText(date: lastSyncedAt, style: .long)
-                        }
-                        .font(Theme.type(.footnote))
-                        .foregroundStyle(Theme.textMuted)
+                        .lineLimit(2)
+                    if let detail {
+                        Text(detail)
+                            .font(Theme.type(.footnote))
+                            .foregroundStyle(Theme.textSecondary)
+                            .lineLimit(2)
                     }
                 }
             }
             .accessibilityElement(children: .combine)
+            Spacer(minLength: 0)
             if let action {
-                if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 0) }
                 Button {
                     isRunning = true
                     Task {
@@ -148,8 +131,10 @@ private struct PhoneSyncStripRow: View {
                     }
                 }
                 .buttonStyle(.bordered)
+                .buttonBorderShape(.capsule)
                 .controlSize(.small)
                 .font(Theme.type(.subheadline, weight: .semibold))
+                .fixedSize()
                 .disabled(isRunning)
                 .sensoryFeedback(.impact(weight: .light), trigger: isRunning) { _, new in new }
             }

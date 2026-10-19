@@ -48,6 +48,9 @@ struct PhoneConversationComposer: View {
                             isConfirmingClose = true
                         }
                         .buttonStyle(.bordered)
+                        // Red, as a destructive button is: the root's accent tint otherwise
+                        // drew it in the same blue as Comment.
+                        .tint(Theme.failure)
                         .confirmationDialog(
                             String(localized: "Close \(summary.slug)?"),
                             isPresented: $isConfirmingClose,
@@ -64,11 +67,14 @@ struct PhoneConversationComposer: View {
             .padding(16)
             .background(Theme.background)
             .navigationTitle(String(localized: "Comment"))
-            .navigationSubtitle(summary.slug)
+            // The number alone: the pull request screen under the sheet names the repository.
+            .navigationSubtitle("#" + String(summary.number))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // The icon-only close every sheet of the app uses: a word here ("Abbrechen") pushed
+                // the title off centre and cut it short.
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "Cancel"), role: .cancel) { dismiss() }
+                    Button(role: .close) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {

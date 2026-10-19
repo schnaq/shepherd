@@ -7,8 +7,9 @@ import SwiftUI
 /// What it reads and writes is all ``ReviewModel``'s: ``ReviewModel/pendingVerdict``,
 /// ``ReviewModel/summaryText``, the draft's comments, ``ReviewModel/verdictBlocker`` and
 /// ``ReviewModel/submit(verdict:actions:)``, which goes through the write funnel's refusal rules.
-/// Under a blocker (your own pull request) the verdict is Comment and the reason is said where the
-/// picker would be: a segmented control cannot disable one segment. *Submit* closes the sheet only
+/// The verdicts are three rows, each with its symbol and colour, rather than a segmented control:
+/// "Änderungen anfordern" does not fit a third of a phone. Under a blocker (your own pull request)
+/// the verdict is Comment and the reason is said where the rows would be. *Submit* closes the sheet only
 /// for a review that was written, so a refused one leaves the summary in the field.
 struct PhoneSubmitReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -41,13 +42,18 @@ struct PhoneSubmitReviewSheet: View {
                 }
             }
             .scrollContentBackground(.hidden)
+            // The form's own top inset left a blank band under the bar at the medium detent.
+            .contentMargins(.top, 8, for: .scrollContent)
             .background(Theme.background)
             .navigationTitle(String(localized: "Submit review"))
-            .navigationSubtitle(model.summary?.slug ?? "")
+            // The number alone: the pull request screen under the sheet names the repository.
+            .navigationSubtitle(model.summary.map { "#" + String($0.number) } ?? "")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                // The icon-only close every sheet of the app uses: a word here ("Abbrechen") pushed
+                // the title off centre and cut it short.
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "Cancel"), role: .cancel) { dismiss() }
+                    Button(role: .close) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
@@ -89,14 +95,14 @@ struct PhoneSubmitReviewSheet: View {
     private var verdictSection: some View {
         Section {
             if model.verdictBlocker == nil {
-                Picker(String(localized: "Verdict"), selection: $model.pendingVerdict) {
-                    Text(String(localized: "Comment")).tag(ReviewVerdict.comment)
-                    Text(String(localized: "Approve")).tag(ReviewVerdict.approve)
-                    Text(String(localized: "Request changes")).tag(ReviewVerdict.requestChanges)
-                }
-                .pickerStyle(.segmented)
-                .listRowBackground(Color.clear)
-                .listRowInsets(EdgeInsets())
+                verdictRow(.comment, title: String(localized: "Comment"), symbol: "text.bubble", tint: Theme.accentText)
+                verdictRow(.approve, title: String(localized: "Approve"), symbol: "checkmark.circle.fill", tint: Theme.success)
+                verdictRow(
+                    .requestChanges,
+                    title: String(localized: "Request changes"),
+                    symbol: "exclamationmark.circle.fill",
+                    tint: Theme.failure
+                )
             } else {
                 LabeledContent(String(localized: "Verdict"), value: String(localized: "Comment"))
             }
@@ -108,11 +114,49 @@ struct PhoneSubmitReviewSheet: View {
         }
     }
 
+    /// One verdict as a row: its symbol in its colour — the conversation's verdict colours — its
+    /// name, and a check on the chosen one.
+    private func verdictRow(_ verdict: ReviewVerdict, title: String, symbol: String, tint: Color) -> some View {
+        let isSelected = model.pendingVerdict == verdict
+        return Button {
+            model.pendingVerdict = verdict
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: symbol)
+                    .font(Theme.type(.body))
+                    .foregroundStyle(tint)
+                    .frame(minWidth: 24)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(Theme.type(.body))
+                    .foregroundStyle(Theme.text)
+                Spacer(minLength: 8)
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(Theme.type(.body, weight: .semibold))
+                        .foregroundStyle(Theme.accent)
+                        .accessibilityHidden(true)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .sensoryFeedback(.selection, trigger: isSelected) { _, new in new }
+    }
+
     private var summarySection: some View {
         Section {
-            TextField(String(localized: "Summary"), text: $model.summaryText, axis: .vertical)
-                .font(Theme.type(.body))
-                .lineLimit(5...12)
+            // The placeholder says whether words are needed, rather than repeating the header.
+            TextField(
+                model.pendingVerdict == .approve
+                    ? String(localized: "Optional for an approval")
+                    : String(localized: "What should the author know?"),
+                text: $model.summaryText,
+                axis: .vertical
+            )
+            .font(Theme.type(.body))
+            .lineLimit(3...12)
             PhoneSavedReplyMenu(replies: model.settings.usableSavedReplies) { snippet in
                 model.summaryText = SavedReply.inserting(snippet, into: model.summaryText)
             }
