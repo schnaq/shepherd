@@ -126,6 +126,21 @@ final class ReplayAndWaitingTests: XCTestCase {
         XCTAssertTrue(events.contains { if case .mutationSent = $0 { return true } else { return false } })
     }
 
+    func testAReviewWhoseAnswerWasUnreadableIsSentNotFailed() async throws {
+        let github = MockGitHub()
+        await github.setHeadOid("head-1", repo: repo, number: 1)
+        await github.setSubmitError(.decoding(message: "Review response was missing an id"))
+        let store = try DatabaseManager.inMemory()
+        let draft = ReviewDraft(prID: "PR_1", verdict: .approve, summaryBody: "Ship it.", basedOnHeadOid: "head-1", updatedAt: now)
+        try await store.saveDraft(draft)
+        try await enqueue(.submitReview(draft), in: store, attempts: 0)
+        await makeEngine(github: github, store: store).drainOutbox()
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty, "a failed row would be one Retry away from a second review")
+        let remainingDraft = try await store.fetchDraft(prID: "PR_1")
+        XCTAssertNil(remainingDraft)
+    }
+
     func testARetriedReviewOnAnotherCommitIsSubmitted() async throws {
         let github = MockGitHub()
         let earlier = ConversationReview(id: "PRR_8", author: me, state: .approved, bodyMarkdown: "Ship it.", createdAt: now.addingTimeInterval(1), commitOid: "head-0")
@@ -207,14 +222,18 @@ final class ReplayAndWaitingTests: XCTestCase {
         XCTAssertEqual(remaining.first?.state, .pending, "retried later, never sent blind")
     }
 
-    /// Edits, resolves and reactions repeat harmlessly; a delete that finds nothing and a merge
-    /// that finds it merged are decided by answers of their own (``OutboxDrainTests``).
+    /// Edits, (un)resolves, reactions and ready-for-review repeat harmlessly; a delete that finds
+    /// nothing and a merge that finds it merged are decided by answers of their own, whatever the
+    /// attempt count (`OutboxDrainTests.testADeleteOfACommentThatIsAlreadyGoneIsSent`,
+    /// `testAMergeGitHubHasAlreadyLandedIsSentRatherThanFailed`).
     func testTheWritesThatRepeatHarmlesslyAreRetriedWithoutAProbe() async throws {
         let github = MockGitHub()
         let store = try DatabaseManager.inMemory()
         try await enqueue(.resolveThread(threadID: "PRRT_1"), in: store, attempts: 1)
         try await enqueue(.editComment(.issueComment(databaseID: 7), body: "Fixed typo"), in: store, attempts: 1)
         try await enqueue(.react(subjectID: "IC_1", content: .thumbsUp, adding: true), in: store, attempts: 1)
+        try await enqueue(.unresolveThread(threadID: "PRRT_2"), in: store, attempts: 1)
+        try await enqueue(.markReadyForReview, in: store, attempts: 1)
         await makeEngine(github: github, store: store).drainOutbox()
         let probes = await github.detailRequests
         XCTAssertEqual(probes, [])

@@ -1145,7 +1145,14 @@ public actor SyncEngine {
                     )
                 }
             }
-            _ = try await github.submitReview(draft, repo: item.repo, number: item.number)
+            do {
+                _ = try await github.submitReview(draft, repo: item.repo, number: item.number)
+            } catch GitHubError.decoding {
+                // Only thrown after GitHub answered 2xx (the request body is plain strings and
+                // cannot fail to encode): the review landed and its answer was unreadable. Failing
+                // the row would let Retry in Settings, which zeroes the attempt count and so skips
+                // the replay check, submit it a second time (ADR 0044).
+            }
             await captureBaseline(for: item, draft: draft)
             try await store.deleteDraft(prID: item.prID)
             return .sent
