@@ -130,11 +130,13 @@ struct PhoneCommentComposer: View {
         return startsReview ? String(localized: "Start a review") : String(localized: "Add review comment")
     }
 
+    /// "Line 42" or "Lines 40–46": short, because the bar beside it carries GitHub's long button
+    /// titles ("Start a review"), and "Comment on line 42" was cut to "Comment on…".
     private var title: String {
         if let start = request.startLine, start != request.line {
-            return String(localized: "Comment on lines \(start)–\(request.line)")
+            return String(localized: "Lines \(start)–\(request.line)")
         }
-        return String(localized: "Comment on line \(request.line)")
+        return String(localized: "Line \(request.line)")
     }
 
     private var anchorDescription: String {

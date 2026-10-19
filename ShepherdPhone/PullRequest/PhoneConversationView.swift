@@ -976,7 +976,23 @@ struct PhoneThreadComment: View {
     var body: some View {
         let editing = PostEditing.threadComment(comment)
         VStack(alignment: .leading, spacing: 8) {
-            PhoneAuthorLine(author: comment.author, date: comment.createdAt, isEdited: comment.isEdited)
+            HStack(alignment: .top, spacing: 8) {
+                PhoneAuthorLine(author: comment.author, date: comment.createdAt, isEdited: comment.isEdited)
+                Spacer(minLength: 4)
+                // Visible as well as on a long press, as on the Mac's stream, so VoiceOver finds it.
+                if editing != nil || comment.url != nil {
+                    Menu {
+                        menuItems(editing)
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(Theme.type(.body))
+                            .foregroundStyle(Theme.textSecondary)
+                            .frame(minWidth: 32, minHeight: 32)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel(String(localized: "More actions"))
+                }
+            }
             if let editing, PhonePostEditor.isOpen(for: editing, in: model) {
                 PhonePostEditor(model: model, actions: actions, editing: editing, markdown: comment.bodyMarkdown)
             } else {
@@ -993,26 +1009,7 @@ struct PhoneThreadComment: View {
             }
         }
         .contentShape(Rectangle())
-        .contextMenu {
-            if let editing, editing.canEdit {
-                Button(String(localized: "Edit"), systemImage: "pencil") {
-                    model.beginEditing(editing.postID, markdown: comment.bodyMarkdown)
-                }
-            }
-            if let url = comment.url {
-                Button(String(localized: "Copy link"), systemImage: "link") {
-                    PlatformServices.copyToPasteboard(url.absoluteString)
-                }
-                ShareLink(item: url)
-                Button(String(localized: "Open on GitHub"), systemImage: "safari") { PlatformServices.open(url) }
-            }
-            if let editing, editing.canDelete {
-                Divider()
-                Button(String(localized: "Delete…"), systemImage: "trash", role: .destructive) {
-                    isConfirmingDelete = true
-                }
-            }
-        }
+        .contextMenu { menuItems(editing) }
         .confirmationDialog(
             String(localized: "Delete this comment?"),
             isPresented: $isConfirmingDelete,
@@ -1024,6 +1021,30 @@ struct PhoneThreadComment: View {
             Button(String(localized: "Cancel"), role: .cancel) {}
         } message: {
             Text(PhonePostCard<EmptyView, EmptyView>.deleteQuestion(author: comment.author, date: comment.createdAt))
+        }
+    }
+
+    /// *Edit*, *Copy link*, *Share*, *Open on GitHub* and *Delete…* — no *Quote reply*: a thread's
+    /// answer is its own reply field.
+    @ViewBuilder
+    private func menuItems(_ editing: PostEditing?) -> some View {
+        if let editing, editing.canEdit {
+            Button(String(localized: "Edit"), systemImage: "pencil") {
+                model.beginEditing(editing.postID, markdown: comment.bodyMarkdown)
+            }
+        }
+        if let url = comment.url {
+            Button(String(localized: "Copy link"), systemImage: "link") {
+                PlatformServices.copyToPasteboard(url.absoluteString)
+            }
+            ShareLink(item: url)
+            Button(String(localized: "Open on GitHub"), systemImage: "safari") { PlatformServices.open(url) }
+        }
+        if let editing, editing.canDelete {
+            Divider()
+            Button(String(localized: "Delete…"), systemImage: "trash", role: .destructive) {
+                isConfirmingDelete = true
+            }
         }
     }
 }

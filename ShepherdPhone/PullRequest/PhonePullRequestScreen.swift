@@ -98,7 +98,7 @@ struct PhonePullRequestScreen: View {
                 PhoneCommentComposer(model: model, request: request)
             }
             .sheet(isPresented: threadSheetBinding) {
-                if let thread = model.activeThread, let summary = model.summary {
+                if let thread = shownActiveThread, let summary = model.summary {
                     PhoneThreadSheet(model: model, actions: actions, summary: summary, thread: thread)
                 }
             }
@@ -167,7 +167,11 @@ struct PhonePullRequestScreen: View {
             #if DEBUG
             // `SHEPHERD_DEMO_SCROLL=description|conversation|checks`: where a demo capture starts,
             // on a simulator nobody can scroll — the Mac demo's `SHEPHERD_DEMO_*` switches' kind.
+            // `SHEPHERD_DEMO_PUSH_FILES=1` pushes the files screen the same way.
             .task {
+                if ProcessInfo.processInfo.environment["SHEPHERD_DEMO_PUSH_FILES"] == "1" {
+                    files = PhoneFilesDestination(prID: model.prID)
+                }
                 guard let target = ProcessInfo.processInfo.environment["SHEPHERD_DEMO_SCROLL"] else { return }
                 try? await Task.sleep(for: .milliseconds(400))
                 proxy.scrollTo(target, anchor: .top)
@@ -406,6 +410,15 @@ struct PhonePullRequestScreen: View {
     private func showInDiff(path: String, line: Int?) {
         model.reveal(path: path, line: line)
         files = PhoneFilesDestination(prID: model.prID)
+    }
+
+    /// The thread the sheet shows, with the reviewer's edits and deletes laid over it — the sheet
+    /// offers both, and ``ReviewModel/activeThread`` is the stored copy, which would put a deleted
+    /// comment back under the reviewer's finger. The binding above keeps asking the stored copy,
+    /// so deleting a comment does not close the sheet.
+    private var shownActiveThread: ReviewThread? {
+        guard let id = model.activeThreadID, let detail = model.detail else { return nil }
+        return model.conversationOverlay.applied(to: detail).threads.first { $0.id == id }
     }
 
     private var threadSheetBinding: Binding<Bool> {
