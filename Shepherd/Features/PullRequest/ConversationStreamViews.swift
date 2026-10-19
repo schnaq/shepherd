@@ -3,8 +3,8 @@ import ShepherdCore
 import SwiftUI
 
 // The conversation tab's stream (ADR 0043) and its rows, one view per kind of entry. They draw what
-// the model already holds and fetch nothing; the writes are the thread reply bars' and the reaction
-// bars', through `PullRequestActions`.
+// the model already holds and fetch nothing; the writes are the thread reply bars', the reaction
+// bars' and the posts' own edits and deletes, through `PullRequestActions`.
 
 /// Every entry after the description, in GitHub's order.
 ///
@@ -14,8 +14,10 @@ import SwiftUI
 /// post and thread of a long conversation again. The model, the actions and the translation cache
 /// are what the rows act through rather than what they show, so they stay out of the comparison;
 /// what a row does read off the model reaches it through observation — a thread's fold reaches
-/// that card, the reviewer's reaction clicks only the reaction bars (``PostReactions``) — and a
-/// reply being typed under a thread redraws that card alone.
+/// that card, the reviewer's reaction clicks only the reaction bars (``PostReactions``), whether a
+/// post is being edited only the posts the viewer may edit — and a reply or an edit being typed
+/// redraws that card alone. The reviewer's edits and deletes are already in the entries
+/// (``ReviewModel/conversationEntries``).
 ///
 /// A plain `VStack`, not a lazy one: a lazy container may drop a row's `@State` once it scrolls
 /// away, and a hidden comment the reviewer asked to see would hide again. A thread's reply and
@@ -64,7 +66,8 @@ struct ConversationStream: View, Equatable {
                 reactions: comment.reactions,
                 url: comment.url,
                 isMinimized: comment.isMinimized,
-                minimizedReason: comment.minimizedReason
+                minimizedReason: comment.minimizedReason,
+                editing: PostEditing.comment(comment)
             )
         case .review(let review, let threads):
             ConversationReviewView(
@@ -124,6 +127,8 @@ struct ConversationPostView: View {
     var isMinimized = false
     /// GitHub's word for why it is hidden, or `nil` when it gave none.
     var minimizedReason: String?
+    /// What the viewer may change about it, or `nil` for nothing (ADR 0043, C).
+    var editing: PostEditing?
 
     /// Whether the reviewer asked to see a hidden post anyway.
     @State private var isRevealed = false
@@ -140,18 +145,24 @@ struct ConversationPostView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     PostHeader(
                         model: model,
+                        actions: actions,
                         author: author,
                         verb: verb,
                         date: date,
                         isEdited: isEdited,
                         markdown: markdown,
-                        url: url
+                        url: url,
+                        editing: editing
                     )
-                    PostBody(
-                        markdown: markdown,
-                        reactions: PostReactions(subjectID: subjectID, stored: reactions, model: model, actions: actions),
-                        translations: translations
-                    )
+                    if let editing, PostEditor.isOpen(for: editing, in: model) {
+                        PostEditor(model: model, actions: actions, editing: editing, markdown: markdown)
+                    } else {
+                        PostBody(
+                            markdown: markdown,
+                            reactions: PostReactions(subjectID: subjectID, stored: reactions, model: model, actions: actions),
+                            translations: translations
+                        )
+                    }
                 }
             }
             .accessibilityElement(children: .contain)
@@ -239,11 +250,13 @@ struct StreamNoticeRow: View {
     }
 }
 
-/// Who wrote a post, what they did and when, and the post's menu — *Quote reply*, *Copy link*,
-/// *Open on GitHub*. Above a post's body, and as a review's own row.
+/// Who wrote a post, what they did and when, and the post's menu (``PostMenu``). Above a post's
+/// body, and as a review's own row.
 private struct PostHeader: View {
-    /// The review model, for *Quote reply*.
+    /// The review model, for the menu.
     let model: ReviewModel
+    /// The write actions, for the menu's delete.
+    let actions: PullRequestActions
     /// Who.
     let author: ShepherdCore.Actor
     /// What, after the name.
@@ -256,43 +269,27 @@ private struct PostHeader: View {
     let date: Date
     /// Whether the post was edited after it was posted.
     var isEdited = false
-    /// What *Quote reply* quotes; empty leaves the item out.
+    /// The post's Markdown, for *Quote reply* and *Edit*; empty for a verdict without words.
     var markdown = ""
-    /// The post on github.com, for the other two items.
+    /// The post on github.com.
     var url: URL?
+    /// What the viewer may change about the post, or `nil` for nothing.
+    var editing: PostEditing?
 
     var body: some View {
         HStack(spacing: 8) {
             AuthorLine(author: author, verb: verb, symbol: symbol, tint: tint, date: date, isEdited: isEdited)
             Spacer(minLength: 4)
-            if !markdown.isEmpty || url != nil {
-                menu
-            }
+            PostMenu(
+                model: model,
+                actions: actions,
+                author: author,
+                date: date,
+                markdown: markdown,
+                url: url,
+                editing: editing
+            )
         }
-    }
-
-    private var menu: some View {
-        Menu {
-            if !markdown.isEmpty {
-                Button(String(localized: "Quote reply")) { model.quote(markdown) }
-            }
-            if let url {
-                Button(String(localized: "Copy link")) {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(url.absoluteString, forType: .string)
-                }
-                Button(String(localized: "Open on GitHub")) { NSWorkspace.shared.open(url) }
-            }
-        } label: {
-            Image(systemName: "ellipsis")
-                .font(Theme.type(.callout))
-                .foregroundStyle(Theme.textSecondary)
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        .help(String(localized: "More actions"))
-        .accessibilityLabel(String(localized: "More actions"))
     }
 
     /// What a post — or a review — is announced as: who, what, when, and "edited" where the line
@@ -304,6 +301,244 @@ private struct PostHeader: View {
             RelativeDate.long(date),
             isEdited ? String(localized: "edited") : nil,
         ])
+    }
+}
+
+/// What the viewer may change about one post, and where the change is sent (ADR 0043, C).
+///
+/// Offered only where GitHub's own flags say so, and only for a post GitHub sent with its REST id:
+/// the edit and delete endpoints take that number in their path, so a post without one cannot be
+/// addressed. The description needs none — the pull request is its address. Pure, so the rule is
+/// tested rather than read off a menu.
+struct PostEditing: Hashable {
+    /// The post's node id, which the overlay and the editor's draft are keyed by — the pull
+    /// request's own for the description.
+    let postID: String
+    /// Where an edit or a delete of it is sent.
+    let target: ConversationTarget
+    /// Whether the menu offers *Edit*.
+    let canEdit: Bool
+    /// Whether the menu offers *Delete…* — never for a review or the description, which GitHub
+    /// cannot delete.
+    let canDelete: Bool
+
+    /// The description: editable where GitHub says the viewer may, never deletable.
+    /// - Parameters:
+    ///   - prID: The pull request's node id.
+    ///   - conversation: The conversation, which carries the flag; `nil` until it has been read.
+    /// - Returns: The description's, or `nil` when the viewer may not edit it.
+    static func description(of prID: String, conversation: PullRequestConversation?) -> PostEditing? {
+        guard conversation?.viewerCanUpdateDescription == true else { return nil }
+        return PostEditing(postID: prID, target: .description, canEdit: true, canDelete: false)
+    }
+
+    /// A comment on the conversation.
+    /// - Parameter comment: The comment.
+    /// - Returns: Its, or `nil` when the viewer may neither edit nor delete it.
+    static func comment(_ comment: ConversationComment) -> PostEditing? {
+        comment.databaseID.flatMap { id in
+            offered(comment.id, .issueComment(databaseID: id), comment.viewerCanUpdate, comment.viewerCanDelete)
+        }
+    }
+
+    /// A review's words above its verdict: editable once submitted, never deletable — GitHub only
+    /// dismisses a review. A verdict without words has no text to edit, and the viewer's pending
+    /// review is not submitted.
+    /// - Parameter review: The review.
+    /// - Returns: Its, or `nil` when the viewer may not edit it.
+    static func review(_ review: ConversationReview) -> PostEditing? {
+        guard review.state != .pending, review.hasBody, let id = review.databaseID else { return nil }
+        return offered(review.id, .review(databaseID: id), review.viewerCanUpdate, false)
+    }
+
+    /// A comment in a review thread.
+    /// - Parameter comment: The comment.
+    /// - Returns: Its, or `nil` when the viewer may neither edit nor delete it.
+    static func threadComment(_ comment: ReviewComment) -> PostEditing? {
+        comment.databaseID.flatMap { id in
+            offered(comment.id, .reviewComment(databaseID: id), comment.viewerCanUpdate, comment.viewerCanDelete)
+        }
+    }
+
+    /// The post's, or `nil` when GitHub allows neither.
+    private static func offered(
+        _ postID: String,
+        _ target: ConversationTarget,
+        _ canEdit: Bool,
+        _ canDelete: Bool
+    ) -> PostEditing? {
+        guard canEdit || canDelete else { return nil }
+        return PostEditing(postID: postID, target: target, canEdit: canEdit, canDelete: canDelete && target.isDeletable)
+    }
+}
+
+/// A post's ⋯ menu — *Quote reply*, *Edit*, *Delete…*, *Copy link*, *Open on GitHub*, each only
+/// where it applies — and the question a delete asks before anything is written. Draws nothing
+/// when no item applies.
+struct PostMenu: View {
+    /// The review model, for *Quote reply*, *Edit* and the delete.
+    let model: ReviewModel
+    /// The write actions, for the delete.
+    let actions: PullRequestActions
+    /// Who wrote the post, for the delete's question.
+    let author: ShepherdCore.Actor
+    /// When, for the same.
+    let date: Date
+    /// The post's Markdown: what *Quote reply* quotes and *Edit* starts from. *Quote reply* is left
+    /// out while it is empty.
+    var markdown = ""
+    /// Whether the menu offers *Quote reply* at all — not on a thread's comment, whose answer is the
+    /// thread's own reply bar.
+    var quotes = true
+    /// The post on github.com, for *Copy link* and *Open on GitHub*.
+    var url: URL?
+    /// What the viewer may change about the post, or `nil` for nothing.
+    var editing: PostEditing?
+
+    /// Whether *Delete…* has asked and is waiting for an answer.
+    @State private var isConfirmingDelete = false
+
+    private var offersQuote: Bool { quotes && !markdown.isEmpty }
+
+    var body: some View {
+        if offersQuote || url != nil || editing != nil {
+            Menu {
+                if offersQuote {
+                    Button(String(localized: "Quote reply")) { model.quote(markdown) }
+                }
+                if let editing, editing.canEdit {
+                    Button(String(localized: "Edit")) { model.beginEditing(editing.postID, markdown: markdown) }
+                }
+                if let editing, editing.canDelete {
+                    Button(String(localized: "Delete…"), role: .destructive) { isConfirmingDelete = true }
+                }
+                if let url {
+                    Button(String(localized: "Copy link")) {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(url.absoluteString, forType: .string)
+                    }
+                    Button(String(localized: "Open on GitHub")) { NSWorkspace.shared.open(url) }
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(Theme.type(.callout))
+                    .foregroundStyle(Theme.textSecondary)
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help(String(localized: "More actions"))
+            .accessibilityLabel(String(localized: "More actions"))
+            .confirmationDialog(
+                String(localized: "Delete this comment?"),
+                isPresented: $isConfirmingDelete
+            ) {
+                Button(String(localized: "Delete"), role: .destructive) {
+                    if let editing { model.delete(editing, actions: actions) }
+                }
+                Button(String(localized: "Cancel"), role: .cancel) {}
+            } message: {
+                Text(Self.deleteQuestion(author: author, date: date))
+            }
+        }
+    }
+
+    /// What a delete asks before anything is written: whose comment, from when, and that it
+    /// cannot be undone — GitHub keeps no copy to restore.
+    static func deleteQuestion(author: ShepherdCore.Actor, date: Date, now: Date = Date()) -> String {
+        let name = author.bestName
+        let when = RelativeDate.long(date, relativeTo: now)
+        return String(localized: "\(name) wrote this comment \(when). It is deleted on GitHub, and that cannot be undone.")
+    }
+}
+
+/// The editor that takes a post's text's place while the viewer edits it (ADR 0043, C): its
+/// Markdown in the app's comment field, with *Cancel* and *Update comment*.
+///
+/// It draws from its own copy of the text, for ``ConversationThreadView``'s reason, and writes
+/// every change to the model's (``ReviewModel/postEditDrafts``), which outlives the tab. ⌘⏎ is
+/// *Update comment* while this field has the keyboard, and the toolbar's *Review* otherwise
+/// (``ReviewModel/focusedPostEditor``).
+struct PostEditor: View {
+    /// The review model, which holds the draft and writes the edit.
+    let model: ReviewModel
+    /// The write actions.
+    let actions: PullRequestActions
+    /// The post and where its edit is sent.
+    let editing: PostEditing
+    /// The text the post shows now — what *Update comment* is compared with, so an unchanged text
+    /// sends nothing.
+    let markdown: String
+
+    /// What is typed — the copy this editor draws from.
+    @State private var text = ""
+    /// Bumped once the editor is on screen, so the keyboard goes into it.
+    @State private var focusRequest = 0
+
+    /// Whether a post's editor is open. Asks the model only for a post the viewer may edit, so the
+    /// others do not redraw when an editor opens.
+    static func isOpen(for editing: PostEditing, in model: ReviewModel) -> Bool {
+        editing.canEdit && model.postsBeingEdited.contains(editing.postID)
+    }
+
+    var body: some View {
+        let isFocused = model.focusedPostEditor == editing.postID
+        VStack(alignment: .leading, spacing: 8) {
+            ComposerTextEditor(
+                text: draft,
+                height: 96,
+                imageUpload: model.summary.map { ImageUploadTarget(repo: $0.repo, actions: actions) },
+                focusRequest: focusRequest,
+                onFocusChange: { focused in
+                    if focused {
+                        model.focusedPostEditor = editing.postID
+                    } else if model.focusedPostEditor == editing.postID {
+                        model.focusedPostEditor = nil
+                    }
+                }
+            )
+            .accessibilityLabel(String(localized: "Edit comment"))
+            HStack(spacing: 8) {
+                Spacer()
+                Button(String(localized: "Cancel")) { model.endEditing(editing.postID) }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .help(String(localized: "Close the editor and keep the comment as it is"))
+                    .accessibilityLabel(String(localized: "Cancel editing"))
+                Button(String(localized: "Update comment")) {
+                    model.edit(editing, body: text, shown: markdown, actions: actions)
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                // The composer's rule: ⌘⏎ is this button's only while its field has the keyboard.
+                .keyboardShortcut(isFocused ? KeyboardShortcut(.return, modifiers: .command) : nil)
+                .disabled(!PastedImage.isSendable(text))
+                .help(String(localized: "Update the comment (⌘⏎ while you type)"))
+            }
+        }
+        .onAppear {
+            text = model.postEditDrafts[editing.postID] ?? ""
+            focusRequest += 1
+        }
+        // The field can leave with the keyboard in it — *Update comment*, a switch of tab — and
+        // then reports no focus change of its own; ⌘⏎ has to go back to *Review* regardless.
+        .onDisappear {
+            if model.focusedPostEditor == editing.postID { model.focusedPostEditor = nil }
+        }
+    }
+
+    /// The field's text, written to this editor's copy and to the model's at once, and read from
+    /// the model's first — ``ConversationThreadView``'s reply binding, for its reasons.
+    private var draft: Binding<String> {
+        Binding(
+            // The editor's copy read first, so SwiftUI tracks it: the model's is not observed.
+            get: {
+                let own = text
+                return model.postEditDrafts[editing.postID] ?? own
+            },
+            set: { new in
+                text = new
+                model.postEditDrafts[editing.postID] = new
+            }
+        )
     }
 }
 
@@ -370,7 +605,7 @@ struct AuthorLine: View {
 /// popover opened from inside another one is a thing nobody here could check by eye.
 struct ReactionBar: View {
     /// The groups to draw, in GitHub's order — the stored ones with the reviewer's clicks laid
-    /// over them (``ReviewModel/displayed(_:subjectID:overlay:)``).
+    /// over them (``ConversationOverlay/reactions(_:on:)``).
     let groups: [ReactionGroup]
     /// Whether the viewer may react here.
     let canReact: Bool
@@ -481,7 +716,7 @@ private extension View {
 /// One post's reaction bar on the review screen: the stored groups with the reviewer's clicks laid
 /// over them, taking a click where GitHub lets the viewer react.
 ///
-/// A view of its own, and the only one that reads the clicks (``ReviewModel/reactionOverlay``), so
+/// A view of its own, and the only one that reads the clicks (``ReviewModel/conversationOverlay``), so
 /// a click re-runs the bars and not the posts around them. A post asks ``isDrawn`` instead, which
 /// reads what the post already shows and two flags a sweep rarely changes.
 struct PostReactions: View {
@@ -513,7 +748,7 @@ struct PostReactions: View {
             // ponytail: every bar reads the whole overlay, so one click re-runs every bar on the
             // screen (the posts around them stay put); a per-post slice of it if a long
             // conversation ever stutters.
-            groups: ReviewModel.displayed(stored, subjectID: subjectID, overlay: model.reactionOverlay),
+            groups: model.conversationOverlay.reactions(stored, on: subjectID),
             canReact: canReact,
             onToggle: { content, isOn in
                 model.toggleReaction(subjectID: subjectID, content: content, currentlyReacted: isOn, actions: actions)
@@ -547,9 +782,11 @@ struct ConversationReviewView: View {
             model: model,
             actions: actions
         )
+        let editing = PostEditing.review(review)
         VStack(alignment: .leading, spacing: 8) {
             PostHeader(
                 model: model,
+                actions: actions,
                 author: review.author,
                 verb: verdict.sentence,
                 symbol: verdict.symbol,
@@ -557,14 +794,19 @@ struct ConversationReviewView: View {
                 date: review.createdAt,
                 isEdited: review.isEdited,
                 markdown: review.hasBody ? review.bodyMarkdown : "",
-                url: review.url
+                url: review.url,
+                editing: editing
             )
             .padding(.horizontal, 12)
             // The words under the review's own row, which already says who and when and carries
             // the menu — so no header here, and no spoken label of the card's own either.
             if review.hasBody {
                 Card {
-                    PostBody(markdown: review.bodyMarkdown, reactions: reactions, translations: translations)
+                    if let editing, PostEditor.isOpen(for: editing, in: model) {
+                        PostEditor(model: model, actions: actions, editing: editing, markdown: review.bodyMarkdown)
+                    } else {
+                        PostBody(markdown: review.bodyMarkdown, reactions: reactions, translations: translations)
+                    }
                 }
             } else if !review.reactions.isEmpty {
                 // A verdict without words has no card to carry its reactions, so they sit under
@@ -656,7 +898,13 @@ struct ConversationThreadView: View {
                 header
                 if isExpanded {
                     ForEach(thread.comments) { comment in
-                        ThreadCommentView(comment: comment, translations: translations, model: model, actions: actions)
+                        ThreadCommentView(
+                            comment: comment,
+                            translations: translations,
+                            model: model,
+                            actions: actions,
+                            hasMenu: true
+                        )
                     }
                     ThreadReplyBar(thread: thread, summary: summary, actions: actions, replyText: reply)
                 }

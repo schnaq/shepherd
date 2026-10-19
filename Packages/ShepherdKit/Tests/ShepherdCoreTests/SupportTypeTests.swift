@@ -392,6 +392,51 @@ final class ModelCodingTests: XCTestCase {
         XCTAssertThrowsError(try JSONDecoder().decode(OutboxAction.self, from: unknownContent))
     }
 
+    func testEditAndDeleteRowsRoundTripForEveryTarget() throws {
+        let targets: [ConversationTarget] = [
+            .description, .issueComment(databaseID: 11), .reviewComment(databaseID: 12),
+            .review(databaseID: 13),
+        ]
+        for target in targets {
+            let edit = OutboxAction.editComment(target, body: "New text")
+            let delete = OutboxAction.deleteComment(target)
+            for action in [edit, delete] {
+                let data = try JSONEncoder().encode(action)
+                XCTAssertEqual(try JSONDecoder().decode(OutboxAction.self, from: data), action)
+                XCTAssertNil(action.basedOnIssueUpdatedAt)
+                XCTAssertFalse(action.targetsIssue)
+            }
+            XCTAssertEqual(edit.kind, "editComment")
+            XCTAssertEqual(delete.kind, "deleteComment")
+        }
+    }
+
+    func testOnlyTheTwoCommentKindsAreDeletable() {
+        XCTAssertTrue(ConversationTarget.issueComment(databaseID: 1).isDeletable)
+        XCTAssertTrue(ConversationTarget.reviewComment(databaseID: 1).isDeletable)
+        XCTAssertFalse(ConversationTarget.review(databaseID: 1).isDeletable)
+        XCTAssertFalse(ConversationTarget.description.isDeletable)
+    }
+
+    func testEditAndDeleteRowsAreStoredUnderTheirKeys() throws {
+        // The payload column keeps these bytes while a row is queued, so a literal is pinned.
+        let edit = Data(
+            #"{"editComment":{"target":{"issueComment":{"databaseID":5}},"body":"Hi"}}"#.utf8
+        )
+        XCTAssertEqual(
+            try JSONDecoder().decode(OutboxAction.self, from: edit),
+            .editComment(.issueComment(databaseID: 5), body: "Hi")
+        )
+        let delete = Data(#"{"deleteComment":{"target":{"reviewComment":{"databaseID":6}}}}"#.utf8)
+        XCTAssertEqual(
+            try JSONDecoder().decode(OutboxAction.self, from: delete),
+            .deleteComment(.reviewComment(databaseID: 6))
+        )
+        // An edit without a body would blank the post, so it is not guessed at.
+        let bodyless = Data(#"{"editComment":{"target":{"description":{}}}}"#.utf8)
+        XCTAssertThrowsError(try JSONDecoder().decode(OutboxAction.self, from: bodyless))
+    }
+
     func testTheCloseReasonsAreGitHubsOwnTwoWords() {
         XCTAssertEqual(
             IssueCloseReason.allCases.map(\.rawValue).sorted(),

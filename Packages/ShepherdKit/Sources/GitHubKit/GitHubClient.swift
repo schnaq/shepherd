@@ -1194,6 +1194,80 @@ public actor GitHubClient {
         } ?? false
     }
 
+    /// Replaces the text of one of the viewer's own posts (ADR 0043). REST, by the post's numeric
+    /// id — the GraphQL node id a reaction uses is no address here.
+    ///
+    /// Answers `200` with the post, which nothing reads. A post that is gone is `404`, thrown as
+    /// ``GitHubError/notFound(resource:)`` like every other status: the drain decides what that
+    /// is worth, and for an edit it is a failure.
+    /// - Parameters:
+    ///   - target: Which post.
+    ///   - body: The new text as Markdown.
+    ///   - repo: The repository.
+    ///   - number: The pull request number, which a review and the description are addressed by.
+    public func editConversationText(
+        _ target: ConversationTarget,
+        body: String,
+        repo: RepoRef,
+        number: Int
+    ) async throws {
+        let root = "/repos/\(repo.owner)/\(repo.name)"
+        let method: String
+        let path: String
+        switch target {
+        case .description:
+            method = "PATCH"
+            path = "\(root)/pulls/\(number)"
+        case .issueComment(let id):
+            method = "PATCH"
+            path = "\(root)/issues/comments/\(id)"
+        case .reviewComment(let id):
+            method = "PATCH"
+            path = "\(root)/pulls/comments/\(id)"
+        case .review(let id):
+            // The one edit that is a PUT.
+            method = "PUT"
+            path = "\(root)/pulls/\(number)/reviews/\(id)"
+        }
+        _ = try await performREST(
+            method: method,
+            path: path,
+            queryItems: [],
+            body: try RESTJSON.encode(CommentBody(body: body)),
+            useCache: false,
+            resource: "\(repo.fullName)#\(number) edit"
+        )
+    }
+
+    /// Deletes one of the viewer's own comments (ADR 0043). `204` with no content; a comment that
+    /// is already gone is `404`, thrown as ``GitHubError/notFound(resource:)`` for the drain to
+    /// read as done.
+    ///
+    /// A review and the description have no delete. Rows come from disk, so asking for one is
+    /// thrown rather than trapped, as a ``GitHubError/validationFailed(message:)`` — not
+    /// retryable, and not the `notFound` the drain reads as sent.
+    /// - Parameters:
+    ///   - target: Which comment.
+    ///   - repo: The repository.
+    public func deleteConversationComment(_ target: ConversationTarget, repo: RepoRef) async throws {
+        let root = "/repos/\(repo.owner)/\(repo.name)"
+        let path: String
+        switch target {
+        case .issueComment(let id): path = "\(root)/issues/comments/\(id)"
+        case .reviewComment(let id): path = "\(root)/pulls/comments/\(id)"
+        case .description, .review:
+            throw GitHubError.validationFailed(message: "This post cannot be deleted.")
+        }
+        _ = try await performREST(
+            method: "DELETE",
+            path: path,
+            queryItems: [],
+            body: nil,
+            useCache: false,
+            resource: "\(repo.fullName) comment"
+        )
+    }
+
     /// Takes a pull request out of draft state. GraphQL-only.
     /// - Parameter pullRequestID: The pull request's GraphQL node id.
     public func markReadyForReview(pullRequestID: String) async throws {

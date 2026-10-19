@@ -411,6 +411,16 @@
         }
       }
     },
+    "%@ wrote this comment %@. It is deleted on GitHub, and that cannot be undone.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@ hat diesen Kommentar %2$@ geschrieben. Er wird auf GitHub gelöscht, und das lässt sich nicht rückgängig machen."
+          }
+        }
+      }
+    },
     "%@ · %@ · %@": {
       "localizations": {
         "de": {
@@ -2911,6 +2921,26 @@
         }
       }
     },
+    "Cancel editing": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bearbeiten abbrechen"
+          }
+        }
+      }
+    },
+    "Close the editor and keep the comment as it is": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den Editor schließen und den Kommentar lassen, wie er ist"
+          }
+        }
+      }
+    },
     "Confused": {
       "localizations": {
         "de": {
@@ -2941,6 +2971,46 @@
         }
       }
     },
+    "Could not delete your comment on %@ — it is back": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Kommentar auf %@ konnte nicht gelöscht werden — er ist wieder da"
+          }
+        }
+      }
+    },
+    "Could not edit your post on %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Beitrag auf %@ konnte nicht bearbeitet werden"
+          }
+        }
+      }
+    },
+    "Could not queue the delete": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Löschen konnte nicht eingereiht werden"
+          }
+        }
+      }
+    },
+    "Could not queue the edit": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Bearbeitung konnte nicht eingereiht werden"
+          }
+        }
+      }
+    },
     "Could not queue the reaction": {
       "localizations": {
         "de": {
@@ -2951,12 +3021,62 @@
         }
       }
     },
+    "Delete a comment": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einen Kommentar löschen"
+          }
+        }
+      }
+    },
+    "Delete this comment?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diesen Kommentar löschen?"
+          }
+        }
+      }
+    },
+    "Delete…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Löschen…"
+          }
+        }
+      }
+    },
     "Earlier activity is on GitHub": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Ältere Aktivität findest du auf GitHub"
+          }
+        }
+      }
+    },
+    "Edit a comment": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Einen Kommentar bearbeiten"
+          }
+        }
+      }
+    },
+    "Edit comment": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentar bearbeiten"
           }
         }
       }
@@ -13637,6 +13757,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Kommentar aktualisieren"
+          }
+        }
+      }
+    },
+    "Update the comment (⌘⏎ while you type)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentar aktualisieren (⌘⏎ beim Schreiben)"
           }
         }
       }

@@ -255,7 +255,9 @@ final class ReviewModel {
     /// The conversation tab's stream (ADR 0043).
     ///
     /// Rebuilt by ``apply(_:)`` and ``refresh(_:replacing:)``, the two places a detail reaches the
-    /// screen, and never in a getter: the tab is drawn far more often than the detail changes.
+    /// screen, and by an edit or a delete of the reviewer's, which it already shows
+    /// (``conversationOverlay``) — never in a getter: the tab is drawn far more often than either
+    /// changes.
     private(set) var conversationEntries: [ConversationEntry] = []
     /// What is typed in the conversation tab's comment field.
     ///
@@ -291,35 +293,44 @@ final class ReviewModel {
     /// by it when the field leaves the screen — never on a keystroke, so the toolbar redraws on a
     /// focus change and not while somebody types.
     var isConversationComposerFocused = false
+    /// Whether somebody is typing in the conversation tab — its comment field or a post's editor —
+    /// so ⌘⏎ is that field's button and not the toolbar's *Review*.
+    var isTypingInConversation: Bool { isConversationComposerFocused || focusedPostEditor != nil }
 
-    /// One reaction on one post — what ``reactionOverlay`` is keyed by (ADR 0043, B).
-    struct ReactionKey: Hashable {
-        /// The post's node id — the pull request's own for the description.
-        var subjectID: String
-        /// Which reaction.
-        var content: ReactionContent
-    }
-
-    /// The reviewer's reaction clicks that the stored detail does not show yet: `true` wants the
-    /// viewer's reaction on, `false` off (ADR 0043, B).
+    /// The reviewer's own changes to the conversation that the stored detail does not show yet —
+    /// reaction clicks, edited texts, deleted comments (ADR 0043, ``ConversationOverlay``, which
+    /// says when a change stops being the screen's).
     ///
-    /// What makes a click visible at once and, while this screen is open, an offline click visible
-    /// until it is sent. A key
-    /// goes when a detail reaching the screen agrees with it (``unconfirmedClicks(_:against:)``) —
-    /// not when its write is sent, because the re-read after a send can still carry the state
-    /// from before it and would flicker the reaction off and on. It also goes when the click could
-    /// not be written, and when the click's own drain saw its row refused. A refusal that comes
-    /// later — from a drain the click did not wait for, which is what a click gets whose row
-    /// another click's drain is still sending — leaves its key until the screen closes; the failed
-    /// row is in Settings → Sync. Observed: it changes on a click.
-    private(set) var reactionOverlay: [ReactionKey: Bool] = [:]
-    /// The last of this screen's reaction rows being written; each waits for the one before
-    /// (``toggleReaction(subjectID:content:currentlyReacted:actions:)``).
-    @ObservationIgnored private var reactionWrites: Task<Void, Never>?
+    /// One value, settled behind one `!=` whenever a detail reaches the screen
+    /// (``syncConversationState(from:)``). Observed, and read by the reaction bars alone
+    /// (``PostReactions``): the edits and the deletes reach the posts through
+    /// ``conversationEntries`` and ``descriptionMarkdown``, rebuilt only when those two parts
+    /// change (``revise(_:)``), so a reaction click re-runs the bars and not the posts around them.
+    private(set) var conversationOverlay = ConversationOverlay()
+    /// The last of this screen's post rows being written — a reaction, an edit, a delete; each
+    /// waits for the one before (``chainPostWrite(_:undo:)``).
+    @ObservationIgnored private var postWrites: Task<Void, Never>?
+    /// The description as the conversation tab draws it: the stored text, or the reviewer's edit of
+    /// it until GitHub has it. Built with ``conversationEntries``, and set only when it changes.
+    private(set) var descriptionMarkdown = ""
+    /// The posts whose text is being edited in place, by node id (ADR 0043, C).
+    ///
+    /// Here for ``threadReplyDrafts``'s reason — *Show in diff* and `t` rebuild the tab, and an
+    /// edit half written must outlive that — and observed: it changes on a click, not on a
+    /// keystroke.
+    private(set) var postsBeingEdited: Set<String> = []
+    /// What is typed in each of those editors, by node id. Not observed, for
+    /// ``threadReplyDrafts``'s reason: the editor draws from its own copy, taken from here when it
+    /// appears and written back with every change (``PostEditor``).
+    @ObservationIgnored var postEditDrafts: [String: String] = [:]
+    /// The post whose editor has the keyboard, if one does — ⌘⏎ is its *Update comment* then, for
+    /// ``isConversationComposerFocused``'s reason. A post rather than a flag, because several
+    /// editors can be open at once and only the one being typed in may take the key.
+    var focusedPostEditor: String?
     /// Whether GitHub lets the viewer react on this pull request's posts — not on a locked
     /// conversation or in an archived repository, and not before the conversation has been read.
     ///
-    /// Stored, and set only when it changes (``syncReactionState(from:)``), for
+    /// Stored, and set only when it changes (``syncConversationState(from:)``), for
     /// ``threadFoldFlips``'s reason: every post's bar reads it, and read off ``detail`` it would
     /// re-evaluate every post on every refresh of the checks.
     private(set) var canReact = false
@@ -698,62 +709,6 @@ final class ReviewModel {
         return kept
     }
 
-    /// A post's reactions as its bar shows them: GitHub's stored groups with the reviewer's clicks
-    /// laid over them (ADR 0043, B).
-    ///
-    /// A click moves its group by one and marks it as the viewer's or not; a group that reaches
-    /// zero goes, and a new one takes its place in GitHub's order of the eight, which is
-    /// ``ShepherdCore/ReactionContent``'s. Pure and `static` for ``change(shown:fresh:)``'s reason.
-    /// - Parameters:
-    ///   - groups: The post's groups as stored.
-    ///   - subjectID: The post's node id.
-    ///   - overlay: ``reactionOverlay``.
-    /// - Returns: The groups to draw.
-    static func displayed(_ groups: [ReactionGroup], subjectID: String, overlay: [ReactionKey: Bool]) -> [ReactionGroup] {
-        guard !overlay.isEmpty else { return groups }
-        return ReactionContent.allCases.compactMap { content in
-            let stored = groups.first { $0.content == content }
-            guard let wanted = overlay[ReactionKey(subjectID: subjectID, content: content)],
-                  wanted != (stored?.viewerHasReacted ?? false)
-            else { return stored }
-            let count = (stored?.count ?? 0) + (wanted ? 1 : -1)
-            return count > 0 ? ReactionGroup(content: content, count: count, viewerHasReacted: wanted) : nil
-        }
-    }
-
-    /// The clicks a detail does not show yet: the overlay keys it does not agree with
-    /// (ADR 0043, B).
-    ///
-    /// A key goes once the detail shows the viewer's reaction the way the click wanted it. A post
-    /// the detail does not carry keeps its key: the conversation is `nil` until it has been read,
-    /// and "not read" is not "not reacted". Pure and `static` for ``change(shown:fresh:)``'s
-    /// reason.
-    /// - Parameters:
-    ///   - overlay: ``reactionOverlay`` as it stands.
-    ///   - detail: The detail reaching the screen.
-    /// - Returns: The keys to keep.
-    static func unconfirmedClicks(_ overlay: [ReactionKey: Bool], against detail: PullRequestDetail) -> [ReactionKey: Bool] {
-        guard !overlay.isEmpty else { return overlay }
-        var stored: [String: [ReactionGroup]] = [:]
-        if let conversation = detail.conversation {
-            stored[detail.summary.id] = conversation.descriptionReactions
-            for item in conversation.items {
-                switch item {
-                case .comment(let comment): stored[comment.id] = comment.reactions
-                case .review(let review): stored[review.id] = review.reactions
-                case .event: break
-                }
-            }
-        }
-        for comment in detail.threads.flatMap(\.comments) {
-            stored[comment.id] = comment.reactions
-        }
-        return overlay.filter { key, wanted in
-            guard let groups = stored[key.subjectID] else { return true }
-            return groups.contains { $0.content == key.content && $0.viewerHasReacted } != wanted
-        }
-    }
-
     /// Classifies an observed detail against the one on screen.
     ///
     /// The head commit is the whole rule, and the equality check in front of it is behaviour rule
@@ -939,8 +894,8 @@ final class ReviewModel {
 
     /// Rebuilds ``conversationEntries`` from the detail that just reached the screen — called by
     /// ``apply(_:)`` and ``refresh(_:replacing:)``, the two ways one does — and carries the
-    /// threads' fold flips and the reaction bars' state across it (``foldFlips(_:from:to:)``,
-    /// ``syncReactionState(from:)``).
+    /// threads' fold flips and the reviewer's own changes across it (``foldFlips(_:from:to:)``,
+    /// ``syncConversationState(from:)``).
     /// - Parameters:
     ///   - detail: The detail now on screen.
     ///   - shown: The one it replaced, or `nil` for the first.
@@ -950,24 +905,34 @@ final class ReviewModel {
             // Only when it moved: every thread card reads it, and a sweep rarely changes it.
             if flips != threadFoldFlips { threadFoldFlips = flips }
         }
-        syncReactionState(from: detail)
-        conversationEntries = ConversationTimeline.entries(
-            conversation: detail.conversation,
-            commits: detail.commits,
-            threads: detail.threads
-        )
+        syncConversationState(from: detail)
+        showConversation(detail)
     }
 
-    /// Brings what the reaction bars read up to the detail that just reached the screen: the
-    /// clicks it does not show yet (``unconfirmedClicks(_:against:)``), ``canReact`` and
-    /// ``pendingReviewIDs``.
+    /// Builds ``conversationEntries`` and ``descriptionMarkdown`` from a detail with the reviewer's
+    /// edits and deletes laid over it (``ConversationOverlay/applied(to:)``). ``detail`` itself is
+    /// left as stored: the diff and its thread popover read it.
+    /// - Parameter detail: The detail on screen.
+    private func showConversation(_ detail: PullRequestDetail) {
+        let shown = conversationOverlay.applied(to: detail)
+        conversationEntries = ConversationTimeline.entries(
+            conversation: shown.conversation,
+            commits: shown.commits,
+            threads: shown.threads
+        )
+        if shown.bodyMarkdown != descriptionMarkdown { descriptionMarkdown = shown.bodyMarkdown }
+    }
+
+    /// Brings what the posts and their reaction bars read up to the detail that just reached the
+    /// screen: the reviewer's changes it does not show yet
+    /// (``ConversationOverlay/settled(against:)``), ``canReact`` and ``pendingReviewIDs``.
     ///
     /// Each is set only when it changed, for ``threadFoldFlips``'s reason: every bar reads them,
     /// and a sweep rarely changes them.
     /// - Parameter detail: The detail now on screen.
-    private func syncReactionState(from detail: PullRequestDetail) {
-        let overlay = Self.unconfirmedClicks(reactionOverlay, against: detail)
-        if overlay != reactionOverlay { reactionOverlay = overlay }
+    private func syncConversationState(from detail: PullRequestDetail) {
+        let overlay = conversationOverlay.settled(against: detail)
+        if overlay != conversationOverlay { conversationOverlay = overlay }
         let reacts = detail.conversation?.viewerCanReact == true
         if reacts != canReact { canReact = reacts }
         let pending = Set((detail.conversation?.items ?? []).compactMap { item -> String? in
@@ -1846,13 +1811,8 @@ final class ReviewModel {
 
     /// A click on a reaction: on the bar at once, then on disk, then sent (ADR 0043, B).
     ///
-    /// The rows are written one after another, each once the one before is on disk: a click
-    /// cancels the row the click before it left in the outbox, and two clicks reading the outbox
-    /// at once would each miss the other's row and could write an add *behind* the removal that
-    /// followed it. That is local work and takes no time; the drains run beside it, so a click
-    /// never waits for the network to reach the disk. A click that could not be written, or whose
-    /// drain saw its row refused, comes back off the bar — unless a later click on the same emoji
-    /// has moved it since.
+    /// A click that could not be written, or whose drain saw its row refused, comes back off the
+    /// bar — unless a later click on the same emoji has moved it since.
     /// - Parameters:
     ///   - subjectID: The post's node id — the pull request's own for the description.
     ///   - content: Which reaction.
@@ -1865,34 +1825,157 @@ final class ReviewModel {
         actions: PullRequestActions
     ) {
         guard let summary else { return }
-        let key = ReactionKey(subjectID: subjectID, content: content)
+        let key = ConversationOverlay.ReactionKey(subjectID: subjectID, content: content)
         let adding = !currentlyReacted
-        reactionOverlay[key] = adding
-        let previous = reactionWrites
-        reactionWrites = Task { [weak self] in
+        revise { $0.reactions[key] = adding }
+        chainPostWrite(
+            { await actions.react(on: summary, subjectID: subjectID, content: content, adding: adding) },
+            undo: { [weak self] in self?.revise { $0.drop(key, ifStill: adding) } }
+        )
+    }
+
+    /// *Edit* in a post's menu: the post's text gives way to an editor holding its Markdown
+    /// (ADR 0043, C).
+    /// - Parameters:
+    ///   - postID: The post's node id.
+    ///   - markdown: The text the post shows now.
+    func beginEditing(_ postID: String, markdown: String) {
+        // A second *Edit* while the editor is open keeps what is typed in it.
+        guard !postsBeingEdited.contains(postID) else { return }
+        postEditDrafts[postID] = markdown
+        postsBeingEdited.insert(postID)
+    }
+
+    /// *Cancel* under a post's editor: the editor goes, and what was typed in it with it.
+    /// - Parameter postID: The post's node id.
+    func endEditing(_ postID: String) {
+        postEditDrafts[postID] = nil
+        postsBeingEdited.remove(postID)
+    }
+
+    /// *Update comment*: the post shows the new text at once, the editor goes, and the edit is
+    /// written, then sent (ADR 0043, C).
+    ///
+    /// Trimmed like a new comment, and the post shows exactly the text that is sent, so the detail
+    /// GitHub answers with can be told to agree with it. Text the post shows already only closes
+    /// the editor: there is nothing to send. An edit that could not be written, or whose drain saw
+    /// its row refused, puts the stored text back — unless a later edit of the same post has
+    /// replaced it since — and its own text into the editor again
+    /// (``reopensEditor(of:with:overlay:editing:)``).
+    /// - Parameters:
+    ///   - post: The post and where its edit is sent.
+    ///   - body: What the editor holds.
+    ///   - shown: The text the post shows now.
+    ///   - actions: The write helper.
+    func edit(_ post: PostEditing, body: String, shown: String, actions: PullRequestActions) {
+        guard let summary, post.canEdit else { return }
+        let text = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        endEditing(post.postID)
+        // Both sides trimmed: GitHub's text can end in a line break the editor never sends.
+        guard text != shown.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
+        revise { $0.editedBodies[post.postID] = text }
+        chainPostWrite(
+            { await actions.edit(on: summary, target: post.target, body: text) },
+            undo: { [weak self] in self?.takeBack(edit: text, of: post.postID) }
+        )
+    }
+
+    /// Takes an edit that never landed back off the post, and puts its text into the post's editor
+    /// again when nothing newer is there.
+    /// - Parameters:
+    ///   - text: The text the edit sent.
+    ///   - postID: The post's node id.
+    private func takeBack(edit text: String, of postID: String) {
+        // Asked before the drop below, which takes away what it reads.
+        if Self.reopensEditor(of: postID, with: text, overlay: conversationOverlay, editing: postsBeingEdited) {
+            postEditDrafts[postID] = text
+            postsBeingEdited.insert(postID)
+        }
+        revise { $0.drop(editOf: postID, ifStill: text) }
+    }
+
+    /// Whether an edit that never landed — refused, or never written — goes back into its post's
+    /// editor: the composer's rule (`ConversationComposer.post()`), words GitHub did not take are
+    /// not thrown away.
+    ///
+    /// Only while the post still shows that edit and its editor is closed. A later edit or a delete
+    /// of the post has replaced it, and an editor opened again holds newer words; either wins.
+    /// - Parameters:
+    ///   - postID: The post's node id.
+    ///   - text: The text the edit sent.
+    ///   - overlay: The overlay before the edit is taken off it.
+    ///   - editing: The posts whose editor is open.
+    /// - Returns: Whether to put the text back and open the editor.
+    static func reopensEditor(
+        of postID: String,
+        with text: String,
+        overlay: ConversationOverlay,
+        editing: Set<String>
+    ) -> Bool {
+        overlay.editedBodies[postID] == text && !editing.contains(postID)
+    }
+
+    /// *Delete…*, once the reviewer confirmed it: the comment is gone from the stream at once, its
+    /// editor with it, and the delete is written, then sent (ADR 0043, C). One that could not be
+    /// written, or whose drain saw its row refused, brings the comment back.
+    /// - Parameters:
+    ///   - post: The comment and where its delete is sent.
+    ///   - actions: The write helper.
+    func delete(_ post: PostEditing, actions: PullRequestActions) {
+        guard let summary, post.canDelete else { return }
+        endEditing(post.postID)
+        revise { $0.delete(post.postID) }
+        chainPostWrite(
+            { await actions.delete(on: summary, target: post.target) },
+            undo: { [weak self] in self?.revise { $0.drop(deletionOf: post.postID) } }
+        )
+    }
+
+    /// Writes one of this screen's post rows once the one before it is on disk, and takes the
+    /// change back off the screen when nothing was written or the row's own drain saw it refused.
+    ///
+    /// One after another, whichever kind: each reads the outbox to cancel the rows it makes
+    /// pointless — a click the one it undoes, an edit or a delete the edits of the same post
+    /// waiting before it — and two reading at once would each miss the other's row and could write
+    /// a row *behind* the one meant to replace it. That is local work and takes no time; the drains
+    /// run beside it, so a change never waits for the network to reach the disk.
+    /// - Parameters:
+    ///   - write: Writes the row, and returns the running task that settles it, or `nil` when
+    ///     nothing was written.
+    ///   - undo: Takes the change back off the screen — off the overlay, and an edit's text into
+    ///     its editor again.
+    private func chainPostWrite(
+        _ write: @escaping @MainActor () async -> Task<OutboxWriteOutcome, Never>?,
+        undo: @escaping @MainActor () -> Void
+    ) {
+        let previous = postWrites
+        postWrites = Task {
             await previous?.value
-            guard let settling = await actions.react(
-                on: summary,
-                subjectID: subjectID,
-                content: content,
-                adding: adding
-            ) else {
-                self?.dropClick(key, ifStill: adding)
+            guard let settling = await write() else {
+                undo()
                 return
             }
-            // Outside the chain: the next click's row is written without waiting for this drain.
-            Task { [weak self] in
+            // Outside the chain: the next row is written without waiting for this drain.
+            Task {
                 switch await settling.value {
                 case .sent, .queued: break
-                case .parked, .failed: self?.dropClick(key, ifStill: adding)
+                case .parked, .failed: undo()
                 }
             }
         }
     }
 
-    /// Drops a click's key, unless a later click on the same emoji has moved it since.
-    private func dropClick(_ key: ReactionKey, ifStill adding: Bool) {
-        if reactionOverlay[key] == adding { reactionOverlay[key] = nil }
+    /// Changes the overlay, and rebuilds the posts only when what they draw changed — an edit or a
+    /// delete; a reaction click re-runs the bars alone.
+    /// - Parameter change: What to do to it.
+    private func revise(_ change: (inout ConversationOverlay) -> Void) {
+        var overlay = conversationOverlay
+        change(&overlay)
+        guard overlay != conversationOverlay else { return }
+        let redrawsPosts = overlay.editedBodies != conversationOverlay.editedBodies
+            || overlay.deletedPosts != conversationOverlay.deletedPosts
+        conversationOverlay = overlay
+        if redrawsPosts, let detail { showConversation(detail) }
     }
 
     /// Shows one file in the diff viewer, scrolled to a line.

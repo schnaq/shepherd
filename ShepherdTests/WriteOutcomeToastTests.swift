@@ -41,6 +41,8 @@ final class WriteOutcomeToastTests: XCTestCase {
             .close(withComment: false),
             .updateBranch,
             .reaction,
+            .edit,
+            .delete,
         ]
     }
 
@@ -147,19 +149,22 @@ final class WriteOutcomeToastTests: XCTestCase {
                 of: write,
                 slug: slug
             ) else {
-                // Only a reaction is silent while queued: the bar already shows the click.
-                if write != .reaction {
+                // Only these are silent while queued: the screen already shows the click, the new
+                // text or the deleted comment (ADR 0043).
+                if ![.reaction, .edit, .delete].contains(write) {
                     XCTFail("\(write) says nothing about being queued")
                 }
                 continue
             }
-            // Only a merge is silent when it lands, and it is silent here on purpose.
+            // Only these are silent when they land: a merge is announced from the other end, and
+            // an edit or a delete is on screen since the click — and a cancelled edit's row reads
+            // as sent, so a sentence here could claim an edit that never went out.
             guard let sent = PullRequestActions.announcement(
                 for: .sent,
                 of: write,
                 slug: slug
             ) else {
-                if write != .merge {
+                if ![.merge, .edit, .delete].contains(write) {
                     XCTFail("\(write) says nothing when it lands")
                 }
                 continue

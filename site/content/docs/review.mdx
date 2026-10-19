@@ -99,7 +99,7 @@ If GitHub reports the pull request as updated while you are reading, a strip abo
 
 ### Offline and the outbox
 
-Submitting does not talk to GitHub directly. The review goes into a local queue, the outbox, and is sent as soon as possible. It survives a crash and a lost connection. The queue also carries comments, replies, thread resolves, reactions and merges.
+Submitting does not talk to GitHub directly. The review goes into a local queue, the outbox, and is sent as soon as possible. It survives a crash and a lost connection. The queue also carries comments, replies, thread resolves, reactions, edits, deletes and merges.
 
 A toast tells you which case you are in:
 
@@ -134,6 +134,8 @@ A review shows the threads it started, each with its file and line. **Show in di
 Type in the field at the bottom and click **Post comment**, or press `⌘⏎`. **Comment and close** posts your comment and closes the pull request. With an empty field, the button reads **Close without a comment**. Saved replies and ⌘V screenshots work here too. A comment you write offline waits in the outbox, like a review.
 
 To answer one post, open its **⋯** menu and pick **Quote reply**. The post goes into the comment field as a quote. The same menu has **Copy link** and **Open on GitHub**.
+
+To change one of your own posts, open its **⋯** menu and pick **Edit**. The post turns into an editor. Click **Update comment** or press `⌘⏎`. **Delete…** removes one of your comments after you confirm it. You can edit comments, thread comments, the text of a submitted review and the description. You can delete comments and thread comments, but not a review or the description. The menu offers only what GitHub allows you. An edit or a delete shows at once, also offline, and waits in the outbox like a comment.
 
 Under each post, click a reaction to add yours or take it back. The smiley (**Add a reaction**) offers all eight. Your click shows at once, also offline, and waits in the outbox like a comment. In a locked conversation, reactions are shown but not offered.
 

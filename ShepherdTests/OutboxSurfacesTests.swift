@@ -45,6 +45,8 @@ final class OutboxSurfacesTests: XCTestCase {
             .closePullRequest(comment: nil),
             .react(subjectID: "IC_1", content: .heart, adding: true),
             .react(subjectID: "IC_1", content: .heart, adding: false),
+            .editComment(.issueComment(databaseID: 7), body: "on it, after all"),
+            .deleteComment(.issueComment(databaseID: 7)),
         ]
     }
 

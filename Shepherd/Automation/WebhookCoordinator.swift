@@ -272,12 +272,13 @@ final class WebhookCoordinator {
                  .markedReadyForReview,
                  .branchUpdated, .mergeEnqueued, .mergeStarted, .issueCommentAdded, .issueLabelAdded,
                  .issueAssigneeAdded, .issueReopened, .pullRequestCommentAdded, .pullRequestClosed,
-                 .reactionChanged:
+                 .reactionChanged, .commentEdited, .commentDeleted:
                 // Sent, and deliberately not events this version promises. A comment, a label,
                 // an assignee and a reopen are the issue-side twins of the four pull-request
                 // writes above them, and mapping any of them later is an additive change. A
                 // stacked merge that is queued or still running (ADR 0042) is not a merge yet:
-                // `pull_request.merged` fires only for `.merged`.
+                // `pull_request.merged` fires only for `.merged`. An edit or a delete of a post is
+                // about a comment's text, which no payload carries (ADR 0012).
                 return nil
             }
 

@@ -335,9 +335,9 @@ At the bottom is a comment field: **Post comment** (⌘⏎), **Comment and close
 ⌘V screenshots — the same two writes as the *Comment…* sheet, queued in the outbox like everything
 else, so a comment written on the train goes out when the network comes back. *Quote reply* on any
 post drops it, quoted, into that field. Once GitHub has a comment, a reply, a resolved thread, a
-reaction or a review, Shepherd re-reads that pull request a second later, so it appears at once
-rather than with the next sweep, wherever it was written; a colleague's comment arrives with the
-sweep, the way a new check does.
+reaction, a review, an edit or a delete, Shepherd re-reads that pull request a second later, so it
+appears at once rather than with the next sweep, wherever it was written; a colleague's comment
+arrives with the sweep, the way a new check does.
 
 Reactions work as on GitHub, on every post — the description, a comment, a review, a comment in a
 thread, in the stream and in the diff's popover — except your own pending review, which takes none
@@ -349,6 +349,20 @@ it can never land after the click that undid it. A refusal that arrives while th
 back off the bar with a toast; one that arrives later shows in Settings → Sync, and the bar corrects
 itself when the screen is reopened. On a locked conversation or in an archived repository the
 reactions are shown but not offered.
+
+Your own posts can be edited and deleted as on GitHub, from each post's ⋯ menu, wherever GitHub
+says you may: **Edit** on a comment, a comment in a thread, the words of a submitted review and the
+description; **Delete…** on a comment and a comment in a thread — a review and the description
+cannot be deleted. *Edit* puts the post's Markdown into an editor in its place, with **Cancel** and
+**Update comment** (⌘⏎ while you type); a half-written edit survives a trip to the Files tab. A
+delete always asks first, naming whose comment it is and from when. The post shows the new text, or
+is gone, at once, and the write is in the outbox at once, so an edit made offline is sent when the
+network comes back; while the review screen is open it shows the edit until GitHub has it. A newer
+edit or a delete takes an older edit still waiting out of the outbox, so the last word is the one
+that lands. A refusal the write's own drain sees — the comment was deleted on GitHub meanwhile,
+say — shows GitHub's words in a toast: a refused edit's text is back in its editor, a refused
+delete's comment back in the stream. One that a later drain meets shows in Settings → Sync, as for
+reactions. Nothing about an edit or a delete reaches a webhook or telemetry.
 
 It is one more GraphQL read per changed pull request, measured at one point of GitHub's rate
 limit, read newest first and capped at 500 entries — a conversation longer than that says
