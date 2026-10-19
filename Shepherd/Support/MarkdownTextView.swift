@@ -17,6 +17,10 @@ struct MarkdownText: View {
     let markdown: String
     /// The body font size. Headings and code are derived from it.
     var size: CGFloat = 12.5
+    /// A code span's size relative to the text around it. At 1 — the Mac's — a span is drawn as
+    /// the inline parser leaves it; the phone passes 0.9, because SF Mono at the body's point size
+    /// reads visibly larger than the SF Pro beside it (ADR 0044).
+    var codeScale: CGFloat = 1
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -36,7 +40,7 @@ struct MarkdownText: View {
     private func view(for block: MarkdownBlock, text: AttributedString) -> some View {
         switch block {
         case .heading(let level, _):
-            Text(text)
+            Text(scalingCode(text, size: headingSize(level)))
                 .font(.system(size: headingSize(level), weight: .semibold))
                 .foregroundStyle(Theme.textStrong)
                 .fixedSize(horizontal: false, vertical: true)
@@ -45,7 +49,7 @@ struct MarkdownText: View {
                 .padding(.top, 6)
 
         case .paragraph:
-            Text(text)
+            Text(scalingCode(text, size: size))
                 .font(.system(size: size))
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -60,7 +64,7 @@ struct MarkdownText: View {
                     // list does not wobble as the numbers grow.
                     .monospacedDigit()
                     .frame(minWidth: 16, alignment: .leading)
-                Text(text)
+                Text(scalingCode(text, size: size))
                     .font(.system(size: size))
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -90,7 +94,7 @@ struct MarkdownText: View {
                 Rectangle()
                     .fill(Theme.border)
                     .frame(width: 2)
-                Text(text)
+                Text(scalingCode(text, size: size))
                     .font(.system(size: size))
                     .foregroundStyle(Theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -100,6 +104,18 @@ struct MarkdownText: View {
         case .rule:
             Divider().overlay(Theme.hairline)
         }
+    }
+
+    /// `text` with its code spans at ``codeScale`` of `size`; untouched at a scale of 1. Applied
+    /// here rather than in the cache, which is keyed by the source alone.
+    private func scalingCode(_ text: AttributedString, size: CGFloat) -> AttributedString {
+        guard codeScale != 1 else { return text }
+        var text = text
+        let spans = text.runs.filter { $0.inlinePresentationIntent?.contains(.code) == true }.map(\.range)
+        for span in spans {
+            text[span].font = Theme.mono(size * codeScale)
+        }
+        return text
     }
 
     /// Forgets every body parsed so far. Called on sign-out, so the leaving account's comments do

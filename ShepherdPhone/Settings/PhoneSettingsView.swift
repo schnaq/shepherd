@@ -95,22 +95,42 @@ struct PhoneSettingsView: View {
     /// user. Second, under the account, so the strip's *Show* lands on it.
     ///
     /// A failed row was refused in a way retrying cannot fix by itself, so it never leaves on its
-    /// own: Retry is the user saying the obstacle is gone, Discard that it never mattered. Swipe
-    /// actions and the same two in the context menu; Discard is never a full swipe, because what
-    /// it throws away cannot be queued again from here.
+    /// own: Retry is the user saying the obstacle is gone, Discard that it never mattered. Both are
+    /// on the row's ⋯ menu, its long press and its swipes; Discard is never a full swipe, because
+    /// what it throws away cannot be queued again from here. The footer carries the explanation
+    /// the inbox's one-line strip leaves out.
     @ViewBuilder
     private var notSentSection: some View {
         if let session = environment.session, session.failedOutboxCount > 0 {
             Section {
                 ForEach(failedRows) { item in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(verbatim: "\(item.repo.fullName)#\(item.number) · \(Self.actionName(item.action))")
-                            .font(Theme.type(.body, weight: .medium))
-                            .foregroundStyle(Theme.textStrong)
-                        Text(item.localizedLastError ?? String(localized: "No reason was recorded."))
-                            .font(Theme.type(.footnote))
-                            .foregroundStyle(Theme.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Label {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(verbatim: "\(item.repo.fullName)#\(item.number) · \(Self.actionName(item.action))")
+                                    .font(Theme.type(.body, weight: .medium))
+                                    .foregroundStyle(Theme.textStrong)
+                                Text(item.localizedLastError ?? String(localized: "No reason was recorded."))
+                                    .font(Theme.type(.footnote))
+                                    .foregroundStyle(Theme.textSecondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                        } icon: {
+                            Image(systemName: "exclamationmark.icloud")
+                                .font(Theme.type(.body))
+                                .foregroundStyle(Theme.failure)
+                        }
+                        // Visible, so the two ways out are not only on a swipe or a long press.
+                        Menu {
+                            failedRowActions(item, session: session)
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                                .font(Theme.type(.title3))
+                                .foregroundStyle(Theme.textSecondary)
+                                .frame(minWidth: 44, minHeight: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .accessibilityLabel(String(localized: "More actions"))
                     }
                     .padding(.vertical, 2)
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
@@ -124,21 +144,25 @@ struct PhoneSettingsView: View {
                             Label(String(localized: "Discard"), systemImage: "trash")
                         }
                     }
-                    .contextMenu {
-                        Button { retry(item, session: session) } label: {
-                            Label(String(localized: "Retry"), systemImage: "arrow.clockwise")
-                        }
-                        Button(role: .destructive) { discard(item, session: session) } label: {
-                            Label(String(localized: "Discard"), systemImage: "trash")
-                        }
-                    }
+                    .contextMenu { failedRowActions(item, session: session) }
                 }
             } header: {
                 Text(String(localized: "Not sent"))
             } footer: {
-                Text(String(localized: "GitHub refused these writes, or Shepherd could not make them at all. Swipe right to retry one once you have fixed what stopped it, left to discard it."))
+                Text(String(localized: "GitHub refused these writes, or Shepherd could not make them at all, so they will not go out by themselves. Retry one once you have fixed what stopped it, or discard it."))
             }
             .sensoryFeedback(.impact(weight: .light), trigger: failedRows.count) { old, new in new < old }
+        }
+    }
+
+    /// Retry and Discard, for a failed row's ⋯ menu and its long press.
+    @ViewBuilder
+    private func failedRowActions(_ item: OutboxItem, session: SignedInSession) -> some View {
+        Button { retry(item, session: session) } label: {
+            Label(String(localized: "Retry"), systemImage: "arrow.clockwise")
+        }
+        Button(role: .destructive) { discard(item, session: session) } label: {
+            Label(String(localized: "Discard"), systemImage: "trash")
         }
     }
 

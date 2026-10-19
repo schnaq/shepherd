@@ -10,7 +10,8 @@ import SwiftUI
 /// own ``ReviewModel/saveDraftComment(_:body:)``, with its anchor check, into the pending review.
 /// The behaviour is the Mac `InlineCommentComposer`'s, in GitHub's words: *Start a review* or
 /// *Add review comment* keeps the comment for the review, *Comment* posts it on its own at once,
-/// and an existing pending comment opens for editing with *Delete* beside it. A head-side comment
+/// and an existing pending comment opens for editing with *Delete* beside it. The buttons sit in a
+/// bar at the bottom, above the keyboard, with the review's own button the prominent one. A head-side comment
 /// can start a ```` ```suggestion ```` block of the commented lines, and the saved replies are a
 /// menu beside it; the Mac's AI draft and session hand-off are not on the phone in v1.
 ///
@@ -26,6 +27,7 @@ struct PhoneInlineCommentSheet: View {
 
     @Environment(PhoneEnvironment.self) private var environment
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var text = ""
     @State private var errorMessage: String?
     @State private var saved = 0
@@ -55,13 +57,6 @@ struct PhoneInlineCommentSheet: View {
                             .strokeBorder(isEditorFocused ? Theme.accent.opacity(0.6) : Theme.border)
                     )
 
-                    Text(startsReview
-                        ? String(localized: "Comment posts it now. Start a review keeps it with your other comments until you submit.")
-                        : String(localized: "Saved to your pending review — nothing is sent until you submit."))
-                        .font(Theme.type(.footnote))
-                        .foregroundStyle(Theme.textMuted)
-                        .fixedSize(horizontal: false, vertical: true)
-
                     if let errorMessage {
                         Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
                             .font(Theme.type(.footnote))
@@ -69,42 +64,30 @@ struct PhoneInlineCommentSheet: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    HStack(spacing: 12) {
+                    HStack(spacing: 16) {
                         if request.side == .right {
                             Button {
                                 insertSuggestion()
                             } label: {
-                                Label(String(localized: "Add a suggestion"), systemImage: "plus.forwardslash.minus")
+                                // Its word as well as its glyph: "+/−" alone said nothing.
+                                Label(String(localized: "Suggest"), systemImage: "plus.forwardslash.minus")
                             }
-                            .labelStyle(.iconOnly)
+                            .accessibilityLabel(Text(String(localized: "Add a suggestion")))
                         }
                         PhoneSavedReplyMenu(replies: model.settings.usableSavedReplies) { snippet in
                             text = SavedReply.inserting(snippet, into: text)
                         }
                         .labelStyle(.iconOnly)
                         Spacer(minLength: 0)
-                        if startsReview {
-                            Button(String(localized: "Comment")) {
-                                Task { await postSingleComment() }
-                            }
-                            .buttonStyle(.bordered)
-                            .disabled(isBlank || isSaving)
-                        }
-                        if let existing = existingComment {
-                            Button(String(localized: "Delete"), role: .destructive) {
-                                Task { await delete(existing) }
-                            }
-                            .buttonStyle(.bordered)
-                        }
                     }
-                    .controlSize(.large)
+                    .font(Theme.type(.subheadline, weight: .medium))
                 }
                 .padding(16)
             }
             .scrollDismissesKeyboard(.interactively)
             .background(Theme.panel)
+            .safeAreaBar(edge: .bottom) { actionBar }
             .navigationTitle(title)
-            .navigationSubtitle(anchorDescription)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -121,13 +104,20 @@ struct PhoneInlineCommentSheet: View {
                         Button(String(localized: "Discard"), role: .destructive) { dismiss() }
                     }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(role: .confirm) {
-                        Task { await save() }
-                    } label: {
-                        Text(saveTitle)
+                // The title and the file by hand rather than as a navigation subtitle, which cannot
+                // be cut in the middle: cut at the end it lost the extension ("…-outbox.m…").
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 1) {
+                        Text(title)
+                            .font(Theme.type(.headline))
+                            .foregroundStyle(Theme.textStrong)
+                        Text(anchorDescription)
+                            .font(Theme.type(.caption))
+                            .foregroundStyle(Theme.textSecondary)
+                            .truncationMode(.middle)
                     }
-                    .disabled(isBlank || isSaving)
+                    .lineLimit(1)
+                    .accessibilityElement(children: .combine)
                 }
             }
         }
@@ -138,6 +128,51 @@ struct PhoneInlineCommentSheet: View {
             text = existingComment?.body ?? ""
             isEditorFocused = true
         }
+    }
+
+    /// The sheet's buttons, side by side above the keyboard (stacked at the accessibility sizes):
+    /// *Comment* — post it alone, now — and the review's own button, the prominent one; *Delete*
+    /// in *Comment*'s place for a pending comment being edited.
+    private var actionBar: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 10))
+            : AnyLayout(HStackLayout(spacing: 12))
+        return layout {
+            if startsReview {
+                Button {
+                    Task { await postSingleComment() }
+                } label: {
+                    Text(String(localized: "Comment"))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.glass)
+                .disabled(isBlank || isSaving)
+            }
+            if let existing = existingComment {
+                Button(role: .destructive) {
+                    Task { await delete(existing) }
+                } label: {
+                    Text(String(localized: "Delete"))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.glass)
+                .tint(Theme.failure)
+            }
+            Button {
+                Task { await save() }
+            } label: {
+                Text(saveTitle)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.glassProminent)
+            .tint(Theme.accent)
+            .disabled(isBlank || isSaving)
+        }
+        .font(Theme.type(.body, weight: .semibold))
+        .lineLimit(1)
+        .controlSize(.large)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
     }
 
     /// The lines being commented on, as they read in the diff — at most six, so a long range does

@@ -172,6 +172,9 @@ struct PhonePullRequestScreen: View {
                 .padding(.vertical, 12)
             }
             .refreshable { await model.reload() }
+            // The soft edge under the bottom bar's glass, so the text scrolling beneath it fades
+            // rather than showing through the verdict capsule.
+            .scrollEdgeEffectStyle(.soft, for: .bottom)
         } else if model.isMissingFromInbox {
             missingFromInbox
         } else if let error = model.detailLoadErrorCard {

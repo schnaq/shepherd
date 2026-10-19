@@ -37,7 +37,8 @@ extension View {
     }
 }
 
-/// The uppercase caption at the top of a phone card — ``CardTitle``'s look on the type scale.
+/// The uppercase caption at the top of a phone card — the inbox's and the file list's section
+/// header type (footnote, semibold, spaced, secondary), so every card and section title is one.
 struct PhoneCardTitle: View {
     /// The caption, already uppercased by the caller.
     let text: String
@@ -48,9 +49,9 @@ struct PhoneCardTitle: View {
 
     var body: some View {
         Text(text)
-            .font(Theme.type(.caption, weight: .semibold))
+            .font(Theme.type(.footnote, weight: .semibold))
             .kerning(0.5)
-            .foregroundStyle(Theme.textMuted)
+            .foregroundStyle(Theme.textSecondary)
             .accessibilityAddTraits(.isHeader)
     }
 }
@@ -186,6 +187,7 @@ struct PhonePostView: View {
                 buttonTitle: String(localized: "Show")
             ) { isRevealed = true }
         } else {
+            let reactions = PhonePostReactions(subjectID: subjectID, stored: reactions, model: model, actions: actions)
             PhonePostCard(
                 model: model,
                 actions: actions,
@@ -193,17 +195,15 @@ struct PhonePostView: View {
                 date: date,
                 markdown: markdown,
                 url: url,
-                editing: editing
+                editing: editing,
+                reactions: reactions
             ) {
                 PhoneAuthorLine(author: author, verb: verb, date: date, isEdited: isEdited)
             } content: {
                 if let editing, PhonePostEditor.isOpen(for: editing, in: model) {
                     PhonePostEditor(model: model, actions: actions, editing: editing, markdown: markdown)
                 } else {
-                    PhonePostBody(
-                        markdown: markdown,
-                        reactions: PhonePostReactions(subjectID: subjectID, stored: reactions, model: model, actions: actions)
-                    )
+                    PhonePostBody(markdown: markdown, reactions: reactions)
                 }
             }
             .accessibilityElement(children: .contain)
@@ -249,6 +249,8 @@ struct PhonePostCard<Header: View, Content: View>: View {
     var quotes = true
     let url: URL?
     let editing: PostEditing?
+    /// The post's reactions, for *Add a reaction* in the menu, or `nil` where it takes none.
+    var reactions: PhonePostReactions?
     @ViewBuilder var header: Header
     @ViewBuilder var content: Content
 
@@ -297,17 +299,18 @@ struct PhonePostCard<Header: View, Content: View>: View {
 
     private var offersQuote: Bool { quotes && !markdown.isEmpty }
 
-    private var hasMenu: Bool { offersQuote || url != nil || editing != nil }
+    private var hasMenu: Bool { offersQuote || url != nil || editing != nil || (reactions?.canReact ?? false) }
 
     private var isEditorOpen: Bool { editing.map { PhonePostEditor.isOpen(for: $0, in: model) } ?? false }
 
-    /// *Quote reply*, *Edit*, *Delete…*, *Copy link*, *Share*, *Open on GitHub* — each only where it
-    /// applies, as on the Mac (`PostMenu`).
+    /// *Quote reply*, *Add a reaction*, *Edit*, *Delete…*, *Copy link*, *Share*, *Open on GitHub* —
+    /// each only where it applies, as on the Mac (`PostMenu`).
     @ViewBuilder
     private var menuItems: some View {
         if offersQuote {
             Button(String(localized: "Quote reply"), systemImage: "quote.bubble") { model.quote(markdown) }
         }
+        reactions?.menu
         if let editing, editing.canEdit {
             Button(String(localized: "Edit"), systemImage: "pencil") {
                 model.beginEditing(editing.postID, markdown: markdown)
@@ -419,7 +422,7 @@ struct PhonePostBody: View {
                     .font(Theme.type(.callout))
                     .foregroundStyle(Theme.textMuted)
             } else {
-                MarkdownText(markdown: markdown, size: bodySize)
+                MarkdownText(markdown: markdown, size: bodySize, codeScale: 0.9)
             }
             if reactions.isDrawn {
                 reactions
@@ -538,23 +541,44 @@ struct PhonePostReactions: View {
 
     @State private var taps = 0
 
-    /// Whether the post draws a bar at all.
-    var isDrawn: Bool { !stored.isEmpty || canReact }
+    /// Whether the post draws a bar at all: only when it carries reactions — the reviewer's own
+    /// just-tapped ones included. An empty bar was a lone smiley row under every post; adding the
+    /// first reaction is *Add a reaction* in the post's menu.
+    var isDrawn: Bool { !groups.isEmpty }
 
-    private var canReact: Bool {
+    private var groups: [ReactionGroup] { model.conversationOverlay.reactions(stored, on: subjectID) }
+
+    /// Whether the viewer may react here.
+    var canReact: Bool {
         model.canReact && !(review.map(model.pendingReviewIDs.contains) ?? false)
     }
 
     var body: some View {
         PhoneReactionBar(
-            groups: model.conversationOverlay.reactions(stored, on: subjectID),
+            groups: groups,
             canReact: canReact,
             onToggle: { content, isOn in
                 taps += 1
-                model.toggleReaction(subjectID: subjectID, content: content, currentlyReacted: isOn, actions: actions)
+                toggle(content, isOn: isOn)
             }
         )
         .sensoryFeedback(.selection, trigger: taps)
+    }
+
+    /// *Add a reaction* — all eight as a submenu, for the post's ⋯ menu and its long press.
+    @ViewBuilder
+    var menu: some View {
+        if canReact {
+            Menu {
+                PhoneReactionToggles(groups: groups, onToggle: toggle)
+            } label: {
+                Label(String(localized: "Add a reaction"), systemImage: "face.smiling")
+            }
+        }
+    }
+
+    private func toggle(_ content: ReactionContent, isOn: Bool) {
+        model.toggleReaction(subjectID: subjectID, content: content, currentlyReacted: isOn, actions: actions)
     }
 }
 
@@ -587,12 +611,7 @@ struct PhoneReactionBar: View {
                 }
                 if canReact {
                     Menu {
-                        ForEach(ReactionContent.allCases, id: \.self) { content in
-                            let isOn = groups.contains { $0.content == content && $0.viewerHasReacted }
-                            Toggle(isOn: Binding(get: { isOn }, set: { _ in onToggle(content, isOn) })) {
-                                Text(verbatim: "\(content.emoji)  \(Self.name(of: content))")
-                            }
-                        }
+                        PhoneReactionToggles(groups: groups, onToggle: onToggle)
                     } label: {
                         Image(systemName: "face.smiling")
                             .font(Theme.type(.subheadline))
@@ -649,6 +668,22 @@ struct PhoneReactionBar: View {
     }
 }
 
+/// GitHub's eight reactions as menu toggles, on where the viewer has reacted — the bar's smiley and
+/// the post menu's *Add a reaction* both offer these.
+struct PhoneReactionToggles: View {
+    let groups: [ReactionGroup]
+    let onToggle: @MainActor (ReactionContent, Bool) -> Void
+
+    var body: some View {
+        ForEach(ReactionContent.allCases, id: \.self) { content in
+            let isOn = groups.contains { $0.content == content && $0.viewerHasReacted }
+            Toggle(isOn: Binding(get: { isOn }, set: { _ in onToggle(content, isOn) })) {
+                Text(verbatim: "\(content.emoji)  \(PhoneReactionBar.name(of: content))")
+            }
+        }
+    }
+}
+
 private extension View {
     /// The capsule a reaction and the smiley beside them are drawn in.
     func reactionCapsule(fill: Color, stroke: Color) -> some View {
@@ -692,7 +727,8 @@ struct PhoneReviewView: View {
                     date: review.createdAt,
                     markdown: review.bodyMarkdown,
                     url: review.url,
-                    editing: editing
+                    editing: editing,
+                    reactions: reactions
                 ) {
                     authorLine(verdict)
                 } content: {
@@ -707,7 +743,7 @@ struct PhoneReviewView: View {
                 // to the reviewer, the way a commit run is not.
                 VStack(alignment: .leading, spacing: 8) {
                     authorLine(verdict)
-                    if !review.reactions.isEmpty {
+                    if reactions.isDrawn {
                         reactions
                     }
                 }
@@ -756,12 +792,17 @@ struct PhoneReviewView: View {
     }
 }
 
-/// A review thread: where it points, whether it is settled, its comments and a reply field with
-/// *Resolve* — the phone's `ConversationThreadView` and `ThreadReplyBar` in one card.
+/// A review thread: where it points, whether it is settled, its comments, and *Resolve* and *Reply*
+/// — the phone's `ConversationThreadView` and `ThreadReplyBar`.
+///
+/// In the stream the card carries no field: *Reply* opens the thread in ``PhoneThreadSheet``
+/// (through ``ReviewModel/activeThreadID``), whose detents keep the field above the keyboard — a
+/// field in every thread fought the bottom bar and made each thread tall (ADR 0044's rejected
+/// alternative). The sheet's card is this view too, always open and with the field.
 ///
 /// Resolved and outdated threads start folded, as on GitHub; the fold and the half-written reply
 /// are the model's (``ReviewModel/threadFoldFlips``, ``ReviewModel/threadReplyDrafts``), so they
-/// outlive the card. Also the body of ``PhoneThreadSheet``, which the diff opens.
+/// outlive the card.
 struct PhoneThreadView: View {
     let model: ReviewModel
     let actions: PullRequestActions
@@ -790,7 +831,11 @@ struct PhoneThreadView: View {
                 ForEach(thread.comments) { comment in
                     PhoneThreadComment(comment: comment, model: model, actions: actions)
                 }
-                replyBar
+                if isAlwaysExpanded {
+                    replyBar
+                } else {
+                    threadActions
+                }
             }
         }
         .phoneCard()
@@ -871,6 +916,21 @@ struct PhoneThreadView: View {
                     replyButton
                 }
             }
+        }
+    }
+
+    /// The stream's two buttons: *Resolve*, and *Reply*, which opens the thread's sheet.
+    private var threadActions: some View {
+        HStack(spacing: 10) {
+            resolveButton
+            Spacer(minLength: 0)
+            Button {
+                model.activeThreadID = thread.id
+            } label: {
+                Label(String(localized: "Reply"), systemImage: "arrowshape.turn.up.left")
+            }
+            .buttonStyle(.bordered)
+            .disabled(replyTargetID == nil)
         }
     }
 
@@ -969,14 +1029,21 @@ struct PhoneThreadComment: View {
 
     var body: some View {
         let editing = PostEditing.threadComment(comment)
+        let reactions = PhonePostReactions(
+            subjectID: comment.id,
+            stored: comment.reactions,
+            review: comment.reviewID,
+            model: model,
+            actions: actions
+        )
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 8) {
                 PhoneAuthorLine(author: comment.author, date: comment.createdAt, isEdited: comment.isEdited)
                 Spacer(minLength: 4)
                 // Visible as well as on a long press, as on the Mac's stream, so VoiceOver finds it.
-                if editing != nil || comment.url != nil {
+                if editing != nil || comment.url != nil || reactions.canReact {
                     Menu {
-                        menuItems(editing)
+                        menuItems(editing, reactions: reactions)
                     } label: {
                         Image(systemName: "ellipsis")
                             .font(Theme.type(.body))
@@ -990,22 +1057,15 @@ struct PhoneThreadComment: View {
             if let editing, PhonePostEditor.isOpen(for: editing, in: model) {
                 PhonePostEditor(model: model, actions: actions, editing: editing, markdown: comment.bodyMarkdown)
             } else {
-                PhonePostBody(
-                    markdown: comment.bodyMarkdown,
-                    reactions: PhonePostReactions(
-                        subjectID: comment.id,
-                        stored: comment.reactions,
-                        review: comment.reviewID,
-                        model: model,
-                        actions: actions
-                    )
-                )
+                PhonePostBody(markdown: comment.bodyMarkdown, reactions: reactions)
             }
         }
         .contentShape(Rectangle())
         // Not while the editor is open, for ``PhonePostCard``'s reason: the field's own long press.
         .contextMenu {
-            if !(editing.map { PhonePostEditor.isOpen(for: $0, in: model) } ?? false) { menuItems(editing) }
+            if !(editing.map { PhonePostEditor.isOpen(for: $0, in: model) } ?? false) {
+                menuItems(editing, reactions: reactions)
+            }
         }
         .confirmationDialog(
             String(localized: "Delete this comment?"),
@@ -1021,10 +1081,11 @@ struct PhoneThreadComment: View {
         }
     }
 
-    /// *Edit*, *Copy link*, *Share*, *Open on GitHub* and *Delete…* — no *Quote reply*: a thread's
-    /// answer is its own reply field.
+    /// *Add a reaction*, *Edit*, *Copy link*, *Share*, *Open on GitHub* and *Delete…* — no *Quote
+    /// reply*: a thread's answer is its own reply.
     @ViewBuilder
-    private func menuItems(_ editing: PostEditing?) -> some View {
+    private func menuItems(_ editing: PostEditing?, reactions: PhonePostReactions) -> some View {
+        reactions.menu
         if let editing, editing.canEdit {
             Button(String(localized: "Edit"), systemImage: "pencil") {
                 model.beginEditing(editing.postID, markdown: comment.bodyMarkdown)
@@ -1113,13 +1174,35 @@ struct PhoneEventRow: View {
         }
     }
 
+    /// The Mac's sentence, with any commit in it set as the commit runs set theirs — monospaced, in
+    /// the accent — so "force-pushed from b81f5d2 to 3f2c1ab" reads like "added 1 commit".
+    private var sentence: AttributedString {
+        var text = AttributedString(ConversationEventText.sentence(for: item))
+        text.foregroundColor = Theme.textSecondary
+        for oid in Self.commits(in: item.event) {
+            guard let range = text.range(of: String(oid.prefix(7))) else { continue }
+            text[range].font = Theme.mono(.subheadline)
+            text[range].foregroundColor = Theme.accentText
+        }
+        return text
+    }
+
+    /// The commits an event's sentence names.
+    private static func commits(in event: ConversationEvent) -> [String] {
+        switch event {
+        case .forcePushed(let from?, let to?): return [from, to]
+        case .merged(let commit?, _): return [commit]
+        default: return []
+        }
+    }
+
     private var row: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Image(systemName: ConversationEventText.symbol(for: item.event))
                 .foregroundStyle(ConversationEventText.tint(for: item.event))
                 .frame(width: symbolWidth)
                 .accessibilityHidden(true)
-            Text("\(Text(ConversationEventText.sentence(for: item)).foregroundStyle(Theme.textSecondary))  \(Text(RelativeDate.short(item.createdAt)).foregroundStyle(Theme.textMuted))")
+            Text("\(Text(sentence))  \(Text(RelativeDate.short(item.createdAt)).foregroundStyle(Theme.textMuted))")
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }

@@ -24,31 +24,43 @@ struct PhoneSignInView: View {
     @ScaledMetric(relativeTo: .body) private var promiseIconWidth: CGFloat = 28
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 32) {
-                header
-                if let grant = model.grant {
-                    deviceCodeCard(userCode: grant.userCode)
-                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
-                } else {
-                    // At the accessibility sizes the button comes before the promises, or it
-                    // would sit three screens down.
-                    if pinsButtonInline { signInButton }
-                    promises
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(spacing: 32) {
+                    header
+                    if let grant = model.grant {
+                        deviceCodeCard(userCode: grant.userCode)
+                            .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                    } else {
+                        // At the accessibility sizes the button comes before the promises, or it
+                        // would sit three screens down.
+                        if pinsButtonInline { signInButton }
+                        promises
+                    }
+                    if let message = model.errorMessage {
+                        errorLine(message)
+                    }
+                    tokenSection
                 }
-                if let message = model.errorMessage {
-                    errorLine(message)
-                }
-                tokenSection
+                .padding(.horizontal, 24)
+                .padding(.top, 48)
+                .padding(.bottom, 24)
+                .frame(maxWidth: 520)
+                .frame(maxWidth: .infinity)
+                .animation(.snappy, value: model.grant?.userCode)
             }
-            .padding(.horizontal, 24)
-            .padding(.top, 48)
-            .padding(.bottom, 24)
-            .frame(maxWidth: 520)
-            .frame(maxWidth: .infinity)
-            .animation(.snappy, value: model.grant?.userCode)
+            .scrollDismissesKeyboard(.interactively)
+            // The field and its button above the keyboard once it is up: left alone, the keyboard
+            // covered "Sign in with token" and half the field. Delayed a beat, because the keyboard's
+            // inset is not there yet when the focus changes.
+            .onChange(of: isTokenFieldFocused) { _, focused in
+                guard focused else { return }
+                Task {
+                    try? await Task.sleep(for: .milliseconds(350))
+                    withAnimation(.snappy) { proxy.scrollTo(Self.tokenButtonID, anchor: .bottom) }
+                }
+            }
         }
-        .scrollDismissesKeyboard(.interactively)
         .background(Theme.background)
         // Pinned to the bottom edge, with the system's scroll-edge effect under it, at ordinary
         // sizes. At the accessibility sizes the button and its footnote are taller than half the
@@ -239,6 +251,7 @@ struct PhoneSignInView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 SecureField(String(localized: "github_pat_…"), text: $model.patText)
                     .font(Theme.mono(.body))
+                    .foregroundStyle(Theme.text)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .textContentType(.password)
@@ -264,6 +277,7 @@ struct PhoneSignInView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.large)
                 .disabled(model.isBusy || model.patText.isEmpty)
+                .id(Self.tokenButtonID)
             }
             .padding(.top, 12)
         } label: {
@@ -272,8 +286,14 @@ struct PhoneSignInView: View {
                 .foregroundStyle(Theme.textSecondary)
         }
         .tint(Theme.textSecondary)
+        // The chevron takes the foreground style, not the tint: without this it was near-black
+        // beside a grey label.
+        .foregroundStyle(Theme.textSecondary)
         .padding(.horizontal, 4)
     }
+
+    /// The token's submit button, scrolled to when the field is focused.
+    private static let tokenButtonID = "tokenSubmit"
 
     // MARK: - Errors
 

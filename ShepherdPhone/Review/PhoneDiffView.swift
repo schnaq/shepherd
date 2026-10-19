@@ -1,6 +1,5 @@
 import ShepherdCore
 import SwiftUI
-import UIKit
 
 /// One file's diff on the iPhone: a unified list of lines with syntax colour and word-level
 /// changes, the review threads under the lines they hang on, and a way to comment on a line or
@@ -152,7 +151,7 @@ struct PhoneDiffView: View {
                 .padding(.bottom, picked == nil ? 12 : 88)
                 // The thread cards stop growing at the third accessibility size, as every list row
                 // in the app does (ADR 0044). The code itself stops earlier, at xxxLarge
-                // (``codeMetric(_:relativeTo:)``).
+                // (``codeSize``).
                 .dynamicTypeSize(...DynamicTypeSize.accessibility3)
             }
             .id(content.path)
@@ -487,7 +486,7 @@ struct PhoneDiffView: View {
                         }
                         .accessibilityElement(children: .combine)
                     }
-                    MarkdownText(markdown: comment.bodyMarkdown, size: bodySize)
+                    MarkdownText(markdown: comment.bodyMarkdown, size: bodySize, codeScale: 0.9)
                 }
             } else if thread.comments.count > 1 {
                 Text(String(localized: "\(thread.comments.count) comments"))
@@ -794,21 +793,15 @@ struct PhoneDiffView: View {
 
     // MARK: - Helpers
 
-    private var codeSize: CGFloat { codeMetric(12, relativeTo: .footnote) * textScale }
-
-    private var gutterSize: CGFloat { codeMetric(11, relativeTo: .caption2) }
-
-    /// A size scaled as `@ScaledMetric(relativeTo:)` scales it, but no further than xxxLarge.
+    /// The code's and the gutter's sizes, scaled with the text but no further than xxxLarge.
     ///
     /// Code is the one text that must not grow with the accessibility sizes: at the largest one a
     /// line of it was a word per row. Past xxxLarge the diff's own Text size menu takes over. Not
-    /// `.dynamicTypeSize(...)` on the rows alone, because a metric is resolved where it is
-    /// declared — here, outside any cap — and reaches the rows as a fixed point size.
-    private func codeMetric(_ base: CGFloat, relativeTo style: UIFont.TextStyle) -> CGFloat {
-        let category = UIContentSizeCategory(min(dynamicTypeSize, .xxxLarge))
-        return UIFontMetrics(forTextStyle: style)
-            .scaledValue(for: base, compatibleWith: UITraitCollection(preferredContentSizeCategory: category))
-    }
+    /// `.dynamicTypeSize(...)` on the rows alone, because a `@ScaledMetric` is resolved where it
+    /// is declared — here, outside any cap — and reaches the rows as a fixed point size.
+    private var codeSize: CGFloat { dynamicTypeSize.scaled(12, relativeTo: .footnote, upTo: .xxxLarge) * textScale }
+
+    private var gutterSize: CGFloat { dynamicTypeSize.scaled(11, relativeTo: .caption2, upTo: .xxxLarge) }
 
     /// The file after the one on screen in the list's order, or `nil` at the last.
     private var nextPath: String? {

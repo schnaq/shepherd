@@ -1,5 +1,6 @@
 import ShepherdCore
 import SwiftUI
+import UIKit
 
 /// The pull request's Files tab on the iPhone: the changed files in the Mac's priority buckets,
 /// how many of them are viewed, and a way into each file's diff (ADR 0044).
@@ -34,8 +35,10 @@ struct PhoneFilesScreen: View {
     /// part of a pull request nobody reads line by line.
     @State private var showsGenerated = false
 
-    @ScaledMetric(relativeTo: .caption) private var chipSize: CGFloat = 12
-    @ScaledMetric(relativeTo: .footnote) private var countSize: CGFloat = 13
+    /// The chips' and counts' sizes, scaled with the text but capped where the rows are
+    /// (`accessibility3`): a `@ScaledMetric` here would be resolved outside that cap and grow on.
+    private var chipSize: CGFloat { dynamicTypeSize.scaled(12, relativeTo: .caption1, upTo: .accessibility3) }
+    private var countSize: CGFloat { dynamicTypeSize.scaled(13, relativeTo: .footnote, upTo: .accessibility3) }
 
     var body: some View {
         Group {
@@ -47,6 +50,9 @@ struct PhoneFilesScreen: View {
         }
         .background(Theme.background)
         .navigationTitle(String(localized: "Files"))
+        // How far through the files, under the title — where a row of its own above the list
+        // cost a band of blank space and a third left edge.
+        .navigationSubtitle(model.visiblePriorities.isEmpty ? "" : progressText)
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(item: $openedPath) { path in
             PhoneDiffView(model: model, path: path, revealing: openedLine)
@@ -58,10 +64,18 @@ struct PhoneFilesScreen: View {
 
     private var list: some View {
         List {
-            Section {
-                progressHeader
+            if model.isSinceReviewOffered {
+                Section {
+                    Picker(String(localized: "Round"), selection: roundBinding) {
+                        ForEach(RoundView.allCases) { round in
+                            Text(round.title).tag(round)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
                     .listRowBackground(Color.clear)
-                    .listRowInsets(EdgeInsets(top: 4, leading: 4, bottom: 4, trailing: 4))
+                    .listRowInsets(EdgeInsets())
+                }
             }
             if model.isSinceReviewOffered, !model.findings.isEmpty {
                 findingsSection
@@ -81,39 +95,16 @@ struct PhoneFilesScreen: View {
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
         .listSectionSpacing(.compact)
+        .contentMargins(.top, 4, for: .scrollContent)
     }
 
-    /// "4 of 12 viewed", its bar, and the round picker when there is a round to pick.
-    private var progressHeader: some View {
+    /// "4 of 12 viewed", or "All 12 viewed" once there is nothing left.
+    private var progressText: String {
         let total = model.visiblePriorities.count
         let viewed = model.visiblePriorities.filter { model.viewedPaths.contains($0.file.path) }.count
-        return VStack(alignment: .leading, spacing: 10) {
-            if model.isSinceReviewOffered {
-                Picker(String(localized: "Round"), selection: roundBinding) {
-                    ForEach(RoundView.allCases) { round in
-                        Text(round.title).tag(round)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-            }
-            HStack(spacing: 8) {
-                Text(String(localized: "\(viewed) of \(total) viewed"))
-                    .font(Theme.type(.footnote, weight: .medium))
-                    .foregroundStyle(Theme.textSecondary)
-                Spacer(minLength: 8)
-                if viewed == total {
-                    Label(String(localized: "All viewed"), systemImage: "checkmark.circle.fill")
-                        .font(Theme.type(.footnote, weight: .medium))
-                        .foregroundStyle(Theme.success)
-                        .labelStyle(.titleAndIcon)
-                }
-            }
-            ProgressView(value: Double(viewed), total: Double(max(total, 1)))
-                .tint(Theme.accent)
-                .accessibilityHidden(true)
-        }
-        .accessibilityElement(children: .contain)
+        return viewed == total
+            ? String(localized: "All \(total) viewed")
+            : String(localized: "\(viewed) of \(total) viewed")
     }
 
     private func bucketHeader(_ bucket: PriorityBucket, count: Int) -> some View {
@@ -215,8 +206,11 @@ struct PhoneFilesScreen: View {
             openedLine = nil
             openedPath = file.path
         } label: {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: 4) {
                 viewedToggle(path: file.path, isViewed: isViewed)
+                    // Pulled up and in, so the larger tap area keeps the check beside the name.
+                    .padding(.top, -8)
+                    .padding(.leading, -8)
                 VStack(alignment: .leading, spacing: 4) {
                     // The counts sit beside the name while there is room and drop under it at
                     // the accessibility sizes, where beside it they would squeeze the name to a
@@ -225,7 +219,7 @@ struct PhoneFilesScreen: View {
                         ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
                         : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 8))
                     nameLayout {
-                        Text(verbatim: file.fileName)
+                        Text(verbatim: Self.breakable(file.fileName))
                             .font(Theme.type(.body, weight: .medium))
                             .foregroundStyle(isViewed ? Theme.textMuted : Theme.textStrong)
                             .lineLimit(2)
@@ -294,7 +288,8 @@ struct PhoneFilesScreen: View {
                 .font(Theme.type(.title3))
                 .foregroundStyle(isViewed ? Theme.success : Theme.controlBorder)
                 .contentTransition(.symbolEffect(.replace))
-                .frame(minWidth: 28, minHeight: 28)
+                // The minimum touch target; the symbol stays its size, its tap area does not.
+                .frame(minWidth: 44, minHeight: 44)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -394,6 +389,23 @@ struct PhoneFilesScreen: View {
         ])
     }
 
+    /// A file name with places a line may break: before a capital that follows a small letter and
+    /// before every dot, as zero-width spaces. Without them a long name wrapped at the largest
+    /// text sizes was hyphenated mid-word ("SignedInSes-sion.swift"), with a hyphen the name does
+    /// not have. VoiceOver reads the row's own label, which keeps the name as it is.
+    static func breakable(_ name: String) -> String {
+        var result = ""
+        var previous: Character?
+        for character in name {
+            if let previous, character == "." || (character.isUppercase && previous.isLowercase) {
+                result.append("\u{200B}")
+            }
+            result.append(character)
+            previous = character
+        }
+        return result
+    }
+
     /// The last path component.
     static func fileName(_ path: String) -> String {
         path.split(separator: "/").last.map(String.init) ?? path
@@ -461,6 +473,17 @@ struct PhoneChip: View {
         // A capsule while the chip is one line; a rounded rectangle, not a tall stadium, when a
         // long reason wraps at the accessibility sizes (``PhoneChipFlow`` proposes the row's width).
         .background(Theme.chipBackground(color), in: RoundedRectangle(cornerRadius: size * 0.75, style: .continuous))
+    }
+}
+
+extension DynamicTypeSize {
+    /// `value` scaled for `style` as `@ScaledMetric(relativeTo:)` scales it, but no further than
+    /// `cap` — for a size handed to a view that sits under a `.dynamicTypeSize(...cap)`, which a
+    /// metric declared above that cap does not see.
+    func scaled(_ value: CGFloat, relativeTo style: UIFont.TextStyle, upTo cap: DynamicTypeSize) -> CGFloat {
+        let category = UIContentSizeCategory(Swift.min(self, cap))
+        return UIFontMetrics(forTextStyle: style)
+            .scaledValue(for: value, compatibleWith: UITraitCollection(preferredContentSizeCategory: category))
     }
 }
 
