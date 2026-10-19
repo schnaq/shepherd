@@ -7,6 +7,7 @@ import SwiftUI
 @main
 struct ShepherdPhoneApp: App {
     @State private var environment = ShepherdPhoneApp.makeEnvironment()
+    @Environment(\.scenePhase) private var scenePhase
 
     /// The container: the real one, or — in a Debug build launched with `-ShepherdDemo YES` — the
     /// demo mode's, which never touches the phone's real database, defaults or Keychain.
@@ -29,6 +30,16 @@ struct ShepherdPhoneApp: App {
                     await DemoMode.prepare(environment)
                     #endif
                     await environment.bootstrap()
+                }
+                // Sweep while open, drain on the way out (ADR 0044); the policy is the
+                // environment's, this only reports the moment.
+                .onChange(of: scenePhase) { _, phase in
+                    environment.scenePhaseChanged(to: phase)
+                }
+                // The Mac's `ShepherdApp` watches the same key: adding or removing a repository in
+                // settings reaches the engine at once, with a sweep.
+                .onChange(of: environment.settings.watchedRepositories) { _, _ in
+                    environment.applyWatchedRepositoriesSetting()
                 }
         }
     }
