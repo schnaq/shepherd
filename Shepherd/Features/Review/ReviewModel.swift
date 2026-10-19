@@ -1830,7 +1830,7 @@ final class ReviewModel {
         revise { $0.reactions[key] = adding }
         chainPostWrite(
             { await actions.react(on: summary, subjectID: subjectID, content: content, adding: adding) },
-            undo: { $0.drop(key, ifStill: adding) }
+            undo: { [weak self] in self?.revise { $0.drop(key, ifStill: adding) } }
         )
     }
 
@@ -1840,6 +1840,8 @@ final class ReviewModel {
     ///   - postID: The post's node id.
     ///   - markdown: The text the post shows now.
     func beginEditing(_ postID: String, markdown: String) {
+        // A second *Edit* while the editor is open keeps what is typed in it.
+        guard !postsBeingEdited.contains(postID) else { return }
         postEditDrafts[postID] = markdown
         postsBeingEdited.insert(postID)
     }
@@ -1855,22 +1857,62 @@ final class ReviewModel {
     /// written, then sent (ADR 0043, C).
     ///
     /// Trimmed like a new comment, and the post shows exactly the text that is sent, so the detail
-    /// GitHub answers with can be told to agree with it. An edit that could not be written, or
-    /// whose drain saw its row refused, puts the stored text back — unless a later edit of the same
-    /// post has replaced it since.
+    /// GitHub answers with can be told to agree with it. Text the post shows already only closes
+    /// the editor: there is nothing to send. An edit that could not be written, or whose drain saw
+    /// its row refused, puts the stored text back — unless a later edit of the same post has
+    /// replaced it since — and its own text into the editor again
+    /// (``reopensEditor(of:with:overlay:editing:)``).
     /// - Parameters:
     ///   - post: The post and where its edit is sent.
     ///   - body: What the editor holds.
+    ///   - shown: The text the post shows now.
     ///   - actions: The write helper.
-    func edit(_ post: PostEditing, body: String, actions: PullRequestActions) {
+    func edit(_ post: PostEditing, body: String, shown: String, actions: PullRequestActions) {
         guard let summary, post.canEdit else { return }
         let text = body.trimmingCharacters(in: .whitespacesAndNewlines)
         endEditing(post.postID)
+        // Both sides trimmed: GitHub's text can end in a line break the editor never sends.
+        guard text != shown.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
         revise { $0.editedBodies[post.postID] = text }
         chainPostWrite(
             { await actions.edit(on: summary, target: post.target, body: text) },
-            undo: { $0.drop(editOf: post.postID, ifStill: text) }
+            undo: { [weak self] in self?.takeBack(edit: text, of: post.postID) }
         )
+    }
+
+    /// Takes an edit that never landed back off the post, and puts its text into the post's editor
+    /// again when nothing newer is there.
+    /// - Parameters:
+    ///   - text: The text the edit sent.
+    ///   - postID: The post's node id.
+    private func takeBack(edit text: String, of postID: String) {
+        // Asked before the drop below, which takes away what it reads.
+        if Self.reopensEditor(of: postID, with: text, overlay: conversationOverlay, editing: postsBeingEdited) {
+            postEditDrafts[postID] = text
+            postsBeingEdited.insert(postID)
+        }
+        revise { $0.drop(editOf: postID, ifStill: text) }
+    }
+
+    /// Whether an edit that never landed — refused, or never written — goes back into its post's
+    /// editor: the composer's rule (`ConversationComposer.post()`), words GitHub did not take are
+    /// not thrown away.
+    ///
+    /// Only while the post still shows that edit and its editor is closed. A later edit or a delete
+    /// of the post has replaced it, and an editor opened again holds newer words; either wins.
+    /// - Parameters:
+    ///   - postID: The post's node id.
+    ///   - text: The text the edit sent.
+    ///   - overlay: The overlay before the edit is taken off it.
+    ///   - editing: The posts whose editor is open.
+    /// - Returns: Whether to put the text back and open the editor.
+    static func reopensEditor(
+        of postID: String,
+        with text: String,
+        overlay: ConversationOverlay,
+        editing: Set<String>
+    ) -> Bool {
+        overlay.editedBodies[postID] == text && !editing.contains(postID)
     }
 
     /// *Delete…*, once the reviewer confirmed it: the comment is gone from the stream at once, its
@@ -1886,13 +1928,14 @@ final class ReviewModel {
             $0.deletedPosts.insert(post.postID)
             // The delete's write takes a waiting edit of this comment out of the outbox, and that
             // edit's own drain then reads its row as sent — so its text would outlive a refused
-            // delete, as text that never went out. An edit already in flight lands, and its re-read
-            // brings its text back the way it brings any sent write.
+            // delete, as text that never went out. An edit the drain already holds either lands, and
+            // its re-read brings its text back the way it brings any sent write, or gives way to the
+            // delete.
             $0.editedBodies[post.postID] = nil
         }
         chainPostWrite(
             { await actions.delete(on: summary, target: post.target) },
-            undo: { $0.drop(deletionOf: post.postID) }
+            undo: { [weak self] in self?.revise { $0.drop(deletionOf: post.postID) } }
         )
     }
 
@@ -1907,23 +1950,24 @@ final class ReviewModel {
     /// - Parameters:
     ///   - write: Writes the row, and returns the running task that settles it, or `nil` when
     ///     nothing was written.
-    ///   - undo: Takes the change back off the overlay.
+    ///   - undo: Takes the change back off the screen — off the overlay, and an edit's text into
+    ///     its editor again.
     private func chainPostWrite(
         _ write: @escaping @MainActor () async -> Task<OutboxWriteOutcome, Never>?,
-        undo: @escaping @MainActor (inout ConversationOverlay) -> Void
+        undo: @escaping @MainActor () -> Void
     ) {
         let previous = postWrites
-        postWrites = Task { [weak self] in
+        postWrites = Task {
             await previous?.value
             guard let settling = await write() else {
-                self?.revise(undo)
+                undo()
                 return
             }
             // Outside the chain: the next row is written without waiting for this drain.
-            Task { [weak self] in
+            Task {
                 switch await settling.value {
                 case .sent, .queued: break
-                case .parked, .failed: self?.revise(undo)
+                case .parked, .failed: undo()
                 }
             }
         }

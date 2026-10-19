@@ -466,9 +466,10 @@ struct PullRequestActions {
     /// A delete makes a waiting edit pointless, and a newer edit makes an older one wrong: an older
     /// edit in a retry's backoff would be sent after the newer one and put back the text the
     /// reviewer replaced. Taking it out is what lets the last word win. A row the drain already
-    /// holds is in flight and is left alone, by the store's state-guarded cancel; the new row waits
-    /// behind it, so it still lands last. Static, over the database alone, so the sequence runs
-    /// against a real outbox in the tests.
+    /// holds is in flight and is left alone, by the store's state-guarded cancel: it may already be
+    /// on GitHub. Should it fail and wait out a backoff, the new row would be sent first; the drain
+    /// takes it out then, when it sends the new row (`SyncEngine`'s `isSuperseded`). Static, over the
+    /// database alone, so the sequence runs against a real outbox in the tests.
     /// - Parameters:
     ///   - action: The edit or the delete.
     ///   - target: The post it is about.
@@ -1088,8 +1089,9 @@ struct PullRequestActions {
             // Says what the screen did about it: the caller takes the click back off the bar.
             return String(localized: "Could not change your reaction on \(slug) — it is back as it was")
         case .edit:
-            // The same: the caller puts the post's text back as GitHub has it.
-            return String(localized: "Could not edit your post on \(slug) — it is back as it was")
+            // No word on what the post shows: an edit queued behind this one may be on it by now.
+            // Otherwise the caller takes this one off it and puts its text into the editor again.
+            return String(localized: "Could not edit your post on \(slug)")
         case .delete:
             return String(localized: "Could not delete your comment on \(slug) — it is back")
         }

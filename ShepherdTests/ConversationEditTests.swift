@@ -194,6 +194,33 @@ final class ConversationEditTests: XCTestCase {
         XCTAssertEqual(overlay, ConversationOverlay())
     }
 
+    func testARefusedEditGoesBackIntoItsEditorUnlessSomethingNewerIsThere() {
+        let shown = ConversationOverlay(editedBodies: ["IC_1": "First try."])
+        XCTAssertTrue(ReviewModel.reopensEditor(of: "IC_1", with: "First try.", overlay: shown, editing: ["IC_2"]))
+        XCTAssertFalse(
+            ReviewModel.reopensEditor(of: "IC_1", with: "First try.", overlay: shown, editing: ["IC_1"]),
+            "the editor was opened again, and what is typed there is newer"
+        )
+        XCTAssertFalse(
+            ReviewModel.reopensEditor(
+                of: "IC_1",
+                with: "First try.",
+                overlay: ConversationOverlay(editedBodies: ["IC_1": "Second try."]),
+                editing: []
+            ),
+            "a later edit replaced it"
+        )
+        XCTAssertFalse(
+            ReviewModel.reopensEditor(
+                of: "IC_1",
+                with: "First try.",
+                overlay: ConversationOverlay(deletedPosts: ["IC_1"]),
+                editing: []
+            ),
+            "the comment was deleted since"
+        )
+    }
+
     func testARefusedDeleteBringsTheCommentBack() {
         var overlay = ConversationOverlay(deletedPosts: ["IC_1", "IC_2"])
         overlay.drop(deletionOf: "IC_1")
@@ -375,7 +402,7 @@ final class ConversationEditTests: XCTestCase {
         }
         XCTAssertEqual(
             PullRequestActions.announcement(for: .failed(reason: "Not Found"), of: .edit, slug: slug)?.message,
-            "Could not edit your post on schnaq/review#182 — it is back as it was: Not Found"
+            "Could not edit your post on schnaq/review#182: Not Found"
         )
         XCTAssertEqual(
             PullRequestActions.announcement(

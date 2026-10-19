@@ -155,7 +155,7 @@ struct ConversationPostView: View {
                         editing: editing
                     )
                     if let editing, PostEditor.isOpen(for: editing, in: model) {
-                        PostEditor(model: model, actions: actions, editing: editing)
+                        PostEditor(model: model, actions: actions, editing: editing, markdown: markdown)
                     } else {
                         PostBody(
                             markdown: markdown,
@@ -466,6 +466,9 @@ struct PostEditor: View {
     let actions: PullRequestActions
     /// The post and where its edit is sent.
     let editing: PostEditing
+    /// The text the post shows now — what *Update comment* is compared with, so an unchanged text
+    /// sends nothing.
+    let markdown: String
 
     /// What is typed — the copy this editor draws from.
     @State private var text = ""
@@ -502,7 +505,7 @@ struct PostEditor: View {
                     .help(String(localized: "Close the editor and keep the comment as it is"))
                     .accessibilityLabel(String(localized: "Cancel editing"))
                 Button(String(localized: "Update comment")) {
-                    model.edit(editing, body: text, actions: actions)
+                    model.edit(editing, body: text, shown: markdown, actions: actions)
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 // The composer's rule: ⌘⏎ is this button's only while its field has the keyboard.
@@ -800,7 +803,7 @@ struct ConversationReviewView: View {
             if review.hasBody {
                 Card {
                     if let editing, PostEditor.isOpen(for: editing, in: model) {
-                        PostEditor(model: model, actions: actions, editing: editing)
+                        PostEditor(model: model, actions: actions, editing: editing, markdown: review.bodyMarkdown)
                     } else {
                         PostBody(markdown: review.bodyMarkdown, reactions: reactions, translations: translations)
                     }

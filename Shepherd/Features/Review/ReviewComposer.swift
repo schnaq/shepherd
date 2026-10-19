@@ -1291,7 +1291,7 @@ struct ThreadCommentView: View {
             }
             VStack(alignment: .leading, spacing: 4) {
                 if let editing, PostEditor.isOpen(for: editing, in: model) {
-                    PostEditor(model: model, actions: actions, editing: editing)
+                    PostEditor(model: model, actions: actions, editing: editing, markdown: comment.bodyMarkdown)
                 } else {
                     TranslatableMarkdownText(
                         markdown: comment.bodyMarkdown,

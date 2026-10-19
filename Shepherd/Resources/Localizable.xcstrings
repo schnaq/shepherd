@@ -2981,12 +2981,12 @@
         }
       }
     },
-    "Could not edit your post on %@ — it is back as it was": {
+    "Could not edit your post on %@": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Dein Beitrag auf %@ konnte nicht bearbeitet werden — er ist wieder wie vorher"
+            "value": "Dein Beitrag auf %@ konnte nicht bearbeitet werden"
           }
         }
       }

@@ -359,9 +359,10 @@ delete always asks first, naming whose comment it is and from when. The post sho
 is gone, at once, and the write is in the outbox at once, so an edit made offline is sent when the
 network comes back; while the review screen is open it shows the edit until GitHub has it. A newer
 edit or a delete takes an older edit still waiting out of the outbox, so the last word is the one
-that lands. A refusal — the comment was deleted on GitHub meanwhile, say — puts the post back as
-GitHub has it, with GitHub's words in the toast and in Settings → Sync. Nothing about an edit or a
-delete reaches a webhook or telemetry.
+that lands. A refusal the write's own drain sees — the comment was deleted on GitHub meanwhile,
+say — shows GitHub's words in a toast: a refused edit's text is back in its editor, a refused
+delete's comment back in the stream. One that a later drain meets shows in Settings → Sync, as for
+reactions. Nothing about an edit or a delete reaches a webhook or telemetry.
 
 It is one more GraphQL read per changed pull request, measured at one point of GitHub's rate
 limit, read newest first and capped at 500 entries — a conversation longer than that says
