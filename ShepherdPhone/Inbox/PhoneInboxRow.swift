@@ -260,7 +260,8 @@ struct PhoneSectionHeader: View {
                     .fill(dot)
                     .frame(width: 8, height: 8)
             }
-            Text(title.uppercased())
+            Text(title)
+                .textCase(.uppercase)
                 .font(Theme.type(.footnote, weight: .semibold))
                 .kerning(0.5)
                 .foregroundStyle(Theme.textSecondary)
@@ -270,6 +271,9 @@ struct PhoneSectionHeader: View {
                 .monospacedDigit()
         }
         .lineLimit(dynamicTypeSize.isAccessibilitySize ? 2 : 1)
+        // Tighter than the plain list's own header padding, which left the header floating
+        // between the smart-view pills and its rows (the space above it is the list's and stays).
+        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 4, trailing: 16))
         .accessibilityElement(children: .ignore)
         // The title as written rather than in capitals, which VoiceOver may spell out letter by
         // letter, and the count in words.

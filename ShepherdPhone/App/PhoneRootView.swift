@@ -125,6 +125,5 @@ private struct PhoneInboxPlaceholder: View {
                     }
                 }
         }
-        .task { model.startObserving() }
     }
 }

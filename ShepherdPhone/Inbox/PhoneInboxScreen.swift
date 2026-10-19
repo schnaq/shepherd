@@ -35,6 +35,8 @@ struct PhoneInboxScreen: View {
     @State private var approvalCount = 0
     /// Bumped when a refresh brought new rows, for the success haptic.
     @State private var arrivalCount = 0
+    /// Bumped when a row was hidden or its link copied, for the light tap.
+    @State private var quietActionCount = 0
 
     var body: some View {
         List {
@@ -52,6 +54,9 @@ struct PhoneInboxScreen: View {
             content
         }
         .listStyle(.plain)
+        // Lets the pill row be as short as its pills — with the 44-point floor the row re-centred
+        // them and kept the gap above the first header. Every other row is taller anyway.
+        .environment(\.defaultMinListRowHeight, 0)
         .scrollContentBackground(.hidden)
         .background(Theme.background)
         // While searching, the results span every smart view, so the title stops naming one.
@@ -68,6 +73,7 @@ struct PhoneInboxScreen: View {
         .sensoryFeedback(.selection, trigger: model.smartView)
         .sensoryFeedback(.success, trigger: approvalCount)
         .sensoryFeedback(.success, trigger: arrivalCount)
+        .sensoryFeedback(.impact(weight: .light), trigger: quietActionCount)
         .animation(.snappy, value: model.smartView)
     }
 
@@ -133,13 +139,17 @@ struct PhoneInboxScreen: View {
             .listRowBackground(Color.clear)
             .listRowSeparatorTint(Theme.hairline)
             .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                Button {
-                    approve(row)
-                } label: {
-                    Label(String(localized: "Approve"), systemImage: "checkmark")
+                // Only where an approval can go out: a swipe that reveals a dead button — on
+                // every row of "My pull requests" — is worse than no swipe. The context menu
+                // keeps the disabled item, where it says why by being there.
+                if row.verdictBlocker == nil {
+                    Button {
+                        approve(row)
+                    } label: {
+                        Label(String(localized: "Approve"), systemImage: "checkmark")
+                    }
+                    .tint(Theme.accent)
                 }
-                .tint(Theme.accent)
-                .disabled(row.verdictBlocker != nil)
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                 Button {
@@ -230,7 +240,9 @@ struct PhoneInboxScreen: View {
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 6)
+                // Nothing below: the next section header brings the plain list's own padding,
+                // and any more left that header floating away from the pills it belongs to.
+                .padding(.top, 6)
                 // Capped: the large title above already names the selected view, and a pill wider
                 // than the screen is a scroller with one visible stop.
                 .dynamicTypeSize(...DynamicTypeSize.accessibility1)
@@ -338,13 +350,11 @@ struct PhoneInboxScreen: View {
                 }
             }
         } label: {
-            Label(
-                String(localized: "Filter"),
-                systemImage: model.hasActiveFilter
-                    ? "line.3.horizontal.decrease.circle.fill"
-                    : "line.3.horizontal.decrease"
-            )
+            // One symbol in both states — a filled circle inside the round glass button reads
+            // as a button in a button. "On" is the tint instead.
+            Label(String(localized: "Filter"), systemImage: "line.3.horizontal.decrease")
         }
+        .tint(model.hasActiveFilter ? Theme.accent : nil)
         .accessibilityValue(model.hasActiveFilter ? String(localized: "Filter on") : "")
     }
 
@@ -371,8 +381,15 @@ struct PhoneInboxScreen: View {
             Label(String(localized: "Approve"), systemImage: "checkmark")
         }
         .disabled(row.verdictBlocker != nil)
-        Divider()
-        PullRequestMoreMenuItems(summary: row, actions: actions, onClose: { closeTarget = row })
+        if case .failed = writeState(for: row) {
+            // The failed-write chip's way out — the Mac panel's Retry (`InboxDetailPanel`); the
+            // observed outbox clears the chip by itself.
+            Button {
+                Task { await model.session.retryFailedWrites(for: row.id) }
+            } label: {
+                Label(String(localized: "Retry"), systemImage: "arrow.clockwise")
+            }
+        }
         Divider()
         ShareLink(item: url(of: row)) {
             Label(String(localized: "Share…"), systemImage: "square.and.arrow.up")
@@ -380,6 +397,7 @@ struct PhoneInboxScreen: View {
         Button {
             PlatformServices.copyToPasteboard(url(of: row).absoluteString)
             environment.toasts.info(String(localized: "Link copied"))
+            quietActionCount += 1
         } label: {
             Label(String(localized: "Copy link"), systemImage: "link")
         }
@@ -388,6 +406,9 @@ struct PhoneInboxScreen: View {
         } label: {
             Label(String(localized: "Hide this pull request"), systemImage: "eye.slash")
         }
+        // Last, so "Close pull request…" ends the menu, where iOS puts a destructive item.
+        Divider()
+        PullRequestMoreMenuItems(summary: row, actions: actions, onClose: { closeTarget = row })
     }
 
     /// Approves from the list — the Mac inbox panel's Approve, through the same path, so an
@@ -404,6 +425,7 @@ struct PhoneInboxScreen: View {
     private func hide(_ row: PullRequestSummary) {
         let id = row.id
         model.ignore(row)
+        quietActionCount += 1
         environment.toasts.show(
             Toast(
                 message: String(localized: "\(row.slug) hidden. A review request brings it back."),
