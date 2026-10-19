@@ -275,6 +275,8 @@ struct PhoneSectionHeader: View {
             Text("\(Text(title.uppercased()).font(Theme.type(.footnote, weight: .semibold)).kerning(0.5).foregroundStyle(Theme.textSecondary)) \(Text(verbatim: "· \(count)").font(Theme.type(.footnote)).foregroundStyle(Theme.textMuted).monospacedDigit())")
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
+                // Cut in the middle, so a long repository or German title keeps its count.
+                .truncationMode(.middle)
         }
         // Tighter than the plain list's own header padding, which left the header floating
         // between the smart-view pills and its rows (the space above it is the list's and stays).

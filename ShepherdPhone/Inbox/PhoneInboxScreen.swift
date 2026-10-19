@@ -536,8 +536,11 @@ private struct SmartViewPill: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        // One element with its own words: the children are not read, so the checkmark symbol's
+        // automatic "Selected" cannot reach it.
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: "\(view.title), \(String(localized: "\(count) pull requests"))"))
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 }
 
