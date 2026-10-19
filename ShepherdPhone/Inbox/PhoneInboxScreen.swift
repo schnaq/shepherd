@@ -504,9 +504,8 @@ private struct SmartViewPill: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
-        .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: "\(view.title), \(String(localized: "\(count) pull requests"))"))
-        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
