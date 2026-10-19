@@ -57,6 +57,8 @@ struct PhonePullRequestScreen: View {
     @State private var isCommentSheetPresented = false
     /// Bumped by every write the reviewer will want to feel land (``SwiftUI/View/sensoryFeedback(_:trigger:)``).
     @State private var successes = 0
+    /// The approval the bar's ✓ is waiting to have confirmed.
+    @State private var approvalToConfirm: PullRequestSummary?
 
     var body: some View {
         content
@@ -128,6 +130,14 @@ struct PhonePullRequestScreen: View {
                 }
             }
             .sensoryFeedback(.success, trigger: successes)
+            .confirmationDialog(
+                approvalToConfirm.map { String(localized: "Approve #\(String($0.number))?") } ?? "",
+                isPresented: approvalConfirmationBinding,
+                titleVisibility: .visible,
+                presenting: approvalToConfirm
+            ) { summary in
+                Button(String(localized: "Approve")) { sendApproval(on: summary) }
+            }
     }
 
     // MARK: - Content and its states
@@ -388,8 +398,10 @@ struct PhonePullRequestScreen: View {
         model.verdictBlocker != nil || model.hasEndedOnGitHub || model.summary == nil || isSubmittingVerdict
     }
 
-    /// The bar's ✓: an approval needs no words, so it goes out at once with the pending comments —
-    /// the Mac toolbar's Approve.
+    /// The bar's ✓: an approval needs no words, so it goes out with the pending comments — the Mac
+    /// toolbar's Approve — after one confirmation. On the Mac the button sits under a pointer; on a
+    /// phone it sits under a thumb that is scrolling the description, and an approval is what an
+    /// auto-merge rule (ADR 0018) acts on unattended, so a stray tap must not be enough.
     ///
     /// Unless words are already written: the summary's only field is in the submit sheet, which
     /// keeps them when closed unsent (and a saved draft brings them back), so a summary sent from
@@ -400,11 +412,20 @@ struct PhonePullRequestScreen: View {
             requestReview(.approve)
             return
         }
+        approvalToConfirm = summary
+    }
+
+    /// Sends the approval the dialog confirmed.
+    private func sendApproval(on summary: PullRequestSummary) {
         Task {
             if await actions.submitReview(on: summary, verdict: .approve, body: model.summaryText) {
                 successes += 1
             }
         }
+    }
+
+    private var approvalConfirmationBinding: Binding<Bool> {
+        Binding(get: { approvalToConfirm != nil }, set: { if !$0 { approvalToConfirm = nil } })
     }
 
     /// Opens the submit sheet on a verdict — never on a pull request GitHub has already ended.

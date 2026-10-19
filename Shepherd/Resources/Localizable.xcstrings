@@ -21162,6 +21162,16 @@
           }
         }
       }
+    },
+    "Approve #%@?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%@ approven?"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
