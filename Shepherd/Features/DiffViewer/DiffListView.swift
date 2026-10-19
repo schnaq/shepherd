@@ -75,11 +75,9 @@ struct DiffListView: View {
         // whole file, because it carries state from line to line.
         .task(id: content) {
             guard highlighted?.lines(for: content.rows) == nil else { return }
-            let rows = content.rows, path = content.path
-            let built = await Task.detached(priority: .userInitiated) {
-                HighlightedDiff(rows: rows, path: path)
-            }.value
-            guard !Task.isCancelled else { return }
+            guard let built = await HighlightedDiff.build(rows: content.rows, path: content.path),
+                !Task.isCancelled
+            else { return }
             highlighted = built
         }
         .focusable()

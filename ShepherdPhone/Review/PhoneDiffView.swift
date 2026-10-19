@@ -702,12 +702,10 @@ struct PhoneDiffView: View {
     /// Highlights the file off the main thread, once per (path, rows).
     private func highlight(_ content: DiffListContent) async {
         if highlights[content.path]?.lines(for: content.rows) != nil { return }
-        let rows = content.rows, path = content.path
-        let built = await Task.detached(priority: .userInitiated) {
-            HighlightedDiff(rows: rows, path: path)
-        }.value
-        guard !Task.isCancelled else { return }
-        highlights[path] = built
+        guard let built = await HighlightedDiff.build(rows: content.rows, path: content.path),
+            !Task.isCancelled
+        else { return }
+        highlights[content.path] = built
     }
 
     /// Scrolls to a head-side line, when it is in this file.

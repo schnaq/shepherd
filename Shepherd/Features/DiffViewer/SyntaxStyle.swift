@@ -42,9 +42,9 @@ extension Theme {
 /// One file's diff rows, coloured: syntax spans and word-level changes turned into one
 /// `AttributedString` per line (ADR 0044).
 ///
-/// Built once per file off the main thread — tokenizing a whole file is a single pass because
-/// the tokenizer carries state from line to line (``ShepherdCore/DiffHighlighting``) — and kept
-/// with the rows it was built from. A renderer asks ``lines(for:)`` with the rows it is about to
+/// Built once per file off the main thread (``build(rows:path:)``) — tokenizing a whole file is
+/// a single pass because the tokenizer carries state from line to line
+/// (``ShepherdCore/DiffHighlighting``) — and kept with the rows it was built from. A renderer asks ``lines(for:)`` with the rows it is about to
 /// draw and gets `nil` for anything else, so a highlight can never be painted onto a different
 /// file or round whose rows merely happen to be as many. Not part of `DiffListContent`: that
 /// value is `Hashable` and compared on every body pass, and comparing span arrays there would
@@ -55,14 +55,31 @@ struct HighlightedDiff: Sendable {
     /// One coloured line per row, `nil` for a hunk header.
     private let attributed: [AttributedString?]
 
-    /// Colours a file's rows. Costs a few milliseconds for a large file — call it off the main
-    /// thread.
+    /// Files longer than this stay plain: the colour is a nicety, and a file this long is a
+    /// generated one or a rewrite nobody reads line by line — not worth a long pass and the
+    /// memory of a coloured copy per row (the iPhone keeps one per file it has shown).
+    static let rowLimit = 4_000
+
+    /// Colours a file's rows off the caller's actor, so a renderer awaits it from its `.task`
+    /// and a file switch — which cancels that task — stops the pass rather than leaving it to
+    /// run to the end (the Mac's j/k walks through files faster than a long file colours).
     /// - Parameters:
     ///   - rows: The rows to colour.
     ///   - path: The file's path, which picks the language.
-    init(rows: [PatchReconstructor.DiffRow], path: String) {
-        self.rows = rows
+    /// - Returns: The coloured rows, or `nil` for a file over ``rowLimit`` and for a pass that
+    ///   was cancelled.
+    @concurrent
+    static func build(rows: [PatchReconstructor.DiffRow], path: String) async -> HighlightedDiff? {
+        guard rows.count <= rowLimit else { return nil }
         let highlighting = DiffHighlighting(rows: rows, language: SourceLanguage(path: path))
+        // The tokenizer is one uninterruptible pass; the per-line strings after it are the other
+        // half of the cost, and a cancelled file need not pay it.
+        guard !Task.isCancelled else { return nil }
+        return HighlightedDiff(rows: rows, highlighting: highlighting)
+    }
+
+    private init(rows: [PatchReconstructor.DiffRow], highlighting: DiffHighlighting) {
+        self.rows = rows
         attributed = rows.indices.map { index in
             guard case .line(let row) = rows[index] else { return nil }
             return SyntaxStyle.attributed(
