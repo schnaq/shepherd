@@ -116,7 +116,9 @@ info "Archived Shepherd for iPhone $VERSION ($BUILD_NUMBER)"
 # ── 3. Export compliance ─────────────────────────────────────────────────────────────────────
 #
 # On the Release binary, which is the one Apple receives: ITSAppUsesNonExemptEncryption is NO,
-# and this is what makes that a checked fact rather than a hope (ADR 0044).
+# and this checks the system ciphers it imports. The archive is stripped of the symbols it
+# defines, so a cipher compiled in from a package is caught by CI's scan of the Debug build
+# instead (`check-phone-encryption.sh` says why), not here (ADR 0044).
 
 log "Checking the binary for ciphers"
 "$SCRIPT_DIR/check-phone-encryption.sh" "$APP"

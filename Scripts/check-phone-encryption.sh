@@ -17,9 +17,12 @@
 # Every Mach-O file in the bundle is read, not just the main executable: in a Debug build the
 # executable is a small launcher and the code lives in `Shepherd.debug.dylib`, and an embedded
 # framework or app extension added later carries code of its own. Defined symbols are read as
-# well as imported ones, so a cipher compiled in from a package is caught too. Run by
-# Scripts/testflight.sh on the archived Release app and by the `ios` job in
-# .github/workflows/ci.yml on the Debug simulator build.
+# well as imported ones, but only an unstripped build still has them: the Debug simulator build
+# the `ios` job in .github/workflows/ci.yml scans keeps them, so that scan is what catches a
+# cipher compiled in from a package. The archived Release app Scripts/testflight.sh scans is
+# stripped to its imports, so before an upload this sees what the app calls in the system's
+# libraries (CryptoKit, Security, CommonCrypto) and nothing it defines itself — the packages are
+# the same in both builds, which is why the push's Debug scan covers the rest.
 #
 set -euo pipefail
 
@@ -50,7 +53,7 @@ while IFS= read -r -d '' binary; do
         printf '%s\n' "$hits" >&2
         die "${binary#"$APP"/} carries a cipher (above). Re-check ITSAppUsesNonExemptEncryption in project.yml (ADR 0044) before uploading."
     fi
-    printf '    %s: %s external symbols, no cipher\n' "${binary#"$APP"/}" "$(printf '%s\n' "$symbols" | wc -l | tr -d ' ')"
+    printf '    %s: %s symbols, no cipher\n' "${binary#"$APP"/}" "$(printf '%s\n' "$symbols" | wc -l | tr -d ' ')"
     scanned=$((scanned + 1))
 done < <(find "$APP" -type f -perm -111 -print0)
 [[ $scanned -gt 0 ]] || die "No Shepherd binary found in $APP."
