@@ -32,6 +32,8 @@ final class PhoneEnvironment: AccountSigningIn, SyncEventPresenting {
 
     /// The current phase. Drives ``PhoneRootView``.
     private(set) var phase: Phase = .launching
+    /// Whether ``bootstrap()`` has run in this process.
+    @ObservationIgnored private var hasBootstrapped = false
     /// The user's preferences — the Mac's `AppSettings`, on the phone's own defaults.
     let settings: AppSettings
     /// The GitHub credential, in the phone's Keychain.
@@ -79,9 +81,11 @@ final class PhoneEnvironment: AccountSigningIn, SyncEventPresenting {
     ///
     /// Once only: it runs from the window's `.task`, which iOS runs again when it discards a scene
     /// and reconnects it, and a second run would start a second session — and a second sweep
-    /// loop — beside the first, which nothing would ever stop.
+    /// loop — beside the first, which nothing would ever stop. Marked before the first `await`,
+    /// because `phase` is still `.launching` while the token is read.
     func bootstrap() async {
-        guard case .launching = phase else { return }
+        guard !hasBootstrapped else { return }
+        hasBootstrapped = true
         guard let account = settings.account else {
             phase = .signedOut
             return

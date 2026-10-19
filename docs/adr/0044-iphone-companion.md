@@ -43,8 +43,9 @@ What made the list close is a small set of seams, each a cut through one edge th
 colours on either platform; `SignInModel` talking to an `AccountSigningIn` protocol and
 `SignedInSession` presenting through `SyncEventPresenting`; three value types moved out of view
 files; and `#if os(macOS)` around the few Mac-only members of shared files. `PullRequestActions`
-takes the guard form rather than `PlatformServices`, only so it rebases over the conversation
-branch without a conflict; the phone supplies its own `openOnGitHub`/`copyBranch`.
+took the guard form rather than `PlatformServices` only so it rebased over the conversation
+branch (ADR 0043, C) without a conflict; the phone supplies its own `openOnGitHub`/`copyBranch`.
+That branch has merged, so routing the Mac file through `PlatformServices` is a follow-up.
 
 Some listed files are compiled but never instantiated — `AppSettings`' stored properties name the
 webhook, S3/SigV4, agent-CLI and editor configuration types, `ReviewModel` names the intelligence
