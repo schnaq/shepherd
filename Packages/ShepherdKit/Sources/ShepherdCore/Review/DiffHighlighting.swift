@@ -138,7 +138,8 @@ public enum IntraLineDiff {
         guard a.count <= maxLineBytes, b.count <= maxLineBytes, a != b else { return nil }
         // Cheap exact bound first: unchanged bytes can never exceed the shared byte multiset, so a
         // pair that fails on the bag fails on the diff too — and skips the O(N·D) diff entirely.
-        let indentA = a.prefix { isSpace($0) }.count, indentB = b.prefix { isSpace($0) }.count
+        let indentA = a.prefix(while: SyntaxHighlighter.isSpace).count
+        let indentB = b.prefix(while: SyntaxHighlighter.isSpace).count
         // difflib's ratio, 2·common / (lenA + lenB): an append (`foo(a)` → `foo(a, b: c)`) is
         // still an edit of the same line, which common/longest would reject.
         let total = (a.count - indentA) + (b.count - indentB)
@@ -179,7 +180,9 @@ public enum IntraLineDiff {
         }
         // Similarity over what is not indentation: a re-indented, rewritten line shares its
         // leading spaces with anything and is still a different line.
-        let changedA = removedTokens.reduce(0) { $0 + ta[$1].count }
+        // A changed indent token is already left out by subtracting `indentA`; counting its
+        // bytes as changed too would sink every re-indented edit (`    foo(a)` → `        foo(b)`).
+        let changedA = removedTokens.reduce(0) { ta[$1].lowerBound < indentA ? $0 : $0 + ta[$1].count }
         let unchanged = (a.count - changedA) - indentA
         guard 2 * Double(max(0, unchanged)) / Double(total) >= minSimilarity else { return nil }
         return (merge(ta, removedTokens, a), merge(tb, insertedTokens, b))
@@ -192,8 +195,11 @@ public enum IntraLineDiff {
         var i = 0
         while i < bytes.count {
             var j = i + 1
-            if isWordByte(bytes[i]) { while j < bytes.count, isWordByte(bytes[j]) { j += 1 } }
-            else if isSpace(bytes[i]) { while j < bytes.count, isSpace(bytes[j]) { j += 1 } }
+            if SyntaxHighlighter.isWordByte(bytes[i]) {
+                while j < bytes.count, SyntaxHighlighter.isWordByte(bytes[j]) { j += 1 }
+            } else if SyntaxHighlighter.isSpace(bytes[i]) {
+                while j < bytes.count, SyntaxHighlighter.isSpace(bytes[j]) { j += 1 }
+            }
             out.append(i..<j); i = j
         }
         return out
@@ -207,7 +213,7 @@ public enum IntraLineDiff {
             if let last = out.last,
                 last.upperBound == range.lowerBound
                     || (index >= 2 && changed.contains(index - 2) && tokens[index - 1].lowerBound == last.upperBound
-                        && isSpace(bytes[tokens[index - 1].lowerBound]))
+                        && SyntaxHighlighter.isSpace(bytes[tokens[index - 1].lowerBound]))
             {
                 out[out.count - 1] = last.lowerBound..<range.upperBound
             } else {

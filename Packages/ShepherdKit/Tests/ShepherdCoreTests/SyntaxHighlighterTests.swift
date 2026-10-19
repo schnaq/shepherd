@@ -37,6 +37,15 @@ final class SyntaxHighlighterTests: XCTestCase {
         XCTAssertFalse(result.contains { $0.hasPrefix("comment:") && $0 != "comment:// done" }, "\(result)")
     }
 
+    func testAnUnclosedCommentInsideAnInterpolationStopsAtItsBracket() {
+        var state = SyntaxState.normal
+        let line = #"let s = "\(a /* )" + b"#
+        let raw = SyntaxHighlighter.tokenize(line, language: .swift, state: &state)
+        XCTAssertEqual(state, .normal)
+        XCTAssertTrue(zip(raw, raw.dropFirst()).allSatisfy { $0.range.upperBound <= $1.range.lowerBound }, "\(raw)")
+        XCTAssertTrue(spans(line, .swift).contains("comment:/* "), "\(spans(line, .swift))")
+    }
+
     func testSwiftDeclaration() {
         XCTAssertEqual(
             spans("@MainActor final class Foo: Bar {", .swift),
@@ -113,6 +122,8 @@ final class SyntaxHighlighterTests: XCTestCase {
         XCTAssertEqual(
             spans(#"  "key": "value", "n": 1.5e3"#, .json),
             [#"property:"key""#, #"string:"value""#, #"property:"n""#, "literal:1.5e3"])
+        // `?` is not an identifier byte, so Ruby's `defined?` is scanned, and listed, as `defined`.
+        XCTAssertEqual(spans("defined?(x)", .ruby), ["keyword:defined"])
     }
 
     func testPlainTextAndOverlongLinesGetNoSpans() {
@@ -131,6 +142,11 @@ final class SyntaxHighlighterTests: XCTestCase {
         // A `*/` inside a string (here a regex) is not a closer.
         XCTAssertEqual(
             SyntaxHighlighter.initialState(forHunk: [##"let re = #"<br\s*/?>"#"##, "x"], language: .swift), .normal)
+        // Nor inside a single-quoted string, in a language where those are strings.
+        XCTAssertEqual(
+            SyntaxHighlighter.initialState(
+                forHunk: ["function a() {", "  const x = 1", "  testMatch: ['**/*.test.ts'],"], language: .typescript),
+            .normal)
     }
 
     func testAHunkCutInsideATripleQuotedString() {

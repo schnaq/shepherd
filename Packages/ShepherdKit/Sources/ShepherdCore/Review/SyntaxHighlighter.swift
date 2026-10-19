@@ -99,7 +99,9 @@ public enum SyntaxHighlighter {
             let verdict: (found: Bool, state: SyntaxState, last: UInt8) = text.withUTF8 { b in
                 let last = b.last { $0 != space && $0 != tab } ?? 0
                 var i = 0
-                var inQuote = false  // a `*/` inside "…" (a regex, a glob) is not a comment closer
+                // The quote byte a string is open on: a `*/` inside one (`"<br\s*/?>"`, a glob
+                // like `'**/*.ts'`) is not a comment closer. Any of the grammar's quotes counts.
+                var openQuote: UInt8?
                 let lead = b.prefix { $0 == space || $0 == tab }.count
                 while i + 1 < b.count {
                     if closesTriple, i + 2 < b.count, b[i] == q2, b[i + 1] == q2, b[i + 2] == q2 {
@@ -110,15 +112,21 @@ public enum SyntaxHighlighter {
                         let opensAfter = Array("=(,:[".utf8).contains(previousLast)
                         return (true, opensAfter ? .normal : .string(quote: q2, triple: true), last)
                     }
-                    if b[i] == q2 { inQuote.toggle() }
-                    if b[i] == backslash {
+                    let c = b[i]
+                    if let quote = openQuote {
+                        if c == quote { openQuote = nil }
+                    } else if g.quotes.contains(c) || (c == q1 && g.apostrophe == .string) {
+                        openQuote = c
+                    }
+                    if c == backslash {
                         i += 2
                         continue
                     }
-                    if !inQuote, !g.blockOpen.isEmpty, b[i] == UInt8(ascii: "*"), b[i + 1] == UInt8(ascii: "/") {
+                    let inQuote = openQuote != nil
+                    if !inQuote, !g.blockOpen.isEmpty, c == UInt8(ascii: "*"), b[i + 1] == UInt8(ascii: "/") {
                         return (true, .blockComment(depth: 1), last)
                     }
-                    if !inQuote, !g.blockOpen.isEmpty, b[i] == UInt8(ascii: "/"), b[i + 1] == UInt8(ascii: "*") {
+                    if !inQuote, !g.blockOpen.isEmpty, c == UInt8(ascii: "/"), b[i + 1] == UInt8(ascii: "*") {
                         return (true, .normal, last)
                     }
                     i += 1
@@ -210,78 +218,146 @@ private struct Grammar: Sendable {
         switch language {
         case .plaintext: return nil
         case .swift:
-            g.lineComments = [Array("//".utf8)]; g.blockOpen = Array("/*".utf8); g.blockClose = Array("*/".utf8)
-            g.blockNests = true; g.apostrophe = .none; g.triple = [q2]; g.interpolation = Array("\\(".utf8)
-            g.annotationPrefix = at; g.hashDirective = true
+            g.lineComments = [Array("//".utf8)]
+            g.blockOpen = Array("/*".utf8)
+            g.blockClose = Array("*/".utf8)
+            g.blockNests = true
+            g.apostrophe = .none
+            g.triple = [q2]
+            g.interpolation = Array("\\(".utf8)
+            g.annotationPrefix = at
+            g.hashDirective = true
             g.keywords = words("actor any as associatedtype async await break case catch class consume continue convenience default defer deinit didSet do dynamic else enum extension fallthrough fileprivate final for func get guard if import in indirect infix init inout internal is isolated lazy let mutating nonisolated nonmutating open operator optional override package postfix precedencegroup prefix private protocol public repeat required rethrows return set some static struct subscript super switch throw throws try typealias unowned var weak where while willSet Self self sending borrowing consuming")
             g.constants = words("true false nil")
         case .typescript, .javascript:
-            g.lineComments = [Array("//".utf8)]; g.blockOpen = Array("/*".utf8); g.blockClose = Array("*/".utf8)
-            g.quotes = [q2, q1, bt]; g.multilineQuotes = [bt]; g.interpolation = Array("${".utf8); g.interpolationQuote = bt
-            g.annotationPrefix = at; g.extraIdent = [dollar]
+            g.lineComments = [Array("//".utf8)]
+            g.blockOpen = Array("/*".utf8)
+            g.blockClose = Array("*/".utf8)
+            g.quotes = [q2, q1, bt]
+            g.multilineQuotes = [bt]
+            g.interpolation = Array("${".utf8)
+            g.interpolationQuote = bt
+            g.annotationPrefix = at
+            g.extraIdent = [dollar]
             g.keywords = words("abstract as async await break case catch class const constructor continue debugger declare default delete do else enum export extends finally for from function get if implements import in infer instanceof interface is keyof let namespace new of private protected public readonly return satisfies set static super switch this throw try type typeof var void while with yield")
             g.constants = words("true false null undefined NaN Infinity")
             g.types = words("string number boolean any unknown never object symbol bigint void")
         case .go:
-            g.lineComments = [Array("//".utf8)]; g.blockOpen = Array("/*".utf8); g.blockClose = Array("*/".utf8)
-            g.quotes = [q2, bt]; g.multilineQuotes = [bt]; g.apostrophe = .charLiteral
+            g.lineComments = [Array("//".utf8)]
+            g.blockOpen = Array("/*".utf8)
+            g.blockClose = Array("*/".utf8)
+            g.quotes = [q2, bt]
+            g.multilineQuotes = [bt]
+            g.apostrophe = .charLiteral
             g.keywords = words("break case chan const continue default defer else fallthrough for func go goto if import interface map package range return select struct switch type var")
             g.constants = words("true false nil iota")
             g.types = words("bool byte complex64 complex128 error float32 float64 int int8 int16 int32 int64 rune string uint uint8 uint16 uint32 uint64 uintptr any")
             g.capitalizedIsType = false  // Go capitalises every export, not just types
         case .rust:
-            g.lineComments = [Array("//".utf8)]; g.blockOpen = Array("/*".utf8); g.blockClose = Array("*/".utf8)
-            g.blockNests = true; g.apostrophe = .charLiteral; g.multilineQuotes = [q2]; g.hashBracketAttribute = true
+            g.lineComments = [Array("//".utf8)]
+            g.blockOpen = Array("/*".utf8)
+            g.blockClose = Array("*/".utf8)
+            g.blockNests = true
+            g.apostrophe = .charLiteral
+            g.multilineQuotes = [q2]
+            g.hashBracketAttribute = true
             g.keywords = words("as async await break const continue crate dyn else enum extern fn for if impl in let loop match mod move mut pub ref return self Self static struct super trait type unsafe use where while macro_rules")
             g.constants = words("true false None Some Ok Err")
             g.types = words("i8 i16 i32 i64 i128 isize u8 u16 u32 u64 u128 usize f32 f64 bool char str")
         case .kotlin, .java, .csharp, .c, .cpp, .objectiveC, .php, .css, .graphql:
-            g.lineComments = [Array("//".utf8)]; g.blockOpen = Array("/*".utf8); g.blockClose = Array("*/".utf8)
+            g.lineComments = [Array("//".utf8)]
+            g.blockOpen = Array("/*".utf8)
+            g.blockClose = Array("*/".utf8)
             g.apostrophe = language == .php || language == .css ? .string : .charLiteral
             g.annotationPrefix = at
             g.hashDirective = [.c, .cpp, .objectiveC, .csharp].contains(language)
-            if language == .kotlin { g.triple = [q2]; g.interpolation = Array("${".utf8) }
-            if language == .php { g.variablePrefix = dollar; g.lineComments.append([hash]) }
-            if language == .css { g.extraIdent = [dash]; g.capitalizedIsType = false }
-            if language == .graphql { g.lineComments = [[hash]]; g.blockOpen = []; g.triple = [q2] }
+            if language == .kotlin {
+                g.triple = [q2]
+                g.interpolation = Array("${".utf8)
+            }
+            if language == .php {
+                g.variablePrefix = dollar
+                g.lineComments.append([hash])
+            }
+            if language == .css {
+                g.extraIdent = [dash]
+                g.capitalizedIsType = false
+            }
+            if language == .graphql {
+                g.lineComments = [[hash]]
+                g.blockOpen = []
+                g.triple = [q2]
+            }
             g.keywords = words("abstract break case catch class const continue default do else enum extends final finally for fun function if implements import in interface internal is new object override package private protected public return sealed static struct super switch this throw throws try typedef union using val var void when while namespace query mutation fragment on type input scalar extends include define ifndef endif")
             g.constants = words("true false null nil NULL YES NO")
             g.types = words("int long short char float double bool boolean byte unsigned signed string String")
         case .python:
-            g.lineComments = [[hash]]; g.quotes = [q2, q1]; g.triple = [q2, q1]; g.annotationPrefix = at
+            g.lineComments = [[hash]]
+            g.quotes = [q2, q1]
+            g.triple = [q2, q1]
+            g.annotationPrefix = at
             g.keywords = words("and as assert async await break class continue def del elif else except finally for from global if import in is lambda match case nonlocal not or pass raise return try while with yield")
             g.constants = words("True False None")
             g.types = words("int str float bool bytes list dict set tuple object type")
         case .ruby:
-            g.lineComments = [[hash]]; g.quotes = [q2, q1]; g.colonKeyword = true; g.annotationPrefix = at
-            g.keywords = words("alias and begin break case class def defined? do else elsif end ensure for if in module next not or redo rescue retry return self super then undef unless until when while yield require attr_reader attr_accessor")
+            g.lineComments = [[hash]]
+            g.quotes = [q2, q1]
+            g.colonKeyword = true
+            g.annotationPrefix = at
+            g.keywords = words("alias and begin break case class def defined do else elsif end ensure for if in module next not or redo rescue retry return self super then undef unless until when while yield require attr_reader attr_accessor")
             g.constants = words("true false nil")
         case .shell, .dockerfile:
-            g.lineComments = [[hash]]; g.hashNeedsSpace = true; g.quotes = [q2, q1, bt]; g.multilineQuotes = [q2, q1, bt]
-            g.variablePrefix = dollar; g.capitalizedIsType = false; g.extraIdent = [dash]
+            g.lineComments = [[hash]]
+            g.hashNeedsSpace = true
+            g.quotes = [q2, q1, bt]
+            g.multilineQuotes = [q2, q1, bt]
+            g.variablePrefix = dollar
+            g.capitalizedIsType = false
+            g.extraIdent = [dash]
             g.keywords = words("if then else elif fi for while until do done case esac in function select return local export readonly declare set unset shift exit break continue source trap eval exec FROM RUN CMD COPY ADD ENV ARG WORKDIR ENTRYPOINT EXPOSE USER LABEL VOLUME")
             g.constants = words("true false")
         case .clojure:
-            g.lineComments = [[semicolon]]; g.quotes = [q2]; g.multilineQuotes = [q2]; g.apostrophe = .none
-            g.colonKeyword = true; g.backslashChar = true; g.annotationPrefix = caret
+            g.lineComments = [[semicolon]]
+            g.quotes = [q2]
+            g.multilineQuotes = [q2]
+            g.apostrophe = .none
+            g.colonKeyword = true
+            g.backslashChar = true
+            g.annotationPrefix = caret
             g.extraIdent = Set("-?!*+<>=/.&%'".utf8)
             g.keywords = words("def defn defn- defmacro defmulti defmethod defprotocol defrecord deftype defonce fn fn* let letfn if if-let if-not when when-let when-not when-some cond condp case do loop recur ns require import use try catch finally throw quote var -> ->> some-> some->> cond-> as-> doto for doseq dotimes binding with-open reify proxy extend-protocol extend-type new set! comment")
             g.constants = words("nil true false")
         case .json:
-            g.lineComments = [Array("//".utf8)]; g.blockOpen = Array("/*".utf8); g.blockClose = Array("*/".utf8)
-            g.apostrophe = .none; g.stringKeys = true; g.capitalizedIsType = false
+            g.lineComments = [Array("//".utf8)]
+            g.blockOpen = Array("/*".utf8)
+            g.blockClose = Array("*/".utf8)
+            g.apostrophe = .none
+            g.stringKeys = true
+            g.capitalizedIsType = false
             g.constants = words("true false null")
         case .toml:
-            g.lineComments = [[hash]]; g.hashNeedsSpace = true; g.quotes = [q2, q1]; g.triple = [q2, q1]
-            g.bareKeys = true; g.capitalizedIsType = false; g.extraIdent = [dash]
+            g.lineComments = [[hash]]
+            g.hashNeedsSpace = true
+            g.quotes = [q2, q1]
+            g.triple = [q2, q1]
+            g.bareKeys = true
+            g.capitalizedIsType = false
+            g.extraIdent = [dash]
             g.constants = words("true false inf nan")
         case .sql:
-            g.lineComments = [Array("--".utf8)]; g.blockOpen = Array("/*".utf8); g.blockClose = Array("*/".utf8)
-            g.quotes = [q1, q2]; g.caseInsensitive = true; g.capitalizedIsType = false
+            g.lineComments = [Array("--".utf8)]
+            g.blockOpen = Array("/*".utf8)
+            g.blockClose = Array("*/".utf8)
+            g.quotes = [q1, q2]
+            g.caseInsensitive = true
+            g.capitalizedIsType = false
             g.keywords = words("select from where and or not insert into values update set delete create table index view drop alter add column primary key foreign references join left right inner outer on as group by order having limit offset union all distinct case when then else end is in like between exists default unique if begin commit rollback transaction with returning")
             g.constants = words("null true false")
             g.types = words("integer int text real blob varchar boolean timestamp date numeric")
-        case .yaml: g.mode = .yaml; g.lineComments = [[hash]]; g.hashNeedsSpace = true
+        case .yaml:
+            g.mode = .yaml
+            g.lineComments = [[hash]]
+            g.hashNeedsSpace = true
             g.constants = words("true false null yes no on off ~ True False Null")
         case .markdown: g.mode = .markdown
         case .xml, .html: g.mode = .xml
@@ -297,11 +373,21 @@ fileprivate let hash = UInt8(ascii: "#"), dollar = UInt8(ascii: "$"), dash = UIn
 fileprivate let semicolon = UInt8(ascii: ";"), colon = UInt8(ascii: ":"), backslash = UInt8(ascii: "\\")
 fileprivate let space = UInt8(ascii: " "), tab = UInt8(ascii: "\t"), lt = UInt8(ascii: "<"), gt = UInt8(ascii: ">")
 
-@inline(__always) private func isDigit(_ c: UInt8) -> Bool { c &- 48 < 10 }
-@inline(__always) func isSpace(_ c: UInt8) -> Bool { c == space || c == tab || c == 13 }
-@inline(__always) func isWordByte(_ c: UInt8) -> Bool {
-    (c | 0x20) &- 97 < 26 || c &- 48 < 10 || c == 95 || c >= 0x80
+extension SyntaxHighlighter {
+    /// A space, a tab or a stray `\r`: what both the tokenizer and ``IntraLineDiff`` skip.
+    @inline(__always) static func isSpace(_ c: UInt8) -> Bool { c == space || c == tab || c == 13 }
+
+    /// A byte of an identifier: ASCII letters, digits, `_`, and every non-ASCII byte, so a word
+    /// swallows whole multibyte scalars and no range built from it cuts one.
+    @inline(__always) static func isWordByte(_ c: UInt8) -> Bool {
+        (c | 0x20) &- 97 < 26 || c &- 48 < 10 || c == 95 || c >= 0x80
+    }
 }
+
+@inline(__always) private func isDigit(_ c: UInt8) -> Bool { c &- 48 < 10 }
+// Unqualified forwarders for the lexer below, which uses them on nearly every byte.
+@inline(__always) private func isSpace(_ c: UInt8) -> Bool { SyntaxHighlighter.isSpace(c) }
+@inline(__always) private func isWordByte(_ c: UInt8) -> Bool { SyntaxHighlighter.isWordByte(c) }
 
 // MARK: - Lexer
 
@@ -491,8 +577,13 @@ private struct Lexer {
             }
             if interpolates, matches(g.interpolation, at: j), let close = closingBracket(after: j + g.interpolation.count) {
                 emit(.string, start, j + g.interpolation.count)
+                // A lexer that ends at the closing bracket: a comment or string left open inside
+                // (`"\(a /* )"`) would otherwise run to the end of the line, past spans still to
+                // come, and break the in-order, non-overlapping promise renderers rely on.
                 var inner = SyntaxState.normal
-                scanCode(from: j + g.interpolation.count, to: close, state: &inner)
+                var sub = Lexer(b: UnsafeBufferPointer(rebasing: b[..<close]), g: g)
+                sub.scanCode(from: j + g.interpolation.count, to: close, state: &inner)
+                for span in sub.spans { emit(span.kind, span.range.lowerBound, span.range.upperBound) }
                 start = close; j = close + 1; continue
             }
             if c == g.variablePrefix, quote == q2, j + 1 < n, isWordByte(b[j + 1]) || b[j + 1] == UInt8(ascii: "{") {

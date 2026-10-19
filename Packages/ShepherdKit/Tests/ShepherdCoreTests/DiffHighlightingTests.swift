@@ -48,6 +48,50 @@ final class DiffHighlightingTests: XCTestCase {
         }
     }
 
+    func testAReindentedEditIsStillPaired() throws {
+        // Moved into an `if` and edited: the indent token is not held against the line twice.
+        let ranges = try XCTUnwrap(IntraLineDiff.changedRanges(old: "    foo(a)", new: "        foo(b)"))
+        XCTAssertEqual(ranges.old, [0..<4, 8..<9])
+        XCTAssertEqual(ranges.new, [0..<8, 12..<13])
+        XCTAssertNotNil(IntraLineDiff.changedRanges(old: "    return x", new: "        return y"))
+    }
+
+    func testOverlongLinesAreNeverPaired() {
+        let long = String(repeating: "a", count: IntraLineDiff.maxLineBytes + 1)
+        XCTAssertNil(IntraLineDiff.changedRanges(old: long, new: long + "b"))
+    }
+
+    func testAMiddleTooBigToDiffIsMarkedWhole() throws {
+        // 66 × 66 token cells in the middle, over the cap: no diff, the whole middle is changed.
+        // Diffed, it would be a one-token shift at each end.
+        let head = String(repeating: "word ", count: 20)
+        let ranges = try XCTUnwrap(
+            IntraLineDiff.changedRanges(
+                old: head + String(repeating: "+-", count: 33) + ";",
+                new: head + String(repeating: "-+", count: 33) + ";"))
+        XCTAssertEqual(ranges.old, [100..<166])
+        XCTAssertEqual(ranges.new, [100..<166])
+    }
+
+    func testPairingIsInOrderWithinTheLookaheadAndBudget() {
+        // Each removed line pairs with its edit, in order.
+        let edits = IntraLineDiff.pair(removed: Array(0..<500), added: Array(500..<504)) { row in
+            row < 500 ? "let value = compute(\(row))" : "let value = compute(\(row - 500), fast)"
+        }
+        XCTAssertEqual(edits.map { [$0.0.row, $0.1.row] }, [[0, 500], [1, 501], [2, 502], [3, 503]])
+        // A partner past the lookahead is not found.
+        let far = IntraLineDiff.pair(removed: [0], added: [1, 2, 3, 4, 5]) { $0 == 5 ? "foo(b)" : $0 == 0 ? "foo(a)" : "x" }
+        XCTAssertTrue(far.isEmpty)
+        // 500 unrelated removed lines beside 4 added stop at the budget: 2·4·4 comparisons.
+        var reads = 0
+        let unrelated = IntraLineDiff.pair(removed: Array(0..<500), added: Array(500..<504)) { row in
+            reads += 1
+            return row < 500 ? "removedLine\(row) = gone" : "completely other text \(row)"
+        }
+        XCTAssertTrue(unrelated.isEmpty)
+        XCTAssertLessThanOrEqual(reads, 2 * 32)
+    }
+
     // MARK: DiffHighlighting
 
     func testRowsAreParallelAndPairedEditsCarryChanges() {
