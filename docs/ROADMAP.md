@@ -499,7 +499,12 @@ remain and each is a project rather than a label; what they would take is in
   names exactly two. **The team half is not built and is not planned**: review load is a fact about
   people, and the fleet has nowhere to put a person by construction. That stays where the plan's
   §0 left it, with roles, the audit export and the cost ledger.
-- iPad companion (ShepherdKit is already platform-independent)
+- ~~iPhone companion~~ — **built** ([ADR 0044](adr/0044-iphone-companion.md)): a native iPhone
+  app on the Mac's own review logic (inbox, pull request and conversation, files and native diff,
+  verdicts and merge through the same outbox), going to internal TestFlight testers. No push and no
+  background refresh in v1. Not on the App Store yet.
+- iPad companion — later. The iPhone target is the starting point, but an iPad wants the Mac's
+  two-column layout rather than the phone's one scroll, so it is its own piece of work.
 
 ## Non-goals
 

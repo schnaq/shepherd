@@ -984,6 +984,45 @@ adding one needs a new ADR — is in [CONTRIBUTING.md](../CONTRIBUTING.md).
 
 ---
 
+## iPhone
+
+### Shepherd for iPhone: the review queue in your pocket
+
+A companion app for the reviewing you do away from the Mac — approving the agent's pull request
+from the train, answering a thread from the sofa, merging the green one before the laptop is open
+([ADR 0044](adr/0044-iphone-companion.md)). It is a native iPhone app with its own screens, not a
+shrunken Mac window, but the review logic underneath is the Mac's own source compiled a second
+time: the same verdict refusal rules, the same drafts pinned to the head you read, the same outbox.
+What the Mac refuses, the phone refuses, for the same reason and in the same words.
+
+- **The inbox**, with the Mac's sections, lanes and facets, search over title, repository, author
+  and branch, a filter for author, repository and lane, pull to refresh, swipe right to approve
+  (only where an approval can go out) and swipe left to hide.
+- **The pull request as one scroll**: the header with CI, size and what the outbox is doing for
+  it, the description as the first post, the whole conversation in GitHub's order — replies,
+  reactions, editing and deleting your own posts — and the checks. The verdicts, *Review* and
+  *Merge* sit in the bottom bar, merge method and branch deletion in the merge sheet, which says
+  when a stacked pull request takes the ones below it along, as on the Mac.
+- **Files and a native diff**: the files in review-priority order with *viewed* ticks, and a diff
+  with syntax colour and word-level changes, wrapping, its own text size, the published threads
+  under their lines, and a comment on one line or a range — with a suggestion block one tap away.
+  Comments collect into a pending review that goes out with the verdict.
+- **Settings**: the account, the watched repositories, and every write GitHub refused, each with
+  Retry and Discard. The language follows the iPhone and can be changed for Shepherd alone in the
+  Settings app; the whole app is in German too.
+
+Local-first holds on the phone as on the Mac: the data stays in a database on the iPhone, the token
+in its Keychain, and an approval pressed offline is queued and sent once there is a network. The
+phone syncs while it is open and sends its outbox as it leaves the foreground. There are **no push
+notifications and no background refresh** in this first version — both would need a server
+Shepherd does not have — and no automations, delegation, intelligence or settings sync: those stay
+on the Mac.
+
+Distribution is **TestFlight, for internal testers only** for now; there is no App Store listing
+yet ([RELEASING.md](RELEASING.md#shepherd-for-iphone-testflight)).
+
+---
+
 ## Why not an existing tool?
 
 We looked ([full report](research/research-landscape.md)). Desktop Git clients (Tower, Fork,
