@@ -305,6 +305,11 @@ public actor SyncEngine {
                 try await performSweep()
             } catch is CancellationError {
                 return
+            } catch where Task.isCancelled {
+                // `stop()` cut a request off, and `URLError.cancelled` reaches here as a
+                // transport error rather than a `CancellationError`: the app stopping, which is
+                // not news (ADR 0044). Nor is the drain below wanted after a stop.
+                return
             } catch {
                 emit(.syncFailed(Self.failure(.sweep, error)))
                 interval = max(interval, configuration.failureBackoff)
@@ -366,6 +371,9 @@ public actor SyncEngine {
                     }
                 }
             } catch is CancellationError {
+                return
+            } catch where Task.isCancelled {
+                // A request `stop()` cut off; see `runSweepLoop`.
                 return
             } catch let error as GitHubError where Self.isRefusal(error) {
                 // Not a failure another attempt could fix: this token is not allowed the
@@ -459,7 +467,10 @@ public actor SyncEngine {
                 try await runSweep()
             } while sweepRequested && !Task.isCancelled
         } catch {
-            outcome = .failure(error)
+            // A run `stop()` cut off is a cancellation to whoever joined it, whatever the cut-off
+            // request threw (a transport error, for `URLError.cancelled`): the phone's
+            // pull-to-refresh then says nothing rather than "Sync failed" (ADR 0044).
+            outcome = .failure(Task.isCancelled ? CancellationError() : error)
             throw error
         }
         // Here rather than at the end of `runSweep()`, so the coalescing above stays invisible to
@@ -629,6 +640,9 @@ public actor SyncEngine {
                             return nil
                         } catch is CancellationError {
                             return nil
+                        } catch where Task.isCancelled {
+                            // Cut off by `stop()`, which the child inherits; see `runSweepLoop`.
+                            return nil
                         } catch {
                             return SyncEngine.failure(
                                 .detail,
@@ -788,6 +802,9 @@ public actor SyncEngine {
             lastIssueSweep = delta
             return delta
         } catch is CancellationError {
+            return IssueSweepDelta()
+        } catch where Task.isCancelled {
+            // A request `stop()` cut off; see `runSweepLoop`.
             return IssueSweepDelta()
         } catch {
             emit(
@@ -996,7 +1013,9 @@ public actor SyncEngine {
                 limit: configuration.outboxBatchSize
             )
         } catch {
-            emit(.syncFailed(Self.failure(.outbox, error)))
+            // The database checks for cancellation too, so a drain `stop()` cancelled before its
+            // claim lands here — not a failure to report, as in the catches below.
+            if !Task.isCancelled { emit(.syncFailed(Self.failure(.outbox, error))) }
             return
         }
 

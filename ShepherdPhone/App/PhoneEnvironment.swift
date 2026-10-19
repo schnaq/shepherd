@@ -421,11 +421,12 @@ final class PhoneEnvironment: AccountSigningIn, SyncEventPresenting {
     ///   app holds no half-finished sweep. The window is ended once, by whichever comes first of
     ///   the stop, the expiry handler and a return to the foreground.
     ///
-    ///   Not yet covered: a drain *already running* when the app leaves — Approve, then straight
-    ///   home. The engine coalesces the second drain into a request for another lap and returns at
-    ///   once, so the loop stops, the window ends and iOS suspends the send midway; it goes out on
-    ///   the next return. That closes when ``SignedInSession/drainOutbox(awaitingInFlight:)``
-    ///   forwards its flag to the engine (the critique's step 9).
+    ///   A drain *already running* when the app leaves — Approve, then straight home — is waited
+    ///   for, extra lap included: `awaitingInFlight: true` joins it instead of leaving it a request
+    ///   and returning at once. The expiry handler cancels this task, which ends a drain it runs
+    ///   itself but only the *wait* on one it joined; that one carries on until iOS suspends the
+    ///   process, and a send cut off midway is caught by the outbox's replay check on the next
+    ///   return rather than sent twice.
     ///
     /// Nothing at all in the demo mode, whose loop never runs.
     /// - Parameter phase: The scene's new phase.

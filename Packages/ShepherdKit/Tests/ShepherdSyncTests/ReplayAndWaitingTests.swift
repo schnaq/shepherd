@@ -507,6 +507,54 @@ final class ReplayAndWaitingTests: XCTestCase {
         let resolved = await github.resolvedThreads
         XCTAssertEqual(resolved, [], "the lap the cancelled drain skipped stays skipped")
     }
+
+    // MARK: - Cancellation
+
+    /// `stop()` — the phone's background window closing — cuts the sweep's request off, and
+    /// `URLSession` says so with `URLError.cancelled`, which `GitHubClient` hands on as a transport
+    /// error rather than a `CancellationError`. That is the app stopping, not GitHub failing: the
+    /// strip must not turn red over it, and a pull-to-refresh that joined the sweep hears a
+    /// cancellation, which it does not toast (ADR 0044).
+    func testASweepCutOffByStopIsNotReportedAsAFailure() async throws {
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        let engine = SyncEngine(
+            github: github,
+            store: store,
+            configuration: SyncConfiguration(pollsNotifications: false),
+            sleeper: BoundedSleeper(allowedSleeps: 1),
+            now: { Date(timeIntervalSince1970: 1_788_162_000) }
+        )
+        let collector = EventCollector()
+        let stream = engine.events
+        let listener = Task { for await event in stream { await collector.append(event) } }
+
+        await github.closeGate()
+        await engine.start()
+        try await waitForGate(github)
+        let waiter = Task { try await engine.syncNow(awaitingInFlight: true) }
+        await eventually("the waiter never parked") { await engine.sweepWaiters.count == 1 }
+        await github.setSearchError(.transport(message: "cancelled"))
+        let stopping = Task { await engine.stop() }
+        // Cleared in the same actor turn as the loop's `cancel()`, so the search answers into a
+        // cancelled task.
+        await eventually("stop() never ran") { await engine.isRunning == false }
+        await github.openGate()
+        await stopping.value
+        await engine.shutdown()
+        _ = await listener.value
+
+        let failures = await collector.events.filter {
+            if case .syncFailed = $0 { return true } else { return false }
+        }
+        XCTAssertTrue(failures.isEmpty, "a cancelled sweep is not a failure, saw \(failures)")
+        do {
+            try await waiter.value
+            XCTFail("the sweep the waiter joined did not finish")
+        } catch {
+            XCTAssertTrue(error is CancellationError, "the waiter heard \(error)")
+        }
+    }
 }
 
 private actor Flag {
