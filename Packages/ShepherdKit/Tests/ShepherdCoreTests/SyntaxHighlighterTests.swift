@@ -147,6 +147,10 @@ final class SyntaxHighlighterTests: XCTestCase {
             SyntaxHighlighter.initialState(
                 forHunk: ["function a() {", "  const x = 1", "  testMatch: ['**/*.test.ts'],"], language: .typescript),
             .normal)
+        // An apostrophe glued to a word is a contraction in comment prose, not a string.
+        XCTAssertEqual(
+            SyntaxHighlighter.initialState(forHunk: [" * This isn't thread-safe. */", "x"], language: .typescript),
+            .blockComment(depth: 1))
     }
 
     func testAHunkCutInsideATripleQuotedString() {

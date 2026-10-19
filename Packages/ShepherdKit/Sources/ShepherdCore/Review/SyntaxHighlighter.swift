@@ -100,7 +100,9 @@ public enum SyntaxHighlighter {
                 let last = b.last { $0 != space && $0 != tab } ?? 0
                 var i = 0
                 // The quote byte a string is open on: a `*/` inside one (`"<br\s*/?>"`, a glob
-                // like `'**/*.ts'`) is not a comment closer. Any of the grammar's quotes counts.
+                // like `'**/*.ts'`) is not a comment closer. Any of the grammar's quotes counts,
+                // except an apostrophe glued to a word: in comment prose (`isn't */`) it is a
+                // contraction, and treating it as a string would hide the real closer.
                 var openQuote: UInt8?
                 let lead = b.prefix { $0 == space || $0 == tab }.count
                 while i + 1 < b.count {
@@ -115,7 +117,9 @@ public enum SyntaxHighlighter {
                     let c = b[i]
                     if let quote = openQuote {
                         if c == quote { openQuote = nil }
-                    } else if g.quotes.contains(c) || (c == q1 && g.apostrophe == .string) {
+                    } else if g.quotes.contains(c) || (c == q1 && g.apostrophe == .string),
+                        !(c == q1 && i > 0 && isWordByte(b[i - 1]))
+                    {
                         openQuote = c
                     }
                     if c == backslash {
