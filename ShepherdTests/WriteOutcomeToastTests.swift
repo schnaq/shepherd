@@ -159,6 +159,9 @@ final class WriteOutcomeToastTests: XCTestCase {
                 of: write,
                 slug: slug
             ) else {
+                if write != .merge {
+                    XCTFail("\(write) says nothing when it lands")
+                }
                 continue
             }
             XCTAssertNotEqual(
