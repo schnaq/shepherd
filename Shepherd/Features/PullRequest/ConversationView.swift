@@ -233,14 +233,16 @@ struct ConversationView: View {
             author: summary.author,
             verb: String(localized: "opened this pull request"),
             date: summary.createdAt,
-            markdown: model.detail?.bodyMarkdown ?? "",
+            // The reviewer's edit, until GitHub has it (ADR 0043, C).
+            markdown: model.descriptionMarkdown,
             isEdited: conversation?.isDescriptionEdited ?? false,
             reactions: conversation?.descriptionReactions ?? [],
             url: AppConfig.pullRequestURL(
                 owner: summary.repo.owner,
                 name: summary.repo.name,
                 number: summary.number
-            )
+            ),
+            editing: PostEditing.description(of: summary.id, conversation: conversation)
         )
     }
 

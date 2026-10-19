@@ -361,6 +361,8 @@ struct SyncSettingsTab: View {
             // Two names for the two directions: an add and a removal are two different things to
             // re-send or discard.
             return adding ? String(localized: "Add a reaction") : String(localized: "Remove a reaction")
+        case .editComment: return String(localized: "Edit a comment")
+        case .deleteComment: return String(localized: "Delete a comment")
         }
     }
 

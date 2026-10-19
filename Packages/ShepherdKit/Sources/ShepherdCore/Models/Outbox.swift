@@ -103,6 +103,17 @@ public enum OutboxAction: Sendable, Codable, Hashable {
     ///   - content: Which of the eight reactions.
     ///   - adding: `true` to add the viewer's reaction, `false` to take it away.
     case react(subjectID: String, content: ReactionContent, adding: Bool)
+    /// Replace the text of one of the viewer's own posts (ADR 0043): a comment, an inline
+    /// comment, a submitted review's body, or the pull request's description. REST, by the
+    /// post's numeric id.
+    /// - Parameters:
+    ///   - target: Which post.
+    ///   - body: The new text as Markdown source.
+    case editComment(ConversationTarget, body: String)
+    /// Delete one of the viewer's own comments (ADR 0043). Only the two comment kinds can go; a
+    /// review or the description cannot, and the drain refuses a row that says otherwise.
+    /// - Parameter target: Which comment.
+    case deleteComment(ConversationTarget)
     /// Post a comment on the issue (ADR 0032).
     /// - Parameters:
     ///   - body: The comment as Markdown source.
@@ -145,6 +156,8 @@ public enum OutboxAction: Sendable, Codable, Hashable {
         case .addPullRequestComment: return "addPullRequestComment"
         case .closePullRequest: return "closePullRequest"
         case .react: return "react"
+        case .editComment: return "editComment"
+        case .deleteComment: return "deleteComment"
         case .addIssueComment: return "addIssueComment"
         case .addIssueLabel: return "addIssueLabel"
         case .addIssueAssignee: return "addIssueAssignee"
@@ -169,7 +182,7 @@ public enum OutboxAction: Sendable, Codable, Hashable {
             return updatedAt
         case .submitReview, .replyToComment, .addReviewComment, .resolveThread, .unresolveThread,
              .merge, .markReadyForReview, .updateBranch, .addPullRequestComment, .closePullRequest,
-             .react:
+             .react, .editComment, .deleteComment:
             return nil
         }
     }
@@ -204,6 +217,7 @@ public enum OutboxAction: Sendable, Codable, Hashable {
         case addIssueComment, addIssueLabel, addIssueAssignee, closeIssue, reopenIssue
         case addPullRequestComment, closePullRequest
         case react
+        case editComment, deleteComment
     }
 
     /// The payload keys of ``submitReview(_:)`` — one unlabelled value, so `_0`.
@@ -249,6 +263,16 @@ public enum OutboxAction: Sendable, Codable, Hashable {
     /// The payload keys of ``react(subjectID:content:adding:)``.
     private enum ReactKeys: String, CodingKey {
         case subjectID, content, adding
+    }
+
+    /// The payload keys of ``editComment(_:body:)``.
+    private enum EditCommentKeys: String, CodingKey {
+        case target, body
+    }
+
+    /// The payload keys of ``deleteComment(_:)``.
+    private enum DeleteCommentKeys: String, CodingKey {
+        case target
     }
 
     /// The payload keys of ``addIssueComment(body:basedOnUpdatedAt:)``.
@@ -346,6 +370,16 @@ public enum OutboxAction: Sendable, Codable, Hashable {
             try nested.encode(subjectID, forKey: .subjectID)
             try nested.encode(content, forKey: .content)
             try nested.encode(adding, forKey: .adding)
+        case .editComment(let target, let body):
+            var nested = container.nestedContainer(keyedBy: EditCommentKeys.self, forKey: .editComment)
+            try nested.encode(target, forKey: .target)
+            try nested.encode(body, forKey: .body)
+        case .deleteComment(let target):
+            var nested = container.nestedContainer(
+                keyedBy: DeleteCommentKeys.self,
+                forKey: .deleteComment
+            )
+            try nested.encode(target, forKey: .target)
         case .addIssueComment(let body, let basedOnUpdatedAt):
             var nested = container.nestedContainer(
                 keyedBy: IssueCommentKeys.self,
@@ -493,6 +527,20 @@ public enum OutboxAction: Sendable, Codable, Hashable {
                 content: try nested.decode(ReactionContent.self, forKey: .content),
                 adding: try nested.decode(Bool.self, forKey: .adding)
             )
+        case .editComment:
+            // Both required: an edit with no body would blank the post, and one with no target
+            // has nothing to address. A row that does not decode is skipped by the claim.
+            let nested = try container.nestedContainer(keyedBy: EditCommentKeys.self, forKey: .editComment)
+            self = .editComment(
+                try nested.decode(ConversationTarget.self, forKey: .target),
+                body: try nested.decode(String.self, forKey: .body)
+            )
+        case .deleteComment:
+            let nested = try container.nestedContainer(
+                keyedBy: DeleteCommentKeys.self,
+                forKey: .deleteComment
+            )
+            self = .deleteComment(try nested.decode(ConversationTarget.self, forKey: .target))
         case .addIssueComment:
             let nested = try container.nestedContainer(
                 keyedBy: IssueCommentKeys.self,

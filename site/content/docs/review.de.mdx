@@ -99,7 +99,7 @@ Meldet GitHub, dass der Pull Request während des Lesens aktualisiert wurde, zei
 
 ### Offline und die Outbox
 
-Beim Abschicken spricht Shepherd nicht direkt mit GitHub. Das Review kommt in eine lokale Warteschlange, die Outbox, und wird so schnell wie möglich gesendet. Sie übersteht einen Absturz und eine unterbrochene Verbindung. Die Warteschlange trägt auch Kommentare, Antworten, Thread-Auflösungen, Reaktionen und Merges.
+Beim Abschicken spricht Shepherd nicht direkt mit GitHub. Das Review kommt in eine lokale Warteschlange, die Outbox, und wird so schnell wie möglich gesendet. Sie übersteht einen Absturz und eine unterbrochene Verbindung. Die Warteschlange trägt auch Kommentare, Antworten, Thread-Auflösungen, Reaktionen, Bearbeitungen, Löschungen und Merges.
 
 Ein Hinweis sagt dir, in welchem Fall du bist:
 
@@ -134,6 +134,8 @@ Ein Review zeigt die Threads, die es begonnen hat, jeweils mit Datei und Zeile. 
 Schreib in das Feld unten und klicke auf **Kommentieren** oder drücke `⌘⏎`. **Kommentieren & schließen** schickt deinen Kommentar und schließt den Pull Request. Ist das Feld leer, heißt der Button **Ohne Kommentar schließen**. Gespeicherte Antworten und Screenshots per ⌘V funktionieren auch hier. Ein Kommentar, den du offline schreibst, wartet wie ein Review in der Outbox.
 
 Um auf einen Beitrag zu antworten, öffne sein **⋯**-Menü und wähle **Mit Zitat antworten**. Der Beitrag landet als Zitat im Kommentarfeld. Im selben Menü findest du **Link kopieren** und **Auf GitHub öffnen**.
+
+Um einen eigenen Beitrag zu ändern, öffne sein **⋯**-Menü und wähle **Bearbeiten**. Der Beitrag wird zu einem Editor. Klicke auf **Kommentar aktualisieren** oder drücke `⌘⏎`. **Löschen…** entfernt einen deiner Kommentare, nachdem du es bestätigt hast. Bearbeiten kannst du Kommentare, Kommentare in Threads, den Text eines abgeschickten Reviews und die Beschreibung. Löschen kannst du Kommentare und Kommentare in Threads, aber kein Review und nicht die Beschreibung. Das Menü bietet nur an, was GitHub dir erlaubt. Eine Bearbeitung oder Löschung ist sofort zu sehen, auch offline, und wartet wie ein Kommentar in der Outbox.
 
 Unter jedem Beitrag klickst du auf eine Reaktion, um deine hinzuzufügen oder zurückzunehmen. Der Smiley (**Reaktion hinzufügen**) bietet alle acht an. Dein Klick ist sofort zu sehen, auch offline, und wartet wie ein Kommentar in der Outbox. In einer gesperrten Unterhaltung werden Reaktionen gezeigt, aber nicht angeboten.
 

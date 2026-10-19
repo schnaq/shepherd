@@ -285,6 +285,82 @@ final class WriteRequestTests: XCTestCase {
         XCTAssertTrue(text.contains("PR_1"))
     }
 
+    // MARK: - Edits and deletes (ADR 0043)
+
+    func testEachTargetIsEditedAtItsOwnEndpointWithOnlyTheBody() async throws {
+        let cases: [(ConversationTarget, String, String)] = [
+            (.description, "PATCH", "/repos/schnaq/review/pulls/128"),
+            (.issueComment(databaseID: 11), "PATCH", "/repos/schnaq/review/issues/comments/11"),
+            (.reviewComment(databaseID: 12), "PATCH", "/repos/schnaq/review/pulls/comments/12"),
+            (.review(databaseID: 13), "PUT", "/repos/schnaq/review/pulls/128/reviews/13"),
+        ]
+        for (target, method, path) in cases {
+            let transport = MockTransport()
+            await transport.route("/repos/", Fixture.response(json: "{\"id\": 1}"))
+            let client = GitHubClient.makeForTesting(transport: transport)
+
+            try await client.editConversationText(target, body: "New", repo: repo, number: 128)
+
+            let request = await transport.onlyRequest()
+            XCTAssertEqual(request?.method, method, "\(target)")
+            XCTAssertEqual(request?.url.absoluteString, "https://api.github.com" + path)
+            XCTAssertEqual(try decodeBody(ReplyRequestBody.self, from: request).body, "New")
+            XCTAssertEqual(bodyText(request), #"{"body":"New"}"#, "nothing but the body")
+        }
+    }
+
+    func testEachCommentKindIsDeletedAtItsOwnEndpoint() async throws {
+        let cases: [(ConversationTarget, String)] = [
+            (.issueComment(databaseID: 11), "/repos/schnaq/review/issues/comments/11"),
+            (.reviewComment(databaseID: 12), "/repos/schnaq/review/pulls/comments/12"),
+        ]
+        for (target, path) in cases {
+            let transport = MockTransport()
+            await transport.route("/repos/", Fixture.empty(status: 204))
+            let client = GitHubClient.makeForTesting(transport: transport)
+
+            try await client.deleteConversationComment(target, repo: repo)
+
+            let request = await transport.onlyRequest()
+            XCTAssertEqual(request?.method, "DELETE")
+            XCTAssertEqual(request?.url.absoluteString, "https://api.github.com" + path)
+            XCTAssertTrue((request?.body ?? Data()).isEmpty)
+        }
+    }
+
+    func testAGoneCommentIsNotFoundForTheDrainToJudge() async throws {
+        let transport = MockTransport()
+        await transport.route("/repos/", Fixture.response(json: #"{"message":"Not Found"}"#, status: 404))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            try await client.deleteConversationComment(.issueComment(databaseID: 11), repo: repo)
+            XCTFail("expected not found")
+        } catch let error as GitHubError {
+            guard case .notFound = error else { return XCTFail("expected .notFound, got \(error)") }
+        }
+    }
+
+    func testATargetWithNoDeleteIsRefusedWithoutARequestAndIsNotNotFound() async throws {
+        let transport = MockTransport()
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        for target in [ConversationTarget.description, .review(databaseID: 13)] {
+            do {
+                try await client.deleteConversationComment(target, repo: repo)
+                XCTFail("expected a refusal")
+            } catch let error as GitHubError {
+                // Never `.notFound`, which the drain reads as a delete that is done.
+                guard case .validationFailed = error else {
+                    return XCTFail("expected .validationFailed, got \(error)")
+                }
+                XCTAssertFalse(error.isRetryable)
+            }
+        }
+        let requests = await transport.requests
+        XCTAssertTrue(requests.isEmpty, "nothing was sent")
+    }
+
     // MARK: - Reactions (ADR 0043)
 
     func testAddReactionSendsTheAddMutationWithTheSubjectAndTheContentName() async throws {

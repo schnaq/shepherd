@@ -166,6 +166,11 @@ public struct SentMutation: Sendable, Hashable, Codable {
         /// (ADR 0043). One kind for both directions: what the app does about it — re-reading the
         /// detail — is the same.
         case reactionChanged
+        /// The text of one of the viewer's own posts was replaced (ADR 0043).
+        case commentEdited
+        /// One of the viewer's own comments was deleted (ADR 0043). Also what a delete of a
+        /// comment already gone is announced as: gone is what the row asked for.
+        case commentDeleted
     }
 
     /// The pull request's node id.

@@ -223,6 +223,25 @@ extension DatabaseManager {
         }
     }
 
+    /// Every row queued against one pull request, in any state, oldest first — the claim's order,
+    /// so "older" and "newer" mean here what they mean to the drain.
+    ///
+    /// What the drain reads before it sends an edit or a delete of a post, and the app before it
+    /// queues one, to find the other rows about the same post (ADR 0043, C). A row whose payload no longer decodes is skipped, as in
+    /// the other list reads.
+    /// - Parameter prID: The pull request's node id.
+    /// - Returns: Its rows.
+    public func outboxItems(prID: String) async throws -> [OutboxItem] {
+        let records = try await writer.read { db in
+            try OutboxRecord.fetchAll(
+                db,
+                sql: "SELECT * FROM outbox WHERE prID = ? ORDER BY createdAt ASC",
+                arguments: [prID]
+            )
+        }
+        return records.compactMap { try? $0.outboxItem() }
+    }
+
     /// The whole-outbox query, shared by ``allOutboxItems()`` and ``observeOutboxItems()``.
     ///
     /// One definition rather than the same `SELECT` written twice: the ordering is part of what
@@ -358,9 +377,10 @@ extension DatabaseManager {
     /// one to the drain, a failed or parked one to its own owners (Settings → Sync, the conflict
     /// alert).
     ///
-    /// A primitive, with no policy in it. The one built on it — a reaction click cancels the row
-    /// it undoes and queues its own all the same — is the app's, in
-    /// `PullRequestActions.writeReaction`.
+    /// A primitive, with no policy in it. The ones built on it are its callers': a reaction click
+    /// cancels the row it undoes and queues its own all the same (`PullRequestActions.writeReaction`),
+    /// and an edit or a delete of a post takes out the older edits of it still waiting — the app's
+    /// when it is queued, the drain's when it is sent (ADR 0043, C).
     /// - Parameter id: The row's identity.
     public func cancelPendingOutboxItem(id: UUID) async throws {
         try await writer.write { db in
