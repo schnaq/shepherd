@@ -163,6 +163,11 @@ public protocol SyncStoring: Sendable {
     ) async throws
     /// Parks an outbox row that conflicts with the server state.
     func markOutboxItemConflicted(id: UUID, reason: String) async throws
+    /// Reads every outbox row of one pull request, oldest first — what an edit or a delete of a
+    /// post is checked against before it is sent (ADR 0043, C).
+    func outboxItems(prID: String) async throws -> [OutboxItem]
+    /// Removes an outbox row only while it is waiting; a claimed, failed or parked one stays.
+    func cancelPendingOutboxItem(id: UUID) async throws
     /// Reads a scalar sync-state value.
     func syncState(forKey key: String) async throws -> String?
     /// Writes a scalar sync-state value.

@@ -505,6 +505,14 @@ actor MarkRecordingStore: SyncStoring {
         try await wrapped.markOutboxItemConflicted(id: id, reason: reason)
     }
 
+    func outboxItems(prID: String) async throws -> [OutboxItem] {
+        try await wrapped.outboxItems(prID: prID)
+    }
+
+    func cancelPendingOutboxItem(id: UUID) async throws {
+        try await wrapped.cancelPendingOutboxItem(id: id)
+    }
+
     func syncState(forKey key: String) async throws -> String? {
         try await wrapped.syncState(forKey: key)
     }

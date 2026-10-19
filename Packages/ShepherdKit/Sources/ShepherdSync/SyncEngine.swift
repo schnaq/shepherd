@@ -1169,6 +1169,7 @@ public actor SyncEngine {
             return .sent
 
         case .editComment(let target, let body):
+            if try await isSuperseded(item, on: target) { return .sent }
             // A `404` stays a failure: an edit of a post that is gone did not do what the row
             // asked, and the user should be told rather than shown a sent edit.
             try await github.editConversationText(
@@ -1180,6 +1181,7 @@ public actor SyncEngine {
             return .sent
 
         case .deleteComment(let target):
+            if try await isSuperseded(item, on: target) { return .sent }
             do {
                 try await github.deleteConversationComment(target, repo: item.repo)
             } catch GitHubError.notFound {
@@ -1549,6 +1551,41 @@ public actor SyncEngine {
         }
         guard let newest = reviews.map(\.createdAt).max() else { return nil }
         return (head, newest)
+    }
+
+    /// Makes the last edit or delete of a post that was queued the one GitHub keeps
+    /// (ADR 0043, C), and says whether this row is still needed for it.
+    ///
+    /// The app takes the waiting edits of a post out of the outbox when it queues a newer edit or a
+    /// delete of it, but not one the drain holds, which may already be on GitHub. Such an edit that
+    /// then fails waits out a backoff while the newer row is sent and leaves the outbox, so its
+    /// retry — with nothing left to compare against — would put back the text the reviewer
+    /// replaced. Hence two halves, in the claim's order (`createdAt`):
+    /// - the row about to be sent takes the older edits of the post still waiting out of the
+    ///   outbox, through the store's state-guarded cancel;
+    /// - an edit with a newer edit or delete of the same post behind it, in any state — claimed in
+    ///   this same batch included — is not sent at all: the newer row says what the reviewer wants,
+    ///   so this one is done, and completed like a sent one. A delete is always sent.
+    /// - Parameters:
+    ///   - item: The edit or the delete about to be sent.
+    ///   - target: The post it is about.
+    /// - Returns: Whether this row is an edit that a newer row about the same post makes unneeded.
+    private func isSuperseded(_ item: OutboxItem, on target: ConversationTarget) async throws -> Bool {
+        var isSuperseded = false
+        for row in try await store.outboxItems(prID: item.prID) {
+            switch row.action {
+            case .editComment(target, _) where row.createdAt < item.createdAt:
+                try await store.cancelPendingOutboxItem(id: row.id)
+            case .editComment(target, _) where row.createdAt > item.createdAt,
+                 .deleteComment(target) where row.createdAt > item.createdAt:
+                // Only an edit gives way. A refused delete retried from Settings → Sync behind an
+                // edit of the comment it brought back must still delete, not claim one never sent.
+                if case .editComment = item.action { isSuperseded = true }
+            default:
+                break
+            }
+        }
+        return isSuperseded
     }
 
     /// Whether GitHub's refusal of a merge write is, in fact, a pull request that is already

@@ -368,6 +368,93 @@ final class OutboxDrainTests: XCTestCase {
         XCTAssertEqual(row?.lastErrorCode.flatMap(GitHubError.init(storageCode:)), notFound)
     }
 
+    // MARK: - The last word on a post (ADR 0043, C)
+
+    func testAnOlderEditBehindANewerOneIsNotSent() async throws {
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        let target = ConversationTarget.issueComment(databaseID: 11)
+        let older = try await enqueue(.editComment(target, body: "First try."), in: store)
+        let newer = try await enqueue(.editComment(target, body: "Second try."), in: store, queuedAfter: 1)
+        let engine = makeEngine(github: github, store: store)
+
+        await engine.drainOutbox()
+
+        let edits = await github.edits
+        XCTAssertEqual(edits.map(\.body), ["Second try."])
+        let olderRow = try await store.outboxItem(id: older)
+        let newerRow = try await store.outboxItem(id: newer)
+        XCTAssertNil(olderRow, "superseded, which is what the reviewer asked for")
+        XCTAssertNil(newerRow)
+    }
+
+    func testAnOlderEditBehindADeleteIsNotSent() async throws {
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        let target = ConversationTarget.reviewComment(databaseID: 12)
+        _ = try await enqueue(.editComment(target, body: "Never mind."), in: store)
+        _ = try await enqueue(.deleteComment(target), in: store, queuedAfter: 1)
+        let engine = makeEngine(github: github, store: store)
+
+        await engine.drainOutbox()
+
+        let edits = await github.edits
+        let deletions = await github.deletions
+        XCTAssertTrue(edits.isEmpty)
+        XCTAssertEqual(deletions, [target])
+    }
+
+    /// The edit was in flight when the newer one was queued, so the app could not take it out; it
+    /// failed and waits out a backoff while the newer one is sent and leaves the outbox. Its retry
+    /// would put the replaced text back.
+    func testAnEditInBackoffIsTakenOutByTheNewerOneSentBeforeIt() async throws {
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        let target = ConversationTarget.issueComment(databaseID: 11)
+        let older = try await enqueue(.editComment(target, body: "First try."), in: store)
+        _ = try await store.claimReadyOutboxItems(now: now)
+        try await store.markOutboxItemFailed(id: older, error: "502 Bad Gateway", now: now, retriable: true)
+        _ = try await enqueue(.editComment(target, body: "Second try."), in: store, queuedAfter: 1)
+        let engine = makeEngine(github: github, store: store)
+
+        await engine.drainOutbox()
+
+        let edits = await github.edits
+        XCTAssertEqual(edits.map(\.body), ["Second try."])
+        let olderRow = try await store.outboxItem(id: older)
+        XCTAssertNil(olderRow, "a retry would land after the newer edit")
+    }
+
+    /// A refused delete brings the comment back, which can then be edited; a Retry of the delete
+    /// from Settings → Sync must still delete it rather than claim it did.
+    func testADeleteWithANewerEditBehindItIsStillSent() async throws {
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        let target = ConversationTarget.issueComment(databaseID: 11)
+        _ = try await enqueue(.deleteComment(target), in: store)
+        _ = try await enqueue(.editComment(target, body: "Kept after all."), in: store, queuedAfter: 1)
+        let engine = makeEngine(github: github, store: store)
+
+        await engine.drainOutbox()
+
+        let deletions = await github.deletions
+        XCTAssertEqual(deletions, [target])
+    }
+
+    func testAnEditOfAnotherPostIsNoReasonToHoldOneBack() async throws {
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(.editComment(.issueComment(databaseID: 11), body: "One."), in: store)
+        _ = try await enqueue(.editComment(.issueComment(databaseID: 12), body: "Two."), in: store, queuedAfter: 1)
+        _ = try await enqueue(.deleteComment(.reviewComment(databaseID: 11)), in: store, queuedAfter: 2)
+        let engine = makeEngine(github: github, store: store)
+
+        await engine.drainOutbox()
+
+        let edits = await github.edits
+        XCTAssertEqual(edits.map(\.body), ["One.", "Two."])
+    }
+
     func testASingleInlineCommentIsSentWithItsCommit() async throws {
         let github = MockGitHub()
         let store = try DatabaseManager.inMemory()
