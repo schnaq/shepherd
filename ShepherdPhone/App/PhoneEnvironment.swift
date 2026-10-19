@@ -151,6 +151,12 @@ final class PhoneEnvironment: AccountSigningIn, SyncEventPresenting {
         rereadTasks = [:]
         syncAfterMergeTask?.cancel()
         syncAfterMergeTask = nil
+        // The phone's own sweeps and the delayed loop restart: the engine's `stop()` only reaches
+        // its loop tasks, and a sweep in a task nobody cancels runs to the end and saves.
+        let sweeps = Array(syncTasks.values) + [restartTask].compactMap { $0 }
+        sweeps.forEach { $0.cancel() }
+        syncTasks = [:]
+        restartTask = nil
         backgroundWork?.cancel()
         backgroundWork = nil
         isStoppedForBackground = false
@@ -159,6 +165,9 @@ final class PhoneEnvironment: AccountSigningIn, SyncEventPresenting {
         MarkdownText.forgetParsedBodies()
         if let current {
             await current.shutdown()
+            // Waited for, not only cancelled — `SyncEngine.stop()`'s reason: a save already under
+            // way when the cancel arrived would otherwise land in the emptied database.
+            for sweep in sweeps { await sweep.value }
             do {
                 try await current.database.eraseAllData()
             } catch {
@@ -196,18 +205,6 @@ final class PhoneEnvironment: AccountSigningIn, SyncEventPresenting {
         } catch {
             toasts.failure(error, context: String(localized: "Sync failed"))
         }
-    }
-
-    /// Sends every write the drain gave up on again — Settings → Sync's *Retry* on the Mac, for
-    /// all of them at once, because the phone has no per-row list to choose from (the sync strip is
-    /// the only place it names them).
-    func retryFailedWrites() async {
-        guard let session else { return }
-        let failed = (try? await session.database.failedOutboxItems()) ?? []
-        for item in failed {
-            try? await session.database.retryOutboxItem(id: item.id)
-        }
-        await session.drainOutbox(awaitingInFlight: true)
     }
 
     private func startSession(for account: Account) async throws {
@@ -252,10 +249,28 @@ final class PhoneEnvironment: AccountSigningIn, SyncEventPresenting {
         let queries = InboxQuery.watching(settings.watchedRepositories)
         let engine = session.syncEngine
         let sweeps = sweepNow && runsSyncLoop
-        Task {
+        runTracked {
+            // Runs even in a task cancelled before it started — a cancel is cooperative, and an
+            // actor call checks nothing — so a sign-out never loses the queries, only the sweep.
             await engine.setAdditionalQueries(queries)
-            guard sweeps else { return }
+            guard sweeps, !Task.isCancelled else { return }
             try? await session.syncNow()
+        }
+    }
+
+    /// The sweeps the phone starts itself, outside the engine's loop, by a key of their own.
+    @ObservationIgnored private var syncTasks: [UUID: Task<Void, Never>] = [:]
+
+    /// Runs a sweep in a task sign-out can cancel and wait for (``signOutAndErase()``).
+    ///
+    /// A set rather than one slot that a newer sweep replaces: cancelling a sweep mid-request
+    /// surfaces as a transport error, which the engine reports as *Sync failed*, so a running
+    /// sweep is left to finish and only sign-out cancels it.
+    private func runTracked(_ operation: @escaping @MainActor () async -> Void) {
+        let id = UUID()
+        syncTasks[id] = Task { [weak self] in
+            await operation()
+            self?.syncTasks[id] = nil
         }
     }
 
@@ -380,6 +395,8 @@ final class PhoneEnvironment: AccountSigningIn, SyncEventPresenting {
     /// Whether the engine's loop was stopped by ``scenePhaseChanged(to:)`` on the way out, and so
     /// has to be started on the way back in.
     @ObservationIgnored private var isStoppedForBackground = false
+    /// The return to the foreground's loop restart, while it waits out ``staleAfter``.
+    @ObservationIgnored private var restartTask: Task<Void, Never>?
     /// Bumped on every phase change, so a background drain that finishes after the app came back
     /// does not stop the loop the return just relied on.
     @ObservationIgnored private var scenePhaseGeneration = 0
@@ -391,15 +408,24 @@ final class PhoneEnvironment: AccountSigningIn, SyncEventPresenting {
     /// The phone's whole background policy (ADR 0044): sweep while open, drain on the way out.
     ///
     /// - `.active`: a loop that was stopped on the way out is started again, and its first lap
-    ///   sweeps at once (`SyncEngine.runSweepLoop`). A loop that never stopped — a glance at
-    ///   another app shorter than the drain — sweeps only when the last sweep is older than
-    ///   ``staleAfter``. Never while `lastSyncedAt` is still `nil`: the first sweep is then still
-    ///   running, and a second would only race it.
+    ///   sweeps at once (`SyncEngine.runSweepLoop`) — so the start waits until the last sweep is
+    ///   ``staleAfter`` old, or a few seconds in another app would cost a full sweep. Until then
+    ///   ``isStoppedForBackground`` stays set, so leaving again cancels the wait and nothing has
+    ///   to be undone. A loop that never stopped — a glance at another app shorter than the
+    ///   drain — sweeps only when the last sweep is older than ``staleAfter``. Never while
+    ///   `lastSyncedAt` is still `nil`: the first sweep is then still running, and a second would
+    ///   only race it.
     /// - `.background`: the outbox is drained inside a `beginBackgroundTask` window — iOS suspends
     ///   the process a few seconds after it leaves the foreground, and a review queued just before
     ///   would otherwise wait for the next launch — and then the loop is stopped, so a suspended
     ///   app holds no half-finished sweep. The window is ended once, by whichever comes first of
     ///   the stop, the expiry handler and a return to the foreground.
+    ///
+    ///   Not yet covered: a drain *already running* when the app leaves — Approve, then straight
+    ///   home. The engine coalesces the second drain into a request for another lap and returns at
+    ///   once, so the loop stops, the window ends and iOS suspends the send midway; it goes out on
+    ///   the next return. That closes when ``SignedInSession/drainOutbox(awaitingInFlight:)``
+    ///   forwards its flag to the engine (the critique's step 9).
     ///
     /// Nothing at all in the demo mode, whose loop never runs.
     /// - Parameter phase: The scene's new phase.
@@ -411,14 +437,24 @@ final class PhoneEnvironment: AccountSigningIn, SyncEventPresenting {
             // In the foreground the window buys nothing; a drain still running carries on.
             endBackgroundTask()
             if isStoppedForBackground {
-                isStoppedForBackground = false
-                Task { await session.syncEngine.start() }
+                let wait = session.lastSyncedAt.map { Self.staleAfter - Date().timeIntervalSince($0) } ?? 0
+                restartTask?.cancel()
+                restartTask = Task { [weak self] in
+                    if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+                    guard let self, !Task.isCancelled else { return }
+                    self.restartTask = nil
+                    self.isStoppedForBackground = false
+                    await session.syncEngine.start()
+                }
             } else if let last = session.lastSyncedAt, Date().timeIntervalSince(last) > Self.staleAfter {
-                Task { try? await session.syncNow() }
+                runTracked { try? await session.syncNow() }
             }
         case .background:
             scenePhaseGeneration += 1
             let generation = scenePhaseGeneration
+            // A restart still waiting: the loop is stopped already, and stays so.
+            restartTask?.cancel()
+            restartTask = nil
             endBackgroundTask()
             backgroundTaskID = UIApplication.shared.beginBackgroundTask(withName: "Shepherd outbox") { [weak self] in
                 // iOS calls this on the main thread when the window runs out.

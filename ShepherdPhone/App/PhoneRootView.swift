@@ -92,6 +92,9 @@ struct PhoneRootView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Theme.background)
+        // The app's accent for every system control, sheets included — once here rather than
+        // per button, so nothing falls back to the system blue.
+        .tint(Theme.accent)
         .overlay(alignment: .bottom) {
             ToastStackView(center: environment.toasts)
         }
@@ -136,6 +139,10 @@ private struct PhoneSignedInView: View {
                 }
         }
         .task { inbox.startObserving() }
+        // On the stack rather than on the inbox inside it, whose `onDisappear` fires on every
+        // push: this one fires when the session's screens go — sign-out — as `InboxScreen` stops
+        // its model on the Mac.
+        .onDisappear { inbox.stopObserving() }
         .sheet(isPresented: $environment.isSettingsPresented) {
             PhoneSettingsView()
         }

@@ -31,8 +31,10 @@ struct PhoneSignInView: View {
                     deviceCodeCard(userCode: grant.userCode)
                         .transition(.opacity.combined(with: .scale(scale: 0.96)))
                 } else {
-                    promises
+                    // At the accessibility sizes the button comes before the promises, or it
+                    // would sit three screens down.
                     if pinsButtonInline { signInButton }
+                    promises
                 }
                 if let message = model.errorMessage {
                     errorLine(message)
@@ -50,9 +52,10 @@ struct PhoneSignInView: View {
         .background(Theme.background)
         // Pinned to the bottom edge, with the system's scroll-edge effect under it, at ordinary
         // sizes. At the accessibility sizes the button and its footnote are taller than half the
-        // screen, so they scroll with the rest instead of covering it.
+        // screen, so they scroll with the rest instead of covering it. Gone while the token is
+        // typed: it would ride up on the keyboard and squeeze the field it competes with.
         .safeAreaBar(edge: .bottom) {
-            if model.grant == nil, !pinsButtonInline {
+            if model.grant == nil, !pinsButtonInline, !isTokenFieldFocused {
                 signInButton
             }
         }
@@ -129,6 +132,11 @@ struct PhoneSignInView: View {
 
     // MARK: - Device flow
 
+    /// The fill of the two prominent buttons: the light accent in both appearances. White on the
+    /// dark accent (#6E9DF2) is about 2.7:1, under even the large-text bar; on this it is about
+    /// 4.5:1. The Mac's `PrimaryButtonStyle` carries the same debt.
+    private static let prominentFill = Color(red: 0x3B / 255, green: 0x74 / 255, blue: 0xD9 / 255)
+
     /// Whether the sign-in button scrolls with the content rather than pinning to the bottom.
     private var pinsButtonInline: Bool { dynamicTypeSize.isAccessibilitySize }
 
@@ -147,7 +155,7 @@ struct PhoneSignInView: View {
                 .frame(maxWidth: .infinity)
             }
             .buttonStyle(.glassProminent)
-            .tint(Theme.accent)
+            .tint(Self.prominentFill)
             .controlSize(.extraLarge)
             .disabled(!model.isDeviceFlowConfigured || model.isBusy)
             Text(String(localized: "Shepherd copies a short code and opens GitHub. Paste it there, approve, and come back."))
@@ -184,7 +192,7 @@ struct PhoneSignInView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.glassProminent)
-                .tint(Theme.accent)
+                .tint(Self.prominentFill)
                 .controlSize(.large)
                 Button {
                     model.copyUserCode()
