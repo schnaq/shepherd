@@ -279,6 +279,8 @@ targets:
           - "Features/PullRequest/PullRequestMoreMenu.swift"
           - "Features/PullRequest/PullRequestStackCard.swift"
           - "Features/Review/AIDraftFieldState.swift"
+          - "Features/Review/ConversationOverlay.swift"
+          - "Features/Review/PostEditing.swift"
           - "Features/Review/ReviewModel.swift"
           - "Features/Review/ReviewUpdateBanner.swift"
           - "Features/Review/SinceReview.swift"

@@ -84,7 +84,7 @@ read it: the phone's diff and, later, the Mac's native list. It stays outside AD
 The phone sweeps while it is open and drains its outbox when it leaves the foreground, inside a
 `beginBackgroundTask` window. There is no `UIBackgroundModes`, no `BGTaskScheduler` identifier, no
 remote notification and no `shepherd://` URL type in the Info.plist. Push would need a server
-Shepherd does not have (ADR 0005, ADR 0006: local-first, no backend), and background refresh on iOS
+Shepherd does not have (ADR 0006: local-first, no backend), and background refresh on iOS
 is opportunistic enough that a "new review request" notice driven by it would be late or absent in
 ways nobody could explain. Both are v2 questions.
 

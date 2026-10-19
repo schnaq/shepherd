@@ -59,8 +59,8 @@ SOURCE_DIRS = (os.path.join(REPO_ROOT, "Shepherd"), os.path.join(REPO_ROOT, "She
 #: check against the wrong source of truth and would fail on a correct file.
 CATALOG_PATH = os.path.join(REPO_ROOT, "Shepherd", "Resources", "Localizable.xcstrings")
 
-#: Directories under either source directory that hold no Swift source. ``Resources`` carries the built web
-#: bundle (ADR 0003), which is a megabyte of minified JavaScript full of quotes.
+#: Directories under either source directory that hold no Swift source. ``Resources`` carries
+#: the built web bundle (ADR 0003), which is a megabyte of minified JavaScript full of quotes.
 SKIPPED_DIRECTORIES = {"Resources", "Assets.xcassets"}
 
 #: The language every entry must carry. One language, because German is the first and only added

@@ -5,6 +5,8 @@ Thanks for helping herd the agents! 🐑
 ## Prerequisites
 
 - macOS 27+, Xcode 27+ (app target; ADR 0038)
+- Xcode's iOS 27 platform, for the iPhone app and for `mise run ci` (ADR 0044). Xcode 27 does not
+  install it by default: *Xcode → Settings → Components*, or `xcodebuild -downloadPlatform iOS`
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew install xcodegen`)
 - Node 22+ (only if you touch `web/diff-viewer`)
 

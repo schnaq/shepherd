@@ -76,7 +76,12 @@ final class PhoneEnvironment: AccountSigningIn, SyncEventPresenting {
     ///
     /// The Mac's rule (`AppEnvironment.bootstrap()`): an account whose token is gone is not an
     /// account, so it is forgotten rather than left to fail every request.
+    ///
+    /// Once only: it runs from the window's `.task`, which iOS runs again when it discards a scene
+    /// and reconnects it, and a second run would start a second session — and a second sweep
+    /// loop — beside the first, which nothing would ever stop.
     func bootstrap() async {
+        guard case .launching = phase else { return }
         guard let account = settings.account else {
             phase = .signedOut
             return

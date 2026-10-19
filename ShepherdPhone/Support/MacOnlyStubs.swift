@@ -12,9 +12,9 @@ import ShepherdPersistence
 /// The two local conveniences `PullRequestActions` keeps behind `#if os(macOS)`, for the iPhone.
 ///
 /// The shared ⋯ menu (`PullRequestMoreMenuItems`) calls both. The Mac versions talk to AppKit and
-/// are fenced rather than routed through ``PlatformServices`` only while
-/// `PullRequestActions.swift` is being edited on another branch; once that has merged, the Mac
-/// file can call ``PlatformServices`` itself and this extension goes away.
+/// were fenced rather than routed through ``PlatformServices`` because `PullRequestActions.swift`
+/// was being edited on another branch at the time (ADR 0043, C), which has since merged. Routing
+/// the Mac file through ``PlatformServices`` itself, and deleting this extension, is a follow-up.
 extension PullRequestActions {
     /// Opens the pull request on github.com — in the GitHub app when it claims the link.
     /// - Parameter summary: The pull request.

@@ -157,7 +157,9 @@ def without_comments_and_strings(source: str) -> str:
 
 def main() -> int:
     findings: list[str] = []
-    phone = sorted(path.relative_to(ROOT).as_posix() for path in (ROOT / PHONE_SOURCES).rglob("*.swift"))
+    phone = sorted(
+        path.relative_to(ROOT).as_posix() for path in (ROOT / PHONE_SOURCES).rglob("*.swift")
+    )
     surfaces = (*MIGRATED, *phone)
     for name in surfaces:
         path = ROOT / name
@@ -178,8 +180,9 @@ def main() -> int:
             print(f"  {finding}", file=sys.stderr)
         print(
             "\nUse Theme.type(_:weight:) or Theme.mono(_:weight:) so the text grows with macOS's"
-            "\nLarger Text setting and with Dynamic Type on the iPhone. If the size has no exact text style behind it, that is a"
-            "\nvisual decision rather than a mechanical one — see docs/plans/accessibility.md §3.",
+            "\nLarger Text setting and with Dynamic Type on the iPhone. If the size has no exact"
+            "\ntext style behind it, that is a visual decision rather than a mechanical one — see"
+            "\ndocs/plans/accessibility.md §3.",
             file=sys.stderr,
         )
         return 1
