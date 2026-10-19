@@ -479,3 +479,7 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate {
         }
     }
 }
+
+/// The Mac's presenter for ``SignedInSession``'s sync events; `present(_:settings:)` above already
+/// matches the requirement.
+extension NotificationManager: SyncEventPresenting {}

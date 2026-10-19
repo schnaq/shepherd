@@ -1,4 +1,8 @@
+#if os(macOS)
 import AppKit
+#else
+import UIKit
+#endif
 import ShepherdCore
 import SwiftUI
 
@@ -22,6 +26,7 @@ enum AppearanceSetting: String, CaseIterable, Sendable, Codable, Identifiable {
         }
     }
 
+    #if os(macOS)
     /// The AppKit appearance to force, or `nil` to follow the system.
     var nsAppearance: NSAppearance? {
         switch self {
@@ -30,6 +35,7 @@ enum AppearanceSetting: String, CaseIterable, Sendable, Codable, Identifiable {
         case .dark: return NSAppearance(named: .darkAqua)
         }
     }
+    #endif
 
     /// The SwiftUI color scheme, or `nil` to follow the system.
     var colorScheme: ColorScheme? {
@@ -41,14 +47,24 @@ enum AppearanceSetting: String, CaseIterable, Sendable, Codable, Identifiable {
     }
 }
 
-extension NSColor {
+#if os(macOS)
+typealias PlatformColor = NSColor
+#else
+typealias PlatformColor = UIColor
+#endif
+
+extension PlatformColor {
     /// Creates an opaque sRGB color from a `0xRRGGBB` literal.
     /// - Parameter rgbHex: The packed colour value.
     convenience init(rgbHex: UInt32) {
         let red = Double((rgbHex >> 16) & 0xFF) / 255
         let green = Double((rgbHex >> 8) & 0xFF) / 255
         let blue = Double(rgbHex & 0xFF) / 255
+        #if os(macOS)
         self.init(srgbRed: red, green: green, blue: blue, alpha: 1)
+        #else
+        self.init(red: red, green: green, blue: blue, alpha: 1)
+        #endif
     }
 }
 
@@ -61,10 +77,16 @@ extension Color {
     ///   - dark: The `0xRRGGBB` value used in dark appearance.
     ///   - light: The `0xRRGGBB` value used in light appearance.
     static func shepherd(dark: UInt32, light: UInt32) -> Color {
+        #if os(macOS)
         Color(nsColor: NSColor(name: nil) { appearance in
             let match = appearance.bestMatch(from: [.aqua, .darkAqua])
             return NSColor(rgbHex: match == .darkAqua ? dark : light)
         })
+        #else
+        Color(uiColor: UIColor { traits in
+            UIColor(rgbHex: traits.userInterfaceStyle == .dark ? dark : light)
+        })
+        #endif
     }
 }
 
