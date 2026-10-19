@@ -212,7 +212,11 @@ bumping a dependency that ships inside the app also means a line in
     endpoint for a review at all. The drain makes one more GraphQL read there, of the post's
     reactions, and only after GitHub refused a removal: a removal of a reaction that is not there
     is refused with the same `FORBIDDEN` as a real permission refusal, and the read tells the two
-    apart. Still no new host.
+    apart. Its **edits and deletes** (ADR 0043, C) are six REST calls there, one ordinary outbox
+    row each, by the post's database id: `PATCH /repos/…/issues/comments/{id}`,
+    `PATCH …/pulls/comments/{id}`, `PUT …/pulls/{n}/reviews/{id}` and `PATCH …/pulls/{n}` (the
+    description), each carrying `body` and nothing else, and `DELETE …/issues/comments/{id}` and
+    `DELETE …/pulls/comments/{id}`. Still no new host.
     The issues *section* (ADR 0032's Sprint 2
     amendment) adds two per-issue reads on that same host, each made only when somebody asks for
     that one issue: the ETag-cached `GET /repos/…/issues/{n}` the claims card already makes, used

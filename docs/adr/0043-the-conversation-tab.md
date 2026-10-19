@@ -114,11 +114,12 @@ rows, trailers included, are the stream's commit groups.
 
 A thread in the stream uses the same reply bar as the thread popover in the diff — one view, not a
 third copy — with *Reply*, *Resolve*/*Unresolve*, *Delegate…* and the saved replies. Once a
-comment, a reply, a thread's resolution, a reaction or a review has **reached** GitHub, Shepherd
-re-reads that pull request once, a second later and coalesced per pull request, so it appears
-without waiting for the next sweep — whichever surface wrote it (this tab, the diff's popover, a
-write the outbox sent later). The open screen takes the stored detail through its own observation.
-A write that is only queued is said by the toast, as before — a reaction by its bar instead.
+comment, a reply, a thread's resolution, a reaction, a review, an edit or a delete has **reached**
+GitHub, Shepherd re-reads that pull request once, a second later and coalesced per pull request, so
+it appears without waiting for the next sweep — whichever surface wrote it (this tab, the diff's
+popover, a write the outbox sent later). The open screen takes the stored detail through its own observation.
+A write that is only queued is said by the toast, as before — a reaction by its bar, an edit or a
+delete by the post instead.
 
 ### Bot bodies
 
@@ -170,7 +171,7 @@ gone) are per GitHub's REST docs; the live check with the app's token in
 ## Consequences
 
 - No new host. The read is one more GraphQL query on `api.github.com` per changed pull request,
-  costing one point; B adds two GraphQL mutations and C five REST calls on the same host with the
+  costing one point; B adds two GraphQL mutations and C six REST calls on the same host with the
   same token, each an ordinary outbox row, and B's drain one GraphQL read of a post's reactions,
   made only after GitHub refused a removal.
 - Comment bodies stay out of webhooks (ADR 0012) and telemetry (ADR 0036): no new event, no new

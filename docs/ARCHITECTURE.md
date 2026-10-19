@@ -451,6 +451,12 @@ Pure logic in `ShepherdCore` (all unit-tested):
     uncached — asked only after GitHub refused a removal: GitHub refuses a removal of a reaction
     that is not there with the same `FORBIDDEN` as a real permission refusal, so the post's own
     reactions decide whether the row is sent or keeps the refusal
+  - `editConversationText(_:body:repo:number:)` / `deleteConversationComment(_:repo:)` — the
+    viewer's own posts (ADR 0043, C), REST by the post's database id: `PATCH …/issues/comments/{id}`,
+    `PATCH …/pulls/comments/{id}`, `PUT …/pulls/{n}/reviews/{id}` and `PATCH …/pulls/{n}` for the
+    description, carrying `body` and nothing else; `DELETE` on the two comment kinds. The drain
+    completes a delete answered `404` as sent — gone is what it asked for — and keeps an edit
+    answered `404` as failed
   - `headBranchContext(repo:number:)` / `deleteBranch(repo:name:)` — the two halves of the merge
     sheet's "delete the branch afterwards" (ADR 0005's 2026-09-05 amendment): one small GraphQL
     read of the head branch, the repository it lives in and the base repository's default branch,

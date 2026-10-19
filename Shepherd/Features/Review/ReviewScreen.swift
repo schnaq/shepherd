@@ -781,15 +781,16 @@ struct ReviewToolbar: ToolbarContent {
                 .foregroundStyle(Theme.accentText)
             }
             // ⌘⏎ came along from the composer bar, which used to hold the submit button. While the
-            // conversation tab's comment field has the keyboard, it is *Post comment*'s instead.
+            // conversation tab's comment field or a post's editor has the keyboard, it is that
+            // field's *Post comment* or *Update comment* instead.
             .keyboardShortcut(
-                model.isConversationComposerFocused
+                model.isTypingInConversation
                     ? nil
                     : KeyboardShortcut(.return, modifiers: .command)
             )
             // Without the shortcut while it is *Post comment*'s, so the tooltip drops it too.
             .help(
-                model.isConversationComposerFocused
+                model.isTypingInConversation
                     ? String(localized: "Submit review")
                     : String(localized: "Submit review (⌘⏎)")
             )

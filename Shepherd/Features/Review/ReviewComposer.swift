@@ -1259,6 +1259,9 @@ struct ThreadCommentView: View {
     let model: ReviewModel
     /// The write actions, for the same.
     let actions: PullRequestActions
+    /// Whether the comment has its ⋯ menu — *Edit*, *Delete…*, *Copy link*, *Open on GitHub*
+    /// (ADR 0043, C). The conversation tab's stream draws it; the diff's popover stays as it was.
+    var hasMenu = false
 
     var body: some View {
         let reactions = PostReactions(
@@ -1268,15 +1271,35 @@ struct ThreadCommentView: View {
             model: model,
             actions: actions
         )
+        let editing = hasMenu ? PostEditing.threadComment(comment) : nil
         VStack(alignment: .leading, spacing: 4) {
-            AuthorLine(author: comment.author, date: comment.createdAt, isEdited: comment.isEdited)
+            HStack(spacing: 8) {
+                AuthorLine(author: comment.author, date: comment.createdAt, isEdited: comment.isEdited)
+                if hasMenu {
+                    Spacer(minLength: 4)
+                    PostMenu(
+                        model: model,
+                        actions: actions,
+                        author: comment.author,
+                        date: comment.createdAt,
+                        markdown: comment.bodyMarkdown,
+                        quotes: false,
+                        url: comment.url,
+                        editing: editing
+                    )
+                }
+            }
             VStack(alignment: .leading, spacing: 4) {
-                TranslatableMarkdownText(
-                    markdown: comment.bodyMarkdown,
-                    translations: translations
-                )
-                if reactions.isDrawn {
-                    reactions
+                if let editing, PostEditor.isOpen(for: editing, in: model) {
+                    PostEditor(model: model, actions: actions, editing: editing)
+                } else {
+                    TranslatableMarkdownText(
+                        markdown: comment.bodyMarkdown,
+                        translations: translations
+                    )
+                    if reactions.isDrawn {
+                        reactions
+                    }
                 }
             }
             // Under the name rather than under the avatar, the way GitHub indents a thread's

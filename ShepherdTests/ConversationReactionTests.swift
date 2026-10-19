@@ -11,12 +11,22 @@ import XCTest
 /// `-testLanguage en`. The mutation and the drain are ShepherdKit's (`OutboxDrainTests`).
 @MainActor
 final class ConversationReactionTests: XCTestCase {
-    private typealias Key = ReviewModel.ReactionKey
+    private typealias Key = ConversationOverlay.ReactionKey
+
+    /// What the bar draws for these clicks (``ConversationOverlay/reactions(_:on:)``).
+    private func displayed(_ groups: [ReactionGroup], subjectID: String, overlay: [Key: Bool]) -> [ReactionGroup] {
+        ConversationOverlay(reactions: overlay).reactions(groups, on: subjectID)
+    }
+
+    /// The clicks a detail leaves (``ConversationOverlay/settled(against:)``).
+    private func unconfirmedClicks(_ overlay: [Key: Bool], against detail: PullRequestDetail) -> [Key: Bool] {
+        ConversationOverlay(reactions: overlay).settled(against: detail).reactions
+    }
 
     // MARK: - What the bar shows
 
     func testAClickAddsToAGroupThatIsAlreadyThere() {
-        let shown = ReviewModel.displayed(
+        let shown = displayed(
             [ReactionGroup(content: .thumbsUp, count: 2)],
             subjectID: "IC_1",
             overlay: [Key(subjectID: "IC_1", content: .thumbsUp): true]
@@ -25,7 +35,7 @@ final class ConversationReactionTests: XCTestCase {
     }
 
     func testANewGroupTakesItsPlaceInGitHubsOrder() {
-        let shown = ReviewModel.displayed(
+        let shown = displayed(
             [ReactionGroup(content: .thumbsUp, count: 1), ReactionGroup(content: .rocket, count: 4)],
             subjectID: "IC_1",
             overlay: [Key(subjectID: "IC_1", content: .heart): true]
@@ -38,14 +48,14 @@ final class ConversationReactionTests: XCTestCase {
     }
 
     func testTakingBackTheOnlyReactionTakesTheGroupAway() {
-        let shown = ReviewModel.displayed(
+        let shown = displayed(
             [ReactionGroup(content: .hooray, count: 1, viewerHasReacted: true)],
             subjectID: "IC_1",
             overlay: [Key(subjectID: "IC_1", content: .hooray): false]
         )
         XCTAssertEqual(shown, [])
         XCTAssertEqual(
-            ReviewModel.displayed(
+            displayed(
                 [ReactionGroup(content: .eyes, count: 3, viewerHasReacted: true)],
                 subjectID: "IC_1",
                 overlay: [Key(subjectID: "IC_1", content: .eyes): false]
@@ -58,16 +68,16 @@ final class ConversationReactionTests: XCTestCase {
     func testAClickTheStoredStateAlreadyAgreesWithChangesNothing() {
         let stored = [ReactionGroup(content: .thumbsUp, count: 2, viewerHasReacted: true)]
         XCTAssertEqual(
-            ReviewModel.displayed(stored, subjectID: "IC_1", overlay: [Key(subjectID: "IC_1", content: .thumbsUp): true]),
+            displayed(stored, subjectID: "IC_1", overlay: [Key(subjectID: "IC_1", content: .thumbsUp): true]),
             stored
         )
         XCTAssertEqual(
-            ReviewModel.displayed(stored, subjectID: "IC_1", overlay: [Key(subjectID: "IC_2", content: .thumbsUp): false]),
+            displayed(stored, subjectID: "IC_1", overlay: [Key(subjectID: "IC_2", content: .thumbsUp): false]),
             stored,
             "a click on another post"
         )
         XCTAssertEqual(
-            ReviewModel.displayed([], subjectID: "IC_1", overlay: [Key(subjectID: "IC_1", content: .laugh): false]),
+            displayed([], subjectID: "IC_1", overlay: [Key(subjectID: "IC_1", content: .laugh): false]),
             [],
             "taking back what is not there"
         )
@@ -152,7 +162,7 @@ final class ConversationReactionTests: XCTestCase {
             Key(subjectID: "PRR_1", content: .rocket): true,
             Key(subjectID: "RC_1", content: .eyes): true,
         ]
-        let kept = ReviewModel.unconfirmedClicks(overlay, against: detail(
+        let kept = unconfirmedClicks(overlay, against: detail(
             description: [ReactionGroup(content: .heart, count: 1, viewerHasReacted: true)],
             comment: [ReactionGroup(content: .thumbsUp, count: 2)],
             review: [ReactionGroup(content: .rocket, count: 1, viewerHasReacted: true)],
@@ -168,7 +178,7 @@ final class ConversationReactionTests: XCTestCase {
             Key(subjectID: "IC_1", content: .thumbsUp): true,
             Key(subjectID: "RC_1", content: .eyes): false,
         ]
-        let kept = ReviewModel.unconfirmedClicks(overlay, against: detail(
+        let kept = unconfirmedClicks(overlay, against: detail(
             comment: [ReactionGroup(content: .thumbsUp, count: 2)],
             threadComment: [ReactionGroup(content: .eyes, count: 1, viewerHasReacted: true)]
         ))
@@ -181,12 +191,12 @@ final class ConversationReactionTests: XCTestCase {
             Key(subjectID: "IC_gone", content: .heart): false,
         ]
         XCTAssertEqual(
-            ReviewModel.unconfirmedClicks(overlay, against: detail(hasConversation: false)),
+            unconfirmedClicks(overlay, against: detail(hasConversation: false)),
             overlay,
             "a conversation not read yet is not one without reactions"
         )
         XCTAssertEqual(
-            ReviewModel.unconfirmedClicks(overlay, against: detail()),
+            unconfirmedClicks(overlay, against: detail()),
             [Key(subjectID: "IC_gone", content: .heart): false]
         )
     }

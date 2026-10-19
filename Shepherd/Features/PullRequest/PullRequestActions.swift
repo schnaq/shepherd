@@ -295,7 +295,7 @@ struct PullRequestActions {
     /// order — which is the order the drain claims them in.
     ///
     /// No toast unless the row was refused: the bar already shows the click
-    /// (``ReviewModel/reactionOverlay``), a reviewer may press three emojis in a row, and a toast
+    /// (``ReviewModel/conversationOverlay``), a reviewer may press three emojis in a row, and a toast
     /// per emoji would be noise. No ``activity`` key either, for the same three emojis.
     /// - Parameters:
     ///   - summary: The pull request the post belongs to.
@@ -388,6 +388,124 @@ struct PullRequestActions {
                   case .react(let rowSubject, let rowContent, let rowAdding) = item.action
             else { return false }
             return rowSubject == subjectID && rowContent == content && rowAdding != adding
+        }
+    }
+
+    // MARK: - Edits and deletes (ADR 0043, C)
+
+    /// An edit of one of the viewer's own posts: its row written at once, then drained, read back
+    /// and announced in a task of its own — ``react(on:subjectID:content:adding:)``'s shape, for its
+    /// reason: the post shows the new text on the click (``ReviewModel/conversationOverlay``), so
+    /// the text is on disk at once too, and survives the screen being closed before it is sent.
+    ///
+    /// No toast unless the row was refused: the post already says it. An edit whose row a newer
+    /// edit or a delete took out of the outbox also reads back as sent — the row is gone — so a
+    /// success toast could claim an edit that never went out.
+    /// - Parameters:
+    ///   - summary: The pull request the post belongs to.
+    ///   - target: Which post.
+    ///   - body: The new text, exactly as the post now shows it.
+    /// - Returns: The running task that settles the row, with what became of it; `nil` when nothing
+    ///   was written because the outbox could not be read or written — toasted here.
+    func edit(
+        on summary: PullRequestSummary,
+        target: ConversationTarget,
+        body: String
+    ) async -> Task<OutboxWriteOutcome, Never>? {
+        await persist(
+            .editComment(target, body: body),
+            of: target,
+            on: summary,
+            as: .edit,
+            failureContext: String(localized: "Could not queue the edit")
+        )
+    }
+
+    /// A delete of one of the viewer's own comments, written and settled like
+    /// ``edit(on:target:body:)`` and silent for its reason: the comment is gone from the screen on
+    /// the click. The confirmation is the caller's; nothing here asks.
+    /// - Parameters:
+    ///   - summary: The pull request the comment belongs to.
+    ///   - target: Which comment — one of the two kinds GitHub deletes.
+    /// - Returns: The running task that settles the row; `nil` when nothing was written — toasted
+    ///   here.
+    func delete(
+        on summary: PullRequestSummary,
+        target: ConversationTarget
+    ) async -> Task<OutboxWriteOutcome, Never>? {
+        await persist(
+            .deleteComment(target),
+            of: target,
+            on: summary,
+            as: .delete,
+            failureContext: String(localized: "Could not queue the delete")
+        )
+    }
+
+    /// Writes an edit's or a delete's row (``write(_:replacingEditsOf:on:in:)``) and settles it, or
+    /// toasts why it could not be written.
+    private func persist(
+        _ action: OutboxAction,
+        of target: ConversationTarget,
+        on summary: PullRequestSummary,
+        as kind: WriteKind,
+        failureContext: String
+    ) async -> Task<OutboxWriteOutcome, Never>? {
+        do {
+            let item = try await Self.write(action, replacingEditsOf: target, on: summary, in: session.database)
+            return settle(item, as: kind, on: summary)
+        } catch {
+            toasts.failure(error, context: failureContext)
+            return nil
+        }
+    }
+
+    /// Writes an edit's or a delete's row, after taking out every edit of the same post still
+    /// waiting in the outbox.
+    ///
+    /// A delete makes a waiting edit pointless, and a newer edit makes an older one wrong: an older
+    /// edit in a retry's backoff would be sent after the newer one and put back the text the
+    /// reviewer replaced. Taking it out is what lets the last word win. A row the drain already
+    /// holds is in flight and is left alone, by the store's state-guarded cancel; the new row waits
+    /// behind it, so it still lands last. Static, over the database alone, so the sequence runs
+    /// against a real outbox in the tests.
+    /// - Parameters:
+    ///   - action: The edit or the delete.
+    ///   - target: The post it is about.
+    ///   - summary: The pull request the post belongs to.
+    ///   - database: The outbox.
+    /// - Returns: The new row.
+    /// - Throws: When the outbox could not be read or written.
+    static func write(
+        _ action: OutboxAction,
+        replacingEditsOf target: ConversationTarget,
+        on summary: PullRequestSummary,
+        in database: DatabaseManager
+    ) async throws -> OutboxItem {
+        let items = try await database.allOutboxItems()
+        for edit in pendingEdits(of: target, prID: summary.id, in: items) {
+            try await database.cancelPendingOutboxItem(id: edit.id)
+        }
+        return try await write(action, on: summary, in: database)
+    }
+
+    /// The edits of one post still waiting in the outbox: the same target on the same pull
+    /// request, not claimed by the drain yet.
+    /// - Parameters:
+    ///   - target: The post.
+    ///   - prID: The pull request's node id.
+    ///   - items: The outbox.
+    /// - Returns: Every such row — there can be several, one per *Update comment* while offline.
+    static func pendingEdits(
+        of target: ConversationTarget,
+        prID: String,
+        in items: [OutboxItem]
+    ) -> [OutboxItem] {
+        items.filter { item in
+            guard item.prID == prID, item.state == .pending,
+                  case .editComment(let rowTarget, _) = item.action
+            else { return false }
+            return rowTarget == target
         }
     }
 
@@ -722,6 +840,10 @@ struct PullRequestActions {
         case updateBranch
         /// The viewer's reaction on a post, added or taken back (ADR 0043, B).
         case reaction
+        /// The text of one of the viewer's own posts replaced (ADR 0043, C).
+        case edit
+        /// One of the viewer's own comments deleted (ADR 0043, C).
+        case delete
     }
 
     /// Why this verdict would be refused on this pull request, or `nil` when it would not.
@@ -864,6 +986,11 @@ struct PullRequestActions {
         case .reaction:
             // The bar says it: the capsule changed on the click.
             return nil
+        case .edit, .delete:
+            // The post says it: it shows the new text, or is gone, since the click. A row a newer
+            // edit or a delete took out reads back as sent too, so this would also claim an edit
+            // that never went out.
+            return nil
         }
     }
 
@@ -903,6 +1030,10 @@ struct PullRequestActions {
             // While the screen is open the click stays on the bar until it is sent, which is the
             // whole of what a toast would add.
             return nil
+        case .edit, .delete:
+            // The same for the post: while the screen is open it shows the edit or the delete
+            // until GitHub has it.
+            return nil
         }
     }
 
@@ -925,8 +1056,8 @@ struct PullRequestActions {
             // Nothing parks these two either: neither is pinned to the head commit, and a
             // comment says what it says however the pull request has moved since.
             return String(localized: "Not sent — \(slug) changed since you started.")
-        case .reply, .thread, .readyForReview, .reaction:
-            // Nothing parks these four today — only a review draft and a merge are checked
+        case .reply, .thread, .readyForReview, .reaction, .edit, .delete:
+            // Nothing parks these six today — only a review draft and a merge are checked
             // against the head commit — but the outcome is read off the queue rather than
             // guessed, so the sentence exists for the day the drain learns to park one of them.
             // It points at no alert, because only a parked *review* raises one (ADR 0006).
@@ -956,6 +1087,11 @@ struct PullRequestActions {
         case .reaction:
             // Says what the screen did about it: the caller takes the click back off the bar.
             return String(localized: "Could not change your reaction on \(slug) — it is back as it was")
+        case .edit:
+            // The same: the caller puts the post's text back as GitHub has it.
+            return String(localized: "Could not edit your post on \(slug) — it is back as it was")
+        case .delete:
+            return String(localized: "Could not delete your comment on \(slug) — it is back")
         }
     }
 
@@ -1052,7 +1188,7 @@ struct PullRequestActions {
 
     /// Drains, reads back what became of the row (``drainAndReadBack(_:)``) and announces it, in a
     /// task of its own: for a write whose row is on disk and whose caller does not wait for GitHub
-    /// — ``enqueueInBackground(_:on:as:)``'s, and a reaction click's.
+    /// — ``enqueueInBackground(_:on:as:)``'s, a reaction click's, an edit's and a delete's.
     /// - Parameters:
     ///   - item: The row just written.
     ///   - kind: What the user asked for, for the toast.
