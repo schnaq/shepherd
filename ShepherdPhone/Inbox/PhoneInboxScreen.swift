@@ -43,14 +43,12 @@ struct PhoneInboxScreen: View {
             if !isSearching {
                 smartViewPills
             }
-            if let error = model.session.lastSyncError {
-                PhoneSyncErrorStrip(message: error, lastSyncedAt: model.session.lastSyncedAt) {
-                    Task { await refresh() }
-                }
-                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 8, trailing: 16))
+            // The sweep's failure, the writes GitHub refused and the reviews parked behind new
+            // commits — nothing at all while sync works.
+            PhoneSyncStrip()
+                .listRowInsets(EdgeInsets())
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
-            }
             content
         }
         .listStyle(.plain)
@@ -528,47 +526,6 @@ private struct SmartViewPill: View {
         .buttonStyle(.plain)
         .accessibilityLabel(Text(verbatim: "\(view.title), \(String(localized: "\(count) pull requests"))"))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-    }
-}
-
-/// The sweep's last failure, inline at the top of the list.
-///
-/// Opaque, on the raised surface, rather than glass: it is content about the list, not a control
-/// floating over it (ADR 0040).
-private struct PhoneSyncErrorStrip: View {
-    let message: String
-    let lastSyncedAt: Date?
-    let retry: () -> Void
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(Theme.pending)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(String(localized: "Couldn't reach GitHub"))
-                    .font(Theme.type(.subheadline, weight: .semibold))
-                    .foregroundStyle(Theme.textStrong)
-                Text(message)
-                    .font(Theme.type(.footnote))
-                    .foregroundStyle(Theme.textSecondary)
-                if let lastSyncedAt {
-                    HStack(spacing: 4) {
-                        Text(String(localized: "Last synced"))
-                        RelativeDateText(date: lastSyncedAt)
-                    }
-                    .font(Theme.type(.footnote))
-                    .foregroundStyle(Theme.textMuted)
-                }
-            }
-            Spacer(minLength: 0)
-            Button(String(localized: "Retry"), action: retry)
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-        }
-        .padding(12)
-        .background(Theme.raised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .accessibilityElement(children: .combine)
     }
 }
 

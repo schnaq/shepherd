@@ -10,8 +10,9 @@ import SwiftUI
 /// own ``ReviewModel/saveDraftComment(_:body:)``, with its anchor check, into the pending review.
 /// The behaviour is the Mac `InlineCommentComposer`'s, in GitHub's words: *Start a review* or
 /// *Add review comment* keeps the comment for the review, *Comment* posts it on its own at once,
-/// and an existing pending comment opens for editing with *Delete* beside it. The Mac's AI draft,
-/// saved replies and session hand-off are not on the phone in v1.
+/// and an existing pending comment opens for editing with *Delete* beside it. A head-side comment
+/// can start a ```` ```suggestion ```` block of the commented lines, and the saved replies are a
+/// menu beside it; the Mac's AI draft and session hand-off are not on the phone in v1.
 ///
 /// Typed text is never lost by accident: a swipe down does not close the sheet while it holds
 /// unsaved text, and Cancel asks first. The diff behind is not interactive — a long press there
@@ -69,6 +70,19 @@ struct PhoneInlineCommentSheet: View {
                     }
 
                     HStack(spacing: 12) {
+                        if request.side == .right {
+                            Button {
+                                insertSuggestion()
+                            } label: {
+                                Label(String(localized: "Add a suggestion"), systemImage: "plus.forwardslash.minus")
+                            }
+                            .labelStyle(.iconOnly)
+                        }
+                        PhoneSavedReplyMenu(replies: model.settings.usableSavedReplies) { snippet in
+                            text = SavedReply.inserting(snippet, into: text)
+                        }
+                        .labelStyle(.iconOnly)
+                        Spacer(minLength: 0)
                         if startsReview {
                             Button(String(localized: "Comment")) {
                                 Task { await postSingleComment() }
@@ -212,6 +226,24 @@ struct PhoneInlineCommentSheet: View {
     private var isSaving: Bool { environment.activity.isRunning(model.prID, .reply) }
 
     // MARK: - Writes
+
+    /// Appends a ```` ```suggestion ```` block holding the commented lines of the head side.
+    private func insertSuggestion() {
+        guard request.path == model.selectedPath,
+              let document = model.currentReconstruction?.modified,
+              let block = Self.suggestionBlock(document: document, startLine: request.startLine, line: request.line)
+        else { return }
+        text = text.isEmpty ? block : text + "\n" + block
+    }
+
+    /// GitHub's suggestion block over lines `startLine...line` of `document` (1-based), or `nil`
+    /// when they are not in it — the Mac's `SuggestionBlock.make`, which lives in a Mac-only file.
+    static func suggestionBlock(document: String, startLine: Int?, line: Int) -> String? {
+        let lines = document.split(separator: "\n", omittingEmptySubsequences: false)
+        let start = startLine ?? line
+        guard start >= 1, start <= line, line <= lines.count else { return nil }
+        return "```suggestion\n" + lines[(start - 1)..<line].joined(separator: "\n") + "\n```"
+    }
 
     private func save() async {
         await environment.activity.run(model.prID, .reply) {

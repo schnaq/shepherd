@@ -12,9 +12,16 @@ import SwiftUI
 /// the round are all on it — which a destination registered here gets for free. The price: the
 /// router's path does not know about it, so a path change from the shell (a deep link) leaves it
 /// out — to be settled together with the router.
+///
+/// With a ``path`` it is *Show in diff*: that file's diff is pushed straight from the
+/// conversation, so Back returns to the thread it came from rather than to the file list.
 struct PhoneFilesDestination: Hashable {
     /// The pull request's node id.
     let prID: String
+    /// The file to open at once, or `nil` for the file list.
+    var path: String?
+    /// The line to scroll that file's diff to.
+    var line: Int?
 }
 
 /// One pull request on the phone (ADR 0044): what it is, what it says, what everyone said about it,
@@ -60,9 +67,12 @@ struct PhonePullRequestScreen: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { toolbar }
             .toolbar(model.summary == nil ? .hidden : .visible, for: .bottomBar)
-            .navigationDestination(item: $files) { _ in
-                // Integration point for the files lane: `PhoneFilesScreen(model: model)`.
-                ContentUnavailableView(String(localized: "Files"), systemImage: "doc.on.doc")
+            .navigationDestination(item: $files) { destination in
+                if let path = destination.path {
+                    PhoneDiffView(model: model, path: path, revealing: destination.line)
+                } else {
+                    PhoneFilesScreen(model: model)
+                }
             }
             .sheet(isPresented: $model.isSubmitSheetPresented) {
                 PhoneSubmitReviewSheet(model: model, actions: actions) { successes += 1 }
@@ -97,7 +107,7 @@ struct PhonePullRequestScreen: View {
             // The inline composer and the thread sheet are presented here for every screen of this
             // pull request — the diff raises them through the model — so one presenter owns each.
             .sheet(item: $model.composerRequest) { request in
-                PhoneCommentComposer(model: model, request: request)
+                PhoneInlineCommentSheet(model: model, request: request)
             }
             .sheet(isPresented: threadSheetBinding) {
                 if let thread = shownActiveThread, let summary = model.summary {
@@ -390,10 +400,14 @@ struct PhonePullRequestScreen: View {
         model.isSubmitSheetPresented = true
     }
 
-    /// *Show in diff* on a thread: the file, at the line, in the files screen.
+    /// *Show in diff* on a thread: the file's diff, at the line. ``ReviewModel/reveal(path:line:)``
+    /// leaves the selection alone for a file the pull request no longer has; the file list is
+    /// then the honest place to land.
     private func showInDiff(path: String, line: Int?) {
         model.reveal(path: path, line: line)
-        files = PhoneFilesDestination(prID: model.prID)
+        files = model.selectedPath == path
+            ? PhoneFilesDestination(prID: model.prID, path: path, line: line)
+            : PhoneFilesDestination(prID: model.prID)
     }
 
     /// The thread the sheet shows, with the reviewer's edits and deletes laid over it — the sheet

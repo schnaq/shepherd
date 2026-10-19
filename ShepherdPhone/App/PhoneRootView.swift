@@ -121,14 +121,12 @@ private struct PhoneSignedInView: View {
         @Bindable var environment = environment
         @Bindable var router = environment.router
         NavigationStack(path: $router.path) {
-            // Replaced by U2's `PhoneInboxScreen(model: inbox)` at integration.
-            PhoneInboxPlaceholder(model: inbox)
+            PhoneInboxScreen(model: inbox, onOpenSettings: { environment.isSettingsPresented = true })
                 .navigationDestination(for: PhoneRoute.self) { route in
                     switch route {
                     case .pullRequest(let id):
                         if let model = router.reviewModel(for: id) {
-                            // Replaced by U3's `PhonePullRequestScreen(model: model)`.
-                            PhonePullRequestPlaceholder(model: model)
+                            PhonePullRequestScreen(model: model)
                         } else {
                             ContentUnavailableView(
                                 String(localized: "Pull request not available"),
@@ -138,70 +136,12 @@ private struct PhoneSignedInView: View {
                     }
                 }
         }
-        .task { inbox.startObserving() }
         // On the stack rather than on the inbox inside it, whose `onDisappear` fires on every
         // push: this one fires when the session's screens go — sign-out — as `InboxScreen` stops
-        // its model on the Mac.
+        // its model on the Mac. The inbox screen starts the model itself.
         .onDisappear { inbox.stopObserving() }
         .sheet(isPresented: $environment.isSettingsPresented) {
             PhoneSettingsView()
         }
-        #if DEBUG
-        // `-PhoneShowSettings YES` opens the sheet at launch, so the settings screen can be
-        // screenshotted on a simulator nobody can tap.
-        .onAppear {
-            if UserDefaults.standard.bool(forKey: "PhoneShowSettings") {
-                environment.isSettingsPresented = true
-            }
-        }
-        #endif
-    }
-}
-
-/// Stand-in for the phone's inbox until U2's screen lands: every stored pull request, newest
-/// activity first, on the Mac's `InboxModel`, under the sync strip and with the settings button.
-private struct PhoneInboxPlaceholder: View {
-    let model: InboxModel
-
-    var body: some View {
-        List {
-            PhoneSyncStrip()
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-            ForEach(model.allRows.sorted { $0.updatedAt > $1.updatedAt }) { row in
-                NavigationLink(value: PhoneRoute.pullRequest(id: row.id)) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(verbatim: "\(row.repo.name) #\(row.number)")
-                            .font(Theme.mono(.footnote))
-                            .foregroundStyle(Theme.textSecondary)
-                        Text(row.title)
-                            .font(Theme.type(.body))
-                            .foregroundStyle(Theme.textStrong)
-                            .lineLimit(2)
-                    }
-                }
-            }
-        }
-        .listStyle(.plain)
-        .navigationTitle(String(localized: "Inbox"))
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                PhoneSettingsButton()
-            }
-        }
-    }
-}
-
-/// Stand-in for the pull request screen until U3's lands, on the router's started model.
-private struct PhonePullRequestPlaceholder: View {
-    let model: ReviewModel
-
-    var body: some View {
-        ContentUnavailableView(
-            model.summary?.title ?? "",
-            systemImage: "arrow.triangle.pull"
-        )
-        .navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -18,7 +18,7 @@ struct PhoneSubmitReviewSheet: View {
     var onSubmitted: () -> Void = {}
 
     @State private var detent: PresentationDetent = .medium
-    /// The pending comment being edited, through ``PhoneCommentComposer``.
+    /// The pending comment being edited, through ``PhoneInlineCommentSheet``.
     @State private var editing: ReviewModel.ComposerRequest?
     @State private var isConfirmingDiscard = false
 
@@ -71,7 +71,7 @@ struct PhoneSubmitReviewSheet: View {
                 Button(String(localized: "Cancel"), role: .cancel) {}
             }
             .sheet(item: $editing) { request in
-                PhoneCommentComposer(model: model, request: request)
+                PhoneInlineCommentSheet(model: model, request: request)
             }
         }
         .presentationDetents([.medium, .large], selection: $detent)

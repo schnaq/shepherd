@@ -55,19 +55,6 @@ struct PhoneCardTitle: View {
     }
 }
 
-/// ``ChipView`` at a size that follows Dynamic Type: the shared chip takes a point size, and this
-/// hands it one scaled from `.caption`.
-struct PhoneChip: View {
-    let text: String
-    var color: Color = Theme.accentText
-
-    @ScaledMetric(relativeTo: .caption) private var size: CGFloat = 12
-
-    var body: some View {
-        ChipView(text: text, color: color, size: size)
-    }
-}
-
 /// The saved replies a field can take, as a menu beside it, or nothing when there are none.
 ///
 /// The Mac's `SavedReplyMenu` is hover-driven and ranks suggestions with embeddings the phone does

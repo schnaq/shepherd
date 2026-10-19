@@ -437,10 +437,14 @@ struct PhoneChip: View {
     var systemImage: String?
     /// The foreground colour; the background is the same colour at 13 %.
     var color: Color = Theme.accentText
-    /// The point size, already scaled by the caller.
-    var size: CGFloat
+    /// The point size, already scaled by the caller, or `nil` for `.caption`'s 12 points scaled
+    /// here.
+    var size: CGFloat?
+
+    @ScaledMetric(relativeTo: .caption) private var captionSize: CGFloat = 12
 
     var body: some View {
+        let size = size ?? captionSize
         HStack(spacing: 3) {
             if let systemImage {
                 Image(systemName: systemImage)

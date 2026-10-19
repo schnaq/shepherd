@@ -10,8 +10,8 @@ import UIKit
 /// intelligence and no settings sync, so a switch for any of them would switch nothing. A system
 /// `Form`, because settings are the one screen iOS users expect to look like Settings.
 ///
-/// Opened by assigning ``PhoneEnvironment/isSettingsPresented`` — ``PhoneSettingsButton`` does it
-/// from the inbox's toolbar.
+/// Opened by assigning ``PhoneEnvironment/isSettingsPresented`` — the inbox's avatar button and the
+/// sync strip's *Show* do it.
 struct PhoneSettingsView: View {
     @Environment(PhoneEnvironment.self) private var environment
     @Environment(\.dismiss) private var dismiss
@@ -416,27 +416,5 @@ struct PhoneSettingsView: View {
             }
             .sensoryFeedback(.warning, trigger: isConfirmingSignOut) { _, confirming in confirming }
         }
-    }
-}
-
-/// The inbox's account button: the signed-in avatar, opening ``PhoneSettingsView``.
-///
-/// For the inbox's leading toolbar item (`ToolbarItem(placement: .topBarLeading)`), where the
-/// system draws its glass around it. Its own type so the inbox screen only has to place it.
-struct PhoneSettingsButton: View {
-    @Environment(PhoneEnvironment.self) private var environment
-    @ScaledMetric(relativeTo: .body) private var size: CGFloat = 30
-
-    var body: some View {
-        Button {
-            environment.isSettingsPresented = true
-        } label: {
-            if let account = environment.session?.account {
-                AvatarView(login: account.login, url: account.avatarURL, size: size)
-            } else {
-                Image(systemName: "gearshape")
-            }
-        }
-        .accessibilityLabel(Text(String(localized: "Settings")))
     }
 }
