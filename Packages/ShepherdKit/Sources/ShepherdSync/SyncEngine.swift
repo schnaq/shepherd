@@ -1168,6 +1168,28 @@ public actor SyncEngine {
             }
             return .sent
 
+        case .editComment(let target, let body):
+            // A `404` stays a failure: an edit of a post that is gone did not do what the row
+            // asked, and the user should be told rather than shown a sent edit.
+            try await github.editConversationText(
+                target,
+                body: body,
+                repo: item.repo,
+                number: item.number
+            )
+            return .sent
+
+        case .deleteComment(let target):
+            do {
+                try await github.deleteConversationComment(target, repo: item.repo)
+            } catch GitHubError.notFound {
+                // The comment is gone, which is what the row asked for: the retry of a delete
+                // whose answer was lost meets this, and so does a comment removed on github.com
+                // meanwhile. Sent, the way a merge already merged is (`isAlreadyMerged`), and no
+                // read is needed — a comment id is not reused.
+            }
+            return .sent
+
         case .merge(let method, let expectedHeadOid, _):
             // Asked before anything is sent, and a lookup that fails is a retry rather than a
             // guess: a stack sent to the synchronous endpoint is refused, and an ordinary pull
@@ -1688,6 +1710,8 @@ public actor SyncEngine {
         case .closePullRequest(let comment):
             return .pullRequestClosed(withComment: !(comment ?? "").isEmpty)
         case .react: return .reactionChanged
+        case .editComment: return .commentEdited
+        case .deleteComment: return .commentDeleted
         }
     }
 

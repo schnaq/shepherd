@@ -77,6 +77,12 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
     /// `subjectID CONTENT` for every "is the viewer's reaction still there?" read, in order. The
     /// claim worth asserting is that it is made *only* when a removal came back refused.
     private(set) var reactionProbes: [String] = []
+    /// Every edit the engine sent, in order.
+    private(set) var edits: [(target: ConversationTarget, body: String, number: Int)] = []
+    /// Every comment deletion the engine asked for, in order.
+    private(set) var deletions: [ConversationTarget] = []
+    private var editError: GitHubError?
+    private var deleteError: GitHubError?
     private(set) var replies: [(commentID: Int, body: String)] = []
     private(set) var reviewComments: [(comment: DraftComment, commitOid: String)] = []
     private(set) var merges: [(number: Int, method: MergeMethod, sha: String?)] = []
@@ -169,6 +175,14 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
 
     func setUpdateBranchError(_ error: GitHubError?) {
         updateBranchError = error
+    }
+
+    func setEditError(_ error: GitHubError?) {
+        editError = error
+    }
+
+    func setDeleteError(_ error: GitHubError?) {
+        deleteError = error
     }
 
     func setReactionError(_ error: GitHubError?) {
@@ -285,6 +299,21 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
 
     func unresolveThread(id: String) async throws {
         unresolvedThreads.append(id)
+    }
+
+    func editConversationText(
+        _ target: ConversationTarget,
+        body: String,
+        repo: RepoRef,
+        number: Int
+    ) async throws {
+        if let editError { throw editError }
+        edits.append((target, body, number))
+    }
+
+    func deleteConversationComment(_ target: ConversationTarget, repo: RepoRef) async throws {
+        deletions.append(target)
+        if let deleteError { throw deleteError }
     }
 
     func setReaction(subjectID: String, content: ReactionContent, adding: Bool) async throws {

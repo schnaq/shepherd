@@ -288,6 +288,86 @@ final class OutboxDrainTests: XCTestCase {
         XCTAssertTrue(probes.isEmpty)
     }
 
+    func testAnEditIsSentForThePullRequestAndAnnouncedAsEdited() async throws {
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        let id = try await enqueue(.editComment(.review(databaseID: 13), body: "New"), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        let sent = sentMutations(in: await drainCollectingEvents(engine))
+
+        let edits = await github.edits
+        XCTAssertEqual(edits.map(\.target), [.review(databaseID: 13)])
+        XCTAssertEqual(edits.map(\.body), ["New"])
+        XCTAssertEqual(edits.map(\.number), [1])
+        XCTAssertEqual(sent.map(\.kind), [.commentEdited])
+        XCTAssertEqual(sent.map(\.prID), ["PR_1"])
+        let row = try await store.outboxItem(id: id)
+        XCTAssertNil(row, "a sent row leaves the queue")
+    }
+
+    func testADeleteIsSentAndAnnouncedAsDeleted() async throws {
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(.deleteComment(.issueComment(databaseID: 11)), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        let sent = sentMutations(in: await drainCollectingEvents(engine))
+
+        let deletions = await github.deletions
+        XCTAssertEqual(deletions, [.issueComment(databaseID: 11)])
+        XCTAssertEqual(sent.map(\.kind), [.commentDeleted])
+    }
+
+    func testADeleteOfACommentThatIsAlreadyGoneIsSent() async throws {
+        // What the retry of a delete whose answer was lost meets: the comment is gone, which is
+        // what the row asked for.
+        let github = MockGitHub()
+        await github.setDeleteError(.notFound(resource: "schnaq/review comment"))
+        let store = try DatabaseManager.inMemory()
+        let id = try await enqueue(.deleteComment(.reviewComment(databaseID: 12)), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        let emitted = await drainCollectingEvents(engine)
+
+        XCTAssertEqual(sentMutations(in: emitted).map(\.kind), [.commentDeleted])
+        let row = try await store.outboxItem(id: id)
+        XCTAssertNil(row)
+    }
+
+    func testADeleteThatIsRefusedStaysFailed() async throws {
+        // A target with no delete is thrown as a validation error, which must never be read as
+        // the `notFound` that means done.
+        let refusal = GitHubError.validationFailed(message: "This post cannot be deleted.")
+        let github = MockGitHub()
+        await github.setDeleteError(refusal)
+        let store = try DatabaseManager.inMemory()
+        let id = try await enqueue(.deleteComment(.review(databaseID: 13)), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        let emitted = await drainCollectingEvents(engine)
+
+        XCTAssertTrue(sentMutations(in: emitted).isEmpty)
+        let row = try await store.outboxItem(id: id)
+        XCTAssertEqual(row?.state, .failed)
+    }
+
+    func testAnEditOfAPostThatIsGoneFailsRatherThanPretendingToBeSent() async throws {
+        let notFound = GitHubError.notFound(resource: "schnaq/review#1 edit")
+        let github = MockGitHub()
+        await github.setEditError(notFound)
+        let store = try DatabaseManager.inMemory()
+        let id = try await enqueue(.editComment(.issueComment(databaseID: 11), body: "New"), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        let emitted = await drainCollectingEvents(engine)
+
+        XCTAssertTrue(sentMutations(in: emitted).isEmpty)
+        let row = try await store.outboxItem(id: id)
+        XCTAssertEqual(row?.state, .failed)
+        XCTAssertEqual(row?.lastErrorCode.flatMap(GitHubError.init(storageCode:)), notFound)
+    }
+
     func testASingleInlineCommentIsSentWithItsCommit() async throws {
         let github = MockGitHub()
         let store = try DatabaseManager.inMemory()
@@ -661,6 +741,14 @@ final class OutboxDrainTests: XCTestCase {
             SyncEngine.sentKind(for: .react(subjectID: "IC_1", content: .eyes, adding: false)),
             .reactionChanged,
             "taking a reaction back is the same kind of change as adding one"
+        )
+        XCTAssertEqual(
+            SyncEngine.sentKind(for: .editComment(.description, body: "x")),
+            .commentEdited
+        )
+        XCTAssertEqual(
+            SyncEngine.sentKind(for: .deleteComment(.issueComment(databaseID: 1))),
+            .commentDeleted
         )
         // A stacked merge is announced by how far GitHub got (ADR 0042); `failed` is no send.
         XCTAssertEqual(

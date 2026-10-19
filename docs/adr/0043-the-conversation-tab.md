@@ -161,7 +161,11 @@ shows in Settings → Sync, and the bar corrects itself when the screen is reope
 `DELETE` on the two comment kinds. Offered only where GitHub's `viewerCanUpdate` /
 `viewerCanDelete` say so, and a delete asks first. A delete that comes back `404` was sent before —
 a crash between GitHub deleting and the row being marked — and is completed, the way a merge
-answered `405` on a merged pull request is (ADR 0005's 2026-09-05 amendment).
+answered `405` on a merged pull request is (ADR 0005's 2026-09-05 amendment). An edit that comes
+back `404` is a failure, not a send: the post is gone and the text did not land. The answers
+(`200` with the post for the `PATCH` and `PUT`, `204` for the `DELETE`, `404` for a post that is
+gone) are per GitHub's REST docs; the live check with the app's token in
+`schnaq/shepherd-playground` follows the release rather than gating it, as in B and below.
 
 ## Consequences
 
