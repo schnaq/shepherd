@@ -274,6 +274,8 @@ targets:
           - "Features/Inbox/RowWriteState.swift"
           - "Features/Inbox/TrustLanes.swift"
           - "Features/Onboarding/SignInModel.swift"
+          - "Features/PullRequest/ClosePullRequestConfirmation.swift"
+          - "Features/PullRequest/ConversationEventText.swift"
           - "Features/PullRequest/MergeMethodPicker.swift"
           - "Features/PullRequest/PullRequestActions.swift"
           - "Features/PullRequest/PullRequestMoreMenu.swift"
