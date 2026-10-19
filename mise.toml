@@ -25,6 +25,7 @@
 SHEPHERD_DD_APP = "{{config_root}}/.build/app"
 SHEPHERD_DD_QA = "{{config_root}}/.build/qa"
 SHEPHERD_DD_CLI = "{{config_root}}/.build/cli"
+SHEPHERD_DD_IOS = "{{config_root}}/.build/ios"
 
 # ── Generate ─────────────────────────────────────────────────────────────────────────────────
 
@@ -46,6 +47,18 @@ run = """
 xcodebuild -project Shepherd.xcodeproj -scheme Shepherd -configuration Debug \
   -destination 'platform=macOS,arch=arm64' -derivedDataPath "$SHEPHERD_DD_APP" \
   CODE_SIGNING_ALLOWED=NO build
+"""
+
+[tasks.build-ios]
+description = "Build the iPhone app for the iOS Simulator (Debug, unsigned) — the same command CI runs"
+depends = ["gen"]
+# A generic destination needs no simulator device, so nothing is booted, created or left behind.
+# The encryption guard runs on the result for the reason the CI job gives (ADR 0044).
+run = """
+xcodebuild -project Shepherd.xcodeproj -scheme ShepherdPhone -configuration Debug \
+  -destination 'generic/platform=iOS Simulator' -derivedDataPath "$SHEPHERD_DD_IOS" \
+  CODE_SIGNING_ALLOWED=NO build
+Scripts/check-phone-encryption.sh "$SHEPHERD_DD_IOS/Build/Products/Debug-iphonesimulator/Shepherd.app"
 """
 
 [tasks.catalog-reset]
@@ -143,6 +156,14 @@ description = "Send a shepherd:// deep link to the QA build, e.g. mise run link 
 # where `open` wants the URL — so no `$@` here, it would be empty.
 run = 'open -a "$SHEPHERD_DD_QA/Build/Products/Debug/Shepherd.app"'
 
+# ── Ship the iPhone app ──────────────────────────────────────────────────────────────────────
+
+[tasks.testflight]
+description = "Archive Shepherd for iPhone and upload it to TestFlight (ALLOW_UNSIGNED=1: archive only)"
+# The script regenerates the project itself, so it works without mise too. The one-time setup it
+# needs — an Apple account in Xcode, the App Store Connect app record — is in docs/RELEASING.md.
+run = "Scripts/testflight.sh"
+
 # ── Test ─────────────────────────────────────────────────────────────────────────────────────
 
 [tasks.test]
@@ -205,6 +226,7 @@ run = [
   "mise run test",
   "mise run build",
   "mise run cli",
+  "mise run build-ios",
   "mise run test-app",
 ]
 

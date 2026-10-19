@@ -135,3 +135,54 @@ jobs:
         run: |
           xcodebuild -version
           xcodebuild -showsdks | grep -o 'macosx[0-9.]*' | sort -u | tr '\n' ' '
+
+  # The iPhone companion (ADR 0044). It compiles a curated list of the Mac app's own files
+  # (project.yml, target ShepherdPhone), so this job is less about the phone's screens than about
+  # that list: a Mac change that gives a shared file an AppKit or App Intents dependency fails
+  # here, on the pull request that made it, rather than on the next phone build.
+  ios:
+    name: iPhone app build (iOS Simulator)
+    runs-on: [self-hosted, macOS]
+    steps:
+      - uses: actions/checkout@v7
+      # Both for the `app` job's reasons, word for word: a service runner's PATH, and an Xcode
+      # chosen per job rather than switched globally.
+      - name: Put Homebrew on the PATH
+        run: |
+          for prefix in /opt/homebrew/bin /usr/local/bin; do
+            if [ -d "$prefix" ]; then echo "$prefix" >> "$GITHUB_PATH"; fi
+          done
+      - name: Select the newest Xcode on the runner
+        run: |
+          for candidate in /Applications/Xcode-27*.app /Applications/Xcode-beta.app; do
+            if [ -d "$candidate/Contents/Developer" ]; then
+              echo "DEVELOPER_DIR=$candidate/Contents/Developer" >> "$GITHUB_ENV"
+              echo "Using $candidate"
+              break
+            fi
+          done
+      # Fails with the reason rather than with a "destination not found" two minutes later.
+      - name: Check for the iOS Simulator SDK
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks | grep -q iphonesimulator || {
+            echo "::error::No iOS Simulator SDK on this runner's Xcode (Xcode → Settings → Components)"
+            exit 1
+          }
+      - name: Install XcodeGen if missing
+        run: command -v xcodegen >/dev/null 2>&1 || brew install xcodegen
+      - run: xcodegen generate
+      # No Node step: the phone renders diffs natively and never bundles the Monaco viewer. A
+      # generic destination needs no simulator device, so nothing is booted or left on the
+      # runner. Its own derived data, for the reason the `app` job's build step gives.
+      - name: Build the iPhone app
+        run: |
+          xcodebuild -project Shepherd.xcodeproj -scheme ShepherdPhone -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath .build/ios \
+            CODE_SIGNING_ALLOWED=NO build
+      # The export-compliance guard Scripts/testflight.sh runs before every upload, here on every
+      # push: `ITSAppUsesNonExemptEncryption` is NO only while no cipher reaches the binary, and
+      # the pull request that adds one should be the one that hears about it. It reads the Debug
+      # build's `Shepherd.debug.dylib`, where the code is in a Debug build.
+      - name: Check the iPhone app for ciphers
+        run: Scripts/check-phone-encryption.sh .build/ios/Build/Products/Debug-iphonesimulator/Shepherd.app
