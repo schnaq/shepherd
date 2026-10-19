@@ -38,7 +38,7 @@ struct DiffListView: View {
 
     @FocusState private var isFocused: Bool
     /// The file's coloured lines, once the background pass has built them; drawn only onto the
-    /// rows they were built from (``HighlightedDiff/lines(for:)``), so a file or round switch
+    /// rows they were built from (``HighlightedDiff/lines(for:path:)``), so a file or round switch
     /// shows plain text for a frame rather than the previous file's colours.
     @State private var highlighted: HighlightedDiff?
 
@@ -53,7 +53,7 @@ struct DiffListView: View {
         // file's threads and the reviewer's draft, and a diff has far more rows than either.
         let threads = threadCounts
         let drafts = draftCounts
-        let lines = highlighted?.lines(for: content.rows)
+        let lines = highlighted?.lines(for: content.rows, path: content.path)
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
@@ -74,7 +74,7 @@ struct DiffListView: View {
         // Once per file and round, off the main thread: the tokenizer is a single pass over the
         // whole file, because it carries state from line to line.
         .task(id: content) {
-            guard highlighted?.lines(for: content.rows) == nil else { return }
+            guard highlighted?.lines(for: content.rows, path: content.path) == nil else { return }
             guard let built = await HighlightedDiff.build(rows: content.rows, path: content.path),
                 !Task.isCancelled
             else { return }

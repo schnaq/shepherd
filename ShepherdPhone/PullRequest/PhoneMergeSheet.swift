@@ -103,6 +103,7 @@ struct PhoneMergeSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+        .toastHost()
     }
 
     /// The green Merge — the only green on the sheet (ADR 0040). A second press while

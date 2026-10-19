@@ -44,6 +44,7 @@ struct PhoneSettingsView: View {
                 }
             }
         }
+        .toastHost()
         .sensoryFeedback(.success, trigger: environment.settings.watchedRepositories.count) { old, new in
             new > old
         }

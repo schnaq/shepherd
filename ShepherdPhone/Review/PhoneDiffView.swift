@@ -91,6 +91,11 @@ struct PhoneDiffView: View {
                 if model.selectedPath != path { model.selectedPath = path }
             }
             .onChange(of: model.selectedPath) { _, _ in pick = nil }
+            // The bar's Comment raised the composer; once it closes the pick is spent — a saved
+            // comment shows as a note, which leaves the rows (and so the pick) as they were.
+            .onChange(of: model.composerRequest) { old, new in
+                if old != nil, new == nil { pick = nil }
+            }
             .sensoryFeedback(.selection, trigger: pick)
             .sensoryFeedback(.warning, trigger: refusals)
     }
@@ -123,7 +128,7 @@ struct PhoneDiffView: View {
     private func diff(_ content: DiffListContent) -> some View {
         // Counted once per draw rather than per row: walks over the threads and the draft.
         let notes = LineNotes(model: model, content: content)
-        let lines = highlights[content.path]?.lines(for: content.rows)
+        let lines = highlights[content.path]?.lines(for: content.rows, path: content.path)
         let window = pick.flatMap { reachableWindow(from: $0.anchor, in: content) }
         let picked = pick.flatMap { span(of: $0, in: content) }
         // Measured over both sides' numbers, which the two-column gutter draws.
@@ -826,7 +831,7 @@ struct PhoneDiffView: View {
 
     /// Highlights the file off the main thread, once per (path, rows).
     private func highlight(_ content: DiffListContent) async {
-        if highlights[content.path]?.lines(for: content.rows) != nil { return }
+        if highlights[content.path]?.lines(for: content.rows, path: content.path) != nil { return }
         guard let built = await HighlightedDiff.build(rows: content.rows, path: content.path),
             !Task.isCancelled
         else { return }

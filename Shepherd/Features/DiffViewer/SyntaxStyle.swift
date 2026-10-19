@@ -45,13 +45,16 @@ extension Theme {
 /// Built once per file off the main thread (``build(rows:path:)``) — tokenizing a whole file is
 /// a single pass because the tokenizer carries state from line to line
 /// (``ShepherdCore/DiffHighlighting``) — and kept with the rows it was built from. A renderer asks
-/// ``lines(for:)`` with the rows it is about to draw and gets `nil` for anything else, so a highlight can never be painted onto a different
-/// file or round whose rows merely happen to be as many. Not part of `DiffListContent`: that
+/// ``lines(for:path:)`` with the rows and the path it is about to draw and gets `nil` for anything
+/// else, so a highlight can never be painted onto a different file or round whose rows merely
+/// happen to be as many — or the same rows in another language, two new files with one line each. Not part of `DiffListContent`: that
 /// value is `Hashable` and compared on every body pass, and comparing span arrays there would
 /// cost more than drawing the rows.
 struct HighlightedDiff: Sendable {
     /// The rows this was built from.
     let rows: [PatchReconstructor.DiffRow]
+    /// The path this was built for, which picked the language.
+    let path: String
     /// One coloured line per row, `nil` for a hunk header.
     private let attributed: [AttributedString?]
 
@@ -75,11 +78,12 @@ struct HighlightedDiff: Sendable {
         // The tokenizer is one uninterruptible pass; the per-line strings after it are the other
         // half of the cost, and a cancelled file need not pay it.
         guard !Task.isCancelled else { return nil }
-        return HighlightedDiff(rows: rows, highlighting: highlighting)
+        return HighlightedDiff(rows: rows, path: path, highlighting: highlighting)
     }
 
-    private init(rows: [PatchReconstructor.DiffRow], highlighting: DiffHighlighting) {
+    private init(rows: [PatchReconstructor.DiffRow], path: String, highlighting: DiffHighlighting) {
         self.rows = rows
+        self.path = path
         attributed = rows.indices.map { index in
             guard case .line(let row) = rows[index] else { return nil }
             return SyntaxStyle.attributed(
@@ -91,13 +95,15 @@ struct HighlightedDiff: Sendable {
         }
     }
 
-    /// The coloured lines, when these are the rows they were built from.
-    /// - Parameter rows: The rows about to be drawn.
-    /// - Returns: One line per row, or `nil` for any other rows.
-    func lines(for rows: [PatchReconstructor.DiffRow]) -> [AttributedString?]? {
+    /// The coloured lines, when these are the rows and the file they were built from.
+    /// - Parameters:
+    ///   - rows: The rows about to be drawn.
+    ///   - path: The file they belong to.
+    /// - Returns: One line per row, or `nil` for any other rows or file.
+    func lines(for rows: [PatchReconstructor.DiffRow], path: String) -> [AttributedString?]? {
         // Equal arrays that share a buffer compare in O(1), which is the common case: the rows
         // come out of `ReviewModel`'s reconstruction memo.
-        self.rows == rows ? attributed : nil
+        self.path == path && self.rows == rows ? attributed : nil
     }
 }
 

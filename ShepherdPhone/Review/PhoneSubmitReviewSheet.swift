@@ -83,6 +83,7 @@ struct PhoneSubmitReviewSheet: View {
             }
         }
         .presentationDetents([.medium, .large], selection: $detent)
+        .toastHost()
         .onAppear {
             // GitHub refuses either verdict on your own pull request; Comment is what is left.
             if model.verdictBlocker != nil { model.pendingVerdict = .comment }

@@ -35,5 +35,6 @@ struct PhoneThreadSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+        .toastHost()
     }
 }

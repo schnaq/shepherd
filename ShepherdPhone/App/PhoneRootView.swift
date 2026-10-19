@@ -25,9 +25,7 @@ struct PhoneRootView: View {
         // The app's accent for every system control, sheets included — once here rather than
         // per button, so nothing falls back to the system blue.
         .tint(Theme.accent)
-        .overlay(alignment: .bottom) {
-            ToastStackView(center: environment.toasts)
-        }
+        .toastHost()
         .sensoryFeedback(.success, trigger: environment.signInCount)
     }
 }
@@ -72,6 +70,29 @@ private struct PhoneSignedInView: View {
         .onDisappear { inbox.stopObserving() }
         .sheet(isPresented: $environment.isSettingsPresented) {
             PhoneSettingsView()
+        }
+    }
+}
+
+extension View {
+    /// The app's toast stack on this view's bottom edge (ADR 0044).
+    ///
+    /// On the root and again on every sheet: a sheet covers the root's bottom edge at every
+    /// detent, and the writes a sheet sends report their refusals only as toasts
+    /// (``PullRequestActions``), so a failed post would otherwise land behind the sheet that sent
+    /// it. A stacked sheet hides the one under it the same way, so only the top one shows.
+    func toastHost() -> some View {
+        modifier(ToastHost())
+    }
+}
+
+/// ``SwiftUI/View/toastHost()``'s body: the environment is read here, where a sheet inherits it.
+private struct ToastHost: ViewModifier {
+    @Environment(PhoneEnvironment.self) private var environment
+
+    func body(content: Content) -> some View {
+        content.overlay(alignment: .bottom) {
+            ToastStackView(center: environment.toasts)
         }
     }
 }

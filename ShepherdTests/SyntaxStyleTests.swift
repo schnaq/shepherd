@@ -37,7 +37,7 @@ final class SyntaxStyleTests: XCTestCase {
         ]
         let built = await HighlightedDiff.build(rows: rows, path: "A.swift")
         let highlighted = try XCTUnwrap(built)
-        let lines = try XCTUnwrap(highlighted.lines(for: rows))
+        let lines = try XCTUnwrap(highlighted.lines(for: rows, path: "A.swift"))
         XCTAssertEqual(lines.count, rows.count)
         XCTAssertNil(lines[0], "a hunk header has no line")
         XCTAssertNotNil(lines[1])
@@ -45,7 +45,10 @@ final class SyntaxStyleTests: XCTestCase {
         // As many rows, another file: the colours are not this file's.
         var other = rows
         other[2] = .line(PatchRow(kind: .added, text: "let b = 2", baseLine: 2, headLine: 1))
-        XCTAssertNil(highlighted.lines(for: other))
+        XCTAssertNil(highlighted.lines(for: other, path: "A.swift"))
+
+        // The same rows, another file: another language, so not these colours either.
+        XCTAssertNil(highlighted.lines(for: rows, path: "B.py"))
     }
 
     func testLeavesAFileOverTheRowLimitPlain() async {

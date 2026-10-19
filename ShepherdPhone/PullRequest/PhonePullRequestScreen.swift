@@ -104,7 +104,8 @@ struct PhonePullRequestScreen: View {
                 }
             }
             // The inline composer and the thread sheet are presented here for every screen of this
-            // pull request — the diff raises them through the model — so one presenter owns each.
+            // pull request — the diff raises the composer and the conversation or a jump the
+            // thread, all through the model — so one presenter owns each.
             .sheet(item: $model.composerRequest) { request in
                 PhoneInlineCommentSheet(model: model, request: request)
             }
@@ -389,8 +390,16 @@ struct PhonePullRequestScreen: View {
 
     /// The bar's ✓: an approval needs no words, so it goes out at once with the pending comments —
     /// the Mac toolbar's Approve.
+    ///
+    /// Unless words are already written: the summary's only field is in the submit sheet, which
+    /// keeps them when closed unsent (and a saved draft brings them back), so a summary sent from
+    /// here would be one the reviewer cannot see. The sheet opens on Approve with it instead.
     private func approve() {
         guard !model.hasEndedOnGitHub, !isSubmittingVerdict, let summary = model.summary else { return }
+        guard model.summaryText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            requestReview(.approve)
+            return
+        }
         Task {
             if await actions.submitReview(on: summary, verdict: .approve, body: model.summaryText) {
                 successes += 1

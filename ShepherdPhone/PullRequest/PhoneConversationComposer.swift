@@ -91,6 +91,7 @@ struct PhoneConversationComposer: View {
             }
         }
         .presentationDetents([.medium, .large])
+        .toastHost()
         .onAppear { isFocused = true }
     }
 

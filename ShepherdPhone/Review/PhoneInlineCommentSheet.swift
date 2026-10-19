@@ -67,7 +67,11 @@ struct PhoneInlineCommentSheet: View {
                     }
 
                     HStack(spacing: 16) {
-                        if request.side == .right {
+                        // Only on the file the diff shows: the suggestion is cut from its
+                        // reconstruction, which the submit sheet's pending list does not have
+                        // for any other file.
+                        if request.side == .right, request.path == model.selectedPath,
+                           model.currentReconstruction != nil {
                             Button {
                                 insertSuggestion()
                             } label: {
@@ -124,6 +128,7 @@ struct PhoneInlineCommentSheet: View {
             }
         }
         .presentationDetents([.fraction(0.5), .large])
+        .toastHost()
         .interactiveDismissDisabled(hasUnsavedText)
         .sensoryFeedback(.success, trigger: saved)
         .onAppear {
