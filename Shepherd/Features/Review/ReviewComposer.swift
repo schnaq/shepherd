@@ -1295,9 +1295,9 @@ struct ThreadCommentView: View {
                 } else {
                     TranslatableMarkdownText(
                         markdown: comment.bodyMarkdown,
+                        imageSubject: comment.id,
                         translations: translations
                     )
-                    .environment(\.markdownImageSubject, comment.id)
                     if reactions.isDrawn {
                         reactions
                     }

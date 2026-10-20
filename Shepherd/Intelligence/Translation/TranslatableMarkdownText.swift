@@ -28,6 +28,8 @@ import Translation
 struct TranslatableMarkdownText: View {
     /// The Markdown source, as GitHub sent it.
     let markdown: String
+    /// The post's node id, for its screenshots; see ``MarkdownText/imageSubject``.
+    let imageSubject: String?
     /// The screen's translation cache.
     let translations: TranslationCoordinator
     /// The font size handed to ``MarkdownText``.
@@ -52,7 +54,7 @@ struct TranslatableMarkdownText: View {
         let store = translations
 
         VStack(alignment: .leading, spacing: 6) {
-            MarkdownText(markdown: markdown, size: size)
+            MarkdownText(markdown: markdown, imageSubject: imageSubject, size: size)
             controls
             translationBlock
         }

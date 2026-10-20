@@ -101,8 +101,7 @@ public enum MarkdownDocument {
             // after it one more row; here it is the paragraph it was most likely meant to be.
             if let open = table {
                 if let cells = tableCells(trimmed) {
-                    table?.rows.append(Array(cells.prefix(open.header.count))
-                        + Array(repeating: "", count: max(0, open.header.count - cells.count)))
+                    table?.rows.append(Array((cells + repeatElement("", count: open.header.count)).prefix(open.header.count)))
                     continue
                 }
                 flushTable()

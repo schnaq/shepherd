@@ -16,6 +16,9 @@ import SwiftUI
 struct MarkdownText: View {
     /// The Markdown source.
     let markdown: String
+    /// The node id of the post this is, which its screenshots' signed links are read by (ADR
+    /// 0043); `nil` where there is none, and a screenshot stays its alt text and a link.
+    let imageSubject: String?
     /// The body font size. Headings and code are derived from it.
     var size: CGFloat = 12.5
 
@@ -30,6 +33,7 @@ struct MarkdownText: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .textSelection(.enabled)
+        .environment(\.markdownImageSubject, imageSubject)
     }
 
     /// One block, with `runs` its text and `cells` a table's, inline Markdown already parsed.
@@ -162,10 +166,7 @@ struct MarkdownText: View {
 private final class ParsedMarkdown {
     /// A piece of a block's text: inline Markdown, parsed, or a screenshot GitHub stores, drawn
     /// where it was written (ADR 0043).
-    enum Run {
-        case text(AttributedString)
-        case image(DescriptionImage)
-    }
+    typealias Run = ImageRun<AttributedString>
 
     /// The blocks in order, each with its text as runs — none for a code block, which is drawn
     /// verbatim, or a rule — and a table's cells, header row first, as runs too.
@@ -226,7 +227,7 @@ private struct InlineRuns: View {
     let runs: [ParsedMarkdown.Run]
 
     var body: some View {
-        if runs.count <= 1, case .text(let text) = runs.first ?? .text(AttributedString()) {
+        if runs.count == 1, case .text(let text)? = runs.first {
             Text(text)
         } else {
             VStack(alignment: .leading, spacing: 6) {
@@ -241,9 +242,8 @@ private struct InlineRuns: View {
     }
 }
 
-extension EnvironmentValues {
-    /// The node id of the post a ``MarkdownText`` draws, which is what its screenshots' signed links
-    /// are read by; `nil` where the text is not a post, and its screenshots stay links.
+private extension EnvironmentValues {
+    /// ``MarkdownText/imageSubject``, handed down to the screenshots in it.
     @Entry var markdownImageSubject: String?
 }
 
@@ -318,33 +318,36 @@ private struct MarkdownImage: View {
 /// sign-out lets go of all of it with the bodies (``MarkdownText/forgetParsedBodies()``).
 @MainActor
 enum MarkdownImages {
+    /// Decoded, so priced by their pixels: a phone screenshot is about 15 MB of them.
     private static let images: NSCache<NSString, NSImage> = {
         let cache = NSCache<NSString, NSImage>()
-        cache.countLimit = 60
+        cache.totalCostLimit = 256 * 1024 * 1024
         return cache
     }()
     /// Each post's rendering being read or read in the last minute, by node id.
     private static var renderings: [String: (task: Task<String?, Never>, startedAt: Date)] = [:]
     /// Each download under way, by the upload's key.
-    private static var downloads: [String: Task<Data?, Never>] = [:]
+    private static var downloads: [String: Task<NSImage?, Never>] = [:]
 
     static func cached(_ image: DescriptionImage) -> NSImage? {
         images.object(forKey: image.key as NSString)
     }
 
     static func load(_ image: DescriptionImage, in subjectID: String, fetcher: any DescriptionImageFetching) async -> NSImage? {
-        let download = downloads[image.key] ?? Task {
+        if let running = downloads[image.key] { return await running.value }
+        let download = Task {
+            defer { downloads[image.key] = nil }
             guard let html = await rendering(of: subjectID, fetcher: fetcher),
-                  let url = DescriptionImages.signedSources(for: [image], inBodyHTML: html).first?.url
-            else { return nil }
-            return try? await fetcher.descriptionImage(at: url)
+                  let url = DescriptionImages.signedSources(for: [image], inBodyHTML: html).first?.url,
+                  let data = try? await fetcher.descriptionImage(at: url),
+                  let decoded = NSImage(data: data)
+            else { return nil as NSImage? }
+            let pixels = decoded.representations.first.map { $0.pixelsWide * $0.pixelsHigh } ?? 0
+            images.setObject(decoded, forKey: image.key as NSString, cost: max(pixels * 4, data.count))
+            return decoded
         }
         downloads[image.key] = download
-        let data = await download.value
-        downloads[image.key] = nil
-        guard let data, let decoded = NSImage(data: data) else { return nil }
-        images.setObject(decoded, forKey: image.key as NSString)
-        return decoded
+        return await download.value
     }
 
     private static func rendering(of subjectID: String, fetcher: any DescriptionImageFetching) async -> String? {

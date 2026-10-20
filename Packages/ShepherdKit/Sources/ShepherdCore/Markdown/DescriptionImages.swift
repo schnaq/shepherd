@@ -30,12 +30,16 @@ public struct DescriptionImage: Sendable, Hashable {
 
 /// A piece of a block's text: prose, or an upload drawn where it was written
 /// (``DescriptionImages/runs(in:)``).
-public enum ImageRun: Equatable, Sendable {
+/// Generic in the text so a renderer can keep its parsed form in the same shape.
+public enum ImageRun<Text> {
     /// Inline Markdown.
-    case text(String)
+    case text(Text)
     /// A GitHub-hosted screenshot.
     case image(DescriptionImage)
 }
+
+extension ImageRun: Equatable where Text: Equatable {}
+extension ImageRun: Sendable where Text: Sendable {}
 
 /// Finds the screenshots in a pull request's description, and the signed links GitHub serves
 /// them under (ADR 0038 item 4, ADR 0007's 2026-09-22 amendment).
@@ -88,14 +92,16 @@ public enum DescriptionImages {
     /// is not an attachment, so it stays in the text exactly as written.
     /// - Parameter text: A paragraph, list item or table cell — no fenced code.
     /// - Returns: The runs in order; empty for blank text.
-    public static func runs(in text: String) -> [ImageRun] {
-        var runs: [ImageRun] = []
+    public static func runs(in text: String) -> [ImageRun<String>] {
+        var runs: [ImageRun<String>] = []
         var rest = text.startIndex
         func appendText(upTo end: String.Index) {
             let piece = text[rest..<end].trimmingCharacters(in: .whitespacesAndNewlines)
             if !piece.isEmpty { runs.append(.text(piece)) }
         }
         for match in matches(in: text) {
+            // A match inside one already cut — an `<img>` written into a Markdown image's text —
+            // is part of that one.
             guard let range = Range(match.range, in: text), range.lowerBound >= rest else { continue }
             appendText(upTo: range.lowerBound)
             runs.append(.image(match.image))
