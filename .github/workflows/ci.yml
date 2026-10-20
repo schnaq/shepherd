@@ -26,7 +26,10 @@ jobs:
 
   shepherdkit-linux:
     name: ShepherdKit tests (Linux)
-    runs-on: ubuntu-latest
+    # Pinned, not `ubuntu-latest`: on 2026-10-20 `latest` moved to 26.04, which
+    # swift-actions/setup-swift@v2 refuses ("Version 26.04 of Ubuntu is not supported"), and the
+    # job died before it built anything. Move this once setup-swift knows the new image.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       # Before Swift, because it is the fast check and the one an Xcode-less contributor cannot
