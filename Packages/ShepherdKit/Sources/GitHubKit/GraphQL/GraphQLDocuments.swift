@@ -778,6 +778,15 @@ public enum GraphQLDocuments {
     }
     """
 
+    /// One post as GitHub renders it, by the post's node id — the description, a comment, a review
+    /// or a thread comment, which are all a `Comment` (ADR 0043). Every upload in it is a
+    /// short-lived signed link; see ``GitHubClient/bodyHTML(subjectID:)``.
+    public static let bodyHTML = """
+    query ShepherdBodyHTML($subjectId: ID!) {
+      node(id: $subjectId) { ... on Comment { bodyHTML } }
+    }
+    """
+
     /// Take a pull request out of draft state. GraphQL-only.
     public static let markPullRequestReadyForReview = """
     mutation ShepherdMarkReady($pullRequestId: ID!) {

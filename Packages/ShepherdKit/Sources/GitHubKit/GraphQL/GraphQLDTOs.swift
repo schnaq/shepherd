@@ -405,6 +405,14 @@ struct ViewerReactionsData: Decodable {
     var node: Node?
 }
 
+/// The payload of ``GraphQLDocuments/bodyHTML``.
+struct BodyHTMLData: Decodable {
+    struct Node: Decodable {
+        var bodyHTML: String?
+    }
+    var node: Node?
+}
+
 /// The payload of the ready-for-review mutation.
 struct MarkReadyData: Decodable {
     struct Payload: Decodable {

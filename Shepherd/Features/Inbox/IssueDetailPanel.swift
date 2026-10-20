@@ -173,8 +173,9 @@ struct IssueDetailPanel: View {
                 CardTitle(String(localized: "DESCRIPTION"))
                 if let body = model.detail?.bodyMarkdown, !body.isEmpty {
                     // The same renderer the pull-request description uses: `AttributedString`,
-                    // not the Monaco bridge — an issue has no diff.
-                    MarkdownText(markdown: body)
+                    // not the Monaco bridge — an issue has no diff. An issue is stored without its
+                    // node id, so its screenshots stay links.
+                    MarkdownText(markdown: body, imageSubject: nil)
                 } else {
                     Text(
                         model.isFetchingBody

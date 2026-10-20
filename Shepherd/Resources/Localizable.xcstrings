@@ -7051,6 +7051,16 @@
         }
       }
     },
+    "Image": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bild"
+          }
+        }
+      }
+    },
     "Images can be up to 10 MB on GitHub.": {
       "localizations": {
         "de": {

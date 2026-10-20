@@ -53,6 +53,10 @@ final class ScreenshotReadingTests: XCTestCase {
             return html
         }
 
+        func bodyHTML(subjectID: String) async throws -> String {
+            html
+        }
+
         func descriptionImage(at url: URL) async throws -> Data {
             downloads.append(url)
             if failing.contains(where: { url.absoluteString.contains($0) }) {

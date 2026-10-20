@@ -15,6 +15,9 @@ struct PhoneRootView: View {
                 PhoneSignInView()
             case .signedIn(let session):
                 PhoneSignedInView(session: session, settings: environment.settings)
+                    // The Mac's screenshots in posts ask `AppEnvironment` for this; the phone
+                    // hands the session's client down instead (ADR 0043, ADR 0044).
+                    .environment(\.descriptionImageFetcher, session.github)
                     // A new session is a new inbox: without the id SwiftUI would keep the first
                     // model's `@State` across a sign-out and sign-in.
                     .id(ObjectIdentifier(session))

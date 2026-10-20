@@ -399,7 +399,7 @@ struct PhonePostBody: View {
                     .font(Theme.type(.callout))
                     .foregroundStyle(Theme.textMuted)
             } else {
-                MarkdownText(markdown: markdown, size: bodySize, codeScale: 0.9)
+                MarkdownText(markdown: markdown, imageSubject: reactions.subjectID, size: bodySize, codeScale: 0.9)
             }
             if reactions.isDrawn {
                 reactions

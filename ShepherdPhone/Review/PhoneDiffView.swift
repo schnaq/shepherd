@@ -477,7 +477,7 @@ struct PhoneDiffView: View {
                         }
                         .accessibilityElement(children: .combine)
                     }
-                    MarkdownText(markdown: comment.bodyMarkdown, size: bodySize, codeScale: 0.9)
+                    MarkdownText(markdown: comment.bodyMarkdown, imageSubject: comment.id, size: bodySize, codeScale: 0.9)
                 }
             } else if thread.comments.count > 1 {
                 Text(String(localized: "\(thread.comments.count) comments"))

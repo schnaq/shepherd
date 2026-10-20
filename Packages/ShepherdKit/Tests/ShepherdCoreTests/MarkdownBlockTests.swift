@@ -334,4 +334,53 @@ final class MarkdownBlockTests: XCTestCase {
             ]
         )
     }
+
+    // MARK: - Tables
+
+    /// schnaq/unlock#953: a light/dark grid of screenshots arrived as five lines of pipes.
+    func testAGFMTableIsATableWithItsCellsStillInlineMarkdown() {
+        let source = """
+            Intro.
+
+            | Light | Dark |
+            | --- | :---: |
+            | ![Feed light](https://a) | ![Feed dark](https://b) |
+            | `a\\|b` | |
+
+            Thumbnails are placeholders.
+            """
+        XCTAssertEqual(
+            MarkdownDocument.blocks(from: source),
+            [
+                .paragraph("Intro."),
+                .table(header: ["Light", "Dark"], rows: [
+                    ["![Feed light](https://a)", "![Feed dark](https://b)"],
+                    ["`a|b`", ""],
+                ]),
+                .paragraph("Thumbnails are placeholders."),
+            ]
+        )
+    }
+
+    /// Outer pipes are optional, a short row is padded and a long one cut to the header's width,
+    /// and the table ends at the first line without a pipe even with no blank line before it.
+    func testATableWithoutOuterPipesTakesItsWidthFromTheHeader() {
+        XCTAssertEqual(
+            MarkdownDocument.blocks(from: "Screens:\na | b\n-|-\n1 |\n1 | 2 | 3\nAfter"),
+            [
+                .paragraph("Screens:"),
+                .table(header: ["a", "b"], rows: [["1", ""], ["1", "2"]]),
+                .paragraph("After"),
+            ]
+        )
+    }
+
+    /// A pipe in a sentence is not a table, and neither is a header whose delimiter row has another
+    /// number of cells.
+    func testPipesWithoutAMatchingDelimiterRowStayProse() {
+        XCTAssertEqual(
+            MarkdownDocument.blocks(from: "a | b\nnot | a | delimiter\n\n| a | b |\n| --- |"),
+            [.paragraph("a | b\nnot | a | delimiter"), .paragraph("| a | b |\n| --- |")]
+        )
+    }
 }
