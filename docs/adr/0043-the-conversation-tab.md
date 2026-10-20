@@ -132,6 +132,24 @@ left as it is written. The parser also splits lines on any line break, so a comm
 github.com (CRLF) no longer renders every line as a paragraph of its own. A comment GitHub reports as minimized (hidden as
 off-topic, outdated, spam …) starts collapsed behind one line.
 
+### Tables and screenshots (2026-10-20 amendment)
+
+A description that put light and dark screenshots side by side in a table (schnaq/unlock#953)
+arrived as five lines of pipes with each image's alt text where the image belonged.
+`MarkdownDocument` now reads GitHub tables — a pipe row followed by a delimiter row with as many
+cells — into a `table` block, drawn as a grid, and a table runs to the first line without a pipe.
+
+An image GitHub stores (`DescriptionImages`' rule: an upload on `github.com/user-attachments` or
+the older upload hosts, Markdown or `<img>`) is drawn where the post put it, in a paragraph, a list
+item or a table cell. It is fetched as *Read screenshots* fetches one: the post as GitHub renders
+it — one GraphQL `node(id:) { ... on Comment { bodyHTML } }` read by the post's node id, never
+cached or stored, read once a minute at most per post — for the short-lived signed link, then that
+link without the token from GitHub's upload host only. Only a post that has an upload is read, and
+only when it is drawn. The decoded images stay in memory, a few dozen at most, and sign-out lets
+go of them with the parsed bodies. Unlike *Read screenshots* there is no setting: this is showing
+what GitHub shows, and no model sees the image. An image on any other host stays its Markdown, and
+a click on a screenshot opens it on GitHub.
+
 ### B: reactions are the second GraphQL write
 
 `addReaction` and `removeReaction` by subject node id, as an exception to ADR 0005's REST writes
@@ -174,6 +192,8 @@ gone) are per GitHub's REST docs; the live check with the app's token in
   costing one point; B adds two GraphQL mutations and C six REST calls on the same host with the
   same token, each an ordinary outbox row, and B's drain one GraphQL read of a post's reactions,
   made only after GitHub refused a removal.
+- The 2026-10-20 amendment adds no host either: a post's rendering is one more GraphQL read on
+  `api.github.com`, and its screenshots come from the upload hosts *Read screenshots* already uses.
 - Comment bodies stay out of webhooks (ADR 0012) and telemetry (ADR 0036): no new event, no new
   payload field.
 - The conversation is stored locally like every other part of a detail, so the tab reads offline

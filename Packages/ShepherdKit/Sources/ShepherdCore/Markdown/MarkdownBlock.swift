@@ -18,6 +18,9 @@ public enum MarkdownBlock: Equatable, Sendable {
     case quote(String)
     /// A thematic break.
     case rule
+    /// A table: the header's cells and each row's, every row as wide as the header and every cell
+    /// still inline Markdown.
+    case table(header: [String], rows: [[String]])
 }
 
 /// Splits a Markdown body into blocks.
@@ -32,7 +35,7 @@ public enum MarkdownBlock: Equatable, Sendable {
 /// This parser answers only the block level and leaves every line's contents untouched, so the
 /// inline parser still does the half it is good at. It is not a CommonMark implementation and
 /// does not try to be: it covers what GitHub bodies actually contain — ATX headings, bullet and
-/// numbered lists with nesting, task items, fenced code, block quotes and thematic breaks.
+/// numbered lists with nesting, task items, fenced code, block quotes, thematic breaks and tables.
 public enum MarkdownDocument {
     /// Reads the blocks out of a Markdown body.
     /// - Parameter markdown: The source.
@@ -42,6 +45,7 @@ public enum MarkdownDocument {
         var paragraph: [String] = []
         var quote: [String] = []
         var fence: (language: String?, lines: [String])?
+        var table: (header: [String], rows: [[String]])?
         var isInHTMLComment = false
 
         func flushParagraph() {
@@ -54,9 +58,15 @@ public enum MarkdownDocument {
             blocks.append(.quote(quote.joined(separator: "\n")))
             quote = []
         }
+        func flushTable() {
+            guard let open = table else { return }
+            blocks.append(.table(header: open.header, rows: open.rows))
+            table = nil
+        }
         func flushProse() {
             flushParagraph()
             flushQuote()
+            flushTable()
         }
 
         // Split on any line break rather than on `CharacterSet.newlines`: whatever was typed on
@@ -87,6 +97,17 @@ public enum MarkdownDocument {
                 continue
             }
 
+            // A table runs to the first line without a pipe. GitHub would make a prose line right
+            // after it one more row; here it is the paragraph it was most likely meant to be.
+            if let open = table {
+                if let cells = tableCells(trimmed) {
+                    table?.rows.append(Array(cells.prefix(open.header.count))
+                        + Array(repeating: "", count: max(0, open.header.count - cells.count)))
+                    continue
+                }
+                flushTable()
+            }
+
             if isFence(trimmed) {
                 flushProse()
                 let info = String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces)
@@ -96,6 +117,16 @@ public enum MarkdownDocument {
 
             if trimmed.isEmpty {
                 flushProse()
+                continue
+            }
+
+            // A delimiter row turns the line before it into a table's header, so that line has
+            // already gone into the paragraph by now. Checked before lists and rules, which a
+            // delimiter row such as `- | -` would otherwise be read as.
+            if let header = paragraph.last.flatMap(tableCells), isDelimiterRow(trimmed, columns: header.count) {
+                paragraph.removeLast()
+                flushProse()
+                table = (header, [])
                 continue
             }
 
@@ -349,6 +380,38 @@ public enum MarkdownDocument {
         }
         guard !text.isEmpty else { return nil }
         return .listItem(text: text, marker: marker, depth: depth)
+    }
+
+    /// A table row's cells, or `nil` for a line without a pipe.
+    ///
+    /// The outer pipes are optional and `\|` is a pipe inside a cell. A pipe inside a code span
+    /// still splits, as on GitHub, which is why a table's code spans escape theirs.
+    private static func tableCells(_ trimmed: String) -> [String]? {
+        guard trimmed.contains("|") else { return nil }
+        var row = Substring(trimmed)
+        if row.hasPrefix("|") { row = row.dropFirst() }
+        if row.hasSuffix("|"), !row.hasSuffix("\\|") { row = row.dropLast() }
+        var cells = [""]
+        for character in row {
+            if character == "|", cells[cells.count - 1].hasSuffix("\\") {
+                cells[cells.count - 1].removeLast()
+                cells[cells.count - 1].append("|")
+            } else if character == "|" {
+                cells.append("")
+            } else {
+                cells[cells.count - 1].append(character)
+            }
+        }
+        return cells.map { $0.trimmingCharacters(in: .whitespaces) }
+    }
+
+    /// `| --- | :---: |`, with as many cells as the header above it.
+    private static func isDelimiterRow(_ trimmed: String, columns: Int) -> Bool {
+        guard let cells = tableCells(trimmed), cells.count == columns else { return false }
+        return cells.allSatisfy { cell in
+            let dashes = cell.drop { $0 == ":" }.reversed().drop { $0 == ":" }
+            return !dashes.isEmpty && dashes.allSatisfy { $0 == "-" }
+        }
     }
 
     /// `12. ` or `12) ` at the start of a line.

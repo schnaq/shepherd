@@ -212,6 +212,7 @@ struct PostBody: View {
                     .foregroundStyle(Theme.textMuted)
             } else {
                 TranslatableMarkdownText(markdown: markdown, translations: translations)
+                    .environment(\.markdownImageSubject, reactions.subjectID)
             }
             if reactions.isDrawn {
                 reactions

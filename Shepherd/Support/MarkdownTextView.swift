@@ -1,3 +1,4 @@
+import AppKit
 import ShepherdCore
 import SwiftUI
 
@@ -24,19 +25,19 @@ struct MarkdownText: View {
             // list items reading "- packages/ui: Jest green" under different headings are two
             // items, and identifying them by content would collapse them into one.
             ForEach(Array(ParsedMarkdown.of(markdown).blocks.enumerated()), id: \.offset) { _, part in
-                view(for: part.block, text: part.text)
+                view(for: part.block, runs: part.runs, cells: part.cells)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .textSelection(.enabled)
     }
 
-    /// One block, with `text` its inline Markdown already parsed.
+    /// One block, with `runs` its text and `cells` a table's, inline Markdown already parsed.
     @ViewBuilder
-    private func view(for block: MarkdownBlock, text: AttributedString) -> some View {
+    private func view(for block: MarkdownBlock, runs: [ParsedMarkdown.Run], cells: [[[ParsedMarkdown.Run]]]) -> some View {
         switch block {
         case .heading(let level, _):
-            Text(text)
+            InlineRuns(runs: runs)
                 .font(.system(size: headingSize(level), weight: .semibold))
                 .foregroundStyle(Theme.textStrong)
                 .fixedSize(horizontal: false, vertical: true)
@@ -45,7 +46,7 @@ struct MarkdownText: View {
                 .padding(.top, 6)
 
         case .paragraph:
-            Text(text)
+            InlineRuns(runs: runs)
                 .font(.system(size: size))
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -60,7 +61,7 @@ struct MarkdownText: View {
                     // list does not wobble as the numbers grow.
                     .monospacedDigit()
                     .frame(minWidth: 16, alignment: .leading)
-                Text(text)
+                InlineRuns(runs: runs)
                     .font(.system(size: size))
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -90,7 +91,7 @@ struct MarkdownText: View {
                 Rectangle()
                     .fill(Theme.border)
                     .frame(width: 2)
-                Text(text)
+                InlineRuns(runs: runs)
                     .font(.system(size: size))
                     .foregroundStyle(Theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -99,6 +100,33 @@ struct MarkdownText: View {
 
         case .rule:
             Divider().overlay(Theme.hairline)
+
+        case .table:
+            // Columns rather than lines: a table is how a pull request puts light and dark
+            // screenshots side by side, and only a grid keeps each pair together.
+            // Lines between rows only: a cell cannot be stretched to its row's height without the
+            // grid growing to fill the scroll view, so lines around each cell would not meet.
+            Grid(alignment: .topLeading, horizontalSpacing: 16, verticalSpacing: 8) {
+                ForEach(Array(cells.enumerated()), id: \.offset) { row, columns in
+                    if row > 0 {
+                        Divider().overlay(Theme.border)
+                    }
+                    GridRow {
+                        ForEach(Array(columns.enumerated()), id: \.offset) { _, cell in
+                            InlineRuns(runs: cell)
+                                .font(.system(size: size, weight: row == 0 ? .semibold : .regular))
+                                .foregroundStyle(row == 0 ? Theme.textStrong : Theme.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .topLeading)
+                        }
+                    }
+                }
+            }
+            .padding(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .stroke(Theme.border, lineWidth: 1)
+            )
         }
     }
 
@@ -106,6 +134,7 @@ struct MarkdownText: View {
     /// not stay in memory after the database they came from is erased.
     @MainActor static func forgetParsedBodies() {
         ParsedMarkdown.cache.removeAllObjects()
+        MarkdownImages.forget()
     }
 
     /// How much bigger a heading is than the body. Three steps for six levels, because a body
@@ -120,8 +149,8 @@ struct MarkdownText: View {
     }
 }
 
-/// One Markdown source, parsed: its blocks, each beside its inline Markdown as an
-/// `AttributedString`, kept process-wide by the source string (``of(_:)``).
+/// One Markdown source, parsed: its blocks, each beside its inline Markdown as `AttributedString`
+/// runs, kept process-wide by the source string (``of(_:)``).
 ///
 /// ``MarkdownText`` is drawn again whenever the view holding it is, and a tab flip draws every post
 /// on the conversation tab: splitting the blocks and running `AttributedString(markdown:)` once per
@@ -131,17 +160,36 @@ struct MarkdownText: View {
 /// sign-out empties it (``MarkdownText/forgetParsedBodies()``), because what it holds is the
 /// leaving account's comments.
 private final class ParsedMarkdown {
-    /// The blocks in order, each with its text's inline Markdown parsed — empty for a code block,
-    /// which is drawn verbatim, and for a rule, which has no text.
-    let blocks: [(block: MarkdownBlock, text: AttributedString)]
+    /// A piece of a block's text: inline Markdown, parsed, or a screenshot GitHub stores, drawn
+    /// where it was written (ADR 0043).
+    enum Run {
+        case text(AttributedString)
+        case image(DescriptionImage)
+    }
+
+    /// The blocks in order, each with its text as runs — none for a code block, which is drawn
+    /// verbatim, or a rule — and a table's cells, header row first, as runs too.
+    let blocks: [(block: MarkdownBlock, runs: [Run], cells: [[[Run]]])]
 
     private init(_ markdown: String) {
         blocks = MarkdownDocument.blocks(from: markdown).map { block in
             switch block {
             case .heading(_, let text), .paragraph(let text), .listItem(let text, _, _), .quote(let text):
-                return (block, Self.inline(text))
+                return (block, Self.runs(text), [])
+            case .table(let header, let rows):
+                return (block, [], ([header] + rows).map { $0.map(Self.runs) })
             case .codeBlock, .rule:
-                return (block, AttributedString())
+                return (block, [], [])
+            }
+        }
+    }
+
+    /// One block's text cut around its uploads, each piece of text parsed.
+    private static func runs(_ text: String) -> [Run] {
+        DescriptionImages.runs(in: text).map { run in
+            switch run {
+            case .text(let text): .text(inline(text))
+            case .image(let image): .image(image)
             }
         }
     }
@@ -169,5 +217,148 @@ private final class ParsedMarkdown {
                 interpretedSyntax: .inlineOnlyPreservingWhitespace
             )
         )) ?? AttributedString(text)
+    }
+}
+
+/// A block's runs: one `Text` when it is only text, the common case, and a column otherwise. Font
+/// and colour are the caller's, through the environment.
+private struct InlineRuns: View {
+    let runs: [ParsedMarkdown.Run]
+
+    var body: some View {
+        if runs.count <= 1, case .text(let text) = runs.first ?? .text(AttributedString()) {
+            Text(text)
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Array(runs.enumerated()), id: \.offset) { _, run in
+                    switch run {
+                    case .text(let text): Text(text)
+                    case .image(let image): MarkdownImage(image: image)
+                    }
+                }
+            }
+        }
+    }
+}
+
+extension EnvironmentValues {
+    /// The node id of the post a ``MarkdownText`` draws, which is what its screenshots' signed links
+    /// are read by; `nil` where the text is not a post, and its screenshots stay links.
+    @Entry var markdownImageSubject: String?
+}
+
+/// A screenshot GitHub stores, drawn where the post put it — or, until it has arrived and when it
+/// cannot, its alt text — and opened on GitHub on a click.
+private struct MarkdownImage: View {
+    let image: DescriptionImage
+
+    @Environment(\.markdownImageSubject) private var subjectID
+    @Environment(AppEnvironment.self) private var environment: AppEnvironment?
+    @Environment(\.openURL) private var openURL
+    /// From the cache straight away, so a post scrolled back to does not flash its alt text.
+    @State private var loaded: NSImage?
+    @State private var isFailed = false
+
+    init(image: DescriptionImage) {
+        self.image = image
+        _loaded = State(initialValue: MarkdownImages.cached(image))
+    }
+
+    var body: some View {
+        Button { openURL(image.url) } label: {
+            if let loaded {
+                Image(nsImage: loaded)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    // Never larger than it is, and never so tall that one phone screenshot is the
+                    // whole conversation; the click shows it whole.
+                    .frame(maxWidth: loaded.size.width, maxHeight: 480, alignment: .leading)
+            } else {
+                HStack(spacing: 6) {
+                    if isFailed {
+                        Image(systemName: "photo")
+                    } else {
+                        ProgressView().controlSize(.mini)
+                    }
+                    Text(image.altText.isEmpty ? String(localized: "Image") : image.altText)
+                        .lineLimit(1)
+                }
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(Theme.raised, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            }
+        }
+        .buttonStyle(.plain)
+        .help(String(localized: "Open on GitHub"))
+        .accessibilityLabel(Text(verbatim: image.altText))
+        .task(id: image.key) {
+            // Again here: an edited post can put another upload where this one was.
+            loaded = MarkdownImages.cached(image)
+            isFailed = false
+            guard loaded == nil else { return }
+            guard let subjectID, let fetcher = environment?.descriptionImageFetcher else {
+                isFailed = true
+                return
+            }
+            loaded = await MarkdownImages.load(image, in: subjectID, fetcher: fetcher)
+            isFailed = loaded == nil
+        }
+    }
+}
+
+/// The screenshots posts show, downloaded once per process (ADR 0043).
+///
+/// A screenshot is fetched the way *Read screenshots* fetches one: the post as GitHub renders it,
+/// for the short-lived signed link, then that link without the token, from GitHub's upload host
+/// only. The rendering is read once for every upload of a post — its links outlive the minute it
+/// is kept — and never stored; the decoded image is kept instead, a few dozen at most, and
+/// sign-out lets go of all of it with the bodies (``MarkdownText/forgetParsedBodies()``).
+@MainActor
+enum MarkdownImages {
+    private static let images: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 60
+        return cache
+    }()
+    /// Each post's rendering being read or read in the last minute, by node id.
+    private static var renderings: [String: (task: Task<String?, Never>, startedAt: Date)] = [:]
+    /// Each download under way, by the upload's key.
+    private static var downloads: [String: Task<Data?, Never>] = [:]
+
+    static func cached(_ image: DescriptionImage) -> NSImage? {
+        images.object(forKey: image.key as NSString)
+    }
+
+    static func load(_ image: DescriptionImage, in subjectID: String, fetcher: any DescriptionImageFetching) async -> NSImage? {
+        let download = downloads[image.key] ?? Task {
+            guard let html = await rendering(of: subjectID, fetcher: fetcher),
+                  let url = DescriptionImages.signedSources(for: [image], inBodyHTML: html).first?.url
+            else { return nil }
+            return try? await fetcher.descriptionImage(at: url)
+        }
+        downloads[image.key] = download
+        let data = await download.value
+        downloads[image.key] = nil
+        guard let data, let decoded = NSImage(data: data) else { return nil }
+        images.setObject(decoded, forKey: image.key as NSString)
+        return decoded
+    }
+
+    private static func rendering(of subjectID: String, fetcher: any DescriptionImageFetching) async -> String? {
+        renderings = renderings.filter { $0.value.startedAt.timeIntervalSinceNow > -60 }
+        if let kept = renderings[subjectID] { return await kept.task.value }
+        let task = Task { try? await fetcher.bodyHTML(subjectID: subjectID) }
+        renderings[subjectID] = (task, Date())
+        return await task.value
+    }
+
+    static func forget() {
+        images.removeAllObjects()
+        renderings = [:]
+        downloads.values.forEach { $0.cancel() }
+        downloads = [:]
     }
 }

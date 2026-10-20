@@ -252,7 +252,12 @@ bumping a dependency that ships inside the app also means a line in
     those hosts refused rather than followed. The
     `github.com/user-attachments/assets/…` URL a description spells is never requested, because it
     redirects to an Amazon S3 bucket that is not on this list, and an image a description links from
-    anywhere else is not read at all. The bytes go to the on-device model and nowhere else;
+    anywhere else is not read at all. The bytes go to the on-device model and nowhere else. The
+    conversation tab (ADR 0043's 2026-10-20 amendment) draws those same uploads where a post puts
+    them, with no setting because no model sees them: when a post that has one is drawn, one
+    GraphQL `node(id:) { ... on Comment { bodyHTML } }` read on api.github.com, not cached and not
+    stored, for its signed links, then one plain `GET` per upload on the same two upload hosts and
+    under the same rules. The images stay in memory and go at sign-out;
   - only when the user configures a key: api.anthropic.com — reached through Anthropic's
     `ClaudeForFoundationModels` package, which sends the key to that host and refuses a redirect
     anywhere else (ADR 0031, amendment) — or the OpenAI-compatible endpoint

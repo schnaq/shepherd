@@ -81,6 +81,30 @@ final class DescriptionImagesTests: XCTestCase {
         XCTAssertEqual(DescriptionImages.attachments(inMarkdown: markdown).count, 1)
     }
 
+    // MARK: - Runs
+
+    /// The conversation tab draws an upload where it was written, in either syntax; text around it
+    /// stays text, and an image on somebody else's host stays exactly as written.
+    func testRunsCutTheTextAroundEachUpload() {
+        let text = "Before ![one](\(upload)) and <img width=\"300\" alt=\"two\" src=\"\(second)\">\n![badge](https://img.shields.io/x)"
+        let runs = DescriptionImages.runs(in: text)
+
+        XCTAssertEqual(runs.count, 5)
+        XCTAssertEqual(runs[0], .text("Before"))
+        XCTAssertEqual(runs[2], .text("and"))
+        XCTAssertEqual(runs[4], .text("![badge](https://img.shields.io/x)"))
+        guard case .image(let first) = runs[1], case .image(let second) = runs[3] else {
+            return XCTFail("\(runs)")
+        }
+        XCTAssertEqual([first.altText, second.altText], ["one", "two"])
+    }
+
+    func testTextWithoutAnUploadIsOneRunAndAnUploadAloneHasNoEmptyText() {
+        XCTAssertEqual(DescriptionImages.runs(in: "Just **text**"), [.text("Just **text**")])
+        XCTAssertEqual(DescriptionImages.runs(in: "  ![one](\(upload))  ").count, 1)
+        XCTAssertEqual(DescriptionImages.runs(in: ""), [])
+    }
+
     // MARK: - Signed links
 
     /// The shape GitHub's `body_html` has, trimmed: every upload rewritten to a signed link whose

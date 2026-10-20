@@ -30,6 +30,22 @@ final class DescriptionImageTests: XCTestCase {
         XCTAssertNil(requests[0].headers["If-None-Match"], "signed links expire; never replay a 304")
     }
 
+    func testAnyPostIsAskedForItsRenderingByNodeID() async throws {
+        let transport = MockTransport()
+        await transport.route(
+            "ShepherdBodyHTML",
+            Fixture.response(json: #"{"data":{"node":{"bodyHTML":"<p><img src=\"x\"></p>"}}}"#)
+        )
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let html = try await client.bodyHTML(subjectID: "IC_kwDOComment1")
+
+        XCTAssertEqual(html, #"<p><img src="x"></p>"#)
+        let request = await transport.onlyRequest()
+        XCTAssertEqual(request?.url.absoluteString, "https://api.github.com/graphql")
+        XCTAssertEqual(request?.headers["Authorization"], "Bearer ghu_test-token")
+    }
+
     func testTheScreenshotIsFetchedWithoutTheToken() async throws {
         let transport = MockTransport()
         await transport.route(
