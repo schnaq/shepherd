@@ -420,6 +420,22 @@ ASC_API_KEY_ID=XXXXXXXX ASC_API_ISSUER_ID=<issuer uuid> \
   Scripts/testflight.sh
 ```
 
+With a key that may make profiles but not cloud-managed certificates — the team key and the
+team's Apple Distribution certificate kept in Infisical under `/apple`, which made the first
+upload on 2026-10-20 — name an installed App Store profile instead. The certificate (`.p12`) has to
+be in a keychain on the search list, and the profile, "Shepherd iOS App Store" (`IOS_APP_STORE`,
+bound to that certificate), was created once through the App Store Connect API and sits in
+`~/Library/Developer/Xcode/UserData/Provisioning Profiles`:
+
+```bash
+PROVISIONING_PROFILE="Shepherd iOS App Store" \
+ASC_API_KEY_PATH=… ASC_API_KEY_ID=… ASC_API_ISSUER_ID=… \
+  Scripts/testflight.sh
+```
+
+The archive is then built unsigned — a profile named on the command line reaches the Swift
+package targets too, and they refuse it — and the export signs the app with the profile.
+
 The script regenerates the project, archives the Release build, refuses to continue if the binary
 imports a cipher (see below), and uploads through `ShepherdPhone/Support/ExportOptions.plist`. The
 build appears in App Store Connect → TestFlight once Apple has processed it, usually within the

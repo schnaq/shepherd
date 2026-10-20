@@ -23,6 +23,15 @@
 #                              creates a cloud-managed Apple Distribution certificate, which a
 #                              Developer-role key (the notarization key) is not allowed to do.
 #
+#   PROVISIONING_PROFILE       The name of an installed App Store profile for com.schnaq.shepherd.ios
+#                              (e.g. "Shepherd iOS App Store"), with the team's Apple Distribution
+#                              certificate in a keychain on the search list. The path for a key
+#                              that may make profiles but not cloud-managed certificates: the
+#                              archive is built unsigned, because a profile named on the command
+#                              line reaches the Swift package targets too and they refuse it, and
+#                              the export signs the app with the profile. Combine with the
+#                              ASC_API_KEY_* variables for the upload itself.
+#
 # ── Optional environment ─────────────────────────────────────────────────────────────────────
 #
 #   BUILD_NUMBER               CFBundleVersion. Default: UTC time as yyDDDHHMM, e.g. 262921530 —
@@ -49,6 +58,7 @@ die() {
 }
 
 ALLOW_UNSIGNED=${ALLOW_UNSIGNED:-}
+PROVISIONING_PROFILE=${PROVISIONING_PROFILE:-}
 BUILD_DIR=${BUILD_DIR:-$REPO_ROOT/.build/testflight}
 BUILD_NUMBER=${BUILD_NUMBER:-$(date -u +%y%j%H%M)}
 ARCHIVE="$BUILD_DIR/Shepherd-iOS.xcarchive"
@@ -98,7 +108,7 @@ ARGS=(
     -archivePath "$ARCHIVE"
     CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
 )
-if [[ -n "$ALLOW_UNSIGNED" ]]; then
+if [[ -n "$ALLOW_UNSIGNED" || -n "$PROVISIONING_PROFILE" ]]; then
     ARGS+=(CODE_SIGNING_ALLOWED=NO)
 else
     ARGS+=(-allowProvisioningUpdates ${AUTH[@]+"${AUTH[@]}"})
@@ -136,6 +146,17 @@ fi
 # distribution and sends the build to App Store Connect, dSYMs included.
 
 log "Uploading to App Store Connect"
+if [[ -n "$PROVISIONING_PROFILE" ]]; then
+    MANUAL_OPTIONS="$BUILD_DIR/ExportOptions-manual.plist"
+    cp "$EXPORT_OPTIONS" "$MANUAL_OPTIONS"
+    /usr/libexec/PlistBuddy \
+        -c "Set :signingStyle manual" \
+        -c "Add :signingCertificate string 'Apple Distribution'" \
+        -c "Add :provisioningProfiles dict" \
+        -c "Add :provisioningProfiles:com.schnaq.shepherd.ios string '$PROVISIONING_PROFILE'" \
+        "$MANUAL_OPTIONS"
+    EXPORT_OPTIONS="$MANUAL_OPTIONS"
+fi
 xcodebuild -exportArchive \
     -archivePath "$ARCHIVE" \
     -exportOptionsPlist "$EXPORT_OPTIONS" \
