@@ -143,7 +143,8 @@ An image GitHub stores (`DescriptionImages`' rule: an upload on `github.com/user
 the older upload hosts, Markdown or `<img>`) is drawn where the post put it, in a paragraph, a list
 item or a table cell. It is fetched as *Read screenshots* fetches one: the post as GitHub renders
 it — one GraphQL `node(id:) { ... on Comment { bodyHTML } }` read by the post's node id, never
-cached or stored, read once a minute at most per post — for the short-lived signed link, then that
+written to disk and kept in memory for a minute at most, so a post is read once a minute at most
+and a failed read is tried again on the next look — for the short-lived signed link, then that
 link without the token from GitHub's upload host only. Only a post that has an upload is read, and
 only when it is drawn. The decoded images stay in memory, a few dozen at most, and sign-out lets
 go of them with the parsed bodies. Unlike *Read screenshots* there is no setting: this is showing

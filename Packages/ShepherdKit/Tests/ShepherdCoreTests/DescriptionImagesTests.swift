@@ -99,6 +99,13 @@ final class DescriptionImagesTests: XCTestCase {
         XCTAssertEqual([first.altText, second.altText], ["one", "two"])
     }
 
+    func testALinkAroundAnUploadGoesWithIt() {
+        let runs = DescriptionImages.runs(in: "[![one](\(upload))](https://example.com/full) after")
+
+        XCTAssertEqual(runs.count, 2)
+        XCTAssertEqual(runs.last, .text("after"))
+    }
+
     func testTextWithoutAnUploadIsOneRunAndAnUploadAloneHasNoEmptyText() {
         XCTAssertEqual(DescriptionImages.runs(in: "Just **text**"), [.text("Just **text**")])
         XCTAssertEqual(DescriptionImages.runs(in: "  ![one](\(upload))  ").count, 1)

@@ -88,8 +88,9 @@ public enum DescriptionImages {
     /// One block's text cut around the attachments in it, so the conversation tab can draw each
     /// upload where it was written (ADR 0043).
     ///
-    /// Text between them is trimmed and left out when nothing is left. An image on any other host
-    /// is not an attachment, so it stays in the text exactly as written.
+    /// Text between them is trimmed and left out when nothing is left, and a link wrapped around an
+    /// upload goes with it. An image on any other host is not an attachment, so it stays in the text
+    /// exactly as written.
     /// - Parameter text: A paragraph, list item or table cell — no fenced code.
     /// - Returns: The runs in order; empty for blank text.
     public static func runs(in text: String) -> [ImageRun<String>] {
@@ -102,10 +103,16 @@ public enum DescriptionImages {
         for match in matches(in: text) {
             // A match inside one already cut — an `<img>` written into a Markdown image's text —
             // is part of that one.
-            guard let range = Range(match.range, in: text), range.lowerBound >= rest else { continue }
-            appendText(upTo: range.lowerBound)
+            guard var cut = Range(match.range, in: text), cut.lowerBound >= rest else { continue }
+            // `[![shot](upload)](link)`: the link around an upload goes with it, since a click on
+            // the screenshot opens it anyway — cut alone, it left `[` and `](link)` as text.
+            if text[rest..<cut.lowerBound].hasSuffix("["), text[cut.upperBound...].hasPrefix("]("),
+               let close = text[cut.upperBound...].firstIndex(of: ")") {
+                cut = text.index(before: cut.lowerBound)..<text.index(after: close)
+            }
+            appendText(upTo: cut.lowerBound)
             runs.append(.image(match.image))
-            rest = range.upperBound
+            rest = cut.upperBound
         }
         appendText(upTo: text.endIndex)
         return runs

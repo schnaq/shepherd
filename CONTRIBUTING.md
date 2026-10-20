@@ -255,8 +255,9 @@ bumping a dependency that ships inside the app also means a line in
     anywhere else is not read at all. The bytes go to the on-device model and nowhere else. The
     conversation tab (ADR 0043's 2026-10-20 amendment) draws those same uploads where a post puts
     them, with no setting because no model sees them: when a post that has one is drawn, one
-    GraphQL `node(id:) { ... on Comment { bodyHTML } }` read on api.github.com, not cached and not
-    stored, for its signed links, then one plain `GET` per upload on the same two upload hosts and
+    GraphQL `node(id:) { ... on Comment { bodyHTML } }` read on api.github.com — never written to
+    disk, kept in memory for a minute at most — for its signed links, then one plain `GET` per
+    upload on the same two upload hosts and
     under the same rules. The images stay in memory and go at sign-out;
   - only when the user configures a key: api.anthropic.com — reached through Anthropic's
     `ClaudeForFoundationModels` package, which sends the key to that host and refuses a redirect

@@ -303,8 +303,11 @@ private struct MarkdownImage: View {
                 isFailed = true
                 return
             }
-            loaded = await MarkdownImages.load(image, in: subjectID, fetcher: fetcher)
-            isFailed = loaded == nil
+            let result = await MarkdownImages.load(image, in: subjectID, fetcher: fetcher)
+            // The download outlives this task; an edit that put another upload here owns the view.
+            guard !Task.isCancelled else { return }
+            loaded = result
+            isFailed = result == nil
         }
     }
 }
@@ -337,11 +340,16 @@ enum MarkdownImages {
         if let running = downloads[image.key] { return await running.value }
         let download = Task {
             defer { downloads[image.key] = nil }
-            guard let html = await rendering(of: subjectID, fetcher: fetcher),
-                  let url = DescriptionImages.signedSources(for: [image], inBodyHTML: html).first?.url,
-                  let data = try? await fetcher.descriptionImage(at: url),
+            guard let html = await rendering(of: subjectID, fetcher: fetcher) else { return nil as NSImage? }
+            guard let url = DescriptionImages.signedSources(for: [image], inBodyHTML: html).first?.url else {
+                // Edited in after this rendering was read: the next look reads the post again.
+                renderings[subjectID] = nil
+                return nil
+            }
+            // Cancelled is sign-out: the leaving account's screenshot is not kept.
+            guard let data = try? await fetcher.descriptionImage(at: url), !Task.isCancelled,
                   let decoded = NSImage(data: data)
-            else { return nil as NSImage? }
+            else { return nil }
             let pixels = decoded.representations.first.map { $0.pixelsWide * $0.pixelsHigh } ?? 0
             images.setObject(decoded, forKey: image.key as NSString, cost: max(pixels * 4, data.count))
             return decoded
@@ -355,7 +363,10 @@ enum MarkdownImages {
         if let kept = renderings[subjectID] { return await kept.task.value }
         let task = Task { try? await fetcher.bodyHTML(subjectID: subjectID) }
         renderings[subjectID] = (task, Date())
-        return await task.value
+        let html = await task.value
+        // A failed read is not kept, so the next look at the post tries again.
+        if html == nil { renderings[subjectID] = nil }
+        return html
     }
 
     static func forget() {
