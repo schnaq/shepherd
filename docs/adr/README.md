@@ -49,6 +49,7 @@ founder interview (2026-08-31) combined with three research reports (see
 | 0041 | [Merge series: several pull requests, one after another, per repository](0041-merge-series.md) | Accepted |
 | 0042 | [Stacked pull requests: shown as a tag, merged through GitHub's asynchronous merge](0042-stacked-pull-requests.md) | Accepted |
 | 0043 | [The conversation tab: GitHub's timeline, read in full and answered in place](0043-the-conversation-tab.md) | Accepted |
+| 0044 | [Shepherd for iPhone: the Mac's review logic, a native phone shell, TestFlight first](0044-iphone-companion.md) | Accepted |
 
 Format: lightweight [MADR](https://adr.github.io/madr/)-style — Context, Decision, Consequences.
 New decisions get the next number; superseded ADRs are marked, never deleted.

@@ -1,131 +1,15 @@
 import ShepherdCore
 import SwiftUI
 
-/// The file a ``DiffListView`` is showing: the walkable rows, and the two sets that decide which
-/// of them may carry a comment.
-///
-/// The same shape as ``DiffViewerContent`` and for the same reason — a renderer is handed a value
-/// rather than reaching into the model — with one difference that matters. The sets are `Set<Int>`
-/// here and sorted arrays there, because the bridge's JSON is defined in terms of arrays and a
-/// list asks `contains` once per drawn row. They are the *same* sets: `ReviewModel`'s
-/// `commentableLineSets(in:)` is where both come from, which is the first item of the contract in
-/// `docs/plans/accessible-diff.md`. A padding line the reconstruction inserted between hunks is
-/// unclickable in both renderers, because GitHub rejects a comment on one and rejects the whole
-/// review along with it.
-struct DiffListContent: Hashable, Sendable {
-    /// The repository-relative path.
-    var path: String
-    /// The diff as hunk headers and lines, in reading order.
-    var rows: [PatchReconstructor.DiffRow]
-    /// Commentable base-side lines, already narrowed for the round being shown.
-    var commentableLeft: Set<Int>
-    /// Commentable head-side lines, already narrowed for the round being shown.
-    var commentableRight: Set<Int>
-
-    /// Which of the two numbers a row carries are the row's *own*.
-    ///
-    /// ``ShepherdCore/PatchRow`` fills both in on every row, and on a changed row one of them
-    /// belongs to a different line: an added row's ``ShepherdCore/PatchRow/baseLine`` names the
-    /// base line it sits *in front of*, and a removed row's ``ShepherdCore/PatchRow/headLine``
-    /// the head line the deletion sits in front of. Both are useful facts about a *neighbour*,
-    /// and neither is this row's number.
-    ///
-    /// Everything downstream is a reading of this one value: ``identity`` anchors a comment and
-    /// names the line out loud, and ``DiffListView`` fills its two gutter columns from ``base``
-    /// and ``head``. So the number a row shows, the number it announces and the number a comment
-    /// on it lands on cannot come apart — which matters most in the last of the three, because a
-    /// comment on a line outside the diff is one GitHub refuses along with the entire review.
-    enum LineNumbers: Hashable, Sendable {
-        /// An added row: it exists on the head side only, where it now is.
-        case headOnly(Int)
-        /// A removed row: it existed on the base side only, where it used to be.
-        case baseOnly(Int)
-        /// A context row: unchanged, so it is the same line on both sides and owns both numbers.
-        case both(base: Int, head: Int)
-
-        /// The row's own base-side number, or `nil` when it has none.
-        var base: Int? {
-            switch self {
-            case .headOnly: return nil
-            case .baseOnly(let line): return line
-            case .both(let line, _): return line
-            }
-        }
-
-        /// The row's own head-side number, or `nil` when it has none.
-        var head: Int? {
-            switch self {
-            case .headOnly(let line): return line
-            case .baseOnly: return nil
-            case .both(_, let line): return line
-            }
-        }
-
-        /// The one side the row *is*, and its number there.
-        ///
-        /// The head side whenever the row has a head-side number of its own: an added row is the
-        /// line it now exists at, and a context row is read as the file as it will be, which is
-        /// the document a review is written against. A removed row is the only row without one,
-        /// and the base side is where it is.
-        var identity: (side: DiffSide, line: Int) {
-            switch self {
-            case .headOnly(let line): return (.right, line)
-            case .baseOnly(let line): return (.left, line)
-            case .both(_, let head): return (.right, head)
-            }
-        }
-    }
-
-    /// Which of a row's two numbers are its own.
-    ///
-    /// The one switch. The rule is short and every case of it is load-bearing:
-    ///
-    /// | row | base | head |
-    /// | --- | --- | --- |
-    /// | added | none — it did not exist before | the line it now is |
-    /// | removed | the line it used to be | none — it no longer exists |
-    /// | context | the line it was | the line it still is |
-    /// - Parameter row: The line.
-    /// - Returns: The numbers it owns.
-    static func lineNumbers(of row: PatchRow) -> LineNumbers {
-        switch row.kind {
-        case .added: return .headOnly(row.headLine)
-        case .removed: return .baseOnly(row.baseLine)
-        case .context: return .both(base: row.baseLine, head: row.headLine)
-        }
-    }
-
-    /// Which side's line number a row *is*, before asking whether it may carry a comment.
-    ///
-    /// Kept as its own name because it is what a *comment* is anchored with and what the spoken
-    /// sentence names the line by, and both read better for asking that question rather than for
-    /// the pair; the answer itself comes from ``lineNumbers(of:)``, so there is still one switch
-    /// deciding which of a row's two numbers belongs to it.
-    /// - Parameter row: The line.
-    /// - Returns: The side it lives on and its number there.
-    static func lineIdentity(of row: PatchRow) -> (side: DiffSide, line: Int) {
-        lineNumbers(of: row).identity
-    }
-
-    /// Where a comment on a row would be anchored, or `nil` when the row takes none.
-    /// - Parameter row: The row the cursor is on.
-    /// - Returns: The anchor, or `nil` for a hunk header and for a line this round does not
-    ///   accept a comment on.
-    func anchor(for row: PatchReconstructor.DiffRow) -> (side: DiffSide, line: Int)? {
-        guard case .line(let patchRow) = row else { return nil }
-        let identity = Self.lineIdentity(of: patchRow)
-        let commentable = identity.side == .left ? commentableLeft : commentableRight
-        return commentable.contains(identity.line) ? identity : nil
-    }
-}
-
 /// The native diff: one row per line, walkable with the keyboard and announced one row at a time.
 ///
 /// The second renderer beside Monaco (`docs/plans/accessible-diff.md`), not a replacement for it
-/// and not a reimplementation of it. Syntax highlighting, word-level intra-line diffs, the
-/// side-by-side layout, folding and the minimap are Monaco's and stay Monaco's; this earns its
-/// place by being a linear, announced list of lines, which is the thing a `WKWebView` full of
-/// canvas is worst at.
+/// and not a reimplementation of it. The side-by-side layout, folding and the minimap are
+/// Monaco's and stay Monaco's; this earns its place by being a linear, announced list of lines,
+/// which is the thing a `WKWebView` full of canvas is worst at. Syntax colour and the word-level
+/// diff are drawn here too, from the same ShepherdCore code the iPhone's diff reads
+/// (``HighlightedDiff``, ADR 0044) — both sit outside ADR 0034's contract, so neither changes
+/// which lines take a comment.
 ///
 /// The construction is the inbox list's, deliberately: `ScrollViewReader` + `LazyVStack`, the
 /// selection as a model property rather than a `List(selection:)` binding, `.focusable()` and
@@ -153,6 +37,10 @@ struct DiffListView: View {
     var onExit: () -> Void
 
     @FocusState private var isFocused: Bool
+    /// The file's coloured lines, once the background pass has built them; drawn only onto the
+    /// rows they were built from (``HighlightedDiff/lines(for:path:)``), so a file or round switch
+    /// shows plain text for a frame rather than the previous file's colours.
+    @State private var highlighted: HighlightedDiff?
 
     /// A line on one side of the diff: what a thread or a draft comment hangs on.
     private struct LineKey: Hashable {
@@ -165,11 +53,12 @@ struct DiffListView: View {
         // file's threads and the reviewer's draft, and a diff has far more rows than either.
         let threads = threadCounts
         let drafts = draftCounts
+        let lines = highlighted?.lines(for: content.rows, path: content.path)
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(content.rows.indices, id: \.self) { index in
-                        row(at: index, threads: threads, drafts: drafts)
+                        row(at: index, threads: threads, drafts: drafts, line: lines?[index])
                             .id(index)
                     }
                 }
@@ -182,6 +71,15 @@ struct DiffListView: View {
             }
         }
         .background(Theme.background)
+        // Once per file and round, off the main thread: the tokenizer is a single pass over the
+        // whole file, because it carries state from line to line.
+        .task(id: content) {
+            guard highlighted?.lines(for: content.rows, path: content.path) == nil else { return }
+            guard let built = await HighlightedDiff.build(rows: content.rows, path: content.path),
+                !Task.isCancelled
+            else { return }
+            highlighted = built
+        }
         .focusable()
         .focusEffectDisabled()
         .focused($isFocused)
@@ -205,7 +103,12 @@ struct DiffListView: View {
     // MARK: - Rows
 
     @ViewBuilder
-    private func row(at index: Int, threads: [LineKey: Int], drafts: [LineKey: Int]) -> some View {
+    private func row(
+        at index: Int,
+        threads: [LineKey: Int],
+        drafts: [LineKey: Int],
+        line: AttributedString?
+    ) -> some View {
         let value = content.rows[index]
         let isSelected = model.selectedDiffRow == index
         let counts = commentCounts(for: value, threads: threads, drafts: drafts)
@@ -226,6 +129,7 @@ struct DiffListView: View {
             case .line(let patchRow):
                 lineRow(
                     patchRow,
+                    line: line,
                     isSelected: isSelected,
                     commentCount: counts.threads + counts.drafts,
                     opensThreadAt: opensThreadAt
@@ -314,6 +218,7 @@ struct DiffListView: View {
 
     private func lineRow(
         _ row: PatchRow,
+        line: AttributedString?,
         isSelected: Bool,
         commentCount: Int,
         opensThreadAt threadRow: Int?
@@ -335,7 +240,7 @@ struct DiffListView: View {
                 .font(Theme.mono(CGFloat(fontSize), weight: .semibold))
                 .foregroundStyle(markerTint(for: row.kind) ?? Theme.textMuted)
                 .frame(width: 14, alignment: .center)
-            code(row.text)
+            code(row.text, attributed: line)
             commentIndicator(commentCount, opensThreadAt: threadRow)
         }
         .padding(.vertical, 1)
@@ -351,11 +256,20 @@ struct DiffListView: View {
             .padding(.trailing, 6)
     }
 
+    /// - Parameters:
+    ///   - text: The line's text, drawn plain until its colours have been built.
+    ///   - attributed: The coloured line, when it has been.
     @ViewBuilder
-    private func code(_ text: String) -> some View {
-        let line = Text(verbatim: text)
-            .font(Theme.mono(CGFloat(fontSize)))
-            .foregroundStyle(Theme.text)
+    private func code(_ text: String, attributed: AttributedString?) -> some View {
+        let line = Group {
+            if let attributed {
+                Text(attributed)
+            } else {
+                Text(verbatim: text)
+            }
+        }
+        .font(Theme.mono(CGFloat(fontSize)))
+        .foregroundStyle(Theme.text)
         if wraps {
             line
                 .fixedSize(horizontal: false, vertical: true)

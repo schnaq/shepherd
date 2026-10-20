@@ -209,6 +209,7 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
         )
     }
 
+    #if os(macOS)
     /// A context for an issue handed over as new work (ADR 0032's 2026-09-04 amendment).
     ///
     /// The branch is Shepherd's, from ``GitWorktree/branchName(issueNumber:)``, and there is no
@@ -234,6 +235,7 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
             taskTemplate: template
         )
     }
+    #endif
 
     /// A context for a free-text task on a repository (ADR 0011's 2026-09-23 amendment).
     ///

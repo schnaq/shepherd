@@ -98,7 +98,10 @@ extension DatabaseManager {
     ///
     /// Called when the database is opened: a process that died between the claim and the
     /// response would otherwise leave its mutations stuck in
-    /// ``ShepherdCore/OutboxState/sending`` forever.
+    /// ``ShepherdCore/OutboxState/sending`` forever. And by every drain that starts while none is
+    /// running, for the rows a *cancelled* drain left behind: its writes throw once its task is
+    /// cancelled, so it cannot settle or release them itself (ADR 0044). The attempt count is
+    /// kept, so the replay check still runs on the next claim.
     public func resetInFlightOutboxItems() async throws {
         try await writer.write { db in
             try DatabaseManager.resetInFlightOutboxItems(db)
@@ -329,8 +332,14 @@ extension DatabaseManager {
     /// so the next attempt only makes sense once a *person* has changed something the queue cannot
     /// see — a token that was missing, a permission that was denied, a branch that was protected.
     /// That is why this is an explicit user action rather than another rung of
-    /// ``ShepherdCore/OutboxBackoff``, and why the attempt count goes back to zero: the row starts
+    /// ``ShepherdCore/OutboxBackoff``, and why the attempt count goes back down: the row starts
     /// its life again rather than resuming a schedule that had already run out.
+    ///
+    /// Down to zero for a row only ever attempted once, which cannot have landed unseen; down to
+    /// one for a row attempted more than once, so the next claim makes it two and the replay check
+    /// (`SyncEngine.previousAttemptLanded`) still asks GitHub first. A row the check gave up on
+    /// because it could not decide is exactly a row whose earlier attempt may have landed, and
+    /// zeroing it would send it blind — the duplicate the check exists to prevent (ADR 0044).
     ///
     /// The `state = 'failed'` guard is what makes it safe to call from a screen: a row a drain is
     /// currently sending cannot be yanked back into ``ShepherdCore/OutboxState/pending`` underneath
@@ -341,7 +350,8 @@ extension DatabaseManager {
             try db.execute(
                 sql: """
                     UPDATE outbox
-                    SET state = ?, attemptCount = 0, nextAttemptAt = 0, lastError = NULL,
+                    SET state = ?, attemptCount = CASE WHEN attemptCount > 1 THEN 1 ELSE 0 END,
+                        nextAttemptAt = 0, lastError = NULL,
                         lastErrorCode = NULL
                     WHERE id = ? AND state = ?
                     """,

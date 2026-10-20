@@ -82,10 +82,14 @@ final class ToastCenter {
     /// The words come from ``Swift/Error/userFacingDescription``, the app's one rule for turning
     /// a failure into a sentence — so a toast, a settings card and an inline composer report the
     /// same error the same way.
+    ///
+    /// A `CancellationError` is no toast at all: the work was called off — a view went away, or
+    /// the iPhone stopped the sync on its way into the background (ADR 0044) — and nothing failed.
     /// - Parameters:
     ///   - error: The failure.
     ///   - context: A short prefix describing what was being attempted.
     func failure(_ error: any Error, context: String? = nil) {
+        guard !(error is CancellationError) else { return }
         let description = error.userFacingDescription
         let message = context.map { "\($0): \(description)" } ?? description
         show(Toast(message: message, kind: .failure, duration: 8))

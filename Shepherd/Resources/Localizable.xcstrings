@@ -15921,12 +15921,12 @@
         }
       }
     },
-    "%@ is the maximum — each repository is one more search on every sweep.": {
+    "%lld is the maximum — each repository is one more search on every sweep.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ ist das Maximum — jedes Repository ist eine weitere Suche pro Durchlauf."
+            "value": "%lld ist das Maximum — jedes Repository ist eine weitere Suche pro Durchlauf."
           }
         }
       }
@@ -16001,12 +16001,12 @@
         }
       }
     },
-    "%lld of %@ — each repository is one more search on every sweep.": {
+    "%lld of %lld — each repository is one more search on every sweep.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld von %@ — jedes Repository ist eine zusätzliche Suche pro Sync."
+            "value": "%lld von %lld — jedes Repository ist eine zusätzliche Suche pro Sync."
           }
         }
       }
@@ -20439,6 +20439,746 @@
           "stringUnit": {
             "state": "translated",
             "value": "Es wird nichts gemergt. Auf GitHub lässt er sich wieder öffnen."
+          }
+        }
+      }
+    },
+    "%@  %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@  %@"
+          }
+        }
+      }
+    },
+    "%lld checks": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Check"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Checks"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld check"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld checks"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld files": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Datei"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld Dateien"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld file"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld files"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld of %lld checks failing": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %lld Checks rot"
+          }
+        }
+      }
+    },
+    "%lld of %lld checks passed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %lld Checks bestanden"
+          }
+        }
+      }
+    },
+    "%lld of %lld viewed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld von %lld gesehen"
+          }
+        }
+      }
+    },
+    "%lld pending": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld offen"
+          }
+        }
+      }
+    },
+    "+%lld more lines": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "+%lld weitere Zeile"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "+%lld weitere Zeilen"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "+%lld more line"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "+%lld more lines"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "About": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Info"
+          }
+        }
+      }
+    },
+    "All %lld viewed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle %lld gesehen"
+          }
+        }
+      }
+    },
+    "All pull requests": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle Pull Requests"
+          }
+        }
+      }
+    },
+    "All repositories": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle Repositories"
+          }
+        }
+      }
+    },
+    "Approve, comment and merge. Offline, it all goes out once you're back.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Approven, kommentieren und mergen. Offline geht alles raus, sobald du wieder online bist."
+          }
+        }
+      }
+    },
+    "Both lanes": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beide Spuren"
+          }
+        }
+      }
+    },
+    "Change it for Shepherd alone in the Settings app.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In der Einstellungen-App lässt sie sich nur für Shepherd ändern."
+          }
+        }
+      }
+    },
+    "Collapsed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eingeklappt"
+          }
+        }
+      }
+    },
+    "Comment on this line": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diese Zeile kommentieren"
+          }
+        }
+      }
+    },
+    "Copy line": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeile kopieren"
+          }
+        }
+      }
+    },
+    "Copy path": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pfad kopieren"
+          }
+        }
+      }
+    },
+    "Could not delete the comment": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentar konnte nicht gelöscht werden"
+          }
+        }
+      }
+    },
+    "Default size": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standard"
+          }
+        }
+      }
+    },
+    "Discard this comment?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diesen Kommentar verwerfen?"
+          }
+        }
+      }
+    },
+    "End selection here": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auswahl hier beenden"
+          }
+        }
+      }
+    },
+    "Every pull request that waits for you, in one list.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jeder Pull Request, der auf dich wartet, in einer Liste."
+          }
+        }
+      }
+    },
+    "Everyone": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle"
+          }
+        }
+      }
+    },
+    "Expanded": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ausgeklappt"
+          }
+        }
+      }
+    },
+    "Fetching your pull requests…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deine Pull Requests werden geladen…"
+          }
+        }
+      }
+    },
+    "Filter on": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filter aktiv"
+          }
+        }
+      }
+    },
+    "Follows your iPhone": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie dein iPhone"
+          }
+        }
+      }
+    },
+    "GitHub refused these writes, or Shepherd could not make them at all, so they will not go out by themselves. Retry one once you have fixed what stopped it, or discard it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub hat diese Änderungen abgelehnt, oder Shepherd konnte sie gar nicht erst ausführen, deshalb gehen sie nicht von selbst raus. Sende eine erneut, sobald du behoben hast, was sie aufgehalten hat, oder verwirf sie."
+          }
+        }
+      }
+    },
+    "Lane": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Spur"
+          }
+        }
+      }
+    },
+    "Larger": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Größer"
+          }
+        }
+      }
+    },
+    "Leave a comment": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kommentar schreiben"
+          }
+        }
+      }
+    },
+    "Line %lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeile %lld"
+          }
+        }
+      }
+    },
+    "Lines %lld–%lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeilen %lld–%lld"
+          }
+        }
+      }
+    },
+    "Link copied": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link kopiert"
+          }
+        }
+      }
+    },
+    "Mark unviewed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Als ungesehen"
+          }
+        }
+      }
+    },
+    "New review requests land here on their own. Pull down to check now.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Review-Anfragen landen hier von selbst. Zum Prüfen nach unten ziehen."
+          }
+        }
+      }
+    },
+    "Next file": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nächste Datei"
+          }
+        }
+      }
+    },
+    "Not sent: %@ has new commits since you wrote your review.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht gesendet: %@ hat neue Commits, seit du dein Review geschrieben hast."
+          }
+        }
+      }
+    },
+    "Nothing matches this filter": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nichts passt zu diesem Filter"
+          }
+        }
+      }
+    },
+    "Nothing synced yet. Pull down to sync now.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noch nichts synchronisiert. Zum Synchronisieren nach unten ziehen."
+          }
+        }
+      }
+    },
+    "Open GitHub": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub öffnen"
+          }
+        }
+      }
+    },
+    "Open the file on GitHub to see it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffne die Datei auf GitHub, um sie zu sehen."
+          }
+        }
+      }
+    },
+    "Optional for an approval": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optional bei einem Approve"
+          }
+        }
+      }
+    },
+    "Pending comments (%lld)": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offene Kommentare (%lld)"
+          }
+        }
+      }
+    },
+    "Previous file": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorige Datei"
+          }
+        }
+      }
+    },
+    "Pull request not available": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pull Request nicht verfügbar"
+          }
+        }
+      }
+    },
+    "Pull requests in the repositories you watch, that nobody asked you about, appear here.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pull Requests aus den Repositories, die du beobachtest und zu denen dich niemand gefragt hat, erscheinen hier."
+          }
+        }
+      }
+    },
+    "Review · %lld": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review · %lld"
+          }
+        }
+      }
+    },
+    "Search": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suchen"
+          }
+        }
+      }
+    },
+    "Select lines…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeilen auswählen…"
+          }
+        }
+      }
+    },
+    "Share…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Teilen…"
+          }
+        }
+      }
+    },
+    "Shepherd copies a short code and opens GitHub. Paste it there, approve, and come back.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd kopiert einen kurzen Code und öffnet GitHub. Füge ihn dort ein, bestätige und komm zurück."
+          }
+        }
+      }
+    },
+    "Shows the changed files and the diff": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeigt die geänderten Dateien und den Diff"
+          }
+        }
+      }
+    },
+    "Smaller": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kleiner"
+          }
+        }
+      }
+    },
+    "Start selection here": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auswahl hier beginnen"
+          }
+        }
+      }
+    },
+    "Suggest": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorschlag"
+          }
+        }
+      }
+    },
+    "Text size": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Textgröße"
+          }
+        }
+      }
+    },
+    "Title, repository, author or branch": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Titel, Repository, Autor oder Branch"
+          }
+        }
+      }
+    },
+    "Use a personal access token": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personal Access Token verwenden"
+          }
+        }
+      }
+    },
+    "What should the author know?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Was sollte der Autor wissen?"
+          }
+        }
+      }
+    },
+    "Wrap lines": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zeilen umbrechen"
+          }
+        }
+      }
+    },
+    "Your token stays in the Keychain, your data on this iPhone.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Token bleibt im Schlüsselbund, deine Daten auf diesem iPhone."
+          }
+        }
+      }
+    },
+    "Approve #%@?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "#%@ approven?"
           }
         }
       }

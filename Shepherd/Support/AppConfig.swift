@@ -1,4 +1,5 @@
 import Foundation
+import ShepherdCore
 
 /// Build-time configuration constants.
 ///
@@ -30,13 +31,12 @@ enum AppConfig {
         #if DEBUG
         // The demo mode's scratch directory (`Shepherd/Debug/DemoMode.swift`): a Debug build has
         // the installed app's bundle id, so without this it would open the developer's real
-        // database, worktrees, diagnostics and telemetry queue. Compiled out of Release.
+        // database, worktrees, diagnostics and telemetry queue. Compiled out of Release. The
+        // phone's own `DemoMode` (ShepherdPhone, ADR 0044) must answer `directory` the same way,
+        // or `-ShepherdDemo` seeds the phone's real database.
         if let demo = DemoMode.directory { return demo }
         #endif
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Application Support", isDirectory: true)
-        return base.appendingPathComponent("Shepherd", isDirectory: true)
+        return URL.applicationSupportDirectory.appendingPathComponent("Shepherd", isDirectory: true)
     }
 
     /// Where the local database lives (ADR 0006).
@@ -114,6 +114,12 @@ enum AppConfig {
             .appendingPathComponent(name)
             .appendingPathComponent("pull")
             .appendingPathComponent(String(number))
+    }
+
+    /// The URL a pull request lives at on github.com.
+    /// - Parameter summary: The pull request.
+    static func pullRequestURL(for summary: PullRequestSummary) -> URL {
+        pullRequestURL(owner: summary.repo.owner, name: summary.repo.name, number: summary.number)
     }
 
     /// The URL an issue lives at on github.com (ADR 0032).

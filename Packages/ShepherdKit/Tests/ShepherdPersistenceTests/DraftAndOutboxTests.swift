@@ -377,6 +377,24 @@ final class OutboxStoreTests: XCTestCase {
         XCTAssertEqual(failed.first?.action.kind, "closeIssue")
     }
 
+    func testRetryingARowAttemptedMoreThanOnceKeepsTheReplayCheck() async throws {
+        // A row the replay check gave up on is one whose earlier attempt may have landed. Zeroed,
+        // the next claim would make it a first attempt and send it without asking GitHub.
+        let database = try DatabaseManager.inMemory()
+        let doubtful = item(action: .addIssueComment(body: "on it", basedOnUpdatedAt: now))
+        try await database.enqueue(doubtful)
+        _ = try await database.claimReadyOutboxItems(now: now, limit: 10)
+        try await database.markOutboxItemFailed(id: doubtful.id, error: "timeout", now: now, retriable: true)
+        _ = try await database.claimReadyOutboxItems(now: now.addingTimeInterval(86_400), limit: 10)
+        try await database.markOutboxItemFailed(id: doubtful.id, error: "undecided", now: now, retriable: false)
+
+        try await database.retryOutboxItem(id: doubtful.id)
+
+        let restored = try await database.outboxItem(id: doubtful.id)
+        XCTAssertEqual(restored?.state, .pending)
+        XCTAssertEqual(restored?.attemptCount, 1, "the next claim makes it 2, so the replay check runs")
+    }
+
     func testRetryLeavesARowThatIsNotFailedWhereItIs() async throws {
         // The guard that makes Retry safe to press from a screen: a row a drain is currently
         // sending must not be pulled back into the queue underneath it and sent twice. A parked

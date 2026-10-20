@@ -85,6 +85,10 @@ MIGRATED = (
     "Shepherd/Features/Review/ThreadReplyBar.swift",
 )
 
+# The iPhone app (ADR 0044) is on the scale from birth, all of it: phone text follows Dynamic
+# Type from its first line, so every Swift file under this folder is checked, not a list.
+PHONE_SOURCES = "ShepherdPhone"
+
 # A fixed point size, either spelling: SwiftUI's own or `Theme.mono`'s numeric overload. `\s*`
 # rather than a space at every join, so a wrapped call is caught as readily as a one-liner. A
 # *parameterised* size (`.system(size: size)`) is deliberately not matched — the caller decides,
@@ -153,7 +157,11 @@ def without_comments_and_strings(source: str) -> str:
 
 def main() -> int:
     findings: list[str] = []
-    for name in MIGRATED:
+    phone = sorted(
+        path.relative_to(ROOT).as_posix() for path in (ROOT / PHONE_SOURCES).rglob("*.swift")
+    )
+    surfaces = (*MIGRATED, *phone)
+    for name in surfaces:
         path = ROOT / name
         if not path.is_file():
             findings.append(f"{name}: listed as migrated but not on disk")
@@ -172,13 +180,14 @@ def main() -> int:
             print(f"  {finding}", file=sys.stderr)
         print(
             "\nUse Theme.type(_:weight:) or Theme.mono(_:weight:) so the text grows with macOS's"
-            "\nLarger Text setting. If the size has no exact text style behind it, that is a"
-            "\nvisual decision rather than a mechanical one — see docs/plans/accessibility.md §3.",
+            "\nLarger Text setting and with Dynamic Type on the iPhone. If the size has no exact"
+            "\ntext style behind it, that is a visual decision rather than a mechanical one — see"
+            "\ndocs/plans/accessibility.md §3.",
             file=sys.stderr,
         )
         return 1
 
-    print(f"Type scale OK: {len(MIGRATED)} surfaces carry no fixed font size.")
+    print(f"Type scale OK: {len(surfaces)} surfaces carry no fixed font size.")
     return 0
 
 

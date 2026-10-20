@@ -49,6 +49,17 @@ Shepherd/                      # macOS app target (SwiftUI, macOS 27+)
     Editor/                    #   editor choice + pure URL/argv construction (ADR 0039)
   Resources/                   #   Assets.xcassets, DiffViewer/dist (built web bundle),
                                #   Localizable.xcstrings (en keys + de, ADR 0022)
+ShepherdPhone/                 # iPhone app target (SwiftUI, iOS 27+, ADR 0044): its own screens
+                               # and composition root; the review logic is Shepherd/'s, compiled
+                               # in from the `includes:` list in project.yml
+  App/                         #   @main, PhoneEnvironment, PhoneRootView + router, sync strip
+  Inbox/                       #   inbox screen and row
+  PullRequest/                 #   pull request screen, conversation, composer, merge sheet
+  Review/                      #   files list, native diff, inline-comment, thread and submit sheets
+  Settings/                    #   settings sheet
+  Onboarding/                  #   device-flow and PAT sign-in
+  Support/                     #   Info.plist, ExportOptions.plist, stand-ins for Mac-only types
+  Resources/                   #   AppIcon.icon, PrivacyInfo.xcprivacy
 Packages/ShepherdKit/          # SPM package, NO AppKit/SwiftUI imports
   Sources/
     ShepherdCore/              #   domain models, agent detection, heuristics, drafts
@@ -84,7 +95,8 @@ web/diff-viewer/               # TypeScript Monaco bundle (esbuild) → dist/ (c
 Tests/Fixtures/eval/           # intelligence evaluation corpus (JSON), copied into the
                                # ShepherdTests bundle as a folder reference
 Scripts/                       # release pipeline: release.sh, Homebrew cask template (ADR 0010);
-                               # check-localization.py; eval-intelligence/ (harness contract)
+                               # testflight.sh + check-phone-encryption.sh (ADR 0044);
+                               # check-localization.py, check-type-scale.py; eval-intelligence/
 docs/                          # this file, ADRs, research, roadmap, RELEASING.md
 project.yml                    # XcodeGen spec → Shepherd.xcodeproj (generated, not committed)
 ```
@@ -94,6 +106,7 @@ Dependency rule (arrows = "may import"):
 ```
 Shepherd.app → ShepherdSync → GitHubKit → ShepherdCore
             ↘ ShepherdPersistence ─────↗
+Shepherd for iPhone: the same arrows as Shepherd.app
 shepherd (CLI) ──────────────────────→ ShepherdCore
 ```
 
@@ -110,6 +123,48 @@ exactly one importer, `Diagnostics/DiagnosticsReporter.swift` (ADR 0017), and Na
 must keep building on Linux, so it never gains an update, a diagnostics or an embedding
 dependency — which is why the search *ranker* is in `ShepherdCore` and only the thing that
 produces a vector is not.
+
+## The iPhone app (`ShepherdPhone`, ADR 0044)
+
+A second application target, iOS 27, iPhone only, bundle id `com.schnaq.shepherd.ios`. It links
+the same four `ShepherdKit` modules as the Mac app and compiles **two kinds of source**:
+
+- **`ShepherdPhone/`** — every screen, written for the phone (one `NavigationStack` with the inbox
+  at the root, `PhoneRoute` values for routes, settings as a sheet), and the composition root.
+- **A curated list of `Shepherd/` files**, the `includes:` of the `ShepherdPhone` target in
+  `project.yml`: `SignedInSession`, `InboxModel`, `ReviewModel`, `PullRequestActions`,
+  `AppSettings`, the Keychain token store, the Markdown renderer, `Theme` and a few leaf views. They
+  are the Mac's files, compiled a second time — not copies and not a framework, so the verdict
+  rules, the draft and head-commit handling and the outbox paths cannot drift between the two
+  apps, and no internal declaration had to become `public`.
+
+The list closes because of a few seams, each cutting one edge that would otherwise drag
+`AppEnvironment` or AppKit along: `PlatformServices` (pasteboard, browser), `Theme` resolving
+colours on either platform, `SignInModel` talking to an `AccountSigningIn` protocol and
+`SignedInSession` presenting through `SyncEventPresenting`, and `#if os(macOS)` around the few
+Mac-only members of shared files. `ShepherdPhone/Support/PhoneDemoMode.swift` holds the phone's
+Debug-only `DemoMode`. Every entry in the list is a promise that the file builds for iOS; CI's
+`ios` job builds the phone on every push, so a Mac change that breaks the promise fails its own
+pull request.
+
+**`PhoneEnvironment`** is the phone's `AppEnvironment`, minus everything the phone does not run. It
+owns the settings, the token store, the toasts, the router and the signed-in session — and
+constructs no automation, delegation, webhook, Sparkle, Spotlight, search index, digest, MetricKit
+or telemetry, although some of those types are compiled in because shared files name them. It
+conforms to `AccountSigningIn` and `SyncEventPresenting`, so the shared sign-in model and session
+report to it exactly as they report to the Mac's root. Its scene-phase policy is the phone's whole
+background story: the sync loop runs while the app is in the foreground; on the way out the outbox
+is drained inside a `beginBackgroundTask` window (`drainOutbox(awaitingInFlight: true)`, which
+waits for a drain already running) and the loop is stopped; on the way back it starts again once
+the last sweep is stale. No push, no background refresh, no `shepherd://` scheme in v1.
+
+The diff is native SwiftUI, not Monaco: syntax colour and word diff come from `ShepherdCore`
+(`SourceLanguage`, `SyntaxHighlighter`, `DiffHighlighting`), outside ADR 0034's contract, so they
+never change which lines take a comment. Strings go through the one String Catalog; the
+localization and type-scale checks scan `ShepherdPhone/` too. `ITSAppUsesNonExemptEncryption` is
+`NO`, and `Scripts/check-phone-encryption.sh` keeps it true by failing on any imported cipher
+symbol — which is why `SettingsSyncCrypto.swift` and `WebhookSignature.swift` must never join the
+list. Shipping is TestFlight, internal testers only: [RELEASING.md](RELEASING.md).
 
 ## Core domain models (`ShepherdCore`)
 

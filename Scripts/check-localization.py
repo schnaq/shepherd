@@ -46,7 +46,11 @@ import re
 import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SOURCE_DIR = os.path.join(REPO_ROOT, "Shepherd")
+#: The app sources whose call sites the catalog must cover: the Mac app, and the iPhone app
+#: (ADR 0044), which shares this one catalog. A phone-only string missing from it would stay English
+#: on a German iPhone just as silently, and a catalog row only the phone uses would be reported as
+#: stale if its call site were not scanned.
+SOURCE_DIRS = (os.path.join(REPO_ROOT, "Shepherd"), os.path.join(REPO_ROOT, "ShepherdPhone"))
 #: The one catalog this script gates, by path rather than by glob. Its sibling
 #: ``Shepherd/Resources/AppShortcuts.xcstrings`` (ADR 0022 § Amendment) is deliberately not
 #: checked here and must not be: its keys are Siri phrases the App Intents metadata processor
@@ -55,8 +59,8 @@ SOURCE_DIR = os.path.join(REPO_ROOT, "Shepherd")
 #: check against the wrong source of truth and would fail on a correct file.
 CATALOG_PATH = os.path.join(REPO_ROOT, "Shepherd", "Resources", "Localizable.xcstrings")
 
-#: Directories under ``Shepherd/`` that hold no Swift source. ``Resources`` carries the built web
-#: bundle (ADR 0003), which is a megabyte of minified JavaScript full of quotes.
+#: Directories under either source directory that hold no Swift source. ``Resources`` carries
+#: the built web bundle (ADR 0003), which is a megabyte of minified JavaScript full of quotes.
 SKIPPED_DIRECTORIES = {"Resources", "Assets.xcassets"}
 
 #: The language every entry must carry. One language, because German is the first and only added
@@ -114,8 +118,11 @@ INTEGER_EXPRESSIONS = frozenset(
         "additions",
         "agent.openAwaitingReviewCount",
         "agent.openCount",
+        "anchor.line",
+        "AppSettings.maximumWatchedRepositories",
         "checks.count - 6",
         "claimed",
+        "comments",
         "configuration.maxChangedLines",
         "configuration.maxFiles",
         "configuration.maxTurns",
@@ -125,11 +132,13 @@ INTEGER_EXPRESSIONS = frozenset(
         "deletions",
         "diagnosticsReportCount",
         "DiagnosticsStore.retentionLimit",
+        "draft.line",
         "entries.count",
         "entry.checkCount",
         "entry.openCount",
         "mergedCount",
         "position",
+        "position + 1",
         "remainingSkips",
         "series.mergedCount",
         "environment.autoDelegation.dailyCap",
@@ -211,6 +220,7 @@ INTEGER_EXPRESSIONS = frozenset(
         "running.remaining",
         "running.total",
         "section.count",
+        "Self.maximumWatchedRepositories",
         "session.conflictedOutboxCount",
         "session.failedOutboxCount",
         "session.pendingOutboxCount",
@@ -218,6 +228,9 @@ INTEGER_EXPRESSIONS = frozenset(
         "session.remaining",
         "session.total",
         "skipped",
+        "span.line",
+        "stack.position",
+        "stack.size",
         "start",
         "status",
         "status.changedPaths.count",
@@ -230,6 +243,7 @@ INTEGER_EXPRESSIONS = frozenset(
         "status.rowCount",
         "streak",
         "summary.changedFiles",
+        "threads",
         "tokens",
         "total",
         "unchangedFindingCount",
@@ -237,6 +251,7 @@ INTEGER_EXPRESSIONS = frozenset(
         "vanished",
         "vanished.count",
         "version",
+        "viewed",
         "waiting",
     }
 )
@@ -492,14 +507,15 @@ def _render_key(segments: list[tuple[str, str]], path: str) -> str:
 
 
 def source_files() -> list[str]:
-    """Every Swift file in the app target, repository-relative, sorted."""
+    """Every Swift file in the two app targets, repository-relative, sorted."""
     found = []
-    for directory, subdirectories, filenames in os.walk(SOURCE_DIR):
-        subdirectories[:] = sorted(d for d in subdirectories if d not in SKIPPED_DIRECTORIES)
-        for filename in sorted(filenames):
-            if filename.endswith(".swift"):
-                absolute = os.path.join(directory, filename)
-                found.append(os.path.relpath(absolute, REPO_ROOT))
+    for source_dir in SOURCE_DIRS:
+        for directory, subdirectories, filenames in os.walk(source_dir):
+            subdirectories[:] = sorted(d for d in subdirectories if d not in SKIPPED_DIRECTORIES)
+            for filename in sorted(filenames):
+                if filename.endswith(".swift"):
+                    absolute = os.path.join(directory, filename)
+                    found.append(os.path.relpath(absolute, REPO_ROOT))
     return sorted(found)
 
 

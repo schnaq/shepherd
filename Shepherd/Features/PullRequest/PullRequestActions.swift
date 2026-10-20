@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 import GitHubKit
 import ShepherdCore
@@ -773,23 +772,16 @@ struct PullRequestActions {
 
     // MARK: - Local conveniences
 
-    /// Opens the pull request on github.com.
+    /// Opens the pull request on github.com — in the GitHub app when it claims the link.
     /// - Parameter summary: The pull request.
     func openOnGitHub(_ summary: PullRequestSummary) {
-        NSWorkspace.shared.open(
-            AppConfig.pullRequestURL(
-                owner: summary.repo.owner,
-                name: summary.repo.name,
-                number: summary.number
-            )
-        )
+        PlatformServices.open(AppConfig.pullRequestURL(for: summary))
     }
 
     /// Copies the head branch name to the pasteboard.
     /// - Parameter summary: The pull request.
     func copyBranch(_ summary: PullRequestSummary) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(summary.headRefName, forType: .string)
+        PlatformServices.copyToPasteboard(summary.headRefName)
         toasts.info(String(localized: "Copied \(summary.headRefName)"))
     }
 

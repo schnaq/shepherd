@@ -1,4 +1,8 @@
+#if canImport(AppKit)
 import AppKit
+#else
+import UIKit
+#endif
 import ShepherdCore
 import SwiftUI
 
@@ -21,6 +25,10 @@ struct MarkdownText: View {
     let imageSubject: String?
     /// The body font size. Headings and code are derived from it.
     var size: CGFloat = 12.5
+    /// A code span's size relative to the text around it. At 1 — the Mac's — a span is drawn as
+    /// the inline parser leaves it; the phone passes 0.9, because SF Mono at the body's point size
+    /// reads visibly larger than the SF Pro beside it (ADR 0044).
+    var codeScale: CGFloat = 1
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -41,7 +49,7 @@ struct MarkdownText: View {
     private func view(for block: MarkdownBlock, runs: [ParsedMarkdown.Run], cells: [[[ParsedMarkdown.Run]]]) -> some View {
         switch block {
         case .heading(let level, _):
-            InlineRuns(runs: runs)
+            InlineRuns(runs: scalingCode(runs, size: headingSize(level)))
                 .font(.system(size: headingSize(level), weight: .semibold))
                 .foregroundStyle(Theme.textStrong)
                 .fixedSize(horizontal: false, vertical: true)
@@ -50,7 +58,7 @@ struct MarkdownText: View {
                 .padding(.top, 6)
 
         case .paragraph:
-            InlineRuns(runs: runs)
+            InlineRuns(runs: scalingCode(runs, size: size))
                 .font(.system(size: size))
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -65,7 +73,7 @@ struct MarkdownText: View {
                     // list does not wobble as the numbers grow.
                     .monospacedDigit()
                     .frame(minWidth: 16, alignment: .leading)
-                InlineRuns(runs: runs)
+                InlineRuns(runs: scalingCode(runs, size: size))
                     .font(.system(size: size))
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -95,7 +103,7 @@ struct MarkdownText: View {
                 Rectangle()
                     .fill(Theme.border)
                     .frame(width: 2)
-                InlineRuns(runs: runs)
+                InlineRuns(runs: scalingCode(runs, size: size))
                     .font(.system(size: size))
                     .foregroundStyle(Theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
@@ -117,7 +125,7 @@ struct MarkdownText: View {
                     }
                     GridRow {
                         ForEach(Array(columns.enumerated()), id: \.offset) { _, cell in
-                            InlineRuns(runs: cell)
+                            InlineRuns(runs: scalingCode(cell, size: size))
                                 .font(.system(size: size, weight: row == 0 ? .semibold : .regular))
                                 .foregroundStyle(row == 0 ? Theme.textStrong : Theme.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
@@ -131,6 +139,20 @@ struct MarkdownText: View {
                 RoundedRectangle(cornerRadius: 6, style: .continuous)
                     .stroke(Theme.border, lineWidth: 1)
             )
+        }
+    }
+
+    /// `runs` with the code spans of their text at ``codeScale`` of `size`; untouched at a scale of
+    /// 1. Applied here rather than in the cache, which is keyed by the source alone.
+    private func scalingCode(_ runs: [ParsedMarkdown.Run], size: CGFloat) -> [ParsedMarkdown.Run] {
+        guard codeScale != 1 else { return runs }
+        return runs.map { run in
+            guard case .text(var text) = run else { return run }
+            let spans = text.runs.filter { $0.inlinePresentationIntent?.contains(.code) == true }.map(\.range)
+            for span in spans {
+                text[span].font = Theme.mono(size * codeScale)
+            }
+            return .text(text)
         }
     }
 
@@ -247,16 +269,55 @@ private extension EnvironmentValues {
     @Entry var markdownImageSubject: String?
 }
 
+extension EnvironmentValues {
+    /// What fetches a post's screenshots on the phone, which has no `AppEnvironment` to ask: its
+    /// root hands down the signed-in session's client (ADR 0044). The Mac reads its environment's.
+    @Entry var descriptionImageFetcher: (any DescriptionImageFetching)?
+}
+
+/// A decoded screenshot: `NSImage` on the Mac, `UIImage` on the phone (ADR 0044).
+#if canImport(AppKit)
+typealias PlatformImage = NSImage
+#else
+typealias PlatformImage = UIImage
+#endif
+
+private extension Image {
+    init(platformImage: PlatformImage) {
+        #if canImport(AppKit)
+        self.init(nsImage: platformImage)
+        #else
+        self.init(uiImage: platformImage)
+        #endif
+    }
+}
+
+private extension PlatformImage {
+    /// How many pixels the decoded image holds, which is what the cache is priced by.
+    var pixelCount: Int {
+        #if canImport(AppKit)
+        representations.first.map { $0.pixelsWide * $0.pixelsHigh } ?? 0
+        #else
+        cgImage.map { $0.width * $0.height } ?? 0
+        #endif
+    }
+}
+
 /// A screenshot GitHub stores, drawn where the post put it — or, until it has arrived and when it
 /// cannot, its alt text — and opened on GitHub on a click.
 private struct MarkdownImage: View {
     let image: DescriptionImage
 
     @Environment(\.markdownImageSubject) private var subjectID
+    #if os(macOS)
     @Environment(AppEnvironment.self) private var environment: AppEnvironment?
+    private var fetcher: (any DescriptionImageFetching)? { environment?.descriptionImageFetcher }
+    #else
+    @Environment(\.descriptionImageFetcher) private var fetcher
+    #endif
     @Environment(\.openURL) private var openURL
     /// From the cache straight away, so a post scrolled back to does not flash its alt text.
-    @State private var loaded: NSImage?
+    @State private var loaded: PlatformImage?
     @State private var isFailed = false
 
     init(image: DescriptionImage) {
@@ -267,7 +328,7 @@ private struct MarkdownImage: View {
     var body: some View {
         Button { openURL(image.url) } label: {
             if let loaded {
-                Image(nsImage: loaded)
+                Image(platformImage: loaded)
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
@@ -302,7 +363,7 @@ private struct MarkdownImage: View {
             loaded = MarkdownImages.cached(image)
             isFailed = false
             guard loaded == nil else { return }
-            guard let subjectID, let fetcher = environment?.descriptionImageFetcher else {
+            guard let subjectID, let fetcher else {
                 isFailed = true
                 return
             }
@@ -325,25 +386,25 @@ private struct MarkdownImage: View {
 @MainActor
 enum MarkdownImages {
     /// Decoded, so priced by their pixels: a phone screenshot is about 15 MB of them.
-    private static let images: NSCache<NSString, NSImage> = {
-        let cache = NSCache<NSString, NSImage>()
+    private static let images: NSCache<NSString, PlatformImage> = {
+        let cache = NSCache<NSString, PlatformImage>()
         cache.totalCostLimit = 256 * 1024 * 1024
         return cache
     }()
     /// Each post's rendering being read or read in the last minute, by node id.
     private static var renderings: [String: (task: Task<String?, Never>, startedAt: Date)] = [:]
     /// Each download under way, by the upload's key.
-    private static var downloads: [String: Task<NSImage?, Never>] = [:]
+    private static var downloads: [String: Task<PlatformImage?, Never>] = [:]
 
-    static func cached(_ image: DescriptionImage) -> NSImage? {
+    static func cached(_ image: DescriptionImage) -> PlatformImage? {
         images.object(forKey: image.key as NSString)
     }
 
-    static func load(_ image: DescriptionImage, in subjectID: String, fetcher: any DescriptionImageFetching) async -> NSImage? {
+    static func load(_ image: DescriptionImage, in subjectID: String, fetcher: any DescriptionImageFetching) async -> PlatformImage? {
         if let running = downloads[image.key] { return await running.value }
         let download = Task {
             defer { downloads[image.key] = nil }
-            guard let html = await rendering(of: subjectID, fetcher: fetcher) else { return nil as NSImage? }
+            guard let html = await rendering(of: subjectID, fetcher: fetcher) else { return nil as PlatformImage? }
             guard let url = DescriptionImages.signedSources(for: [image], inBodyHTML: html).first?.url else {
                 // Edited in after this rendering was read: the next look reads the post again.
                 renderings[subjectID] = nil
@@ -351,9 +412,9 @@ enum MarkdownImages {
             }
             // Cancelled is sign-out: the leaving account's screenshot is not kept.
             guard let data = try? await fetcher.descriptionImage(at: url), !Task.isCancelled,
-                  let decoded = NSImage(data: data)
+                  let decoded = PlatformImage(data: data)
             else { return nil }
-            let pixels = decoded.representations.first.map { $0.pixelsWide * $0.pixelsHigh } ?? 0
+            let pixels = decoded.pixelCount
             images.setObject(decoded, forKey: image.key as NSString, cost: max(pixels * 4, data.count))
             return decoded
         }

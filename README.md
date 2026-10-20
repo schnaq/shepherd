@@ -223,6 +223,15 @@ xcodebuild -project Shepherd.xcodeproj -scheme ShepherdCLI -configuration Releas
 cp .build/cli/Build/Products/Release/shepherd /usr/local/bin/
 ```
 
+### iPhone
+
+There is an iPhone companion for reviewing away from the Mac — the inbox, the pull request and its
+conversation, files and a native diff, verdicts and merge, on the Mac's own review logic
+([ADR 0044](docs/adr/0044-iphone-companion.md), [details](docs/FEATURES.md#iphone)). It is in
+**internal TestFlight testing** only; there is no App Store build and no public beta yet. To try it
+from source in the iOS Simulator, run the `ShepherdPhone` scheme of the generated project
+(`mise run build-ios` builds it the way CI does); a device build needs the team's signing.
+
 ## Status
 
 **Under active development, and in daily use by the people who build it.** Releases ship signed

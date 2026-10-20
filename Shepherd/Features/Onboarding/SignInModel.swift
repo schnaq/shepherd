@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 import GitHubKit
 import Observation
@@ -48,7 +47,7 @@ final class SignInModel {
 
     /// Requests a device code and polls until the user approves it.
     /// - Parameter environment: The app container, which stores the resulting credential.
-    func startDeviceFlow(environment: AppEnvironment) {
+    func startDeviceFlow(environment: any AccountSigningIn) {
         guard isDeviceFlowConfigured else {
             errorMessage = String(
                 localized: "This build has no GitHub App client ID. Use a personal access token."
@@ -106,8 +105,7 @@ final class SignInModel {
     /// Copies the user code to the pasteboard.
     func copyUserCode() {
         guard let code = grant?.userCode else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(code, forType: .string)
+        PlatformServices.copyToPasteboard(code)
         didCopyCode = true
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
@@ -118,14 +116,14 @@ final class SignInModel {
     /// Opens `github.com/login/device` in the default browser.
     func openVerificationPage() {
         guard let url = grant?.verificationURI else { return }
-        NSWorkspace.shared.open(url)
+        PlatformServices.open(url)
     }
 
     // MARK: - Personal access token
 
     /// Validates a pasted token against `GET /user` and signs in on success.
     /// - Parameter environment: The app container.
-    func submitPersonalAccessToken(environment: AppEnvironment) {
+    func submitPersonalAccessToken(environment: any AccountSigningIn) {
         let token = patText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !token.isEmpty else {
             errorMessage = String(localized: "Paste a token first.")
@@ -230,4 +228,18 @@ final class SignInModel {
         grant = nil
         step = .idle
     }
+}
+
+/// What sign-in hands a verified credential to: `AppEnvironment` on the Mac, the phone's root
+/// model on iOS (ADR 0044).
+///
+/// The model only ever needed this one call, and naming the concrete `AppEnvironment` pulled the
+/// whole Mac composition root — Sparkle, webhooks, delegation — into anything that compiled it.
+@MainActor
+protocol AccountSigningIn: AnyObject {
+    /// Stores the credential and starts the signed-in session.
+    /// - Parameters:
+    ///   - account: The GitHub account the token belongs to.
+    ///   - token: The verified credential.
+    func signIn(account: Account, token: TokenSet) async
 }

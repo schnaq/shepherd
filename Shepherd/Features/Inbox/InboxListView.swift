@@ -511,13 +511,7 @@ struct InboxSectionHeader: View {
         .background(Theme.panel)
     }
 
-    private var dotColor: Color? {
-        guard section.facet == .provenance else { return nil }
-        if section.id.hasPrefix("agent:") {
-            return AgentPalette.color(forAgentID: String(section.id.dropFirst("agent:".count)))
-        }
-        return section.id == "human" ? Theme.accent : Theme.textSecondary
-    }
+    private var dotColor: Color? { InboxRowText.sectionDot(for: section) }
 }
 
 /// One inbox row, exactly as the mockup lays it out.
@@ -750,57 +744,29 @@ struct InboxRowView: View {
         )
     }
 
-    /// The row's spoken label: everything the row shows, in the order it shows it.
-    ///
-    /// `.accessibilityElement(children: .combine)` would concatenate the siblings' own labels,
-    /// and the `.accessibilityLabel` beside it *replaces* that — so this has to say the whole
-    /// row or the row says only its number and title. Six facts are drawn here and six are
-    /// spoken: the tick, the checks, which pull request, its title, who opened it, whether it
-    /// answers a session, how that author has done before, what triage made of it, whether it
-    /// is a draft, how many rounds it has been reviewed in, its status chip, its size and its
-    /// age. Each part comes from the same value the view draws, through the components' own
-    /// spoken forms, so the row cannot describe itself differently from its own chips.
+    /// The row's spoken label: everything the row shows, in the order it shows it — the shared
+    /// sentence (``InboxRowText/spokenLabel(for:selection:hasSession:triage:rounds:write:)``),
+    /// which the iPhone's row speaks too (ADR 0044), plus the tick this row alone has.
     private var accessibilityText: String {
-        SpokenRow.sentence([
+        InboxRowText.spokenLabel(
+            for: row,
             // Said only once something is ticked: "not selected" on every row of a list nobody is
             // bulk-triaging would be the first words of each one, and tell the listener nothing.
-            hasMarks
+            selection: hasMarks
                 ? (isMarked
                     ? String(localized: "Selected")
                     : String(localized: "Not selected"))
                 : nil,
-            CheckDotView.spokenState(row.checkRollup?.state),
-            "\(row.slug): \(row.title)",
-            ProvenanceChip.spokenProvenance(of: row.author),
-            hasSession ? String(localized: "Has a session to answer to") : nil,
-            triage.flatMap { TriageChip.spokenTitle(for: $0) },
-            row.isDraft ? String(localized: "Draft") : nil,
-            row.stack?.chipHelp,
-            rounds?.chipText,
-            statusChip?.text,
-            DiffCountsView.spokenCounts(additions: row.additions, deletions: row.deletions),
-            RelativeDate.long(row.updatedAt),
-        ])
+            hasSession: hasSession,
+            triage: triage.flatMap { TriageChip.spokenTitle(for: $0) },
+            rounds: rounds,
+            write: write
+        )
     }
 
+    /// The status chip, decided where the iPhone's row decides it too (``InboxRowText``).
     private var statusChip: (text: String, color: Color)? {
-        if let write {
-            return (write.text, write.color)
-        }
-        if let rollup = row.checkRollup, rollup.state == .failure {
-            let count = max(1, rollup.failureCount)
-            return (String(localized: "\(count) checks failing"), Theme.failure)
-        }
-        if let rollup = row.checkRollup, rollup.state == .pending {
-            return (String(localized: "CI running"), Theme.pending)
-        }
-        if let decision = row.reviewDecision {
-            return (decision.chipTitle, decision.chipColor)
-        }
-        if row.myRelation.contains(.reviewRequested) {
-            return (String(localized: "Review requested"), Theme.accentText)
-        }
-        return nil
+        InboxRowText.statusChip(for: row, write: write)
     }
 }
 

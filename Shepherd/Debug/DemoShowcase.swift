@@ -51,7 +51,9 @@ enum ShowcaseFiles {
                 "     case merging",
                 "     case merged",
                 "     case mergeQueued",
-                "     case queued(Int)",
+                // An edited line, so the demo shows the word-level highlight (ADR 0044).
+                "-    case queued(Int)",
+                "+    case queued(count: Int)",
                 "+",
                 "+    /// Whether the row's context menu offers *Retry* for this state.",
                 "+    var offersRetry: Bool {",

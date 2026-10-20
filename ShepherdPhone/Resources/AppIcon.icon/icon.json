@@ -1,0 +1,29 @@
+{
+  "fill": {
+    "linear-gradient": [
+      "srgb:0.53333,0.48235,0.96471,1.00000",
+      "srgb:0.25490,0.17647,0.65098,1.00000"
+    ]
+  },
+  "groups": [
+    {
+      "layers": [
+        {
+          "image-name": "sheep.png",
+          "name": "sheep"
+        }
+      ],
+      "shadow": {
+        "kind": "layer-color",
+        "opacity": 0.35
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      }
+    }
+  ],
+  "supported-platforms": {
+    "squares": "shared"
+  }
+}
