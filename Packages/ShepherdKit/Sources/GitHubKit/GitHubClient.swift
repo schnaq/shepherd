@@ -889,6 +889,22 @@ public actor GitHubClient {
         return response.body
     }
 
+    /// One post as GitHub renders it, in which every upload is a short-lived signed link — what the
+    /// conversation tab downloads a screenshot from (ADR 0043). The sibling of
+    /// ``pullRequestBodyHTML(repo:number:)`` for any post, by its node id; a GraphQL read, so never
+    /// cached either.
+    /// - Parameter subjectID: The post's node id — the pull request's own for the description.
+    /// - Returns: The rendered post; empty when it has no text or is gone.
+    public func bodyHTML(subjectID: String) async throws -> String {
+        let data: BodyHTMLData = try await graphQL(
+            document: GraphQLDocuments.bodyHTML,
+            variables: ["subjectId": .string(subjectID)],
+            resource: "post",
+            isIdempotent: true
+        )
+        return data.node?.bodyHTML ?? ""
+    }
+
     /// Fetches the review threads of a pull request, following pagination.
     ///
     /// GraphQL-only: thread ids do not exist in REST, and without them threads cannot be

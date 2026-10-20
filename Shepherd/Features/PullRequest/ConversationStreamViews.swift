@@ -211,7 +211,7 @@ struct PostBody: View {
                     .font(Theme.type(.callout))
                     .foregroundStyle(Theme.textMuted)
             } else {
-                TranslatableMarkdownText(markdown: markdown, translations: translations)
+                TranslatableMarkdownText(markdown: markdown, imageSubject: reactions.subjectID, translations: translations)
             }
             if reactions.isDrawn {
                 reactions

@@ -28,6 +28,19 @@ public struct DescriptionImage: Sendable, Hashable {
     }
 }
 
+/// A piece of a block's text: prose, or an upload drawn where it was written
+/// (``DescriptionImages/runs(in:)``).
+/// Generic in the text so a renderer can keep its parsed form in the same shape.
+public enum ImageRun<Text> {
+    /// Inline Markdown.
+    case text(Text)
+    /// A GitHub-hosted screenshot.
+    case image(DescriptionImage)
+}
+
+extension ImageRun: Equatable where Text: Equatable {}
+extension ImageRun: Sendable where Text: Sendable {}
+
 /// Finds the screenshots in a pull request's description, and the signed links GitHub serves
 /// them under (ADR 0038 item 4, ADR 0007's 2026-09-22 amendment).
 ///
@@ -66,30 +79,65 @@ public enum DescriptionImages {
     /// - Parameter markdown: The description as Markdown source.
     /// - Returns: The GitHub-hosted images; empty when there are none.
     public static func attachments(inMarkdown markdown: String) -> [DescriptionImage] {
-        let text = withoutFencedCode(markdown)
+        var seen = Set<String>()
+        return matches(in: withoutFencedCode(markdown))
+            .map(\.image)
+            .filter { seen.insert($0.key).inserted }
+    }
+
+    /// One block's text cut around the attachments in it, so the conversation tab can draw each
+    /// upload where it was written (ADR 0043).
+    ///
+    /// Text between them is trimmed and left out when nothing is left, and a link wrapped around an
+    /// upload goes with it. An image on any other host is not an attachment, so it stays in the text
+    /// exactly as written.
+    /// - Parameter text: A paragraph, list item or table cell — no fenced code.
+    /// - Returns: The runs in order; empty for blank text.
+    public static func runs(in text: String) -> [ImageRun<String>] {
+        var runs: [ImageRun<String>] = []
+        var rest = text.startIndex
+        func appendText(upTo end: String.Index) {
+            let piece = text[rest..<end].trimmingCharacters(in: .whitespacesAndNewlines)
+            if !piece.isEmpty { runs.append(.text(piece)) }
+        }
+        for match in matches(in: text) {
+            // A match inside one already cut — an `<img>` written into a Markdown image's text —
+            // is part of that one.
+            guard var cut = Range(match.range, in: text), cut.lowerBound >= rest else { continue }
+            // `[![shot](upload)](link)`: the link around an upload goes with it, since a click on
+            // the screenshot opens it anyway — cut alone, it left `[` and `](link)` as text.
+            if text[rest..<cut.lowerBound].hasSuffix("["), text[cut.upperBound...].hasPrefix("]("),
+               let close = text[cut.upperBound...].firstIndex(of: ")") {
+                cut = text.index(before: cut.lowerBound)..<text.index(after: close)
+            }
+            appendText(upTo: cut.lowerBound)
+            runs.append(.image(match.image))
+            rest = cut.upperBound
+        }
+        appendText(upTo: text.endIndex)
+        return runs
+    }
+
+    /// Every attachment in `text`, Markdown and HTML alike, with where it stands, in order.
+    private static func matches(in text: String) -> [(range: NSRange, image: DescriptionImage)] {
         let range = NSRange(text.startIndex..., in: text)
-        var found: [(location: Int, image: DescriptionImage)] = []
+        var found: [(range: NSRange, image: DescriptionImage)] = []
 
         for match in markdownImage?.matches(in: text, range: range) ?? [] {
             guard let alt = substring(text, match.range(at: 1)),
                   let link = substring(text, match.range(at: 2)),
                   let image = attachment(link: link, altText: alt)
             else { continue }
-            found.append((match.range.location, image))
+            found.append((match.range, image))
         }
         for match in htmlImage?.matches(in: text, range: range) ?? [] {
             guard let tag = substring(text, match.range),
                   let link = attribute(srcAttribute, in: tag),
                   let image = attachment(link: link, altText: attribute(altAttribute, in: tag) ?? "")
             else { continue }
-            found.append((match.range.location, image))
+            found.append((match.range, image))
         }
-
-        var seen = Set<String>()
-        return found
-            .sorted { $0.location < $1.location }
-            .map(\.image)
-            .filter { seen.insert($0.key).inserted }
+        return found.sorted { $0.range.location < $1.range.location }
     }
 
     /// The signed download link for each attachment, from GitHub's HTML rendering of the

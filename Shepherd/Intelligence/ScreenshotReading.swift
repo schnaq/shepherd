@@ -35,6 +35,8 @@ protocol DescriptionImageFetching: Sendable {
     func pullRequestBodyHTML(repo: RepoRef, number: Int) async throws -> String
     /// One screenshot's bytes, fetched without the token.
     func descriptionImage(at url: URL) async throws -> Data
+    /// Any post as GitHub renders it, by its node id — the conversation tab's screenshots (ADR 0043).
+    func bodyHTML(subjectID: String) async throws -> String
 }
 
 extension GitHubClient: DescriptionImageFetching {}
