@@ -292,6 +292,9 @@ private struct MarkdownImage: View {
             }
         }
         .buttonStyle(.plain)
+        // A list item that starts with a screenshot keeps its bullet beside the top of it, not
+        // the bottom: an image has no baseline of its own.
+        .alignmentGuide(.firstTextBaseline) { $0[.top] + 10 }
         .help(String(localized: "Open on GitHub"))
         .accessibilityLabel(Text(verbatim: image.altText))
         .task(id: image.key) {
