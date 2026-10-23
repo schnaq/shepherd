@@ -70,11 +70,17 @@ struct InboxScreen: View {
     /// the toolbar item a few times rather than on every point. 150 is the panel at its 320 pt
     /// minimum, until the first measurement.
     @State private var syncStatusWidth: CGFloat = 150
+    /// Where the window's width last stood, for the sidebar button's writes to be read against.
+    @State private var widthBand: WidthBand = .wide
 
-    /// Who put the rail away, if anyone: only the width's doing is undone when the window widens
-    /// again, so a rail the reader closed stays closed.
+    /// Who decided the rail's state, if anyone: only the width's doing is undone when the window
+    /// widens again, so a rail the reader closed stays closed — and one they opened in a narrow
+    /// window stays open, including after a trip to the review screen, until the window has been
+    /// wide enough for it again.
     enum RailVisibility: String {
-        case open, hiddenByReader, hiddenByWidth
+        case open, openByReader, hiddenByReader, hiddenByWidth
+
+        var isOpen: Bool { self == .open || self == .openByReader }
     }
 
     /// Below this window width the rail folds away by itself.
@@ -176,9 +182,12 @@ struct InboxScreen: View {
         }
         .navigationSplitViewStyle(.balanced)
         .onGeometryChange(for: WidthBand.self) { WidthBand($0.size.width) } action: { band in
+            widthBand = band
             if band == .narrow, rail == .open {
                 rail = .hiddenByWidth
             } else if band == .wide, rail == .hiddenByWidth {
+                rail = .open
+            } else if band != .narrow, rail == .openByReader {
                 rail = .open
             }
         }
@@ -592,11 +601,11 @@ struct InboxScreen: View {
     /// the width folds the rail away, and that echo must not turn it into the reader's doing.
     private var columnVisibility: Binding<NavigationSplitViewVisibility> {
         Binding {
-            rail == .open ? .all : .doubleColumn
+            rail.isOpen ? .all : .doubleColumn
         } set: { visibility in
             let isOpen = visibility == .all
-            guard isOpen != (rail == .open) else { return }
-            rail = isOpen ? .open : .hiddenByReader
+            guard isOpen != rail.isOpen else { return }
+            rail = !isOpen ? .hiddenByReader : widthBand == .narrow ? .openByReader : .open
         }
     }
 
@@ -888,7 +897,12 @@ struct SyncStatusView: View {
                 // worst true thing, not just the most recent one.
                 .fill(dotColor)
                 .frame(width: 6, height: 6)
-            if density != .minimal || worst == .status {
+            if density == .minimal, worst == .syncFailed {
+                // Not ``status``, which says "Syncing…" during the retry: the narrowest line
+                // keeps the failure until a sync has actually succeeded.
+                Text(String(localized: "Sync failed"))
+                    .help(session.lastSyncError ?? "")
+            } else if density != .minimal || worst == .status {
                 status
             }
             // Parked mutations do not drain by themselves (ADR 0006), so the title bar says so
@@ -968,15 +982,15 @@ struct SyncStatusView: View {
         }
     }
 
-    /// What the narrowest line keeps, in words: the worst state, in the order ``dotColor`` ranks
-    /// them, so the dot is never the only thing saying that a sync failed.
+    /// The worst true state: what the narrowest line keeps in words, and what ``dotColor``
+    /// colours — one ranking for both, so the dot is never the only thing saying a sync failed.
     private enum Worst {
-        case status, failedWrites, parked
+        case syncFailed, failedWrites, parked, status
     }
 
     private var worst: Worst {
         if session.lastSyncError != nil {
-            .status
+            .syncFailed
         } else if session.failedOutboxCount > 0 {
             .failedWrites
         } else if session.conflictedOutboxCount > 0 {
@@ -995,12 +1009,10 @@ struct SyncStatusView: View {
     /// to be up to date when it has never spoken to GitHub. Amber, not red, because it is not a
     /// failure either; it usually resolves itself within a sweep.
     private var dotColor: Color {
-        if session.lastSyncError != nil || session.failedOutboxCount > 0 {
-            Theme.failure
-        } else if session.conflictedOutboxCount > 0 || session.lastSyncedAt == nil {
-            Theme.pending
-        } else {
-            Theme.success
+        switch worst {
+        case .syncFailed, .failedWrites: Theme.failure
+        case .parked: Theme.pending
+        case .status: session.lastSyncedAt == nil ? Theme.pending : Theme.success
         }
     }
 }

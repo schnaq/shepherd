@@ -794,7 +794,9 @@ struct ReviewToolbar: ToolbarContent {
                         : String(localized: "Review"),
                     systemImage: "square.and.pencil"
                 )
-                .labelStyle(.compactable(isCompact))
+                // With comments pending the title stays even on a narrow window: the count is
+                // the only place on screen that says they have not been sent yet.
+                .labelStyle(.compactable(isCompact && model.pendingCommentCount == 0))
                 .foregroundStyle(Theme.accentText)
             }
             // ⌘⏎ came along from the composer bar, which used to hold the submit button. While the
