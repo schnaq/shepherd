@@ -49,7 +49,32 @@ struct InboxListView: View {
 
     // MARK: - Header
 
+    /// How much of the bar fits: everything, then the count and the picker labels go, then the
+    /// session button and both pickers keep their symbols alone.
+    private enum HeaderDensity {
+        case full, compact, minimal
+    }
+
+    /// The bar above the list, as wide as the column lets it be.
+    ///
+    /// Every control in it is sized to its own content, so a single fixed layout gave the column a
+    /// minimum of its own: about 590 pt in English and 670 in German, against the 380 the split
+    /// view declares. Measured on 2026-10-23, that pushed the split view 100 pt past a 1040 pt
+    /// window, which centred it and cut the rail and the panel off at both edges — and before
+    /// that, the title gave way first, so "Braucht mein Review" vanished from a 1300 pt window.
+    /// The bar sheds the extras instead, and the smart view's name keeps its place.
     private var header: some View {
+        ViewThatFits(in: .horizontal) {
+            headerRow(.full)
+            headerRow(.compact)
+            headerRow(.minimal)
+        }
+        .padding(.horizontal, 16)
+        .frame(height: 42)
+        .background(Theme.background)
+    }
+
+    private func headerRow(_ density: HeaderDensity) -> some View {
         HStack(spacing: 10) {
             // The smart view's name is what tells the reader which list they are in, so it wins
             // the row's width: one line, and first claim on the space. At 1440 pt with both
@@ -63,7 +88,7 @@ struct InboxListView: View {
             // While rows are ticked, the selection chip below takes the count's place: the bar is
             // the narrowest part of the window, and with both beside the pickers the count was cut
             // to "1(" and the chip squeezed to an empty pill.
-            if !model.hasMarks {
+            if !model.hasMarks, density == .full {
                 Text(String(localized: "\(model.filteredRows.count) pull requests"))
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.textMuted)
@@ -115,40 +140,75 @@ struct InboxListView: View {
                 } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "play.circle").font(.system(size: 11))
-                        Text(String(localized: "Session · \(pendingReviewCount)"))
+                        if density != .minimal {
+                            Text(String(localized: "Session · \(pendingReviewCount)"))
+                        }
                     }
                 }
                 .buttonStyle(SecondaryButtonStyle(height: 26, tint: Theme.accentText))
+                .accessibilityLabel(Text(String(localized: "Session · \(pendingReviewCount)")))
                 .help(String(
                     localized: "Work through the \(pendingReviewCount) pull requests waiting for your review, one at a time (r f)"
                 ))
                 .layoutPriority(1)
             }
 
-            Picker(String(localized: "Group"), selection: groupBinding) {
-                Text(String(localized: "Agent")).tag(InboxFacet.provenance)
-                Text(String(localized: "Repository")).tag(InboxFacet.repository)
-                Text(String(localized: "Review state")).tag(InboxFacet.reviewState)
-            }
-            .pickerStyle(.menu)
-            // Sized to its own label and selection rather than to a guessed width: a menu picker
-            // on a fixed frame takes that width whether it needs it or not, and the two of them
-            // together took enough of a 1440 pt window to wrap the title beside them.
-            .fixedSize()
+            barPicker(
+                Picker(String(localized: "Group"), selection: groupBinding) {
+                    Text(String(localized: "Agent")).tag(InboxFacet.provenance)
+                    Text(String(localized: "Repository")).tag(InboxFacet.repository)
+                    Text(String(localized: "Review state")).tag(InboxFacet.reviewState)
+                },
+                title: String(localized: "Group"),
+                systemImage: "rectangle.3.group",
+                density: density
+            )
             .help(String(localized: "Group the list (g a / g r / g s)"))
 
-            Picker(String(localized: "Sort"), selection: sortBinding) {
-                ForEach(InboxSortOrder.allCases) { order in
-                    Text(order.title).tag(order)
-                }
-            }
-            .pickerStyle(.menu)
-            .fixedSize()
+            barPicker(
+                Picker(String(localized: "Sort"), selection: sortBinding) {
+                    ForEach(InboxSortOrder.allCases) { order in
+                        Text(order.title).tag(order)
+                    }
+                },
+                title: String(localized: "Sort"),
+                systemImage: "arrow.up.arrow.down",
+                density: density
+            )
             .help(String(localized: "Sort the list"))
         }
-        .padding(.horizontal, 16)
-        .frame(height: 42)
-        .background(Theme.background)
+    }
+
+    /// One of the bar's two menu pickers: with its label, then without it — the selection alone,
+    /// "Agent" or "Priority", still says what the list is grouped and sorted by — and at the
+    /// narrowest as a symbol that opens the same choices. A menu picker is as wide as its longest
+    /// option, so the two of them were most of the minimal bar's width.
+    ///
+    /// Sized to its own label and selection rather than to a guessed width: a menu picker on a
+    /// fixed frame takes that width whether it needs it or not, and the two of them together took
+    /// enough of a 1440 pt window to wrap the title beside them.
+    @ViewBuilder
+    private func barPicker(
+        _ picker: some View,
+        title: String,
+        systemImage: String,
+        density: HeaderDensity
+    ) -> some View {
+        switch density {
+        case .full:
+            picker.pickerStyle(.menu).fixedSize()
+        case .compact:
+            picker.pickerStyle(.menu).labelsHidden().fixedSize()
+        case .minimal:
+            Menu {
+                picker.pickerStyle(.inline)
+            } label: {
+                Label(title, systemImage: systemImage)
+            }
+            .labelStyle(.iconOnly)
+            .menuIndicator(.hidden)
+            .fixedSize()
+        }
     }
 
     // MARK: - List
