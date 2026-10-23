@@ -23,7 +23,17 @@ struct ReviewScreen: View {
     @State private var isCommentSheetPresented = false
     /// This pull request's outbox rows, observed, for the toolbar's write state.
     @State private var outboxItems: [OutboxItem] = []
+    /// Whether the window is too narrow for the toolbar's labels (``compactToolbarWidth``).
+    @State private var isToolbarCompact = false
     @FocusState private var isFileListFocused: Bool
+
+    /// Below this window width the toolbar's buttons keep their symbols and drop their words.
+    ///
+    /// The full toolbar needs about 1150 pt in German; narrower, macOS moved its last items —
+    /// *Review*, ⋯ and *Merge*, the one prominent action — behind the overflow chevron
+    /// (measured on 2026-10-23, three items hidden at the 1040 pt minimum). The margin above
+    /// that is for the items that come and go: a write chip, *Retry*, *Remove from series*.
+    private static let compactToolbarWidth: CGFloat = 1_280
 
     /// Creates the screen.
     /// - Parameters:
@@ -85,6 +95,10 @@ struct ReviewScreen: View {
                 )
             }
         }
+        // The window's width, for the toolbar's labels (``compactToolbarWidth``).
+        .onGeometryChange(for: Bool.self) { $0.size.width < Self.compactToolbarWidth } action: {
+            isToolbarCompact = $0
+        }
         // The header, as the window's toolbar (ADR 0040). The title and subtitle are the window's
         // own: macOS lays them out and truncates them beside the back button, and hands the title
         // to the Window menu and Mission Control.
@@ -93,6 +107,7 @@ struct ReviewScreen: View {
         .toolbar {
             ReviewToolbar(
                 model: model,
+                isCompact: isToolbarCompact,
                 checkRollup: model.checkRollup,
                 write: writeState,
                 onBack: leaveReview,
@@ -658,6 +673,8 @@ struct ReviewScreen: View {
 struct ReviewToolbar: ToolbarContent {
     /// The review model.
     let model: ReviewModel
+    /// Whether the buttons show their symbols alone, for a narrow window.
+    var isCompact = false
     /// The freshest CI rollup, from the model (``ReviewModel/checkRollup``).
     let checkRollup: CheckRollup?
     /// What the outbox is doing for this pull request, or `nil`.
@@ -734,7 +751,7 @@ struct ReviewToolbar: ToolbarContent {
                     String(localized: "Delegate…"),
                     systemImage: "terminal"
                 )
-                .labelStyle(.titleAndIcon)
+                .labelStyle(.compactable(isCompact))
                 // The agent colour the header's button had, on the label only: the capsule is
                 // the system's, and a tinted capsule is reserved for the one recommended action.
                 .foregroundStyle(Theme.agent)
@@ -751,7 +768,7 @@ struct ReviewToolbar: ToolbarContent {
         ToolbarItemGroup(placement: .primaryAction) {
             Button(action: onApprove) {
                 Label(String(localized: "Approve"), systemImage: "checkmark")
-                    .labelStyle(.titleAndIcon)
+                    .labelStyle(.compactable(isCompact))
                     .busyLabel(isBusy: isSubmittingVerdict)
             }
             .disabled(verdictDisabled)
@@ -777,7 +794,9 @@ struct ReviewToolbar: ToolbarContent {
                         : String(localized: "Review"),
                     systemImage: "square.and.pencil"
                 )
-                .labelStyle(.titleAndIcon)
+                // With comments pending the title stays even on a narrow window: the count is
+                // the only place on screen that says they have not been sent yet.
+                .labelStyle(.compactable(isCompact && model.pendingCommentCount == 0))
                 .foregroundStyle(Theme.accentText)
             }
             // ⌘⏎ came along from the composer bar, which used to hold the submit button. While the
@@ -885,6 +904,27 @@ struct ReviewToolbar: ToolbarContent {
             on: summary,
             otherwise: shortcut
         )
+    }
+}
+
+/// A toolbar label with its title, or — on a narrow window — its symbol alone. The title stays
+/// the button's spoken name and its tooltip's subject either way.
+private struct CompactableLabelStyle: LabelStyle {
+    let isCompact: Bool
+
+    @ViewBuilder
+    func makeBody(configuration: Configuration) -> some View {
+        if isCompact {
+            Label(configuration).labelStyle(.iconOnly)
+        } else {
+            Label(configuration).labelStyle(.titleAndIcon)
+        }
+    }
+}
+
+private extension LabelStyle where Self == CompactableLabelStyle {
+    static func compactable(_ isCompact: Bool) -> CompactableLabelStyle {
+        CompactableLabelStyle(isCompact: isCompact)
     }
 }
 

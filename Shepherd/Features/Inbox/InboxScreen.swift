@@ -58,6 +58,63 @@ struct InboxScreen: View {
     /// than rebuilt like the bulk plan: the user drags an order on it, and a sweep landing
     /// mid-drag must not reset that order.
     @State private var mergeSeriesPlan: MergeSeriesPlan?
+    /// Whether the rail is put away, by the toolbar's sidebar button or by ``railCollapseWidth``.
+    ///
+    /// Scene storage for ``contentKind``'s reason: this screen is rebuilt on every trip to the
+    /// review screen, and as `@State` the rail came back open each time — three squeezed columns
+    /// for a moment in a narrow window before the width folded it away again, and a rail the
+    /// reader had opened by hand closed behind their back.
+    @SceneStorage("inbox.railVisibility") private var rail: RailVisibility = .open
+    /// The sync status's width: what the panel column's half of the toolbar leaves it, from the
+    /// column's width in 20 pt steps — so a window being dragged rebuilds the screen and replaces
+    /// the toolbar item a few times rather than on every point. 150 is the panel at its 320 pt
+    /// minimum, until the first measurement.
+    @State private var syncStatusWidth: CGFloat = 150
+    /// Where the window's width last stood, for the sidebar button's writes to be read against.
+    @State private var widthBand: WidthBand = .wide
+
+    /// Who decided the rail's state, if anyone: only the width's doing is undone when the window
+    /// widens again, so a rail the reader closed stays closed — and one they opened in a narrow
+    /// window stays open, including after a trip to the review screen, until the window has been
+    /// wide enough for it again.
+    enum RailVisibility: String {
+        case open, openByReader, hiddenByReader, hiddenByWidth
+
+        var isOpen: Bool { self == .open || self == .openByReader }
+    }
+
+    /// Below this window width the rail folds away by itself.
+    ///
+    /// Three columns at their narrowest fit a 1040 pt window, but only just: a list of about 420
+    /// pt beside the rail and the panel truncates every title to its first two words. The rail is
+    /// the column a reader can most easily do without — its smart view is named in the list's
+    /// header, and the sidebar button brings it back — so it gives way first, at the
+    /// width where the list would otherwise drop below about 560 pt (232 + 560 + 380, rounded up).
+    private static let railCollapseWidth: CGFloat = 1_180
+    /// At or above this window width a rail the width put away comes back by itself.
+    ///
+    /// Not ``railCollapseWidth``: putting a sidebar back, AppKit keeps the other two columns as
+    /// wide as they are and widens the window by the rail instead, as long as the list would
+    /// otherwise drop below roughly 560 pt. Restored at 1180, a 1180 pt window became 1413 pt —
+    /// a tiled or zoomed window jumping past its edge (measured on 2026-10-23: growth at 1240,
+    /// none at 1280 or 1320, from every width the rail had folded at). The band in between also
+    /// keeps a drag that hovers around one width from folding the rail away and back.
+    private static let railRestoreWidth: CGFloat = 1_320
+
+    /// Where the window's width stands against the rail's two thresholds.
+    private enum WidthBand {
+        case narrow, middle, wide
+
+        init(_ width: CGFloat) {
+            self = width < InboxScreen.railCollapseWidth ? .narrow
+                : width >= InboxScreen.railRestoreWidth ? .wide
+                : .middle
+        }
+    }
+    /// What the panel column's toolbar holds besides the sync status: the triage menu, *Sync
+    /// now* and the account with their spacers, and a margin off the column's leading edge.
+    /// Measured on 2026-10-23; a new item in that half of the toolbar has to be added here.
+    private static let panelToolbarItemsWidth: CGFloat = 170
 
     /// Creates the screen for a session.
     /// - Parameters:
@@ -78,9 +135,13 @@ struct InboxScreen: View {
     }
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: columnVisibility) {
             sidebar
-                .navigationSplitViewColumnWidth(min: 200, ideal: 232, max: 300)
+                // Its ideal as its minimum: below ``railCollapseWidth`` the rail folds away rather
+                // than narrowing, so a narrower rail only ever came from the split view's first
+                // pass, which runs at the window's minimum width and left the rail at 200 pt once
+                // the list could give way too — "Braucht mein Review" cut to "Brauch…Review".
+                .navigationSplitViewColumnWidth(min: 232, ideal: 232, max: 300)
         } content: {
             centre
                 // Above the list header, as a top safe-area inset — the same mechanism the shortcut
@@ -112,9 +173,24 @@ struct InboxScreen: View {
                 .navigationSplitViewColumnWidth(min: 380, ideal: 640)
         } detail: {
             panel
+                .onGeometryChange(for: CGFloat.self) {
+                    max(0, ($0.size.width / 20).rounded(.down) * 20 - Self.panelToolbarItemsWidth)
+                } action: {
+                    syncStatusWidth = $0
+                }
                 .navigationSplitViewColumnWidth(min: 320, ideal: 380, max: 480)
         }
         .navigationSplitViewStyle(.balanced)
+        .onGeometryChange(for: WidthBand.self) { WidthBand($0.size.width) } action: { band in
+            widthBand = band
+            if band == .narrow, rail == .open {
+                rail = .hiddenByWidth
+            } else if band == .wide, rail == .hiddenByWidth {
+                rail = .open
+            } else if band != .narrow, rail == .openByReader {
+                rail = .open
+            }
+        }
         // "This view has no preferred height; take the one the window gives you."
         //
         // Without it, the first layout pass after sign-in proposed the split view its *ideal*
@@ -453,7 +529,12 @@ struct InboxScreen: View {
         // control, and a glass capsule is how the toolbar says "press me". The review screen's
         // facts row makes the same choice.
         ToolbarItem(placement: .primaryAction) {
-            SyncStatusView(session: session)
+            SyncStatusView(width: syncStatusWidth, session: session)
+                // A new identity for every new width, which is what makes the toolbar lay its row
+                // out again: it measures an item when it inserts it, and an item that changed size
+                // afterwards kept its old slot — the line drawn centred over *Sync now* and the
+                // triage menu (2026-10-23).
+                .id(syncStatusWidth)
         }
         .sharedBackgroundVisibility(.hidden)
 
@@ -513,6 +594,19 @@ struct InboxScreen: View {
             .help(Text(session.account.login))
         }
         .sharedBackgroundVisibility(.hidden)
+    }
+
+    /// The rail's visibility as the split view reads and writes it. A change the sidebar button
+    /// makes is the reader's; the split view also writes back the value it was just handed when
+    /// the width folds the rail away, and that echo must not turn it into the reader's doing.
+    private var columnVisibility: Binding<NavigationSplitViewVisibility> {
+        Binding {
+            rail.isOpen ? .all : .doubleColumn
+        } set: { visibility in
+            let isOpen = visibility == .all
+            guard isOpen != rail.isOpen else { return }
+            rail = !isOpen ? .hiddenByReader : widthBand == .narrow ? .openByReader : .open
+        }
     }
 
     /// What the bulk-triage menu is called: on screen if it ever draws its title, and to
@@ -765,12 +859,37 @@ private struct InboxSelectionMirror: View {
 
 /// The "Synced · 32 s ago" indicator from the mockup's title bar.
 struct SyncStatusView: View {
+    /// The width the read-out takes.
+    let width: CGFloat
     /// The active session.
     let session: SignedInSession
     /// Needed only so the failed-writes text below can act as a button to Settings → Sync.
     @Environment(AppEnvironment.self) private var environment
 
+    /// How much of the line fits: all of it, then the counts without their explanation, then
+    /// the worst of them alone.
+    private enum Density {
+        case full, short, minimal
+    }
+
     var body: some View {
+        // A width from the caller rather than the line's own. It used to be `fixedSize`, and the
+        // toolbar measures an item when it inserts it, not when its content changes afterwards:
+        // a line that grew later — "Synced · now" turning into "Sync failed · 1 failed — see
+        // Settings → Sync", about 400 pt in German — was drawn centred over its old slot, across
+        // *Sync now* and the triage menu and over the edge of the panel column's half of the
+        // toolbar (2026-10-23). Nor does the toolbar ever give an item less than it asks for, so
+        // a flexible frame ran over the edge just the same. A fixed width leaves the content
+        // nothing to grow by, and the longest form that fits inside it is the one drawn.
+        ViewThatFits(in: .horizontal) {
+            line(.full)
+            line(.short)
+            line(.minimal)
+        }
+        .frame(width: width, alignment: .trailing)
+    }
+
+    private func line(_ density: Density) -> some View {
         HStack(spacing: 6) {
             Circle()
                 // Failure outranks the merely-parked state, and a failed write is a failure even
@@ -778,31 +897,21 @@ struct SyncStatusView: View {
                 // worst true thing, not just the most recent one.
                 .fill(dotColor)
                 .frame(width: 6, height: 6)
-            if session.isSyncing {
-                Text(String(localized: "Syncing…"))
-            } else if let error = session.lastSyncError {
+            if density == .minimal, worst == .syncFailed {
+                // Not ``status``, which says "Syncing…" during the retry: the narrowest line
+                // keeps the failure until a sync has actually succeeded.
                 Text(String(localized: "Sync failed"))
-                    .help(error)
-            } else if let date = session.lastSyncedAt {
-                // The separator is not decoration. Without it the two words run together as
-                // "Synchronisiert jetzt", which German reads as a verb in the present tense —
-                // "synchronises now", a claim about what the app is doing rather than about when
-                // it last finished. English survives it ("Synced now") and German does not, and
-                // the mockup this came from had the middot anyway.
-                HStack(spacing: 4) {
-                    Text(String(localized: "Synced"))
-                    Text(verbatim: "·").foregroundStyle(Theme.textMuted)
-                    RelativeDateText(date: date)
-                }
-            } else if session.failedOutboxCount == 0 {
-                // "Not synced yet" would be a lie once there are failed writes on record — those
-                // came from a sync that did happen.
-                Text(String(localized: "Not synced yet"))
+                    .help(session.lastSyncError ?? "")
+            } else if density != .minimal || worst == .status {
+                status
             }
             // Parked mutations do not drain by themselves (ADR 0006), so the title bar says so
             // for as long as they sit there — the conflict alert is only shown once.
-            if session.conflictedOutboxCount > 0 {
-                Text(String(localized: "· \(session.conflictedOutboxCount) not sent"))
+            if session.conflictedOutboxCount > 0, density != .minimal || worst == .parked {
+                if density != .minimal {
+                    Text(verbatim: "·")
+                }
+                Text(String(localized: "\(session.conflictedOutboxCount) not sent"))
                     .foregroundStyle(Theme.pending)
                     .help(String(
                         localized: "Queued reviews that were parked because the pull request moved on. Settings → Sync has the count; open the pull request to check your draft."
@@ -813,16 +922,21 @@ struct SyncStatusView: View {
             // parked one there is no draft to re-apply and no alert that ever raised it — a 4xx
             // from GitHub simply ends the row. The issue panel says exactly this about one issue
             // (ADR 0032); this is the same sentence about the account.
-            if session.failedOutboxCount > 0 {
-                Text(verbatim: "·")
+            if session.failedOutboxCount > 0, density != .minimal || worst == .failedWrites {
+                if density != .minimal {
+                    Text(verbatim: "·")
+                }
                 // A status line that names the fix but does not let you take it is a dead end —
                 // Settings → Sync is one click away everywhere else this count is mentioned
                 // (the toolbar menu at `.failedWrites` above), so the title bar should not be the
-                // one place you have to go find it yourself.
+                // one place you have to go find it yourself. Shortened, the line still is that
+                // click, and the tooltip still names where it goes.
                 Button {
                     environment.showSettings(.sync)
                 } label: {
-                    Text(String(localized: "\(session.failedOutboxCount) failed — see Settings → Sync"))
+                    Text(density == .full
+                        ? String(localized: "\(session.failedOutboxCount) failed — see Settings → Sync")
+                        : String(localized: "\(session.failedOutboxCount) failed"))
                         .foregroundStyle(Theme.failure)
                 }
                 .buttonStyle(.plain)
@@ -834,17 +948,56 @@ struct SyncStatusView: View {
         .font(.system(size: 11))
         .foregroundStyle(Theme.textMuted)
         .lineLimit(1)
-        // Without this the line is handed a width by the toolbar and truncates inside its own
-        // glass capsule — "Wird synchronisiert…" lost its last letters against the capsule's
-        // edge. `fixedSize` makes it ask for the width it actually needs; the padding keeps the
-        // text off the capsule's rim, which is drawn tight around the item.
-        //
-        // 10 pt rather than the 4 it started with: 4 cleared the rim and nothing more, so the
-        // capsule read as a label someone had forgotten to pad rather than as a control. The dot
-        // and the text inside it are 6 pt apart, and a gutter narrower than that gap makes the
-        // whole group look pushed against the glass.
-        .fixedSize(horizontal: true, vertical: false)
+        // The longer two at their full width, so `ViewThatFits` skips a form that would only fit
+        // truncated; the shortest, used when nothing fits, truncates inside the item rather than
+        // running over its neighbours. The 10 pt keeps the line off the glass group beside it, the
+        // gap the dot and the text inside it have.
+        .fixedSize(horizontal: density != .minimal, vertical: false)
         .padding(.horizontal, 10)
+    }
+
+    /// Where the last sync stands, in words.
+    @ViewBuilder
+    private var status: some View {
+        if session.isSyncing {
+            Text(String(localized: "Syncing…"))
+        } else if let error = session.lastSyncError {
+            Text(String(localized: "Sync failed"))
+                .help(error)
+        } else if let date = session.lastSyncedAt {
+            // The separator is not decoration. Without it the two words run together as
+            // "Synchronisiert jetzt", which German reads as a verb in the present tense —
+            // "synchronises now", a claim about what the app is doing rather than about when
+            // it last finished. English survives it ("Synced now") and German does not, and
+            // the mockup this came from had the middot anyway.
+            HStack(spacing: 4) {
+                Text(String(localized: "Synced"))
+                Text(verbatim: "·").foregroundStyle(Theme.textMuted)
+                RelativeDateText(date: date)
+            }
+        } else if session.failedOutboxCount == 0 {
+            // "Not synced yet" would be a lie once there are failed writes on record — those
+            // came from a sync that did happen.
+            Text(String(localized: "Not synced yet"))
+        }
+    }
+
+    /// The worst true state: what the narrowest line keeps in words, and what ``dotColor``
+    /// colours — one ranking for both, so the dot is never the only thing saying a sync failed.
+    private enum Worst {
+        case syncFailed, failedWrites, parked, status
+    }
+
+    private var worst: Worst {
+        if session.lastSyncError != nil {
+            .syncFailed
+        } else if session.failedOutboxCount > 0 {
+            .failedWrites
+        } else if session.conflictedOutboxCount > 0 {
+            .parked
+        } else {
+            .status
+        }
     }
 
     /// The worst true state wins: a failed write outranks "synced fine a moment ago", and a
@@ -856,12 +1009,10 @@ struct SyncStatusView: View {
     /// to be up to date when it has never spoken to GitHub. Amber, not red, because it is not a
     /// failure either; it usually resolves itself within a sweep.
     private var dotColor: Color {
-        if session.lastSyncError != nil || session.failedOutboxCount > 0 {
-            Theme.failure
-        } else if session.conflictedOutboxCount > 0 || session.lastSyncedAt == nil {
-            Theme.pending
-        } else {
-            Theme.success
+        switch worst {
+        case .syncFailed, .failedWrites: Theme.failure
+        case .parked: Theme.pending
+        case .status: session.lastSyncedAt == nil ? Theme.pending : Theme.success
         }
     }
 }

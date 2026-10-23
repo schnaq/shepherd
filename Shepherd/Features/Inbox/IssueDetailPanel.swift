@@ -281,47 +281,23 @@ struct IssueDetailPanel: View {
         // issue (comment, assign) on top, the writes that change its *state* (label,
         // close/reopen) below.
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Button {
-                    commentBody = ""
-                    isCommentSheetPresented = true
-                } label: {
-                    Text(String(localized: "Comment…"))
-                        .frame(maxWidth: .infinity)
+            // And the top row in two where the panel is too narrow for its three: at 320 pt the
+            // German labels wrapped inside their buttons, "Kommenti" over "eren …" (2026-10-23).
+            // The pull-request panel's action bar makes the same move.
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    commentButton(row)
+                    assignToMeButton(row)
+                    assignToAgentButton(row)
+                    Spacer(minLength: 0)
                 }
-                .buttonStyle(SecondaryButtonStyle())
-                .modifier(issueWrite(row, .issueComment))
-
-                if let login = model.viewerLogin, !login.isEmpty {
-                    Button {
-                        Task {
-                            let queued = await model.assignToMe(row)
-                            report(
-                                queued: queued,
-                                success: String(localized: "Assignment queued."),
-                                action: .assigned
-                            )
-                        }
-                    } label: {
-                        Text(String(localized: "Assign to me"))
-                            .frame(maxWidth: .infinity)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        commentButton(row)
+                        assignToMeButton(row)
                     }
-                    .buttonStyle(SecondaryButtonStyle())
-                    .modifier(issueWrite(
-                        row,
-                        .issueAssign,
-                        alsoDisabledWhen: row.myRelation.contains(.assigned)
-                    ))
-                    .help(
-                        row.myRelation.contains(.assigned)
-                            ? String(localized: "This issue is already assigned to you")
-                            : String(localized: "Add yourself as an assignee, without removing anyone")
-                    )
+                    assignToAgentButton(row)
                 }
-
-                assignToAgentButton(row)
-
-                Spacer(minLength: 0)
             }
 
             HStack(spacing: 8) {
@@ -331,6 +307,48 @@ struct IssueDetailPanel: View {
 
                 Spacer(minLength: 0)
             }
+        }
+    }
+
+    private func commentButton(_ row: IssueRowSummary) -> some View {
+        Button {
+            commentBody = ""
+            isCommentSheetPresented = true
+        } label: {
+            Text(String(localized: "Comment…"))
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(SecondaryButtonStyle())
+        .modifier(issueWrite(row, .issueComment))
+    }
+
+    @ViewBuilder
+    private func assignToMeButton(_ row: IssueRowSummary) -> some View {
+        if let login = model.viewerLogin, !login.isEmpty {
+            Button {
+                Task {
+                    let queued = await model.assignToMe(row)
+                    report(
+                        queued: queued,
+                        success: String(localized: "Assignment queued."),
+                        action: .assigned
+                    )
+                }
+            } label: {
+                Text(String(localized: "Assign to me"))
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(SecondaryButtonStyle())
+            .modifier(issueWrite(
+                row,
+                .issueAssign,
+                alsoDisabledWhen: row.myRelation.contains(.assigned)
+            ))
+            .help(
+                row.myRelation.contains(.assigned)
+                    ? String(localized: "This issue is already assigned to you")
+                    : String(localized: "Add yourself as an assignee, without removing anyone")
+            )
         }
     }
 
