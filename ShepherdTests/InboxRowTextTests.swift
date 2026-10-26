@@ -15,7 +15,8 @@ final class InboxRowTextTests: XCTestCase {
         reviewDecision: ReviewDecision? = nil,
         checks: CheckRollup.State? = nil,
         relation: Set<Relation> = [],
-        stack: PullRequestStack? = nil
+        stack: PullRequestStack? = nil,
+        mergeable: Mergeable? = nil
     ) -> PullRequestSummary {
         PullRequestSummary(
             id: "PR_1",
@@ -32,6 +33,7 @@ final class InboxRowTextTests: XCTestCase {
             reviewDecision: reviewDecision,
             checkRollup: checks.map { CheckRollup(state: $0, total: 2, failureCount: $0 == .failure ? 2 : 0) },
             myRelation: relation,
+            mergeable: mergeable,
             stack: stack
         )
     }
@@ -58,6 +60,13 @@ final class InboxRowTextTests: XCTestCase {
         )
         XCTAssertEqual(chip(row(relation: [.reviewRequested])), String(localized: "Review requested"))
         XCTAssertNil(chip(row()))
+    }
+
+    func testAConflictOutranksFailingChecksAndTheVerdictButNotAWrite() {
+        let conflicting = row(reviewDecision: .approved, checks: .failure, mergeable: .conflicting)
+        XCTAssertEqual(chip(conflicting), String(localized: "Conflicts"))
+        XCTAssertEqual(chip(conflicting, write: .mergeQueued), RowWriteState.mergeQueued.text)
+        XCTAssertEqual(chip(row(reviewDecision: .approved, mergeable: .unknown)), ReviewDecision.approved.chipTitle)
     }
 
     func testTheSpokenLabelNamesEveryChipTheRowShows() {

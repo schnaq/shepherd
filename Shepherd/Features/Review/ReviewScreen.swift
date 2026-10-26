@@ -1025,6 +1025,11 @@ private struct ReviewToolbarFacts: View {
             if let checkRollup, checkRollup.total > 0 {
                 ChecksSummaryView(rollup: checkRollup)
             }
+            // A conflicting branch merges nothing however green the suite is.
+            if let summary = model.summary, summary.mergeBlocker == .conflicting {
+                ChipView(text: String(localized: "Conflicts"), color: Theme.failure)
+                    .help(PullRequestActions.blockerMessage(.conflicting, slug: summary.slug))
+            }
             if let write {
                 ChipView(text: write.text, color: write.color)
                     .help(write.help)

@@ -15,7 +15,8 @@ enum InboxRowText {
     ///
     /// One chip, in a fixed order of what needs the reviewer most: a write on its way or stuck
     /// (``RowWriteState``) takes the chip's place while it lasts, because "your merge is on its way"
-    /// is what the reviewer who just pressed it is looking for; then red CI, running CI, the review
+    /// is what the reviewer who just pressed it is looking for; then a conflict with the base
+    /// branch, which no green suite or approval can merge past; then red CI, running CI, the review
     /// decision, and finally a review request nobody has answered yet.
     /// - Parameters:
     ///   - row: The pull request.
@@ -24,6 +25,9 @@ enum InboxRowText {
     static func statusChip(for row: PullRequestSummary, write: RowWriteState?) -> (text: String, color: Color)? {
         if let write {
             return (write.text, write.color)
+        }
+        if row.mergeBlocker == .conflicting {
+            return (String(localized: "Conflicts"), Theme.failure)
         }
         if let rollup = row.checkRollup, rollup.state == .failure {
             let count = max(1, rollup.failureCount)

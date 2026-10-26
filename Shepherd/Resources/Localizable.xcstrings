@@ -21182,6 +21182,26 @@
           }
         }
       }
+    },
+    "Conflicts": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konflikte"
+          }
+        }
+      }
+    },
+    "MERGE CONFLICT": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MERGE-KONFLIKT"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
