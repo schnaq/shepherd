@@ -54,6 +54,9 @@ struct InboxDetailPanel: View {
                     if let stack = model.stackOverview(for: row) {
                         PullRequestStackCard(overview: stack, onOpen: openStackMember)
                     }
+                    if row.mergeable == .conflicting {
+                        conflictCard(row)
+                    }
                     checksCard(row)
                     priorityCard
                     intelligenceCard
@@ -104,6 +107,31 @@ struct InboxDetailPanel: View {
     }
 
     // MARK: - Cards
+
+    /// The conflict with the base branch, above the checks because a green suite merges nothing
+    /// while it lasts. The Merge tooltip's sentence; no *Update branch*, which GitHub refuses here.
+    private func conflictCard(_ row: PullRequestSummary) -> some View {
+        Card {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(Theme.failure)
+                    CardTitle(String(localized: "MERGE CONFLICT"), tint: Theme.failure)
+                }
+                Text(PullRequestActions.blockerMessage(.conflicting, slug: row.slug))
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 12) {
+                    Button(String(localized: "Open on GitHub")) { actions.openOnGitHub(row) }
+                    Button(String(localized: "Copy branch name")) { actions.copyBranch(row) }
+                }
+                .buttonStyle(.link)
+                .font(.system(size: 12))
+            }
+        }
+    }
 
     private func checksCard(_ row: PullRequestSummary) -> some View {
         Card {

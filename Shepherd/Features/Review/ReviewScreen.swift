@@ -1025,6 +1025,13 @@ private struct ReviewToolbarFacts: View {
             if let checkRollup, checkRollup.total > 0 {
                 ChecksSummaryView(rollup: checkRollup)
             }
+            // A conflicting branch merges nothing however green the suite is — draft or not, so
+            // `mergeable` rather than `mergeBlocker`, which answers `.draft` first.
+            if let summary = model.summary, summary.mergeable == .conflicting {
+                ChipView(text: String(localized: "Conflicts"), color: Theme.failure)
+                    .help(PullRequestActions.blockerMessage(.conflicting, slug: summary.slug))
+                    .transition(.opacity)
+            }
             if let write {
                 ChipView(text: write.text, color: write.color)
                     .help(write.help)
@@ -1032,5 +1039,6 @@ private struct ReviewToolbarFacts: View {
             }
         }
         .animation(reduceMotion ? nil : .snappy, value: write)
+        .animation(reduceMotion ? nil : .snappy, value: model.summary?.mergeable)
     }
 }
