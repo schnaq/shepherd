@@ -67,6 +67,8 @@ final class InboxRowTextTests: XCTestCase {
         XCTAssertEqual(chip(conflicting), String(localized: "Conflicts"))
         XCTAssertEqual(chip(conflicting, write: .mergeQueued), RowWriteState.mergeQueued.text)
         XCTAssertEqual(chip(row(reviewDecision: .approved, mergeable: .unknown)), ReviewDecision.approved.chipTitle)
+        // A draft still conflicts: `mergeBlocker` answers `.draft` first, the chip must not.
+        XCTAssertEqual(chip(row(isDraft: true, mergeable: .conflicting)), String(localized: "Conflicts"))
     }
 
     func testTheSpokenLabelNamesEveryChipTheRowShows() {

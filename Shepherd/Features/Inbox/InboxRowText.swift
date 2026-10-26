@@ -26,7 +26,7 @@ enum InboxRowText {
         if let write {
             return (write.text, write.color)
         }
-        if row.mergeBlocker == .conflicting {
+        if row.mergeable == .conflicting {
             return (String(localized: "Conflicts"), Theme.failure)
         }
         if let rollup = row.checkRollup, rollup.state == .failure {

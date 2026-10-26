@@ -54,7 +54,7 @@ struct InboxDetailPanel: View {
                     if let stack = model.stackOverview(for: row) {
                         PullRequestStackCard(overview: stack, onOpen: openStackMember)
                     }
-                    if row.mergeBlocker == .conflicting {
+                    if row.mergeable == .conflicting {
                         conflictCard(row)
                     }
                     checksCard(row)
