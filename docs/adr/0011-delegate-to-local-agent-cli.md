@@ -243,3 +243,25 @@ attempting an empty commit. The pull-request origins are untouched.
 No host is added: the only network traffic is the user's own git talking to the remote it already
 fetches from. No setting is added either — the checkout map and the watch list both existed — so ADR
 0014's sync obligation does not change.
+
+## Amendment (2026-10-29): aliases, forks, and "By name" watches too
+
+Three corrections to the 2026-09-23 amendment's "Add a local repository…". They came out of a
+user whose watched repository stayed empty. The main cause was access (ADR 0005's 2026-10-29
+amendment), and these were on the way:
+
+- **An ssh_config alias is github.com, not Enterprise.** `GitRemote` counted any host with
+  "github" in it as GitHub Enterprise and refused it outright, so the multi-account conventions
+  `git@github-work:o/r.git` and `git@github.com-work:o/r.git` had no way in. Over ssh (scp-like or
+  `ssh://`), a host without a dot, or one spelled `github.com-<suffix>`, is now read as github.com
+  with `owner/name` from the path. A real host has a dot, and no top-level domain has a dash. An
+  `https://` host never gets this reading, because aliases are an ssh feature. A wrong guess
+  costs no more than a watched repository the access check then flags. For a remote on another host,
+  the name field is pre-filled from the path (`GitRemote.pathRepository`).
+- **A fork's `upstream` wins.** The probe reads `git remote get-url upstream` before `origin`.
+  When `upstream` is on github.com, that is the repository linked and watched, because the
+  pull requests worth watching go there and not to the fork.
+- **"By name" in Settings → Delegation watches as well as links.** It now goes through
+  `addLocalRepository(…, watch: true)` like the folder route. Only *Change* on an existing entry,
+  the rail's *Link a local checkout…* and the delegation sheet's clone picker still only link. Each
+  of those re-links a repository that is already in the inbox.

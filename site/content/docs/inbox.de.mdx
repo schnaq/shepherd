@@ -43,6 +43,8 @@ Die Liste kannst du auch unter Einstellungen → Sync bei **Beobachtete Reposito
 
 ![Beobachtete Repositorys in der Seitenleiste](/watched-repositories.png)
 
+Ein Warndreieck statt einer Zahl heißt: Shepherd kann das Repository nicht sehen. Die GitHub-Suche liefert für ein Repository, auf das deine Anmeldung keinen Zugriff hat, einfach nichts. Ohne die Warnung sähest du nur eine leere Liste. Fahre mit dem Mauszeiger über die Zeile, um den Grund zu lesen. Hast du dich per Device-Flow angemeldet, wähle mit Rechtsklick **Shepherd bei … installieren** (mit dem Namen des Owners). Ist die App installiert, wähle **Zugriff erneut prüfen**. Hast du dich mit einem Token angemeldet, gib dem Token Zugriff auf den Owner des Repositorys. Siehe [GitHub-Token](/de/docs/github-token#device-flow-und-organisationen).
+
 ### Einen lokalen Clone hinzufügen
 
 Wähle **Lokales Repository hinzufügen…** im selben `+`-Menü oder über `⌘K`. Wähle den Ordner eines Clones. Shepherd liest `owner/repo` aus dem `origin`-Remote und zeigt eine Bestätigung mit zwei Kästchen:
@@ -52,10 +54,12 @@ Wähle **Lokales Repository hinzufügen…** im selben `+`-Menü oder über `⌘
 
 Beide sind standardmäßig angehakt. Du kannst jedes abwählen.
 
+Im Clone eines Forks nimmt Shepherd das Remote `upstream`, wenn es auf github.com zeigt, denn dorthin gehen die Pull Requests. Wenn du auf **Hinzufügen** klickst, prüft Shepherd zuerst, ob deine Anmeldung das Repository lesen kann. Kann sie es nicht, bleibt der Dialog offen, sagt das und bietet den Installationslink an.
+
 Ein beobachtetes Repository mit verknüpftem Clone zeigt ein kleines Laptop-Symbol. Mit Rechtsklick siehst du **Agent starten…**. Ohne Clone bietet das Menü stattdessen **Lokalen Checkout verknüpfen…** an.
 
 <Callout type="info">
-Nur github.com wird unterstützt. Ein Clone, dessen `origin` auf GitHub Enterprise zeigt, wird abgelehnt.
+Nur github.com wird unterstützt. Ein Clone, dessen `origin` auf GitHub Enterprise zeigt, wird abgelehnt. Ein SSH-Alias aus `~/.ssh/config`, etwa `git@github-work:owner/repo.git` oder `git@github.com-work:owner/repo.git`, zählt als github.com.
 </Callout>
 
 ## Gruppieren, sortieren und filtern

@@ -185,3 +185,38 @@ Three things this decided:
   prune takes them out of the inbox.
 
 `shepherd://inbox?filter=watched` and `shepherd inbox watched` name the new rail (ADR 0013).
+
+## Amendment (2026-10-29): a watched repository the token cannot read says so
+
+A user added `MoneyMoneyApp/mono` as a local repository, watched it, and never saw a pull request
+from it. The search was not wrong: a device-flow token is a GitHub App user token, and it only sees
+repositories of owners the app (`shepherd-review`) is installed on. A fine-grained token sees only
+its resource owner, and SAML SSO hides an organization from a token not authorized for it. For all
+three, GitHub's `search` answers `repo:<owner>/<name>` with `issueCount: 0` and no `errors`. That is
+the same answer as a quiet repository, so the rail showed `0` and the add dialog said "Added".
+
+**One REST read per watched repository, at the moments the list can change.**
+`GitHubClient.canRead(repo:)` is `GET /repos/{owner}/{repo}`. `404` (no access, or no such
+repository) and a `403` that is not a rate limit (SSO) answer `false`. Everything else throws,
+for the merged probe's reason: "could not ask" must never read as "no access". The check runs
+from `AppEnvironment.applyWatchedRepositoriesSetting`, so it runs at sign-in and on every edit of
+the watch list. It never runs per sweep. That costs at most ten core-API requests per edit and
+nothing from the search budget. The answer is an observable set of unreadable repositories. It is
+cleared on sign-out and pruned to the watch list.
+
+- **The rail** shows a warning glyph instead of the count for such a repository. Its tooltip
+  says why, worded for the sign-in method. Its context menu offers *Install Shepherd on
+  <owner>…* (`github.com/apps/shepherd-review/installations/new`, `AppConfig.githubAppInstallURL`)
+  for a device-flow sign-in, and *Check access again*, which re-runs the check and sweeps. The
+  tooltip no longer promises that every open pull request arrives.
+- **"Add a local repository…"** asks before it announces anything. A repository the token
+  cannot read keeps the sheet up with the same sentence and the install button. *Watch a
+  repository* marks the entry in its list. A full watch list no longer reads as "Added": the sheet
+  says the repository was linked but not watched.
+- A `404` is also what a typo gets, so the sentence names the name as a suspect too.
+
+No request is added to the sweep and no host is added; `api.github.com` was already the REST host.
+Per-facet error isolation in `searchOpenPullRequests` was considered and left out. A swallowed facet
+would reach `savePullRequestSummaries(pruneMissing: true)`, which would prune that facet's rows and
+re-announce them on the next good sweep. Doing it properly means teaching the engine to skip the
+prune on a partial result, which is its own change.

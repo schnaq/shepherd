@@ -65,9 +65,9 @@ Many organizations require SAML single sign-on. A token does not get access to s
 
 ### Symptom
 
-A pull request you are assigned to or asked to review in that organization does not appear in the inbox. There is no error and no warning. GitHub's search silently leaves out results from organizations the token cannot access.
+A pull request you are assigned to or asked to review in that organization does not appear in the inbox. There is no error. GitHub's search silently leaves out results from organizations the token cannot access.
 
-Watching the repository does not help. A watched repository is one more search with the same token, so it comes back empty for the same reason.
+Watching the repository does not fill the inbox, because a watched repository is one more search with the same token. It does make the problem visible: Shepherd checks each watched repository with `GET /repos/{owner}/{repo}` and shows a warning triangle in the rail for one it cannot read.
 
 ### Fix for a classic token
 
@@ -83,7 +83,9 @@ Watching the repository does not help. A watched repository is one more search w
 
 ### Device flow and organizations
 
-Device flow signs in through Shepherd's GitHub App. GitHub may require the organization to allow that app before it shows you the organization's pull requests. If pull requests from an organization are missing after a device-flow sign-in, ask an owner to approve the app, or sign in with a token instead. The Shepherd project recommends a token for SSO organizations.
+Device flow signs in through Shepherd's GitHub App, [`shepherd-review`](https://github.com/apps/shepherd-review). A device-flow sign-in sees only repositories of accounts and organizations the app is installed on. For any other owner, GitHub's search returns nothing and reports no error.
+
+To fix this, install the app on the owner at [github.com/apps/shepherd-review/installations/new](https://github.com/apps/shepherd-review/installations/new). Only an organization owner can install it. Everyone else can request it from that page. A watched repository on an owner without the app shows a warning triangle in the rail, and its context menu has **Install Shepherd on …** (with the owner's name). After the install, choose **Check access again**. You can also sign in with a token instead. The Shepherd project recommends a token for SSO organizations.
 
 ### Check that the token works
 
