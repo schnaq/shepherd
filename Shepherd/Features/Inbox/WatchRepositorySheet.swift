@@ -43,7 +43,7 @@ struct WatchRepositorySheet: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(Theme.textStrong)
             Text(String(
-                localized: "Every open pull request in these repositories reaches the inbox, even the ones nobody asked you about. They appear under Watched until you are involved in one."
+                localized: "Open pull requests in these repositories reach the inbox, even the ones nobody asked you about. They appear under Watched until you are involved in one."
             ))
             .font(.system(size: 12))
             .foregroundStyle(Theme.textMuted)

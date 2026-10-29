@@ -37,7 +37,7 @@ struct LocalRepositoryDraft: Identifiable {
 ///
 /// The one question the user is asked is whether this is right: "schnaq/shepherd — ~/code/shepherd".
 /// Both halves are ticked by default because that is what "add my repository" means — agents can
-/// start in it, and every pull request in it reaches the inbox — and either can be unticked. A
+/// start in it, and its open pull requests reach the inbox — and either can be unticked. A
 /// half that is already done is shown ticked and disabled with a sentence saying so, which is what
 /// makes adding the same clone twice a harmless no-op (``ShepherdCore/LocalRepositoryLink``).
 ///
@@ -216,7 +216,7 @@ struct AddLocalRepositorySheet: View {
     private func watchCaption(_ watch: LocalRepositoryLink.Watch) -> String {
         switch watch {
         case .notWatched:
-            return String(localized: "Every open pull request in it reaches the inbox, even the ones nobody asked you about.")
+            return String(localized: "Its open pull requests reach the inbox, even the ones nobody asked you about.")
         case .watched:
             return String(localized: "Already watched.")
         case .listFull:
