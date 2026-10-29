@@ -2751,6 +2751,16 @@
         }
       }
     },
+    "A previous run left commits in %@ that were never pushed. Push or discard them from that delegation's sheet, then start it again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein früherer Lauf hat in %@ Commits hinterlassen, die nie gepusht wurden. Pushe oder verwirf sie im Fenster dieser Delegation und starte sie dann erneut."
+          }
+        }
+      }
+    },
     "A pull request was merged": {
       "localizations": {
         "de": {

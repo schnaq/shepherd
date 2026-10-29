@@ -164,6 +164,10 @@ final class DelegationModel: Identifiable {
     private(set) var elapsed: TimeInterval = 0
     /// What `git status --porcelain` said after the run.
     private(set) var worktreeStatus: GitWorktree.Snapshot?
+    /// How many commits a pull-request run left that the branch on `origin` does not have
+    /// (``GitWorktree/commitsAhead(of:)``). Always `0` for new work, whose commits are on its
+    /// own branch and survive the worktree.
+    private(set) var unpushedCommits = 0
     /// Whether a commit-and-push is in flight.
     private(set) var isPublishing = false
     /// Whether the worktree has been pushed already, so the button can say so.
@@ -311,10 +315,21 @@ final class DelegationModel: Identifiable {
     /// Whether *Run again* does anything.
     ///
     /// A repository task continues in its own worktree. Every other origin prepares a fresh one,
-    /// which ``GitWorktree`` refuses while the last run's changes are uncommitted — so the button
-    /// waits until they are pushed or discarded, or the run is continued instead.
+    /// which ``GitWorktree`` refuses while the last run's changes are uncommitted, or a
+    /// pull-request run's commits unpushed — so the button waits until they are pushed or
+    /// discarded, or the run is continued instead.
     var canRunAgain: Bool {
-        canStart && (context.isRepositoryTask || worktreeStatus?.isDirty != true)
+        canStart && (context.isRepositoryTask || (worktreeStatus?.isDirty != true && unpushedCommits == 0))
+    }
+
+    /// Whether this sheet holds something a fresh one for the same target would lose: a session
+    /// to continue, or work in its worktree that is not pushed yet. ``DelegationCenter`` shows
+    /// such a model again rather than replacing it.
+    var holdsPendingWork: Bool {
+        guard !isBusy, state != .idle, isWorktreeDirectoryKnown, let worktree,
+              FileManager.default.fileExists(atPath: worktree.directory.path)
+        else { return false }
+        return continuableSessionID != nil || (hasChanges && !hasPushed)
     }
 
     /// The session *Continue* resumes, when there is one.
@@ -347,9 +362,10 @@ final class DelegationModel: Identifiable {
     ///
     /// For new work that includes commits the run made itself: the diff stat is taken against the
     /// branch's starting point, so a non-empty one means there is something to push even when the
-    /// worktree is clean.
+    /// worktree is clean. For a pull request it includes commits the branch on `origin` does not
+    /// have (``unpushedCommits``) — also after a start was refused because of them.
     var hasChanges: Bool {
-        if worktreeStatus?.isDirty == true { return true }
+        if worktreeStatus?.isDirty == true || unpushedCommits > 0 { return true }
         guard context.isNewWork, case .finished(_, let stat) = state else { return false }
         return !stat.isEmpty
     }
@@ -513,6 +529,15 @@ final class DelegationModel: Identifiable {
                 // cancellation check threw on the way out is not news, and must not turn a run the
                 // user stopped into one that failed.
                 guard !Task.isCancelled else { return }
+                switch error {
+                case GitWorktree.Failure.worktreeHasUncommittedWork,
+                     GitWorktree.Failure.worktreeHasUnpushedCommits:
+                    // Refused because the last run's work is still there: what is there is what
+                    // the failed sheet's *Commit & push* publishes.
+                    await self.refreshWorktreeStatus()
+                default:
+                    break
+                }
                 self.fail(with: error)
                 return
             }
@@ -576,6 +601,7 @@ final class DelegationModel: Identifiable {
         didAnnounceStart = false
         lastResult = nil
         worktreeStatus = nil
+        unpushedCommits = 0
         hasPushed = false
         state = .preparingWorktree
         startedAt = Date()
@@ -779,6 +805,7 @@ final class DelegationModel: Identifiable {
     private func refreshWorktreeStatus() async {
         guard let worktree else { return }
         worktreeStatus = try? await worktree.status()
+        unpushedCommits = context.isNewWork ? 0 : await worktree.commitsAhead(of: context.headRefName)
     }
 
     private func fail(with error: any Error) {
@@ -883,8 +910,11 @@ final class DelegationModel: Identifiable {
     ///
     /// Only ever runs because the user pressed the button: ADR 0011 forbids auto-pushing agent
     /// output, and the push uses the user's own git credentials, never Shepherd's token.
+    ///
+    /// Any state after a run: a cancelled run's edits, and a start refused because the last
+    /// run's work was still in the worktree, are published the same way.
     func commitAndPush() {
-        guard let worktree, !isPublishing, case .finished = state else { return }
+        guard let worktree, !isPublishing, !isBusy, state != .idle else { return }
         isPublishing = true
         let branch = branchName
         let message = commitMessage

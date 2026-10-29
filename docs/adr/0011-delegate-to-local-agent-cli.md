@@ -286,6 +286,18 @@ larger task also ended at the turn or spend cap, and *Run again* then deleted wh
   are now refused, not wiped. In the sheet, *Run again* is disabled while the changes are
   uncommitted. A repository task is the exception, because it continues in place. *Discard
   worktree* is also offered in the failed state, which is the way out the refusal names.
+- **Commits count as work too.** A pull-request worktree is detached, so a commit the agent made
+  there is on no branch, and `worktree remove --force` would orphan it. `prepare` therefore also
+  refuses when `git rev-list --count origin/<branch>..HEAD` is above 0, after its fetch. A push
+  updates `origin/<branch>`, so pushed work no longer counts. The sheet counts the same commits as
+  changes, so *Commit & push* pushes them even from a clean worktree. After either refusal the
+  failed sheet offers *Commit & push* beside *Discard worktree*, and *Try again* waits for one of them.
+- **Re-opening keeps the run.** Opening a delegation again shows the existing sheet, not a fresh
+  one, while that sheet has a session to continue or unpushed work in a worktree that exists. The
+  origin must match: a review finding on the same pull request still gets a sheet of its own. So
+  *Continue* and *Commit & push* stay reachable after the sheet was closed, also for a run a rule
+  started. The session id is not stored across launches. After a relaunch the refusal and its
+  two ways out remain, but *Continue* does not.
 - **Continue.** A Claude Code run that ended with an error, typically a cap, keeps its `session_id`.
   While its worktree exists, the sheet offers *Continue*. It runs `claude --resume <id> -p
   "Continue."` with the same guardrail flags and stream-json, in the same worktree, with no worktree

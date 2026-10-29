@@ -64,8 +64,11 @@ final class DelegationCenter {
     /// Opens (or re-opens) the sheet for a delegation.
     ///
     /// A running delegation for the same target is shown as it is: its prompt and transcript
-    /// belong to the run in flight and must not be replaced by a new context. A new repository task
-    /// never meets that rule — its identity is fresh.
+    /// belong to the run in flight and must not be replaced by a new context. So is a finished one
+    /// for the same origin that still holds work (``DelegationModel/holdsPendingWork``) — its
+    /// session for *Continue*, or changes for *Commit & push* — whether a person or a rule started
+    /// it: a fresh model would drop the session and could only be refused by the worktree. A new
+    /// repository task never meets either rule — its identity is fresh.
     /// - Parameters:
     ///   - context: What the delegation is about.
     ///   - settings: Where the CLI configuration and the checkout mapping live.
@@ -88,7 +91,10 @@ final class DelegationCenter {
         onDidStart: (@MainActor (DelegationStart) -> Void)? = nil,
         brief: AgentBriefDrafter? = nil
     ) -> DelegationModel {
-        if let existing = models[context.prID], existing.isBusy {
+        if let existing = models[context.prID],
+           existing.isBusy
+            || (existing.holdsPendingWork && existing.context.origin == context.origin
+                && existing.context.session == context.session) {
             show(existing)
             return existing
         }

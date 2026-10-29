@@ -269,6 +269,7 @@ final class DelegationModelTests: XCTestCase {
                 ["worktree", "add", "--detach", model.worktree?.directory.path ?? "", "0123456789abcdef"],
                 ["diff", "--stat", "HEAD"],
                 ["status", "--porcelain"],
+                ["rev-list", "--count", "refs/remotes/origin/agent/fix..HEAD"],
             ]
         )
 
@@ -597,14 +598,54 @@ final class DelegationModelTests: XCTestCase {
         await fulfillment(of: [refreshed], timeout: 2)
         XCTAssertTrue(model.hasPushed)
         XCTAssertEqual(
-            Array(git.arguments.suffix(4)),
+            Array(git.arguments.suffix(5)),
             [
                 ["add", "-A"],
                 ["commit", "-m", "Address review feedback on #42"],
                 ["push", "origin", "HEAD:agent/fix"],
                 ["status", "--porcelain"],
+                ["rev-list", "--count", "refs/remotes/origin/agent/fix..HEAD"],
             ]
         )
+    }
+
+    func testAStartRefusedOverUnpushedCommitsOffersToPushThem() async throws {
+        // What the last run committed on the detached worktree, before anybody pushed it.
+        final class Pushed: @unchecked Sendable { var value = false }
+        let pushed = Pushed()
+        let git = RecordingProcessRunner { invocation in
+            switch invocation.arguments.first {
+            case "rev-list":
+                return ProcessResult(status: 0, standardOutput: pushed.value ? "0\n" : "2\n", standardError: "")
+            case "push":
+                pushed.value = true
+                return ProcessResult(status: 0, standardOutput: "", standardError: "")
+            default:
+                return ProcessResult(status: 0, standardOutput: "", standardError: "")
+            }
+        }
+        let model = makeModel(runner: ScriptedAgentRunner(), git: git)
+        try FileManager.default.createDirectory(
+            at: XCTUnwrap(model.worktree?.directory),
+            withIntermediateDirectories: true
+        )
+
+        model.start()
+        await model.runTask?.value
+
+        guard case .failed = model.state else { return XCTFail("expected a refusal, got \(model.state)") }
+        XCTAssertEqual(model.unpushedCommits, 2)
+        XCTAssertTrue(model.hasChanges, "the failed sheet offers Commit & push")
+        XCTAssertFalse(model.canRunAgain, "trying again would be refused the same way")
+
+        model.commitAndPush()
+        await model.actionTask?.value
+
+        XCTAssertTrue(model.hasPushed)
+        XCTAssertFalse(git.arguments.contains { $0.first == "commit" }, "a clean worktree has nothing to commit")
+        XCTAssertTrue(git.arguments.contains(["push", "origin", "HEAD:agent/fix"]))
+        XCTAssertEqual(model.unpushedCommits, 0)
+        XCTAssertTrue(model.canRunAgain)
     }
 
     func testDiscardingRemovesTheWorktreeAndResetsTheSheet() async throws {
@@ -866,6 +907,42 @@ final class DelegationModelTests: XCTestCase {
 
         center.dismiss()
         XCTAssertNil(center.presented)
+    }
+
+    func testReopeningKeepsARunThatCanBeContinuedUnlessTheOriginDiffers() async throws {
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: "shepherd.tests.\(UUID().uuidString)"))
+        let settings = AppSettings(defaults: defaults)
+        settings.setLocalCheckout(URL(fileURLWithPath: "/Users/dev/code/review"), forRepoNamed: "schnaq/review")
+        settings.agentCLI.executablePath = "/bin/echo"
+        let runner = ScriptedAgentRunner(
+            events: [.result(AgentRunResult(isError: true, sessionID: "6f2a-0001", subtype: "error_max_turns"))],
+            exitCode: 1
+        )
+        let center = DelegationCenter(
+            gitRunner: RecordingProcessRunner(),
+            worktreesRoot: root,
+            makeAgentRunner: { _ in runner }
+        )
+        let toasts = ToastCenter()
+
+        let first = center.open(context: context, settings: settings, toasts: toasts)
+        first.start()
+        await first.runTask?.value
+        // The fake git creates nothing; the real `worktree add` would have.
+        try FileManager.default.createDirectory(
+            at: XCTUnwrap(first.worktree?.directory),
+            withIntermediateDirectories: true
+        )
+        center.dismiss()
+
+        let again = center.open(context: context, settings: settings, toasts: toasts)
+        XCTAssertTrue(again === first, "the capped run is shown again, not replaced")
+        XCTAssertEqual(again.continuableSessionID, "6f2a-0001")
+
+        var finding = try XCTUnwrap(context)
+        finding.origin = .reviewFinding(path: "Sources/App.swift", line: 3)
+        let other = center.open(context: finding, settings: settings, toasts: toasts)
+        XCTAssertFalse(other === first, "a finding on the same pull request is a delegation of its own")
     }
 
     func testAnAutomaticStartRefusesWhenTheDelegationCouldNotRunAndPresentsNothing() throws {
