@@ -295,7 +295,8 @@ larger task also ended at the turn or spend cap, and *Run again* then deleted wh
   failed sheet offers *Commit & push* beside *Discard worktree*, and *Try again* waits for one of them.
 - **Re-opening keeps the run.** Opening a delegation again shows the existing sheet, not a fresh
   one, while that sheet has a session to continue or unpushed work in a worktree that exists. The
-  origin must match: a review finding on the same pull request still gets a sheet of its own. So
+  origin and the head commit must match: a review finding on the same pull request, or a pull
+  request that has moved on, still gets a sheet of its own. So
   *Continue* and *Commit & push* stay reachable after the sheet was closed, also for a run a rule
   started. The session id is not stored across launches. After a relaunch the refusal and its
   two ways out remain, but *Continue* does not.

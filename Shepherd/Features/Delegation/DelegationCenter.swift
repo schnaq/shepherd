@@ -65,7 +65,7 @@ final class DelegationCenter {
     ///
     /// A running delegation for the same target is shown as it is: its prompt and transcript
     /// belong to the run in flight and must not be replaced by a new context. So is a finished one
-    /// for the same origin that still holds work (``DelegationModel/holdsPendingWork``) — its
+    /// for the same origin and head commit that still holds work (``DelegationModel/holdsPendingWork``) — its
     /// session for *Continue*, or changes for *Commit & push* — whether a person or a rule started
     /// it: a fresh model would drop the session and could only be refused by the worktree. A new
     /// repository task never meets either rule — its identity is fresh.
@@ -94,7 +94,10 @@ final class DelegationCenter {
         if let existing = models[context.prID],
            existing.isBusy
             || (existing.holdsPendingWork && existing.context.origin == context.origin
-                && existing.context.session == context.session) {
+                && existing.context.session == context.session
+                // A pull request that moved on gets a fresh model: *Run again* on the old one
+                // would check out the stale head.
+                && existing.context.headRefOid == context.headRefOid) {
             show(existing)
             return existing
         }
