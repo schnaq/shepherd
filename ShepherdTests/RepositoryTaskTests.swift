@@ -908,17 +908,15 @@ final class RepositoryTaskTests: XCTestCase {
 
     func testTheOriginIsReadAtTheTopLevelNotTheFolderThatWasPicked() async throws {
         let git = RecordingProcessRunner { invocation in
-            switch invocation.arguments {
-            case ["rev-parse", "--show-toplevel"]:
+            switch invocation.arguments.first {
+            case "rev-parse":
                 return ProcessResult(status: 0, standardOutput: "/Users/dev/code/review\n", standardError: "")
-            case ["remote", "get-url", "origin"]:
+            default:
                 return ProcessResult(
                     status: 0,
                     standardOutput: "git@github.com:schnaq/review.git\n",
                     standardError: ""
                 )
-            default:
-                return ProcessResult(status: 2, standardOutput: "", standardError: "error: No such remote")
             }
         }
         let finding = try await LocalRepositoryProbe(runner: git)
@@ -951,22 +949,6 @@ final class RepositoryTaskTests: XCTestCase {
         let finding = try await LocalRepositoryProbe(runner: git).inspect(checkout)
         guard case .repository(_, let remote) = finding else { return XCTFail("\(finding)") }
         XCTAssertEqual(remote, .enterpriseHost("github.acme.com"))
-    }
-
-    func testAForksUpstreamIsPreferredOverItsOrigin() async throws {
-        let git = RecordingProcessRunner { invocation in
-            switch invocation.arguments {
-            case ["rev-parse", "--show-toplevel"]:
-                return ProcessResult(status: 0, standardOutput: "/Users/dev/code/review\n", standardError: "")
-            case ["remote", "get-url", "upstream"]:
-                return ProcessResult(status: 0, standardOutput: "git@github.com:schnaq/review.git\n", standardError: "")
-            default:
-                return ProcessResult(status: 0, standardOutput: "git@github.com:me/review.git\n", standardError: "")
-            }
-        }
-        let finding = try await LocalRepositoryProbe(runner: git).inspect(checkout)
-        guard case .repository(_, let remote) = finding else { return XCTFail("\(finding)") }
-        XCTAssertEqual(remote, .github(repo))
     }
 
     func testAnOtherHostOriginSuggestsTheNameItsPathSpells() async throws {

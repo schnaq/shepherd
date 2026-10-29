@@ -3,18 +3,17 @@ import ShepherdCore
 
 /// Asks git what a folder the user picked is: a clone, and of which GitHub repository.
 ///
-/// The first half of "Add a local repository…". Reads and nothing else, all run *in* the chosen
-/// folder through the same ``ProcessRunning`` seam and the same `/usr/bin/git` delegation uses —
-/// no shell, no network, and nothing written:
+/// The first half of "Add a local repository…". Two reads and nothing else, both run *in* the
+/// chosen folder through the same ``ProcessRunning`` seam and the same `/usr/bin/git` delegation
+/// uses — no shell, no network, and nothing written:
 ///
 /// 1. `git rev-parse --show-toplevel` — fails outside a work tree (a plain folder, a bare
 ///    repository), and otherwise names the clone's root, which is what gets linked. People pick a
 ///    subfolder often enough (`src/`, the folder the editor had open) that linking the pick
 ///    as-is would build every later worktree from the wrong place.
-/// 2. `git remote get-url upstream`, then `origin` — which repository the clone is of. A
-///    github.com `upstream` wins: in a fork's clone `origin` is the fork, and the pull requests
-///    worth watching are upstream's. A clone with no `origin` exits non-zero, and that is a
-///    finding rather than a failure: the sheet then asks for the name instead of guessing one.
+/// 2. `git remote get-url origin` — which repository the clone is of. A clone with no `origin`
+///    exits non-zero, and that is a finding rather than a failure: the sheet then asks for the
+///    name instead of guessing one.
 ///
 /// What the URL *means* is ``ShepherdCore/GitRemote``'s decision, not this type's.
 struct LocalRepositoryProbe: Sendable {
@@ -72,13 +71,13 @@ struct LocalRepositoryProbe: Sendable {
         guard top.isSuccess, !rootPath.isEmpty else { return .notAGitRepository }
         let root = URL(fileURLWithPath: rootPath, isDirectory: true)
 
-        // A fork's clone has the fork as `origin` and the repository its pull requests go to as
-        // `upstream`; that one is what is worth watching, so a github.com `upstream` wins.
-        if let upstream = try await remoteURL("upstream", in: root),
-           case .github(let repo) = GitRemote.read(upstream) {
-            return .repository(root: root, remote: .github(repo))
-        }
-        guard let url = try await remoteURL("origin", in: root) else {
+        let origin = try await runner.run(
+            executable: git,
+            arguments: ["remote", "get-url", "origin"],
+            currentDirectory: root
+        )
+        let url = origin.trimmedOutput
+        guard origin.isSuccess, !url.isEmpty else {
             return .repository(root: root, remote: .none)
         }
         switch GitRemote.read(url) {
@@ -92,16 +91,5 @@ struct LocalRepositoryProbe: Sendable {
             // Quoted back to the user by the sheet, so never with a credential in it.
             return .repository(root: root, remote: .unreadable(GitRemote.redacted(url)))
         }
-    }
-
-    /// A remote's URL, or `nil` when the clone has no remote of that name.
-    private func remoteURL(_ name: String, in root: URL) async throws -> String? {
-        let result = try await runner.run(
-            executable: git,
-            arguments: ["remote", "get-url", name],
-            currentDirectory: root
-        )
-        let url = result.trimmedOutput
-        return result.isSuccess && !url.isEmpty ? url : nil
     }
 }

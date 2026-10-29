@@ -244,9 +244,9 @@ No host is added: the only network traffic is the user's own git talking to the 
 fetches from. No setting is added either — the checkout map and the watch list both existed — so ADR
 0014's sync obligation does not change.
 
-## Amendment (2026-10-29): aliases, forks, and "By name" watches too
+## Amendment (2026-10-29): ssh aliases, and "By name" watches too
 
-Three corrections to the 2026-09-23 amendment's "Add a local repository…". They came out of a
+Two corrections to the 2026-09-23 amendment's "Add a local repository…". They came out of a
 user whose watched repository stayed empty. The main cause was access (ADR 0005's 2026-10-29
 amendment), and these were on the way:
 
@@ -258,9 +258,6 @@ amendment), and these were on the way:
   `https://` host never gets this reading, because aliases are an ssh feature. A wrong guess
   costs no more than a watched repository the access check then flags. For a remote on another host,
   the name field is pre-filled from the path (`GitRemote.pathRepository`).
-- **A fork's `upstream` wins.** The probe reads `git remote get-url upstream` before `origin`.
-  When `upstream` is on github.com, that is the repository linked and watched, because the
-  pull requests worth watching go there and not to the fork.
 - **"By name" in Settings → Delegation watches as well as links.** It now goes through
   `addLocalRepository(…, watch: true)` like the folder route. Only *Change* on an existing entry,
   the rail's *Link a local checkout…* and the delegation sheet's clone picker still only link. Each
