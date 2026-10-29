@@ -53,6 +53,37 @@ final class GitRemoteTests: XCTestCase {
         )
     }
 
+    // MARK: - ~/.ssh/config aliases
+
+    func testReadsAnSSHAliasWithoutADotAsGitHub() {
+        XCTAssertEqual(GitRemote.read("git@github-mm:o/r.git"), .github(RepoRef(owner: "o", name: "r")))
+        XCTAssertEqual(GitRemote.read("github:o/r"), .github(RepoRef(owner: "o", name: "r")))
+        XCTAssertEqual(GitRemote.read("ssh://git@work-github/o/r.git"), .github(RepoRef(owner: "o", name: "r")))
+        XCTAssertEqual(GitRemote.read("ssh+git://git@github-mm/o/r.git"), .github(RepoRef(owner: "o", name: "r")))
+    }
+
+    func testADotlessHostThatDoesNotNameGitHubIsAnotherHost() {
+        XCTAssertEqual(GitRemote.read("git@gitlab:o/r"), .otherHost("gitlab"))
+        XCTAssertEqual(GitRemote.read("git@localhost:o/r"), .otherHost("localhost"))
+        XCTAssertEqual(GitRemote.pathRepository("git@gitlab:o/r"), RepoRef(owner: "o", name: "r"))
+    }
+
+    func testReadsTheSecondAccountConventionAsGitHub() {
+        XCTAssertEqual(
+            GitRemote.read("git@github.com-work:o/r.git"),
+            .github(RepoRef(owner: "o", name: "r"))
+        )
+    }
+
+    func testAnAliasOnlyCountsForSSH() {
+        XCTAssertEqual(GitRemote.read("https://intranet-git/o/r"), .otherHost("intranet-git"))
+    }
+
+    func testReadsTheRepositoryOutOfAnyHostsPath() {
+        XCTAssertEqual(GitRemote.pathRepository("git@gitlab.com:team/app.git"), RepoRef(owner: "team", name: "app"))
+        XCTAssertNil(GitRemote.pathRepository("https://gitlab.com/group/sub/app"))
+    }
+
     // MARK: - Refusals
 
     func testRecognisesAnEnterpriseHost() {

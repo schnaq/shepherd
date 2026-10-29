@@ -648,9 +648,10 @@ URL builder with no resource bundle (ADR 0013).
 ### Delegate back to a local coding agent
 
 Send a pull request or a single review finding back to the locally installed Claude Code (headless
-`claude -p`, `stream-json` output parsed as it arrives) in an isolated detached worktree, with
-turn and budget caps. The command template is configurable for other agent CLIs. Shepherd never
-touches agent auth and never pushes: you review the result and push it yourself
+`claude -p`, `stream-json` output parsed as it arrives) in an isolated detached worktree. Turn and
+budget caps are optional and off by default (Settings → Delegation). The command template is
+configurable for other agent CLIs. Shepherd never touches agent auth and never pushes: you review
+the result and push it yourself
 ([ADR 0011](adr/0011-delegate-to-local-agent-cli.md)).
 
 ### Your own clones: add a local repository, start an agent on it
@@ -672,8 +673,8 @@ type is the prompt. When you press Start, Shepherd names a branch after the firs
 *"Add dark mode"* becomes `agent/add-dark-mode`, with a short suffix if that name is taken locally
 or on `origin` — fetches, and creates the worktree on that branch from the tip of the default
 branch. The agent is told the repository and the branch, may commit and open a pull request with
-its own credentials, and runs under the same turn cap (or *No limit*), spend cap and permission
-mode as every other delegation. Shepherd pushes nothing itself; *Commit & push branch* is your
+its own credentials, and runs under the same optional turn and spend caps and permission mode
+as every other delegation. Shepherd pushes nothing itself; *Commit & push branch* is your
 button. Several tasks can run in one repository at once, each on its own branch and worktree —
 two that start with the same words get two names. *Start an agent…* always starts a new one; the
 row's **Agent tasks** submenu (and ⌘K's *Show agent task "…"*) lists each task with whether it is
@@ -972,12 +973,12 @@ GitHub is a sync target, not a backend. Writes go through a persisted outbox, so
 pressed offline is still an approval when the network comes back — and a queued approval has
 approved nothing until it lands. The toast says which of the two happened: *"Approved
 schnaq/review#182."* only once the row really reached GitHub, *"Approval queued for …"* while it is
-still on this Mac, and *"Review held back — … changed since you started"* when the pull request
-moved on and the review was parked instead of sent. A merge says *"Merged …"* when it lands,
-whenever the drain got to it. Settings → Sync is where the queue is accounted for: how many
-writes are waiting, how many were parked because the pull request moved on, and — named one by one,
-with the reason and a Retry or Discard button — the ones GitHub refused outright, which are the
-only ones that will never leave the queue on their own. No server, no account other than your GitHub login, and telemetry that is anonymous and off in one click;
+still on this Mac, and *"Review parked — … got new commits since you wrote it"* when the pull
+request moved on and the review was parked instead of sent. A merge says *"Merged …"* when it lands,
+whenever the drain got to it. The writes that will not leave the queue on their own are one click
+away in the toolbar — *n not sent* (GitHub refused them) and *n parked* (the pull request moved on)
+— named one by one with the reason and their way out: Retry, Send anyway for a parked review,
+Discard. Settings → Sync lists the same rows, and a new review or merge replaces a parked one. No server, no account other than your GitHub login, and telemetry that is anonymous and off in one click;
 where Shepherd does sync between your own machines, it does it through storage you own, encrypted
 before it leaves the Mac. The complete list of hosts Shepherd may ever contact — and the rule that
 adding one needs a new ADR — is in [CONTRIBUTING.md](../CONTRIBUTING.md).

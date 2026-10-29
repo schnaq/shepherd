@@ -489,10 +489,29 @@ final class AutoDelegationPolicyTests: XCTestCase {
         XCTAssertEqual(berlin.count, 10, "yyyy-MM-dd")
     }
 
-    func testCapsCannotBeDrivenBelowOne() {
-        let broken = rules(maxConcurrent: 0, maxPerDay: -3)
-        XCTAssertEqual(broken.concurrencyCap, 1)
-        XCTAssertEqual(broken.dailyCap, 1)
+    func testZeroOrBelowMeansNoCap() {
+        let unlimited = rules(maxConcurrent: 0, maxPerDay: -3)
+        XCTAssertEqual(unlimited.concurrencyCap, .max)
+        XCTAssertEqual(unlimited.dailyCap, .max)
+        let ledger = AutoDelegationLedger(
+            day: AutoDelegationLedger.dayStamp(for: clock, timeZone: timeZone),
+            startsToday: 500
+        )
+        XCTAssertNotNil(
+            decide(
+                signal(ownRedPullRequest()),
+                context(rules: unlimited, runningAutomaticCount: 50, ledger: ledger)
+            ).plan,
+            "no cap is ever reached, so no cap notification is ever posted"
+        )
+        // The other guards still hold: one run per pull request.
+        XCTAssertEqual(
+            decide(
+                signal(ownRedPullRequest()),
+                context(rules: unlimited, hasRunningDelegation: true)
+            ).skipReason,
+            .delegationRunning
+        )
     }
 
     // MARK: - Ordering

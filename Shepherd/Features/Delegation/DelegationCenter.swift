@@ -46,10 +46,12 @@ final class DelegationCenter {
         self.makeAgentRunner = makeAgentRunner
     }
 
-    /// Whether a delegation for a pull request is currently running.
+    /// Whether a delegation for a pull request is currently running, or finished holding work a
+    /// new one would replace (``DelegationModel/holdsPendingWork``) — either way, a rule must not
+    /// start another.
     /// - Parameter prID: The pull request's node id.
     func isRunning(prID: String) -> Bool {
-        models[prID]?.isBusy ?? false
+        models[prID].map { $0.isBusy || $0.holdsPendingWork } ?? false
     }
 
     /// How many delegations that a rule started are running right now.
@@ -64,8 +66,11 @@ final class DelegationCenter {
     /// Opens (or re-opens) the sheet for a delegation.
     ///
     /// A running delegation for the same target is shown as it is: its prompt and transcript
-    /// belong to the run in flight and must not be replaced by a new context. A new repository task
-    /// never meets that rule — its identity is fresh.
+    /// belong to the run in flight and must not be replaced by a new context. So is a finished one
+    /// for the same origin and head commit that still holds work (``DelegationModel/holdsPendingWork``) — its
+    /// session for *Continue*, or changes for *Commit & push* — whether a person or a rule started
+    /// it: a fresh model would drop the session and could only be refused by the worktree. A new
+    /// repository task never meets either rule — its identity is fresh.
     /// - Parameters:
     ///   - context: What the delegation is about.
     ///   - settings: Where the CLI configuration and the checkout mapping live.
@@ -88,7 +93,13 @@ final class DelegationCenter {
         onDidStart: (@MainActor (DelegationStart) -> Void)? = nil,
         brief: AgentBriefDrafter? = nil
     ) -> DelegationModel {
-        if let existing = models[context.prID], existing.isBusy {
+        if let existing = models[context.prID],
+           existing.isBusy
+            || (existing.holdsPendingWork && existing.context.origin == context.origin
+                && existing.context.session == context.session
+                // A pull request that moved on gets a fresh model: *Run again* on the old one
+                // would check out the stale head.
+                && existing.context.headRefOid == context.headRefOid) {
             show(existing)
             return existing
         }
@@ -145,7 +156,7 @@ final class DelegationCenter {
         // of code rather than a property of today's callers (ADR 0011's 2026-09-23 amendment).
         guard !context.isRepositoryTask else { return nil }
         // The one-per-pull-request rule, again from the one place that owns it.
-        if let existing = models[context.prID], existing.isBusy { return nil }
+        if isRunning(prID: context.prID) { return nil }
 
         let model = make(
             context: context,

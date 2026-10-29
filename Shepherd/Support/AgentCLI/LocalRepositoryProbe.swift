@@ -31,8 +31,8 @@ struct LocalRepositoryProbe: Sendable {
         case github(RepoRef)
         /// A GitHub Enterprise host, which Shepherd does not talk to.
         case enterpriseHost(String)
-        /// A host that is not GitHub.
-        case otherHost(String)
+        /// A host that is not GitHub, and the `owner/name` its path spells, when it spells one.
+        case otherHost(String, RepoRef?)
         /// A URL Shepherd could not read a repository out of, redacted by
         /// ``ShepherdCore/GitRemote/redacted(_:)`` so it is safe to show.
         case unreadable(String)
@@ -86,7 +86,7 @@ struct LocalRepositoryProbe: Sendable {
         case .enterpriseHost(let host):
             return .repository(root: root, remote: .enterpriseHost(host))
         case .otherHost(let host):
-            return .repository(root: root, remote: .otherHost(host))
+            return .repository(root: root, remote: .otherHost(host, GitRemote.pathRepository(url)))
         case .unreadable:
             // Quoted back to the user by the sheet, so never with a credential in it.
             return .repository(root: root, remote: .unreadable(GitRemote.redacted(url)))

@@ -497,7 +497,20 @@ struct IssueDetailPanel: View {
             queued: model.queuedWriteCount(for: row),
             parked: model.parkedWriteCount(for: row),
             failed: model.failedWriteCount(for: row),
-            target: .issue
+            target: .issue,
+            // The issue side re-reads the outbox rather than observing it, so each re-reads.
+            onRetry: {
+                Task {
+                    await environment.session?.retryFailedWrites(for: row.id)
+                    await model.refreshPendingWrites()
+                }
+            },
+            onDiscardParked: {
+                Task {
+                    await environment.session?.discardParkedWrites(for: row.id)
+                    await model.refreshPendingWrites()
+                }
+            }
         )
     }
 

@@ -35,8 +35,10 @@ Verified facts (docs.claude.com / code.claude.com, 2026-09):
   self-configured CLI and inherits whatever auth that CLI has. Shepherd's UI and docs
   make no claims about subscription coverage and never collect or inject Anthropic
   credentials for this feature.
-- Guardrails on by default: `--max-turns`, `--max-budget-usd` (user-configurable),
-  allowed-tools preset, worktree isolation, full transcript retained locally.
+- ~~Guardrails on by default: `--max-turns`, `--max-budget-usd` (user-configurable),
+  allowed-tools preset, worktree isolation, full transcript retained locally.~~ Superseded by the
+  2026-10-29 amendment: the turn and spend caps are user-chosen and off by default; worktree
+  isolation, the allow-list and the local transcript stay.
 
 ## Consequences
 
@@ -138,7 +140,7 @@ button on an issue that says nothing about a previous run.
 
 Settings → Delegation's *Max turns* gains a **No limit** checkbox. It stores `maxTurns = 0`, which
 `AgentCLIConfiguration` already read as "pass no `--max-turns`" — so this is a control for an
-existing state, not a new one. The default stays 25, switching the box off restores 25, and the
+existing state, not a new one. The default stays 25 (no limit since the 2026-10-29 amendment), switching the box off restores 25 (30 since that amendment), and the
 delegation sheet's guardrail line says "no turn limit" rather than "0 turns max". The spend cap is
 untouched and still applies, which is why the box's help says so: a run without a turn limit is a
 run the budget has to stop.
@@ -243,3 +245,93 @@ attempting an empty commit. The pull-request origins are untouched.
 No host is added: the only network traffic is the user's own git talking to the remote it already
 fetches from. No setting is added either — the checkout map and the watch list both existed — so ADR
 0014's sync obligation does not change.
+
+## Amendment (2026-10-29): user-chosen guardrails, and a run that can be continued
+
+Replaces "Guardrails on by default" above. The defaults were a $5 spend cap, 25 turns and the
+allow-list `Read,Edit,Bash(git *),Glob,Grep`. With them, an agent could not run a project's tests,
+a build or `gh`. It still reported `success`, because a refused tool is not an error to the CLI. A
+larger task also ended at the turn or spend cap, and *Run again* then deleted what it had done.
+
+- **New defaults.** No `--max-turns`, no `--max-budget-usd`, and the allow-list
+  `Read,Edit,Write,Glob,Grep,Bash,WebFetch,WebSearch`. The permission mode stays `acceptEdits`. Both
+  caps keep their controls. Unticking *No limit* brings back 30 turns. Ticking *Cap spend* brings
+  back the last amount, or $10. Neither suggestion is a legacy default, which the migration below
+  would turn back into "no limit". The UI makes no claim about what pays for a run, as the Decision
+  requires. The new defaults are the user's settings, not a statement about any plan.
+- **Migration.** `AgentCLIConfiguration` now writes `schemaVersion: 2`. A document without it
+  comes from an older build. When such a document is decoded, each field that still equals its old
+  default gets the new default: the allow-list, the turns, the budget and the session template.
+  Every other value is kept. The same decoder reads `UserDefaults` and the settings-sync document
+  (ADR 0014). So an older Mac that uploads its old defaults does not bring them back here. Edge
+  case: a user on the new build who sets exactly 25 turns or $5, and then has an *older* Mac
+  re-upload that, gets the new defaults back. This is accepted.
+- **All six permission modes the CLI accepts, except `manual`.** `auto` and `bypassPermissions` are
+  added. `manual` prompts, and a headless run cannot answer a prompt. The `dontAsk` text now says
+  what the mode does: anything not on the list is refused without asking. Under
+  `bypassPermissions` the sheet's guardrail line says the Tools list does not apply, and Settings
+  greys the field.
+- **Model, effort, extra arguments.** `model` is free text: an alias such as `opus` or a full name.
+  `effort` is one of `low`, `medium`, `high`, `xhigh` or `max`. They are passed as `--model` and
+  `--effort`. Empty or unset leaves the choice to the CLI. `extraArguments` existed already but had
+  no field. Settings now has *Extra arguments*, split with `ShellWords`. The field stores a value
+  only once it splits.
+- **Refusals are visible.** The result event's `permission_denials` are decoded. The result card
+  shows "*n* tools denied" and the tool names next to cost and turns. `isError` is unchanged, so
+  webhooks and outcomes report what the CLI reported.
+- **Run again no longer deletes work.** `GitWorktree.prepare` now refuses a worktree with
+  uncommitted changes, as `addForNewWork` already did. Before, it ran `worktree remove --force` on
+  it. The error message is shared and no longer mentions issues. Two other paths go through
+  `prepare` and get the same refusal: a session back-channel send (ADR 0030) on a pull request
+  whose worktree is dirty, and an automatic run (ADR 0016) on top of an unpushed earlier run. Both
+  are now refused, not wiped. In the sheet, *Run again* is disabled while the changes are
+  uncommitted. A repository task is the exception, because it continues in place. *Discard
+  worktree* is also offered in the failed state, which is the way out the refusal names.
+- **Commits count as work too.** A pull-request worktree is detached, so a commit the agent made
+  there is on no branch, and `worktree remove --force` would orphan it. `prepare` therefore also
+  refuses when `git rev-list --count --right-only --cherry-pick origin/<branch>...HEAD` is above 0,
+  after its fetch; `--cherry-pick` leaves out commits a rebase already carried over. A push
+  updates `origin/<branch>`, so pushed work no longer counts. The sheet counts the same commits as
+  changes, so *Commit & push* pushes them even from a clean worktree. After either refusal the
+  failed sheet offers *Commit & push* beside *Discard worktree*, and *Try again* waits for one of them.
+- **Re-opening keeps the run.** Opening a delegation again shows the existing sheet, not a fresh
+  one, while that sheet has a session to continue or unpushed work in a worktree that exists. The
+  origin and the head commit must match: a review finding on the same pull request, or a pull
+  request that has moved on, still gets a sheet of its own. So
+  *Continue* and *Commit & push* stay reachable after the sheet was closed, also for a run a rule
+  started. The session id is not stored across launches. After a relaunch the refusal and its
+  two ways out remain, but *Continue* does not.
+- **Continue.** A Claude Code run that ended with an error, typically a cap, keeps its `session_id`.
+  While its worktree exists, the sheet offers *Continue*. It runs `claude --resume <id> -p
+  "Continue."` with the same guardrail flags and stream-json, in the same worktree, with no worktree
+  step. Claude Code finds a session by its directory, so it must be the same worktree. A custom CLI
+  cannot be resumed and is not offered *Continue*. A back-channel run already is a resume.
+- **The session back-channel default** becomes `claude --resume {sessionID} -p {message}
+  --output-format stream-json --verbose --permission-mode acceptEdits`. The old default printed
+  plain text, which the stream decoder drops, so the transcript stayed empty. It also refused edits
+  in headless mode. A stored copy of the old default is migrated as above.
+
+The preamble rules in `DelegationContext` do not change. A pull-request run is still told not to
+push, and Shepherd still never pushes on its own.
+
+## Amendment (2026-10-29): ssh aliases, and "By name" watches too
+
+Two corrections to the 2026-09-23 amendment's "Add a local repository…". They came out of a
+user whose watched repository stayed empty. The main cause was access (ADR 0005's 2026-10-29
+amendment), and these were on the way:
+
+- **An ssh_config alias is github.com, not Enterprise.** `GitRemote` counted any host with
+  "github" in it as GitHub Enterprise and refused it outright, so the multi-account conventions
+  `git@github-work:o/r.git` and `git@github.com-work:o/r.git` had no way in. Over ssh (scp-like or
+  `ssh://`), a host without a dot that has "github" in its name, or one spelled
+  `github.com-<suffix>`, is now read as github.com with `owner/name` from the path. A real host
+  has a dot, and no top-level domain has a dash. Any other dotless host (`git@gitlab:o/r`,
+  `git@localhost:o/r`) stays another host: reading it as github.com would watch whatever public
+  repository happens to share the path. An `https://` host never gets the alias reading, because
+  aliases are an ssh feature. For a remote on another host, the name field is pre-filled from the
+  path (`GitRemote.pathRepository`), for the user to confirm.
+- **"By name" in Settings → Delegation watches as well as links.** It now goes through
+  `addLocalRepository(…, watch: true)` like the folder route. On a full watch list it still links,
+  and says it did not watch, as the folder route's sheet does. Only *Change* on an existing entry,
+  the rail's *Link a local checkout…* and the delegation sheet's clone picker still only link. Each
+  of those re-links a repository that is already in the inbox.

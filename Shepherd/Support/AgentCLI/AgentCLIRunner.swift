@@ -26,6 +26,23 @@ protocol AgentRunning: Sendable {
     /// - Returns: The live session.
     /// - Throws: When the invocation cannot be built or the process cannot be spawned.
     func run(prompt: String, in worktree: URL) throws -> AgentSession
+
+    /// Continues an earlier Claude Code session in the same worktree, under the same guardrails.
+    /// - Parameters:
+    ///   - sessionID: The session the earlier run reported.
+    ///   - prompt: What to tell it, e.g. "Continue."
+    ///   - worktree: The worktree the earlier run used; Claude Code finds a session by directory.
+    /// - Returns: The live session.
+    /// - Throws: When the invocation cannot be built or the process cannot be spawned.
+    func resume(sessionID: String, prompt: String, in worktree: URL) throws -> AgentSession
+}
+
+extension AgentRunning {
+    /// A runner with no notion of a session starts the prompt as a fresh run — what the test
+    /// doubles need, and nothing in the app relies on.
+    func resume(sessionID: String, prompt: String, in worktree: URL) throws -> AgentSession {
+        try run(prompt: prompt, in: worktree)
+    }
 }
 
 /// Spawns the configured agent CLI and streams its newline-delimited JSON.
@@ -73,6 +90,14 @@ struct AgentCLIRunner: AgentRunning {
     }
 
     func run(prompt: String, in worktree: URL) throws -> AgentSession {
+        try spawn(prompt: prompt, in: worktree, resuming: nil)
+    }
+
+    func resume(sessionID: String, prompt: String, in worktree: URL) throws -> AgentSession {
+        try spawn(prompt: prompt, in: worktree, resuming: sessionID)
+    }
+
+    private func spawn(prompt: String, in worktree: URL, resuming sessionID: String?) throws -> AgentSession {
         let invocation: AgentInvocation
         if let session {
             invocation = try configuration.sessionInvocation(
@@ -85,7 +110,8 @@ struct AgentCLIRunner: AgentRunning {
             invocation = try configuration.invocation(
                 prompt: prompt,
                 worktree: worktree,
-                executable: executable
+                executable: executable,
+                resuming: sessionID
             )
         }
 

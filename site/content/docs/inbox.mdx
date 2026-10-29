@@ -43,6 +43,8 @@ You can also manage the list in Settings → Sync under **Watched repositories**
 
 ![Watched repositories in the rail](/watched-repositories.png)
 
+A warning triangle instead of a count means Shepherd cannot see the repository. GitHub's search returns nothing for a repository your sign-in has no access to, so without the warning you would only see an empty list. Hover the row to see why. If you signed in with device flow, right-click it and choose **Install Shepherd on …** (with the owner's name). After the app is installed, choose **Check access again**. If you signed in with a token, give the token access to the repository's owner. See [GitHub token](/docs/github-token#device-flow-and-organizations).
+
 ### Add a local clone
 
 Choose **Add a local repository…** from the same `+` menu, or from `⌘K`. Pick the folder of a clone. Shepherd reads `owner/repo` from its `origin` remote and shows one confirmation with two boxes:
@@ -52,10 +54,12 @@ Choose **Add a local repository…** from the same `+` menu, or from `⌘K`. Pic
 
 Both are ticked by default. Untick either one.
 
+When you click **Add**, Shepherd first checks that your sign-in can read the repository. If it cannot, the dialog stays open, says so, and offers the install link.
+
 A watched repository with a linked clone shows a small laptop icon. Right-click it to see **Start an agent…**. Without a clone, the menu offers **Link a local checkout…** instead.
 
 <Callout type="info">
-Only github.com is supported. A clone whose `origin` points at GitHub Enterprise is refused.
+Only github.com is supported. A clone whose `origin` points at GitHub Enterprise is refused. An SSH alias from `~/.ssh/config` with "github" in its name, such as `git@github-work:owner/repo.git` or `git@github.com-work:owner/repo.git`, counts as github.com.
 </Callout>
 
 ## Group, sort and filter
@@ -172,7 +176,7 @@ Once a day, you get one notification that opens the inbox, plus a dismissible ca
 - green agent pull requests that only need an approval or a merge
 - issues an agent pull request closed
 - your own pull requests with red CI or a change request
-- queued reviews that were not sent, and writes Shepherd gave up on
+- queued writes that are parked, and writes Shepherd gave up on
 
 Each line has a **Show** button that takes you there. The digest is built from local data only. If your Mac was asleep at the set time, it arrives when the Mac wakes, if that is still the same day. A quiet night produces nothing.
 
@@ -182,9 +186,9 @@ Settings → Sync has three switches under **Notifications**:
 
 - **A new review is requested from me**
 - **Checks fail on a pull request I opened**
-- **A queued review could not be sent**
+- **A queued write was parked or not sent**
 
-macOS asks for permission the first time Shepherd posts one. Automatic rules and webhooks have their own notifications. See [Automation](/docs/automation).
+macOS asks for permission the first time Shepherd posts one. Notifications also show while Shepherd is in front, and clicking one about a pull request or issue opens it. Automatic rules and webhooks have their own notifications. See [Automation](/docs/automation).
 
 <Cards>
   <Card title="Reviewing in the app" href="/docs/review" />

@@ -16,13 +16,15 @@ Open **Settings → Delegation**. The **Agent** picker has two choices.
 - **Claude Code.** Shepherd runs `claude` headless and reads its output as it arrives. Use **Detect** to find the executable, or type its **Path**.
 - **Custom command.** Any other agent CLI. Write a **Command** template. `{prompt}` is the task and `{worktree}` is the path. `{prompt}` always becomes exactly one argument, and no shell runs the command.
 
-Under **Guardrails** you set the **Permission mode** (**Accept edits**, **Plan only** or **Don't ask**), **Max turns** (or **No limit**), an optional spend cap (**Cap spend**, in USD) and the allowed **Tools**.
+For Claude Code you can also pick the **Model** and the **Effort**. **Extra arguments** are added to every run.
+
+Under **Guardrails** you set the **Permission mode** (**Accept edits**, **Plan only**, **Don't ask**, **Auto** or **Bypass permissions**), **Max turns** (no limit by default), an optional spend cap (**Cap spend**, in USD, off by default) and the allowed **Tools**. By default the agent may read, edit and write files, run any shell command and use the web, so it can run your tests.
 
 ### Link your local clones
 
 A delegation runs in a git worktree of your own clone. Shepherd never clones anything itself.
 
-In **Settings → Delegation**, under **Local checkouts**, press **Add a local repository…** and choose the folder. Shepherd reads the repository from the clone's `origin`. You can also watch it in the same step. For a clone whose origin does not say, enter the name as `owner/name`.
+In **Settings → Delegation**, under **Local checkouts**, press **Add a local repository…** and choose the folder. Shepherd reads the repository from the clone's `origin`. You can also watch it in the same step. For a clone whose origin does not say, enter the name as `owner/name` and choose the folder. That watches the repository too.
 
 ### Start an agent
 
@@ -31,6 +33,8 @@ In **Settings → Delegation**, under **Local checkouts**, press **Add a local r
 - ⌘K also offers **Start an agent on owner/repo…** for every linked clone.
 
 The **Agent tasks** menu lists each task and whether it is running, finished or failed. **Discard worktree** removes one task's worktree. **Commit & push branch** is your button.
+
+If a run stops at a cap or with an error, **Continue** resumes the same Claude Code session in the same worktree, with its changes. On a pull request or an issue, **Run again** starts afresh, so it waits until you push or discard the changes the last run left. The result also shows any tools the agent was refused.
 
 ### Let Shepherd write the brief
 

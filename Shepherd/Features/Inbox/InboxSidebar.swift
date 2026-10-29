@@ -26,6 +26,13 @@ struct InboxSidebar: View {
     var onReopenTask: (DelegationModel) -> Void = { _ in }
     /// Asks for a folder to link as a repository's local checkout.
     var onLinkCheckout: (RepoRef) -> Void = { _ in }
+    /// Why a watched repository's pull requests cannot reach the inbox, or `nil` when the token
+    /// can read it (``AppEnvironment/accessProblem(for:)``).
+    var accessProblem: (RepoRef) -> String? = { _ in nil }
+    /// Whether the fix for an unreadable repository is installing the Shepherd GitHub App.
+    var offersAppInstall = false
+    /// Asks GitHub again whether the watched repositories can be read.
+    var onCheckAccessAgain: () -> Void = {}
 
     var body: some View {
         ScrollView {
@@ -202,20 +209,36 @@ struct InboxSidebar: View {
             }
             ForEach(watchedFacets, id: \.repo.fullName) { facet in
                 let isLinked = hasLocalCheckout(facet.repo)
+                let problem = accessProblem(facet.repo)
+                // A warning instead of a count: GitHub answers a repository the token cannot see
+                // with an empty search, and a zero would say "nothing open" when the truth is
+                // "Shepherd cannot look".
+                let glyph: (image: String, label: String)? = problem != nil
+                    ? ("exclamationmark.triangle.fill", String(localized: "no access"))
+                    : isLinked ? ("laptopcomputer", String(localized: "local checkout linked")) : nil
                 RailRow(
                     title: facet.repo.fullName,
                     systemImage: "binoculars",
-                    trailingSystemImage: isLinked ? "laptopcomputer" : nil,
-                    trailingAccessibilityLabel: isLinked ? String(localized: "local checkout linked") : nil,
-                    count: facet.count,
+                    trailingSystemImage: glyph?.image,
+                    trailingAccessibilityLabel: glyph?.label,
+                    count: problem != nil ? nil : facet.count,
                     isSelected: model.repoFilter.map { $0.isSameRepository(as: facet.repo) } ?? false
                 ) {
                     toggleRepoFilter(facet.repo)
                 }
-                .help(isLinked
-                    ? String(localized: "Watched, with a local checkout: every open pull request in this repository reaches the inbox, and you can start an agent in it from the context menu.")
-                    : String(localized: "Watched: every open pull request in this repository reaches the inbox."))
+                .help(problem ?? (isLinked
+                    ? String(localized: "Watched, with a local checkout: open pull requests in this repository reach the inbox, and you can start an agent in it from the context menu.")
+                    : String(localized: "Watched: open pull requests in this repository reach the inbox.")))
                 .contextMenu {
+                    if problem != nil {
+                        if offersAppInstall {
+                            Button(String(localized: "Install Shepherd on \(facet.repo.owner)…")) {
+                                NSWorkspace.shared.open(AppConfig.githubAppInstallURL)
+                            }
+                        }
+                        Button(String(localized: "Check access again"), action: onCheckAccessAgain)
+                        Divider()
+                    }
                     if isLinked {
                         // Always a new task: several run in one repository side by side, each on
                         // its own branch (ADR 0011's 2026-09-23 amendment).

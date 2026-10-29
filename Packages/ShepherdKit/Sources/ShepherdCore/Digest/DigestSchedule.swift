@@ -86,10 +86,9 @@ public struct DigestSchedule: Sendable, Codable, Hashable {
 
     /// The delivery hour, clamped into range.
     ///
-    /// Clamped rather than validated at the setter, for the same reason
-    /// `AutoDelegationRules.dailyCap` is: the value can arrive from a settings document written by
-    /// another build (ADR 0014), and a nonsensical hour must degrade to a sane delivery time rather
-    /// than to no delivery at all.
+    /// Clamped rather than validated at the setter: the value can arrive from a settings document
+    /// written by another build (ADR 0014), and a nonsensical hour must degrade to a sane delivery
+    /// time rather than to no delivery at all.
     public var normalizedHour: Int { min(23, max(0, hour)) }
 
     /// The delivery minute, clamped into range.

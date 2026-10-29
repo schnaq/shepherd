@@ -11,8 +11,12 @@ enum AgentPermissionMode: String, CaseIterable, Codable, Sendable, Identifiable 
     case acceptEdits
     /// The agent plans and reports, but changes nothing.
     case plan
-    /// Nothing is asked at all — every permitted tool runs unattended.
+    /// Nothing is asked: a tool on the allow-list runs, anything else is refused.
     case dontAsk
+    /// The CLI's own classifier decides which tool calls run unattended.
+    case auto
+    /// Every tool runs unattended; the allow-list does not apply.
+    case bypassPermissions
 
     var id: String { rawValue }
 
@@ -22,6 +26,8 @@ enum AgentPermissionMode: String, CaseIterable, Codable, Sendable, Identifiable 
         case .acceptEdits: return String(localized: "Accept edits")
         case .plan: return String(localized: "Plan only")
         case .dontAsk: return String(localized: "Don't ask")
+        case .auto: return String(localized: "Auto")
+        case .bypassPermissions: return String(localized: "Bypass permissions")
         }
     }
 
@@ -33,9 +39,23 @@ enum AgentPermissionMode: String, CaseIterable, Codable, Sendable, Identifiable 
         case .plan:
             return String(localized: "The agent only writes a plan. No file is changed.")
         case .dontAsk:
-            return String(localized: "Every allowed tool runs unattended, including shell commands.")
+            return String(localized: "Tools on the list run unattended; anything not in Tools is refused without asking.")
+        case .auto:
+            return String(localized: "Claude Code decides which tool calls run unattended and refuses the rest.")
+        case .bypassPermissions:
+            return String(localized: "Every tool runs unattended, including any shell command. Tools does not apply.")
         }
     }
+
+    /// Whether the `--allowedTools` list has any effect in this mode.
+    var usesAllowedTools: Bool { self != .bypassPermissions }
+}
+
+/// The reasoning effort passed to Claude Code's `--effort`.
+enum AgentEffort: String, CaseIterable, Codable, Sendable, Identifiable {
+    case low, medium, high, xhigh, max
+
+    var id: String { rawValue }
 }
 
 /// Which CLI Shepherd invokes.
@@ -137,6 +157,10 @@ struct AgentCLIConfiguration: Codable, Sendable, Equatable {
     var maxTurns: Int
     /// The spend cap passed to `--max-budget-usd`; `nil` means uncapped.
     var maxBudgetUSD: Double?
+    /// The model passed to `--model`; empty leaves the CLI's own choice.
+    var model: String
+    /// The effort passed to `--effort`; `nil` leaves the CLI's own choice.
+    var effort: AgentEffort?
     /// The command that continues a **local** session (ADR 0030).
     ///
     /// A second template beside ``AgentCLIKind/custom(commandTemplate:)``'s, and separate from
@@ -151,18 +175,41 @@ struct AgentCLIConfiguration: Codable, Sendable, Equatable {
     /// button offers the session's link instead of a run, which is honest and needs no answer.
     var remoteSessionTemplate: String
 
-    /// The default tool allow-list: read, edit, search, and git — but no arbitrary shell.
-    static let defaultAllowedTools = "Read,Edit,Bash(git *),Glob,Grep"
-    /// The default turn cap.
-    static let defaultMaxTurns = 25
-    /// The default spend cap in US dollars.
-    static let defaultMaxBudgetUSD = 5.0
-    /// The default local-session command: the CLI's documented session resume, headless.
-    static let defaultSessionResumeTemplate = "claude --resume {sessionID} -p {message}"
+    /// The default tool allow-list: reading, editing, any shell command and the web — enough to
+    /// run a project's tests, which is what most delegated tasks need (ADR 0011's 2026-10-29
+    /// amendment).
+    static let defaultAllowedTools = "Read,Edit,Write,Glob,Grep,Bash,WebFetch,WebSearch"
+    /// The default turn cap: `0`, i.e. no `--max-turns`.
+    static let defaultMaxTurns = 0
+    /// The default spend cap: none.
+    static let defaultMaxBudgetUSD: Double? = nil
+    /// What *Max turns* comes back at when its "No limit" box is unticked.
+    ///
+    /// Neither suggestion equals its legacy default (25 turns, $5): the schema migration turns a
+    /// legacy value back into "no limit", so a cap the user switched on must not look like one.
+    static let suggestedMaxTurns = 30
+    /// What *Budget* starts at when "Cap spend" is ticked and no earlier value is known.
+    static let suggestedMaxBudgetUSD = 10.0
+    /// The default local-session command: the CLI's documented session resume, headless, with
+    /// output Shepherd can read and the edits headless mode would otherwise refuse.
+    static let defaultSessionResumeTemplate =
+        "claude --resume {sessionID} -p {message} --output-format stream-json --verbose --permission-mode acceptEdits"
+
+    /// The shape of the stored JSON, written as `schemaVersion`; absent means 1.
+    ///
+    /// Version 2 changed the defaults (ADR 0011's 2026-10-29 amendment). Encoding writes every
+    /// field, so a configuration saved by an older build carries the old defaults as if they had
+    /// been chosen; the decoder upgrades exactly those values and keeps everything else.
+    private static let schemaVersion = 2
+    /// The version-1 defaults, each replaced by today's when a version-1 document still holds it.
+    private static let legacyAllowedTools = "Read,Edit,Bash(git *),Glob,Grep"
+    private static let legacyMaxTurns = 25
+    private static let legacyMaxBudgetUSD = 5.0
+    private static let legacySessionResumeTemplate = "claude --resume {sessionID} -p {message}"
     /// The default remote-session command: none, deliberately (see ``remoteSessionTemplate``).
     static let defaultRemoteSessionTemplate = ""
 
-    /// Creates a configuration, guardrails on by default (ADR 0011).
+    /// Creates a configuration with the default guardrails (ADR 0011).
     init(
         kind: AgentCLIKind = .claudeCode,
         executablePath: String = "",
@@ -171,6 +218,8 @@ struct AgentCLIConfiguration: Codable, Sendable, Equatable {
         allowedTools: String = AgentCLIConfiguration.defaultAllowedTools,
         maxTurns: Int = AgentCLIConfiguration.defaultMaxTurns,
         maxBudgetUSD: Double? = AgentCLIConfiguration.defaultMaxBudgetUSD,
+        model: String = "",
+        effort: AgentEffort? = nil,
         sessionResumeTemplate: String = AgentCLIConfiguration.defaultSessionResumeTemplate,
         remoteSessionTemplate: String = AgentCLIConfiguration.defaultRemoteSessionTemplate
     ) {
@@ -181,20 +230,29 @@ struct AgentCLIConfiguration: Codable, Sendable, Equatable {
         self.allowedTools = allowedTools
         self.maxTurns = maxTurns
         self.maxBudgetUSD = maxBudgetUSD
+        self.model = model
+        self.effort = effort
         self.sessionResumeTemplate = sessionResumeTemplate
         self.remoteSessionTemplate = remoteSessionTemplate
     }
 
     private enum CodingKeys: String, CodingKey {
         case kind, executablePath, extraArguments, permissionMode, allowedTools
-        case maxTurns, maxBudgetUSD, sessionResumeTemplate, remoteSessionTemplate
+        case maxTurns, maxBudgetUSD, model, effort, sessionResumeTemplate, remoteSessionTemplate
+        case schemaVersion
     }
 
     /// Decodes tolerantly: a stored configuration written by an older build is missing keys
     /// that were added later, and a missing key must fall back to the default rather than
     /// throwing away the whole configuration.
+    ///
+    /// A version-1 document — from `UserDefaults` or from settings sync, including one an older
+    /// Mac uploads after this one upgraded — has each field that still equals a version-1 default
+    /// replaced by today's default, so the old caps cannot come back by way of another Mac.
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let version = (try? container.decodeIfPresent(Int.self, forKey: .schemaVersion))
+            .flatMap { $0 } ?? 1
         kind = (try? container.decodeIfPresent(AgentCLIKind.self, forKey: .kind))
             .flatMap { $0 } ?? .claudeCode
         executablePath = (try? container.decodeIfPresent(String.self, forKey: .executablePath))
@@ -216,6 +274,8 @@ struct AgentCLIConfiguration: Codable, Sendable, Equatable {
         } else {
             maxBudgetUSD = Self.defaultMaxBudgetUSD
         }
+        model = (try? container.decodeIfPresent(String.self, forKey: .model)).flatMap { $0 } ?? ""
+        effort = (try? container.decodeIfPresent(AgentEffort.self, forKey: .effort)).flatMap { $0 }
         // Absent means "written before the session back-channel existed", so both fall back to
         // their defaults — which for the remote one is the empty string, i.e. "offer the link"
         // (ADR 0030). An explicitly *empty* local template is kept as it is: clearing that field
@@ -228,6 +288,15 @@ struct AgentCLIConfiguration: Codable, Sendable, Equatable {
             String.self,
             forKey: .remoteSessionTemplate
         )).flatMap { $0 } ?? Self.defaultRemoteSessionTemplate
+
+        if version < Self.schemaVersion {
+            if allowedTools == Self.legacyAllowedTools { allowedTools = Self.defaultAllowedTools }
+            if maxTurns == Self.legacyMaxTurns { maxTurns = Self.defaultMaxTurns }
+            if maxBudgetUSD == Self.legacyMaxBudgetUSD { maxBudgetUSD = Self.defaultMaxBudgetUSD }
+            if sessionResumeTemplate == Self.legacySessionResumeTemplate {
+                sessionResumeTemplate = Self.defaultSessionResumeTemplate
+            }
+        }
     }
 
     /// Encodes `maxBudgetUSD` as an explicit `null` when it is "no cap" — the synthesized
@@ -242,8 +311,11 @@ struct AgentCLIConfiguration: Codable, Sendable, Equatable {
         try container.encode(allowedTools, forKey: .allowedTools)
         try container.encode(maxTurns, forKey: .maxTurns)
         try container.encode(maxBudgetUSD, forKey: .maxBudgetUSD)
+        try container.encode(model, forKey: .model)
+        try container.encode(effort, forKey: .effort)
         try container.encode(sessionResumeTemplate, forKey: .sessionResumeTemplate)
         try container.encode(remoteSessionTemplate, forKey: .remoteSessionTemplate)
+        try container.encode(Self.schemaVersion, forKey: .schemaVersion)
     }
 
     // MARK: - Invocation
@@ -289,15 +361,24 @@ struct AgentCLIConfiguration: Codable, Sendable, Equatable {
     ///   - prompt: The full prompt, preamble included.
     ///   - worktree: The detached worktree the agent works in.
     ///   - executable: The located binary; ignored for a custom template, which names its own.
+    ///   - sessionID: A Claude Code session to continue with `--resume`, under the same
+    ///     guardrails. Ignored by a custom template, which Shepherd cannot resume
+    ///     (``DelegationModel/continuableSessionID`` never asks it to).
     /// - Returns: The invocation to spawn.
     /// - Throws: ``Failure`` when the configuration cannot produce a command.
-    func invocation(prompt: String, worktree: URL, executable: URL?) throws -> AgentInvocation {
+    func invocation(
+        prompt: String,
+        worktree: URL,
+        executable: URL?,
+        resuming sessionID: String? = nil
+    ) throws -> AgentInvocation {
         switch kind {
         case .claudeCode:
             guard let executable else { throw Failure.executableNotFound }
+            let resume = sessionID.map { ["--resume", $0] } ?? []
             return AgentInvocation(
                 executable: executable,
-                arguments: claudeArguments(prompt: prompt) + extraArguments
+                arguments: resume + claudeArguments(prompt: prompt) + extraArguments
             )
         case .custom(let template):
             let words: [String]
@@ -444,6 +525,13 @@ struct AgentCLIConfiguration: Codable, Sendable, Equatable {
         }
         if let maxBudgetUSD {
             arguments.append(contentsOf: ["--max-budget-usd", Self.format(budget: maxBudgetUSD)])
+        }
+        let model = model.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !model.isEmpty {
+            arguments.append(contentsOf: ["--model", model])
+        }
+        if let effort {
+            arguments.append(contentsOf: ["--effort", effort.rawValue])
         }
         return arguments
     }

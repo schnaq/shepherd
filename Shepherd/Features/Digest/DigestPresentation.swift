@@ -49,8 +49,8 @@ enum DigestPresentation {
                 : String(localized: "\(count) of your pull requests need attention")
         case .parkedReviews:
             return count == 1
-                ? String(localized: "1 queued review was not sent")
-                : String(localized: "\(count) queued reviews were not sent")
+                ? String(localized: "1 queued write is parked")
+                : String(localized: "\(count) queued writes are parked")
         case .failedWrites:
             return count == 1
                 ? String(localized: "1 queued write was given up on")
@@ -73,7 +73,7 @@ enum DigestPresentation {
         case .ownPullRequestsNeedingAttention:
             return String(localized: "Show your own pull requests")
         case .parkedReviews:
-            return String(localized: "Open Settings → Sync, where the parked reviews are listed")
+            return String(localized: "Open Settings → Sync, where the parked writes are listed")
         case .failedWrites:
             return String(localized: "Open Settings → Sync, where each one can be retried or discarded")
         }

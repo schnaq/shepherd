@@ -41,13 +41,15 @@ final class DraftConflictQueue {
 
     /// Adds a conflict, or shows it immediately when nothing else is up.
     ///
-    /// A second conflict for the same pull request is dropped: the two rows of an
-    /// "approve & merge" park together, and the alert says the same thing about both.
-    /// - Parameter conflict: The parked review.
+    /// A second conflict for the same pull request *and the same write* is dropped. The two rows
+    /// of an "approve & merge" are two writes, and each gets its own alert: the alert names the
+    /// write and its Discard throws away only that kind (ADR 0006's 2026-10-29 amendment).
+    /// - Parameter conflict: The parked write.
     func raise(_ conflict: DraftConflict) {
-        guard current?.prID != conflict.prID,
-              !waiting.contains(where: { $0.prID == conflict.prID })
-        else { return }
+        let isSame = { (other: DraftConflict) in
+            other.prID == conflict.prID && other.write == conflict.write
+        }
+        guard !(current.map(isSame) ?? false), !waiting.contains(where: isSame) else { return }
         guard current != nil else {
             current = conflict
             return

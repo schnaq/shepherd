@@ -15,6 +15,14 @@ enum NotificationCategory {
     static let digest = "shepherd.digest"
 }
 
+/// The `userInfo` keys a click is routed on, beside the category.
+enum NotificationUserInfoKey {
+    /// The node id of the one pull request the notification is about.
+    static let pullRequestID = "prID"
+    /// The node id of the one issue the notification is about.
+    static let issueID = "issueID"
+}
+
 /// One notification Shepherd wants to show.
 ///
 /// A value rather than three loose strings, so the mapping functions below can be unit-tested
@@ -32,6 +40,9 @@ struct NotificationPayload: Sendable, Equatable {
     /// The pull requests this notification is about, by node id — what lets Siri and Apple
     /// Intelligence act on "this" with a read intent (ADR 0021's 2026-09-22 amendment).
     var pullRequestIDs: [String]
+    /// The issue this notification is about, by node id — a write against an issue that was not
+    /// sent. A click opens it.
+    var issueID: String?
 
     /// Creates a payload.
     /// - Parameters:
@@ -40,23 +51,34 @@ struct NotificationPayload: Sendable, Equatable {
     ///   - body: The body.
     ///   - categoryIdentifier: The category, for notifications a click should route.
     ///   - pullRequestIDs: The pull requests it is about, by node id.
+    ///   - issueID: The issue it is about, by node id.
     init(
         identifier: String,
         title: String,
         body: String,
         categoryIdentifier: String? = nil,
-        pullRequestIDs: [String] = []
+        pullRequestIDs: [String] = [],
+        issueID: String? = nil
     ) {
         self.identifier = identifier
         self.title = title
         self.body = body
         self.categoryIdentifier = categoryIdentifier
         self.pullRequestIDs = pullRequestIDs
+        self.issueID = issueID
     }
 
     /// The entities the system attaches to the notification.
     var entityIdentifiers: [EntityIdentifier] {
         pullRequestIDs.map { EntityIdentifier(for: PullRequestEntity.self, identifier: $0) }
+    }
+
+    /// What a click opens: the one pull request or issue the notification is about. A notice
+    /// about several pull requests opens nothing in particular — the app comes forward.
+    var userInfo: [String: String] {
+        if let issueID { return [NotificationUserInfoKey.issueID: issueID] }
+        guard pullRequestIDs.count == 1, let id = pullRequestIDs.first else { return [:] }
+        return [NotificationUserInfoKey.pullRequestID: id]
     }
 }
 
@@ -75,9 +97,8 @@ final class NotificationManager {
     private var router: NotificationRouter?
     /// Answers `true` for a sync event that is somebody else's to announce.
     ///
-    /// Today only a merge series (ADR 0041) sets it: the parked branch update it queued raises
-    /// ``ShepherdSync/SyncEvent/draftConflict(_:)``, whose notice says "Review not sent" — about
-    /// a review nobody wrote. The series says what happened in its chip and its summary.
+    /// Today only a merge series (ADR 0041) sets it: a branch update or merge it queued that was
+    /// parked or refused is the series' to report, in its chip and its summary.
     var suppresses: (@MainActor (SyncEvent) -> Bool)?
 
     /// Creates a manager.
@@ -92,10 +113,19 @@ final class NotificationManager {
     /// `bootstrap()`: a notification the user clicked while the app was not running is delivered to
     /// the delegate shortly after launch, so the delegate has to exist by the earliest moment a
     /// SwiftUI app has any code of its own.
-    /// - Parameter onDigestClicked: What to do when the morning digest is clicked.
-    func routeClicks(onDigestClicked: @escaping @MainActor () -> Void) {
+    /// - Parameters:
+    ///   - onDigestClicked: What to do when the morning digest is clicked.
+    ///   - onTargetClicked: What to do when a notification about one pull request or issue is
+    ///     clicked: its node id, and whether it is an issue.
+    func routeClicks(
+        onDigestClicked: @escaping @MainActor () -> Void,
+        onTargetClicked: @escaping @MainActor (String, Bool) -> Void
+    ) {
         guard router == nil else { return }
-        let router = NotificationRouter(onDigestClicked: onDigestClicked)
+        let router = NotificationRouter(
+            onDigestClicked: onDigestClicked,
+            onTargetClicked: onTargetClicked
+        )
         self.router = router
         center.delegate = router
     }
@@ -139,6 +169,7 @@ final class NotificationManager {
             content.categoryIdentifier = category
         }
         content.appEntityIdentifiers = payload.entityIdentifiers
+        content.userInfo = payload.userInfo
 
         let request = UNNotificationRequest(
             identifier: payload.identifier,
@@ -179,14 +210,42 @@ final class NotificationManager {
             )
         case .draftConflict(let conflict):
             guard settings.notifyOnDraftConflict else { return nil }
+            let slug = "\(conflict.repo.fullName)#\(String(conflict.number))"
+            let title: String
+            let body: String
+            switch conflict.write {
+            case .review:
+                title = String(localized: "Review parked · \(slug)")
+                body = String(localized: "New commits arrived after you wrote your review. Send it anyway or discard it.")
+            case .merge:
+                title = String(localized: "Merge parked · \(slug)")
+                body = String(localized: "New commits arrived before the merge ran. Look at them, then merge again.")
+            case .updateBranch:
+                title = String(localized: "Branch update parked · \(slug)")
+                body = String(localized: "New commits arrived before the branch could be updated.")
+            }
             return NotificationPayload(
-                identifier: "draft-conflict-\(conflict.prID)-\(conflict.actualHeadOid)",
-                title: String(localized: "Review not sent · \(conflict.repo.fullName)#\(String(conflict.number))"),
-                body: String(localized: "The pull request got new commits. Re-review before submitting."),
+                // The write in the id too: "approve & merge" parks a review and a merge on the same
+                // head, and one notice must not replace the other.
+                identifier: "draft-conflict-\(conflict.prID)-\(conflict.write.rawValue)-\(conflict.actualHeadOid)",
+                title: title,
+                body: body,
                 pullRequestIDs: [conflict.prID]
             )
-        case .changesRequestedOnOwnPR, .prMerged, .prUpdated, .mutationSent, .sweepCompleted,
-             .syncFailed:
+        case .syncFailed(let failure):
+            // Only a write the drain gave up on: a sweep that failed retries by itself, and the
+            // title bar says so. Behind the same switch as a parked write — both are "what you
+            // asked for did not reach GitHub".
+            guard settings.notifyOnDraftConflict, let write = failure.abandonedWrite else { return nil }
+            let isIssue = write.action.targetsIssue
+            return NotificationPayload(
+                identifier: "write-failed-\(write.id.uuidString)",
+                title: String(localized: "Not sent · \(write.repo.fullName)#\(String(write.number))"),
+                body: "\(write.action.localizedName): \(failure.localizedMessage())",
+                pullRequestIDs: isIssue ? [] : [write.prID],
+                issueID: isIssue ? write.prID : nil
+            )
+        case .changesRequestedOnOwnPR, .prMerged, .prUpdated, .mutationSent, .sweepCompleted:
             // A mutation the user just triggered themselves needs no notification — the toast
             // says so, and the webhook dispatcher takes it from here (ADR 0012). That argument
             // used to be half true for a merge, whose toast could only say "queued": the app now
@@ -247,9 +306,14 @@ final class NotificationManager {
         let summary = signal.pullRequest
         let body: String
         switch reason {
+        // `Int.max` is "no limit" (ADR 0016's 2026-10-29 amendment). `decide` cannot report such a
+        // cap, but the rules here are read after it ran, and a box ticked in between must not
+        // put 9223372036854775807 in a notification.
         case .dailyCapReached:
+            guard rules.dailyCap != .max else { return nil }
             body = String(localized: "Today's limit of \(rules.dailyCap) automatic delegations is used up. Start it by hand from the pull request.")
         case .concurrencyCapReached:
+            guard rules.concurrencyCap != .max else { return nil }
             body = String(localized: "\(rules.concurrencyCap) automatic delegations are already running. Start it by hand from the pull request.")
         case .disabled, .triggerNotArmed, .notOwnPullRequest, .notATransition, .notConfigured,
              .alreadyHandled, .delegationRunning:
@@ -434,28 +498,47 @@ final class NotificationManager {
     }
 }
 
-/// Receives clicks on Shepherd's notifications and turns them into navigation.
+/// Receives clicks on Shepherd's notifications and turns them into navigation, and lets them show
+/// while Shepherd is the active app.
 ///
-/// Deliberately tiny and deliberately switch-free beyond one comparison: the only notification that
-/// routes anywhere is the morning digest, which is the only one that is *not* about a single pull
-/// request the user can already see. Every other notification keeps macOS's default behaviour —
-/// clicking it brings the app forward — because a review request that yanked the app to a different
-/// screen while somebody was mid-review would be hostile.
+/// A click on the morning digest opens the inbox; a click on a notice about one pull request or one
+/// issue opens it (ADR 0006's 2026-10-29 amendment — a click is the user asking for exactly that,
+/// which is why the earlier worry about yanking somebody mid-review does not apply). A notice about
+/// several pull requests only brings the app forward.
 ///
-/// The completion-handler form of the delegate callback is implemented, `nonisolated`, rather than
-/// the `async` one: the centre calls its delegate off the main thread with a response that is not
-/// `Sendable`, so an `async` witness on a main-actor class would have to ship that response across
-/// an isolation boundary — which Swift 6 rightly refuses. Instead the one fact the router needs, the
-/// category, is read where the response is, and only the decision hops onto the main actor.
+/// The completion-handler forms of the delegate callbacks are implemented, `nonisolated`, rather
+/// than the `async` ones: the centre calls its delegate off the main thread with values that are
+/// not `Sendable`, so an `async` witness on a main-actor class would have to ship them across an
+/// isolation boundary — which Swift 6 rightly refuses. Instead the facts the router needs, the
+/// category and the target, are read where the response is, and only the decision hops onto the
+/// main actor.
 @MainActor
 final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate {
     private let onDigestClicked: @MainActor () -> Void
+    private let onTargetClicked: @MainActor (String, Bool) -> Void
 
     /// Creates a router.
-    /// - Parameter onDigestClicked: What to do when the morning digest is clicked.
-    init(onDigestClicked: @escaping @MainActor () -> Void) {
+    /// - Parameters:
+    ///   - onDigestClicked: What to do when the morning digest is clicked.
+    ///   - onTargetClicked: What to do when a notice about one pull request or issue is clicked.
+    init(
+        onDigestClicked: @escaping @MainActor () -> Void,
+        onTargetClicked: @escaping @MainActor (String, Bool) -> Void
+    ) {
         self.onDigestClicked = onDigestClicked
+        self.onTargetClicked = onTargetClicked
         super.init()
+    }
+
+    /// Shows a notification while Shepherd is frontmost too. Without this macOS files it silently
+    /// into Notification Centre, and a parked review or a refused merge went unnoticed by exactly
+    /// the user who was looking at the app.
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .list, .sound])
     }
 
     /// Handles a click on a notification.
@@ -469,13 +552,21 @@ final class NotificationRouter: NSObject, UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        let isDigest = response.notification.request.content.categoryIdentifier
-            == NotificationCategory.digest
+        let content = response.notification.request.content
+        let isDigest = content.categoryIdentifier == NotificationCategory.digest
+        let issueID = content.userInfo[NotificationUserInfoKey.issueID] as? String
+        let prID = content.userInfo[NotificationUserInfoKey.pullRequestID] as? String
         completionHandler()
-        guard isDigest else { return }
         let onDigestClicked = self.onDigestClicked
+        let onTargetClicked = self.onTargetClicked
         Task { @MainActor in
-            onDigestClicked()
+            if isDigest {
+                onDigestClicked()
+            } else if let issueID {
+                onTargetClicked(issueID, true)
+            } else if let prID {
+                onTargetClicked(prID, false)
+            }
         }
     }
 }

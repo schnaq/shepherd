@@ -105,18 +105,20 @@ Ein Hinweis sagt dir, in welchem Fall du bist:
 
 - „… approved.“ heißt: GitHub hat das Review.
 - „Approval für … eingereiht.“ heißt: Es liegt noch auf deinem Mac. Es hat noch nichts approved.
-- „Review zurückgehalten — … hat sich geändert, seit du angefangen hast. Siehe Hinweis.“ heißt: Der Pull Request hat sich weiterentwickelt und das Review wurde geparkt.
+- „Review zurückgestellt — … hat neue Commits bekommen, seit du es geschrieben hast.“ heißt: Der Pull Request hat sich weiterentwickelt und das Review wurde zurückgestellt.
 
-Unter Einstellungen → Sync siehst du, wie viele Schreibvorgänge warten oder geparkt sind. Dort stehen auch die, die GitHub abgelehnt hat, jeweils mit **Erneut senden** und **Verwerfen**. Der Review-Kopf und das Detail-Panel bieten **Erneut senden** für den Pull Request, in dem du gerade bist.
+Schreibvorgänge, die nicht von selbst rausgehen, zählt die Toolbar als **n nicht gesendet** (rot, GitHub hat sie abgelehnt) und **n zurückgestellt** (gelb, der Pull Request hat sich geändert). Klick auf die Zahl, um jeden mit **Zeigen**, **Erneut senden** oder **Trotzdem senden** und **Verwerfen** zu sehen. Einstellungen → Sync listet dieselben Zeilen. Der Review-Kopf und das Detail-Panel bieten dieselben Aktionen für den Pull Request, in dem du gerade bist.
 
-### Wenn ein Review nicht gesendet wird
+### Wenn ein Review zurückgestellt wird
 
-Ein Review ist an den Head-Commit gebunden, auf dem du es geschrieben hast. Bekommt der Pull Request neue Commits, bevor das Review GitHub erreicht, sendet Shepherd es nicht. Deine Inline-Kommentare könnten sonst auf falschen Zeilen landen. Es zeigt **Dieses Review wurde nicht gesendet** mit zwei Buttons:
+Ein Review ist an den Head-Commit gebunden, auf dem du es geschrieben hast. Bekommt der Pull Request neue Commits, bevor das Review GitHub erreicht, stellt Shepherd es zurück, damit du entscheidest, ob es noch passt. Es zeigt **Dein Review wurde zurückgestellt** mit diesen Buttons:
 
-- **Erneut reviewen** öffnet den Pull Request noch einmal, damit du deinen Draft gegen den neuen Commit prüfen kannst.
+- **Trotzdem senden** sendet das Review auf den Commit, auf dem du es geschrieben hast. GitHub lässt deine Inline-Kommentare dort und markiert sie als veraltet, wo sich die Zeilen geändert haben.
+- **Erneut reviewen** öffnet den Pull Request, damit du deinen Draft gegen die neuen Commits prüfen kannst. Ein neu abgeschicktes Review ersetzt das zurückgestellte.
+- **Verwerfen** löscht das zurückgestellte Review samt Draft.
 - **Später** schließt den Hinweis.
 
-Dein Draft bleibt erhalten. Die Titelleiste und Einstellungen → Sync zählen das Review weiter als **nicht gesendet**, bis du dich darum gekümmert hast, und du bekommst eine Mitteilung **Review nicht gesendet**. Wurden in einem Sweep mehrere Reviews geparkt, kommen die Hinweise nacheinander.
+Bis du entscheidest, zeigt der Pull Request **Zurückgestellt**, die Toolbar zählt ihn unter **zurückgestellt**, und dieselben Buttons stehen im Detail-Panel und im Review-Kopf. Außerdem bekommst du eine Mitteilung **Review zurückgestellt**. Wurden in einem Durchlauf mehrere Schreibvorgänge zurückgestellt, kommen die Hinweise nacheinander. Ein zurückgestellter Merge funktioniert genauso, nur ohne **Trotzdem senden**: Sieh dir die neuen Commits an und merge noch einmal, oder verwirf ihn.
 
 Ein schnelles Urteil ohne Inline-Kommentare ist an den Head gebunden, den du beim Klicken gesehen hast. Inline-Kommentare behalten den Commit, auf dem du sie geschrieben hast.
 

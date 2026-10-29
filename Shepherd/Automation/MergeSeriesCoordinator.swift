@@ -341,11 +341,11 @@ final class MergeSeriesCoordinator {
     /// Whether a parked write's alert should stay down because the series already handles it.
     ///
     /// The drain raises ``ShepherdSync/SyncEvent/draftConflict(_:)`` for a branch update whose
-    /// pin went stale, and the alert it pops talks about a review draft to re-apply — which a
-    /// series' update does not have. The series skips such an entry (*update refused*) and says
-    /// so in its chip and its summary, so the alert would be a second, wrong explanation.
-    /// `DraftConflict` carries no action kind; the entry's state and the pin it was updating
-    /// from identify the update exactly, without a database read.
+    /// pin went stale, and the alert it pops tells the user to look again and retry — which a
+    /// series does by itself. The series skips such an entry (*update refused*) and says so in its
+    /// chip and its summary, so the alert would be a second explanation. The entry's state and the
+    /// pin it was updating from identify the update exactly, without a database read, so the
+    /// conflict's ``ShepherdSync/DraftConflict/write`` is not consulted.
     /// - Parameter conflict: The parked write.
     func handlesConflict(_ conflict: DraftConflict) -> Bool {
         guard let entry = store.series(containing: conflict.prID)?.entry(for: conflict.prID) else {

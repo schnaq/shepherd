@@ -98,6 +98,22 @@ final class AgentCLITests: XCTestCase {
         XCTAssertEqual(result.subtype, "error_max_turns")
     }
 
+    func testRefusedToolsAreReadFromTheResult() throws {
+        // What the CLI sends when the permission mode refused a call: the run still "succeeds".
+        let line = """
+            {"type":"result","subtype":"success","is_error":false,"num_turns":3,"session_id":"6f2a-0001","permission_denials":[{"tool_name":"Bash","tool_use_id":"toolu_07","tool_input":{"command":"swift test"}},{"tool_name":"WebFetch","tool_use_id":"toolu_08","tool_input":{}},{"tool_name":"Bash","tool_use_id":"toolu_09","tool_input":{}},{"tool_use_id":"toolu_10"}]}
+            """
+        guard case .result(let result) = try XCTUnwrap(AgentStreamEvent.events(in: line).first)
+        else { return XCTFail("expected a result event") }
+        XCTAssertFalse(result.isError)
+        XCTAssertEqual(result.permissionDenials, ["Bash", "WebFetch", "Bash"])
+        XCTAssertEqual(result.deniedTools, ["Bash", "WebFetch"])
+
+        guard case .result(let clean) = try XCTUnwrap(AgentStreamEvent.events(in: Fixture.resultSuccess).first)
+        else { return XCTFail("expected a result event") }
+        XCTAssertEqual(clean.permissionDenials, [])
+    }
+
     func testAnUnknownEventTypeIsNotFatal() {
         XCTAssertEqual(AgentStreamEvent.events(in: Fixture.unknownType), [.unknown])
     }
@@ -145,9 +161,36 @@ final class AgentCLITests: XCTestCase {
                 "--output-format", "stream-json",
                 "--verbose",
                 "--permission-mode", "acceptEdits",
-                "--allowedTools", "Read,Edit,Bash(git *),Glob,Grep",
-                "--max-turns", "25",
-                "--max-budget-usd", "5",
+                "--allowedTools", "Read,Edit,Write,Glob,Grep,Bash,WebFetch,WebSearch",
+            ]
+        )
+    }
+
+    func testModelEffortAndAResumedSessionArePassed() throws {
+        var configuration = AgentCLIConfiguration()
+        configuration.model = " opus "
+        configuration.effort = .xhigh
+        configuration.maxTurns = 40
+        configuration.extraArguments = ["--add-dir", "/tmp/extra"]
+        let invocation = try configuration.invocation(
+            prompt: "Continue.",
+            worktree: worktree,
+            executable: binary,
+            resuming: "6f2a-0001"
+        )
+        XCTAssertEqual(
+            invocation.arguments,
+            [
+                "--resume", "6f2a-0001",
+                "-p", "Continue.",
+                "--output-format", "stream-json",
+                "--verbose",
+                "--permission-mode", "acceptEdits",
+                "--allowedTools", AgentCLIConfiguration.defaultAllowedTools,
+                "--max-turns", "40",
+                "--model", "opus",
+                "--effort", "xhigh",
+                "--add-dir", "/tmp/extra",
             ]
         )
     }
@@ -164,8 +207,8 @@ final class AgentCLITests: XCTestCase {
     }
 
     func testNoTurnLimitOmitsTheFlagEntirelyAndSaysSo() throws {
-        // `0` is what Settings → Delegation's "No limit" stores; the default stays 25.
-        XCTAssertEqual(AgentCLIConfiguration().maxTurns, 25)
+        // `0` is what Settings → Delegation's "No limit" stores, and the default since 2026-10-29.
+        XCTAssertEqual(AgentCLIConfiguration().maxTurns, 0)
         var configuration = AgentCLIConfiguration()
         configuration.maxTurns = 0
         let invocation = try configuration.invocation(
@@ -300,6 +343,12 @@ final class AgentCLITests: XCTestCase {
         XCTAssertEqual(try ShellWords.split("agent \"\" x"), ["agent", "", "x"])
     }
 
+    func testJoiningRoundTripsThroughSplitting() throws {
+        let words = ["--add-dir", "/tmp/a b", "it's", "", #"back\slash"#, "--model=opus"]
+        XCTAssertEqual(try ShellWords.split(ShellWords.join(words)), words)
+        XCTAssertEqual(ShellWords.join(["--model", "opus"]), "--model opus")
+    }
+
     func testUnterminatedQuotesAndEscapesAreErrors() {
         XCTAssertThrowsError(try ShellWords.split("agent \"oops"))
         XCTAssertThrowsError(try ShellWords.split("agent 'oops"))
@@ -328,7 +377,45 @@ final class AgentCLITests: XCTestCase {
         XCTAssertEqual(configuration.maxTurns, 4)
         XCTAssertEqual(configuration.permissionMode, .acceptEdits)
         XCTAssertEqual(configuration.allowedTools, AgentCLIConfiguration.defaultAllowedTools)
-        XCTAssertEqual(configuration.maxBudgetUSD, AgentCLIConfiguration.defaultMaxBudgetUSD)
+        XCTAssertNil(configuration.maxBudgetUSD)
+        XCTAssertEqual(configuration.model, "")
+        XCTAssertNil(configuration.effort)
+    }
+
+    /// Exactly what 1.15 wrote for a user who never touched Settings → Delegation.
+    private let versionOneDefaults = #"""
+        {"kind":{"claudeCode":{}},"executablePath":"","extraArguments":[],"permissionMode":"acceptEdits","allowedTools":"Read,Edit,Bash(git *),Glob,Grep","maxTurns":25,"maxBudgetUSD":5,"sessionResumeTemplate":"claude --resume {sessionID} -p {message}","remoteSessionTemplate":""}
+        """#
+
+    func testAVersionOneConfigurationHoldingTheOldDefaultsIsUpgraded() throws {
+        let decoded = try JSONDecoder().decode(
+            AgentCLIConfiguration.self,
+            from: Data(versionOneDefaults.utf8)
+        )
+        XCTAssertEqual(decoded, AgentCLIConfiguration())
+    }
+
+    func testAVersionOneConfigurationKeepsWhatTheUserChanged() throws {
+        let customised = versionOneDefaults
+            .replacingOccurrences(of: #""maxTurns":25"#, with: #""maxTurns":60"#)
+            .replacingOccurrences(of: #""permissionMode":"acceptEdits""#, with: #""permissionMode":"dontAsk""#)
+        let decoded = try JSONDecoder().decode(AgentCLIConfiguration.self, from: Data(customised.utf8))
+        XCTAssertEqual(decoded.maxTurns, 60)
+        XCTAssertEqual(decoded.permissionMode, .dontAsk)
+        // The fields still at the old defaults are upgraded one by one.
+        XCTAssertEqual(decoded.allowedTools, AgentCLIConfiguration.defaultAllowedTools)
+        XCTAssertNil(decoded.maxBudgetUSD)
+        XCTAssertEqual(decoded.sessionResumeTemplate, AgentCLIConfiguration.defaultSessionResumeTemplate)
+    }
+
+    func testAVersionTwoConfigurationIsTakenAsWritten() throws {
+        // Chosen today, the old numbers are a choice, not a default to upgrade.
+        var configuration = AgentCLIConfiguration()
+        configuration.maxTurns = 25
+        configuration.maxBudgetUSD = 5
+        configuration.allowedTools = "Read,Edit,Bash(git *),Glob,Grep"
+        let data = try JSONEncoder().encode(configuration)
+        XCTAssertEqual(try JSONDecoder().decode(AgentCLIConfiguration.self, from: data), configuration)
     }
 
     // MARK: - Prompt

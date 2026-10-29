@@ -770,10 +770,9 @@ enum QueueStatusTarget {
 /// own reason for showing the line where it shows it.
 ///
 /// The standing counts in Settings → Sync, the title bar and the morning digest are unchanged and
-/// remain account-wide; this line is what makes them findable from where the write was queued.
-/// It deliberately carries no Retry or Discard button on either side: those belong to
-/// Settings → Sync, which the failed indicator names, because they exist for somebody who has
-/// just changed a token or a branch rule and wants to see the whole queue.
+/// remain account-wide; this line is what makes them findable from where the write was queued,
+/// and it acts on them there: Retry for a failed write, Send anyway (a parked review) and Discard
+/// for a parked one (ADR 0006's 2026-10-29 amendment).
 struct QueueStatusLine: View {
     /// How many writes are queued or in flight.
     let queued: Int
@@ -786,6 +785,13 @@ struct QueueStatusLine: View {
     /// Sends this target's failed writes again, right here. `nil` keeps the pointer to
     /// Settings → Sync, for a surface that cannot act.
     var onRetry: (() -> Void)?
+    /// Throws this target's parked writes away, or `nil` for no button.
+    var onDiscardParked: (() -> Void)?
+    /// Sends this target's parked review on the commit it was written on, or `nil` when no review
+    /// is parked. Non-`nil` also makes Discard ask first, because discarding a parked review
+    /// deletes its draft.
+    var onSendAnyway: (() -> Void)?
+    @State private var isConfirmingDiscard = false
 
     var body: some View {
         if queued > 0 || parked > 0 || failed > 0 {
@@ -802,9 +808,26 @@ struct QueueStatusLine: View {
                     indicator(
                         target.parkedMessage(parked),
                         systemImage: "exclamationmark.triangle",
-                        symbolTint: Theme.failure,
+                        symbolTint: Theme.pending,
                         textTint: Theme.textSecondary
                     )
+                    if let onSendAnyway {
+                        Button(String(localized: "Send anyway"), action: onSendAnyway)
+                            .buttonStyle(SecondaryButtonStyle(height: 22, tint: Theme.accentText))
+                            .help(String(localized: "Send the review on the commit you wrote it on. GitHub keeps your inline comments there."))
+                    }
+                    if let onDiscardParked {
+                        Button(String(localized: "Discard")) {
+                            if onSendAnyway == nil {
+                                onDiscardParked()
+                            } else {
+                                isConfirmingDiscard = true
+                            }
+                        }
+                        .buttonStyle(SecondaryButtonStyle(height: 22, tint: Theme.failure))
+                        .help(String(localized: "Throw the parked write away"))
+                        .discardParkedReviewConfirmation(isPresented: $isConfirmingDiscard, discard: onDiscardParked)
+                    }
                 }
                 if failed > 0 {
                     indicator(
@@ -842,6 +865,48 @@ struct QueueStatusLine: View {
         Text(message)
             .font(componentFont(11, .caption))
             .foregroundStyle(textTint)
+    }
+}
+
+extension View {
+    /// Asks before a parked review is discarded — discarding it deletes the user's draft
+    /// (`DatabaseManager.discardConflictedOutboxItem(id:)`). One dialog for every surface that
+    /// offers the Discard: the panel line, the review toolbar, the unsent list and the phone.
+    /// - Parameters:
+    ///   - isPresented: Whether the question is up.
+    ///   - discard: What the confirming button does.
+    func discardParkedReviewConfirmation(
+        isPresented: Binding<Bool>,
+        discard: @escaping () -> Void
+    ) -> some View {
+        confirmationDialog(String(localized: "Discard this review?"), isPresented: isPresented) {
+            Button(String(localized: "Discard review"), role: .destructive, action: discard)
+        } message: {
+            Text(String(localized: "Your review and its inline comments are deleted. This cannot be undone."))
+        }
+    }
+
+    /// The same question about one review held in `item`. Presented with `presenting:`, so the
+    /// button gets the value even though dismissing the dialog clears `item` before it runs.
+    /// - Parameters:
+    ///   - item: What to discard; the dialog is up while it is non-`nil`.
+    ///   - discard: What the confirming button does with it.
+    func discardParkedReviewConfirmation<Item>(
+        item: Binding<Item?>,
+        discard: @escaping (Item) -> Void
+    ) -> some View {
+        confirmationDialog(
+            String(localized: "Discard this review?"),
+            isPresented: Binding(
+                get: { item.wrappedValue != nil },
+                set: { if !$0 { item.wrappedValue = nil } }
+            ),
+            presenting: item.wrappedValue
+        ) { value in
+            Button(String(localized: "Discard review"), role: .destructive) { discard(value) }
+        } message: { _ in
+            Text(String(localized: "Your review and its inline comments are deleted. This cannot be undone."))
+        }
     }
 }
 

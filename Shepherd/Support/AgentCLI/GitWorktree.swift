@@ -37,6 +37,9 @@ struct GitWorktree: Sendable {
         case noDefaultBranch
         /// A previous run left uncommitted work in the worktree this one wants.
         case worktreeHasUncommittedWork(String)
+        /// A previous pull-request run left commits in the worktree that the branch on `origin`
+        /// does not have.
+        case worktreeHasUnpushedCommits(String)
         /// Every candidate name for a repository task's branch was already taken.
         case noFreeTaskBranch
 
@@ -58,7 +61,11 @@ struct GitWorktree: Sendable {
                 )
             case .worktreeHasUncommittedWork(let path):
                 return String(
-                    localized: "A previous run left changes in \(path) that were never committed. Commit or discard them from that delegation's sheet, then assign the issue again."
+                    localized: "A previous run left changes in \(path) that were never committed. Commit or discard them from that delegation's sheet, then start it again."
+                )
+            case .worktreeHasUnpushedCommits(let path):
+                return String(
+                    localized: "A previous run left commits in \(path) that were never pushed. Push or discard them from that delegation's sheet, then start it again."
                 )
             case .noFreeTaskBranch:
                 return String(
@@ -288,14 +295,14 @@ struct GitWorktree: Sendable {
     /// - Parameters:
     ///   - branch: The head branch name, fetched from `origin`.
     ///   - headOid: The commit to check out.
+    /// - Throws: ``Failure/worktreeHasUncommittedWork(_:)`` or
+    ///   ``Failure/worktreeHasUnpushedCommits(_:)`` when a previous run's work is in the way,
+    ///   rather than deleting it.
     func prepare(branch: String, headOid: String) async throws {
         try await run(["fetch", "origin", branch], in: checkout, label: "fetch")
-        if FileManager.default.fileExists(atPath: directory.path) {
-            // A worktree left behind by a previous run (or a crash) is cleaned up rather than
-            // failing the whole delegation. Failure here is not fatal: `worktree add` will say
-            // so far more clearly.
-            try? await remove()
-        }
+        // The worktree is detached, so a commit the last run made is on no branch: removing the
+        // worktree would orphan it.
+        try await clearLeftover(protectingCommitsAheadOf: branch)
         try FileManager.default.createDirectory(
             at: directory.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -343,19 +350,9 @@ struct GitWorktree: Sendable {
             label: "remote set-head"
         )
         let base = try await defaultBranchRef()
-        if FileManager.default.fileExists(atPath: directory.path) {
-            // A worktree is already there: a previous run's, or a crash's. Committed work is
-            // safe either way — it is on the branch, and the branch is what this worktree is
-            // re-checked-out from below. **Uncommitted** work is not, and removing a worktree
-            // is `--force`, so the one case that must not be silently swallowed is a dirty
-            // one: it is refused with a message naming the directory instead. A clean leftover
-            // is cleared out, exactly as ``prepare(branch:headOid:)`` clears one.
-            let leftover = try? await status()
-            if leftover?.isDirty == true {
-                throw Failure.worktreeHasUncommittedWork(directory.path)
-            }
-            try? await remove()
-        }
+        // Committed work in a leftover is safe — it is on the branch, and the branch is what this
+        // worktree is re-checked-out from below. Uncommitted work is what `clearLeftover` guards.
+        try await clearLeftover()
         try FileManager.default.createDirectory(
             at: directory.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -374,6 +371,25 @@ struct GitWorktree: Sendable {
             )
         }
         return base
+    }
+
+    /// Clears a worktree a previous run (or a crash) left in ``directory``, unless it holds
+    /// uncommitted work — or, given a branch, commits that `origin/<branch>` does not have.
+    ///
+    /// Removing a worktree is `--force`, so one holding work is refused with a message naming the
+    /// directory rather than silently deleted — *Run again* must never cost a run's edits. Any
+    /// other failure here is not fatal: `worktree add` says so far more clearly afterwards.
+    /// - Parameter branch: The pull request's branch, for a detached worktree whose commits are
+    ///   on no branch; `nil` when the worktree's commits are on its own branch.
+    private func clearLeftover(protectingCommitsAheadOf branch: String? = nil) async throws {
+        guard FileManager.default.fileExists(atPath: directory.path) else { return }
+        if (try? await status())?.isDirty == true {
+            throw Failure.worktreeHasUncommittedWork(directory.path)
+        }
+        if let branch, await commitsAhead(of: branch) > 0 {
+            throw Failure.worktreeHasUnpushedCommits(directory.path)
+        }
+        try? await remove()
     }
 
     /// What `origin`'s HEAD points at, e.g. `origin/main`.
@@ -477,6 +493,23 @@ struct GitWorktree: Sendable {
         return Snapshot(
             porcelain: result.standardOutput.trimmingCharacters(in: .newlines)
         )
+    }
+
+    /// How many commits the worktree's `HEAD` has that `origin/<branch>` does not: what a
+    /// pull-request run committed and nobody pushed. `0` when git cannot tell — a missing
+    /// directory or remote branch — as ``status()`` failing counts as clean.
+    ///
+    /// `--cherry-pick` leaves out a commit whose change `origin/<branch>` already has under
+    /// another hash: after the author rebases the pull request, the old head a leftover worktree
+    /// stands on is not work anybody still has to push.
+    /// - Parameter branch: The pull request's branch.
+    func commitsAhead(of branch: String) async -> Int {
+        let result = try? await run(
+            ["rev-list", "--count", "--right-only", "--cherry-pick", "refs/remotes/origin/\(branch)...HEAD"],
+            in: directory,
+            label: "rev-list"
+        )
+        return Int(result?.trimmedOutput ?? "") ?? 0
     }
 
     /// `git diff --stat HEAD` inside the worktree — what the reviewer reads before pushing.

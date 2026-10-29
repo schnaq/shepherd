@@ -64,7 +64,7 @@ you triage, review and merge without opening a browser tab. It is open source, a
 </tr>
 <tr><th colspan="2" align="left">Automate</th></tr>
 <tr>
-<td>🛠️ <b>Delegate to a local agent</b><br>Hand a PR or a single finding back to Claude Code in an isolated worktree with a budget cap and a turn cap you can lift. Optionally started for you when CI turns red.</td>
+<td>🛠️ <b>Delegate to a local agent</b><br>Hand a PR or a single finding back to Claude Code in an isolated worktree, with optional turn and budget caps (off by default). Optionally started for you when CI turns red.</td>
 <td>🚦 <b>Auto-merge rules</b><br>Opt in, and an agent PR that is green, approved and mergeable gets its merge queued for you — narrowable by repo and label, never approving anything, every decision in a local audit log.</td>
 </tr>
 <tr>

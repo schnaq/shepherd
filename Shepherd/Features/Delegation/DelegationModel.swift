@@ -164,6 +164,10 @@ final class DelegationModel: Identifiable {
     private(set) var elapsed: TimeInterval = 0
     /// What `git status --porcelain` said after the run.
     private(set) var worktreeStatus: GitWorktree.Snapshot?
+    /// How many commits a pull-request run left that the branch on `origin` does not have
+    /// (``GitWorktree/commitsAhead(of:)``). Always `0` for new work, whose commits are on its
+    /// own branch and survive the worktree.
+    private(set) var unpushedCommits = 0
     /// Whether a commit-and-push is in flight.
     private(set) var isPublishing = false
     /// Whether the worktree has been pushed already, so the button can say so.
@@ -308,6 +312,41 @@ final class DelegationModel: Identifiable {
         return !task.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// Whether *Run again* does anything.
+    ///
+    /// A repository task continues in its own worktree. Every other origin prepares a fresh one,
+    /// which ``GitWorktree`` refuses while the last run's changes are uncommitted, or a
+    /// pull-request run's commits unpushed — so the button waits until they are pushed or
+    /// discarded, or the run is continued instead.
+    var canRunAgain: Bool {
+        canStart && (context.isRepositoryTask || (worktreeStatus?.isDirty != true && unpushedCommits == 0))
+    }
+
+    /// Whether this sheet holds something a fresh one for the same target would lose: a session
+    /// to continue, or work in its worktree that is not pushed yet. ``DelegationCenter`` shows
+    /// such a model again rather than replacing it.
+    var holdsPendingWork: Bool {
+        guard !isBusy, state != .idle, isWorktreeDirectoryKnown, let worktree,
+              FileManager.default.fileExists(atPath: worktree.directory.path)
+        else { return false }
+        return continuableSessionID != nil || (hasChanges && !hasPushed)
+    }
+
+    /// The session *Continue* resumes, when there is one.
+    ///
+    /// Offered for a Claude Code run that stopped with an error — a cap, typically — and left its
+    /// worktree in place: the session picks up where it stopped instead of a fresh run starting
+    /// from zero. A custom CLI cannot be resumed, and a session back-channel run already is one.
+    var continuableSessionID: String? {
+        guard readiness == .ready, !isBusy, configuration.kind == .claudeCode,
+              context.session == nil, isWorktreeDirectoryKnown, let worktree,
+              case .finished(let result, _) = state, result.isError,
+              let sessionID = result.sessionID, !sessionID.isEmpty,
+              FileManager.default.fileExists(atPath: worktree.directory.path)
+        else { return nil }
+        return sessionID
+    }
+
     /// Whether the sheet offers the ✨ button next to the task field (plan §3.E).
     ///
     /// Three conditions, all of them known before the click: a drafter exists (so this is not a
@@ -323,9 +362,10 @@ final class DelegationModel: Identifiable {
     ///
     /// For new work that includes commits the run made itself: the diff stat is taken against the
     /// branch's starting point, so a non-empty one means there is something to push even when the
-    /// worktree is clean.
+    /// worktree is clean. For a pull request it includes commits the branch on `origin` does not
+    /// have (``unpushedCommits``) — also after a start was refused because of them.
     var hasChanges: Bool {
-        if worktreeStatus?.isDirty == true { return true }
+        if worktreeStatus?.isDirty == true || unpushedCommits > 0 { return true }
         guard context.isNewWork, case .finished(_, let stat) = state else { return false }
         return !stat.isEmpty
     }
@@ -431,6 +471,9 @@ final class DelegationModel: Identifiable {
         } else {
             parts.append(String(localized: "no spend cap"))
         }
+        if !configuration.permissionMode.usesAllowedTools {
+            parts.append(String(localized: "Tools list does not apply"))
+        }
         return parts.joined(separator: " · ")
     }
 
@@ -454,21 +497,8 @@ final class DelegationModel: Identifiable {
     /// Prepares the worktree and starts the agent.
     func start() {
         guard canStart, let worktree else { return }
-        didCancel = false
-        didAnnounceOutcome = false
-        didAnnounceStart = false
-        lastResult = nil
-        worktreeStatus = nil
-        hasPushed = false
         transcript = []
-        state = .preparingWorktree
-        startedAt = Date()
-        elapsed = 0
-        startTimer()
-
-        // After the guard above, so a press that could not start anything is not counted, and
-        // before the work, so it does not depend on how the run ends (ADR 0036).
-        onDidBegin?()
+        beginRun()
 
         let taskText = task
         runTask = Task { [weak self] in
@@ -499,6 +529,15 @@ final class DelegationModel: Identifiable {
                 // cancellation check threw on the way out is not news, and must not turn a run the
                 // user stopped into one that failed.
                 guard !Task.isCancelled else { return }
+                switch error {
+                case GitWorktree.Failure.worktreeHasUncommittedWork,
+                     GitWorktree.Failure.worktreeHasUnpushedCommits:
+                    // Refused because the last run's work is still there: what is there is what
+                    // the failed sheet's *Commit & push* publishes.
+                    await self.refreshWorktreeStatus()
+                default:
+                    break
+                }
                 self.fail(with: error)
                 return
             }
@@ -526,33 +565,89 @@ final class DelegationModel: Identifiable {
             var promptContext = self.context
             promptContext.headRefName = self.branchName
             let prompt = DelegationPrompt.full(for: promptContext, task: taskText)
-
-            let session: AgentSession
-            do {
-                session = try self.runner.run(prompt: prompt, in: worktree.directory)
-            } catch {
-                self.fail(with: error)
-                return
+            await self.runAgent(in: worktree) {
+                try self.runner.run(prompt: prompt, in: worktree.directory)
             }
-            self.session = session
-            self.state = .running
-            self.announceStart()
-            self.append(.note, String(localized: "Running \(self.agentName) in \(worktree.directory.lastPathComponent)"))
-            if self.isAutomatic {
-                // A run nobody pressed a button for says so in its own transcript, not only in
-                // the header badge and the notification (ADR 0016).
-                self.append(
-                    .note,
-                    String(localized: "Started automatically by a delegation rule. Nothing is pushed.")
+        }
+    }
+
+    /// Resumes the session a capped or failed run left, in the same worktree (``continuableSessionID``).
+    ///
+    /// No worktree step: the worktree and whatever the run left in it are exactly what the
+    /// session continues from. The transcript is kept and grows.
+    func continueRun() {
+        guard let sessionID = continuableSessionID, let worktree else { return }
+        beginRun()
+        // The same handover, carried on: an issue must not get a second "Handed to …" comment.
+        didAnnounceStart = true
+        append(.note, String(localized: "Continuing the previous session."))
+        runTask = Task { [weak self] in
+            // ``cancel()`` during `.preparingWorktree` cancels this task; it must not spawn after.
+            guard let self, !Task.isCancelled else { return }
+            await self.runAgent(in: worktree, isContinuation: true) {
+                try self.runner.resume(
+                    sessionID: sessionID,
+                    prompt: "Continue.",
+                    in: worktree.directory
                 )
             }
-
-            for await event in session.events {
-                self.apply(event)
-            }
-            let code = await session.exitCode()
-            await self.finish(exitCode: code)
         }
+    }
+
+    /// Resets what one run tracks and starts the clock.
+    private func beginRun() {
+        didCancel = false
+        didAnnounceOutcome = false
+        didAnnounceStart = false
+        lastResult = nil
+        worktreeStatus = nil
+        unpushedCommits = 0
+        hasPushed = false
+        state = .preparingWorktree
+        startedAt = Date()
+        elapsed = 0
+        startTimer()
+
+        // After the caller's guard, so a press that could not start anything is not counted,
+        // and before the work, so it does not depend on how the run ends (ADR 0036).
+        onDidBegin?()
+    }
+
+    /// Spawns the agent, streams its events into the transcript and records how it ended.
+    /// - Parameters:
+    ///   - worktree: The worktree it runs in.
+    ///   - isContinuation: Whether this resumes a session the user pressed *Continue* for.
+    ///   - spawn: Starts the process — a fresh run or a resumed session.
+    private func runAgent(
+        in worktree: GitWorktree,
+        isContinuation: Bool = false,
+        spawn: () throws -> AgentSession
+    ) async {
+        let session: AgentSession
+        do {
+            session = try spawn()
+        } catch {
+            fail(with: error)
+            return
+        }
+        self.session = session
+        state = .running
+        announceStart()
+        append(.note, String(localized: "Running \(agentName) in \(worktree.directory.lastPathComponent)"))
+        if isAutomatic, !isContinuation {
+            // A run nobody pressed a button for says so in its own transcript, not only in
+            // the header badge and the notification (ADR 0016).
+            append(
+                .note,
+                String(localized: "Started automatically by a delegation rule. Nothing is pushed.")
+            )
+        }
+
+        for await event in session.events {
+            apply(event)
+        }
+        let code = await session.exitCode()
+        await finish(exitCode: code)
     }
 
     /// Chooses a repository task's branch and adds its worktree.
@@ -710,6 +805,7 @@ final class DelegationModel: Identifiable {
     private func refreshWorktreeStatus() async {
         guard let worktree else { return }
         worktreeStatus = try? await worktree.status()
+        unpushedCommits = context.isNewWork ? 0 : await worktree.commitsAhead(of: context.headRefName)
     }
 
     private func fail(with error: any Error) {
@@ -814,8 +910,11 @@ final class DelegationModel: Identifiable {
     ///
     /// Only ever runs because the user pressed the button: ADR 0011 forbids auto-pushing agent
     /// output, and the push uses the user's own git credentials, never Shepherd's token.
+    ///
+    /// Any state after a run: a cancelled run's edits, and a start refused because the last
+    /// run's work was still in the worktree, are published the same way.
     func commitAndPush() {
-        guard let worktree, !isPublishing, case .finished = state else { return }
+        guard let worktree, !isPublishing, !isBusy, state != .idle else { return }
         isPublishing = true
         let branch = branchName
         let message = commitMessage
@@ -868,6 +967,7 @@ final class DelegationModel: Identifiable {
                 self.state = .idle
                 self.transcript = []
                 self.worktreeStatus = nil
+                self.unpushedCommits = 0
                 // A repository task's next run is a new task: it gets a branch and a directory
                 // of its own rather than resuming the branch this worktree was on, which is
                 // still in the clone with whatever the run committed to it. Clearing the branch

@@ -152,7 +152,13 @@ final class SessionBackChannelTests: XCTestCase {
             executable: claude
         )
         XCTAssertEqual(invocation.executable, claude)
-        XCTAssertEqual(invocation.arguments, ["--resume", "session_01abc", "-p", nasty])
+        XCTAssertEqual(
+            invocation.arguments,
+            [
+                "--resume", "session_01abc", "-p", nasty,
+                "--output-format", "stream-json", "--verbose", "--permission-mode", "acceptEdits",
+            ]
+        )
         // Exactly one argv element carries the message: the template is split first and the
         // placeholders are substituted into the already-split words afterwards.
         XCTAssertEqual(invocation.arguments.filter { $0 == nasty }.count, 1)

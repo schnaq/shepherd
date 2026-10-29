@@ -12,7 +12,7 @@ Work through these in order.
 3. **Is it about you?** Shepherd searches for pull requests where you were asked to review, are the author, are assigned, are mentioned, or are otherwise involved. A pull request nobody involved you in appears only if you watch its repository. Press `⇧⌘A` to watch one. You can watch up to 10 repositories.
 4. **Did you hide it?** Check **Settings → Sync → Hidden pull requests** and click **Show again**. A hidden pull request comes back by itself when a review is requested from you.
 5. **Is a filter on?** Clear the rail selection or filter. The inbox says "No pull request matches this filter" when one hides everything.
-6. **Can your token see the repository?** This is the usual cause for organization repositories with SAML single sign-on. GitHub's search silently omits results the token cannot access, and no error appears. Watching the repository does not help. See [GitHub token](/docs/github-token#organizations-with-saml-single-sign-on).
+6. **Can your sign-in see the repository?** GitHub's search silently omits results your sign-in cannot access, and no error appears. With device flow, Shepherd's GitHub App must be installed on the repository's owner. With a token, the token must have access to that owner, and SAML single sign-on must be authorized. A watched repository Shepherd cannot see shows a warning triangle in the rail instead of a count. See [GitHub token](/docs/github-token#device-flow-and-organizations).
 
 ## The merge button is greyed out
 
@@ -35,11 +35,11 @@ If the message says the pull request moved on, someone pushed after you looked. 
 
 ## A merge is "Merge queued" or "Not sent"
 
-Merges and reviews go through a local outbox. They show as **Merge queued** until GitHub is reachable, then **Merging…**, and **Merged** only once GitHub confirms. A failed write shows **Not sent** with **Retry**. Failed rows are also listed with Retry and Discard in **Settings → Sync**.
+Merges and reviews go through a local outbox. They show as **Merge queued** until GitHub is reachable, then **Merging…**, and **Merged** only once GitHub confirms. A failed write shows **Not sent** with **Retry**. Click the **not sent** count in the toolbar, or open **Settings → Sync**, to retry or discard each one.
 
-## "This review was not sent"
+## A pull request shows "Parked"
 
-You queued a review, then new commits landed before it was sent. Shepherd parks the review instead of attaching your comments to a commit you did not judge. Your draft is saved locally. Open the pull request, check the draft against the new commit, and send it again. A notification, "Review not sent", tells you when this happens. See [Review](/docs/review).
+You queued a review or a merge, then new commits landed before it was sent. Shepherd parks it instead of sending something you judged on an older commit. Click the **parked** count in the toolbar, or use the buttons in the pull request's panel: **Send anyway** posts a review on the commit you wrote it on, **Discard** throws the write away (for a review, with its draft), and submitting a new review or merge replaces the parked one. A parked merge or branch update of a pull request that was merged or closed goes away by itself. A notification, "Review parked" or "Merge parked", tells you when this happens. See [Review](/docs/review).
 
 ## Nothing happens after I press Sync
 
@@ -50,7 +50,7 @@ You queued a review, then new commits landed before it was sent. Shepherd parks 
 
 ## Notifications do not arrive
 
-1. Open **Settings → Sync → Notifications** and check the three toggles: a new review is requested from me, checks fail on a pull request I opened, a queued review could not be sent.
+1. Open **Settings → Sync → Notifications** and check the three toggles: a new review is requested from me, checks fail on a pull request I opened, a queued write was parked or not sent.
 2. macOS asks for permission the first time Shepherd posts one. Check System Settings → Notifications → Shepherd.
 3. Shepherd sends notifications while it is running. Keep it running.
 

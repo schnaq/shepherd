@@ -20,6 +20,17 @@ struct AgentRunResult: Sendable, Equatable, Codable {
     var sessionID: String?
     /// The CLI's own subtype (`success`, `error_max_turns`, …), shown verbatim when present.
     var subtype: String?
+    /// The tools the CLI refused, one entry per refusal, in order (`permission_denials`).
+    ///
+    /// A refusal does not make the run an error — the CLI reports `success` and carries on — so
+    /// this is the only sign that the run was held back by its permission mode or allow-list.
+    var permissionDenials: [String]
+
+    /// The refused tools, each named once, in the order they were first refused.
+    var deniedTools: [String] {
+        var seen = Set<String>()
+        return permissionDenials.filter { seen.insert($0).inserted }
+    }
 
     /// Creates a result.
     init(
@@ -29,7 +40,8 @@ struct AgentRunResult: Sendable, Equatable, Codable {
         durationMS: Int? = nil,
         numTurns: Int? = nil,
         sessionID: String? = nil,
-        subtype: String? = nil
+        subtype: String? = nil,
+        permissionDenials: [String] = []
     ) {
         self.isError = isError
         self.resultText = resultText
@@ -38,6 +50,7 @@ struct AgentRunResult: Sendable, Equatable, Codable {
         self.numTurns = numTurns
         self.sessionID = sessionID
         self.subtype = subtype
+        self.permissionDenials = permissionDenials
     }
 }
 
@@ -107,6 +120,19 @@ struct AgentStreamLine: Decodable, Sendable {
         case durationMS = "duration_ms"
         case numTurns = "num_turns"
         case sessionID = "session_id"
+        case permissionDenials = "permission_denials"
+    }
+
+    /// One entry of the result's `permission_denials`; only the tool's name is kept.
+    private struct Denial: Decodable {
+        var toolName: String?
+
+        private enum CodingKeys: String, CodingKey { case toolName = "tool_name" }
+
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            toolName = (try? container.decodeIfPresent(String.self, forKey: .toolName)).flatMap { $0 }
+        }
     }
 
     private struct Message: Decodable {
@@ -201,7 +227,11 @@ struct AgentStreamLine: Decodable, Sendable {
                         numTurns: Self.int(container, .numTurns),
                         sessionID: (try? container.decodeIfPresent(String.self, forKey: .sessionID))
                             .flatMap { $0 },
-                        subtype: subtype
+                        subtype: subtype,
+                        permissionDenials: ((try? container.decodeIfPresent(
+                            [Denial].self,
+                            forKey: .permissionDenials
+                        )).flatMap { $0 } ?? []).compactMap(\.toolName)
                     )
                 )
             ]

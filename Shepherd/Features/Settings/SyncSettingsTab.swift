@@ -12,14 +12,6 @@ struct SyncSettingsTab: View {
     @Environment(AppEnvironment.self) private var environment
     /// The encrypted settings-sync model, owned by ``SettingsView``.
     let syncModel: SettingsSyncModel
-    /// The outbox rows the drain gave up on, listed one by one in the Outbox section.
-    ///
-    /// Fetched rather than observed, and keyed on ``SignedInSession/failedOutboxCount``, which is
-    /// observed: the count is the thing that changes, and re-reading a table of tens of rows when
-    /// it does is cheaper than a second `ValueObservation` on the same table. Retry and Discard
-    /// re-read it themselves as well, so the list is right immediately rather than one
-    /// observation hop later.
-    @State private var failedRows: [OutboxItem] = []
     /// What is typed into the watched-repositories field.
     @State private var watchedRepositoryDraft = ""
     /// Why the last attempt to watch a repository did nothing.
@@ -50,7 +42,7 @@ struct SyncSettingsTab: View {
             Section {
                 Toggle(String(localized: "A new review is requested from me"), isOn: reviewBinding)
                 Toggle(String(localized: "Checks fail on a pull request I opened"), isOn: checksBinding)
-                Toggle(String(localized: "A queued review could not be sent"), isOn: conflictBinding)
+                Toggle(String(localized: "A queued write was parked or not sent"), isOn: conflictBinding)
             } header: {
                 Text(String(localized: "Notifications"))
             } footer: {
@@ -87,22 +79,8 @@ struct SyncSettingsTab: View {
                     ? String(localized: "Nothing waiting to be sent.")
                     : String(localized: "\(session.pendingOutboxCount) mutations waiting to be sent."))
             }
-            // A parked mutation is never retried on its own (ADR 0006), so it stays on screen
-            // until someone acts on it — the alert it raised was a moment, this is the standing
-            // reminder.
-            if session.conflictedOutboxCount > 0 {
-                Label(
-                    String(localized: "\(session.conflictedOutboxCount) conflicted — needs your attention."),
-                    systemImage: "exclamationmark.triangle.fill"
-                )
-                .foregroundStyle(Theme.pending)
-                .help(String(
-                    localized: "These pull requests got new commits after the review was queued, so nothing was sent. Open each one and check your draft against the new commit."
-                ))
-            }
-            failedOutboxGroup(session)
+            unsentWritesGroup(session)
         }
-        .task(id: session.failedOutboxCount) { await reloadFailedRows(session) }
     }
 
     // MARK: - Merge series
@@ -256,74 +234,38 @@ struct SyncSettingsTab: View {
         }
     }
 
-    // MARK: - Rows the outbox gave up on
+    // MARK: - Rows that will not go out by themselves
 
-    /// The failed rows, named one by one, each with Retry and Discard.
+    /// The parked and the failed rows, named one by one with their actions — the same rows, in
+    /// the same row view, as the toolbar's unsent list (ADR 0006's 2026-10-29 amendment).
     ///
-    /// The third outbox state and the only one this section can *do* anything about. A pending row
-    /// needs nothing but time and a parked one needs the pull request it was queued against — but
-    /// a failed row was refused in a way retrying cannot fix (a 4xx from GitHub, a port the app
-    /// never wired up), so it sits in the queue for ever and the click that produced it looked as
-    /// though it had worked. Retry is the user saying the obstacle is gone; Discard is them saying
-    /// it never mattered.
-    ///
-    /// It is a group of its own rather than another line beside the conflicted count for the same
-    /// reason: a count nobody can act on is a nag, and these rows are the only ones in the outbox
-    /// with an action attached. The conflicted line above is deliberately untouched — a parked
-    /// review is re-applied against the new commit from the pull request itself, not thrown back
-    /// at GitHub from a settings window.
+    /// Both kinds sit in the queue until somebody decides: a failed row was refused in a way
+    /// retrying cannot fix (Retry once the obstacle is gone, or Discard), a parked one was written
+    /// against a commit that is no longer the head (Send anyway for a review, or Discard; Open to
+    /// look at the new commits first). The amendment of 2026-09-03 left parked rows without
+    /// buttons, and that is what kept a parked write — and its pull request — around for ever.
     @ViewBuilder
-    private func failedOutboxGroup(_ session: SignedInSession) -> some View {
+    private func unsentWritesGroup(_ session: SignedInSession) -> some View {
+        if session.conflictedOutboxCount > 0 {
+            Label(
+                String(localized: "\(session.conflictedOutboxCount) parked — the target changed after the write was queued."),
+                systemImage: "exclamationmark.triangle.fill"
+            )
+            .foregroundStyle(Theme.pending)
+        }
         if session.failedOutboxCount > 0 {
             Label(
-                String(localized: "\(session.failedOutboxCount) given up on — they will not be retried."),
+                String(localized: "\(session.failedOutboxCount) not sent — they will not be retried."),
                 systemImage: "xmark.octagon.fill"
             )
             .foregroundStyle(Theme.failure)
             .help(String(
                 localized: "GitHub refused these writes, or Shepherd could not make them at all. Nothing about them changes by itself: retry one once you have fixed what stopped it, or discard it."
             ))
-            ForEach(failedRows) { item in
-                failedOutboxRow(item, session: session)
-            }
         }
-    }
-
-    private func failedOutboxRow(_ item: OutboxItem, session: SignedInSession) -> some View {
-        LabeledContent {
-            HStack(spacing: 8) {
-                Button(String(localized: "Retry")) {
-                    Task {
-                        try? await session.database.retryOutboxItem(id: item.id)
-                        await reloadFailedRows(session)
-                        await session.drainOutbox()
-                        await reloadFailedRows(session)
-                    }
-                }
-                Button(String(localized: "Discard")) {
-                    Task {
-                        try? await session.database.deleteOutboxItem(id: item.id)
-                        await reloadFailedRows(session)
-                    }
-                }
-            }
-        } label: {
-            Text(verbatim: "\(item.repo.fullName)#\(item.number) · \(Self.actionName(item.action))")
-            Text(item.localizedLastError ?? String(localized: "No reason was recorded."))
-                .textSelection(.enabled)
+        ForEach(session.unsentWrites) { item in
+            UnsentWriteRow(item: item, session: session)
         }
-    }
-
-    /// Re-reads the failed rows.
-    ///
-    /// `@MainActor` for the reason ``ClosingIssuesCard/openOnGitHub(_:)`` is: every caller is a
-    /// view body or a button's action, which is main-actor isolated already, and the session it
-    /// reads the database off is a main-actor type.
-    @MainActor
-    private func reloadFailedRows(_ session: SignedInSession) async {
-        // A read failure answers "nothing to list", which is the same answer an empty outbox
-        // gives; the standing count above is the record.
-        failedRows = (try? await session.database.failedOutboxItems()) ?? []
     }
 
     /// What one queued write would have done, in the user's words.

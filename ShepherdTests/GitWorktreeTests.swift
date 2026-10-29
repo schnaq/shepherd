@@ -428,11 +428,75 @@ final class GitWorktreeTests: XCTestCase {
         )
     }
 
+    func testPreparingAPullRequestRefusesToDiscardAPreviousRunsUncommittedWork() async throws {
+        // *Run again* on a pull request used to `worktree remove --force` whatever the last run
+        // left; a capped run's uncommitted edits went with it.
+        let tree = worktree(runner: RecordingProcessRunner())
+        try FileManager.default.createDirectory(at: tree.directory, withIntermediateDirectories: true)
+        let runner = RecordingProcessRunner { invocation in
+            invocation.arguments.first == "status"
+                ? ProcessResult(status: 0, standardOutput: " M Sources/App.swift\n", standardError: "")
+                : ProcessResult(status: 0, standardOutput: "", standardError: "")
+        }
+        do {
+            try await worktree(runner: runner).prepare(branch: "agent/fix", headOid: "deadbeef")
+            XCTFail("expected the uncommitted work to be reported rather than deleted")
+        } catch {
+            XCTAssertEqual(
+                error as? GitWorktree.Failure,
+                .worktreeHasUncommittedWork(tree.directory.path)
+            )
+        }
+        XCTAssertFalse(runner.arguments.contains { $0.first == "worktree" })
+    }
+
+    func testPreparingAPullRequestRefusesToOrphanAPreviousRunsUnpushedCommits() async throws {
+        // The worktree is detached: a commit the last run made there is on no branch, and
+        // `worktree remove --force` would leave it to git's garbage collection.
+        let tree = worktree(runner: RecordingProcessRunner())
+        try FileManager.default.createDirectory(at: tree.directory, withIntermediateDirectories: true)
+        let runner = RecordingProcessRunner { invocation in
+            invocation.arguments.first == "rev-list"
+                ? ProcessResult(status: 0, standardOutput: "2\n", standardError: "")
+                : ProcessResult(status: 0, standardOutput: "", standardError: "")
+        }
+        do {
+            try await worktree(runner: runner).prepare(branch: "agent/fix", headOid: "deadbeef")
+            XCTFail("expected the unpushed commits to be reported rather than orphaned")
+        } catch {
+            XCTAssertEqual(
+                error as? GitWorktree.Failure,
+                .worktreeHasUnpushedCommits(tree.directory.path)
+            )
+        }
+        let count = try XCTUnwrap(runner.invocations.first { $0.arguments.first == "rev-list" })
+        XCTAssertEqual(count.arguments, ["rev-list", "--count", "--right-only", "--cherry-pick", "refs/remotes/origin/agent/fix...HEAD"])
+        XCTAssertEqual(count.currentDirectory, tree.directory.path)
+        XCTAssertFalse(runner.arguments.contains { $0.first == "worktree" })
+    }
+
+    func testPreparingAPullRequestClearsALeftoverWhoseCommitsArePushed() async throws {
+        let tree = worktree(runner: RecordingProcessRunner())
+        try FileManager.default.createDirectory(at: tree.directory, withIntermediateDirectories: true)
+        let runner = RecordingProcessRunner { invocation in
+            invocation.arguments.first == "rev-list"
+                ? ProcessResult(status: 0, standardOutput: "0\n", standardError: "")
+                : ProcessResult(status: 0, standardOutput: "", standardError: "")
+        }
+        try await worktree(runner: runner).prepare(branch: "agent/fix", headOid: "deadbeef")
+
+        let worktreeCalls = runner.arguments.filter { $0.first == "worktree" }
+        XCTAssertEqual(worktreeCalls.first?.dropFirst().first, "remove")
+        XCTAssertEqual(worktreeCalls.last, ["worktree", "add", "--detach", tree.directory.path, "deadbeef"])
+    }
+
     func testAddingForNewWorkClearsACleanLeftoverAndCarriesOn() async throws {
         let tree = issueWorktree(runner: RecordingProcessRunner())
         try FileManager.default.createDirectory(at: tree.directory, withIntermediateDirectories: true)
         let runner = newWorkRunner()
         try await issueWorktree(runner: runner).addForNewWork(branch: "agent/issue-128")
+        // The leftover's commits are on its branch, which survives the worktree: nothing to count.
+        XCTAssertFalse(runner.arguments.contains { $0.first == "rev-list" })
 
         let worktreeCalls = runner.arguments.filter { $0.first == "worktree" }
         XCTAssertEqual(worktreeCalls.first?.dropFirst().first, "remove")

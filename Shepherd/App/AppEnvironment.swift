@@ -377,9 +377,23 @@ final class AppEnvironment {
         self.mergeSeries = mergeSeries
         // The draft-conflict notice has the same problem the alert has for a series' parked
         // branch update (see `handle(_:)`), and it is posted before `handle(_:)` runs.
+        // And a refused branch update or merge a series queued: the series skips the entry and
+        // says why itself.
         notifications.suppresses = { [weak mergeSeries] event in
-            guard case .draftConflict(let conflict) = event else { return false }
-            return mergeSeries?.handlesConflict(conflict) ?? false
+            switch event {
+            case .draftConflict(let conflict):
+                return mergeSeries?.handlesConflict(conflict) ?? false
+            case .syncFailed(let failure):
+                guard let write = failure.abandonedWrite else { return false }
+                switch write.action {
+                case .merge, .updateBranch:
+                    return mergeSeries?.series(containing: write.prID) != nil
+                default:
+                    return false
+                }
+            default:
+                return false
+            }
         }
         self.search = SearchIndexCoordinator(settings: settings)
         self.triage = TriageCoordinator(settings: settings)
@@ -398,9 +412,10 @@ final class AppEnvironment {
         // Registered here rather than in `bootstrap()`: a click on a digest notification that
         // happened while Shepherd was not running is delivered to the delegate shortly after
         // launch, and a delegate installed a moment later would miss it.
-        notifications.routeClicks { [weak self] in
-            self?.openInboxFromNotification()
-        }
+        notifications.routeClicks(
+            onDigestClicked: { [weak self] in self?.openInboxFromNotification() },
+            onTargetClicked: { [weak self] id, isIssue in self?.openTarget(id, isIssue: isIssue) }
+        )
         // App Intents are created by the *system*, so they have no initialiser to be handed a
         // dependency through; registering the container here is how an intent finds the running
         // app (ADR 0021, `Intents/IntentBridge.swift`). The reference there is weak.
@@ -481,6 +496,9 @@ final class AppEnvironment {
         rereadTasks = [:]
         // And the comments it read: parsed bodies stay in memory for as long as the app runs.
         MarkdownText.forgetParsedBodies()
+        // And what its token could not read, which says nothing about the next account's.
+        accessCheckTask?.cancel()
+        unreadableRepositories = []
         if let current {
             await current.shutdown()
             do {
@@ -1123,7 +1141,8 @@ final class AppEnvironment {
             // text, and the reviewer still presses Run.
             brief: agentBriefDrafter()
         )
-        if let task, !model.isBusy {
+        // A reused sheet keeps its text: it belongs to the run whose work or session it holds.
+        if let task, !model.isBusy, !model.holdsPendingWork {
             model.task = task
         }
     }
@@ -1503,14 +1522,81 @@ final class AppEnvironment {
     ///   loop's own first iteration is about to sweep anyway.
     func applyWatchedRepositoriesSetting(sweepNow: Bool = true) {
         guard let session else { return }
-        let queries = InboxQuery.watching(settings.watchedRepositories)
+        let watched = settings.watchedRepositories
+        let queries = InboxQuery.watching(watched)
         let engine = session.syncEngine
         Task {
             await engine.setAdditionalQueries(queries)
             guard sweepNow else { return }
             try? await engine.syncNow()
         }
+        // The same moment is when the access check is worth making: the list only changes here,
+        // so this is one `GET /repos` per watched repository at sign-in and on an edit, never per
+        // sweep.
+        unreadableRepositories.formIntersection(watched.map { $0.fullName.lowercased() })
+        accessCheckTask?.cancel()
+        accessCheckTask = Task { [weak self] in
+            for repo in watched {
+                guard !Task.isCancelled else { return }
+                await self?.checkAccess(to: repo)
+            }
+        }
     }
+
+    /// Watched repositories the signed-in token cannot read, by lowercased `owner/name`.
+    ///
+    /// GitHub's search answers a repository the token cannot see with an empty result and no
+    /// error — the GitHub App not installed on its owner, a fine-grained token for another
+    /// resource owner, SAML SSO — so without this such a repository sits in the rail at a silent
+    /// zero. Filled by ``checkAccess(to:)``.
+    private(set) var unreadableRepositories: Set<String> = []
+    @ObservationIgnored private var accessCheckTask: Task<Void, Never>?
+
+    /// Asks GitHub whether the signed-in token can read a repository, and records the answer.
+    /// - Parameter repo: The repository.
+    /// - Returns: The answer, or `nil` when it could not be asked — offline, rate-limited, signed
+    ///   out meanwhile — which leaves what is recorded alone: "could not ask" is not "no access".
+    @discardableResult
+    func checkAccess(to repo: RepoRef) async -> Bool? {
+        // The demo mode's transport refuses every request with `forbidden`, which would flag every
+        // seeded repository; like the sweep loop, the check is for a real GitHub only.
+        guard runsSyncLoop,
+              let session,
+              let readable = try? await session.github.canRead(repo: repo),
+              // A superseded check's late answer could re-add a repository just unwatched.
+              !Task.isCancelled,
+              self.session === session
+        else { return nil }
+        let key = repo.fullName.lowercased()
+        if readable {
+            unreadableRepositories.remove(key)
+        } else {
+            unreadableRepositories.insert(key)
+        }
+        return readable
+    }
+
+    /// Why a repository's pull requests cannot reach the inbox, or `nil` when nothing says so.
+    ///
+    /// Worded for how the user signed in: a device-flow token sees what the Shepherd app is
+    /// installed on, a pasted token what it was granted. A `404` is also what a typo gets, so the
+    /// name is always named as a suspect too.
+    /// - Parameter repo: The repository.
+    func accessProblem(for repo: RepoRef) -> String? {
+        guard unreadableRepositories.contains(repo.fullName.lowercased()) else { return nil }
+        if offersAppInstall {
+            return String(
+                localized: "Shepherd cannot see \(repo.fullName), so none of its pull requests reach the inbox. Check the name, or install Shepherd on \(repo.owner). Only an owner can install it; everyone else can request it."
+            )
+        }
+        return String(
+            localized: "Your token has no access to \(repo.fullName), so none of its pull requests reach the inbox. Check the name, or give the token access to \(repo.owner)."
+        )
+    }
+
+    /// Whether the fix for an unreadable repository is installing the Shepherd GitHub App, which is
+    /// only true for a device-flow sign-in.
+    var offersAppInstall: Bool { session?.account.authKind == .deviceFlow }
 
     func applyStructuredTriageSetting() {
         guard let session else {
@@ -1663,8 +1749,8 @@ final class AppEnvironment {
 
     /// Brings the inbox forward because the user clicked a Shepherd notification.
     ///
-    /// The digest is the one notification that routes anywhere (see ``NotificationRouter``), and
-    /// "needs my review" is where it points: it is the section the digest leads with and the one
+    /// The digest routes here (``NotificationRouter``; a notice about one pull request opens that
+    /// instead), and "needs my review" is where it points: it is the section the digest leads with and the one
     /// the user is being reminded about. The route is set through the same
     /// ``AppEnvironment/pendingInboxFilter`` slot a `shepherd://inbox?filter=needs-my-review` link
     /// uses, so there is one implementation of "filter the inbox" (ADR 0013).
@@ -1676,6 +1762,21 @@ final class AppEnvironment {
         pendingInboxFilter = Pending(.needsMyReview)
         guard !activateMainWindow() else { return }
         // Every window is closed; only SwiftUI can make a new one.
+        reopenMainWindow?()
+    }
+
+    /// Opens the pull request or issue a notification or an unsent write is about, in the main
+    /// window — brought forward, or made again when the user closed it.
+    /// - Parameters:
+    ///   - id: The pull request's or issue's node id.
+    ///   - isIssue: Whether it is an issue (``ShepherdCore/OutboxAction/targetsIssue``).
+    func openTarget(_ id: String, isIssue: Bool) {
+        if isIssue {
+            openIssue(issueID: id)
+        } else {
+            openReview(prID: id)
+        }
+        guard !activateMainWindow() else { return }
         reopenMainWindow?()
     }
 

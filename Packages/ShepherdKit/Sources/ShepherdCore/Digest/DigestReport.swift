@@ -22,7 +22,8 @@ public enum DigestSectionKind: String, Sendable, Codable, Hashable, CaseIterable
     case agentPullRequestsThatClosedAnIssue
     /// The user's own pull requests with red CI or a change request on them.
     case ownPullRequestsNeedingAttention
-    /// Queued reviews the outbox parked because the pull request moved on (ADR 0006).
+    /// Queued writes the outbox parked because their target moved on (ADR 0006) — reviews,
+    /// merges, branch updates; the case keeps its older name.
     case parkedReviews
     /// Queued writes the outbox gave up on, because retrying them cannot help (ADR 0006).
     ///

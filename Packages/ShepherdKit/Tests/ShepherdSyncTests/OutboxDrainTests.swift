@@ -528,6 +528,45 @@ final class OutboxDrainTests: XCTestCase {
         XCTAssertEqual(headChecks, ["schnaq/review#1"])
     }
 
+    func testAReviewSentAnywaySkipsTheHeadCheckAndGoesOutOnTheReviewedCommit() async throws {
+        let github = MockGitHub()
+        await github.setHeadOid("head-2", repo: repo, number: 1)
+        let store = try DatabaseManager.inMemory()
+        let pending = draft(headOid: "head-1")
+        try await store.saveDraft(pending)
+        let id = try await enqueue(.submitReview(pending), in: store)
+        let engine = makeEngine(github: github, store: store)
+        await engine.drainOutbox()
+        let parked = try await store.outboxItem(id: id)
+        XCTAssertEqual(parked?.state, .conflicted, "the ordinary check parks it first")
+
+        try await store.sendConflictedReviewAnyway(id: id)
+        await engine.drainOutbox()
+
+        let submitted = await github.submittedDrafts
+        XCTAssertEqual(submitted.map(\.basedOnHeadOid), ["head-1"], "sent as commit_id")
+        let headChecks = await github.headOidRequests
+        XCTAssertEqual(headChecks.count, 1, "only the first drain asked for the head")
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
+    func testAParkedBranchUpdateSaysWhichWriteItWas() async throws {
+        let github = MockGitHub()
+        await github.setUpdateBranchError(.staleHead(expected: "head-1", actual: "head-2"))
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(.updateBranch(expectedHeadOid: "head-1"), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        let emitted = await drainCollectingEvents(engine)
+
+        let writes = emitted.compactMap { event -> DraftConflict.Write? in
+            if case .draftConflict(let conflict) = event { return conflict.write }
+            return nil
+        }
+        XCTAssertEqual(writes, [.updateBranch])
+    }
+
     // MARK: - Deleting the merged head branch (ADR 0005's 2026-09-05 amendment)
 
     func testAMergeThatAsksForItDeletesTheHeadBranchAfterTheMerge() async throws {

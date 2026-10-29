@@ -11,8 +11,31 @@ extension DatabaseManager {
     public func enqueue(_ item: OutboxItem) async throws {
         let record = try OutboxRecord(item: item)
         try await writer.write { db in
+            try DatabaseManager.supersedeParked(by: record, db)
             try record.save(db)
         }
+    }
+
+    /// The kinds a newer row of the same kind replaces while parked: a review, a merge and a
+    /// branch update are each one decision per pull request, so the parked one is the decision
+    /// the user has just made again (ADR 0006's 2026-10-29 amendment).
+    static let supersededParkedKinds = ["submitReview", "merge", "updateBranch"]
+
+    /// Deletes the target's parked rows of `record`'s kind, when `record` is a new pending one of
+    /// a kind in ``supersededParkedKinds``. The outbox row only — the review draft is the text the
+    /// new row was just built from, so it stays.
+    ///
+    /// Called inside the transaction that writes `record`, from ``enqueue(_:)`` and
+    /// ``saveBulkTriage(writes:)``, so every way a review or a merge is queued replaces the parked
+    /// one. Without it, re-reviewing after the conflict alert left the old row parked for ever.
+    static func supersedeParked(by record: OutboxRecord, _ db: Database) throws {
+        guard record.state == OutboxState.pending.rawValue,
+              supersededParkedKinds.contains(record.kind)
+        else { return }
+        try db.execute(
+            sql: "DELETE FROM outbox WHERE prID = ? AND kind = ? AND state = ?",
+            arguments: [record.prID, record.kind, OutboxState.conflicted.rawValue]
+        )
     }
 
     /// Claims the mutations that are due to be attempted, moving them out of the queue.
@@ -180,8 +203,11 @@ extension DatabaseManager {
 
     /// Parks a mutation because the pull request moved on underneath it.
     ///
-    /// The row is kept so the UI can show the conflict and let the user re-apply or discard;
-    /// it is never retried on its own (ADR 0006: surface conflicts, never blind-submit).
+    /// The row is kept so the UI can show the conflict and let the user decide — *Discard*
+    /// (``discardConflictedOutboxItem(id:)``), *Send anyway* for a review
+    /// (``sendConflictedReviewAnyway(id:)``), or a new review or merge that replaces it
+    /// (``enqueue(_:)``); it is never retried on its own (ADR 0006: surface conflicts, never
+    /// blind-submit).
     /// - Parameters:
     ///   - id: The row's identity.
     ///   - reason: What the conflict was.
@@ -325,6 +351,88 @@ extension DatabaseManager {
         return records.compactMap { try? $0.outboxItem() }
     }
 
+    /// The rows parked because their target moved on, oldest first — ``failedOutboxItems()``'s
+    /// sibling, for the lists that name each parked write beside the failed ones.
+    public func conflictedOutboxItems() async throws -> [OutboxItem] {
+        let records = try await writer.read { db in
+            try OutboxRecord.fetchAll(
+                db,
+                sql: "SELECT * FROM outbox WHERE state = ? ORDER BY createdAt ASC",
+                arguments: [OutboxState.conflicted.rawValue]
+            )
+        }
+        return records.compactMap { try? $0.outboxItem() }
+    }
+
+    /// Throws a parked row away — the user deciding the write is not going out.
+    ///
+    /// A parked **review** takes its draft with it, in the same transaction: the draft is what the
+    /// row was built from, and a draft left behind keeps the pull request pinned in the inbox
+    /// (`pruneGuardSQL`) after it was merged or closed — the stuck row this exists to clear. That
+    /// deletes text the user wrote, which is why every caller confirms first.
+    ///
+    /// Guarded on `state = 'conflicted'`, so a screen that is a moment behind cannot throw away a
+    /// row that has meanwhile been re-queued or sent.
+    /// - Parameter id: The row's identity.
+    public func discardConflictedOutboxItem(id: UUID) async throws {
+        try await writer.write { db in
+            guard let row = try Row.fetchOne(
+                db,
+                sql: "SELECT prID, kind FROM outbox WHERE id = ? AND state = ?",
+                arguments: [id.uuidString, OutboxState.conflicted.rawValue]
+            ) else { return }
+            try db.execute(sql: "DELETE FROM outbox WHERE id = ?", arguments: [id.uuidString])
+            let kind: String = row["kind"]
+            guard kind == "submitReview" else { return }
+            let prID: String = row["prID"]
+            try db.execute(sql: "DELETE FROM review_drafts WHERE prID = ?", arguments: [prID])
+            try db.execute(sql: "DELETE FROM draft_comments WHERE prID = ?", arguments: [prID])
+        }
+    }
+
+    /// Re-queues a parked review to be sent against the commit it was written on — the user's
+    /// *Send anyway*.
+    ///
+    /// The payload is rebuilt from the stored draft, so edits made while the row was parked go out
+    /// with it. The row's draft gets ``ShepherdCore/ReviewDraft/sendsAgainstReviewedCommit`` set, which is
+    /// what makes the drain skip its staleness check for this one send; GitHub anchors the
+    /// comments on `commit_id`, the reviewed commit. A commit a force-push made unreachable is
+    /// refused by GitHub, and the row ends up failed, where Retry and Discard are.
+    ///
+    /// The attempt count goes to zero: a review is parked before it is submitted, so there is no
+    /// earlier attempt the replay check could find. Only a parked `submitReview` row is touched.
+    /// - Parameter id: The row's identity.
+    public func sendConflictedReviewAnyway(id: UUID) async throws {
+        try await writer.write { db in
+            guard let record = try OutboxRecord.fetchOne(
+                db,
+                sql: "SELECT * FROM outbox WHERE id = ? AND state = ? AND kind = 'submitReview'",
+                arguments: [id.uuidString, OutboxState.conflicted.rawValue]
+            ), case .submitReview(let parked) = try record.outboxItem().action
+            else { return }
+            // The draft as it stands now, not the snapshot the row was built from: the review
+            // screen keeps saving to it while the row is parked, and the send deletes the draft
+            // afterwards, so an edit left out here would be lost. The anchor stays the parked
+            // one — the commit the user just agreed to send against.
+            var draft = try DatabaseManager.loadDraft(db, prID: parked.prID) ?? parked
+            draft.basedOnHeadOid = parked.basedOnHeadOid
+            draft.sendsAgainstReviewedCommit = true
+            try db.execute(
+                sql: """
+                    UPDATE outbox
+                    SET state = ?, payload = ?, attemptCount = 0, nextAttemptAt = 0,
+                        lastError = NULL, lastErrorCode = NULL
+                    WHERE id = ?
+                    """,
+                arguments: [
+                    OutboxState.pending.rawValue,
+                    try JSONEncoder().encode(OutboxAction.submitReview(draft)),
+                    id.uuidString,
+                ]
+            )
+        }
+    }
+
     /// Puts a row the drain gave up on back into the queue, with its backoff reset.
     ///
     /// The counterpart of ``deleteOutboxItem(id:)`` for a failed row: retry or discard, and
@@ -366,8 +474,8 @@ extension DatabaseManager {
 
     /// Deletes a row outright — the user discarding a mutation that is never going to be sent.
     ///
-    /// Both parked states end here when the user says so: a conflicted row from the draft-conflict
-    /// alert, and a failed one from Settings → Sync's Discard.
+    /// A failed row ends here when the user says so (Settings → Sync, the unsent-writes list). A
+    /// parked one goes through ``discardConflictedOutboxItem(id:)``, which also clears its draft.
     /// - Parameter id: The row's identity.
     public func deleteOutboxItem(id: UUID) async throws {
         try await writer.write { db in

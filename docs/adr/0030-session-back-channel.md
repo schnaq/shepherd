@@ -31,7 +31,9 @@ credentials Shepherd holds.**
   from a second session must be answered at that one. A malformed value yields no reference at all.
   No new read, no new host, nothing stored.
 - **The transport is ADR 0011's, unchanged.** The message is carried by a **second command
-  template** beside the existing one — `claude --resume {sessionID} -p {message}` by default —
+  template** beside the existing one — `claude --resume {sessionID} -p {message}` by default
+  (with `--output-format stream-json --verbose --permission-mode acceptEdits` since ADR 0011's
+  2026-10-29 amendment) —
   split by `ShellWords` and substituted *after* splitting, so the message is exactly one argv
   element and no shell is ever involved. It runs in the pull request's detached worktree, streams
   into the same delegation panel, keeps the same local transcript, and nothing is ever pushed for
