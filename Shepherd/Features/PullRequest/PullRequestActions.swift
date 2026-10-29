@@ -927,9 +927,10 @@ struct PullRequestActions {
             return Toast(message: message, kind: .success)
         case .parked:
             // A warning rather than a failure, because nothing is lost: the draft is still on
-            // disk, and the alert this sentence points at is where it is re-applied or discarded
-            // (``DraftConflictQueue``, ADR 0006). The reason the row carries is not shown — it
-            // names two commit SHAs, and "the pull request changed" is the part a person acts on.
+            // disk, and the alert, the pull request's panel and the toolbar's unsent list all
+            // offer Send anyway and Discard (ADR 0006's 2026-10-29 amendment). The reason the row
+            // carries is not shown — it names two commit SHAs, and "the pull request changed" is
+            // the part a person acts on.
             return Toast(message: parkedMessage(write, slug: slug), kind: .warning, duration: 8)
         case .failed(let reason):
             let sentence = failedMessage(write, slug: slug)
@@ -1035,26 +1036,21 @@ struct PullRequestActions {
         switch write {
         case .review:
             return String(
-                localized: "Review held back — \(slug) changed since you started. See the alert."
+                localized: "Review parked — \(slug) got new commits since you wrote it. Send it anyway or discard it."
             )
         case .merge:
             return String(
-                localized: "Merge held back — \(slug) changed since you started. See the alert."
+                localized: "Merge parked — \(slug) got new commits. Look at them, then merge again."
             )
         case .updateBranch:
-            // No alert to point at: a series handles its own parked update and skips the entry
+            // A series handles its own parked update and skips the entry
             // (``MergeSeriesCoordinator/handlesConflict(_:)``).
-            return String(localized: "Branch update held back — \(slug) changed since the series started.")
-        case .comment, .close:
-            // Nothing parks these two either: neither is pinned to the head commit, and a
-            // comment says what it says however the pull request has moved since.
-            return String(localized: "Not sent — \(slug) changed since you started.")
-        case .reply, .thread, .readyForReview, .reaction, .edit, .delete:
-            // Nothing parks these six today — only a review draft and a merge are checked
-            // against the head commit — but the outcome is read off the queue rather than
+            return String(localized: "Branch update parked — \(slug) changed since the series started.")
+        case .comment, .close, .reply, .thread, .readyForReview, .reaction, .edit, .delete:
+            // Nothing parks these today — only a review draft, a merge and a branch update are
+            // checked against the head commit — but the outcome is read off the queue rather than
             // guessed, so the sentence exists for the day the drain learns to park one of them.
-            // It points at no alert, because only a parked *review* raises one (ADR 0006).
-            return String(localized: "Not sent — \(slug) changed since you started.")
+            return String(localized: "Parked — \(slug) changed since you started.")
         }
     }
 

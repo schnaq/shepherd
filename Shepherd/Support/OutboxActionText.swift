@@ -38,3 +38,34 @@ extension OutboxAction {
         }
     }
 }
+
+extension OutboxItem {
+    /// Whether this is a parked review: the one parked write *Send anyway* applies to, and the
+    /// one whose *Discard* also deletes the user's draft, so it asks first (ADR 0006's 2026-10-29
+    /// amendment).
+    var isParkedReview: Bool {
+        guard state == .conflicted, case .submitReview = action else { return false }
+        return true
+    }
+
+    /// Why a parked or failed write is stuck, in the user's words. A parked row's stored reason
+    /// names two commit SHAs, so it is said rather than shown; a failed row says what GitHub said.
+    var unsentReason: String {
+        guard state == .conflicted else {
+            return localizedLastError ?? String(localized: "No reason was recorded.")
+        }
+        if action.targetsIssue {
+            return String(localized: "The issue changed after you queued this.")
+        }
+        switch action {
+        case .submitReview:
+            return String(localized: "New commits arrived after you wrote this review.")
+        case .merge:
+            return String(localized: "New commits arrived after you chose to merge. Look at them, then merge again.")
+        case .updateBranch:
+            return String(localized: "New commits arrived before the branch could be updated.")
+        default:
+            return String(localized: "The pull request changed after you queued this.")
+        }
+    }
+}

@@ -65,7 +65,7 @@ final class WriteOutcomeToastTests: XCTestCase {
         )
         XCTAssertEqual(
             parked?.message,
-            String(localized: "Review held back — \(slug) changed since you started. See the alert.")
+            String(localized: "Review parked — \(slug) got new commits since you wrote it. Send it anyway or discard it.")
         )
         XCTAssertEqual(parked?.kind, .warning, "nothing is lost, so this is not a failure")
         XCTAssertNotEqual(
@@ -200,7 +200,7 @@ final class WriteOutcomeToastTests: XCTestCase {
         )
         XCTAssertEqual(
             toast?.message,
-            String(localized: "Merge held back — \(slug) changed since you started. See the alert.")
+            String(localized: "Merge parked — \(slug) got new commits. Look at them, then merge again.")
         )
         XCTAssertEqual(toast?.kind, .warning)
     }

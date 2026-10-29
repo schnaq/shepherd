@@ -69,6 +69,11 @@ final class SignedInSession {
     /// the same reason the other two are: a write that is never going to arrive has to be sayable
     /// from a surface the user is already looking at, not only from the panel it was queued in.
     var failedOutboxCount = 0
+    /// The parked and the failed rows, oldest first — the writes that will not go out by
+    /// themselves, which the toolbar's unsent list and Settings → Sync name one by one with their
+    /// actions (ADR 0006's 2026-10-29 amendment). Observed, so the list survives a relaunch and
+    /// is current wherever it is shown.
+    var unsentWrites: [OutboxItem] = []
     /// Every inbox row the local database holds, for the surfaces that outlive a screen.
     ///
     /// This is the menu-bar quick inbox's source (`Features/MenuBar/`), and it is here rather
@@ -270,6 +275,13 @@ final class SignedInSession {
             }
         })
 
+        let outbox = database.observeOutboxItems()
+        observationTasks.append(Task { [weak self] in
+            for await items in outbox {
+                self?.unsentWrites = items.filter { $0.state == .conflicted || $0.state == .failed }
+            }
+        })
+
         let inbox = database.observeInbox()
         observationTasks.append(Task { [weak self] in
             for await rows in inbox {
@@ -365,6 +377,45 @@ final class SignedInSession {
         let failed = (try? await database.failedOutboxItems()) ?? []
         for item in failed where item.prID == targetID {
             try? await database.retryOutboxItem(id: item.id)
+        }
+        await drainOutbox()
+    }
+
+    /// Sends one failed write again: back into the queue with its backoff reset, then a drain.
+    func retry(_ item: OutboxItem) async {
+        try? await database.retryOutboxItem(id: item.id)
+        await drainOutbox()
+    }
+
+    /// Throws one unsent write away. A parked review takes its draft with it
+    /// (`DatabaseManager.discardConflictedOutboxItem(id:)`), so callers confirm that one first.
+    func discard(_ item: OutboxItem) async {
+        if item.state == .conflicted {
+            try? await database.discardConflictedOutboxItem(id: item.id)
+        } else {
+            try? await database.deleteOutboxItem(id: item.id)
+        }
+    }
+
+    /// Throws away every parked write of one pull request or issue — the panel's and the
+    /// conflict alert's *Discard*. "Approve & merge" parks two rows at once, and the alert is about
+    /// both.
+    /// - Parameter targetID: The pull request's or issue's node id.
+    func discardParkedWrites(for targetID: String) async {
+        let parked = (try? await database.conflictedOutboxItems()) ?? []
+        for item in parked where item.prID == targetID {
+            await discard(item)
+        }
+    }
+
+    /// Sends a parked review against the commit it was written on, then drains (ADR 0006's
+    /// 2026-10-29 amendment). A parked merge or branch update is left alone: the head moved, so
+    /// the user has to look again and merge again.
+    /// - Parameter targetID: The pull request's node id.
+    func sendParkedReviewAnyway(for targetID: String) async {
+        let parked = (try? await database.conflictedOutboxItems()) ?? []
+        for item in parked where item.prID == targetID {
+            try? await database.sendConflictedReviewAnyway(id: item.id)
         }
         await drainOutbox()
     }

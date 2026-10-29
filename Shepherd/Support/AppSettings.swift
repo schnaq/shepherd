@@ -247,7 +247,8 @@ final class AppSettings {
         didSet { defaults.set(notifyOnChecksFailed, forKey: Keys.notifyChecksFailed) }
     }
 
-    /// Notify when a queued review could not be submitted.
+    /// Notify when a queued write was parked — a review, a merge or a branch update whose pull
+    /// request moved on — or given up on (ADR 0006's 2026-10-29 amendment).
     var notifyOnDraftConflict: Bool {
         didSet { defaults.set(notifyOnDraftConflict, forKey: Keys.notifyDraftConflict) }
     }

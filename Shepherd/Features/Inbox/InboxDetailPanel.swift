@@ -457,7 +457,12 @@ struct InboxDetailPanel: View {
             parked: model.parkedWriteCount(for: row),
             failed: model.failedWriteCount(for: row),
             target: .pullRequest,
-            onRetry: { retryFailedWrites(row) }
+            onRetry: { retryFailedWrites(row) },
+            // The observed outbox updates the line by itself after either.
+            onDiscardParked: { Task { await environment.session?.discardParkedWrites(for: row.id) } },
+            onSendAnyway: model.queuedWrites(for: row).contains(where: \.isParkedReview)
+                ? { Task { await environment.session?.sendParkedReviewAnyway(for: row.id) } }
+                : nil
         )
         if environment.mergeWhenGreen.isArmed(row) {
             mergeWhenGreenStatus

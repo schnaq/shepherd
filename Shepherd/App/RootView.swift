@@ -194,19 +194,31 @@ struct SignedInRootView: View {
                     .environment(environment)
             }
         }
-        // One alert, one parked review: dismissing it lets the next conflict of the same drain
-        // through instead of losing it (ADR 0006, ADR 0015).
+        // One alert, one parked write: dismissing it lets the next conflict of the same drain
+        // through instead of losing it (ADR 0006, ADR 0015). Every way out is here — Send anyway
+        // for a review, Discard for anything, Open to look first — and "Later" leaves the write in
+        // the toolbar's unsent list (ADR 0006's 2026-10-29 amendment).
         .alert(
-            String(localized: "This review was not sent"),
+            conflictTitle(for: environment.draftConflicts.current),
             isPresented: Binding(
                 get: { environment.draftConflicts.current != nil },
                 set: { if !$0 { environment.draftConflicts.dismiss() } }
             ),
             presenting: environment.draftConflicts.current
         ) { conflict in
-            Button(String(localized: "Re-review")) {
+            if conflict.write == .review {
+                Button(String(localized: "Send anyway")) {
+                    environment.draftConflicts.dismiss()
+                    Task { await environment.session?.sendParkedReviewAnyway(for: conflict.prID) }
+                }
+            }
+            Button(conflict.write == .review ? String(localized: "Re-review") : String(localized: "Show")) {
                 environment.draftConflicts.dismiss()
                 environment.openReview(prID: conflict.prID)
+            }
+            Button(String(localized: "Discard"), role: .destructive) {
+                environment.draftConflicts.dismiss()
+                Task { await environment.session?.discardParkedWrites(for: conflict.prID) }
             }
             Button(String(localized: "Later"), role: .cancel) {
                 environment.draftConflicts.dismiss()
@@ -216,16 +228,33 @@ struct SignedInRootView: View {
         }
     }
 
+    /// The conflict alert's title, naming the write that was parked.
+    private func conflictTitle(for conflict: DraftConflict?) -> String {
+        switch conflict?.write {
+        case .merge: String(localized: "Your merge was parked")
+        case .updateBranch: String(localized: "Your branch update was parked")
+        case .review, nil: String(localized: "Your review was parked")
+        }
+    }
+
     /// What the conflict alert says, plus how many more are behind it.
     private func conflictMessage(for conflict: DraftConflict) -> String {
-        let explanation = String(
-            localized: """
-                \(conflict.repo.fullName)#\(String(conflict.number)) got new commits after you wrote \
-                your review, so your inline comments would land on the wrong lines. \
-                Your draft is kept — open the pull request again to check it against the \
-                new commit.
-                """
-        )
+        let slug = "\(conflict.repo.fullName)#\(String(conflict.number))"
+        let explanation = conflict.write == .review
+            ? String(
+                localized: """
+                    \(slug) got new commits after you wrote your review, so Shepherd did not send \
+                    it. Send it anyway to post it on the commit you reviewed, or open the pull \
+                    request to check it against the new commits. Discard deletes the review and \
+                    its inline comments.
+                    """
+            )
+            : String(
+                localized: """
+                    \(slug) got new commits after you chose this, so Shepherd did not send it. \
+                    Open the pull request, look at the new commits and try again, or discard it.
+                    """
+            )
         let waiting = environment.draftConflicts.waiting.count
         guard waiting > 0 else { return explanation }
         let more = waiting == 1

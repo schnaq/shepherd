@@ -500,7 +500,7 @@ struct InboxScreen: View {
             model.apply(.myPullRequests)
         case .parkedReviews, .failedWrites:
             // Not an inbox filter at all: both are outbox rows, and Settings → Sync is where they
-            // are counted and explained — and, for the failed ones, retried or discarded.
+            // are listed with their actions — retry or send anyway, and discard.
             environment.showSettings(.sync)
         }
     }
@@ -863,13 +863,10 @@ struct SyncStatusView: View {
     let width: CGFloat
     /// The active session.
     let session: SignedInSession
-    /// Needed only so the failed-writes text below can act as a button to Settings → Sync.
-    @Environment(AppEnvironment.self) private var environment
 
-    /// How much of the line fits: all of it, then the counts without their explanation, then
-    /// the worst of them alone.
+    /// How much of the line fits: all of it, or the worst of it alone.
     private enum Density {
-        case full, short, minimal
+        case full, minimal
     }
 
     var body: some View {
@@ -883,7 +880,6 @@ struct SyncStatusView: View {
         // nothing to grow by, and the longest form that fits inside it is the one drawn.
         ViewThatFits(in: .horizontal) {
             line(.full)
-            line(.short)
             line(.minimal)
         }
         .frame(width: width, alignment: .trailing)
@@ -905,44 +901,16 @@ struct SyncStatusView: View {
             } else if density != .minimal || worst == .status {
                 status
             }
-            // Parked mutations do not drain by themselves (ADR 0006), so the title bar says so
-            // for as long as they sit there — the conflict alert is only shown once.
-            if session.conflictedOutboxCount > 0, density != .minimal || worst == .parked {
+            // The writes that do not go out by themselves — parked (ADR 0006) and given up on —
+            // as one control: the counts, and a click that lists each with its way out (the
+            // 2026-10-29 amendment). Before, parked was plain text and failed a button to
+            // Settings, which had nothing to click for a parked write.
+            if session.failedOutboxCount + session.conflictedOutboxCount > 0,
+               density != .minimal || worst != .syncFailed {
                 if density != .minimal {
                     Text(verbatim: "·")
                 }
-                Text(String(localized: "\(session.conflictedOutboxCount) not sent"))
-                    .foregroundStyle(Theme.pending)
-                    .help(String(
-                        localized: "Queued reviews that were parked because the pull request moved on. Settings → Sync has the count; open the pull request to check your draft."
-                    ))
-            }
-            // And the third state, the one this side of the app could not say until now: a write
-            // the drain **gave up on**. It is not coming back by itself either, and unlike a
-            // parked one there is no draft to re-apply and no alert that ever raised it — a 4xx
-            // from GitHub simply ends the row. The issue panel says exactly this about one issue
-            // (ADR 0032); this is the same sentence about the account.
-            if session.failedOutboxCount > 0, density != .minimal || worst == .failedWrites {
-                if density != .minimal {
-                    Text(verbatim: "·")
-                }
-                // A status line that names the fix but does not let you take it is a dead end —
-                // Settings → Sync is one click away everywhere else this count is mentioned
-                // (the toolbar menu at `.failedWrites` above), so the title bar should not be the
-                // one place you have to go find it yourself. Shortened, the line still is that
-                // click, and the tooltip still names where it goes.
-                Button {
-                    environment.showSettings(.sync)
-                } label: {
-                    Text(density == .full
-                        ? String(localized: "\(session.failedOutboxCount) failed — see Settings → Sync")
-                        : String(localized: "\(session.failedOutboxCount) failed"))
-                        .foregroundStyle(Theme.failure)
-                }
-                .buttonStyle(.plain)
-                .help(String(
-                    localized: "Queued writes Shepherd gave up on: GitHub refused them, or they could not be made at all. They are never retried by themselves — Settings → Sync lists each one and offers Retry or Discard."
-                ))
+                UnsentWritesButton(session: session, isCompact: density == .minimal)
             }
         }
         .font(.system(size: 11))

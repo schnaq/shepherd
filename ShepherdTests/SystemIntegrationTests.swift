@@ -1,6 +1,7 @@
 import AppIntents
 import Foundation
 import ShepherdCore
+import ShepherdSync
 import XCTest
 
 @testable import Shepherd
@@ -585,5 +586,40 @@ final class SystemIntegrationTests: XCTestCase {
 
     func testTheDigestNotificationIsAboutNoSinglePullRequest() {
         XCTAssertEqual(NotificationPayload(identifier: "d", title: "t", body: "b").pullRequestIDs, [])
+        XCTAssertEqual(NotificationPayload(identifier: "d", title: "t", body: "b").userInfo, [:])
+    }
+
+    func testAParkedMergeIsNamedAsAMergeAndOpensItsPullRequest() throws {
+        let conflict = DraftConflict(
+            prID: "PR_4",
+            repo: repo,
+            number: 4,
+            expectedHeadOid: "a",
+            actualHeadOid: "b",
+            write: .merge
+        )
+        let payload = try XCTUnwrap(
+            NotificationManager.payload(for: .draftConflict(conflict), settings: makeSettings())
+        )
+        XCTAssertEqual(payload.title, String(localized: "Merge parked · \(repo.fullName)#\(String(4))"))
+        XCTAssertEqual(payload.userInfo, [NotificationUserInfoKey.pullRequestID: "PR_4"])
+    }
+
+    func testOnlyAWriteTheDrainGaveUpOnNotifiesAndAnIssueOpensTheIssue() throws {
+        let retried = SyncFailure(stage: .outbox, message: "offline")
+        XCTAssertNil(NotificationManager.payload(for: .syncFailed(retried), settings: makeSettings()))
+
+        let write = OutboxItem(
+            prID: "I_7",
+            repo: repo,
+            number: 7,
+            action: .addIssueLabel(name: "bug", basedOnUpdatedAt: Date(timeIntervalSince1970: 0))
+        )
+        let abandoned = SyncFailure(stage: .outbox, message: "403", abandonedWrite: write)
+        let payload = try XCTUnwrap(
+            NotificationManager.payload(for: .syncFailed(abandoned), settings: makeSettings())
+        )
+        XCTAssertEqual(payload.pullRequestIDs, [])
+        XCTAssertEqual(payload.userInfo, [NotificationUserInfoKey.issueID: "I_7"])
     }
 }

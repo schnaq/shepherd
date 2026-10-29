@@ -21,6 +21,8 @@ struct ReviewScreen: View {
     @State private var closeTarget: PullRequestSummary?
     /// Whether the conversation composer from the ⋯ menu is up.
     @State private var isCommentSheetPresented = false
+    /// Whether "discard this review?" is being asked about the parked review.
+    @State private var isConfirmingParkedDiscard = false
     /// This pull request's outbox rows, observed, for the toolbar's write state.
     @State private var outboxItems: [OutboxItem] = []
     /// Whether the window is too narrow for the toolbar's labels (``compactToolbarWidth``).
@@ -122,6 +124,18 @@ struct ReviewScreen: View {
                 onComment: { isCommentSheetPresented = true },
                 onClose: { perform(.close) },
                 onRetry: { Task { await session.retryFailedWrites(for: prID) } },
+                session: session,
+                // A parked review's Discard deletes its draft, so that one asks first.
+                onDiscardParked: {
+                    if outboxItems.contains(where: \.isParkedReview) {
+                        isConfirmingParkedDiscard = true
+                    } else {
+                        Task { await session.discardParkedWrites(for: prID) }
+                    }
+                },
+                onSendAnyway: outboxItems.contains(where: \.isParkedReview)
+                    ? { Task { await session.sendParkedReviewAnyway(for: prID) } }
+                    : nil,
                 onRemoveFromSeries: environment.mergeSeries.canRemove(
                     prID,
                     hasUnsentWrite: outboxItems.contains { $0.state == .pending || $0.state == .sending }
@@ -197,6 +211,16 @@ struct ReviewScreen: View {
                     onMerged: { leaveReview() }
                 )
             }
+        }
+        .confirmationDialog(
+            String(localized: "Discard this review?"),
+            isPresented: $isConfirmingParkedDiscard
+        ) {
+            Button(String(localized: "Discard review"), role: .destructive) {
+                Task { await session.discardParkedWrites(for: prID) }
+            }
+        } message: {
+            Text(String(localized: "Your review and its inline comments are deleted. This cannot be undone."))
         }
         .closePullRequestConfirmation($closeTarget, actions: actions)
         .pullRequestCommentSheet(isPresented: $isCommentSheetPresented, summary: model.summary, actions: actions)
@@ -699,6 +723,12 @@ struct ReviewToolbar: ToolbarContent {
     var onClose: () -> Void
     /// Sends this pull request's failed writes again.
     var onRetry: () -> Void = {}
+    /// The active session, for the account-wide unsent writes beside the facts.
+    let session: SignedInSession
+    /// Throws this pull request's parked writes away (the screen asks first for a review).
+    var onDiscardParked: () -> Void = {}
+    /// Sends the parked review on the commit it was written on, or `nil` when none is parked.
+    var onSendAnyway: (() -> Void)?
     /// Takes this pull request out of its merge series, or `nil` when it is in none or its merge
     /// is already queued (ADR 0041).
     var onRemoveFromSeries: (() -> Void)?
@@ -723,12 +753,36 @@ struct ReviewToolbar: ToolbarContent {
         }
         .sharedBackgroundVisibility(.hidden)
 
+        // The account's writes that will not go out by themselves, as on the inbox's sync line —
+        // so the way out of one is a click away while reviewing too.
+        if session.failedOutboxCount + session.conflictedOutboxCount > 0 {
+            ToolbarItem(placement: .primaryAction) {
+                UnsentWritesButton(session: session)
+                    .font(.system(size: 11))
+            }
+            .sharedBackgroundVisibility(.hidden)
+        }
+
         // Only while there is something to retry, and as an item of its own so it gets the
         // toolbar's button treatment rather than a custom style inside the facts row.
         if case .failed = write {
             ToolbarItem(placement: .primaryAction) {
                 Button(String(localized: "Retry"), action: onRetry)
                     .help(String(localized: "Send the failed changes to GitHub again"))
+            }
+        }
+
+        // And the parked state's two ways out, beside the chip that says *Parked*.
+        if case .parked = write {
+            if let onSendAnyway {
+                ToolbarItem(placement: .primaryAction) {
+                    Button(String(localized: "Send anyway"), action: onSendAnyway)
+                        .help(String(localized: "Send the review on the commit you wrote it on. GitHub keeps your inline comments there."))
+                }
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button(String(localized: "Discard"), action: onDiscardParked)
+                    .help(String(localized: "Throw the parked write away"))
             }
         }
 
