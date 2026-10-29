@@ -885,6 +885,29 @@ extension View {
             Text(String(localized: "Your review and its inline comments are deleted. This cannot be undone."))
         }
     }
+
+    /// The same question about one review held in `item`. Presented with `presenting:`, so the
+    /// button gets the value even though dismissing the dialog clears `item` before it runs.
+    /// - Parameters:
+    ///   - item: What to discard; the dialog is up while it is non-`nil`.
+    ///   - discard: What the confirming button does with it.
+    func discardParkedReviewConfirmation<Item>(
+        item: Binding<Item?>,
+        discard: @escaping (Item) -> Void
+    ) -> some View {
+        confirmationDialog(
+            String(localized: "Discard this review?"),
+            isPresented: Binding(
+                get: { item.wrappedValue != nil },
+                set: { if !$0 { item.wrappedValue = nil } }
+            ),
+            presenting: item.wrappedValue
+        ) { value in
+            Button(String(localized: "Discard review"), role: .destructive) { discard(value) }
+        } message: { _ in
+            Text(String(localized: "Your review and its inline comments are deleted. This cannot be undone."))
+        }
+    }
 }
 
 // MARK: - Small helpers

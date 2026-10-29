@@ -170,6 +170,8 @@ Where the user meets them:
   observation of the outbox on `SignedInSession`, so it survives a relaunch where the alert does not.
 - **The panel's queue line and the review toolbar** act on the pull request's own parked rows; the
   conflict alert names the write (review, merge or branch update) and offers Send anyway and Discard.
+  The alert's Discard throws away only the write it names — "Approve & merge" parks two rows and
+  raises an alert for each — and for a review it asks first, like every other surface.
 - **One vocabulary.** *Parked* (amber) is a write the target moved on underneath; *Not sent* (red) is
   one the drain gave up on — in the row chip, the toolbar, the panel, toasts, notifications and
   Settings. Before, the toolbar called parked rows "not sent" and the chip drew them red.

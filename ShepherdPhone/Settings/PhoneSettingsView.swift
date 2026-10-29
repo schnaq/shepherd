@@ -128,13 +128,7 @@ struct PhoneSettingsView: View {
                 Text(String(localized: "Parked: the pull request or issue changed after you queued the write, so Shepherd held it back. Not sent: GitHub refused it, or Shepherd could not make it."))
             }
             .sensoryFeedback(.impact(weight: .light), trigger: session.unsentWrites.count) { old, new in new < old }
-            .discardParkedReviewConfirmation(
-                isPresented: Binding(
-                    get: { reviewToDiscard != nil },
-                    set: { if !$0 { reviewToDiscard = nil } }
-                )
-            ) {
-                guard let item = reviewToDiscard else { return }
+            .discardParkedReviewConfirmation(item: $reviewToDiscard) { item in
                 Task { await session.discard(item) }
             }
         }

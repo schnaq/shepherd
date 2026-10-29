@@ -397,13 +397,16 @@ final class SignedInSession {
         }
     }
 
-    /// Throws away every parked write of one pull request or issue — the panel's and the
-    /// conflict alert's *Discard*. "Approve & merge" parks two rows at once, and the alert is about
-    /// both.
-    /// - Parameter targetID: The pull request's or issue's node id.
-    func discardParkedWrites(for targetID: String) async {
+    /// Throws away the parked writes of one pull request or issue — every one for the panel's and
+    /// the review toolbar's *Discard*, only the alerted kind for the conflict alert's: "Approve &
+    /// merge" parks two rows at once and raises one alert each, and the merge's must not take the
+    /// review's draft with it.
+    /// - Parameters:
+    ///   - targetID: The pull request's or issue's node id.
+    ///   - write: The kind to discard, or `nil` for all of them.
+    func discardParkedWrites(for targetID: String, of write: DraftConflict.Write? = nil) async {
         let parked = (try? await database.conflictedOutboxItems()) ?? []
-        for item in parked where item.prID == targetID {
+        for item in parked where item.prID == targetID && (write == nil || item.action.conflictWrite == write) {
             await discard(item)
         }
     }
@@ -482,4 +485,16 @@ protocol SyncEventPresenting: AnyObject, Sendable {
     ///   - event: What the sync engine reported.
     ///   - settings: The settings that say which events notify.
     func present(_ event: SyncEvent, settings: AppSettings) async
+}
+
+private extension OutboxAction {
+    /// The ``DraftConflict/Write`` a parked row of this action was alerted as, if it is one.
+    var conflictWrite: DraftConflict.Write? {
+        switch self {
+        case .submitReview: .review
+        case .merge: .merge
+        case .updateBranch: .updateBranch
+        default: nil
+        }
+    }
 }

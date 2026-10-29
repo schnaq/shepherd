@@ -154,6 +154,8 @@ struct SignedInRootView: View {
     @Environment(AppEnvironment.self) private var environment
     /// The active session.
     let session: SignedInSession
+    /// The pull request whose parked review the conflict alert's *Discard* is asking about.
+    @State private var conflictReviewToDiscard: String?
 
     var body: some View {
         ZStack {
@@ -196,8 +198,9 @@ struct SignedInRootView: View {
         }
         // One alert, one parked write: dismissing it lets the next conflict of the same drain
         // through instead of losing it (ADR 0006, ADR 0015). Every way out is here — Send anyway
-        // for a review, Discard for anything, Open to look first — and "Later" leaves the write in
-        // the toolbar's unsent list (ADR 0006's 2026-10-29 amendment).
+        // for a review, Discard for this write only (a review's asks first), Open to look first —
+        // and "Later" leaves the write in the toolbar's unsent list (ADR 0006's 2026-10-29
+        // amendment).
         .alert(
             conflictTitle(for: environment.draftConflicts.current),
             isPresented: Binding(
@@ -218,13 +221,21 @@ struct SignedInRootView: View {
             }
             Button(String(localized: "Discard"), role: .destructive) {
                 environment.draftConflicts.dismiss()
-                Task { await environment.session?.discardParkedWrites(for: conflict.prID) }
+                if conflict.write == .review {
+                    // Deletes the draft, so it asks first — once the alert is gone.
+                    Task { @MainActor in conflictReviewToDiscard = conflict.prID }
+                } else {
+                    Task { await environment.session?.discardParkedWrites(for: conflict.prID, of: conflict.write) }
+                }
             }
             Button(String(localized: "Later"), role: .cancel) {
                 environment.draftConflicts.dismiss()
             }
         } message: { conflict in
             Text(conflictMessage(for: conflict))
+        }
+        .discardParkedReviewConfirmation(item: $conflictReviewToDiscard) { prID in
+            Task { await environment.session?.discardParkedWrites(for: prID, of: .review) }
         }
     }
 
