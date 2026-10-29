@@ -210,16 +210,17 @@ struct InboxSidebar: View {
             ForEach(watchedFacets, id: \.repo.fullName) { facet in
                 let isLinked = hasLocalCheckout(facet.repo)
                 let problem = accessProblem(facet.repo)
+                // A warning instead of a count: GitHub answers a repository the token cannot see
+                // with an empty search, and a zero would say "nothing open" when the truth is
+                // "Shepherd cannot look".
+                let glyph: (image: String, label: String)? = problem != nil
+                    ? ("exclamationmark.triangle.fill", String(localized: "no access"))
+                    : isLinked ? ("laptopcomputer", String(localized: "local checkout linked")) : nil
                 RailRow(
                     title: facet.repo.fullName,
                     systemImage: "binoculars",
-                    // A warning instead of a count: GitHub answers a repository the token cannot
-                    // see with an empty search, and a zero would say "nothing open" when the truth
-                    // is "Shepherd cannot look".
-                    trailingSystemImage: problem != nil ? "exclamationmark.triangle.fill"
-                        : isLinked ? "laptopcomputer" : nil,
-                    trailingAccessibilityLabel: problem != nil ? String(localized: "no access")
-                        : isLinked ? String(localized: "local checkout linked") : nil,
+                    trailingSystemImage: glyph?.image,
+                    trailingAccessibilityLabel: glyph?.label,
                     count: problem != nil ? nil : facet.count,
                     isSelected: model.repoFilter.map { $0.isSameRepository(as: facet.repo) } ?? false
                 ) {

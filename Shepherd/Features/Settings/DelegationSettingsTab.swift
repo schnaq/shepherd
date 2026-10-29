@@ -446,18 +446,18 @@ struct DelegationSettingsTab: View {
             return
         }
         repoError = nil
-        guard let url = FolderPicker.choose(
-            title: String(localized: "Choose the local clone of \(name)")
-        ) else { return }
+        guard let url = chooseClone(of: name) else { return }
         repoError = environment.settings.addLocalRepository(repo, folder: url, link: true, watch: true)
         newRepoFullName = ""
     }
 
     private func choose(repo: String) {
-        guard let url = FolderPicker.choose(
-            title: String(localized: "Choose the local clone of \(repo)")
-        ) else { return }
+        guard let url = chooseClone(of: repo) else { return }
         environment.settings.setLocalCheckout(url, forRepoNamed: repo)
+    }
+
+    private func chooseClone(of repo: String) -> URL? {
+        FolderPicker.choose(title: String(localized: "Choose the local clone of \(repo)"))
     }
 
     // MARK: - Bindings
