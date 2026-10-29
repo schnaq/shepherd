@@ -212,15 +212,8 @@ struct ReviewScreen: View {
                 )
             }
         }
-        .confirmationDialog(
-            String(localized: "Discard this review?"),
-            isPresented: $isConfirmingParkedDiscard
-        ) {
-            Button(String(localized: "Discard review"), role: .destructive) {
-                Task { await session.discardParkedWrites(for: prID) }
-            }
-        } message: {
-            Text(String(localized: "Your review and its inline comments are deleted. This cannot be undone."))
+        .discardParkedReviewConfirmation(isPresented: $isConfirmingParkedDiscard) {
+            Task { await session.discardParkedWrites(for: prID) }
         }
         .closePullRequestConfirmation($closeTarget, actions: actions)
         .pullRequestCommentSheet(isPresented: $isCommentSheetPresented, summary: model.summary, actions: actions)

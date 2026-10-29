@@ -826,14 +826,7 @@ struct QueueStatusLine: View {
                         }
                         .buttonStyle(SecondaryButtonStyle(height: 22, tint: Theme.failure))
                         .help(String(localized: "Throw the parked write away"))
-                        .confirmationDialog(
-                            String(localized: "Discard this review?"),
-                            isPresented: $isConfirmingDiscard
-                        ) {
-                            Button(String(localized: "Discard review"), role: .destructive, action: onDiscardParked)
-                        } message: {
-                            Text(String(localized: "Your review and its inline comments are deleted. This cannot be undone."))
-                        }
+                        .discardParkedReviewConfirmation(isPresented: $isConfirmingDiscard, discard: onDiscardParked)
                     }
                 }
                 if failed > 0 {
@@ -872,6 +865,25 @@ struct QueueStatusLine: View {
         Text(message)
             .font(componentFont(11, .caption))
             .foregroundStyle(textTint)
+    }
+}
+
+extension View {
+    /// Asks before a parked review is discarded — discarding it deletes the user's draft
+    /// (`DatabaseManager.discardConflictedOutboxItem(id:)`). One dialog for every surface that
+    /// offers the Discard: the panel line, the review toolbar, the unsent list and the phone.
+    /// - Parameters:
+    ///   - isPresented: Whether the question is up.
+    ///   - discard: What the confirming button does.
+    func discardParkedReviewConfirmation(
+        isPresented: Binding<Bool>,
+        discard: @escaping () -> Void
+    ) -> some View {
+        confirmationDialog(String(localized: "Discard this review?"), isPresented: isPresented) {
+            Button(String(localized: "Discard review"), role: .destructive, action: discard)
+        } message: {
+            Text(String(localized: "Your review and its inline comments are deleted. This cannot be undone."))
+        }
     }
 }
 

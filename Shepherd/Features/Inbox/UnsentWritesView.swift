@@ -138,15 +138,8 @@ struct UnsentWriteRow: View {
             }
             .controlSize(.small)
         }
-        .confirmationDialog(
-            String(localized: "Discard this review?"),
-            isPresented: $isConfirmingDiscard
-        ) {
-            Button(String(localized: "Discard review"), role: .destructive) {
-                Task { await session.discard(item) }
-            }
-        } message: {
-            Text(String(localized: "Your review and its inline comments are deleted. This cannot be undone."))
+        .discardParkedReviewConfirmation(isPresented: $isConfirmingDiscard) {
+            Task { await session.discard(item) }
         }
     }
 
