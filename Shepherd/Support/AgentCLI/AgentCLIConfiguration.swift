@@ -184,9 +184,12 @@ struct AgentCLIConfiguration: Codable, Sendable, Equatable {
     /// The default spend cap: none.
     static let defaultMaxBudgetUSD: Double? = nil
     /// What *Max turns* comes back at when its "No limit" box is unticked.
-    static let suggestedMaxTurns = 25
+    ///
+    /// Neither suggestion equals its legacy default (25 turns, $5): the schema migration turns a
+    /// legacy value back into "no limit", so a cap the user switched on must not look like one.
+    static let suggestedMaxTurns = 30
     /// What *Budget* starts at when "Cap spend" is ticked and no earlier value is known.
-    static let suggestedMaxBudgetUSD = 5.0
+    static let suggestedMaxBudgetUSD = 10.0
     /// The default local-session command: the CLI's documented session resume, headless, with
     /// output Shepherd can read and the edits headless mode would otherwise refuse.
     static let defaultSessionResumeTemplate =

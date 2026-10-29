@@ -140,7 +140,7 @@ button on an issue that says nothing about a previous run.
 
 Settings → Delegation's *Max turns* gains a **No limit** checkbox. It stores `maxTurns = 0`, which
 `AgentCLIConfiguration` already read as "pass no `--max-turns`" — so this is a control for an
-existing state, not a new one. The default stays 25 (no limit since the 2026-10-29 amendment), switching the box off restores 25, and the
+existing state, not a new one. The default stays 25 (no limit since the 2026-10-29 amendment), switching the box off restores 25 (30 since that amendment), and the
 delegation sheet's guardrail line says "no turn limit" rather than "0 turns max". The spend cap is
 untouched and still applies, which is why the box's help says so: a run without a turn limit is a
 run the budget has to stop.
@@ -255,8 +255,9 @@ larger task also ended at the turn or spend cap, and *Run again* then deleted wh
 
 - **New defaults.** No `--max-turns`, no `--max-budget-usd`, and the allow-list
   `Read,Edit,Write,Glob,Grep,Bash,WebFetch,WebSearch`. The permission mode stays `acceptEdits`. Both
-  caps keep their controls. Unticking *No limit* brings back 25 turns. Ticking *Cap spend* brings
-  back the last amount, or $5. The UI makes no claim about what pays for a run, as the Decision
+  caps keep their controls. Unticking *No limit* brings back 30 turns. Ticking *Cap spend* brings
+  back the last amount, or $10. Neither suggestion is a legacy default, which the migration below
+  would turn back into "no limit". The UI makes no claim about what pays for a run, as the Decision
   requires. The new defaults are the user's settings, not a statement about any plan.
 - **Migration.** `AgentCLIConfiguration` now writes `schemaVersion: 2`. A document without it
   comes from an older build. When such a document is decoded, each field that still equals its old
