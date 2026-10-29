@@ -141,7 +141,8 @@ struct DelegationSettingsTab: View {
                 TextField(
                     String(localized: "Extra arguments"),
                     text: $extraArgumentsText,
-                    prompt: Text(verbatim: "--add-dir ~/shared")
+                    // No `~`: the words reach the CLI as argv, and no shell expands it.
+                    prompt: Text(verbatim: "--add-dir /Users/me/shared")
                 )
                 .labelsHidden()
                 .onChange(of: extraArgumentsText) { _, text in

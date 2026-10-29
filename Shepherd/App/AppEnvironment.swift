@@ -1123,7 +1123,8 @@ final class AppEnvironment {
             // text, and the reviewer still presses Run.
             brief: agentBriefDrafter()
         )
-        if let task, !model.isBusy {
+        // A reused sheet keeps its text: it belongs to the run whose work or session it holds.
+        if let task, !model.isBusy, !model.holdsPendingWork {
             model.task = task
         }
     }

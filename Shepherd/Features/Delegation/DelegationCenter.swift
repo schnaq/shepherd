@@ -46,10 +46,12 @@ final class DelegationCenter {
         self.makeAgentRunner = makeAgentRunner
     }
 
-    /// Whether a delegation for a pull request is currently running.
+    /// Whether a delegation for a pull request is currently running, or finished holding work a
+    /// new one would replace (``DelegationModel/holdsPendingWork``) — either way, a rule must not
+    /// start another.
     /// - Parameter prID: The pull request's node id.
     func isRunning(prID: String) -> Bool {
-        models[prID]?.isBusy ?? false
+        models[prID].map { $0.isBusy || $0.holdsPendingWork } ?? false
     }
 
     /// How many delegations that a rule started are running right now.
@@ -154,7 +156,7 @@ final class DelegationCenter {
         // of code rather than a property of today's callers (ADR 0011's 2026-09-23 amendment).
         guard !context.isRepositoryTask else { return nil }
         // The one-per-pull-request rule, again from the one place that owns it.
-        if let existing = models[context.prID], existing.isBusy { return nil }
+        if isRunning(prID: context.prID) { return nil }
 
         let model = make(
             context: context,

@@ -967,6 +967,7 @@ final class DelegationModel: Identifiable {
                 self.state = .idle
                 self.transcript = []
                 self.worktreeStatus = nil
+                self.unpushedCommits = 0
                 // A repository task's next run is a new task: it gets a branch and a directory
                 // of its own rather than resuming the branch this worktree was on, which is
                 // still in the clone with whatever the run committed to it. Clearing the branch

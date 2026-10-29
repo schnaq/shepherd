@@ -269,7 +269,7 @@ final class DelegationModelTests: XCTestCase {
                 ["worktree", "add", "--detach", model.worktree?.directory.path ?? "", "0123456789abcdef"],
                 ["diff", "--stat", "HEAD"],
                 ["status", "--porcelain"],
-                ["rev-list", "--count", "refs/remotes/origin/agent/fix..HEAD"],
+                ["rev-list", "--count", "--right-only", "--cherry-pick", "refs/remotes/origin/agent/fix...HEAD"],
             ]
         )
 
@@ -604,7 +604,7 @@ final class DelegationModelTests: XCTestCase {
                 ["commit", "-m", "Address review feedback on #42"],
                 ["push", "origin", "HEAD:agent/fix"],
                 ["status", "--porcelain"],
-                ["rev-list", "--count", "refs/remotes/origin/agent/fix..HEAD"],
+                ["rev-list", "--count", "--right-only", "--cherry-pick", "refs/remotes/origin/agent/fix...HEAD"],
             ]
         )
     }

@@ -498,10 +498,14 @@ struct GitWorktree: Sendable {
     /// How many commits the worktree's `HEAD` has that `origin/<branch>` does not: what a
     /// pull-request run committed and nobody pushed. `0` when git cannot tell — a missing
     /// directory or remote branch — as ``status()`` failing counts as clean.
+    ///
+    /// `--cherry-pick` leaves out a commit whose change `origin/<branch>` already has under
+    /// another hash: after the author rebases the pull request, the old head a leftover worktree
+    /// stands on is not work anybody still has to push.
     /// - Parameter branch: The pull request's branch.
     func commitsAhead(of branch: String) async -> Int {
         let result = try? await run(
-            ["rev-list", "--count", "refs/remotes/origin/\(branch)..HEAD"],
+            ["rev-list", "--count", "--right-only", "--cherry-pick", "refs/remotes/origin/\(branch)...HEAD"],
             in: directory,
             label: "rev-list"
         )

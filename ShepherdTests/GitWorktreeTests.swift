@@ -470,7 +470,7 @@ final class GitWorktreeTests: XCTestCase {
             )
         }
         let count = try XCTUnwrap(runner.invocations.first { $0.arguments.first == "rev-list" })
-        XCTAssertEqual(count.arguments, ["rev-list", "--count", "refs/remotes/origin/agent/fix..HEAD"])
+        XCTAssertEqual(count.arguments, ["rev-list", "--count", "--right-only", "--cherry-pick", "refs/remotes/origin/agent/fix...HEAD"])
         XCTAssertEqual(count.currentDirectory, tree.directory.path)
         XCTAssertFalse(runner.arguments.contains { $0.first == "worktree" })
     }
