@@ -224,8 +224,8 @@ struct SignedInRootView: View {
             Button(String(localized: "Discard"), role: .destructive) {
                 environment.draftConflicts.dismiss()
                 if conflict.write == .review {
-                    // Deletes the draft, so it asks first.
-                    conflictReviewToDiscard = conflict.prID
+                    // Deletes the draft, so it asks first — a tick later, once the alert is gone.
+                    Task { @MainActor in conflictReviewToDiscard = conflict.prID }
                 } else {
                     Task { await environment.session?.discardParkedWrites(for: conflict.prID, of: conflict.write) }
                 }
