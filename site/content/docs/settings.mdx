@@ -174,21 +174,23 @@ Hands a pull request to a local agent CLI. See [Automation](/docs/automation).
 - **Agent** is **Claude Code** or **Custom command**. Shepherd runs your installed CLI with your environment. It holds no login for it and never pushes.
 - **Path**: leave empty to look in the usual places. **Detect** finds it.
 - **Command** (custom): `{prompt}` is the task, `{worktree}` the path. No shell runs the command, so a prompt cannot become a second command.
+- **Model** and **Effort** (Claude Code): passed as `--model` and `--effort`. Empty and **CLI default** leave the choice to your CLI.
+- **Extra arguments**: appended to every run, split like a shell would.
 
 ### Guardrails
 
 | Option | Default |
 | --- | --- |
-| **Permission mode**: **Accept edits**, **Plan only**, **Don't ask** | Accept edits |
-| **Max turns** (1 to 200), or **No limit** | 25 |
-| **Budget** in USD, with **Cap spend** | 5 |
-| **Tools** (passed to `--allowedTools`) | `Read,Edit,Bash(git *),Glob,Grep` |
+| **Permission mode**: **Accept edits**, **Plan only**, **Don't ask**, **Auto**, **Bypass permissions** | Accept edits |
+| **Max turns** (1 to 500), or **No limit** | No limit |
+| **Budget** in USD, with **Cap spend** | Off (5 when you switch it on) |
+| **Tools** (passed to `--allowedTools`) | `Read,Edit,Write,Glob,Grep,Bash,WebFetch,WebSearch` |
 
-**Don't ask** runs every allowed tool unattended, including shell commands. Guardrails do not apply to a resumed session.
+**Don't ask** runs the tools on the list unattended and refuses anything else without asking. **Bypass permissions** runs every tool unattended, so **Tools** does not apply. If a run was refused a tool, the result shows how many calls were denied and which tools. Guardrails do not apply to a resumed session.
 
 ### Session back-channel
 
-**Local** and **Remote** commands send a review finding to the session named in a commit's `Claude-Session:` trailer. The local default is `claude --resume {sessionID} -p {message}`. Leave a field empty to switch that button off.
+**Local** and **Remote** commands send a review finding to the session named in a commit's `Claude-Session:` trailer. The local default is `claude --resume {sessionID} -p {message} --output-format stream-json --verbose --permission-mode acceptEdits`. Leave a field empty to switch that button off.
 
 ### Local checkouts
 
@@ -207,7 +209,7 @@ Off by default. When on, Shepherd starts a delegation on its own on your pull re
 
 "Turns" is literal. A pull request that was already red when Shepherd first saw it never starts anything. Each pull request starts at most one run per commit. Same worktree and guardrails, and it never pushes, approves or merges.
 
-You can edit the **Task for the agent** and **Reset to the default task**. **Limits** cap runs **At once** (1 to 5, default 1) and **Per day** (1 to 50, default 5). At a cap, Shepherd notifies you instead.
+You can edit the **Task for the agent** and **Reset to the default task**. **Limits** cap runs **At once** (1 to 20, default 1) and **Per day** (1 to 500, default 5). Each has **No limit**. At a cap, Shepherd notifies you instead.
 
 ## Automation
 

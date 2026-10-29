@@ -16,7 +16,9 @@ Shepherd startet die Agent-CLI, die du schon hast. Es hält kein Login dafür, l
 - **Claude Code.** Shepherd startet `claude` headless und liest die Ausgabe, sobald sie ankommt. Mit **Suchen** findest du die ausführbare Datei, oder tippe ihren **Pfad** ein.
 - **Eigener Befehl.** Jede andere Agent-CLI. Schreibe eine **Befehl**-Vorlage. `{prompt}` ist die Aufgabe und `{worktree}` der Pfad. `{prompt}` wird immer genau ein Argument, und keine Shell führt den Befehl aus.
 
-Unter **Leitlinien** legst du den **Berechtigungsmodus** fest (**Änderungen zulassen**, **Nur planen** oder **Nicht fragen**), **Max. Turns** (oder **Unbegrenzt**), ein optionales Ausgabenlimit (**Begrenzen**, in USD) und die erlaubten **Werkzeuge**.
+Für Claude Code kannst du außerdem das **Modell** und den **Aufwand** wählen. **Zusätzliche Argumente** werden an jeden Lauf angehängt.
+
+Unter **Leitlinien** legst du den **Berechtigungsmodus** fest (**Änderungen zulassen**, **Nur planen**, **Nicht fragen**, **Automatisch** oder **Berechtigungen umgehen**), **Max. Turns** (standardmäßig unbegrenzt), ein optionales Ausgabenlimit (**Begrenzen**, in USD, standardmäßig aus) und die erlaubten **Werkzeuge**. Standardmäßig darf der Agent Dateien lesen, bearbeiten und schreiben, jeden Shell-Befehl ausführen und das Web nutzen, also auch deine Tests laufen lassen.
 
 ### Lokale Klone verknüpfen
 
@@ -31,6 +33,8 @@ Drücke in **Einstellungen → Delegation** unter **Lokale Checkouts** auf **Lok
 - ⌘K bietet außerdem **Agent in owner/repo starten…** für jeden verknüpften Klon.
 
 Das Menü **Agent-Aufgaben** listet jede Aufgabe und ob sie läuft, fertig ist oder fehlgeschlagen ist. **Worktree verwerfen** entfernt den Worktree einer Aufgabe. **Committen & Branch pushen** ist dein Button.
+
+Endet ein Lauf an einem Limit oder mit einem Fehler, setzt **Fortsetzen** dieselbe Claude-Code-Session im selben Worktree fort, mit ihren Änderungen. Bei einem Pull Request oder Issue fängt **Erneut ausführen** neu an und wartet deshalb, bis du die Änderungen des letzten Laufs gepusht oder verworfen hast. Das Ergebnis zeigt auch, welche Werkzeuge dem Agenten verweigert wurden.
 
 ### Shepherd den Brief schreiben lassen
 

@@ -96,7 +96,8 @@ automatic run; the other order would risk re-running on every relaunch.
 ### Caps, and a notification when a cap bites
 
 Two limits, both user-visible and both settable: at most *n* automatic delegations running at once
-(default 1) and at most *n* per calendar day (default 5). The daily counter is keyed to a
+(default 1) and at most *n* per calendar day (default 5). Either can be switched off since the
+2026-10-29 amendment below. The daily counter is keyed to a
 `yyyy-MM-dd` stamp in the local time zone, so it resets at midnight rather than 24 hours after the
 last start. `ADR 0011`'s one-run-per-pull-request rule is enforced by `DelegationCenter` and is
 simply reused — an automatic start is the last thing allowed to bend it, and the concurrency cap
@@ -172,3 +173,24 @@ request behind it — a free-text task on a repository. No rule can start one:
 `DelegationCenter.startAutomatically` refuses that origin before anything else, and
 `RepositoryTaskTests.testARuleNeverStartsARepositoryTask` pins it with a CLI present, so the refusal is
 the guard's and not a missing tool's.
+
+## Amendment (2026-10-29): either cap can be switched off
+
+The two caps above were floored at one (`max(1, …)`). The steppers stopped at 5 at once and 50 per
+day. A stored value of `0` (or less) now means **no limit**:
+
+- `concurrencyCap` and `dailyCap` return `Int.max` for it.
+- Settings has a *No limit* box beside each stepper, the same as *Max turns*. Unticking it brings
+  back the default.
+- The stepper ranges are now 1…20 and 1…500.
+
+The defaults stay 1 and 5, so no stored rule set changes meaning. An older build reading `0` floors
+it to 1, which is the safe direction.
+
+A cap of `Int.max` cannot be reached, so `decide` never reports it and the cap notification never
+has to print it. The Settings footer drops the "of *n*" when there is no daily cap. The other
+guards do not change: the one-run-per-pull-request rule (ADR 0011), the per-commit ledger and the
+transition check. Together they still make sure that each red commit starts at most one run. An
+automatic run now inherits ADR 0011's 2026-10-29 defaults, so it runs with no turn or spend cap
+unless the user sets one. It also refuses to replace a worktree that holds an earlier run's
+uncommitted changes.

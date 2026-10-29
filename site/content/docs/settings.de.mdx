@@ -174,21 +174,23 @@ Der **Semantische Suchindex** ist standardmäßig an. `⌘K` findet Pull Request
 - **Agent** ist **Claude Code** oder **Eigener Befehl**. Shepherd startet deine installierte CLI mit deiner Umgebung. Es hält kein Login dafür und pusht nie.
 - **Pfad**: Leer lassen, dann wird an den üblichen Orten gesucht. **Suchen** findet sie.
 - **Befehl** (eigener): `{prompt}` ist die Aufgabe, `{worktree}` der Pfad. Der Befehl läuft ohne Shell, ein Prompt kann also nicht zu einem zweiten Befehl werden.
+- **Modell** und **Aufwand** (Claude Code): werden als `--model` und `--effort` übergeben. Leer und **Standard der CLI** überlassen die Wahl deiner CLI.
+- **Zusätzliche Argumente**: werden an jeden Lauf angehängt und wie in einer Shell aufgeteilt.
 
 ### Leitlinien
 
 | Option | Standard |
 | --- | --- |
-| **Berechtigungsmodus**: **Änderungen zulassen**, **Nur planen**, **Nicht fragen** | Änderungen zulassen |
-| **Max. Turns** (1 bis 200) oder **Unbegrenzt** | 25 |
-| **Budget** in USD, mit **Begrenzen** | 5 |
-| **Werkzeuge** (an `--allowedTools` übergeben) | `Read,Edit,Bash(git *),Glob,Grep` |
+| **Berechtigungsmodus**: **Änderungen zulassen**, **Nur planen**, **Nicht fragen**, **Automatisch**, **Berechtigungen umgehen** | Änderungen zulassen |
+| **Max. Turns** (1 bis 500) oder **Unbegrenzt** | Unbegrenzt |
+| **Budget** in USD, mit **Begrenzen** | Aus (5, wenn du es einschaltest) |
+| **Werkzeuge** (an `--allowedTools` übergeben) | `Read,Edit,Write,Glob,Grep,Bash,WebFetch,WebSearch` |
 
-**Nicht fragen** führt jedes erlaubte Werkzeug unbeaufsichtigt aus, auch Shell-Befehle. Die Leitlinien gelten nicht für eine fortgesetzte Session.
+**Nicht fragen** führt die Werkzeuge auf der Liste unbeaufsichtigt aus und lehnt alles andere ohne Nachfrage ab. **Berechtigungen umgehen** führt jedes Werkzeug unbeaufsichtigt aus, **Werkzeuge** gilt dann nicht. Wurde einem Lauf ein Werkzeug verweigert, zeigt das Ergebnis, wie viele Aufrufe abgelehnt wurden und welche Werkzeuge. Die Leitlinien gelten nicht für eine fortgesetzte Session.
 
 ### Rückkanal zur Session
 
-Die Befehle **Lokal** und **Remote** senden einen Review-Befund an die Session, die im `Claude-Session:`-Trailer eines Commits steht. Der lokale Standard ist `claude --resume {sessionID} -p {message}`. Lass ein Feld leer, um den zugehörigen Button auszuschalten.
+Die Befehle **Lokal** und **Remote** senden einen Review-Befund an die Session, die im `Claude-Session:`-Trailer eines Commits steht. Der lokale Standard ist `claude --resume {sessionID} -p {message} --output-format stream-json --verbose --permission-mode acceptEdits`. Lass ein Feld leer, um den zugehörigen Button auszuschalten.
 
 ### Lokale Checkouts
 
@@ -207,7 +209,7 @@ Standardmäßig aus. Wenn an, startet Shepherd bei deinen Pull Requests von selb
 
 „Wird“ ist wörtlich gemeint. Ein Pull Request, der schon rot war, als Shepherd ihn zum ersten Mal sah, startet nie etwas. Jeder Pull Request startet höchstens einen Lauf pro Commit. Gleicher Worktree, gleiche Leitlinien, und es pusht, approvet oder mergt nie.
 
-Du kannst die **Aufgabe für den Agenten** bearbeiten und **Auf die Standardaufgabe zurücksetzen**. **Limits** begrenzen die Läufe **Parallel** (1 bis 5, Standard 1) und **Pro Tag** (1 bis 50, Standard 5). Am Limit zeigt Shepherd stattdessen eine Mitteilung.
+Du kannst die **Aufgabe für den Agenten** bearbeiten und **Auf die Standardaufgabe zurücksetzen**. **Limits** begrenzen die Läufe **Parallel** (1 bis 20, Standard 1) und **Pro Tag** (1 bis 500, Standard 5). Beide haben **Unbegrenzt**. Am Limit zeigt Shepherd stattdessen eine Mitteilung.
 
 ## Automatisierung
 
