@@ -951,6 +951,22 @@ final class RepositoryTaskTests: XCTestCase {
         XCTAssertEqual(remote, .enterpriseHost("github.acme.com"))
     }
 
+    func testAnOtherHostOriginSuggestsTheNameItsPathSpells() async throws {
+        let git = RecordingProcessRunner { invocation in
+            switch invocation.arguments {
+            case ["rev-parse", "--show-toplevel"]:
+                return ProcessResult(status: 0, standardOutput: "/Users/dev/code/review\n", standardError: "")
+            case ["remote", "get-url", "origin"]:
+                return ProcessResult(status: 0, standardOutput: "git@gitlab.com:schnaq/review.git\n", standardError: "")
+            default:
+                return ProcessResult(status: 2, standardOutput: "", standardError: "error: No such remote")
+            }
+        }
+        let finding = try await LocalRepositoryProbe(runner: git).inspect(checkout)
+        guard case .repository(_, let remote) = finding else { return XCTFail("\(finding)") }
+        XCTAssertEqual(remote, .otherHost("gitlab.com", repo))
+    }
+
     // MARK: - Linking and watching in one step
 
     private func settings() throws -> AppSettings {

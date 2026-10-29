@@ -41,23 +41,39 @@ public enum GitRemote {
     /// `git@github.com:o/r.git`. A path on github.com must be exactly `owner/name` — a remote
     /// never carries anything past the name, so a third segment is a remote Shepherd does not
     /// understand rather than noise to drop.
+    ///
+    /// An SSH host that is an `~/.ssh/config` alias for github.com — one without a dot that names
+    /// github (`git@github-work:o/r`), or the `github.com-<account>` convention people use for a
+    /// second account — is read as github.com: that is what such aliases are for, and refusing
+    /// them as "GitHub Enterprise" left a multi-account user no way in. Any other dotless host
+    /// (`git@gitlab:o/r`, `git@localhost:o/r`) is another host, never a guess at github.com.
     /// - Parameter remoteURL: What `git remote get-url origin` printed.
     public static func read(_ remoteURL: String) -> Reading {
         let text = remoteURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let (host, path) = split(text) else { return .unreadable }
+        guard let (host, path, isSSH) = split(text) else { return .unreadable }
         let lowered = host.lowercased()
-        guard githubHosts.contains(lowered) else {
+        guard githubHosts.contains(lowered) || (isSSH && isSSHAlias(lowered)) else {
             return isEnterpriseLooking(lowered) ? .enterpriseHost(lowered) : .otherHost(lowered)
         }
+        return repository(inPath: path).map(Reading.github) ?? .unreadable
+    }
+
+    /// The `owner/name` a remote's path spells, whatever its host — what the sheet pre-fills for
+    /// a remote on another host, where the repository often has the same name on GitHub.
+    /// - Parameter remoteURL: What `git remote get-url origin` printed.
+    public static func pathRepository(_ remoteURL: String) -> RepoRef? {
+        split(remoteURL.trimmingCharacters(in: .whitespacesAndNewlines))
+            .flatMap { repository(inPath: $0.path) }
+    }
+
+    /// A path that is exactly `owner/name(.git)`, validated by the `shepherd://` grammar's rules.
+    private static func repository(inPath path: String) -> RepoRef? {
         var segments = path.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
-        guard segments.count == 2 else { return .unreadable }
+        guard segments.count == 2 else { return nil }
         if segments[1].lowercased().hasSuffix(".git") {
             segments[1] = String(segments[1].dropLast(4))
         }
-        guard let repo = DeepLinkValidation.repository(fullName: "\(segments[0])/\(segments[1])") else {
-            return .unreadable
-        }
-        return .github(repo)
+        return DeepLinkValidation.repository(fullName: "\(segments[0])/\(segments[1])")
     }
 
     /// A remote URL fit to show on screen: without credentials, a query or a fragment.
@@ -80,10 +96,13 @@ public enum GitRemote {
         return String(text[..<schemeEnd.upperBound]) + String(rest[rest.index(after: at)...])
     }
 
-    /// Splits a remote into its host and its path, or `nil` when it has no host.
-    private static func split(_ text: String) -> (host: String, path: String)? {
+    /// Splits a remote into its host and its path, or `nil` when it has no host. `isSSH` is
+    /// whether git reaches the host over ssh, the only transport `~/.ssh/config` aliases apply to.
+    private static func split(_ text: String) -> (host: String, path: String, isSSH: Bool)? {
         guard !text.isEmpty else { return nil }
         if let schemeEnd = text.range(of: "://") {
+            // `ssh://` and the `git+ssh://` and `ssh+git://` spellings git still accepts.
+            let isSSH = text[..<schemeEnd.lowerBound].lowercased().contains("ssh")
             // `scheme://[user@]host[:port]/path`
             let rest = text[schemeEnd.upperBound...]
             let authorityEnd = rest.firstIndex(of: "/") ?? rest.endIndex
@@ -95,7 +114,7 @@ public enum GitRemote {
                 authority = authority[..<colon]
             }
             guard !authority.isEmpty else { return nil }
-            return (String(authority), String(rest[authorityEnd...]))
+            return (String(authority), String(rest[authorityEnd...]), isSSH)
         }
         // scp-like `[user@]host:path`. git only reads it that way when the colon comes before
         // the first slash — `./a:b` and `/srv/a:b` are local paths, and so is anything else.
@@ -106,7 +125,14 @@ public enum GitRemote {
             host = host[host.index(after: at)...]
         }
         guard !host.isEmpty else { return nil }
-        return (String(host), String(text[text.index(after: colon)...]))
+        return (String(host), String(text[text.index(after: colon)...]), true)
+    }
+
+    /// Whether an SSH host is an `~/.ssh/config` alias standing in for github.com: no dot and
+    /// "github" in its name, or `github.com-<suffix>`. A real host has a dot, and no top-level
+    /// domain has a dash.
+    private static func isSSHAlias(_ host: String) -> Bool {
+        (!host.contains(".") && host.contains("github")) || githubHosts.contains { host.hasPrefix($0 + "-") }
     }
 
     /// Whether a host that is not github.com is nevertheless a GitHub installation.

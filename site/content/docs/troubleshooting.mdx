@@ -12,7 +12,7 @@ Work through these in order.
 3. **Is it about you?** Shepherd searches for pull requests where you were asked to review, are the author, are assigned, are mentioned, or are otherwise involved. A pull request nobody involved you in appears only if you watch its repository. Press `⇧⌘A` to watch one. You can watch up to 10 repositories.
 4. **Did you hide it?** Check **Settings → Sync → Hidden pull requests** and click **Show again**. A hidden pull request comes back by itself when a review is requested from you.
 5. **Is a filter on?** Clear the rail selection or filter. The inbox says "No pull request matches this filter" when one hides everything.
-6. **Can your token see the repository?** This is the usual cause for organization repositories with SAML single sign-on. GitHub's search silently omits results the token cannot access, and no error appears. Watching the repository does not help. See [GitHub token](/docs/github-token#organizations-with-saml-single-sign-on).
+6. **Can your sign-in see the repository?** GitHub's search silently omits results your sign-in cannot access, and no error appears. With device flow, Shepherd's GitHub App must be installed on the repository's owner. With a token, the token must have access to that owner, and SAML single sign-on must be authorized. A watched repository Shepherd cannot see shows a warning triangle in the rail instead of a count. See [GitHub token](/docs/github-token#device-flow-and-organizations).
 
 ## The merge button is greyed out
 

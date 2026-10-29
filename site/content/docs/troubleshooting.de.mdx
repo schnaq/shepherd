@@ -12,7 +12,7 @@ Geh die Punkte der Reihe nach durch.
 3. **Betrifft er dich?** Shepherd sucht nach Pull Requests, bei denen du als Reviewer angefragt, Autor, zugewiesen, erwähnt oder sonst beteiligt bist. Ein Pull Request, in den dich niemand einbezogen hat, erscheint nur, wenn du sein Repository beobachtest. Mit `⇧⌘A` beobachtest du eins. Du kannst bis zu 10 Repositorys beobachten.
 4. **Hast du ihn ausgeblendet?** Prüfe **Einstellungen → Sync → Ausgeblendete Pull Requests** und klicke auf **Wieder anzeigen**. Ein ausgeblendeter Pull Request kommt von selbst zurück, wenn ein Review von dir angefordert wird.
 5. **Ist ein Filter aktiv?** Setze die Auswahl in der Seitenleiste oder den Filter zurück. Die Inbox meldet "Kein Pull Request passt zu diesem Filter", wenn einer alles ausblendet.
-6. **Sieht dein Token das Repository?** Das ist die übliche Ursache bei Organisations-Repositorys mit SAML-Single-Sign-on. Die GitHub-Suche lässt Ergebnisse, auf die das Token nicht zugreifen kann, stillschweigend weg, und es erscheint kein Fehler. Das Repository zu beobachten hilft nicht. Siehe [GitHub-Token](/de/docs/github-token#organisationen-mit-saml-single-sign-on).
+6. **Sieht deine Anmeldung das Repository?** Die GitHub-Suche lässt Ergebnisse, auf die deine Anmeldung nicht zugreifen kann, stillschweigend weg, und es erscheint kein Fehler. Bei Device-Flow muss die GitHub App von Shepherd beim Owner des Repositorys installiert sein. Bei einem Token muss das Token Zugriff auf diesen Owner haben, und SAML-Single-Sign-on muss autorisiert sein. Ein beobachtetes Repository, das Shepherd nicht sehen kann, zeigt in der Seitenleiste ein Warndreieck statt einer Zahl. Siehe [GitHub-Token](/de/docs/github-token#device-flow-und-organisationen).
 
 ## Der Merge-Button ist ausgegraut
 

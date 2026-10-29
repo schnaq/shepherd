@@ -65,9 +65,9 @@ Viele Organisationen verlangen SAML-Single-Sign-on. Ein Token bekommt auf so ein
 
 ### Symptom
 
-Ein Pull Request, der dir in dieser Organisation zugewiesen ist oder den du reviewen sollst, taucht nicht in der Inbox auf. Es gibt keinen Fehler und keine Warnung. Die GitHub-Suche lässt Ergebnisse aus Organisationen, auf die das Token nicht zugreifen kann, stillschweigend weg.
+Ein Pull Request, der dir in dieser Organisation zugewiesen ist oder den du reviewen sollst, taucht nicht in der Inbox auf. Es gibt keinen Fehler. Die GitHub-Suche lässt Ergebnisse aus Organisationen, auf die das Token nicht zugreifen kann, stillschweigend weg.
 
-Das Repository zu beobachten hilft nicht. Ein beobachtetes Repository ist nur eine weitere Suche mit demselben Token und kommt aus demselben Grund leer zurück.
+Das Repository zu beobachten füllt die Inbox nicht, denn ein beobachtetes Repository ist nur eine weitere Suche mit demselben Token. Es macht das Problem aber sichtbar: Shepherd prüft jedes beobachtete Repository mit `GET /repos/{owner}/{repo}` und zeigt für eines, das es nicht lesen kann, ein Warndreieck in der Seitenleiste.
 
 ### Lösung für ein Classic Token
 
@@ -83,7 +83,9 @@ Das Repository zu beobachten hilft nicht. Ein beobachtetes Repository ist nur ei
 
 ### Device-Flow und Organisationen
 
-Device-Flow meldet dich über die GitHub App von Shepherd an. GitHub kann verlangen, dass die Organisation diese App zulässt, bevor du ihre Pull Requests siehst. Fehlen nach einer Anmeldung per Device-Flow Pull Requests einer Organisation, bitte einen Owner, die App freizugeben, oder melde dich stattdessen mit einem Token an. Das Shepherd-Projekt empfiehlt für SSO-Organisationen ein Token.
+Device-Flow meldet dich über die GitHub App von Shepherd an, [`shepherd-review`](https://github.com/apps/shepherd-review). Eine Anmeldung per Device-Flow sieht nur Repositorys von Konten und Organisationen, bei denen die App installiert ist. Für jeden anderen Owner liefert die GitHub-Suche nichts und meldet keinen Fehler.
+
+Installiere die App dazu beim Owner unter [github.com/apps/shepherd-review/installations/new](https://github.com/apps/shepherd-review/installations/new). Installieren kann nur ein Owner der Organisation. Alle anderen können es auf dieser Seite anfragen. Ein beobachtetes Repository bei einem Owner ohne die App zeigt in der Seitenleiste ein Warndreieck, und sein Kontextmenü hat **Shepherd bei … installieren** (mit dem Namen des Owners). Wähle nach der Installation **Zugriff erneut prüfen**. Du kannst dich stattdessen auch mit einem Token anmelden. Das Shepherd-Projekt empfiehlt für SSO-Organisationen ein Token.
 
 ### Prüfen, ob das Token funktioniert
 

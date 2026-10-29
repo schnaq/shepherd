@@ -43,6 +43,8 @@ You can also manage the list in Settings → Sync under **Watched repositories**
 
 ![Watched repositories in the rail](/watched-repositories.png)
 
+A warning triangle instead of a count means Shepherd cannot see the repository. GitHub's search returns nothing for a repository your sign-in has no access to, so without the warning you would only see an empty list. Hover the row to see why. If you signed in with device flow, right-click it and choose **Install Shepherd on …** (with the owner's name). After the app is installed, choose **Check access again**. If you signed in with a token, give the token access to the repository's owner. See [GitHub token](/docs/github-token#device-flow-and-organizations).
+
 ### Add a local clone
 
 Choose **Add a local repository…** from the same `+` menu, or from `⌘K`. Pick the folder of a clone. Shepherd reads `owner/repo` from its `origin` remote and shows one confirmation with two boxes:
@@ -52,10 +54,12 @@ Choose **Add a local repository…** from the same `+` menu, or from `⌘K`. Pic
 
 Both are ticked by default. Untick either one.
 
+When you click **Add**, Shepherd first checks that your sign-in can read the repository. If it cannot, the dialog stays open, says so, and offers the install link.
+
 A watched repository with a linked clone shows a small laptop icon. Right-click it to see **Start an agent…**. Without a clone, the menu offers **Link a local checkout…** instead.
 
 <Callout type="info">
-Only github.com is supported. A clone whose `origin` points at GitHub Enterprise is refused.
+Only github.com is supported. A clone whose `origin` points at GitHub Enterprise is refused. An SSH alias from `~/.ssh/config` with "github" in its name, such as `git@github-work:owner/repo.git` or `git@github.com-work:owner/repo.git`, counts as github.com.
 </Callout>
 
 ## Group, sort and filter

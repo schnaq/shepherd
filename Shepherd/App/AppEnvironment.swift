@@ -496,6 +496,9 @@ final class AppEnvironment {
         rereadTasks = [:]
         // And the comments it read: parsed bodies stay in memory for as long as the app runs.
         MarkdownText.forgetParsedBodies()
+        // And what its token could not read, which says nothing about the next account's.
+        accessCheckTask?.cancel()
+        unreadableRepositories = []
         if let current {
             await current.shutdown()
             do {
@@ -1519,14 +1522,81 @@ final class AppEnvironment {
     ///   loop's own first iteration is about to sweep anyway.
     func applyWatchedRepositoriesSetting(sweepNow: Bool = true) {
         guard let session else { return }
-        let queries = InboxQuery.watching(settings.watchedRepositories)
+        let watched = settings.watchedRepositories
+        let queries = InboxQuery.watching(watched)
         let engine = session.syncEngine
         Task {
             await engine.setAdditionalQueries(queries)
             guard sweepNow else { return }
             try? await engine.syncNow()
         }
+        // The same moment is when the access check is worth making: the list only changes here,
+        // so this is one `GET /repos` per watched repository at sign-in and on an edit, never per
+        // sweep.
+        unreadableRepositories.formIntersection(watched.map { $0.fullName.lowercased() })
+        accessCheckTask?.cancel()
+        accessCheckTask = Task { [weak self] in
+            for repo in watched {
+                guard !Task.isCancelled else { return }
+                await self?.checkAccess(to: repo)
+            }
+        }
     }
+
+    /// Watched repositories the signed-in token cannot read, by lowercased `owner/name`.
+    ///
+    /// GitHub's search answers a repository the token cannot see with an empty result and no
+    /// error — the GitHub App not installed on its owner, a fine-grained token for another
+    /// resource owner, SAML SSO — so without this such a repository sits in the rail at a silent
+    /// zero. Filled by ``checkAccess(to:)``.
+    private(set) var unreadableRepositories: Set<String> = []
+    @ObservationIgnored private var accessCheckTask: Task<Void, Never>?
+
+    /// Asks GitHub whether the signed-in token can read a repository, and records the answer.
+    /// - Parameter repo: The repository.
+    /// - Returns: The answer, or `nil` when it could not be asked — offline, rate-limited, signed
+    ///   out meanwhile — which leaves what is recorded alone: "could not ask" is not "no access".
+    @discardableResult
+    func checkAccess(to repo: RepoRef) async -> Bool? {
+        // The demo mode's transport refuses every request with `forbidden`, which would flag every
+        // seeded repository; like the sweep loop, the check is for a real GitHub only.
+        guard runsSyncLoop,
+              let session,
+              let readable = try? await session.github.canRead(repo: repo),
+              // A superseded check's late answer could re-add a repository just unwatched.
+              !Task.isCancelled,
+              self.session === session
+        else { return nil }
+        let key = repo.fullName.lowercased()
+        if readable {
+            unreadableRepositories.remove(key)
+        } else {
+            unreadableRepositories.insert(key)
+        }
+        return readable
+    }
+
+    /// Why a repository's pull requests cannot reach the inbox, or `nil` when nothing says so.
+    ///
+    /// Worded for how the user signed in: a device-flow token sees what the Shepherd app is
+    /// installed on, a pasted token what it was granted. A `404` is also what a typo gets, so the
+    /// name is always named as a suspect too.
+    /// - Parameter repo: The repository.
+    func accessProblem(for repo: RepoRef) -> String? {
+        guard unreadableRepositories.contains(repo.fullName.lowercased()) else { return nil }
+        if offersAppInstall {
+            return String(
+                localized: "Shepherd cannot see \(repo.fullName), so none of its pull requests reach the inbox. Check the name, or install Shepherd on \(repo.owner). Only an owner can install it; everyone else can request it."
+            )
+        }
+        return String(
+            localized: "Your token has no access to \(repo.fullName), so none of its pull requests reach the inbox. Check the name, or give the token access to \(repo.owner)."
+        )
+    }
+
+    /// Whether the fix for an unreadable repository is installing the Shepherd GitHub App, which is
+    /// only true for a device-flow sign-in.
+    var offersAppInstall: Bool { session?.account.authKind == .deviceFlow }
 
     func applyStructuredTriageSetting() {
         guard let session else {

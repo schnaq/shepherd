@@ -1077,6 +1077,52 @@ final class WriteRequestTests: XCTestCase {
         }
     }
 
+    // MARK: - "Can this token see the repository?"
+
+    func testAReadableRepositoryAnswersTrue() async throws {
+        let transport = MockTransport()
+        await transport.route("/repos/schnaq/review", Fixture.response(json: #"{"id":1}"#))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        let canRead = try await client.canRead(repo: repo)
+
+        XCTAssertTrue(canRead)
+        let request = await transport.onlyRequest()
+        XCTAssertEqual(request?.method, "GET")
+        XCTAssertEqual(request?.url.absoluteString, "https://api.github.com/repos/schnaq/review")
+    }
+
+    func testARepositoryTheTokenCannotSeeAnswersFalse() async throws {
+        // 404 for a GitHub App not installed on the owner, 403 for an SSO-protected organization.
+        for status in [404, 403] {
+            let transport = MockTransport()
+            await transport.route(
+                "/repos/schnaq/review",
+                Fixture.response(json: #"{"message":"Not Found"}"#, status: status)
+            )
+            let client = GitHubClient.makeForTesting(transport: transport)
+
+            let canRead = try await client.canRead(repo: repo)
+
+            XCTAssertFalse(canRead, "status \(status)")
+        }
+    }
+
+    func testAnAccessCheckThatCouldNotBeMadeIsStillAnError() async throws {
+        let transport = MockTransport()
+        await transport.route("/repos/schnaq/review", Fixture.empty(status: 401))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            _ = try await client.canRead(repo: repo)
+            XCTFail("expected the check to throw")
+        } catch let error as GitHubError {
+            guard case .unauthorized = error else {
+                return XCTFail("expected .unauthorized, got \(error)")
+            }
+        }
+    }
+
     // MARK: - Branch deletion (ADR 0005's 2026-09-05 amendment)
 
     func testDeletingABranchIsOneDeleteToTheRefsEndpoint() async throws {

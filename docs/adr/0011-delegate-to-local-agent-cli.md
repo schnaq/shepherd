@@ -289,7 +289,8 @@ larger task also ended at the turn or spend cap, and *Run again* then deleted wh
   worktree* is also offered in the failed state, which is the way out the refusal names.
 - **Commits count as work too.** A pull-request worktree is detached, so a commit the agent made
   there is on no branch, and `worktree remove --force` would orphan it. `prepare` therefore also
-  refuses when `git rev-list --count origin/<branch>..HEAD` is above 0, after its fetch. A push
+  refuses when `git rev-list --count --right-only --cherry-pick origin/<branch>...HEAD` is above 0,
+  after its fetch; `--cherry-pick` leaves out commits a rebase already carried over. A push
   updates `origin/<branch>`, so pushed work no longer counts. The sheet counts the same commits as
   changes, so *Commit & push* pushes them even from a clean worktree. After either refusal the
   failed sheet offers *Commit & push* beside *Discard worktree*, and *Try again* waits for one of them.
@@ -312,3 +313,25 @@ larger task also ended at the turn or spend cap, and *Run again* then deleted wh
 
 The preamble rules in `DelegationContext` do not change. A pull-request run is still told not to
 push, and Shepherd still never pushes on its own.
+
+## Amendment (2026-10-29): ssh aliases, and "By name" watches too
+
+Two corrections to the 2026-09-23 amendment's "Add a local repository…". They came out of a
+user whose watched repository stayed empty. The main cause was access (ADR 0005's 2026-10-29
+amendment), and these were on the way:
+
+- **An ssh_config alias is github.com, not Enterprise.** `GitRemote` counted any host with
+  "github" in it as GitHub Enterprise and refused it outright, so the multi-account conventions
+  `git@github-work:o/r.git` and `git@github.com-work:o/r.git` had no way in. Over ssh (scp-like or
+  `ssh://`), a host without a dot that has "github" in its name, or one spelled
+  `github.com-<suffix>`, is now read as github.com with `owner/name` from the path. A real host
+  has a dot, and no top-level domain has a dash. Any other dotless host (`git@gitlab:o/r`,
+  `git@localhost:o/r`) stays another host: reading it as github.com would watch whatever public
+  repository happens to share the path. An `https://` host never gets the alias reading, because
+  aliases are an ssh feature. For a remote on another host, the name field is pre-filled from the
+  path (`GitRemote.pathRepository`), for the user to confirm.
+- **"By name" in Settings → Delegation watches as well as links.** It now goes through
+  `addLocalRepository(…, watch: true)` like the folder route. On a full watch list it still links,
+  and says it did not watch, as the folder route's sheet does. Only *Change* on an existing entry,
+  the rail's *Link a local checkout…* and the delegation sheet's clone picker still only link. Each
+  of those re-links a repository that is already in the inbox.

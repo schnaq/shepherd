@@ -11,6 +11,8 @@ struct DelegationSettingsTab: View {
     @State private var detectState: DetectState = .idle
     @State private var newRepoFullName = ""
     @State private var repoError: String?
+    /// What "By name" did when it could only do half: linked, but the watch list was full.
+    @State private var repoNotice: String?
     /// The folder "Add a local repository…" is confirming, while its sheet is up.
     ///
     /// This window's own rather than ``AppEnvironment/localRepositoryDraft``: Settings is a
@@ -361,6 +363,10 @@ struct DelegationSettingsTab: View {
                 Text(repoError)
                     .foregroundStyle(Theme.failure)
             }
+            if let repoNotice {
+                Text(repoNotice)
+                    .foregroundStyle(Theme.textMuted)
+            }
         }
     }
 
@@ -543,22 +549,37 @@ struct DelegationSettingsTab: View {
         }
     }
 
+    /// "By name": the same add as the folder route, so the repository is watched as well as
+    /// linked — a clone whose pull requests never reach the inbox is not what "add" means. Only
+    /// "Change" on an existing entry re-links without touching the watch list.
     private func addRepository() {
         let name = newRepoFullName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard RepoRef.parse(fullName: name) != nil else {
+        repoNotice = nil
+        guard let repo = RepoRef.parse(fullName: name) else {
             repoError = String(localized: "Enter the repository as owner/name.")
             return
         }
         repoError = nil
-        choose(repo: name)
+        guard let url = chooseClone(of: name) else { return }
+        // A full watch list still links: the checkout is what this row is for, so it says what
+        // happened instead of reporting the half that could not as a failure.
+        let isListFull = environment.settings.localRepositoryLink(repo, folder: url).watch == .listFull
+        repoError = environment.settings.addLocalRepository(repo, folder: url, link: true, watch: !isListFull)
+        if isListFull {
+            repoNotice = String(
+                localized: "Linked \(repo.fullName), but did not watch it: the watch list is full. Its pull requests reach the inbox only when they involve you."
+            )
+        }
         newRepoFullName = ""
     }
 
     private func choose(repo: String) {
-        guard let url = FolderPicker.choose(
-            title: String(localized: "Choose the local clone of \(repo)")
-        ) else { return }
+        guard let url = chooseClone(of: repo) else { return }
         environment.settings.setLocalCheckout(url, forRepoNamed: repo)
+    }
+
+    private func chooseClone(of repo: String) -> URL? {
+        FolderPicker.choose(title: String(localized: "Choose the local clone of \(repo)"))
     }
 
     // MARK: - Bindings
