@@ -1542,7 +1542,10 @@ final class AppEnvironment {
     ///   out meanwhile — which leaves what is recorded alone: "could not ask" is not "no access".
     @discardableResult
     func checkAccess(to repo: RepoRef) async -> Bool? {
-        guard let session,
+        // The demo mode's transport refuses every request with `forbidden`, which would flag every
+        // seeded repository; like the sweep loop, the check is for a real GitHub only.
+        guard runsSyncLoop,
+              let session,
               let readable = try? await session.github.canRead(repo: repo),
               // A superseded check's late answer could re-add a repository just unwatched.
               !Task.isCancelled,
