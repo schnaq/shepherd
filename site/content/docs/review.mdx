@@ -105,18 +105,20 @@ A toast tells you which case you are in:
 
 - **Approved …** means GitHub has the review.
 - **Approval queued for …** means it is still on your Mac. It has not approved anything yet.
-- **Review held back — … changed since you started. See the alert.** means the pull request moved on and the review was parked.
+- **Review parked — … got new commits since you wrote it.** means the pull request moved on and the review was parked.
 
-Settings → Sync shows how many writes are waiting or parked. It also lists the ones GitHub refused, each with **Retry** and **Discard**. The review header and the detail panel offer **Retry** for the pull request you are on.
+Writes that will not go out by themselves are counted in the toolbar as **n not sent** (red, GitHub refused them) and **n parked** (amber, the pull request moved on). Click the count to see each one with **Show**, **Retry** or **Send anyway**, and **Discard**. Settings → Sync lists the same rows. The review header and the detail panel offer the same actions for the pull request you are on.
 
-### When a review is not sent
+### When a review is parked
 
-A review is pinned to the head commit you wrote it on. If the pull request gets new commits before the review reaches GitHub, Shepherd does not send it. Your inline comments could land on the wrong lines. It shows **This review was not sent** with two buttons:
+A review is pinned to the head commit you wrote it on. If the pull request gets new commits before the review reaches GitHub, Shepherd parks it, so you decide whether it still applies. It shows **Your review was parked** with these buttons:
 
-- **Re-review** opens the pull request again so you can check your draft against the new commit.
+- **Send anyway** sends the review on the commit you wrote it on. GitHub keeps your inline comments there, marked outdated where the lines have changed.
+- **Re-review** opens the pull request so you can check your draft against the new commits. Submitting a new review replaces the parked one.
+- **Discard** deletes the parked review and its draft.
 - **Later** dismisses the alert.
 
-Your draft is kept. The title bar and Settings → Sync keep counting the review as **not sent** until you deal with it, and you get a **Review not sent** notification. If several reviews were parked in one run, the alerts come one after another.
+Until you decide, the pull request shows **Parked**, the toolbar counts it under **parked**, and the same buttons are in the detail panel and the review header. You also get a **Review parked** notification. If several writes were parked in one run, the alerts come one after another. A parked merge works the same way, without **Send anyway**: look at the new commits and merge again, or discard it.
 
 A quick verdict with no inline comments is pinned to the head you saw when you clicked it. Inline comments keep the commit you wrote them on.
 

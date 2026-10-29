@@ -35,11 +35,11 @@ If the message says the pull request moved on, someone pushed after you looked. 
 
 ## A merge is "Merge queued" or "Not sent"
 
-Merges and reviews go through a local outbox. They show as **Merge queued** until GitHub is reachable, then **Merging…**, and **Merged** only once GitHub confirms. A failed write shows **Not sent** with **Retry**. Failed rows are also listed with Retry and Discard in **Settings → Sync**.
+Merges and reviews go through a local outbox. They show as **Merge queued** until GitHub is reachable, then **Merging…**, and **Merged** only once GitHub confirms. A failed write shows **Not sent** with **Retry**. Click the **not sent** count in the toolbar, or open **Settings → Sync**, to retry or discard each one.
 
-## "This review was not sent"
+## A pull request shows "Parked"
 
-You queued a review, then new commits landed before it was sent. Shepherd parks the review instead of attaching your comments to a commit you did not judge. Your draft is saved locally. Open the pull request, check the draft against the new commit, and send it again. A notification, "Review not sent", tells you when this happens. See [Review](/docs/review).
+You queued a review or a merge, then new commits landed before it was sent. Shepherd parks it instead of sending something you judged on an older commit. Click the **parked** count in the toolbar, or use the buttons in the pull request's panel: **Send anyway** posts a review on the commit you wrote it on, **Discard** throws the write away (for a review, with its draft), and submitting a new review or merge replaces the parked one. A parked merge or branch update of a pull request that was merged or closed goes away by itself. A notification, "Review parked" or "Merge parked", tells you when this happens. See [Review](/docs/review).
 
 ## Nothing happens after I press Sync
 
@@ -50,7 +50,7 @@ You queued a review, then new commits landed before it was sent. Shepherd parks 
 
 ## Notifications do not arrive
 
-1. Open **Settings → Sync → Notifications** and check the three toggles: a new review is requested from me, checks fail on a pull request I opened, a queued review could not be sent.
+1. Open **Settings → Sync → Notifications** and check the three toggles: a new review is requested from me, checks fail on a pull request I opened, a queued write was parked or not sent.
 2. macOS asks for permission the first time Shepherd posts one. Check System Settings → Notifications → Shepherd.
 3. Shepherd sends notifications while it is running. Keep it running.
 

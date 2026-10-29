@@ -64,7 +64,7 @@ Drei Schalter, alle standardmäßig an:
 
 - **Ein neues Review wird von mir angefordert**
 - **Checks auf einem Pull Request von mir fehlschlagen**
-- **Ein eingereihtes Review konnte nicht gesendet werden**
+- **Ein eingereihter Schreibvorgang wurde zurückgestellt oder nicht gesendet**
 
 macOS fragt beim ersten Mal nach der Erlaubnis, wenn Shepherd eine Mitteilung sendet.
 
@@ -80,8 +80,8 @@ Der Digest wird nur aus der lokalen Datenbank gebaut. Wenn dein Mac schlief, kom
 
 Zeigt, wie viele Aktionen noch auf das Senden warten, mit einem Button **Jetzt synchronisieren**. Reviews und andere Schreibzugriffe laufen über diese Outbox und überstehen deshalb eine unterbrochene Verbindung.
 
-- „n mit Konflikt — bitte ansehen“ heißt: Der Pull Request hat neue Commits bekommen, nachdem du das Review eingereiht hast. Es wurde nichts gesendet. Öffne ihn und prüfe deinen Entwurf.
-- „n aufgegeben — sie werden nicht erneut versucht“ listet Schreibzugriffe, die GitHub abgelehnt hat. Jeder hat **Erneut senden** und **Verwerfen**.
+- „n zurückgestellt“ zählt Schreibvorgänge, deren Pull Request oder Issue sich geändert hat, nachdem du sie eingereiht hast. Es wurde nichts gesendet. Jeder steht mit **Zeigen** und **Verwerfen** in der Liste, ein zurückgestelltes Review auch mit **Trotzdem senden**. Verwerfen löscht bei einem Review auch den Draft, deshalb fragt Shepherd vorher.
+- „n nicht gesendet – sie werden nicht erneut versucht“ zählt Schreibzugriffe, die GitHub abgelehnt hat. Jeder steht mit **Erneut senden** und **Verwerfen** in der Liste.
 
 ### Merge-Serien
 

@@ -64,7 +64,7 @@ Three switches, all on by default:
 
 - **A new review is requested from me**
 - **Checks fail on a pull request I opened**
-- **A queued review could not be sent**
+- **A queued write was parked or not sent**
 
 macOS asks for permission the first time Shepherd posts one.
 
@@ -80,8 +80,8 @@ The digest is built from the local database only. If your Mac was asleep, it arr
 
 Shows how many actions are waiting to be sent, with a **Sync now** button. Reviews and other writes go through this outbox, so they survive a lost connection.
 
-- "n conflicted — needs your attention" means the pull request got new commits after you queued the review. Nothing was sent. Open it and check your draft.
-- "n given up on — they will not be retried" lists writes GitHub refused. Each has **Retry** and **Discard**.
+- "n parked" counts writes whose pull request or issue changed after you queued them. Nothing was sent. Each is listed with **Show** and **Discard**, and a parked review also with **Send anyway**. Discarding a parked review deletes its draft, so Shepherd asks first.
+- "n not sent — they will not be retried" counts writes GitHub refused. Each is listed with **Retry** and **Discard**.
 
 ### Merge series
 
