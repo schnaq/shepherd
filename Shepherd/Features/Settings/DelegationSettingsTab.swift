@@ -11,6 +11,8 @@ struct DelegationSettingsTab: View {
     @State private var detectState: DetectState = .idle
     @State private var newRepoFullName = ""
     @State private var repoError: String?
+    /// What "By name" did when it could only do half: linked, but the watch list was full.
+    @State private var repoNotice: String?
     /// The folder "Add a local repository…" is confirming, while its sheet is up.
     ///
     /// This window's own rather than ``AppEnvironment/localRepositoryDraft``: Settings is a
@@ -300,6 +302,10 @@ struct DelegationSettingsTab: View {
                 Text(repoError)
                     .foregroundStyle(Theme.failure)
             }
+            if let repoNotice {
+                Text(repoNotice)
+                    .foregroundStyle(Theme.textMuted)
+            }
         }
     }
 
@@ -441,13 +447,22 @@ struct DelegationSettingsTab: View {
     /// "Change" on an existing entry re-links without touching the watch list.
     private func addRepository() {
         let name = newRepoFullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        repoNotice = nil
         guard let repo = RepoRef.parse(fullName: name) else {
             repoError = String(localized: "Enter the repository as owner/name.")
             return
         }
         repoError = nil
         guard let url = chooseClone(of: name) else { return }
-        repoError = environment.settings.addLocalRepository(repo, folder: url, link: true, watch: true)
+        // A full watch list still links: the checkout is what this row is for, so it says what
+        // happened instead of reporting the half that could not as a failure.
+        let isListFull = environment.settings.localRepositoryLink(repo, folder: url).watch == .listFull
+        repoError = environment.settings.addLocalRepository(repo, folder: url, link: true, watch: !isListFull)
+        if isListFull {
+            repoNotice = String(
+                localized: "Linked \(repo.fullName), but did not watch it: the watch list is full. Its pull requests reach the inbox only when they involve you."
+            )
+        }
         newRepoFullName = ""
     }
 

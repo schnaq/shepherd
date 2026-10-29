@@ -261,6 +261,7 @@ amendment), and these were on the way:
   aliases are an ssh feature. For a remote on another host, the name field is pre-filled from the
   path (`GitRemote.pathRepository`), for the user to confirm.
 - **"By name" in Settings → Delegation watches as well as links.** It now goes through
-  `addLocalRepository(…, watch: true)` like the folder route. Only *Change* on an existing entry,
+  `addLocalRepository(…, watch: true)` like the folder route. On a full watch list it still links,
+  and says it did not watch, as the folder route's sheet does. Only *Change* on an existing entry,
   the rail's *Link a local checkout…* and the delegation sheet's clone picker still only link. Each
   of those re-links a repository that is already in the inbox.
