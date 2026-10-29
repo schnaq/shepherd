@@ -18,6 +18,13 @@ struct DelegationSettingsTab: View {
     @State private var localRepositoryDraft: LocalRepositoryDraft?
     /// Which editors this Mac has, read when the tab appears rather than on every redraw.
     @State private var installedEditors: Set<EditorKind> = []
+    /// The *Extra arguments* field as typed. Stored only once it splits, so an unclosed quote
+    /// mid-typing neither snaps the field back nor saves half an argument.
+    @State private var extraArgumentsText = ""
+    /// Why the typed extra arguments cannot be split, while they cannot.
+    @State private var extraArgumentsError: String?
+    /// The spend cap "Cap spend" brings back, so unticking and reticking it keeps the amount.
+    @State private var lastBudgetUSD = AgentCLIConfiguration.suggestedMaxBudgetUSD
 
     /// What the "Detect" button last found.
     private enum DetectState: Equatable {
@@ -92,6 +99,25 @@ struct DelegationSettingsTab: View {
                 }
                 detectResult
 
+                LabeledContent {
+                    TextField(
+                        String(localized: "Model"),
+                        text: agentCLIBinding(\.model),
+                        prompt: Text(String(localized: "CLI default"))
+                    )
+                    .labelsHidden()
+                } label: {
+                    Text(String(localized: "Model"))
+                    Text(String(localized: "An alias such as opus, sonnet or haiku, or a full model name."))
+                }
+
+                Picker(String(localized: "Effort"), selection: agentCLIBinding(\.effort)) {
+                    Text(String(localized: "CLI default")).tag(AgentEffort?.none)
+                    ForEach(AgentEffort.allCases) { effort in
+                        Text(verbatim: effort.rawValue).tag(Optional(effort))
+                    }
+                }
+
             case .custom:
                 LabeledContent {
                     HStack(spacing: 8) {
@@ -109,6 +135,36 @@ struct DelegationSettingsTab: View {
                     Text(String(localized: "Command"))
                     Text(String(localized: "{prompt} is the task, {worktree} the path."))
                 }
+            }
+
+            LabeledContent {
+                TextField(
+                    String(localized: "Extra arguments"),
+                    text: $extraArgumentsText,
+                    // No `~`: the words reach the CLI as argv, and no shell expands it.
+                    prompt: Text(verbatim: "--add-dir /Users/me/shared")
+                )
+                .labelsHidden()
+                .onChange(of: extraArgumentsText) { _, text in
+                    do {
+                        // Only a real change is written: `onAppear` filling the field must not
+                        // rewrite (and re-sync) the stored settings.
+                        let words = try ShellWords.split(text)
+                        if words != environment.settings.agentCLI.extraArguments {
+                            environment.settings.agentCLI.extraArguments = words
+                        }
+                        extraArgumentsError = nil
+                    } catch {
+                        extraArgumentsError = error.userFacingDescription
+                    }
+                }
+            } label: {
+                Text(String(localized: "Extra arguments"))
+                Text(extraArgumentsError ?? String(localized: "Appended to every run, split like a shell would."))
+                    .foregroundStyle(extraArgumentsError == nil ? Color.secondary : Theme.failure)
+            }
+            .onAppear {
+                extraArgumentsText = ShellWords.join(environment.settings.agentCLI.extraArguments)
             }
         } header: {
             Text(String(localized: "Agent CLI"))
@@ -155,16 +211,16 @@ struct DelegationSettingsTab: View {
             }
 
             LabeledContent(String(localized: "Max turns")) {
-                HStack(spacing: 12) {
-                    StepperValue(value: turnsBinding, range: 1...200)
-                        .disabled(isTurnLimitOff)
-                        .opacity(isTurnLimitOff ? 0.5 : 1)
-                    Toggle(String(localized: "No limit"), isOn: noTurnLimitBinding)
-                        .toggleStyle(.checkbox)
-                        .help(String(
-                            localized: "Runs until the agent is done. The spend cap below still applies when it is on."
-                        ))
-                }
+                // `0` is the stored form of "no limit", which ``AgentCLIConfiguration`` has
+                // always read that way (it only passes a positive cap).
+                limitRow(
+                    agentCLIBinding(\.maxTurns),
+                    suggested: AgentCLIConfiguration.suggestedMaxTurns,
+                    range: 1...500
+                )
+                .help(String(
+                    localized: "Runs until the agent is done. The spend cap below still applies when it is on."
+                ))
             }
 
             LabeledContent(String(localized: "Budget")) {
@@ -194,12 +250,17 @@ struct DelegationSettingsTab: View {
                     prompt: Text(verbatim: AgentCLIConfiguration.defaultAllowedTools)
                 )
                 .labelsHidden()
+                .disabled(!environment.settings.agentCLI.permissionMode.usesAllowedTools)
                 .help(String(
-                    localized: "Passed to --allowedTools. The default allows reading, editing and git, but no other shell command."
+                    localized: "Passed to --allowedTools. The default allows reading, editing, any shell command and the web."
                 ))
             } label: {
                 Text(String(localized: "Tools"))
-                Text(String(localized: "Passed to --allowedTools."))
+                if environment.settings.agentCLI.permissionMode.usesAllowedTools {
+                    Text(String(localized: "Passed to --allowedTools."))
+                } else {
+                    Text(String(localized: "Does not apply while every tool is allowed."))
+                }
             }
         }
     }
@@ -400,17 +461,63 @@ struct DelegationSettingsTab: View {
     private var capSection: some View {
         Section {
             LabeledContent(String(localized: "At once")) {
-                StepperValue(value: concurrencyBinding, range: 1...5)
+                limitRow(
+                    autoDelegationBinding(\.maxConcurrent),
+                    suggested: AutoDelegationRules.defaultMaxConcurrent,
+                    range: 1...20
+                )
             }
             LabeledContent(String(localized: "Per day")) {
-                StepperValue(value: dailyBinding, range: 1...50)
+                limitRow(
+                    autoDelegationBinding(\.maxPerDay),
+                    suggested: AutoDelegationRules.defaultMaxPerDay,
+                    range: 1...500
+                )
             }
         } header: {
             Text(String(localized: "Limits"))
         } footer: {
-            SettingsNote(String(
-                localized: "\(environment.autoDelegation.startsToday) of \(environment.autoDelegation.dailyCap) used today · \(environment.autoDelegation.runningCount) running now. At a cap, Shepherd notifies you instead."
+            SettingsNote(capFooter)
+        }
+    }
+
+    /// "3 of 5 used today", or just "3 used today" with no daily cap — never `Int.max`.
+    private var capFooter: String {
+        guard environment.autoDelegation.dailyCap != .max else {
+            return String(
+                localized: "\(environment.autoDelegation.startsToday) started today · \(environment.autoDelegation.runningCount) running now. At a cap, Shepherd notifies you instead."
+            )
+        }
+        return String(
+            localized: "\(environment.autoDelegation.startsToday) of \(environment.autoDelegation.dailyCap) used today · \(environment.autoDelegation.runningCount) running now. At a cap, Shepherd notifies you instead."
+        )
+    }
+
+    /// A limit's stepper with a "No limit" box: `0` is stored for no limit.
+    ///
+    /// While the limit is off the disabled stepper shows `suggested` rather than a `0` outside
+    /// its own range, and unticking the box restores exactly that number.
+    private func limitRow(
+        _ stored: Binding<Int>,
+        suggested: Int,
+        range: ClosedRange<Int>
+    ) -> some View {
+        let isOff = stored.wrappedValue <= 0
+        return HStack(spacing: 12) {
+            StepperValue(
+                value: Binding(
+                    get: { isOff ? suggested : stored.wrappedValue },
+                    set: { stored.wrappedValue = max(1, $0) }
+                ),
+                range: range
+            )
+            .disabled(isOff)
+            .opacity(isOff ? 0.5 : 1)
+            Toggle(String(localized: "No limit"), isOn: Binding(
+                get: { isOff },
+                set: { stored.wrappedValue = $0 ? 0 : suggested }
             ))
+            .toggleStyle(.checkbox)
         }
     }
 
@@ -492,32 +599,17 @@ struct DelegationSettingsTab: View {
         )
     }
 
-    /// Whether `--max-turns` is left off entirely. `0` is the stored form of "no limit", which
-    /// ``AgentCLIConfiguration`` has always read that way (it only passes a positive cap).
-    private var isTurnLimitOff: Bool { environment.settings.agentCLI.maxTurns <= 0 }
-
-    private var turnsBinding: Binding<Int> {
+    private func agentCLIBinding<Value>(_ field: WritableKeyPath<AgentCLIConfiguration, Value>) -> Binding<Value> {
         Binding(
-            // While the limit is off the disabled stepper shows the default it would come back
-            // on at, rather than a `0` that is outside its own range.
-            get: {
-                let turns = environment.settings.agentCLI.maxTurns
-                return turns > 0 ? turns : AgentCLIConfiguration.defaultMaxTurns
-            },
-            set: { environment.settings.agentCLI.maxTurns = max(1, $0) }
+            get: { environment.settings.agentCLI[keyPath: field] },
+            set: { environment.settings.agentCLI[keyPath: field] = $0 }
         )
     }
 
-    /// Switching the limit off stores `0`; switching it back on restores the default rather than
-    /// a remembered number, so what the stepper shows while disabled is exactly what returns.
-    private var noTurnLimitBinding: Binding<Bool> {
+    private func autoDelegationBinding(_ field: WritableKeyPath<AutoDelegationRules, Int>) -> Binding<Int> {
         Binding(
-            get: { isTurnLimitOff },
-            set: { isOff in
-                environment.settings.agentCLI.maxTurns = isOff
-                    ? 0
-                    : AgentCLIConfiguration.defaultMaxTurns
-            }
+            get: { environment.settings.autoDelegation[keyPath: field] },
+            set: { environment.settings.autoDelegation[keyPath: field] = $0 }
         )
     }
 
@@ -539,19 +631,17 @@ struct DelegationSettingsTab: View {
         Binding(
             get: { environment.settings.agentCLI.maxBudgetUSD != nil },
             set: { isOn in
-                environment.settings.agentCLI.maxBudgetUSD = isOn
-                    ? AgentCLIConfiguration.defaultMaxBudgetUSD
-                    : nil
+                if !isOn, let current = environment.settings.agentCLI.maxBudgetUSD {
+                    lastBudgetUSD = current
+                }
+                environment.settings.agentCLI.maxBudgetUSD = isOn ? lastBudgetUSD : nil
             }
         )
     }
 
     private var budgetBinding: Binding<Double> {
         Binding(
-            get: {
-                environment.settings.agentCLI.maxBudgetUSD
-                    ?? AgentCLIConfiguration.defaultMaxBudgetUSD
-            },
+            get: { environment.settings.agentCLI.maxBudgetUSD ?? lastBudgetUSD },
             set: { environment.settings.agentCLI.maxBudgetUSD = max(0, $0) }
         )
     }
@@ -603,20 +693,6 @@ struct DelegationSettingsTab: View {
         Binding(
             get: { environment.settings.autoDelegation.promptTemplate },
             set: { environment.settings.autoDelegation.promptTemplate = $0 }
-        )
-    }
-
-    private var concurrencyBinding: Binding<Int> {
-        Binding(
-            get: { environment.settings.autoDelegation.concurrencyCap },
-            set: { environment.settings.autoDelegation.maxConcurrent = max(1, $0) }
-        )
-    }
-
-    private var dailyBinding: Binding<Int> {
-        Binding(
-            get: { environment.settings.autoDelegation.dailyCap },
-            set: { environment.settings.autoDelegation.maxPerDay = max(1, $0) }
         )
     }
 }

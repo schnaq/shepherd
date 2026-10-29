@@ -27,7 +27,7 @@ const GROUPS: Group[] = [
     name: "Automate",
     summary: "Send work back, on your terms.",
     items: [
-      { lead: "Delegate to Claude Code.", rest: "Hand a pull request or a single finding to your local agent in an isolated worktree, with turn and budget caps." },
+      { lead: "Delegate to Claude Code.", rest: "Hand a pull request or a single finding to your local agent in an isolated worktree, with the guardrails you choose." },
       { lead: "Merge when the checks pass.", rest: "Decided on the commit you read. If the head moves, the decision expires." },
       { lead: "Auto-merge rules.", rest: "Agent pull requests that are green, approved and mergeable get merged for you, narrowed by repository and label, with every decision in a local audit log." },
       { lead: "Webhooks, links and a CLI.", rest: "Signed events into n8n, shepherd:// links, Shortcuts, Spotlight, and a binary that drives the app from a terminal. Notifications name their pull request, so Siri can open or summarise the one it is about." },

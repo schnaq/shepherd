@@ -771,6 +771,19 @@ final class SettingsSyncTests: XCTestCase {
         XCTAssertEqual(document.secrets.count, 1)
     }
 
+    func testAnOlderMacsDelegationDefaultsAreUpgradedRatherThanReinstated() throws {
+        // What a Mac on 1.15 uploads for a user who never touched Settings → Delegation: the old
+        // caps, written out as if chosen. Applying it here must not bring them back.
+        let json = #"""
+            {
+              "v": 1,
+              "delegation": {"agentCLI": {"kind":{"claudeCode":{}},"executablePath":"","extraArguments":[],"permissionMode":"acceptEdits","allowedTools":"Read,Edit,Bash(git *),Glob,Grep","maxTurns":25,"maxBudgetUSD":5,"sessionResumeTemplate":"claude --resume {sessionID} -p {message}","remoteSessionTemplate":""}}
+            }
+            """#
+        let document = try SyncedSettingsDocument.decode(from: Data(json.utf8))
+        XCTAssertEqual(document.delegation.agentCLI, AgentCLIConfiguration())
+    }
+
     func testADocumentWithoutAVersionOrWithANewerOneIsRefused() {
         XCTAssertThrowsError(
             try SyncedSettingsDocument.decode(from: Data(#"{"sync":{}}"#.utf8))

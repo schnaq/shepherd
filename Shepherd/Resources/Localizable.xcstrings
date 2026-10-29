@@ -2353,6 +2353,16 @@
         }
       }
     },
+    "%lld started today · %lld running now. At a cap, Shepherd notifies you instead.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld heute gestartet · %lld laufen gerade. Am Limit benachrichtigt Shepherd dich stattdessen."
+          }
+        }
+      }
+    },
     "%lld turns max": {
       "localizations": {
         "de": {
@@ -2753,12 +2763,22 @@
         }
       }
     },
-    "A previous run left changes in %@ that were never committed. Commit or discard them from that delegation's sheet, then assign the issue again.": {
+    "A previous run left changes in %@ that were never committed. Commit or discard them from that delegation's sheet, then start it again.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ein früherer Lauf hat in %@ Änderungen hinterlassen, die nie committet wurden. Committe oder verwirf sie im Fenster dieser Delegation und übergib das Issue dann erneut."
+            "value": "Ein früherer Lauf hat in %@ Änderungen hinterlassen, die nie committet wurden. Committe oder verwirf sie im Fenster dieser Delegation und starte sie dann erneut."
+          }
+        }
+      }
+    },
+    "A previous run left commits in %@ that were never pushed. Push or discard them from that delegation's sheet, then start it again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein früherer Lauf hat in %@ Commits hinterlassen, die nie gepusht wurden. Pushe oder verwirf sie im Fenster dieser Delegation und starte sie dann erneut."
           }
         }
       }
@@ -2953,6 +2973,56 @@
         }
       }
     },
+    "An alias such as opus, sonnet or haiku, or a full model name.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein Alias wie opus, sonnet oder haiku oder ein vollständiger Modellname."
+          }
+        }
+      }
+    },
+    "Appended to every run, split like a shell would.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird an jeden Lauf angehängt und wie in einer Shell aufgeteilt."
+          }
+        }
+      }
+    },
+    "Auto": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatisch"
+          }
+        }
+      }
+    },
+    "Bypass permissions": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Berechtigungen umgehen"
+          }
+        }
+      }
+    },
+    "CLI default": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standard der CLI"
+          }
+        }
+      }
+    },
     "Branch update parked · %@": {
       "localizations": {
         "de": {
@@ -2983,6 +3053,16 @@
         }
       }
     },
+    "Claude Code decides which tool calls run unattended and refuses the rest.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claude Code entscheidet, welche Werkzeugaufrufe unbeaufsichtigt laufen, und lehnt den Rest ab."
+          }
+        }
+      }
+    },
     "Close the editor and keep the comment as it is": {
       "localizations": {
         "de": {
@@ -2999,6 +3079,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Verwirrt"
+          }
+        }
+      }
+    },
+    "Continue": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fortsetzen"
+          }
+        }
+      }
+    },
+    "Continuing the previous session.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die vorige Session wird fortgesetzt."
           }
         }
       }
@@ -3103,6 +3203,16 @@
         }
       }
     },
+    "Does not apply while every tool is allowed.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gilt nicht, solange jedes Werkzeug erlaubt ist."
+          }
+        }
+      }
+    },
     "Discard review": {
       "localizations": {
         "de": {
@@ -3149,6 +3259,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Kommentar bearbeiten"
+          }
+        }
+      }
+    },
+    "Effort": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aufwand"
+          }
+        }
+      }
+    },
+    "Every tool runs unattended, including any shell command. Tools does not apply.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Jedes Werkzeug läuft unbeaufsichtigt, auch jeder Shell-Befehl. Werkzeuge gilt nicht."
+          }
+        }
+      }
+    },
+    "Extra arguments": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zusätzliche Argumente"
           }
         }
       }
@@ -3219,6 +3359,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Lachen"
+          }
+        }
+      }
+    },
+    "Passed to --allowedTools. The default allows reading, editing, any shell command and the web.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wird an --allowedTools übergeben. Standardmäßig sind Lesen, Bearbeiten, jeder Shell-Befehl und das Web erlaubt."
           }
         }
       }
@@ -3353,6 +3503,16 @@
         }
       }
     },
+    "Push or discard the changes in the worktree first": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pushe oder verwirf zuerst die Änderungen im Worktree"
+          }
+        }
+      }
+    },
     "Quote reply": {
       "localizations": {
         "de": {
@@ -3379,6 +3539,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Deine Reaktion entfernen"
+          }
+        }
+      }
+    },
+    "Resumes the agent's session in this worktree, with its changes": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Setzt die Session des Agenten in diesem Worktree fort, mit seinen Änderungen"
           }
         }
       }
@@ -3463,6 +3633,16 @@
         }
       }
     },
+    "The permission mode or the Tools list refused these calls. Change them in Settings → Delegation.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Berechtigungsmodus oder die Werkzeugliste hat diese Aufrufe abgelehnt. Ändere sie in Einstellungen → Delegation."
+          }
+        }
+      }
+    },
     "The issue changed after you queued this.": {
       "localizations": {
         "de": {
@@ -3509,6 +3689,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Daumen hoch"
+          }
+        }
+      }
+    },
+    "Tools list does not apply": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Werkzeugliste gilt nicht"
+          }
+        }
+      }
+    },
+    "Tools on the list run unattended; anything not in Tools is refused without asking.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Werkzeuge auf der Liste laufen unbeaufsichtigt; alles, was nicht unter Werkzeuge steht, wird ohne Nachfrage abgelehnt."
           }
         }
       }
@@ -6519,16 +6719,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Jeder Agent, den Shepherd je gesehen hat, und was aus seinen Pull Requests geworden ist."
-          }
-        }
-      }
-    },
-    "Every allowed tool runs unattended, including shell commands.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Jedes erlaubte Werkzeug läuft unbeaufsichtigt, auch Shell-Befehle."
           }
         }
       }
@@ -9819,16 +10009,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "PERSONAL ACCESS TOKEN"
-          }
-        }
-      }
-    },
-    "Passed to --allowedTools. The default allows reading, editing and git, but no other shell command.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wird an --allowedTools übergeben. Standardmäßig sind Lesen, Bearbeiten und git erlaubt, aber kein anderer Shell-Befehl."
           }
         }
       }
@@ -15799,6 +15979,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "dieses Repo"
+          }
+        }
+      }
+    },
+    "tools denied": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Werkzeuge abgelehnt"
           }
         }
       }

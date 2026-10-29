@@ -306,9 +306,14 @@ final class NotificationManager {
         let summary = signal.pullRequest
         let body: String
         switch reason {
+        // `Int.max` is "no limit" (ADR 0016's 2026-10-29 amendment). `decide` cannot report such a
+        // cap, but the rules here are read after it ran, and a box ticked in between must not
+        // put 9223372036854775807 in a notification.
         case .dailyCapReached:
+            guard rules.dailyCap != .max else { return nil }
             body = String(localized: "Today's limit of \(rules.dailyCap) automatic delegations is used up. Start it by hand from the pull request.")
         case .concurrencyCapReached:
+            guard rules.concurrencyCap != .max else { return nil }
             body = String(localized: "\(rules.concurrencyCap) automatic delegations are already running. Start it by hand from the pull request.")
         case .disabled, .triggerNotArmed, .notOwnPullRequest, .notATransition, .notConfigured,
              .alreadyHandled, .delegationRunning:

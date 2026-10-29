@@ -294,6 +294,19 @@ final class AutoDelegationTests: XCTestCase {
 
     // MARK: - Mapping
 
+    func testACapNoticeNeverNamesAnUnlimitedCap() throws {
+        let signal = try XCTUnwrap(AutoDelegationCoordinator.signal(for: checksFailedEvent(summary())))
+        let unlimited = AutoDelegationRules(isEnabled: true, maxConcurrent: 0, maxPerDay: 0)
+        for reason in [AutoDelegationSkipReason.dailyCapReached, .concurrencyCapReached] {
+            XCTAssertNil(NotificationManager.payload(forSkipped: signal, reason: reason, rules: unlimited))
+        }
+        let capped = AutoDelegationRules(isEnabled: true, maxConcurrent: 2, maxPerDay: 7)
+        let notice = try XCTUnwrap(
+            NotificationManager.payload(forSkipped: signal, reason: .dailyCapReached, rules: capped)
+        )
+        XCTAssertTrue(notice.body.contains("7"))
+    }
+
     func testOnlyTheTwoTransitionEventsBecomeSignals() {
         let summary = summary()
         XCTAssertEqual(

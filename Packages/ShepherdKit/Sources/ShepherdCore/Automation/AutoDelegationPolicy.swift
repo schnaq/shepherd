@@ -37,9 +37,9 @@ public struct AutoDelegationRules: Sendable, Codable, Hashable {
     public var triggers: Set<AutoDelegationTrigger>
     /// The task text template, with `{…}` placeholders (see ``AutoDelegationPrompt``).
     public var promptTemplate: String
-    /// How many automatic delegations may run at the same time.
+    /// How many automatic delegations may run at the same time; `0` means no limit.
     public var maxConcurrent: Int
-    /// How many automatic delegations may start on one calendar day.
+    /// How many automatic delegations may start on one calendar day; `0` means no limit.
     public var maxPerDay: Int
 
     /// The conditions a fresh install arms once the master switch goes on.
@@ -86,10 +86,13 @@ public struct AutoDelegationRules: Sendable, Codable, Hashable {
         self.maxPerDay = maxPerDay
     }
 
-    /// The concurrency cap, never below one.
-    public var concurrencyCap: Int { max(1, maxConcurrent) }
-    /// The daily cap, never below one.
-    public var dailyCap: Int { max(1, maxPerDay) }
+    /// The concurrency cap; `Int.max` when the stored value is `0` (or below), i.e. no limit.
+    public var concurrencyCap: Int { maxConcurrent > 0 ? maxConcurrent : .max }
+    /// The daily cap; `Int.max` when the stored value is `0` (or below), i.e. no limit.
+    ///
+    /// A cap of `Int.max` can never be reached, so ``AutoDelegationPolicy/decide(_:context:)``
+    /// never reports it and no notification ever has to print it.
+    public var dailyCap: Int { maxPerDay > 0 ? maxPerDay : .max }
 
     /// Whether a condition is armed *and* the master switch is on.
     /// - Parameter trigger: The condition.

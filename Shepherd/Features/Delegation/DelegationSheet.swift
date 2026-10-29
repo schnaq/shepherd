@@ -227,11 +227,13 @@ struct DelegationSheet: View {
             Text(model.guardrailSummary)
                 .font(.system(size: 11.5))
                 .foregroundStyle(Theme.textSecondary)
-            Text("· \(model.configuration.allowedTools)")
-                .font(Theme.mono(10.5))
-                .foregroundStyle(Theme.textMuted)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            if model.configuration.permissionMode.usesAllowedTools {
+                Text("· \(model.configuration.allowedTools)")
+                    .font(Theme.mono(10.5))
+                    .foregroundStyle(Theme.textMuted)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
             Spacer(minLength: 6)
             Button {
                 environment.showSettings(.delegation)
@@ -384,6 +386,25 @@ struct DelegationSheet: View {
                             RelativeDate.duration(Double(duration) / 1_000)
                         )
                     }
+                }
+                if !result.permissionDenials.isEmpty {
+                    // The CLI reports a refused tool as a success, so this line is what keeps a
+                    // run its permissions held back from looking like a clean one.
+                    HStack(spacing: 8) {
+                        metric(
+                            String(localized: "tools denied"),
+                            String(result.permissionDenials.count)
+                        )
+                        Text(result.deniedTools.joined(separator: ", "))
+                            .font(Theme.mono(11))
+                            .foregroundStyle(Theme.pending)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .textSelection(.enabled)
+                    }
+                    .help(String(
+                        localized: "The permission mode or the Tools list refused these calls. Change them in Settings → Delegation."
+                    ))
                 }
                 if let text = result.resultText, !text.isEmpty {
                     Text(text)
@@ -544,38 +565,42 @@ struct DelegationSheet: View {
             Button(String(localized: "Discard worktree")) { model.discardWorktree() }
                 .buttonStyle(SecondaryButtonStyle(height: 30, tint: Theme.failure))
                 .disabled(model.isPublishing || !model.isWorktreeDirectoryKnown)
+            if model.continuableSessionID != nil {
+                Button(String(localized: "Continue")) { model.continueRun() }
+                    .buttonStyle(SecondaryButtonStyle(height: 30))
+                    .help(String(localized: "Resumes the agent's session in this worktree, with its changes"))
+            }
             Button(String(localized: "Run again")) { model.start() }
                 .buttonStyle(SecondaryButtonStyle(height: 30))
-                .disabled(!model.canStart)
-            Button(
-                model.hasPushed
-                    ? String(localized: "Pushed")
-                    : (model.context.isNewWork
-                        // New work has no pull request yet; the branch is Shepherd's.
-                        ? String(localized: "Commit & push branch")
-                        : String(localized: "Commit & push to PR branch"))
-            ) {
-                model.commitAndPush()
-            }
-            // Accent, not green: green is Merge's colour on every surface (ADR 0040's 2026-09-23
-            // amendment), and a push is not a merge.
-            .buttonStyle(PrimaryButtonStyle(height: 30))
-            .disabled(model.isPublishing || model.hasPushed || !model.hasChanges)
-            .help(String(localized: "Pushes with your own git credentials to \(model.branchName)"))
+                .disabled(!model.canRunAgain)
+                .help(model.canStart && !model.canRunAgain
+                    ? String(localized: "Push or discard the changes in the worktree first")
+                    : "")
+            pushButton
 
         case .failed:
             Button(String(localized: "Reveal in Finder")) { model.revealWorktreeInFinder() }
                 .buttonStyle(SecondaryButtonStyle(height: 30))
                 .disabled(!model.isWorktreeDirectoryKnown)
+            // A start git refused because an earlier run's changes are still in the worktree
+            // lands here, and this is the way out the refusal names.
+            Button(String(localized: "Discard worktree")) { model.discardWorktree() }
+                .buttonStyle(SecondaryButtonStyle(height: 30, tint: Theme.failure))
+                .disabled(model.isPublishing || !model.isWorktreeDirectoryKnown)
             if environment.delegation.canDismissTask(model) {
                 // A repository task git refused to create holds nothing on disk; this is how it
                 // leaves the rail's list without being retried.
                 Button(String(localized: "Dismiss task")) { environment.delegation.dismissTask(model) }
                     .buttonStyle(SecondaryButtonStyle(height: 30))
             }
+            // A start refused because the last run's work is still in the worktree: publishing
+            // it is the other way out, and trying again before that would be refused again.
+            if model.hasChanges || model.hasPushed {
+                pushButton
+            }
             Button(String(localized: "Try again")) { model.start() }
                 .buttonStyle(PrimaryButtonStyle())
-                .disabled(!model.canStart)
+                .disabled(!model.canRunAgain)
 
         case .idle:
             Button(String(localized: "Start")) { model.start() }
@@ -587,6 +612,25 @@ struct DelegationSheet: View {
                 // still inserts a line, because a `TextEditor` consumes it first.
                 .keyboardShortcut(.defaultAction)
         }
+    }
+
+    /// *Commit & push*, for a finished run and for a start refused over the last run's work.
+    private var pushButton: some View {
+        Button(
+            model.hasPushed
+                ? String(localized: "Pushed")
+                : (model.context.isNewWork
+                    // New work has no pull request yet; the branch is Shepherd's.
+                    ? String(localized: "Commit & push branch")
+                    : String(localized: "Commit & push to PR branch"))
+        ) {
+            model.commitAndPush()
+        }
+        // Accent, not green: green is Merge's colour on every surface (ADR 0040's 2026-09-23
+        // amendment), and a push is not a merge.
+        .buttonStyle(PrimaryButtonStyle(height: 30))
+        .disabled(model.isPublishing || model.hasPushed || !model.hasChanges)
+        .help(String(localized: "Pushes with your own git credentials to \(model.branchName)"))
     }
 
     // MARK: - Drafting the task (plan §3.E)
