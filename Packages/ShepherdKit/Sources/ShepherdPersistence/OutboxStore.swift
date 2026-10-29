@@ -393,7 +393,8 @@ extension DatabaseManager {
     /// Re-queues a parked review to be sent against the commit it was written on — the user's
     /// *Send anyway*.
     ///
-    /// The row's draft gets ``ShepherdCore/ReviewDraft/sendsAgainstReviewedCommit`` set, which is
+    /// The payload is rebuilt from the stored draft, so edits made while the row was parked go out
+    /// with it. The row's draft gets ``ShepherdCore/ReviewDraft/sendsAgainstReviewedCommit`` set, which is
     /// what makes the drain skip its staleness check for this one send; GitHub anchors the
     /// comments on `commit_id`, the reviewed commit. A commit a force-push made unreachable is
     /// refused by GitHub, and the row ends up failed, where Retry and Discard are.
@@ -407,8 +408,14 @@ extension DatabaseManager {
                 db,
                 sql: "SELECT * FROM outbox WHERE id = ? AND state = ? AND kind = 'submitReview'",
                 arguments: [id.uuidString, OutboxState.conflicted.rawValue]
-            ), case .submitReview(var draft) = try record.outboxItem().action
+            ), case .submitReview(let parked) = try record.outboxItem().action
             else { return }
+            // The draft as it stands now, not the snapshot the row was built from: the review
+            // screen keeps saving to it while the row is parked, and the send deletes the draft
+            // afterwards, so an edit left out here would be lost. The anchor stays the parked
+            // one — the commit the user just agreed to send against.
+            var draft = try DatabaseManager.loadDraft(db, prID: parked.prID) ?? parked
+            draft.basedOnHeadOid = parked.basedOnHeadOid
             draft.sendsAgainstReviewedCommit = true
             try db.execute(
                 sql: """

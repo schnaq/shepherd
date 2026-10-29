@@ -156,6 +156,26 @@ final class ParkedOutboxTests: XCTestCase {
         XCTAssertEqual(draft.basedOnHeadOid, "abc123", "still pinned to the reviewed commit")
     }
 
+    func testSendingAnywaySendsEditsMadeWhileParked() async throws {
+        let database = try DatabaseManager.inMemory()
+        let draft = PersistenceFixtures.draft()
+        try await database.saveDraft(draft)
+        let parked = row(.submitReview(draft))
+        try await park(parked, in: database)
+        let added = DraftComment(path: "README.md", line: 3, side: .right, body: "Added while parked")
+        try await database.upsertDraftComment(added, prID: draft.prID, headRefOid: "def456")
+
+        try await database.sendConflictedReviewAnyway(id: parked.id)
+
+        let stored = try await database.outboxItem(id: parked.id)
+        guard case .submitReview(let sent) = stored?.action else {
+            return XCTFail("still a review")
+        }
+        XCTAssertTrue(sent.comments.contains { $0.localID == added.localID })
+        XCTAssertEqual(sent.basedOnHeadOid, draft.basedOnHeadOid)
+        XCTAssertEqual(sent.sendsAgainstReviewedCommit, true)
+    }
+
     func testSendAnywayLeavesAParkedMergeParked() async throws {
         let database = try DatabaseManager.inMemory()
         let parked = row(merge())
