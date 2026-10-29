@@ -1543,6 +1543,35 @@ public actor GitHubClient {
         }
     }
 
+    /// Whether the signed-in token can read a repository at all.
+    ///
+    /// `GET /repos/{owner}/{repo}`. GitHub's search answers a repository the token cannot see
+    /// with an empty result and no error — a GitHub App not installed on the owner, a
+    /// fine-grained token for another resource owner, an organization's SAML SSO — so a watched
+    /// repository would otherwise sit in the rail at a silent zero. This is the one request that
+    /// tells the two apart. `404` (no access, or no such repository) and a `403` that is not a
+    /// rate limit (SSO) answer `false`; anything else is thrown, for
+    /// ``isPullRequestMerged(repo:number:)``'s reason: "we could not ask" must never read as "no
+    /// access".
+    /// - Parameter repo: The repository.
+    /// - Returns: `false` when GitHub says this token may not read it.
+    /// - Throws: Whatever the transport or the status mapping produced, `404` and `403` excepted.
+    public func canRead(repo: RepoRef) async throws -> Bool {
+        do {
+            _ = try await performREST(
+                method: "GET",
+                path: "/repos/\(repo.owner)/\(repo.name)",
+                queryItems: [],
+                body: nil,
+                useCache: false,
+                resource: repo.fullName
+            )
+            return true
+        } catch GitHubError.notFound, GitHubError.forbidden {
+            return false
+        }
+    }
+
     // MARK: - Branch deletion (ADR 0005's 2026-09-05 amendment)
 
     /// Reads the three facts a queued branch deletion is decided on.
