@@ -360,7 +360,7 @@ struct AgentCLIConfiguration: Codable, Sendable, Equatable {
     ///   - executable: The located binary; ignored for a custom template, which names its own.
     ///   - sessionID: A Claude Code session to continue with `--resume`, under the same
     ///     guardrails. Ignored by a custom template, which Shepherd cannot resume
-    ///     (``DelegationModel/canContinue`` never asks it to).
+    ///     (``DelegationModel/continuableSessionID`` never asks it to).
     /// - Returns: The invocation to spawn.
     /// - Throws: ``Failure`` when the configuration cannot produce a command.
     func invocation(

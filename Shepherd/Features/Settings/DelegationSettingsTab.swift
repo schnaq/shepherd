@@ -102,7 +102,7 @@ struct DelegationSettingsTab: View {
                 LabeledContent {
                     TextField(
                         String(localized: "Model"),
-                        text: modelBinding,
+                        text: agentCLIBinding(\.model),
                         prompt: Text(String(localized: "CLI default"))
                     )
                     .labelsHidden()
@@ -111,7 +111,7 @@ struct DelegationSettingsTab: View {
                     Text(String(localized: "An alias such as opus, sonnet or haiku, or a full model name."))
                 }
 
-                Picker(String(localized: "Effort"), selection: effortBinding) {
+                Picker(String(localized: "Effort"), selection: agentCLIBinding(\.effort)) {
                     Text(String(localized: "CLI default")).tag(AgentEffort?.none)
                     ForEach(AgentEffort.allCases) { effort in
                         Text(verbatim: effort.rawValue).tag(Optional(effort))
@@ -146,7 +146,12 @@ struct DelegationSettingsTab: View {
                 .labelsHidden()
                 .onChange(of: extraArgumentsText) { _, text in
                     do {
-                        environment.settings.agentCLI.extraArguments = try ShellWords.split(text)
+                        // Only a real change is written: `onAppear` filling the field must not
+                        // rewrite (and re-sync) the stored settings.
+                        let words = try ShellWords.split(text)
+                        if words != environment.settings.agentCLI.extraArguments {
+                            environment.settings.agentCLI.extraArguments = words
+                        }
                         extraArgumentsError = nil
                     } catch {
                         extraArgumentsError = error.userFacingDescription
@@ -586,20 +591,6 @@ struct DelegationSettingsTab: View {
         )
     }
 
-    private var modelBinding: Binding<String> {
-        Binding(
-            get: { environment.settings.agentCLI.model },
-            set: { environment.settings.agentCLI.model = $0 }
-        )
-    }
-
-    private var effortBinding: Binding<AgentEffort?> {
-        Binding(
-            get: { environment.settings.agentCLI.effort },
-            set: { environment.settings.agentCLI.effort = $0 }
-        )
-    }
-
     private var permissionBinding: Binding<AgentPermissionMode> {
         Binding(
             get: { environment.settings.agentCLI.permissionMode },
@@ -607,7 +598,7 @@ struct DelegationSettingsTab: View {
         )
     }
 
-    private func agentCLIBinding(_ field: WritableKeyPath<AgentCLIConfiguration, Int>) -> Binding<Int> {
+    private func agentCLIBinding<Value>(_ field: WritableKeyPath<AgentCLIConfiguration, Value>) -> Binding<Value> {
         Binding(
             get: { environment.settings.agentCLI[keyPath: field] },
             set: { environment.settings.agentCLI[keyPath: field] = $0 }

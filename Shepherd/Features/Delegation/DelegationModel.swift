@@ -553,10 +553,13 @@ final class DelegationModel: Identifiable {
     func continueRun() {
         guard let sessionID = continuableSessionID, let worktree else { return }
         beginRun()
+        // The same handover, carried on: an issue must not get a second "Handed to …" comment.
+        didAnnounceStart = true
         append(.note, String(localized: "Continuing the previous session."))
         runTask = Task { [weak self] in
-            guard let self else { return }
-            await self.runAgent(in: worktree) {
+            // ``cancel()`` during `.preparingWorktree` cancels this task; it must not spawn after.
+            guard let self, !Task.isCancelled else { return }
+            await self.runAgent(in: worktree, isContinuation: true) {
                 try self.runner.resume(
                     sessionID: sessionID,
                     prompt: "Continue.",
@@ -587,9 +590,11 @@ final class DelegationModel: Identifiable {
     /// Spawns the agent, streams its events into the transcript and records how it ended.
     /// - Parameters:
     ///   - worktree: The worktree it runs in.
+    ///   - isContinuation: Whether this resumes a session the user pressed *Continue* for.
     ///   - spawn: Starts the process — a fresh run or a resumed session.
     private func runAgent(
         in worktree: GitWorktree,
+        isContinuation: Bool = false,
         spawn: () throws -> AgentSession
     ) async {
         let session: AgentSession
@@ -603,7 +608,7 @@ final class DelegationModel: Identifiable {
         state = .running
         announceStart()
         append(.note, String(localized: "Running \(agentName) in \(worktree.directory.lastPathComponent)"))
-        if isAutomatic {
+        if isAutomatic, !isContinuation {
             // A run nobody pressed a button for says so in its own transcript, not only in
             // the header badge and the notification (ADR 0016).
             append(
