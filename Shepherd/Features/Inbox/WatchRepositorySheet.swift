@@ -105,6 +105,9 @@ struct WatchRepositorySheet: View {
                         }
                         .buttonStyle(SecondaryButtonStyle(height: 24))
                     }
+                    // Filled by the access check every change to the list starts, so a repository
+                    // just added gets its answer here a moment later.
+                    RepositoryAccessWarning(repo: repo)
                 }
             }
         }
@@ -129,5 +132,31 @@ struct WatchRepositorySheet: View {
         }
         draft = ""
         error = nil
+    }
+}
+
+/// What both add dialogs show under a repository the signed-in token cannot read, with the one
+/// action that fixes it after a device-flow sign-in. Nothing at all while the token can read it
+/// or nobody has asked yet.
+struct RepositoryAccessWarning: View {
+    @Environment(AppEnvironment.self) private var environment
+    /// The repository.
+    let repo: RepoRef
+
+    var body: some View {
+        if let problem = environment.accessProblem(for: repo) {
+            VStack(alignment: .leading, spacing: 6) {
+                Label(problem, systemImage: "exclamationmark.triangle.fill")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.pending)
+                    .fixedSize(horizontal: false, vertical: true)
+                if environment.offersAppInstall {
+                    Button(String(localized: "Install Shepherd on \(repo.owner)…")) {
+                        NSWorkspace.shared.open(AppConfig.githubAppInstallURL)
+                    }
+                    .buttonStyle(SecondaryButtonStyle(height: 24))
+                }
+            }
+        }
     }
 }

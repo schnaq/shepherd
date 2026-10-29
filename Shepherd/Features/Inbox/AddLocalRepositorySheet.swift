@@ -44,8 +44,13 @@ struct LocalRepositoryDraft: Identifiable {
 /// When `origin` does not name a github.com repository the sheet says why and asks for the name
 /// instead, except for a GitHub Enterprise host: Shepherd only talks to github.com, so there is no
 /// name that would make that clone work, and offering a field would suggest there were.
+///
+/// Add asks GitHub whether the signed-in token can read the repository before it says anything
+/// (``AppEnvironment/checkAccess(to:)``): when it cannot, the sheet stays up with the reason and,
+/// after a device-flow sign-in, the link that installs Shepherd on the owner.
 struct AddLocalRepositorySheet: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppEnvironment.self) private var environment
     /// The folder and the finding.
     let draft: LocalRepositoryDraft
     /// Where the checkout map and the watch list live.
@@ -59,21 +64,35 @@ struct AddLocalRepositorySheet: View {
     @State private var link = true
     @State private var watch = true
     @State private var error: String?
+    /// Whether Add is waiting for GitHub to say whether the token can read the repository.
+    @State private var isCheckingAccess = false
+    /// What was added, once it was and the token turned out unable to read it: the sheet then
+    /// stays up to say so instead of announcing a success that the inbox would contradict.
+    @State private var added: (repo: RepoRef, message: String)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(String(localized: "Add a local repository"))
                 .font(Theme.type(.title3, weight: .semibold))
                 .foregroundStyle(Theme.textStrong)
-            content
+            if let added {
+                message(added.message, isProblem: false)
+                RepositoryAccessWarning(repo: added.repo)
+            } else {
+                content
+            }
             footer
         }
         .padding(20)
         .frame(width: 480)
         .background(Theme.panel)
         .onAppear {
-            if case .success(.repository(_, .github(let repo))) = draft.finding {
+            switch draft.finding {
+            case .success(.repository(_, .github(let repo))),
+                 .success(.repository(_, .otherHost(_, let repo?))):
                 name = repo.fullName
+            default:
+                break
             }
         }
     }
@@ -141,7 +160,7 @@ struct AddLocalRepositorySheet: View {
             return String(
                 localized: "This clone has no origin remote, so Shepherd cannot tell which repository it is. Enter it as owner/repository."
             )
-        case .otherHost(let host):
+        case .otherHost(let host, _):
             return String(
                 localized: "origin points at \(host), not GitHub. If the repository is also on GitHub, enter its name as owner/repository."
             )
@@ -205,7 +224,21 @@ struct AddLocalRepositorySheet: View {
 
     // MARK: - Footer
 
+    @ViewBuilder
     private var footer: some View {
+        if added != nil {
+            HStack {
+                Spacer()
+                Button(String(localized: "Done")) { dismiss() }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .keyboardShortcut(.defaultAction)
+            }
+        } else {
+            formFooter
+        }
+    }
+
+    private var formFooter: some View {
         HStack(spacing: 8) {
             if !isRepositoryFound {
                 Button(String(localized: "Choose another folder…")) {
@@ -222,7 +255,7 @@ struct AddLocalRepositorySheet: View {
                 Button(String(localized: "Add")) { add() }
                     .buttonStyle(PrimaryButtonStyle())
                     .keyboardShortcut(.defaultAction)
-                    .disabled(!canAdd)
+                    .disabled(!canAdd || isCheckingAccess)
             }
         }
     }
@@ -263,8 +296,26 @@ struct AddLocalRepositorySheet: View {
             error = failure
             return
         }
-        toasts.success(String(localized: "Added \(repo.fullName)."))
-        dismiss()
+        // The watch box shows unticked on a full list, but `watch` still says what the user
+        // wanted; "Added" would then claim a watch that did not happen.
+        let message = watch && state.watch == .listFull
+            ? String(
+                localized: "Linked \(repo.fullName), but did not watch it: the watch list is full. Its pull requests reach the inbox only when they involve you."
+            )
+            : String(localized: "Added \(repo.fullName).")
+        isCheckingAccess = true
+        Task {
+            // Asked before the sheet goes, because a repository the token cannot read is the one
+            // case where the success would be a lie: its pull requests never arrive.
+            let readable = await environment.checkAccess(to: repo)
+            isCheckingAccess = false
+            if readable == false {
+                added = (repo, message)
+                return
+            }
+            toasts.success(message)
+            dismiss()
+        }
     }
 
     // MARK: - Pieces

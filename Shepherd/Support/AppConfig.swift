@@ -17,6 +17,16 @@ enum AppConfig {
     /// Whether the OAuth device flow can be offered.
     static var isDeviceFlowConfigured: Bool { !githubAppClientID.isEmpty }
 
+    /// The Shepherd GitHub App's slug, `github.com/apps/<slug>`. Forks with their own app change
+    /// it beside ``githubAppClientID``.
+    static let githubAppSlug = "shepherd-review"
+
+    /// Where an owner installs the app. A device-flow token only sees repositories of owners the
+    /// app is installed on, and GitHub's search says nothing about the others.
+    static var githubAppInstallURL: URL {
+        webBaseURL.appending(path: "apps/\(githubAppSlug)/installations/new")
+    }
+
     /// Keychain service for GitHub credentials.
     static let githubKeychainService = "com.schnaq.shepherd.github"
 

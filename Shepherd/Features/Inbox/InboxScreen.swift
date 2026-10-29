@@ -373,7 +373,12 @@ struct InboxScreen: View {
                                 String(localized: "Linked your clone of \(repo.fullName).")
                             )
                         }
-                    }
+                    },
+                    accessProblem: { environment.accessProblem(for: $0) },
+                    offersAppInstall: environment.offersAppInstall,
+                    // The whole route rather than only the check: once access is there, a sweep is
+                    // what brings the repository's pull requests in.
+                    onCheckAccessAgain: { environment.applyWatchedRepositoriesSetting() }
                 )
             case .issues:
                 IssueSidebar(

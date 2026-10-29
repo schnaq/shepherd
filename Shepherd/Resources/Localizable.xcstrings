@@ -2941,6 +2941,16 @@
         }
       }
     },
+    "Check access again": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zugriff erneut prüfen"
+          }
+        }
+      }
+    },
     "Close the editor and keep the comment as it is": {
       "localizations": {
         "de": {
@@ -3151,12 +3161,42 @@
         }
       }
     },
+    "Install Shepherd on %@…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd bei %@ installieren…"
+          }
+        }
+      }
+    },
     "Laugh": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Lachen"
+          }
+        }
+      }
+    },
+    "Linked %@, but did not watch it: the watch list is full. Its pull requests reach the inbox only when they involve you.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ verknüpft, aber nicht beobachtet: Die Liste der beobachteten Repositorys ist voll. Seine Pull Requests kommen nur in die Inbox, wenn sie dich betreffen."
+          }
+        }
+      }
+    },
+    "no access": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "kein Zugriff"
           }
         }
       }
@@ -3217,6 +3257,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rakete"
+          }
+        }
+      }
+    },
+    "Shepherd cannot see %@, so none of its pull requests reach the inbox. Check the name, or install Shepherd on %@. Only an owner can install it; everyone else can request it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd kann %@ nicht sehen, deshalb kommt keiner seiner Pull Requests in die Inbox. Prüfe den Namen oder installiere Shepherd bei %@. Installieren kann nur ein Owner, alle anderen können es anfragen."
           }
         }
       }
@@ -14011,6 +14061,26 @@
         }
       }
     },
+    "Watched, with a local checkout: open pull requests in this repository reach the inbox, and you can start an agent in it from the context menu.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beobachtet, mit lokalem Checkout: Offene Pull Requests aus diesem Repository landen in der Inbox, und über das Kontextmenü kannst du darin einen Agent starten."
+          }
+        }
+      }
+    },
+    "Watched: open pull requests in this repository reach the inbox.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beobachtet: Offene Pull Requests aus diesem Repository landen in der Inbox."
+          }
+        }
+      }
+    },
     "WHAT IT READ · %lld": {
       "localizations": {
         "de": {
@@ -15621,6 +15691,16 @@
         }
       }
     },
+    "Your token has no access to %@, so none of its pull requests reach the inbox. Check the name, or give the token access to %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Token hat keinen Zugriff auf %@, deshalb kommt keiner seiner Pull Requests in die Inbox. Prüfe den Namen oder gib dem Token Zugriff auf %@."
+          }
+        }
+      }
+    },
     "zero retention": {
       "localizations": {
         "de": {
@@ -16577,16 +16657,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Jede geänderte Datei ist generiert oder mitgeliefert (ein Lockfile, ein Snapshot oder ein Bundle)."
-          }
-        }
-      }
-    },
-    "Watched: every open pull request in this repository reaches the inbox.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Beobachtet: Jeder offene Pull Request aus diesem Repository landet in der Inbox."
           }
         }
       }
@@ -17907,16 +17977,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Das Repository beobachten"
-          }
-        }
-      }
-    },
-    "Watched, with a local checkout: every open pull request in this repository reaches the inbox, and you can start an agent in it from the context menu.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Beobachtet, mit lokalem Checkout: Jeder offene Pull Request aus diesem Repository landet in der Inbox, und über das Kontextmenü kannst du darin einen Agent starten."
           }
         }
       }

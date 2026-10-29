@@ -436,14 +436,20 @@ struct DelegationSettingsTab: View {
         }
     }
 
+    /// "By name": the same add as the folder route, so the repository is watched as well as
+    /// linked — a clone whose pull requests never reach the inbox is not what "add" means. Only
+    /// "Change" on an existing entry re-links without touching the watch list.
     private func addRepository() {
         let name = newRepoFullName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard RepoRef.parse(fullName: name) != nil else {
+        guard let repo = RepoRef.parse(fullName: name) else {
             repoError = String(localized: "Enter the repository as owner/name.")
             return
         }
         repoError = nil
-        choose(repo: name)
+        guard let url = FolderPicker.choose(
+            title: String(localized: "Choose the local clone of \(name)")
+        ) else { return }
+        repoError = environment.settings.addLocalRepository(repo, folder: url, link: true, watch: true)
         newRepoFullName = ""
     }
 
