@@ -45,13 +45,15 @@ struct PhoneSyncStrip: View {
                     )
                 }
                 if session.conflictedOutboxCount > 0 {
-                    // No button: a parked review is re-checked on its own pull request, against
-                    // the new commit — the Mac's wording, which already has its German.
+                    // Listed in Settings beside the failed ones, with Discard (ADR 0006's
+                    // 2026-10-29 amendment); the word is the row chip's.
                     PhoneSyncStripRow(
                         systemImage: "exclamationmark.triangle.fill",
-                        title: String(localized: "\(session.conflictedOutboxCount) conflicted — needs your attention."),
+                        title: String(localized: "\(session.conflictedOutboxCount) parked"),
                         tint: Theme.pending,
-                        action: nil
+                        action: PhoneSyncStripAction(title: String(localized: "Show")) {
+                            environment.isSettingsPresented = true
+                        }
                     )
                 }
             }

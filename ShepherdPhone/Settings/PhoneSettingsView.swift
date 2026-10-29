@@ -19,9 +19,8 @@ struct PhoneSettingsView: View {
     @State private var isConfirmingSignOut = false
     @State private var watchedRepositoryDraft = ""
     @State private var watchedRepositoryError: String?
-    /// The outbox rows the drain gave up on — fetched, keyed on the observed
-    /// ``SignedInSession/failedOutboxCount``, for `SyncSettingsTab.failedRows`' reasons.
-    @State private var failedRows: [OutboxItem] = []
+    /// The parked review whose Discard is being confirmed — it deletes the user's draft.
+    @State private var reviewToDiscard: OutboxItem?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @ScaledMetric(relativeTo: .headline) private var avatarSize: CGFloat = 52
 
@@ -48,7 +47,6 @@ struct PhoneSettingsView: View {
         .sensoryFeedback(.success, trigger: environment.settings.watchedRepositories.count) { old, new in
             new > old
         }
-        .task(id: environment.session?.failedOutboxCount) { await reloadFailedRows() }
     }
 
     // MARK: - Account
@@ -91,27 +89,31 @@ struct PhoneSettingsView: View {
 
     // MARK: - Not sent
 
-    /// The writes the drain gave up on, each with Retry and Discard — the Mac's Settings → Sync
-    /// group (`SyncSettingsTab.failedOutboxGroup`), and where the inbox's sync strip sends the
-    /// user. Second, under the account, so the strip's *Show* lands on it.
+    /// The writes that will not go out by themselves — given up on, or parked because the target
+    /// moved on — the Mac's Settings → Sync list (`UnsentWriteRow`), and where the inbox's sync
+    /// strip sends the user. Second, under the account, so the strip's *Show* lands on it.
     ///
     /// A failed row was refused in a way retrying cannot fix by itself, so it never leaves on its
-    /// own: Retry is the user saying the obstacle is gone, Discard that it never mattered. Both are
-    /// on the row's ⋯ menu, its long press and its swipes; Discard is never a full swipe, because
-    /// what it throws away cannot be queued again from here. The footer carries the explanation
-    /// the inbox's one-line strip leaves out.
+    /// own: Retry is the user saying the obstacle is gone, Discard that it never mattered. A parked
+    /// row gets Discard only — sending it anyway, or looking at the new commits first, is the
+    /// Mac's (ADR 0006's 2026-10-29 amendment). Both are on the row's ⋯ menu, its long press and
+    /// its swipes; Discard is never a full swipe, because what it throws away cannot be queued
+    /// again from here, and a parked review's asks first. The footer carries the explanation the
+    /// inbox's one-line strip leaves out.
     @ViewBuilder
     private var notSentSection: some View {
-        if let session = environment.session, session.failedOutboxCount > 0 {
+        if let session = environment.session, !session.unsentWrites.isEmpty {
             Section {
-                ForEach(failedRows) { item in
+                ForEach(session.unsentWrites) { item in
                     failedRow(item, session: session)
                     .padding(.vertical, 2)
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                        Button { retry(item, session: session) } label: {
-                            Label(String(localized: "Retry"), systemImage: "arrow.clockwise")
+                        if item.state == .failed {
+                            Button { retry(item, session: session) } label: {
+                                Label(String(localized: "Retry"), systemImage: "arrow.clockwise")
+                            }
+                            .tint(Theme.accent)
                         }
-                        .tint(Theme.accent)
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) { discard(item, session: session) } label: {
@@ -121,11 +123,25 @@ struct PhoneSettingsView: View {
                     .contextMenu { failedRowActions(item, session: session) }
                 }
             } header: {
-                Text(String(localized: "Not sent"))
+                Text(String(localized: "Not sent to GitHub"))
             } footer: {
-                Text(String(localized: "GitHub refused these writes, or Shepherd could not make them at all, so they will not go out by themselves. Retry one once you have fixed what stopped it, or discard it."))
+                Text(String(localized: "Parked: the pull request or issue changed after you queued the write, so Shepherd held it back. Not sent: GitHub refused it, or Shepherd could not make it."))
             }
-            .sensoryFeedback(.impact(weight: .light), trigger: failedRows.count) { old, new in new < old }
+            .sensoryFeedback(.impact(weight: .light), trigger: session.unsentWrites.count) { old, new in new < old }
+            .confirmationDialog(
+                String(localized: "Discard this review?"),
+                isPresented: Binding(
+                    get: { reviewToDiscard != nil },
+                    set: { if !$0 { reviewToDiscard = nil } }
+                ),
+                presenting: reviewToDiscard
+            ) { item in
+                Button(String(localized: "Discard review"), role: .destructive) {
+                    Task { await session.discard(item) }
+                }
+            } message: { _ in
+                Text(String(localized: "Your review and its inline comments are deleted. This cannot be undone."))
+            }
         }
     }
 
@@ -135,15 +151,19 @@ struct PhoneSettingsView: View {
     /// share a line above the words, which beside them were squeezed to a syllable a line.
     @ViewBuilder
     private func failedRow(_ item: OutboxItem, session: SignedInSession) -> some View {
-        let icon = Image(systemName: "exclamationmark.icloud")
+        let isParked = item.state == .conflicted
+        let icon = Image(systemName: isParked ? "exclamationmark.triangle" : "exclamationmark.icloud")
             .font(Theme.type(.body))
-            .foregroundStyle(Theme.failure)
+            .foregroundStyle(isParked ? Theme.pending : Theme.failure)
             .accessibilityHidden(true)
         let text = VStack(alignment: .leading, spacing: 4) {
             Text(verbatim: "\(item.repo.fullName)#\(item.number) · \(item.action.localizedName)")
                 .font(Theme.type(.body, weight: .medium))
                 .foregroundStyle(Theme.textStrong)
-            Text(item.localizedLastError ?? String(localized: "No reason was recorded."))
+            Text(isParked ? String(localized: "Parked") : String(localized: "Not sent"))
+                .font(Theme.type(.footnote, weight: .medium))
+                .foregroundStyle(isParked ? Theme.pending : Theme.failure)
+            Text(item.unsentReason)
                 .font(Theme.type(.footnote))
                 .foregroundStyle(Theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -177,11 +197,13 @@ struct PhoneSettingsView: View {
         }
     }
 
-    /// Retry and Discard, for a failed row's ⋯ menu and its long press.
+    /// Retry (a failed row only) and Discard, for a row's ⋯ menu and its long press.
     @ViewBuilder
     private func failedRowActions(_ item: OutboxItem, session: SignedInSession) -> some View {
-        Button { retry(item, session: session) } label: {
-            Label(String(localized: "Retry"), systemImage: "arrow.clockwise")
+        if item.state == .failed {
+            Button { retry(item, session: session) } label: {
+                Label(String(localized: "Retry"), systemImage: "arrow.clockwise")
+            }
         }
         Button(role: .destructive) { discard(item, session: session) } label: {
             Label(String(localized: "Discard"), systemImage: "trash")
@@ -189,25 +211,16 @@ struct PhoneSettingsView: View {
     }
 
     private func retry(_ item: OutboxItem, session: SignedInSession) {
-        Task {
-            try? await session.database.retryOutboxItem(id: item.id)
-            await reloadFailedRows()
-            await session.drainOutbox()
-            await reloadFailedRows()
-        }
+        Task { await session.retry(item) }
     }
 
+    /// Discards the row — after asking, for a parked review, whose draft goes with it.
     private func discard(_ item: OutboxItem, session: SignedInSession) {
-        Task {
-            try? await session.database.deleteOutboxItem(id: item.id)
-            await reloadFailedRows()
+        if item.isParkedReview {
+            reviewToDiscard = item
+        } else {
+            Task { await session.discard(item) }
         }
-    }
-
-    /// Re-reads the failed rows; a read failure lists nothing, as an empty outbox would.
-    private func reloadFailedRows() async {
-        guard let session = environment.session else { return }
-        failedRows = (try? await session.database.failedOutboxItems()) ?? []
     }
 
     // MARK: - Watched repositories
