@@ -42,11 +42,11 @@ public enum GitRemote {
     /// never carries anything past the name, so a third segment is a remote Shepherd does not
     /// understand rather than noise to drop.
     ///
-    /// An SSH host that is an `~/.ssh/config` alias — one without a dot (`git@github-work:o/r`),
-    /// or the `github.com-<account>` convention people use for a second account — is read as
-    /// github.com: that is what such aliases are for, and refusing them as "GitHub Enterprise"
-    /// left a multi-account user no way in. A wrong guess costs no more than a watched repository
-    /// the access check then flags.
+    /// An SSH host that is an `~/.ssh/config` alias for github.com — one without a dot that names
+    /// github (`git@github-work:o/r`), or the `github.com-<account>` convention people use for a
+    /// second account — is read as github.com: that is what such aliases are for, and refusing
+    /// them as "GitHub Enterprise" left a multi-account user no way in. Any other dotless host
+    /// (`git@gitlab:o/r`, `git@localhost:o/r`) is another host, never a guess at github.com.
     /// - Parameter remoteURL: What `git remote get-url origin` printed.
     public static func read(_ remoteURL: String) -> Reading {
         let text = remoteURL.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -128,10 +128,11 @@ public enum GitRemote {
         return (String(host), String(text[text.index(after: colon)...]), true)
     }
 
-    /// Whether an SSH host is an `~/.ssh/config` alias standing in for github.com: no dot at all,
-    /// or `github.com-<suffix>`. A real host has a dot, and no top-level domain has a dash.
+    /// Whether an SSH host is an `~/.ssh/config` alias standing in for github.com: no dot and
+    /// "github" in its name, or `github.com-<suffix>`. A real host has a dot, and no top-level
+    /// domain has a dash.
     private static func isSSHAlias(_ host: String) -> Bool {
-        !host.contains(".") || githubHosts.contains { host.hasPrefix($0 + "-") }
+        (!host.contains(".") && host.contains("github")) || githubHosts.contains { host.hasPrefix($0 + "-") }
     }
 
     /// Whether a host that is not github.com is nevertheless a GitHub installation.

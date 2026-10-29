@@ -253,11 +253,13 @@ amendment), and these were on the way:
 - **An ssh_config alias is github.com, not Enterprise.** `GitRemote` counted any host with
   "github" in it as GitHub Enterprise and refused it outright, so the multi-account conventions
   `git@github-work:o/r.git` and `git@github.com-work:o/r.git` had no way in. Over ssh (scp-like or
-  `ssh://`), a host without a dot, or one spelled `github.com-<suffix>`, is now read as github.com
-  with `owner/name` from the path. A real host has a dot, and no top-level domain has a dash. An
-  `https://` host never gets this reading, because aliases are an ssh feature. A wrong guess
-  costs no more than a watched repository the access check then flags. For a remote on another host,
-  the name field is pre-filled from the path (`GitRemote.pathRepository`).
+  `ssh://`), a host without a dot that has "github" in its name, or one spelled
+  `github.com-<suffix>`, is now read as github.com with `owner/name` from the path. A real host
+  has a dot, and no top-level domain has a dash. Any other dotless host (`git@gitlab:o/r`,
+  `git@localhost:o/r`) stays another host: reading it as github.com would watch whatever public
+  repository happens to share the path. An `https://` host never gets the alias reading, because
+  aliases are an ssh feature. For a remote on another host, the name field is pre-filled from the
+  path (`GitRemote.pathRepository`), for the user to confirm.
 - **"By name" in Settings → Delegation watches as well as links.** It now goes through
   `addLocalRepository(…, watch: true)` like the folder route. Only *Change* on an existing entry,
   the rail's *Link a local checkout…* and the delegation sheet's clone picker still only link. Each

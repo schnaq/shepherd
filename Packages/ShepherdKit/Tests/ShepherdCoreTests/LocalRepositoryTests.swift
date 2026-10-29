@@ -57,9 +57,15 @@ final class GitRemoteTests: XCTestCase {
 
     func testReadsAnSSHAliasWithoutADotAsGitHub() {
         XCTAssertEqual(GitRemote.read("git@github-mm:o/r.git"), .github(RepoRef(owner: "o", name: "r")))
-        XCTAssertEqual(GitRemote.read("mm:o/r"), .github(RepoRef(owner: "o", name: "r")))
-        XCTAssertEqual(GitRemote.read("ssh://git@mm/o/r.git"), .github(RepoRef(owner: "o", name: "r")))
-        XCTAssertEqual(GitRemote.read("ssh+git://git@mm/o/r.git"), .github(RepoRef(owner: "o", name: "r")))
+        XCTAssertEqual(GitRemote.read("github:o/r"), .github(RepoRef(owner: "o", name: "r")))
+        XCTAssertEqual(GitRemote.read("ssh://git@work-github/o/r.git"), .github(RepoRef(owner: "o", name: "r")))
+        XCTAssertEqual(GitRemote.read("ssh+git://git@github-mm/o/r.git"), .github(RepoRef(owner: "o", name: "r")))
+    }
+
+    func testADotlessHostThatDoesNotNameGitHubIsAnotherHost() {
+        XCTAssertEqual(GitRemote.read("git@gitlab:o/r"), .otherHost("gitlab"))
+        XCTAssertEqual(GitRemote.read("git@localhost:o/r"), .otherHost("localhost"))
+        XCTAssertEqual(GitRemote.pathRepository("git@gitlab:o/r"), RepoRef(owner: "o", name: "r"))
     }
 
     func testReadsTheSecondAccountConventionAsGitHub() {
