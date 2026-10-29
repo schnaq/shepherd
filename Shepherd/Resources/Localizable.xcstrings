@@ -1973,12 +1973,42 @@
         }
       }
     },
-    "%lld queued reviews were not sent": {
+    "%lld queued writes are parked": {
       "localizations": {
         "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld eingereihte Reviews wurden nicht gesendet"
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld eingereihter Schreibvorgang ist zurückgestellt"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld eingereihte Schreibvorgänge sind zurückgestellt"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld queued write is parked"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld queued writes are parked"
+                }
+              }
+            }
           }
         }
       }
@@ -2593,12 +2623,12 @@
         }
       }
     },
-    "1 queued review was not sent": {
+    "1 queued write is parked": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "1 eingereihtes Review wurde nicht gesendet"
+            "value": "1 eingereihter Schreibvorgang ist zurückgestellt"
           }
         }
       }
@@ -9483,12 +9513,12 @@
         }
       }
     },
-    "Open Settings → Sync, where the parked reviews are listed": {
+    "Open Settings → Sync, where the parked writes are listed": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Einstellungen → Sync öffnen, wo die geparkten Reviews stehen"
+            "value": "Einstellungen → Sync öffnen, wo die zurückgestellten Schreibvorgänge stehen"
           }
         }
       }
