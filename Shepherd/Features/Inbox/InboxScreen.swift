@@ -916,8 +916,8 @@ struct SyncStatusView: View {
         .font(.system(size: 11))
         .foregroundStyle(Theme.textMuted)
         .lineLimit(1)
-        // The longer two at their full width, so `ViewThatFits` skips a form that would only fit
-        // truncated; the shortest, used when nothing fits, truncates inside the item rather than
+        // The full line at its full width, so `ViewThatFits` skips it when it would only fit
+        // truncated; the minimal one, used when nothing fits, truncates inside the item rather than
         // running over its neighbours. The 10 pt keeps the line off the glass group beside it, the
         // gap the dot and the text inside it have.
         .fixedSize(horizontal: density != .minimal, vertical: false)

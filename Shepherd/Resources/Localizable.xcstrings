@@ -1481,12 +1481,12 @@
         }
       }
     },
-    "%lld more reviews were parked in the same run; they come up next.": {
+    "%lld more writes were parked in the same run; they come up next.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld weitere Reviews wurden im selben Lauf geparkt; sie kommen als Nächstes."
+            "value": "%lld weitere Schreibvorgänge wurden im selben Lauf zurückgestellt; sie kommen als Nächstes."
           }
         }
       }
@@ -9403,12 +9403,12 @@
         }
       }
     },
-    "One more review was parked in the same run; it comes up next.": {
+    "One more write was parked in the same run; it comes up next.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ein weiteres Review wurde im selben Lauf geparkt; es kommt als Nächstes."
+            "value": "Ein weiterer Schreibvorgang wurde im selben Lauf zurückgestellt; er kommt als Nächstes."
           }
         }
       }

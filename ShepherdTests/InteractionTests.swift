@@ -468,14 +468,19 @@ final class InteractionTests: XCTestCase {
 
     @MainActor
     func testASecondConflictForTheSamePullRequestIsNotAskedAboutTwice() {
-        // "Approve & merge" parks two rows for one pull request; the alert would say the same
-        // thing about both.
         let queue = DraftConflictQueue(gap: .zero)
         queue.raise(conflict(prID: "PR_1", number: 1))
         queue.raise(conflict(prID: "PR_1", number: 1))
         queue.raise(conflict(prID: "PR_2", number: 2))
         queue.raise(conflict(prID: "PR_2", number: 2))
         XCTAssertEqual(queue.count, 2)
+
+        // "Approve & merge" parks a review and a merge: two writes, two alerts — each alert's
+        // Discard throws away only its own kind.
+        var merge = conflict(prID: "PR_1", number: 1)
+        merge.write = .merge
+        queue.raise(merge)
+        XCTAssertEqual(queue.count, 3)
 
         queue.removeAll()
         XCTAssertNil(queue.current)

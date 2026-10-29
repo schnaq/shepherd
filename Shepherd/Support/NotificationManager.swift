@@ -225,7 +225,9 @@ final class NotificationManager {
                 body = String(localized: "New commits arrived before the branch could be updated.")
             }
             return NotificationPayload(
-                identifier: "draft-conflict-\(conflict.prID)-\(conflict.actualHeadOid)",
+                // The write in the id too: "approve & merge" parks a review and a merge on the same
+                // head, and one notice must not replace the other.
+                identifier: "draft-conflict-\(conflict.prID)-\(conflict.write.rawValue)-\(conflict.actualHeadOid)",
                 title: title,
                 body: body,
                 pullRequestIDs: [conflict.prID]

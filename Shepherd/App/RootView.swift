@@ -204,7 +204,9 @@ struct SignedInRootView: View {
         .alert(
             conflictTitle(for: environment.draftConflicts.current),
             isPresented: Binding(
-                get: { environment.draftConflicts.current != nil },
+                // Held down while a review's Discard is being confirmed, so the next queued
+                // conflict does not present on top of that question.
+                get: { environment.draftConflicts.current != nil && conflictReviewToDiscard == nil },
                 set: { if !$0 { environment.draftConflicts.dismiss() } }
             ),
             presenting: environment.draftConflicts.current
@@ -222,8 +224,8 @@ struct SignedInRootView: View {
             Button(String(localized: "Discard"), role: .destructive) {
                 environment.draftConflicts.dismiss()
                 if conflict.write == .review {
-                    // Deletes the draft, so it asks first — once the alert is gone.
-                    Task { @MainActor in conflictReviewToDiscard = conflict.prID }
+                    // Deletes the draft, so it asks first.
+                    conflictReviewToDiscard = conflict.prID
                 } else {
                     Task { await environment.session?.discardParkedWrites(for: conflict.prID, of: conflict.write) }
                 }
@@ -269,8 +271,8 @@ struct SignedInRootView: View {
         let waiting = environment.draftConflicts.waiting.count
         guard waiting > 0 else { return explanation }
         let more = waiting == 1
-            ? String(localized: "One more review was parked in the same run; it comes up next.")
-            : String(localized: "\(waiting) more reviews were parked in the same run; they come up next.")
+            ? String(localized: "One more write was parked in the same run; it comes up next.")
+            : String(localized: "\(waiting) more writes were parked in the same run; they come up next.")
         return explanation + "\n\n" + more
     }
 }
