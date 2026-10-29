@@ -292,17 +292,7 @@ struct GitWorktree: Sendable {
     ///   changes are in the way, rather than deleting them.
     func prepare(branch: String, headOid: String) async throws {
         try await run(["fetch", "origin", branch], in: checkout, label: "fetch")
-        if FileManager.default.fileExists(atPath: directory.path) {
-            // A worktree left behind by a previous run (or a crash) is cleaned up rather than
-            // failing the whole delegation — unless it holds uncommitted work, which
-            // `worktree remove --force` would delete: that is refused, exactly as
-            // ``addForNewWork(branch:fetch:)`` refuses it. Any other failure here is not fatal:
-            // `worktree add` will say so far more clearly.
-            if (try? await status())?.isDirty == true {
-                throw Failure.worktreeHasUncommittedWork(directory.path)
-            }
-            try? await remove()
-        }
+        try await clearLeftover()
         try FileManager.default.createDirectory(
             at: directory.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -350,19 +340,9 @@ struct GitWorktree: Sendable {
             label: "remote set-head"
         )
         let base = try await defaultBranchRef()
-        if FileManager.default.fileExists(atPath: directory.path) {
-            // A worktree is already there: a previous run's, or a crash's. Committed work is
-            // safe either way — it is on the branch, and the branch is what this worktree is
-            // re-checked-out from below. **Uncommitted** work is not, and removing a worktree
-            // is `--force`, so the one case that must not be silently swallowed is a dirty
-            // one: it is refused with a message naming the directory instead. A clean leftover
-            // is cleared out, exactly as ``prepare(branch:headOid:)`` clears one.
-            let leftover = try? await status()
-            if leftover?.isDirty == true {
-                throw Failure.worktreeHasUncommittedWork(directory.path)
-            }
-            try? await remove()
-        }
+        // Committed work in a leftover is safe — it is on the branch, and the branch is what this
+        // worktree is re-checked-out from below. Uncommitted work is what `clearLeftover` guards.
+        try await clearLeftover()
         try FileManager.default.createDirectory(
             at: directory.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -381,6 +361,20 @@ struct GitWorktree: Sendable {
             )
         }
         return base
+    }
+
+    /// Clears a worktree a previous run (or a crash) left in ``directory``, unless it holds
+    /// uncommitted work.
+    ///
+    /// Removing a worktree is `--force`, so a dirty one is refused with a message naming the
+    /// directory rather than silently deleted — *Run again* must never cost a run's edits. Any
+    /// other failure here is not fatal: `worktree add` says so far more clearly afterwards.
+    private func clearLeftover() async throws {
+        guard FileManager.default.fileExists(atPath: directory.path) else { return }
+        if (try? await status())?.isDirty == true {
+            throw Failure.worktreeHasUncommittedWork(directory.path)
+        }
+        try? await remove()
     }
 
     /// What `origin`'s HEAD points at, e.g. `origin/main`.

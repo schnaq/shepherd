@@ -205,16 +205,16 @@ struct DelegationSettingsTab: View {
             }
 
             LabeledContent(String(localized: "Max turns")) {
-                HStack(spacing: 12) {
-                    StepperValue(value: turnsBinding, range: 1...500)
-                        .disabled(isTurnLimitOff)
-                        .opacity(isTurnLimitOff ? 0.5 : 1)
-                    Toggle(String(localized: "No limit"), isOn: noTurnLimitBinding)
-                        .toggleStyle(.checkbox)
-                        .help(String(
-                            localized: "Runs until the agent is done. The spend cap below still applies when it is on."
-                        ))
-                }
+                // `0` is the stored form of "no limit", which ``AgentCLIConfiguration`` has
+                // always read that way (it only passes a positive cap).
+                limitRow(
+                    agentCLIBinding(\.maxTurns),
+                    suggested: AgentCLIConfiguration.suggestedMaxTurns,
+                    range: 1...500
+                )
+                .help(String(
+                    localized: "Runs until the agent is done. The spend cap below still applies when it is on."
+                ))
             }
 
             LabeledContent(String(localized: "Budget")) {
@@ -455,10 +455,18 @@ struct DelegationSettingsTab: View {
     private var capSection: some View {
         Section {
             LabeledContent(String(localized: "At once")) {
-                capRow(\.maxConcurrent, suggested: AutoDelegationRules.defaultMaxConcurrent, range: 1...20)
+                limitRow(
+                    autoDelegationBinding(\.maxConcurrent),
+                    suggested: AutoDelegationRules.defaultMaxConcurrent,
+                    range: 1...20
+                )
             }
             LabeledContent(String(localized: "Per day")) {
-                capRow(\.maxPerDay, suggested: AutoDelegationRules.defaultMaxPerDay, range: 1...500)
+                limitRow(
+                    autoDelegationBinding(\.maxPerDay),
+                    suggested: AutoDelegationRules.defaultMaxPerDay,
+                    range: 1...500
+                )
             }
         } header: {
             Text(String(localized: "Limits"))
@@ -479,19 +487,21 @@ struct DelegationSettingsTab: View {
         )
     }
 
-    /// A cap's stepper with a "No limit" box, the way *Max turns* has one: `0` is stored for no
-    /// limit, and unticking the box brings the default back.
-    private func capRow(
-        _ field: WritableKeyPath<AutoDelegationRules, Int>,
+    /// A limit's stepper with a "No limit" box: `0` is stored for no limit.
+    ///
+    /// While the limit is off the disabled stepper shows `suggested` rather than a `0` outside
+    /// its own range, and unticking the box restores exactly that number.
+    private func limitRow(
+        _ stored: Binding<Int>,
         suggested: Int,
         range: ClosedRange<Int>
     ) -> some View {
-        let isOff = environment.settings.autoDelegation[keyPath: field] <= 0
+        let isOff = stored.wrappedValue <= 0
         return HStack(spacing: 12) {
             StepperValue(
                 value: Binding(
-                    get: { isOff ? suggested : environment.settings.autoDelegation[keyPath: field] },
-                    set: { environment.settings.autoDelegation[keyPath: field] = max(1, $0) }
+                    get: { isOff ? suggested : stored.wrappedValue },
+                    set: { stored.wrappedValue = max(1, $0) }
                 ),
                 range: range
             )
@@ -499,7 +509,7 @@ struct DelegationSettingsTab: View {
             .opacity(isOff ? 0.5 : 1)
             Toggle(String(localized: "No limit"), isOn: Binding(
                 get: { isOff },
-                set: { environment.settings.autoDelegation[keyPath: field] = $0 ? 0 : suggested }
+                set: { stored.wrappedValue = $0 ? 0 : suggested }
             ))
             .toggleStyle(.checkbox)
         }
@@ -597,32 +607,17 @@ struct DelegationSettingsTab: View {
         )
     }
 
-    /// Whether `--max-turns` is left off entirely. `0` is the stored form of "no limit", which
-    /// ``AgentCLIConfiguration`` has always read that way (it only passes a positive cap).
-    private var isTurnLimitOff: Bool { environment.settings.agentCLI.maxTurns <= 0 }
-
-    private var turnsBinding: Binding<Int> {
+    private func agentCLIBinding(_ field: WritableKeyPath<AgentCLIConfiguration, Int>) -> Binding<Int> {
         Binding(
-            // While the limit is off the disabled stepper shows the default it would come back
-            // on at, rather than a `0` that is outside its own range.
-            get: {
-                let turns = environment.settings.agentCLI.maxTurns
-                return turns > 0 ? turns : AgentCLIConfiguration.suggestedMaxTurns
-            },
-            set: { environment.settings.agentCLI.maxTurns = max(1, $0) }
+            get: { environment.settings.agentCLI[keyPath: field] },
+            set: { environment.settings.agentCLI[keyPath: field] = $0 }
         )
     }
 
-    /// Switching the limit off stores `0`; switching it back on restores the suggested cap rather
-    /// than a remembered number, so what the stepper shows while disabled is exactly what returns.
-    private var noTurnLimitBinding: Binding<Bool> {
+    private func autoDelegationBinding(_ field: WritableKeyPath<AutoDelegationRules, Int>) -> Binding<Int> {
         Binding(
-            get: { isTurnLimitOff },
-            set: { isOff in
-                environment.settings.agentCLI.maxTurns = isOff
-                    ? 0
-                    : AgentCLIConfiguration.suggestedMaxTurns
-            }
+            get: { environment.settings.autoDelegation[keyPath: field] },
+            set: { environment.settings.autoDelegation[keyPath: field] = $0 }
         )
     }
 
