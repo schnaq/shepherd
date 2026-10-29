@@ -99,4 +99,20 @@ enum ShellWords {
         if isOpen { words.append(current) }
         return words
     }
+
+    /// Joins argv elements into one line that ``split(_:)`` turns back into the same elements.
+    ///
+    /// A word with nothing special in it is written as it is; any other word is single-quoted,
+    /// with each `'` inside it written as `'\''`.
+    /// - Parameter words: The argv elements.
+    /// - Returns: The line, for a text field.
+    static func join(_ words: [String]) -> String {
+        words.map { word in
+            let isPlain = !word.isEmpty && !word.contains {
+                $0.isWhitespace || "'\"\\".contains($0)
+            }
+            return isPlain ? word : "'" + word.replacingOccurrences(of: "'", with: #"'\''"#) + "'"
+        }
+        .joined(separator: " ")
+    }
 }

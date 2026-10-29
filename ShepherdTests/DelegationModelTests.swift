@@ -16,6 +16,7 @@ final class ScriptedAgentRunner: AgentRunning, @unchecked Sendable {
     private let lock = NSLock()
     private var recordedPrompts: [String] = []
     private var recordedDirectories: [URL] = []
+    private var recordedSessions: [String] = []
 
     /// Creates a scripted runner.
     init(
@@ -40,6 +41,20 @@ final class ScriptedAgentRunner: AgentRunning, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return recordedDirectories
+    }
+
+    /// The sessions the model asked to resume.
+    var resumedSessions: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recordedSessions
+    }
+
+    func resume(sessionID: String, prompt: String, in worktree: URL) throws -> AgentSession {
+        lock.lock()
+        recordedSessions.append(sessionID)
+        lock.unlock()
+        return try run(prompt: prompt, in: worktree)
     }
 
     func run(prompt: String, in worktree: URL) throws -> AgentSession {
@@ -366,6 +381,53 @@ final class DelegationModelTests: XCTestCase {
         model.start()
         XCTAssertEqual(model.state, .idle)
         XCTAssertTrue(runner.prompts.isEmpty)
+    }
+
+    // MARK: - Continuing a capped run
+
+    func testContinueResumesTheCappedSessionInTheSameWorktreeWithoutPreparingIt() async throws {
+        let git = gitRunnerWithDiffStat()
+        let runner = ScriptedAgentRunner(
+            events: [
+                .result(AgentRunResult(isError: true, sessionID: "6f2a-0001", subtype: "error_max_turns"))
+            ],
+            exitCode: 1
+        )
+        let model = makeModel(runner: runner, git: git)
+        model.start()
+        await model.runTask?.value
+        // The fake git creates nothing; the real `worktree add` would have.
+        let directory = try XCTUnwrap(model.worktree?.directory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        XCTAssertEqual(model.continuableSessionID, "6f2a-0001")
+        XCTAssertFalse(model.canRunAgain, "a fresh run would have to throw the uncommitted edits away")
+
+        let callsBefore = git.arguments.count
+        model.continueRun()
+        await model.runTask?.value
+
+        XCTAssertEqual(runner.resumedSessions, ["6f2a-0001"])
+        XCTAssertEqual(runner.prompts.last, "Continue.")
+        XCTAssertEqual(runner.directories.last, directory)
+        XCTAssertFalse(
+            git.arguments.dropFirst(callsBefore).contains { ["fetch", "worktree"].contains($0.first) },
+            "the worktree is continued as it is, never re-prepared"
+        )
+    }
+
+    func testASuccessfulRunOffersNoContinue() async throws {
+        let model = makeModel(
+            runner: ScriptedAgentRunner(
+                events: [.result(AgentRunResult(isError: false, sessionID: "6f2a-0001", subtype: "success"))]
+            )
+        )
+        model.start()
+        await model.runTask?.value
+        let directory = try XCTUnwrap(model.worktree?.directory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        XCTAssertNil(model.continuableSessionID)
+        XCTAssertTrue(model.canRunAgain, "a clean worktree can be prepared afresh")
     }
 
     // MARK: - Cancel

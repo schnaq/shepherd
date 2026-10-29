@@ -428,6 +428,28 @@ final class GitWorktreeTests: XCTestCase {
         )
     }
 
+    func testPreparingAPullRequestRefusesToDiscardAPreviousRunsUncommittedWork() async throws {
+        // *Run again* on a pull request used to `worktree remove --force` whatever the last run
+        // left; a capped run's uncommitted edits went with it.
+        let tree = worktree(runner: RecordingProcessRunner())
+        try FileManager.default.createDirectory(at: tree.directory, withIntermediateDirectories: true)
+        let runner = RecordingProcessRunner { invocation in
+            invocation.arguments.first == "status"
+                ? ProcessResult(status: 0, standardOutput: " M Sources/App.swift\n", standardError: "")
+                : ProcessResult(status: 0, standardOutput: "", standardError: "")
+        }
+        do {
+            try await worktree(runner: runner).prepare(branch: "agent/fix", headOid: "deadbeef")
+            XCTFail("expected the uncommitted work to be reported rather than deleted")
+        } catch {
+            XCTAssertEqual(
+                error as? GitWorktree.Failure,
+                .worktreeHasUncommittedWork(tree.directory.path)
+            )
+        }
+        XCTAssertFalse(runner.arguments.contains { $0.first == "worktree" })
+    }
+
     func testAddingForNewWorkClearsACleanLeftoverAndCarriesOn() async throws {
         let tree = issueWorktree(runner: RecordingProcessRunner())
         try FileManager.default.createDirectory(at: tree.directory, withIntermediateDirectories: true)

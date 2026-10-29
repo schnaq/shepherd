@@ -58,7 +58,7 @@ struct GitWorktree: Sendable {
                 )
             case .worktreeHasUncommittedWork(let path):
                 return String(
-                    localized: "A previous run left changes in \(path) that were never committed. Commit or discard them from that delegation's sheet, then assign the issue again."
+                    localized: "A previous run left changes in \(path) that were never committed. Commit or discard them from that delegation's sheet, then start it again."
                 )
             case .noFreeTaskBranch:
                 return String(
@@ -288,12 +288,19 @@ struct GitWorktree: Sendable {
     /// - Parameters:
     ///   - branch: The head branch name, fetched from `origin`.
     ///   - headOid: The commit to check out.
+    /// - Throws: ``Failure/worktreeHasUncommittedWork(_:)`` when a previous run's uncommitted
+    ///   changes are in the way, rather than deleting them.
     func prepare(branch: String, headOid: String) async throws {
         try await run(["fetch", "origin", branch], in: checkout, label: "fetch")
         if FileManager.default.fileExists(atPath: directory.path) {
             // A worktree left behind by a previous run (or a crash) is cleaned up rather than
-            // failing the whole delegation. Failure here is not fatal: `worktree add` will say
-            // so far more clearly.
+            // failing the whole delegation — unless it holds uncommitted work, which
+            // `worktree remove --force` would delete: that is refused, exactly as
+            // ``addForNewWork(branch:fetch:)`` refuses it. Any other failure here is not fatal:
+            // `worktree add` will say so far more clearly.
+            if (try? await status())?.isDirty == true {
+                throw Failure.worktreeHasUncommittedWork(directory.path)
+            }
             try? await remove()
         }
         try FileManager.default.createDirectory(
