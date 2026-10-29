@@ -53,6 +53,10 @@ public struct SyncFailure: Sendable, Hashable, Codable {
     /// What the failure was about, for a display that re-composes ``message`` in another
     /// language.
     public var context: Context
+    /// The outbox row this failure moved to ``ShepherdCore/OutboxState/failed``, when it did —
+    /// set only when the drain gave up on a write, never for one it will retry. What lets the app
+    /// post "not sent" about *that* write and open its target on a click.
+    public var abandonedWrite: OutboxItem?
 
     /// Creates a failure.
     /// - Parameters:
@@ -60,24 +64,38 @@ public struct SyncFailure: Sendable, Hashable, Codable {
     ///   - message: A human-readable description, in English.
     ///   - error: The GitHub error behind it, when it was one.
     ///   - context: What it was about, beyond the stage.
+    ///   - abandonedWrite: The outbox row the drain gave up on, when this failure ended one.
     public init(
         stage: SyncStage,
         message: String,
         error: GitHubError? = nil,
-        context: Context = .none
+        context: Context = .none,
+        abandonedWrite: OutboxItem? = nil
     ) {
         self.stage = stage
         self.message = message
         self.error = error
         self.context = context
+        self.abandonedWrite = abandonedWrite
     }
 }
 
-/// A queued review could not be submitted because the pull request moved on underneath it.
+/// A queued review, merge or branch update was not sent because the pull request moved on
+/// underneath it.
 ///
-/// ADR 0006 is explicit that this must be surfaced rather than silently submitted against the
-/// wrong commit: the user's inline comments would land on the wrong lines.
+/// ADR 0006 is explicit that this must be surfaced rather than silently sent: the user judged a
+/// commit that is no longer the head, so they decide whether the write still applies.
 public struct DraftConflict: Sendable, Hashable, Codable {
+    /// Which write was parked, so a notice can name it rather than calling every one a review.
+    public enum Write: String, Sendable, Hashable, Codable {
+        /// A review (`submitReview`).
+        case review
+        /// A merge.
+        case merge
+        /// A branch update (ADR 0041).
+        case updateBranch
+    }
+
     /// The target's node id — the pull request's, or the issue's for an issue action
     /// (ADR 0032). Named for the pull request it usually is, exactly as
     /// ``ShepherdCore/OutboxItem/prID`` is and for the same reason.
@@ -90,6 +108,8 @@ public struct DraftConflict: Sendable, Hashable, Codable {
     public var expectedHeadOid: String
     /// The head commit the pull request is on now.
     public var actualHeadOid: String
+    /// Which write was parked.
+    public var write: Write
 
     /// Creates a conflict description.
     public init(
@@ -97,13 +117,15 @@ public struct DraftConflict: Sendable, Hashable, Codable {
         repo: RepoRef,
         number: Int,
         expectedHeadOid: String,
-        actualHeadOid: String
+        actualHeadOid: String,
+        write: Write = .review
     ) {
         self.prID = prID
         self.repo = repo
         self.number = number
         self.expectedHeadOid = expectedHeadOid
         self.actualHeadOid = actualHeadOid
+        self.write = write
     }
 }
 

@@ -75,6 +75,14 @@ public struct ReviewDraft: Sendable, Codable, Hashable, Identifiable {
     public var basedOnHeadOid: String
     /// When the draft was last modified.
     public var updatedAt: Date
+    /// Whether the drain sends this draft even though the pull request moved past
+    /// ``basedOnHeadOid`` — set only by the user's *Send anyway* on a parked review (ADR 0006's
+    /// 2026-10-29 amendment). Safe because the review is submitted with `commit_id` =
+    /// ``basedOnHeadOid``, so GitHub anchors the comments on the commit they were written on.
+    ///
+    /// Travels in the outbox row's payload only (`review_drafts` has no column for it), and is
+    /// optional so payloads written before it decode unchanged.
+    public var sendsAgainstReviewedCommit: Bool?
 
     /// Creates a review draft.
     public init(
@@ -115,8 +123,9 @@ public struct ReviewDraft: Sendable, Codable, Hashable, Identifiable {
     /// meant a pull request that had a comment-free draft and was then pushed to would have its
     /// approval parked as a conflict on the way out — the review the user asked for never
     /// reached GitHub. A draft **with** comments keeps its anchor: those comments reference lines
-    /// of the commit they were written on, so the drain's staleness check is the guard that stops
-    /// them landing in the wrong place.
+    /// of the commit they were written on, and the review is submitted against that commit — the
+    /// drain's staleness check parks it so the user decides whether it still applies to the new
+    /// commits (*Send anyway* or *Discard*, ADR 0006's 2026-10-29 amendment).
     /// - Parameters:
     ///   - verdict: The verdict to record.
     ///   - summary: The pull request the draft belongs to.

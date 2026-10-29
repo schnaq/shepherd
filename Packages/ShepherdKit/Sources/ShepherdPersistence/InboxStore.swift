@@ -65,7 +65,9 @@ extension DatabaseManager {
     /// else merges it.
     ///
     /// Terminal outbox rows (`failed`, `succeeded`) do not hold a pull request open; a
-    /// `conflicted` row does, because it is waiting for the user to decide.
+    /// `conflicted` row does, because it is waiting for the user to decide — until they discard
+    /// it, or, for a parked merge or branch update, until the search stops returning the pull
+    /// request (``savePullRequestSummaries(_:pruneMissing:)`` drops those first).
     private static let pruneGuardSQL = """
         id NOT IN (SELECT prID FROM review_drafts)
         AND id NOT IN (
@@ -107,6 +109,19 @@ extension DatabaseManager {
 
             guard pruneMissing else { return }
             let keep = summaries.map(\.id)
+            // A parked merge or branch update of a pull request the open search no longer returns
+            // — merged or closed, in the sweep's reading (`SyncEvent.prMerged`) — can never be
+            // sent, and it would pin the pull request in the inbox below. Dropped first, so the
+            // prune can take the row in the same sweep. A parked review is not: it holds text the
+            // user wrote, and only they discard that (ADR 0006's 2026-10-29 amendment).
+            try db.execute(
+                sql: """
+                    DELETE FROM outbox
+                    WHERE state = 'conflicted' AND kind IN ('merge', 'updateBranch')
+                    \(keep.isEmpty ? "" : "AND prID NOT IN (\(sqlPlaceholders(keep.count)))")
+                    """,
+                arguments: StatementArguments(keep)
+            )
             if keep.isEmpty {
                 try db.execute(sql: "DELETE FROM pull_requests WHERE \(DatabaseManager.pruneGuardSQL)")
             } else {
