@@ -66,6 +66,9 @@ struct AddLocalRepositorySheet: View {
     @State private var error: String?
     /// Whether Add is waiting for GitHub to say whether the token can read the repository.
     @State private var isCheckingAccess = false
+    /// The check Add started, cancelled when the sheet goes so that a Cancel mid-check does not
+    /// toast or dismiss later.
+    @State private var accessCheck: Task<Void, Never>?
     /// What was added, once it was and the token turned out unable to read it: the sheet then
     /// stays up to say so instead of announcing a success that the inbox would contradict.
     @State private var added: (repo: RepoRef, message: String)?
@@ -86,6 +89,7 @@ struct AddLocalRepositorySheet: View {
         .padding(20)
         .frame(width: 480)
         .background(Theme.panel)
+        .onDisappear { accessCheck?.cancel() }
         .onAppear {
             switch draft.finding {
             case .success(.repository(_, .github(let repo))),
@@ -248,6 +252,10 @@ struct AddLocalRepositorySheet: View {
                 .buttonStyle(SecondaryButtonStyle())
             }
             Spacer()
+            if isCheckingAccess {
+                // A rate-limited check waits out GitHub's backoff, which can take minutes.
+                ProgressView().controlSize(.small)
+            }
             Button(String(localized: "Cancel")) { dismiss() }
                 .buttonStyle(SecondaryButtonStyle())
                 .keyboardShortcut(.cancelAction)
@@ -304,10 +312,12 @@ struct AddLocalRepositorySheet: View {
             )
             : String(localized: "Added \(repo.fullName).")
         isCheckingAccess = true
-        Task {
+        accessCheck = Task {
             // Asked before the sheet goes, because a repository the token cannot read is the one
             // case where the success would be a lie: its pull requests never arrive.
             let readable = await environment.checkAccess(to: repo)
+            // Cancelled mid-check: the sheet is gone, and the add itself already happened.
+            guard !Task.isCancelled else { return }
             isCheckingAccess = false
             if readable == false {
                 added = (repo, message)

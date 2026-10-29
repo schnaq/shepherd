@@ -101,8 +101,8 @@ public enum GitRemote {
     private static func split(_ text: String) -> (host: String, path: String, isSSH: Bool)? {
         guard !text.isEmpty else { return nil }
         if let schemeEnd = text.range(of: "://") {
-            // `ssh://` and the `git+ssh://` spelling git still accepts.
-            let isSSH = text[..<schemeEnd.lowerBound].lowercased().hasSuffix("ssh")
+            // `ssh://` and the `git+ssh://` and `ssh+git://` spellings git still accepts.
+            let isSSH = text[..<schemeEnd.lowerBound].lowercased().contains("ssh")
             // `scheme://[user@]host[:port]/path`
             let rest = text[schemeEnd.upperBound...]
             let authorityEnd = rest.firstIndex(of: "/") ?? rest.endIndex

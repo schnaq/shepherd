@@ -1544,6 +1544,8 @@ final class AppEnvironment {
     func checkAccess(to repo: RepoRef) async -> Bool? {
         guard let session,
               let readable = try? await session.github.canRead(repo: repo),
+              // A superseded check's late answer could re-add a repository just unwatched.
+              !Task.isCancelled,
               self.session === session
         else { return nil }
         let key = repo.fullName.lowercased()

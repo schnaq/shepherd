@@ -59,6 +59,7 @@ final class GitRemoteTests: XCTestCase {
         XCTAssertEqual(GitRemote.read("git@github-mm:o/r.git"), .github(RepoRef(owner: "o", name: "r")))
         XCTAssertEqual(GitRemote.read("mm:o/r"), .github(RepoRef(owner: "o", name: "r")))
         XCTAssertEqual(GitRemote.read("ssh://git@mm/o/r.git"), .github(RepoRef(owner: "o", name: "r")))
+        XCTAssertEqual(GitRemote.read("ssh+git://git@mm/o/r.git"), .github(RepoRef(owner: "o", name: "r")))
     }
 
     func testReadsTheSecondAccountConventionAsGitHub() {
