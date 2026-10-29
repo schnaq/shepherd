@@ -186,7 +186,7 @@ Hands a pull request to a local agent CLI. See [Automation](/docs/automation).
 | **Budget** in USD, with **Cap spend** | Off (5 when you switch it on) |
 | **Tools** (passed to `--allowedTools`) | `Read,Edit,Write,Glob,Grep,Bash,WebFetch,WebSearch` |
 
-**Don't ask** runs the tools on the list unattended and refuses anything else without asking. **Bypass permissions** runs every tool unattended, so **Tools** does not apply. If a run was refused a tool, the result shows how many calls were denied and which tools. Guardrails do not apply to a resumed session.
+**Don't ask** runs the tools on the list unattended and refuses anything else without asking. **Bypass permissions** runs every tool unattended, so **Tools** does not apply. If a run was refused a tool, the result shows how many calls were denied and which tools. **Continue** keeps these guardrails. They do not apply to a message sent through the session back-channel below.
 
 ### Session back-channel
 
