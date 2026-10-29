@@ -111,10 +111,12 @@ enum RowWriteState: Equatable, Sendable {
         }
     }
 
-    /// The chip's colour.
+    /// The chip's colour: red for *Not sent*, amber for *Parked* — the same two colours the
+    /// toolbar's unsent count, the panel's line and Settings → Sync use for the two states.
     var color: Color {
         switch self {
-        case .failed, .parked: return Theme.failure
+        case .failed: return Theme.failure
+        case .parked: return Theme.pending
         case .series(let chip): return chip.color
         case .merging, .mergeQueued, .queued: return Theme.pending
         case .merged: return Theme.success
@@ -127,7 +129,7 @@ enum RowWriteState: Equatable, Sendable {
         case .failed:
             return String(localized: "Shepherd could not send a change to GitHub. Open the pull request to retry it.")
         case .parked:
-            return String(localized: "A change is held because the pull request moved on underneath it.")
+            return String(localized: "A change is parked because the pull request got new commits after you made it. Open the pull request to send it anyway or discard it.")
         case .series(let chip):
             return chip.help
         case .merging:

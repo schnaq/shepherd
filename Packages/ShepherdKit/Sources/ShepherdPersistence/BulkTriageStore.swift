@@ -37,6 +37,7 @@ extension DatabaseManager {
                 if let draft = entry.draft {
                     try DatabaseManager.storeDraft(db, draft)
                 }
+                try DatabaseManager.supersedeParked(by: entry.record, db)
                 try entry.record.save(db)
             }
         }

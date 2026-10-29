@@ -293,7 +293,7 @@ final class DigestDeliveryTests: XCTestCase {
         XCTAssertEqual(
             DigestPresentation.summary(for: report),
             "4 new review requests · 2 green agent pull requests ready · "
-                + "1 of your pull requests needs attention · 1 queued review was not sent · "
+                + "1 of your pull requests needs attention · 1 queued write is parked · "
                 + "2 queued writes were given up on"
         )
     }

@@ -1048,7 +1048,8 @@ public actor SyncEngine {
                     emit(.draftConflict(conflict))
                 case .staleIssue(let reason):
                     // Parked, and nothing is emitted: there is no draft to re-apply and no
-                    // alert that could offer one. The standing conflicted count is the surface.
+                    // alert that could offer one. The standing conflicted count and the app's list
+                    // of unsent writes, which offers Discard, are the surface.
                     try await store.markOutboxItemConflicted(id: item.id, reason: reason)
                 }
             } catch let error as GitHubError {
@@ -1069,7 +1070,8 @@ public actor SyncEngine {
                     emit(.syncFailed(Self.failure(
                         .outbox,
                         undecided.underlying ?? undecided,
-                        message: undecided.description
+                        message: undecided.description,
+                        abandoning: item
                     )))
                 }
             } catch {
@@ -1143,17 +1145,21 @@ public actor SyncEngine {
             // Only the two head-pinned writes can answer with a stale head; the sentence names
             // which one did not run.
             let reason: String
+            let write: DraftConflict.Write
             if case .updateBranch = item.action {
                 reason = "The pull request moved on before the branch could be updated"
+                write = .updateBranch
             } else {
                 reason = "The pull request moved on before the merge could run"
+                write = .merge
             }
             let conflict = DraftConflict(
                 prID: item.prID,
                 repo: item.repo,
                 number: item.number,
                 expectedHeadOid: expected,
-                actualHeadOid: actual ?? ""
+                actualHeadOid: actual ?? "",
+                write: write
             )
             try? await store.markOutboxItemConflicted(id: item.id, reason: reason)
             emit(.draftConflict(conflict))
@@ -1167,7 +1173,9 @@ public actor SyncEngine {
             retriable: error.isRetryable
         )
         // See the generic catch in `performDrain`: a cancelled send is not a failure to report.
-        if !Task.isCancelled { emit(.syncFailed(Self.failure(.outbox, error))) }
+        if !Task.isCancelled {
+            emit(.syncFailed(Self.failure(.outbox, error, abandoning: error.isRetryable ? nil : item)))
+        }
     }
 
     private func execute(_ item: OutboxItem) async throws -> OutboxOutcome {
@@ -1178,7 +1186,10 @@ public actor SyncEngine {
                 try await store.deleteDraft(prID: item.prID)
                 return .sent
             }
-            if !draft.basedOnHeadOid.isEmpty {
+            // *Send anyway* (ADR 0006's 2026-10-29 amendment) skips the check for this one send:
+            // the user has seen that the head moved, and `commit_id` keeps the comments on the
+            // commit they were written on.
+            if !draft.basedOnHeadOid.isEmpty, draft.sendsAgainstReviewedCommit != true {
                 let head = try await github.headRefOid(repo: item.repo, number: item.number)
                 // The same comparison the bulk-triage dialog warns with, so what the user was
                 // told before the confirm is what actually happens here (ADR 0015).
@@ -1889,13 +1900,15 @@ public actor SyncEngine {
         _ stage: SyncStage,
         _ error: any Error,
         context: SyncFailure.Context = .none,
-        message: String? = nil
+        message: String? = nil,
+        abandoning write: OutboxItem? = nil
     ) -> SyncFailure {
         SyncFailure(
             stage: stage,
             message: message ?? describe(error),
             error: error as? GitHubError,
-            context: context
+            context: context,
+            abandonedWrite: write
         )
     }
 }

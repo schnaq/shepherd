@@ -377,9 +377,23 @@ final class AppEnvironment {
         self.mergeSeries = mergeSeries
         // The draft-conflict notice has the same problem the alert has for a series' parked
         // branch update (see `handle(_:)`), and it is posted before `handle(_:)` runs.
+        // And a refused branch update or merge a series queued: the series skips the entry and
+        // says why itself.
         notifications.suppresses = { [weak mergeSeries] event in
-            guard case .draftConflict(let conflict) = event else { return false }
-            return mergeSeries?.handlesConflict(conflict) ?? false
+            switch event {
+            case .draftConflict(let conflict):
+                return mergeSeries?.handlesConflict(conflict) ?? false
+            case .syncFailed(let failure):
+                guard let write = failure.abandonedWrite else { return false }
+                switch write.action {
+                case .merge, .updateBranch:
+                    return mergeSeries?.series(containing: write.prID) != nil
+                default:
+                    return false
+                }
+            default:
+                return false
+            }
         }
         self.search = SearchIndexCoordinator(settings: settings)
         self.triage = TriageCoordinator(settings: settings)
@@ -398,9 +412,10 @@ final class AppEnvironment {
         // Registered here rather than in `bootstrap()`: a click on a digest notification that
         // happened while Shepherd was not running is delivered to the delegate shortly after
         // launch, and a delegate installed a moment later would miss it.
-        notifications.routeClicks { [weak self] in
-            self?.openInboxFromNotification()
-        }
+        notifications.routeClicks(
+            onDigestClicked: { [weak self] in self?.openInboxFromNotification() },
+            onTargetClicked: { [weak self] id, isIssue in self?.openTarget(id, isIssue: isIssue) }
+        )
         // App Intents are created by the *system*, so they have no initialiser to be handed a
         // dependency through; registering the container here is how an intent finds the running
         // app (ADR 0021, `Intents/IntentBridge.swift`). The reference there is weak.
@@ -1663,8 +1678,8 @@ final class AppEnvironment {
 
     /// Brings the inbox forward because the user clicked a Shepherd notification.
     ///
-    /// The digest is the one notification that routes anywhere (see ``NotificationRouter``), and
-    /// "needs my review" is where it points: it is the section the digest leads with and the one
+    /// The digest routes here (``NotificationRouter``; a notice about one pull request opens that
+    /// instead), and "needs my review" is where it points: it is the section the digest leads with and the one
     /// the user is being reminded about. The route is set through the same
     /// ``AppEnvironment/pendingInboxFilter`` slot a `shepherd://inbox?filter=needs-my-review` link
     /// uses, so there is one implementation of "filter the inbox" (ADR 0013).
@@ -1676,6 +1691,21 @@ final class AppEnvironment {
         pendingInboxFilter = Pending(.needsMyReview)
         guard !activateMainWindow() else { return }
         // Every window is closed; only SwiftUI can make a new one.
+        reopenMainWindow?()
+    }
+
+    /// Opens the pull request or issue a notification or an unsent write is about, in the main
+    /// window — brought forward, or made again when the user closed it.
+    /// - Parameters:
+    ///   - id: The pull request's or issue's node id.
+    ///   - isIssue: Whether it is an issue (``ShepherdCore/OutboxAction/targetsIssue``).
+    func openTarget(_ id: String, isIssue: Bool) {
+        if isIssue {
+            openIssue(issueID: id)
+        } else {
+            openReview(prID: id)
+        }
+        guard !activateMainWindow() else { return }
         reopenMainWindow?()
     }
 

@@ -221,6 +221,26 @@
         }
       }
     },
+    "%@ got new commits after you chose this, so Shepherd did not send it. Open the pull request, look at the new commits and try again, or discard it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat neue Commits bekommen, nachdem du das ausgewählt hast, deshalb hat Shepherd es nicht gesendet. Öffne den Pull Request, sieh dir die neuen Commits an und versuch es noch einmal, oder verwirf es."
+          }
+        }
+      }
+    },
+    "%@ got new commits after you wrote your review, so Shepherd did not send it. Send it anyway to post it on the commit you reviewed, or open the pull request to check it against the new commits. Discard deletes the review and its inline comments.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ hat neue Commits bekommen, nachdem du dein Review geschrieben hast, deshalb hat Shepherd es nicht gesendet. Mit „Trotzdem senden“ geht es auf den Commit, den du reviewt hast, oder du öffnest den Pull Request und prüfst es gegen die neuen Commits. „Verwerfen“ löscht das Review und seine Inline-Kommentare."
+          }
+        }
+      }
+    },
     "%@ has conflicts with its base branch. Resolve them first.": {
       "localizations": {
         "de": {
@@ -537,16 +557,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ → %@"
-          }
-        }
-      }
-    },
-    "%@#%@ got new commits after you wrote your review, so your inline comments would land on the wrong lines. Your draft is kept — open the pull request again to check it against the new commit.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@#%@ hat neue Commits bekommen, nachdem du dein Review geschrieben hast — deine Inline-Kommentare würden auf den falschen Zeilen landen. Dein Draft bleibt erhalten; öffne den Pull Request erneut und prüfe ihn gegen den neuen Commit."
           }
         }
       }
@@ -1031,16 +1041,6 @@
         }
       }
     },
-    "%lld conflicted — needs your attention.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld mit Konflikt — bitte ansehen."
-          }
-        }
-      }
-    },
     "%lld d": {
       "localizations": {
         "de": {
@@ -1097,16 +1097,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld Fakten"
-          }
-        }
-      }
-    },
-    "%lld failed": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld fehlgeschlagen"
           }
         }
       }
@@ -1224,46 +1214,6 @@
                 "stringUnit": {
                   "state": "translated",
                   "value": "%lld findings unchanged"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "%lld given up on — they will not be retried.": {
-      "localizations": {
-        "de": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld aufgegeben – sie wird nicht erneut versucht."
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld aufgegeben – sie werden nicht erneut versucht."
-                }
-              }
-            }
-          }
-        },
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld given up on — it will not be retried."
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld given up on — they will not be retried."
                 }
               }
             }
@@ -1531,12 +1481,12 @@
         }
       }
     },
-    "%lld more reviews were parked in the same run; they come up next.": {
+    "%lld more writes were parked in the same run; they come up next.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "%lld weitere Reviews wurden im selben Lauf geparkt; sie kommen als Nächstes."
+            "value": "%lld weitere Schreibvorgänge wurden im selben Lauf zurückgestellt; sie kommen als Nächstes."
           }
         }
       }
@@ -1597,6 +1547,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld neue Review-Anfragen"
+          }
+        }
+      }
+    },
+    "%lld not sent — they will not be retried.": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld nicht gesendet – sie wird nicht erneut versucht."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld nicht gesendet – sie werden nicht erneut versucht."
+                }
+              }
+            }
           }
         }
       }
@@ -1831,6 +1803,16 @@
         }
       }
     },
+    "%lld parked — the target changed after the write was queued.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld zurückgestellt – das Ziel hat sich geändert, nachdem der Schreibvorgang eingereiht wurde."
+          }
+        }
+      }
+    },
     "%lld passed, %lld failed, %lld running": {
       "localizations": {
         "de": {
@@ -1991,12 +1973,42 @@
         }
       }
     },
-    "%lld queued reviews were not sent": {
+    "%lld queued writes are parked": {
       "localizations": {
         "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld eingereihte Reviews wurden nicht gesendet"
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld eingereihter Schreibvorgang ist zurückgestellt"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld eingereihte Schreibvorgänge sind zurückgestellt"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld queued write is parked"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld queued writes are parked"
+                }
+              }
+            }
           }
         }
       }
@@ -2611,12 +2623,12 @@
         }
       }
     },
-    "1 queued review was not sent": {
+    "1 queued write is parked": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "1 eingereihtes Review wurde nicht gesendet"
+            "value": "1 eingereihter Schreibvorgang ist zurückgestellt"
           }
         }
       }
@@ -2641,12 +2653,32 @@
         }
       }
     },
+    "A change is parked because the pull request got new commits after you made it. Open the pull request to send it anyway or discard it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Änderung ist zurückgestellt, weil der Pull Request danach neue Commits bekommen hat. Öffne den Pull Request, um sie trotzdem zu senden oder zu verwerfen."
+          }
+        }
+      }
+    },
     "A new push or a failing check cancels it, with a notification.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Ein neuer Push oder ein fehlgeschlagener Check bricht das ab – mit einer Mitteilung."
+          }
+        }
+      }
+    },
+    "A queued write was parked or not sent": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ein eingereihter Schreibvorgang wurde zurückgestellt oder nicht gesendet"
           }
         }
       }
@@ -2737,16 +2769,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ein Pull Request wurde gemergt"
-          }
-        }
-      }
-    },
-    "A queued review could not be sent": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ein eingereihtes Review konnte nicht gesendet werden"
           }
         }
       }
@@ -2931,6 +2953,26 @@
         }
       }
     },
+    "Branch update parked · %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Branch-Update zurückgestellt · %@"
+          }
+        }
+      }
+    },
+    "Branch update parked — %@ changed since the series started.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Branch-Update zurückgestellt — %@ hat sich geändert, seit die Serie gestartet ist."
+          }
+        }
+      }
+    },
     "Cancel editing": {
       "localizations": {
         "de": {
@@ -3061,6 +3103,26 @@
         }
       }
     },
+    "Discard review": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review verwerfen"
+          }
+        }
+      }
+    },
+    "Discard this review?": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dieses Review verwerfen?"
+          }
+        }
+      }
+    },
     "Earlier activity is on GitHub": {
       "localizations": {
         "de": {
@@ -3161,6 +3223,116 @@
         }
       }
     },
+    "Merge parked · %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge zurückgestellt · %@"
+          }
+        }
+      }
+    },
+    "Merge parked — %@ got new commits. Look at them, then merge again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Merge zurückgestellt — %@ hat neue Commits bekommen. Sieh sie dir an und merge dann noch einmal."
+          }
+        }
+      }
+    },
+    "New commits arrived after you chose to merge. Look at them, then merge again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Commits sind angekommen, nachdem du den Merge ausgelöst hast. Sieh sie dir an und merge dann noch einmal."
+          }
+        }
+      }
+    },
+    "New commits arrived after you wrote this review.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Commits sind angekommen, nachdem du dieses Review geschrieben hast."
+          }
+        }
+      }
+    },
+    "New commits arrived after you wrote your review. Send it anyway or discard it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Commits sind angekommen, nachdem du dein Review geschrieben hast. Sende es trotzdem oder verwirf es."
+          }
+        }
+      }
+    },
+    "New commits arrived before the branch could be updated.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Commits sind angekommen, bevor der Branch aktualisiert werden konnte."
+          }
+        }
+      }
+    },
+    "New commits arrived before the merge ran. Look at them, then merge again.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Neue Commits sind angekommen, bevor der Merge lief. Sieh sie dir an und merge dann noch einmal."
+          }
+        }
+      }
+    },
+    "Not sent to GitHub": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht an GitHub gesendet"
+          }
+        }
+      }
+    },
+    "Not sent · %@#%@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nicht gesendet · %@#%@"
+          }
+        }
+      }
+    },
+    "Parked — %@ changed since you started.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zurückgestellt — %@ hat sich geändert, seit du angefangen hast."
+          }
+        }
+      }
+    },
+    "Parked: the pull request or issue changed after you queued the write, so Shepherd held it back. Not sent: GitHub refused it, or Shepherd could not make it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zurückgestellt: Der Pull Request oder das Issue hat sich geändert, nachdem du den Schreibvorgang eingereiht hast, deshalb hat Shepherd ihn zurückgehalten. Nicht gesendet: GitHub hat ihn abgelehnt, oder Shepherd konnte ihn nicht ausführen."
+          }
+        }
+      }
+    },
     "Post the comment (⌘⏎ while you type)": {
       "localizations": {
         "de": {
@@ -3211,12 +3383,52 @@
         }
       }
     },
+    "Review parked · %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review zurückgestellt · %@"
+          }
+        }
+      }
+    },
+    "Review parked — %@ got new commits since you wrote it. Send it anyway or discard it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review zurückgestellt — %@ hat neue Commits bekommen, seit du es geschrieben hast. Sende es trotzdem oder verwirf es."
+          }
+        }
+      }
+    },
     "Rocket": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Rakete"
+          }
+        }
+      }
+    },
+    "Send anyway": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trotzdem senden"
+          }
+        }
+      }
+    },
+    "Send the review on the commit you wrote it on. GitHub keeps your inline comments there.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Review auf den Commit senden, auf dem du es geschrieben hast. GitHub lässt deine Inline-Kommentare dort."
           }
         }
       }
@@ -3247,6 +3459,36 @@
           "stringUnit": {
             "state": "translated",
             "value": "Jemand"
+          }
+        }
+      }
+    },
+    "The issue changed after you queued this.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Issue hat sich geändert, nachdem du das eingereiht hast."
+          }
+        }
+      }
+    },
+    "The pull request changed after you queued this.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Der Pull Request hat sich geändert, nachdem du das eingereiht hast."
+          }
+        }
+      }
+    },
+    "Throw the parked write away": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Den zurückgestellten Schreibvorgang verwerfen"
           }
         }
       }
@@ -8031,16 +8273,6 @@
         }
       }
     },
-    "Merge held back — %@ changed since you started. See the alert.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Merge zurückgehalten — %@ hat sich geändert, seit du angefangen hast. Siehe Hinweis."
-          }
-        }
-      }
-    },
     "Merge pull request…": {
       "localizations": {
         "de": {
@@ -8831,16 +9063,6 @@
         }
       }
     },
-    "Not sent — %@ changed since you started.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Nicht gesendet — %@ hat sich geändert, seit du angefangen hast."
-          }
-        }
-      }
-    },
     "Not signed in": {
       "localizations": {
         "de": {
@@ -9181,12 +9403,12 @@
         }
       }
     },
-    "One more review was parked in the same run; it comes up next.": {
+    "One more write was parked in the same run; it comes up next.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Ein weiteres Review wurde im selben Lauf geparkt; es kommt als Nächstes."
+            "value": "Ein weiterer Schreibvorgang wurde im selben Lauf zurückgestellt; er kommt als Nächstes."
           }
         }
       }
@@ -9291,12 +9513,12 @@
         }
       }
     },
-    "Open Settings → Sync, where the parked reviews are listed": {
+    "Open Settings → Sync, where the parked writes are listed": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "Einstellungen → Sync öffnen, wo die geparkten Reviews stehen"
+            "value": "Einstellungen → Sync öffnen, wo die zurückgestellten Schreibvorgänge stehen"
           }
         }
       }
@@ -10007,26 +10229,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Wird lokal eingereiht und im Hintergrund gepostet. Markdown, wie auf GitHub."
-          }
-        }
-      }
-    },
-    "Queued reviews that were parked because the pull request moved on. Settings → Sync has the count; open the pull request to check your draft.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Eingereihte Reviews, die geparkt wurden, weil der Pull Request weitergewandert ist. Einstellungen → Sync zeigt die Anzahl; öffne den Pull Request, um deinen Draft zu prüfen."
-          }
-        }
-      }
-    },
-    "Queued writes Shepherd gave up on: GitHub refused them, or they could not be made at all. They are never retried by themselves — Settings → Sync lists each one and offers Retry or Discard.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Eingereihte Änderungen, die Shepherd aufgegeben hat: GitHub hat sie abgelehnt, oder sie ließen sich gar nicht erst senden. Von allein werden sie nie erneut versucht — Einstellungen → Sync listet jede auf und bietet „Erneut senden“ und „Verwerfen“ an."
           }
         }
       }
@@ -10767,26 +10969,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Zuerst reviewen"
-          }
-        }
-      }
-    },
-    "Review held back — %@ changed since you started. See the alert.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Review zurückgehalten — %@ hat sich geändert, seit du angefangen hast. Siehe Hinweis."
-          }
-        }
-      }
-    },
-    "Review not sent · %@#%@": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Review nicht gesendet · %@#%@"
           }
         }
       }
@@ -13131,16 +13313,6 @@
         }
       }
     },
-    "The pull request got new commits. Re-review before submitting.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Der Pull Request hat neue Commits bekommen. Reviewe erneut, bevor du abschickst."
-          }
-        }
-      }
-    },
     "The pull request has no changed files.": {
       "localizations": {
         "de": {
@@ -13331,16 +13503,6 @@
         }
       }
     },
-    "These pull requests got new commits after the review was queued, so nothing was sent. Open each one and check your draft against the new commit.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Diese Pull Requests haben neue Commits bekommen, nachdem das Review eingereiht wurde — gesendet wurde deshalb nichts. Öffne jeden davon und prüfe deinen Draft gegen den neuen Commit."
-          }
-        }
-      }
-    },
     "These settings were written by %@ at %@ and carry %lld secrets. Applying them overwrites the settings on this Mac, including the keys in your Keychain. Local data, drafts and the outbox are untouched.": {
       "localizations": {
         "de": {
@@ -13517,16 +13679,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Das ersetzt die Einstellungen auf diesem Mac."
-          }
-        }
-      }
-    },
-    "This review was not sent": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dieses Review wurde nicht gesendet"
           }
         }
       }
@@ -14251,6 +14403,16 @@
         }
       }
     },
+    "Writes that will not go out by themselves. Click to see each one and send or discard it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schreibvorgänge, die nicht von selbst rausgehen. Klick, um jeden zu sehen und zu senden oder zu verwerfen."
+          }
+        }
+      }
+    },
     "Writing and merging": {
       "localizations": {
         "de": {
@@ -14371,12 +14533,52 @@
         }
       }
     },
+    "Your branch update was parked": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Branch-Update wurde zurückgestellt"
+          }
+        }
+      }
+    },
     "Your findings": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Deine Anmerkungen"
+          }
+        }
+      }
+    },
+    "Your merge was parked": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Merge wurde zurückgestellt"
+          }
+        }
+      }
+    },
+    "Your review and its inline comments are deleted. This cannot be undone.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Review und seine Inline-Kommentare werden gelöscht. Das lässt sich nicht rückgängig machen."
+          }
+        }
+      }
+    },
+    "Your review was parked": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dein Review wurde zurückgestellt"
           }
         }
       }
@@ -16617,16 +16819,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%lld werden gesendet"
-          }
-        }
-      }
-    },
-    "A change is held because the pull request moved on underneath it.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Eine Änderung ist zurückgestellt, weil sich der Pull Request inzwischen weiterentwickelt hat."
           }
         }
       }
@@ -19561,16 +19753,6 @@
         }
       }
     },
-    "Branch update held back — %@ changed since the series started.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Branch-Update zurückgehalten – %@ hat sich seit dem Start der Serie geändert."
-          }
-        }
-      }
-    },
     "Branch update queued for %@.": {
       "localizations": {
         "de": {
@@ -20819,16 +21001,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Wie dein iPhone"
-          }
-        }
-      }
-    },
-    "GitHub refused these writes, or Shepherd could not make them at all, so they will not go out by themselves. Retry one once you have fixed what stopped it, or discard it.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GitHub hat diese Änderungen abgelehnt, oder Shepherd konnte sie gar nicht erst ausführen, deshalb gehen sie nicht von selbst raus. Sende eine erneut, sobald du behoben hast, was sie aufgehalten hat, oder verwirf sie."
           }
         }
       }

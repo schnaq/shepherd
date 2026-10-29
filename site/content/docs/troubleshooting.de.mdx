@@ -35,11 +35,11 @@ Sagt die Meldung, der Pull Request habe sich weiterentwickelt, hat jemand gepush
 
 ## Ein Merge steht auf "Merge eingereiht" oder "Nicht gesendet"
 
-Merges und Reviews laufen über eine lokale Outbox. Sie stehen auf **Merge eingereiht**, bis GitHub erreichbar ist, dann auf **Wird gemergt …**, und auf **Gemergt** erst, wenn GitHub es bestätigt. Ein fehlgeschlagener Schreibzugriff zeigt **Nicht gesendet** mit **Erneut senden**. Fehlgeschlagene Zeilen findest du auch mit Erneut senden und Verwerfen unter **Einstellungen → Sync**.
+Merges und Reviews laufen über eine lokale Outbox. Sie stehen auf **Merge eingereiht**, bis GitHub erreichbar ist, dann auf **Wird gemergt …**, und auf **Gemergt** erst, wenn GitHub es bestätigt. Ein fehlgeschlagener Schreibzugriff zeigt **Nicht gesendet** mit **Erneut senden**. Klick in der Toolbar auf die Zahl **nicht gesendet** oder öffne **Einstellungen → Sync**, um jeden erneut zu senden oder zu verwerfen.
 
-## "Dieses Review wurde nicht gesendet"
+## Ein Pull Request zeigt "Zurückgestellt"
 
-Du hast ein Review eingereiht, und bevor es gesendet wurde, kamen neue Commits dazu. Shepherd hält das Review zurück, statt deine Kommentare an einen Commit zu hängen, den du nicht beurteilt hast. Dein Entwurf ist lokal gespeichert. Öffne den Pull Request, prüfe den Entwurf gegen den neuen Commit und sende ihn erneut. Eine Mitteilung, "Review nicht gesendet", sagt dir Bescheid, wenn das passiert. Siehe [Review](/de/docs/review).
+Du hast ein Review oder einen Merge eingereiht, und bevor es gesendet wurde, kamen neue Commits dazu. Shepherd stellt es zurück, statt etwas zu senden, das du auf einem älteren Commit beurteilt hast. Klick in der Toolbar auf die Zahl **zurückgestellt** oder nutze die Buttons im Panel des Pull Requests: **Trotzdem senden** schickt ein Review auf den Commit, auf dem du es geschrieben hast, **Verwerfen** wirft den Schreibvorgang weg (bei einem Review samt Draft), und ein neu abgeschicktes Review oder ein neuer Merge ersetzt den zurückgestellten. Ein zurückgestellter Merge oder ein Branch-Update eines Pull Requests, der gemergt oder geschlossen wurde, verschwindet von selbst. Eine Mitteilung, "Review zurückgestellt" oder "Merge zurückgestellt", sagt dir Bescheid, wenn das passiert. Siehe [Review](/de/docs/review).
 
 ## Nach dem Sync passiert nichts
 
@@ -50,7 +50,7 @@ Du hast ein Review eingereiht, und bevor es gesendet wurde, kamen neue Commits d
 
 ## Mitteilungen kommen nicht an
 
-1. Öffne **Einstellungen → Sync → Mitteilungen** und prüfe die drei Schalter: ein neues Review wird von mir angefordert, Checks auf einem Pull Request von mir fehlschlagen, ein eingereihtes Review konnte nicht gesendet werden.
+1. Öffne **Einstellungen → Sync → Mitteilungen** und prüfe die drei Schalter: ein neues Review wird von mir angefordert, Checks auf einem Pull Request von mir fehlschlagen, ein eingereihter Schreibvorgang wurde zurückgestellt oder nicht gesendet.
 2. macOS fragt beim ersten Mal nach der Erlaubnis, wenn Shepherd eine Mitteilung sendet. Prüfe Systemeinstellungen → Mitteilungen → Shepherd.
 3. Shepherd sendet Mitteilungen, solange es läuft. Lass es laufen.
 

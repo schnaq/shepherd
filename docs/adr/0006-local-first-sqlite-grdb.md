@@ -126,3 +126,56 @@ read.
   finds one queued, being sent or confirmed, and says so; the header's *Merge* and the `m` key follow
   the same state. Without that, a second merge behind a landed one became a failed row whose
   *Retry* could never succeed. The confirmed set lives on the session, so it ends with the account.
+
+## Amendment (2026-10-29): a parked row has a way out, and the user hears about it
+
+This reverses one sentence of the 2026-09-03 amendment: "Parked rows are deliberately left as they
+were." Left as they were, a parked row could never leave. Nothing deleted it; re-reviewing queued a
+second row beside it; and because `pruneGuardSQL` keeps any pull request with a `conflicted` row or a
+draft, the pull request stayed in the inbox as *Parked* after it was merged or closed. The premise —
+that the user would re-apply the draft from the pull request — had no button behind it, and the alert
+that pointed there was shown once, from memory, and never again after *Later* or a relaunch.
+
+What a parked row can now become, each a user decision except the last:
+
+- **Discard** (`discardConflictedOutboxItem(id:)`, guarded on `state = 'conflicted'`). A parked
+  review takes its draft with it in the same transaction — the draft is what would otherwise keep the
+  pull request pinned — so every surface asks before discarding one.
+- **Send anyway**, for a parked review only (`sendConflictedReviewAnyway(id:)`). The row goes back
+  to `pending` with `ReviewDraft.sendsAgainstReviewedCommit` set in its payload (optional, so no
+  migration), and the drain skips the staleness check for that one send. This is not the blind submit
+  the ADR forbids: the user has been told the head moved and chose to send, and the review is
+  submitted with `commit_id` = the reviewed commit, so GitHub anchors the inline comments where they
+  were written (outdated where the lines have changed since). A commit a force-push made unreachable
+  is refused by GitHub, and the row ends up *Not sent*, where Retry and Discard are. A parked merge or
+  branch update gets no such button: the head it was pinned to is gone, so the user looks again and
+  merges again.
+- **Superseded.** Queuing a review, a merge or a branch update deletes the target's parked row of the
+  same kind first (`DatabaseManager.supersedeParked`, inside the transaction of `enqueue(_:)` and
+  `saveBulkTriage(writes:)`). The draft stays — the new row was just built from it.
+- **Dropped with the pull request.** When the sweep's open-pull-request search stops returning a pull
+  request — merged or closed, in the reading `SyncEvent.prMerged` already uses —
+  `savePullRequestSummaries(_:pruneMissing:)` deletes its parked merge and branch-update rows before
+  the prune, so the pull request leaves the inbox in the same sweep. A parked review is never dropped
+  automatically: it holds text the user wrote. A pull request that only fell out of a capped facet
+  loses a parked merge that could not have been sent anyway.
+
+Where the user meets them:
+
+- **One "unsent" control** in the inbox's sync line and the review screen's toolbar —
+  "*n* not sent · *n* parked", red and amber — whose popover lists every parked and failed row: the
+  target and its title, what the write would have done, why it is stuck, and Show / Retry / Send
+  anyway / Discard. Settings → Sync lists the same rows with the same row view (`UnsentWriteRow`),
+  and the phone's Settings lists parked rows beside failed ones with Discard. The list is an
+  observation of the outbox on `SignedInSession`, so it survives a relaunch where the alert does not.
+- **The panel's queue line and the review toolbar** act on the pull request's own parked rows; the
+  conflict alert names the write (review, merge or branch update) and offers Send anyway and Discard.
+  The alert's Discard throws away only the write it names — "Approve & merge" parks two rows and
+  raises an alert for each — and for a review it asks first, like every other surface.
+- **One vocabulary.** *Parked* (amber) is a write the target moved on underneath; *Not sent* (red) is
+  one the drain gave up on — in the row chip, the toolbar, the panel, toasts, notifications and
+  Settings. Before, the toolbar called parked rows "not sent" and the chip drew them red.
+- **Notifications show while Shepherd is frontmost** (`willPresent`), a click opens the pull request
+  or issue a notice is about, `DraftConflict.write` lets a parked merge say "Merge parked", and a
+  write the drain gives up on (`SyncFailure.abandonedWrite`) posts "Not sent" behind the same toggle
+  as a parked one. A merge series' own refused writes stay the series' to report.
