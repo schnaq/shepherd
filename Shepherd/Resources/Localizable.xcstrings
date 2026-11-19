@@ -21675,12 +21675,12 @@
         }
       }
     },
-    "Only issues in repositories of owners Shepherd is installed on reach this list. Only an owner can install it; everyone else can request it.": {
+    "Issues from public repositories always reach this list. From private ones, only where Shepherd is installed on the owner: only an owner can install it, everyone else can request it. Or sign in with a classic token (repo scope) to see everything your GitHub account sees.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
-            "value": "In diese Liste kommen nur Issues aus Repositorys von Ownern, bei denen Shepherd installiert ist. Installieren kann nur ein Owner, alle anderen können es anfragen."
+            "value": "Issues aus öffentlichen Repositorys kommen immer in diese Liste. Aus privaten nur, wenn Shepherd beim Owner installiert ist: Installieren kann nur ein Owner, alle anderen können es anfragen. Oder melde dich mit einem klassischen Token (Scope „repo“) an, dann siehst du alles, was dein GitHub-Konto sieht."
           }
         }
       }

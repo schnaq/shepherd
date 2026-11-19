@@ -361,7 +361,7 @@ struct IssueSidebar: View {
         if offersAppInstall {
             VStack(alignment: .leading, spacing: 6) {
                 Text(String(
-                    localized: "Only issues in repositories of owners Shepherd is installed on reach this list. Only an owner can install it; everyone else can request it."
+                    localized: "Issues from public repositories always reach this list. From private ones, only where Shepherd is installed on the owner: only an owner can install it, everyone else can request it. Or sign in with a classic token (repo scope) to see everything your GitHub account sees."
                 ))
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textMuted)

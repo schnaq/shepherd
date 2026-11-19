@@ -874,8 +874,11 @@ pull-request sweep is unchanged, for the reason ADR 0005's 2026-10-29 amendment 
 
 ### Where the section ends, stated once
 
-After a device-flow sign-in the search sees only owners the Shepherd app is installed on, and
-leaves the rest out without an error. The issue rail has no list of repositories to flag, so it
+After a device-flow sign-in the search sees public repositories everywhere but private ones only
+of owners the Shepherd app is installed on, and leaves the rest out without an error. The sentence
+says both halves and names the classic-token sign-in as the way to see everything the account sees,
+because the user this was built for contributes across many organisations and cannot install the
+app on most of them. The issue rail has no list of repositories to flag, so it
 ends with one muted sentence saying so, in the wording `AppEnvironment.accessProblem(for:)` uses,
 and *Install Shepherd on another owner…*. A token sign-in shows nothing, because there the fix is
 the token's scope. `archived:false` stays in the query.
