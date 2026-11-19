@@ -1,0 +1,17 @@
+{
+  "data": {
+    "repository": {
+      "pullRequest": {
+        "files": {
+          "pageInfo": { "hasNextPage": false, "endCursor": "Y3Vyc29yOjQ=" },
+          "nodes": [
+            { "path": "Sources/Auth/TokenStore.swift", "viewerViewedState": "VIEWED" },
+            { "path": "Sources/Auth/KeychainTokenStore.swift", "viewerViewedState": "DISMISSED" },
+            { "path": "Resources/icon.png", "viewerViewedState": "UNVIEWED" },
+            { "path": "Tests/AuthTests/LegacyKeychainTests.swift", "viewerViewedState": "VIEWED" }
+          ]
+        }
+      }
+    }
+  }
+}
