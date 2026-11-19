@@ -167,7 +167,7 @@ struct IssueListView: View {
     /// repository selected is showing "this label, in this repository", and the surprising half
     /// of that sentence is the label.
     ///
-    /// The state facet leads all four of them when it is showing closed issues, because that is
+    /// The state facet leads all the others when it is showing closed issues, because that is
     /// the most surprising thing a list of triage work can be doing — and it is silent on the
     /// section's own default, and silent again when it has been widened to open *and* closed,
     /// since the rows in the list say which they are themselves.
@@ -177,6 +177,8 @@ struct IssueListView: View {
         if let filter = model.agentPullRequestFilter { return filter.facetTitle }
         if let bucket = model.ageFilter { return bucket.facetTitle }
         if let repo = model.repoFilter { return repo.fullName }
+        // Last: the widest of the six, so any narrower facet beside it is the better chip.
+        if let relation = model.relationFilter { return relation.facetTitle }
         return nil
     }
 
