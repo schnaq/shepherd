@@ -113,4 +113,13 @@ final class IssueDelegationPromptTests: XCTestCase {
         XCTAssertFalse(template.contains("push"))
         XCTAssertFalse(template.contains("branch"))
     }
+
+    func testTheDefaultTemplateDoesNotPresumeAFix() {
+        // A handed-over issue may as well be explained or planned as solved (ADR 0011's
+        // 2026-11-19 amendment); the last line is the one a person edits to say which.
+        let template = IssueDelegationPrompt.defaultTemplate.lowercased()
+        XCTAssertFalse(template.contains("fix"))
+        XCTAssertFalse(template.contains("solve"))
+        XCTAssertTrue(template.contains("work on this issue"))
+    }
 }

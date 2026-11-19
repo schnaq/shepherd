@@ -17,8 +17,15 @@ enum AgentPermissionMode: String, CaseIterable, Codable, Sendable, Identifiable 
     case auto
     /// Every tool runs unattended; the allow-list does not apply.
     case bypassPermissions
+    /// Claude Code asks before each edit or command — only for a session somebody is at
+    /// (ADR 0011's 2026-11-19 amendment). A headless run has nobody to ask.
+    case manual
 
     var id: String { rawValue }
+
+    /// The modes a headless run can use: all but ``manual``, whose question nobody would answer.
+    /// What Settings and the sheet's background path offer.
+    static let headlessCases = allCases.filter { $0 != .manual }
 
     /// The label shown in the picker.
     var title: String {
@@ -28,6 +35,7 @@ enum AgentPermissionMode: String, CaseIterable, Codable, Sendable, Identifiable 
         case .dontAsk: return String(localized: "Don't ask")
         case .auto: return String(localized: "Auto")
         case .bypassPermissions: return String(localized: "Bypass permissions")
+        case .manual: return String(localized: "Ask for each action")
         }
     }
 
@@ -44,6 +52,8 @@ enum AgentPermissionMode: String, CaseIterable, Codable, Sendable, Identifiable 
             return String(localized: "Claude Code decides which tool calls run unattended and refuses the rest.")
         case .bypassPermissions:
             return String(localized: "Every tool runs unattended, including any shell command. Tools does not apply.")
+        case .manual:
+            return String(localized: "Claude Code asks you in the terminal before each edit or command.")
         }
     }
 
@@ -534,6 +544,51 @@ struct AgentCLIConfiguration: Codable, Sendable, Equatable {
             arguments.append(contentsOf: ["--effort", effort.rawValue])
         }
         return arguments
+    }
+
+    /// The flags of a handed-off session, without argv[0] and without the prompt (ADR 0011's
+    /// 2026-11-19 amendment).
+    ///
+    /// Every word here is Shepherd's or the user's own setting, which is what lets
+    /// ``SessionLauncher`` write them into a script: the prompt is not among them and is appended
+    /// by the script at run time.
+    ///
+    /// The headless-only flags stay out: `--output-format`, `--max-turns` and `--max-budget-usd`
+    /// only work with `-p`, and `--allowedTools` would pre-approve the very commands "Ask for each
+    /// action" is meant to ask about. The session name goes to `-n` and, for Remote Control, to
+    /// `--remote-control` — always with a value, because the flag's value is optional and would
+    /// otherwise swallow the next word. `--cloud` comes last for the same reason: its value *is*
+    /// the prompt the script appends.
+    /// - Parameters:
+    ///   - handoff: An interactive or cloud hand-off; ``DelegationHandoff/background`` has no
+    ///     session arguments and gets an empty list.
+    ///   - permissionMode: The mode chosen for this run.
+    ///   - name: The session's display name — a worktree directory name, Shepherd's own.
+    func sessionArguments(
+        for handoff: DelegationHandoff,
+        permissionMode: AgentPermissionMode,
+        name: String
+    ) -> [String] {
+        switch handoff {
+        case .background:
+            return []
+        case .cloud:
+            return extraArguments + ["--cloud"]
+        case .terminal, .remoteControl:
+            var arguments = ["--permission-mode", permissionMode.rawValue]
+            let model = model.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !model.isEmpty {
+                arguments.append(contentsOf: ["--model", model])
+            }
+            if let effort {
+                arguments.append(contentsOf: ["--effort", effort.rawValue])
+            }
+            arguments.append(contentsOf: ["-n", name])
+            if handoff == .remoteControl {
+                arguments.append(contentsOf: ["--remote-control", name])
+            }
+            return arguments + extraArguments
+        }
     }
 
     /// Replaces the placeholders inside one already-split word.

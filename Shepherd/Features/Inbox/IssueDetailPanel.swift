@@ -363,7 +363,9 @@ struct IssueDetailPanel: View {
     /// looking at the issue can see that somebody is on it. It is queued when the run actually
     /// starts rather than on this click: a comment saying an assistant is working on the issue is
     /// a claim, and the click is too early to make it — a missing checkout or a branch git
-    /// refuses would leave the claim standing with nothing behind it.
+    /// refuses would leave the claim standing with nothing behind it. A run handed to a terminal
+    /// or to claude.ai never makes the claim at all: Shepherd cannot see whether anything is
+    /// working on it, so `onDidStart` is not called for it (ADR 0032's 2026-11-19 amendment).
     @ViewBuilder
     private func assignToAgentButton(_ row: IssueRowSummary) -> some View {
         Button {
@@ -398,7 +400,7 @@ struct IssueDetailPanel: View {
             row.state == .closed
                 ? String(localized: "This issue is closed")
                 : String(
-                    localized: "Open a delegation sheet with this issue as the task. Shepherd creates a worktree on its own branch and runs the assistant you configured; the handover is queued as a comment on the issue."
+                    localized: "Open a delegation sheet with this issue as the task. Shepherd creates a worktree on its own branch and runs the assistant you configured; a run in the background is queued as a comment on the issue."
                 )
         )
     }
