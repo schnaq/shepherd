@@ -193,6 +193,9 @@ public struct SentMutation: Sendable, Hashable, Codable {
         /// One of the viewer's own comments was deleted (ADR 0043). Also what a delete of a
         /// comment already gone is announced as: gone is what the row asked for.
         case commentDeleted
+        /// A file's *Viewed* checkbox was ticked or unticked on GitHub (ADR 0028, 2026-11-19
+        /// amendment). Nothing re-reads on it: the store already holds the tick.
+        case fileViewedChanged
     }
 
     /// The pull request's node id.

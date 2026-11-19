@@ -1659,12 +1659,13 @@ final class ReviewModel {
     func toggleViewed(path: String, actions: PullRequestActions) async {
         guard let summary else { return }
         let isViewed = !viewedPaths.contains(path)
-        await actions.setFileViewed(path: path, on: summary, isViewed: isViewed)
+        // On the press, not after the write: the store's answer follows through the observation.
         if isViewed {
             viewedPaths.insert(path)
         } else {
             viewedPaths.remove(path)
         }
+        await actions.setFileViewed(path: path, on: summary, isViewed: isViewed)
     }
 
     /// Marks a file as seen and moves to the next one still waiting.
@@ -1683,8 +1684,10 @@ final class ReviewModel {
     func acceptFile(path: String, actions: PullRequestActions) async {
         guard let summary else { return }
         if !viewedPaths.contains(path) {
-            await actions.setFileViewed(path: path, on: summary, isViewed: true)
             viewedPaths.insert(path)
+            selectNextUnviewedFile()
+            await actions.setFileViewed(path: path, on: summary, isViewed: true)
+            return
         }
         selectNextUnviewedFile()
     }

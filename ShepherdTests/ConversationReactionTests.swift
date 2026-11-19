@@ -288,6 +288,18 @@ final class ConversationReactionTests: XCTestCase {
         XCTAssertEqual(rows.first { $0.id == remove.id }?.state, .pending)
     }
 
+    /// The viewed checkbox's rows follow the same rule (ADR 0028, 2026-11-19 amendment): only the
+    /// newest state of one file waits, and another file's row is left alone.
+    func testAViewedToggleReplacesTheWaitingRowOfTheSameFileOnly() async throws {
+        let database = try DatabaseManager.inMemory()
+        try await PullRequestActions.writeFileViewed(path: "a.swift", viewed: true, on: summary, in: database)
+        let other = try await PullRequestActions.writeFileViewed(path: "b.swift", viewed: true, on: summary, in: database)
+        let untick = try await PullRequestActions.writeFileViewed(path: "a.swift", viewed: false, on: summary, in: database)
+        let rows = try await database.allOutboxItems()
+        XCTAssertEqual(Set(rows.map(\.id)), [other.id, untick.id])
+        XCTAssertEqual(rows.first { $0.id == untick.id }?.action, .setFileViewed(path: "a.swift", viewed: false))
+    }
+
     func testAClickCancelsARowThatNeverLeftAndStillQueuesItsOwn() async throws {
         let database = try DatabaseManager.inMemory()
         _ = try await click(adding: true, in: database)

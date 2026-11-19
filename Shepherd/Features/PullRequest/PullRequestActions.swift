@@ -785,7 +785,14 @@ struct PullRequestActions {
         toasts.info(String(localized: "Copied \(summary.headRefName)"))
     }
 
-    /// Marks a file viewed (or not) for the current head commit.
+    /// Marks a file viewed (or not) for the current head commit, here and on GitHub.
+    ///
+    /// The local tick is the record and is written first; GitHub's *Viewed* checkbox is a copy
+    /// sent through the outbox afterwards, drained in the background and never announced — a
+    /// reviewer pressing `a` down twenty files gets no toasts, and a token that may not write
+    /// keeps the ticks on this Mac only (ADR 0028, 2026-11-19 amendment). Only the two local
+    /// writes are inside ``activity``: a drain waiting on the network would otherwise refuse the
+    /// next press.
     /// - Parameters:
     ///   - path: The file path.
     ///   - summary: The pull request.
@@ -793,7 +800,7 @@ struct PullRequestActions {
     func setFileViewed(path: String, on summary: PullRequestSummary, isViewed: Bool) async {
         // Keyed on the pull request rather than on the path: one file is selected at a time, so
         // the toggle and the `v` shortcut are the same button and cannot mean two files at once.
-        await activity.run(summary.id, .viewed) {
+        let queued = await activity.run(summary.id, .viewed) { () -> Bool in
             do {
                 try await session.database.setFileViewed(
                     prID: summary.id,
@@ -803,8 +810,46 @@ struct PullRequestActions {
                 )
             } catch {
                 toasts.failure(error, context: String(localized: "Could not save the viewed state"))
+                return false
+            }
+            // A row that could not be written costs GitHub's copy only, so it is not news.
+            return (try? await Self.writeFileViewed(
+                path: path,
+                viewed: isViewed,
+                on: summary,
+                in: session.database
+            )) != nil
+        }
+        guard queued == true else { return }
+        let session = self.session
+        Task { await session.drainOutbox() }
+    }
+
+    /// Writes a viewed toggle's row, after taking out any still-waiting row for the same file.
+    ///
+    /// Each row states the checkbox outright rather than flipping it, so only the newest one
+    /// matters: `v` pressed three times offline sends one mutation, not three. Static, over the
+    /// database alone, like ``writeReaction(subjectID:content:adding:on:in:)``.
+    /// - Parameters:
+    ///   - path: The file path.
+    ///   - viewed: The new state.
+    ///   - summary: The pull request.
+    ///   - database: The outbox.
+    /// - Returns: The row.
+    /// - Throws: When the outbox could not be read or written.
+    @discardableResult
+    static func writeFileViewed(
+        path: String,
+        viewed: Bool,
+        on summary: PullRequestSummary,
+        in database: DatabaseManager
+    ) async throws -> OutboxItem {
+        for item in try await database.outboxItems(prID: summary.id) where item.state == .pending {
+            if case .setFileViewed(path, _) = item.action {
+                try await database.cancelPendingOutboxItem(id: item.id)
             }
         }
+        return try await write(.setFileViewed(path: path, viewed: viewed), on: summary, in: database)
     }
 
     // MARK: - What the user asked for
