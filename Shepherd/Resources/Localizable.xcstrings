@@ -21624,6 +21624,126 @@
           }
         }
       }
+    },
+    "Assigned to me": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mir zugewiesen"
+          }
+        }
+      }
+    },
+    "Opened by me": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Von mir eröffnet"
+          }
+        }
+      }
+    },
+    "Mentioning me": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erwähnt mich"
+          }
+        }
+      }
+    },
+    "MINE": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MEINE"
+          }
+        }
+      }
+    },
+    "Which of your three searches found the issue. An issue that is assigned to you and mentions you is counted in both.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Welche deiner drei Suchen das Issue gefunden hat. Ein Issue, das dir zugewiesen ist und dich erwähnt, zählt in beiden."
+          }
+        }
+      }
+    },
+    "Only issues in repositories of owners Shepherd is installed on reach this list. Only an owner can install it; everyone else can request it.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In diese Liste kommen nur Issues aus Repositorys von Ownern, bei denen Shepherd installiert ist. Installieren kann nur ein Owner, alle anderen können es anfragen."
+          }
+        }
+      }
+    },
+    "Install Shepherd on another owner…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd bei einem weiteren Owner installieren…"
+          }
+        }
+      }
+    },
+    "Install Shepherd…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd installieren…"
+          }
+        }
+      }
+    },
+    "%lld watched repositories not visible to Shepherd": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld beobachtetes Repository für Shepherd nicht sichtbar"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld beobachtete Repositorys für Shepherd nicht sichtbar"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld watched repository not visible to Shepherd"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld watched repositories not visible to Shepherd"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "version": "1.0"

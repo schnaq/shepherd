@@ -1,0 +1,53 @@
+{
+  "data": {
+    "search": {
+      "issueCount": 1,
+      "pageInfo": { "hasNextPage": false, "endCursor": "Y3Vyc29yOjE=" },
+      "nodes": [
+        {
+          "__typename": "Issue",
+          "id": "I_kwDOIssueOne",
+          "number": 42,
+          "title": "Login times out after the token refresh",
+          "createdAt": "2026-08-20T10:00:00Z",
+          "updatedAt": "2026-08-31T08:00:00Z",
+          "closedAt": null,
+          "closed": false,
+          "stateReason": null,
+          "repository": { "name": "review", "owner": { "login": "schnaq" } },
+          "author": {
+            "__typename": "User",
+            "login": "octocat",
+            "avatarUrl": "https://avatars.githubusercontent.com/u/583231?v=4"
+          },
+          "labels": { "nodes": [{ "name": "bug" }] },
+          "comments": { "totalCount": 1 },
+          "closedByPullRequestsReferences": {
+            "totalCount": 2,
+            "nodes": [
+              null,
+              {
+                "number": 131,
+                "title": "Add a regression test for the timeout",
+                "state": "MERGED",
+                "repository": { "name": "review", "owner": { "login": "schnaq" } },
+                "author": {
+                  "__typename": "User",
+                  "login": "octocat",
+                  "avatarUrl": "https://avatars.githubusercontent.com/u/583231?v=4"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "errors": [
+    {
+      "type": "FORBIDDEN",
+      "path": ["search", "nodes", 0, "closedByPullRequestsReferences", "nodes", 0],
+      "message": "Resource not accessible by integration"
+    }
+  ]
+}
