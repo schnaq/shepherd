@@ -527,6 +527,33 @@ final class OutboxStoreTests: XCTestCase {
         XCTAssertEqual(remaining.map(\.id), [second.id])
     }
 
+    func testAnEnqueueReplacesOnlyTheWaitingRowsItsPredicateNames() async throws {
+        // One transaction: the cancel and the insert cannot interleave with a second press's.
+        let database = try DatabaseManager.inMemory()
+        let isA: @Sendable (OutboxAction) -> Bool = {
+            if case .setFileViewed("a.swift", _) = $0 { true } else { false }
+        }
+        let claimed = item(action: .setFileViewed(path: "a.swift", viewed: true))
+        try await database.enqueue(claimed)
+        _ = try await database.claimReadyOutboxItems(now: now, limit: 10)
+        let waiting = item(action: .setFileViewed(path: "a.swift", viewed: false))
+        var other = item(action: .setFileViewed(path: "b.swift", viewed: true))
+        other.createdAt = waiting.createdAt.addingTimeInterval(1)
+        try await database.enqueue(waiting)
+        try await database.enqueue(other)
+
+        var newest = item(action: .setFileViewed(path: "a.swift", viewed: true))
+        newest.createdAt = waiting.createdAt.addingTimeInterval(2)
+        try await database.enqueue(newest, replacingPending: isA)
+
+        let remaining = try await database.allOutboxItems()
+        XCTAssertEqual(
+            Set(remaining.map(\.id)),
+            [claimed.id, other.id, newest.id],
+            "the claimed row is the drain's, the other file's row is not this press's"
+        )
+    }
+
     func testDequeueRespectsTheLimitAndOrdersOldestFirst() async throws {
         let database = try DatabaseManager.inMemory()
         for index in 0..<5 {

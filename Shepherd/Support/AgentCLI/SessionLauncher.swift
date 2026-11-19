@@ -129,7 +129,18 @@ enum SessionLauncher {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
             process.arguments = ["-na", application.path, "--args", "-e", script.path]
-            try process.run()
+            // `open` exits once Launch Services has taken the request — or refused it, which only
+            // its status says. Waited for off the main thread; the handler is set before `run()`,
+            // and a `run()` that throws never calls it, so the continuation resumes once.
+            let status: Int32 = try await withCheckedThrowingContinuation { continuation in
+                process.terminationHandler = { continuation.resume(returning: $0.terminationStatus) }
+                do {
+                    try process.run()
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+            guard status == 0 else { throw LaunchFailure.openFailed(app.title) }
         }
     }
 
@@ -137,11 +148,15 @@ enum SessionLauncher {
     enum LaunchFailure: LocalizedError, Equatable {
         /// The chosen terminal app is not on this Mac.
         case notInstalled(String)
+        /// macOS refused to open the terminal app.
+        case openFailed(String)
 
         var errorDescription: String? {
             switch self {
             case .notInstalled(let name):
                 return String(localized: "\(name) is not installed on this Mac. Choose another terminal in Settings → Delegation, or copy the command.")
+            case .openFailed(let name):
+                return String(localized: "macOS could not open \(name). Copy the command and run it in a terminal instead.")
             }
         }
     }

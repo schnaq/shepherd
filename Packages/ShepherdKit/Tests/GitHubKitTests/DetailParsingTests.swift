@@ -383,6 +383,10 @@ final class DetailParsingTests: XCTestCase {
             ["Sources/Auth/TokenStore.swift", "Tests/AuthTests/LegacyKeychainTests.swift"]
         )
         XCTAssertEqual(detail.files.first?.blobSha, "1a2b3c")
+        XCTAssertEqual(
+            detail.viewedOnGitHub,
+            ["Sources/Auth/TokenStore.swift", "Tests/AuthTests/LegacyKeychainTests.swift"]
+        )
     }
 
     func testAViewedReadThatFailsLeavesTheDetailIntact() async throws {
@@ -394,6 +398,7 @@ final class DetailParsingTests: XCTestCase {
 
         XCTAssertEqual(detail.files.count, 4)
         XCTAssertFalse(detail.files.contains(where: \.isViewed))
+        XCTAssertNil(detail.viewedOnGitHub, "unknown, so the store keeps what it last read")
     }
 
     func testMarkAndUnmarkSendTheirMutationsWithThePullRequestAndPath() async throws {

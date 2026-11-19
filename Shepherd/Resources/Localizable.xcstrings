@@ -3873,6 +3873,16 @@
         }
       }
     },
+    "macOS could not open %@. Copy the command and run it in a terminal instead.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS konnte %@ nicht öffnen. Kopiere den Befehl und führe ihn stattdessen in einem Terminal aus."
+          }
+        }
+      }
+    },
     "Merge parked · %@": {
       "localizations": {
         "de": {

@@ -500,7 +500,7 @@ final class ReviewModel {
                     return
                 }
                 self.isMissingFromInbox = false
-                let fresh = try await self.session.github.pullRequestDetail(
+                var fresh = try await self.session.github.pullRequestDetail(
                     repo: row.repo,
                     number: row.number
                 )
@@ -523,6 +523,9 @@ final class ReviewModel {
                     saveFailure = error.userFacingDescription
                 }
                 guard !Task.isCancelled else { return }
+                // The store's input only: a stored copy never carries it, so left in, every
+                // fetch would compare unequal and be applied again.
+                fresh.viewedOnGitHub = nil
                 // An equal detail was already applied — by the cached read above, or by
                 // ``received(_:)`` reacting to the save — so applying it again would only re-run
                 // the prioritiser and reload the round for nothing. Compared and applied with the
@@ -707,23 +710,24 @@ final class ReviewModel {
     }
 
     /// The detail ``load()`` puts on the screen when the store could not be written or read
-    /// back, with the viewed ticks on screen kept.
+    /// back, with the viewed state on screen kept.
     ///
-    /// A fetch carries only what GitHub reported as viewed; the reviewer's own ticks live in the
-    /// store. Applied as it came, a fetch that could not be stored would untick every file the
-    /// reviewer ticked here. Only for the same head: a tick on another head is the store's to
-    /// carry forward or not (`DatabaseManager.loadPullRequestDetail`). Pure and `static` for
-    /// ``change(shown:fresh:)``'s reason.
+    /// A fetch carries only what GitHub reported as viewed; the reviewer's own decisions live in
+    /// the store and win over GitHub's (ADR 0028, 2026-11-19 amendment). Applied as it came, a
+    /// fetch that could not be stored would untick every file the reviewer ticked here, and
+    /// re-tick one they unticked. Only for the same head: a decision on another head is the
+    /// store's to carry forward or not (`DatabaseManager.loadPullRequestDetail`). Pure and
+    /// `static` for ``change(shown:fresh:)``'s reason.
     /// - Parameters:
     ///   - shown: The detail the screen is showing, or `nil` when it is showing none.
     ///   - fresh: The detail GitHub just returned.
-    /// - Returns: `fresh`, with every file viewed on screen still viewed.
+    /// - Returns: `fresh`, with every file the screen shows viewed or not as the screen has it.
     static func keepingViewed(of shown: PullRequestDetail?, in fresh: PullRequestDetail) -> PullRequestDetail {
         guard let shown, shown.summary.headRefOid == fresh.summary.headRefOid else { return fresh }
-        let viewed = Set(shown.files.filter(\.isViewed).map(\.path))
+        let onScreen = Dictionary(shown.files.map { ($0.path, $0.isViewed) }) { first, _ in first }
         var kept = fresh
-        for index in kept.files.indices where viewed.contains(kept.files[index].path) {
-            kept.files[index].isViewed = true
+        for index in kept.files.indices {
+            if let isViewed = onScreen[kept.files[index].path] { kept.files[index].isViewed = isViewed }
         }
         return kept
     }
@@ -1671,8 +1675,8 @@ final class ReviewModel {
         await writeViewed(path, !viewedPaths.contains(path), on: summary, actions: actions)
     }
 
-    /// Ticks or unticks a file on the press, not after the write, and takes it back when nothing
-    /// was stored: a tick only the screen holds is the one that is gone on reopening.
+    /// Ticks or unticks a file on the press, not after the write, and takes it back when the
+    /// write failed: a tick only the screen holds is the one that is gone on reopening.
     /// - Parameter afterTicking: Runs between the tick and the write, so what follows the tick
     ///   on screen does not wait for the disk.
     private func writeViewed(

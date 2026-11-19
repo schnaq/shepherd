@@ -17,6 +17,7 @@ final class ScriptedAgentRunner: AgentRunning, @unchecked Sendable {
     private var recordedPrompts: [String] = []
     private var recordedDirectories: [URL] = []
     private var recordedSessions: [String] = []
+    private var recordedModes: [AgentPermissionMode?] = []
 
     /// Creates a scripted runner.
     init(
@@ -43,6 +44,13 @@ final class ScriptedAgentRunner: AgentRunning, @unchecked Sendable {
         return recordedDirectories
     }
 
+    /// The permission mode of every run and resume, in order.
+    var permissionModes: [AgentPermissionMode?] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recordedModes
+    }
+
     /// The sessions the model asked to resume.
     var resumedSessions: [String] {
         lock.lock()
@@ -67,6 +75,7 @@ final class ScriptedAgentRunner: AgentRunning, @unchecked Sendable {
         lock.lock()
         recordedPrompts.append(prompt)
         recordedDirectories.append(worktree)
+        recordedModes.append(permissionMode)
         lock.unlock()
 
         let (stream, continuation) = AsyncStream<AgentStreamEvent>.makeStream()
@@ -396,6 +405,29 @@ final class DelegationModelTests: XCTestCase {
     }
 
     // MARK: - Continuing a capped run
+
+    func testContinueResumesWithTheModeTheRunStartedWithNotThePickersNewOne() async throws {
+        let runner = ScriptedAgentRunner(
+            events: [
+                .result(AgentRunResult(isError: true, sessionID: "6f2a-0001", subtype: "error_max_turns"))
+            ],
+            exitCode: 1
+        )
+        let model = makeModel(runner: runner, git: gitRunnerWithDiffStat())
+        let started = try XCTUnwrap(model.permissionModeChoices.last)
+        model.permissionMode = started
+        model.start()
+        await model.runTask?.value
+        let directory = try XCTUnwrap(model.worktree?.directory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        model.permissionMode = try XCTUnwrap(model.permissionModeChoices.first { $0 != started })
+        model.continueRun()
+        await model.runTask?.value
+
+        XCTAssertEqual(runner.resumedSessions, ["6f2a-0001"])
+        XCTAssertEqual(runner.permissionModes, [started, started])
+    }
 
     func testContinueResumesTheCappedSessionInTheSameWorktreeWithoutPreparingIt() async throws {
         let git = gitRunnerWithDiffStat()

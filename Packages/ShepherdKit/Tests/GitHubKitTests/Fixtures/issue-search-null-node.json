@@ -1,0 +1,61 @@
+{
+  "data": {
+    "search": {
+      "issueCount": 2,
+      "pageInfo": {
+        "hasNextPage": false,
+        "endCursor": "Y3Vyc29yOjE="
+      },
+      "nodes": [
+        null,
+        {
+          "__typename": "Issue",
+          "id": "I_kwDOIssueOne",
+          "number": 42,
+          "title": "Login times out after the token refresh",
+          "createdAt": "2026-08-20T10:00:00Z",
+          "updatedAt": "2026-08-31T08:00:00Z",
+          "closedAt": null,
+          "closed": false,
+          "stateReason": null,
+          "repository": {
+            "name": "review",
+            "owner": {
+              "login": "schnaq"
+            }
+          },
+          "author": {
+            "__typename": "User",
+            "login": "octocat",
+            "avatarUrl": "https://avatars.githubusercontent.com/u/583231?v=4"
+          },
+          "labels": {
+            "nodes": [
+              {
+                "name": "bug"
+              }
+            ]
+          },
+          "comments": {
+            "totalCount": 1
+          },
+          "closedByPullRequestsReferences": {
+            "totalCount": 0,
+            "nodes": []
+          }
+        }
+      ]
+    }
+  },
+  "errors": [
+    {
+      "type": "FORBIDDEN",
+      "path": [
+        "search",
+        "nodes",
+        0
+      ],
+      "message": "Resource protected by organization SAML enforcement. You must grant your Personal Access token access to this organization."
+    }
+  ]
+}

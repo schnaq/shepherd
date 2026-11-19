@@ -117,12 +117,14 @@ public enum OutboxAction: Sendable, Codable, Hashable {
     /// Tick or untick a file's *Viewed* checkbox on GitHub for the signed-in user (ADR 0028,
     /// 2026-11-19 amendment).
     ///
-    /// The reviewer's tick is already in the local store when this is queued; the row only
-    /// carries it to GitHub, so a refusal costs GitHub's copy and never the tick. Addressed to the
-    /// pull request by the row's own `prID`, the node id the mutation takes.
+    /// The reviewer's decision is already in the local store when this is queued; the row only
+    /// carries it to GitHub, so a refusal costs GitHub's copy and never the decision. The drain
+    /// sends the decision stored when the row goes out, not `viewed`, so rows sent out of order
+    /// still leave GitHub with the last one. Addressed to the pull request by the row's own
+    /// `prID`, the node id the mutation takes.
     /// - Parameters:
     ///   - path: The file path.
-    ///   - viewed: `true` to tick, `false` to untick.
+    ///   - viewed: `true` to tick, `false` to untick, as pressed — what the outbox list says.
     case setFileViewed(path: String, viewed: Bool)
     /// Post a comment on the issue (ADR 0032).
     /// - Parameters:

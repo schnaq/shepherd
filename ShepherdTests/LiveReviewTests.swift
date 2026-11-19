@@ -185,6 +185,15 @@ final class LiveReviewTests: XCTestCase {
         XCTAssertEqual(kept, shown, "nothing left to apply, so nothing is re-applied")
     }
 
+    func testAFetchDoesNotRetickAFileUntickedOnScreen() {
+        // GitHub still says `VIEWED` (the untick was refused, or has not gone out); the
+        // reviewer's decision wins, here as in the store.
+        let shown = detail(headRefOid: "head-1", commits: [commit("c1", at: 0)])
+        var fetched = detail(headRefOid: "head-1", commits: [commit("c1", at: 0)])
+        fetched.files[0].isViewed = true
+        XCTAssertFalse(ReviewModel.keepingViewed(of: shown, in: fetched).files[0].isViewed)
+    }
+
     func testATickOnAnotherHeadIsNotCarriedByTheScreen() {
         var shown = detail(headRefOid: "head-1", commits: [commit("c1", at: 0)])
         shown.files[0].isViewed = true

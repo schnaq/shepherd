@@ -105,10 +105,10 @@ public actor GitHubClient {
 
     /// Pages one GraphQL `search` connection — the loop both sweeps (pull requests and issues)
     /// share, so they differ only in document, payload type and row mapper.
-    /// - Parameter acceptsPartialData: Keep a page GitHub answered only in part, as
-    ///   ``pullRequestConversation(repo:number:)`` does. A page whose connection was refused as a
-    ///   whole — `nodes` `null`, or every node `null` — still throws: kept, it would be an empty
-    ///   facet, and the sweep's prune would delete every row that facet holds.
+    /// - Parameter acceptsPartialData: Keep a page whose results GitHub answered only in part —
+    ///   a `null` nested inside a result, such as one linked pull request. A page with `nodes`
+    ///   `null`, or with any result itself `null`, still throws: kept, that result would be
+    ///   missing from the facet, and the sweep's prune would delete the row it holds.
     private func sweep<Payload: Decodable, Node, Row>(
         document: String,
         rawQuery: String,
@@ -136,7 +136,10 @@ public actor GitHubClient {
             )
             let (nodes, pageInfo) = page(data)
             if acceptsPartialData {
-                guard let nodes, nodes.isEmpty || nodes.contains(where: { $0 != nil }) else {
+                // Only a null *inside* a node is tolerated. A result GitHub nulled as a whole —
+                // SAML, a forbidden repository, a timeout — would otherwise be missing from the
+                // facet, and the prune would delete the row the user still has.
+                guard let nodes, !nodes.contains(where: { $0 == nil }) else {
                     throw GitHubError.graphQL(messages: ["GitHub refused the search \(rawQuery)"])
                 }
             }
@@ -290,13 +293,16 @@ public actor GitHubClient {
         )
         async let checks: [CheckRun] = headSHA.isEmpty ? [] : checkRuns(repo: repo, ref: headSHA)
         // Tolerated as well (ADR 0028, 2026-11-19 amendment): GitHub's *Viewed* checkboxes are a
-        // convenience on top of the reviewer's own ticks, which the store keeps either way.
+        // convenience on top of the reviewer's own decisions, which the store keeps either way.
+        // `nil` travels as "unknown", so the store keeps the checkboxes it last read rather than
+        // reading a failure as "nothing viewed".
         async let viewedRead: Set<String>? = try? viewedFiles(repo: repo, number: number)
 
         var fileList = try await files
-        if let viewed = await viewedRead {
+        let viewedOnGitHub = await viewedRead
+        if let viewedOnGitHub {
             for index in fileList.indices {
-                fileList[index].isViewed = viewed.contains(fileList[index].path)
+                fileList[index].isViewed = viewedOnGitHub.contains(fileList[index].path)
             }
         }
         let commitList = try await commitsRead
@@ -336,7 +342,8 @@ public actor GitHubClient {
             ),
             checks: checkList,
             closingIssues: closingIssueList,
-            conversation: await conversationRead
+            conversation: await conversationRead,
+            viewedOnGitHub: viewedOnGitHub
         )
     }
 
@@ -383,7 +390,7 @@ public actor GitHubClient {
     ///   - number: The pull request number.
     /// - Returns: The viewed paths.
     /// - Throws: Any ``GitHubError`` the request maps to. ``pullRequestDetail(repo:number:)``
-    ///   tolerates every one of them and leaves GitHub's ticks out.
+    ///   tolerates every one of them and carries `nil` — unknown — in their place.
     public func viewedFiles(repo: RepoRef, number: Int) async throws -> Set<String> {
         var viewed: Set<String> = []
         var cursor: String? = nil

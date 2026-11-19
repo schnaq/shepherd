@@ -195,6 +195,21 @@ final class ResponseMappingIssueTests: XCTestCase {
         }
     }
 
+    func testAnIssueGitHubNulledAsAWholeFailsTheSweepRatherThanBeingPruned() async throws {
+        // A result behind SAML or in a forbidden repository: kept as a page without it, the
+        // prune would delete the row the user still has.
+        let transport = MockTransport()
+        await transport.route("ShepherdIssueSweep", try Fixture.response("issue-search-null-node"))
+        let client = GitHubClient.makeForTesting(transport: transport)
+
+        do {
+            _ = try await client.searchOpenIssues(queries: [.assigned])
+            XCTFail("expected a GraphQL error")
+        } catch GitHubError.graphQL {
+            // Expected.
+        }
+    }
+
     // MARK: - The fallback shape
 
     /// Decodes the timeline fixture the way the client would, without sending it.

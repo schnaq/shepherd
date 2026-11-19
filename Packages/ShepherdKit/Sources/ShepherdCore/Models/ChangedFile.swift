@@ -43,8 +43,9 @@ public struct ChangedFile: Sendable, Codable, Hashable, Identifiable {
     /// Whether the file counts as viewed.
     ///
     /// From a fetch, GitHub's own *Viewed* checkbox for the signed-in user — `VIEWED` only, so a
-    /// file GitHub reports as changed since (`DISMISSED`) is not. Read from the store, that or the
-    /// reviewer's own tick made here, which survives a push that left the file's content alone
+    /// file GitHub reports as changed since (`DISMISSED`) is not. Read from the store, the
+    /// reviewer's own decision made here — a tick or an untick, which survives a push that left
+    /// the file's content alone — or else GitHub's checkbox
     /// (`DatabaseManager.loadPullRequestDetail`).
     public var isViewed: Bool
     /// The file's blob SHA at the head commit, or `nil` when GitHub did not send one.

@@ -108,9 +108,22 @@ final class OutboxDrainTests: XCTestCase {
 
     // MARK: - Viewed checkbox (ADR 0028, 2026-11-19 amendment)
 
+    /// Stores `PR_1` with `Sources/A.swift` and the reviewer's decision about it, as the app does
+    /// before it queues the row.
+    private func decide(_ viewed: Bool, in store: DatabaseManager) async throws {
+        try await store.savePullRequestDetail(
+            PullRequestDetail(
+                summary: SyncFixtures.summary(id: "PR_1", number: 1),
+                files: [ChangedFile(path: "Sources/A.swift", status: .modified)]
+            )
+        )
+        try await store.setFileViewed(prID: "PR_1", path: "Sources/A.swift", headRefOid: "head-1", isViewed: viewed)
+    }
+
     func testAViewedTickIsSentForThePullRequestAndTheRowIsRemoved() async throws {
         let github = MockGitHub()
         let store = try DatabaseManager.inMemory()
+        try await decide(true, in: store)
         _ = try await enqueue(.setFileViewed(path: "Sources/A.swift", viewed: true), in: store)
         let engine = makeEngine(github: github, store: store)
 
@@ -123,12 +136,44 @@ final class OutboxDrainTests: XCTestCase {
         XCTAssertTrue(remaining.isEmpty)
     }
 
+    func testAViewedRowSendsTheDecisionStoredNowNotTheOneItWasQueuedWith() async throws {
+        // A tick that waited out a backoff behind a later untick: sent as queued, it would leave
+        // GitHub ticked and the reviewer's untick undone there.
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        try await decide(false, in: store)
+        _ = try await enqueue(.setFileViewed(path: "Sources/A.swift", viewed: true), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        await engine.drainOutbox()
+
+        let calls = await github.fileViewedCalls
+        XCTAssertEqual(calls, ["PR_1 Sources/A.swift false"])
+    }
+
+    func testAViewedRowWithNoDecisionLeftIsDroppedUnsent() async throws {
+        // A push changed the file since, or it left the pull request: nothing to copy.
+        let github = MockGitHub()
+        let store = try DatabaseManager.inMemory()
+        _ = try await enqueue(.setFileViewed(path: "Sources/A.swift", viewed: true), in: store)
+        let engine = makeEngine(github: github, store: store)
+
+        let emitted = await drainCollectingEvents(engine)
+
+        XCTAssertTrue(emitted.isEmpty, "\(emitted)")
+        let calls = await github.fileViewedCalls
+        XCTAssertTrue(calls.isEmpty)
+        let remaining = try await store.allOutboxItems()
+        XCTAssertTrue(remaining.isEmpty)
+    }
+
     func testARefusedViewedTickIsDroppedWithoutAWord() async throws {
-        // A token that may read but not write: the tick is in the local store already, so the
-        // row goes and nothing reaches the user — no failed row, no alert.
+        // A token that may read but not write: the decision is in the local store already, so
+        // the row goes and nothing reaches the user — no failed row, no alert.
         let github = MockGitHub()
         await github.setFileViewedError(.graphQL(messages: ["Resource not accessible by integration"]))
         let store = try DatabaseManager.inMemory()
+        try await decide(true, in: store)
         _ = try await enqueue(.setFileViewed(path: "Sources/A.swift", viewed: true), in: store)
         let engine = makeEngine(github: github, store: store)
 
@@ -139,15 +184,18 @@ final class OutboxDrainTests: XCTestCase {
         XCTAssertTrue(remaining.isEmpty)
     }
 
-    func testAViewedTickThatDidNotReachGitHubIsRetried() async throws {
+    func testAViewedTickThatDidNotReachGitHubIsRetriedQuietly() async throws {
+        // A background row: no `syncFailed`, so no error badge for a copy of a checkbox.
         let github = MockGitHub()
         await github.setFileViewedError(.transport(message: "offline"))
         let store = try DatabaseManager.inMemory()
+        try await decide(false, in: store)
         let id = try await enqueue(.setFileViewed(path: "Sources/A.swift", viewed: false), in: store)
         let engine = makeEngine(github: github, store: store)
 
-        await engine.drainOutbox()
+        let emitted = await drainCollectingEvents(engine)
 
+        XCTAssertTrue(emitted.isEmpty, "\(emitted)")
         let row = try await store.outboxItem(id: id)
         XCTAssertEqual(row?.state, .pending, "retried after a backoff")
     }

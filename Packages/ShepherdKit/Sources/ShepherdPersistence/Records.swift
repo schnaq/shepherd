@@ -317,12 +317,13 @@ struct ChangedFileRecord: Codable, FetchableRecord, PersistableRecord {
     var sortIndex: Int
     /// The file's blob SHA at the head (v12).
     var blobSha: String?
-    /// Whether GitHub reported the file as viewed by the signed-in user on the fetch that wrote
-    /// this row (v12). Replaced with the row on every detail write, so a tick taken back on
-    /// github.com is gone with the next fetch; the reviewer's own ticks are in `viewed_files`.
+    /// Whether GitHub reported the file as viewed by the signed-in user (v12). Rewritten with the
+    /// row on every detail write — from the fetch's reading, or carried over when the fetch could
+    /// not read it — so a tick taken back on github.com is gone with the next fetch. The
+    /// reviewer's own decisions are in `viewed_files` and win over it.
     var viewedOnGitHub: Bool
 
-    init(prID: String, file: ChangedFile, sortIndex: Int) {
+    init(prID: String, file: ChangedFile, sortIndex: Int, viewedOnGitHub: Bool) {
         self.prID = prID
         self.path = file.path
         self.previousPath = file.previousPath
@@ -332,10 +333,10 @@ struct ChangedFileRecord: Codable, FetchableRecord, PersistableRecord {
         self.patch = file.patch
         self.sortIndex = sortIndex
         self.blobSha = file.blobSha
-        self.viewedOnGitHub = file.isViewed
+        self.viewedOnGitHub = viewedOnGitHub
     }
 
-    /// Rebuilds the model with GitHub's viewed state. The reviewer's own ticks live in
+    /// Rebuilds the model with GitHub's viewed state. The reviewer's own decisions live in
     /// `viewed_files` and are laid over it by the caller.
     var changedFile: ChangedFile {
         ChangedFile(
@@ -349,19 +350,6 @@ struct ChangedFileRecord: Codable, FetchableRecord, PersistableRecord {
             blobSha: blobSha
         )
     }
-}
-
-/// A row of `viewed_files`.
-struct ViewedFileRecord: Codable, FetchableRecord, PersistableRecord {
-    static let databaseTableName = "viewed_files"
-
-    var prID: String
-    var path: String
-    var headRefOid: String
-    var viewedAt: Double
-    /// The file's blob SHA when it was ticked (v12), or `nil` for a tick made before it was kept
-    /// or on a file GitHub sent none for — such a tick holds for ``headRefOid`` only.
-    var blobSha: String?
 }
 
 /// A row of `review_threads`.

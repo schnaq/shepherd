@@ -975,10 +975,10 @@ public actor SyncEngine {
         /// ``ShepherdPersistence/DatabaseManager/conflictedOutboxCount()`` beside every other
         /// parked row, and left for the user — which is the whole of what ADR 0006 asks for.
         case staleIssue(reason: String)
-        /// GitHub refused a write that is a copy of state kept locally, and the row is dropped
-        /// without a word — the viewed checkbox under a read-only token (ADR 0028, 2026-11-19
-        /// amendment). Nothing is lost: the local tick is the reviewer's record, GitHub's was
-        /// the extra.
+        /// A write that copies state kept locally was refused by GitHub, or has nothing left to
+        /// copy, and the row is dropped without a word — the viewed checkbox under a read-only
+        /// token (ADR 0028, 2026-11-19 amendment). Nothing is lost: the local decision is the
+        /// reviewer's record and wins over GitHub's checkbox there.
         case dropped
     }
 
@@ -1093,7 +1093,9 @@ public actor SyncEngine {
                 )
                 // A request cut off by `stop()` — the phone's background time running out — is
                 // not news: the row keeps its attempt count and the replay check runs next time.
-                if !Task.isCancelled { emit(.syncFailed(Self.failure(.outbox, error))) }
+                if !Task.isCancelled, !item.action.isBackgroundSync {
+                    emit(.syncFailed(Self.failure(.outbox, error)))
+                }
             }
         }
 
@@ -1180,7 +1182,9 @@ public actor SyncEngine {
             retriable: error.isRetryable
         )
         // See the generic catch in `performDrain`: a cancelled send is not a failure to report.
-        if !Task.isCancelled {
+        // Nor is a background row's: it copies what the screen already shows, and its refusals
+        // are dropped in `execute` (ADR 0028, 2026-11-19 amendment).
+        if !Task.isCancelled, !item.action.isBackgroundSync {
             emit(.syncFailed(Self.failure(.outbox, error, abandoning: error.isRetryable ? nil : item)))
         }
     }
@@ -1277,12 +1281,20 @@ public actor SyncEngine {
             }
             return .sent
 
-        case .setFileViewed(let path, let viewed):
+        case .setFileViewed(let path, _):
+            // The row's own `viewed` is not what is sent: the store's decision is, read now. Rows
+            // can be sent out of order — a tick in a retry's backoff after a later untick — and
+            // GitHub must end up with the last decision, not the last row. No decision that
+            // still applies (a push changed the file, it left the pull request) drops the row.
             // Setting a checkbox twice is harmless, so no replay check. A refusal that no retry
-            // can change — a token that may read but not write, a file no longer in the pull
-            // request, a closed one — drops the row in silence: the tick is in the local store
-            // already, and an alert per `a` press about a copy the reviewer never asked to keep
-            // would be noise. Retryable failures back off like every other row.
+            // can change — a token that may read but not write, a closed pull request — drops
+            // the row in silence: the decision is in the local store already and wins over
+            // GitHub's checkbox there, and an alert per `a` press about a copy the reviewer
+            // never asked to keep would be noise. Retryable failures back off, quietly too
+            // (``OutboxAction/isBackgroundSync``).
+            guard let viewed = try await store.viewedDecision(prID: item.prID, path: path) else {
+                return .dropped
+            }
             do {
                 try await github.setFileViewed(pullRequestID: item.prID, path: path, viewed: viewed)
             } catch let refusal as GitHubError where !refusal.isRetryable {

@@ -174,6 +174,9 @@ public protocol SyncStoring: Sendable {
     func outboxItems(prID: String) async throws -> [OutboxItem]
     /// Removes an outbox row only while it is waiting; a claimed, failed or parked one stays.
     func cancelPendingOutboxItem(id: UUID) async throws
+    /// The reviewer's *Viewed* decision for one file while it applies, or `nil` when there is
+    /// none — what a viewed row sends, read when it is sent (ADR 0028, 2026-11-19 amendment).
+    func viewedDecision(prID: String, path: String) async throws -> Bool?
     /// Reads a scalar sync-state value.
     func syncState(forKey key: String) async throws -> String?
     /// Writes a scalar sync-state value.

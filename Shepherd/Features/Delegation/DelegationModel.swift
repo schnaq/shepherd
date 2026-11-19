@@ -285,6 +285,9 @@ final class DelegationModel: Identifiable {
     /// Guards ``onDidStart`` against firing twice: a handover is announced once per run, and a
     /// run that is restarted from the same sheet is a second handover of the same issue.
     private var didAnnounceStart = false
+    /// The permission mode the last background run started with, which *Continue* resumes it
+    /// with: the picker may have moved since, and a resumed session is the same run.
+    private var runPermissionMode: AgentPermissionMode?
 
     /// The run task, so tests (and `deinit`-time cleanup) can await it.
     private(set) var runTask: Task<Void, Never>?
@@ -613,6 +616,9 @@ final class DelegationModel: Identifiable {
 
         let taskText = task
         let handoff = self.handoff
+        // Taken at the press, not after the worktree step, which the picker can outlast.
+        let mode = permissionMode
+        runPermissionMode = mode
         if handoff == .cloud {
             let prompt = DelegationPrompt.cloudFull(for: context, task: taskText)
             let name = Self.fileName(context.id) + "-cloud"
@@ -705,7 +711,6 @@ final class DelegationModel: Identifiable {
                 await self.refreshHandoff()
                 return
             }
-            let mode = self.permissionMode
             await self.runAgent(in: worktree) {
                 try self.runner.run(prompt: prompt, in: worktree.directory, permissionMode: mode)
             }
@@ -802,7 +807,7 @@ final class DelegationModel: Identifiable {
         // The same handover, carried on: an issue must not get a second "Handed to …" comment.
         didAnnounceStart = true
         append(.note, String(localized: "Continuing the previous session."))
-        let mode = permissionMode
+        let mode = runPermissionMode ?? permissionMode
         runTask = Task { [weak self] in
             // ``cancel()`` during `.preparingWorktree` cancels this task; it must not spawn after.
             guard let self, !Task.isCancelled else { return }
