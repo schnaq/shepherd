@@ -16,7 +16,7 @@ Open **Settings → Delegation**. The **Agent** picker has two choices.
 - **Claude Code.** Shepherd runs `claude` headless and reads its output as it arrives. Use **Detect** to find the executable, or type its **Path**.
 - **Custom command.** Any other agent CLI. Write a **Command** template. `{prompt}` is the task and `{worktree}` is the path. `{prompt}` always becomes exactly one argument, and no shell runs the command.
 
-For Claude Code you can also pick the **Model** and the **Effort**. **Extra arguments** are added to every run.
+For Claude Code you can also pick the **Model**, the **Effort** and the **Terminal** an interactive session opens in (**Terminal**, **iTerm** or **Ghostty**). **Extra arguments** are added to every run.
 
 Under **Guardrails** you set the **Permission mode** (**Accept edits**, **Plan only**, **Don't ask**, **Auto** or **Bypass permissions**), **Max turns** (no limit by default), an optional spend cap (**Cap spend**, in USD, off by default) and the allowed **Tools**. By default the agent may read, edit and write files, run any shell command and use the web, so it can run your tests.
 
@@ -35,6 +35,21 @@ In **Settings → Delegation**, under **Local checkouts**, press **Add a local r
 The **Agent tasks** menu lists each task and whether it is running, finished or failed. **Discard worktree** removes one task's worktree. **Commit & push branch** is your button.
 
 If a run stops at a cap or with an error, **Continue** resumes the same Claude Code session in the same worktree, with its changes. On a pull request or an issue, **Run again** starts afresh, so it waits until you push or discard the changes the last run left. The result also shows any tools the agent was refused.
+
+The task does not have to be a fix. Ask the agent to explain something, write a plan or review the change: Shepherd's own instructions only ask for small changes when the task asks for changes.
+
+### Choose how it runs
+
+With Claude Code, the sheet asks **How**. Shepherd remembers your last choice.
+
+- **In the background.** Shepherd runs the agent headless in a worktree and shows the transcript in the sheet.
+- **Interactive session.** Shepherd prepares the same worktree, then opens Claude Code in your terminal with the task as the first message. You drive the session.
+- **Remote Control.** The same session, also reachable from `claude.ai/code` and the Claude app.
+- **Claude Code on the web.** Starts a session on `claude.ai/code` from your clone. It works on the repository on GitHub, not on your local changes, and no worktree is made.
+
+The **Permission mode** next to the guardrails applies to this run only. An interactive session can also use **Ask for each action**, where Claude Code asks you before each edit or command. Turn and spend caps only apply in the background.
+
+Shepherd does not see a session in your terminal. Press **Refresh** in the sheet to see what it changed, then **Commit & push** as usual. **Copy command** copies the command that starts the session, if the terminal did not open. Handing an issue to a session posts no comment on the issue. Only a background run does.
 
 ### Let Shepherd write the brief
 

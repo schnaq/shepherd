@@ -882,3 +882,21 @@ app on most of them. The issue rail has no list of repositories to flag, so it
 ends with one muted sentence saying so, in the wording `AppEnvironment.accessProblem(for:)` uses,
 and *Install Shepherd on another owner…*. A token sign-in shows nothing, because there the fix is
 the token's scope. `archived:false` stays in the query.
+
+## Amendment, 2026-11-19 — no handover comment for a session Shepherd cannot see
+
+ADR 0011's amendment of the same date lets an issue be handed to an interactive Claude Code
+session in a terminal, to the same session under Remote Control, or to Claude Code on the web.
+On those paths Shepherd starts the session but does not watch it. "Running" is therefore never
+true in the sense Sprint 4b's handover requires. The two records of a handover follow from that:
+
+- The public **"Handed to … via Shepherd" comment** is only queued for a background run. It is
+  still queued when the agent process is actually up, as before.
+- **`issue.assigned_to_agent`** is only fired for a background run, for the same reason.
+
+Both come from one call, `DelegationModel.announceStart()`, which only the background path
+reaches. So this is a missing call on the other paths, not a flag that could be set wrong. A
+person who wants colleagues to know can still comment by hand. The default task template's last
+line now reads "Work on this issue. Read the repository first, and keep any change as small as the
+issue allows." It no longer presumes a fix, and still says nothing about what the run may do
+with the result.

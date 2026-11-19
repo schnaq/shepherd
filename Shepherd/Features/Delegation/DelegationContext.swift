@@ -314,8 +314,10 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
 /// Builds the prompt handed to the agent CLI.
 ///
 /// The prompt has two halves. The **preamble** is Shepherd's and is not editable: it tells the
-/// agent where it is, what it may do with the result, and that the change should stay small
-/// (ADR 0011's guardrails are not only flags). The **task** is the user's text, appended after it.
+/// agent where it is, what it may do with the result, and that a change — *if* the task asks for
+/// one — should stay small (ADR 0011's guardrails are not only flags). It assumes no fix: a task
+/// may as well ask a question, for a plan or for a review (ADR 0011's 2026-11-19 amendment). The
+/// **task** is the user's text, appended after it.
 ///
 /// There are two preambles, chosen by the origin, and what differs is the ground rules rather
 /// than the wording (ADR 0011's 2026-09-04 amendment). Addressing a pull request forbids a
@@ -338,11 +340,13 @@ enum DelegationPrompt {
                 Ground rules:
                 - Do not push, do not create or switch branches, and do not open a pull \
                 request. The reviewer reads your diff and pushes it themselves.
-                - Keep the change as small as it can be. Do not reformat, rename or refactor \
-                anything the task does not ask for.
+                - Do what the task asks. If it asks a question, for a plan or for a review, \
+                answer it and change nothing.
+                - If the task asks for code changes, keep them as small as they can be. Do not \
+                reformat, rename or refactor anything the task does not ask for.
                 - Prefer the project's existing tests and tooling over adding new ones.
-                - If the task is unclear or you would have to guess at intent, say so in your \
-                final message instead of guessing.
+                - If the task is unclear or you would have to guess at intent, say so instead of \
+                guessing.
                 """
         )
     }
@@ -368,17 +372,20 @@ enum DelegationPrompt {
                 to another one.
 
                 Ground rules:
-                - The work is yours to finish on this branch. When it is ready you may commit \
-                it, publish the branch and open a pull request, using the git and GitHub \
-                credentials you already have. If you cannot publish, commit anyway and say so \
-                in your final message: the reviewer can publish the worktree from Shepherd.
-                - Solve the issue and nothing else. Do not reformat, rename or refactor \
-                anything the issue does not ask for.
+                - Do what the task asks. If it asks a question, for a plan or for a review, \
+                answer it and change nothing.
+                - If the task asks for code changes, the work is yours to finish on this \
+                branch. When it is ready you may commit it, publish the branch and open a pull \
+                request, using the git and GitHub credentials you already have. If you cannot \
+                publish, commit anyway and say so: the reviewer can publish the worktree from \
+                Shepherd.
+                - Keep code changes to what the issue asks for. Do not reformat, rename or \
+                refactor anything else.
                 - Read the repository before you write: its tests, its conventions and its \
                 contribution notes are the specification, not a suggestion.
                 - Prefer the project's existing tests and tooling over adding new ones.
-                - If the issue is unclear or you would have to guess at intent, say so in your \
-                final message instead of guessing.
+                - If the issue is unclear or you would have to guess at intent, say so instead \
+                of guessing.
                 """
         )
     }
@@ -401,17 +408,20 @@ enum DelegationPrompt {
                 Shepherd named that branch; do not rename it and do not switch to another one.
 
                 Ground rules:
-                - The work is yours to finish on this branch. When it is ready you may commit \
-                it, publish the branch and open a pull request, using the git and GitHub \
-                credentials you already have. If you cannot publish, commit anyway and say so \
-                in your final message: the reviewer can publish the worktree from Shepherd.
-                - Do what the task asks and nothing else. Do not reformat, rename or refactor \
-                anything the task does not ask for.
+                - Do what the task asks. If it asks a question, for a plan or for a review, \
+                answer it and change nothing.
+                - If the task asks for code changes, the work is yours to finish on this \
+                branch. When it is ready you may commit it, publish the branch and open a pull \
+                request, using the git and GitHub credentials you already have. If you cannot \
+                publish, commit anyway and say so: the reviewer can publish the worktree from \
+                Shepherd.
+                - Keep code changes to what the task asks for. Do not reformat, rename or \
+                refactor anything else.
                 - Read the repository before you write: its tests, its conventions and its \
                 contribution notes are the specification, not a suggestion.
                 - Prefer the project's existing tests and tooling over adding new ones.
-                - If the task is unclear or you would have to guess at intent, say so in your \
-                final message instead of guessing.
+                - If the task is unclear or you would have to guess at intent, say so instead of \
+                guessing.
                 """
         )
     }
@@ -424,7 +434,9 @@ enum DelegationPrompt {
             var lines = [
                 String(localized: "Pull request: \(context.title)"),
                 "",
-                String(localized: "Address the open review feedback on this pull request."),
+                // Neutral on purpose (ADR 0011's 2026-11-19 amendment): the reviewer may want a
+                // fix, an explanation or a plan, and says which by editing this line.
+                String(localized: "Work through the open review feedback on this pull request."),
             ]
             if !context.focusReasons.isEmpty {
                 lines.append("")
@@ -464,7 +476,7 @@ enum DelegationPrompt {
                 lines.append(MarkdownDocument.quoted(comment))
                 lines.append("")
             }
-            lines.append(String(localized: "Fix this finding."))
+            lines.append(String(localized: "Work on this finding."))
             return lines.joined(separator: "\n")
         }
     }
@@ -484,5 +496,43 @@ enum DelegationPrompt {
         let trimmed = task.trimmingCharacters(in: .whitespacesAndNewlines)
         guard context.session == nil else { return trimmed }
         return preamble(for: context) + "\n\n---\n\n" + String(localized: "Task from the reviewer:") + "\n" + trimmed
+    }
+
+    /// The prompt of a Claude Code on the web session (ADR 0011's 2026-11-19 amendment).
+    ///
+    /// Its own preamble, because every other one describes a worktree on this Mac and a branch
+    /// Shepherd named — neither exists for a session that works on the repository on GitHub. What
+    /// carries over is the part that does not depend on where the work happens: do what the task
+    /// asks, keep changes small, say so when it is unclear.
+    /// - Parameters:
+    ///   - context: What the delegation is about.
+    ///   - task: The user's editable text.
+    static func cloudFull(for context: DelegationContext, task: String) -> String {
+        let subject: String
+        switch context.origin {
+        case .pullRequest, .reviewFinding:
+            subject = String(
+                localized: "Shepherd handed you a task on pull request #\(String(context.number)) of \(context.repo.fullName), branch \(context.headRefName)."
+            )
+        case .issue:
+            subject = String(
+                localized: "Shepherd handed you a task on issue #\(String(context.number)) of \(context.repo.fullName)."
+            )
+        case .repository:
+            subject = String(localized: "Shepherd handed you a task on \(context.repo.fullName).")
+        }
+        let rules = String(
+            localized: """
+                Ground rules:
+                - Do what the task asks. If it asks a question, for a plan or for a review, \
+                answer it and change nothing.
+                - If the task asks for code changes, keep them as small as they can be. Do not \
+                reformat, rename or refactor anything the task does not ask for.
+                - If the task is unclear or you would have to guess at intent, say so instead of \
+                guessing.
+                """
+        )
+        let trimmed = task.trimmingCharacters(in: .whitespacesAndNewlines)
+        return subject + "\n\n" + rules + "\n\n---\n\n" + String(localized: "Task from the reviewer:") + "\n" + trimmed
     }
 }

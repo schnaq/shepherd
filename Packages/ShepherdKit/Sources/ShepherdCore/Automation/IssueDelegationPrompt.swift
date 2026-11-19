@@ -37,14 +37,17 @@ public enum IssueDelegationPrompt {
     /// It states the issue and then stops. There is deliberately no "and open a pull request"
     /// here: what the run is allowed to do belongs to the preamble Shepherd controls, not to a
     /// template anybody may rewrite.
+    ///
+    /// The last line asks for work on the issue without presuming a fix (ADR 0011's 2026-11-19
+    /// amendment): it is the line a person edits to ask for an explanation or a plan instead.
     public static let defaultTemplate = """
         Issue {repo}#{number}: {title}
         Labels: {labels}
 
         {body}
 
-        Work on this issue. Read the repository to find out how it is meant to be solved, and \
-        keep the change as small as the issue allows.
+        Work on this issue. Read the repository first, and keep any change as small as the \
+        issue allows.
         """
 
     /// The label the delegation reports for a template — `"default"` or `"custom"`.

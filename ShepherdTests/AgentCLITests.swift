@@ -437,4 +437,94 @@ final class AgentCLITests: XCTestCase {
         XCTAssertTrue(prompt.contains("agent/fix"))
         XCTAssertTrue(prompt.lowercased().contains("do not push"))
     }
+
+    func testThePreambleDoesNotPresumeAFix() {
+        // A task may ask a question, a plan or a review (ADR 0011's 2026-11-19 amendment).
+        let context = DelegationContext(
+            prID: "PR_1",
+            repo: .init(owner: "schnaq", name: "review"),
+            number: 42,
+            title: "Fix the thing",
+            headRefName: "agent/fix",
+            headRefOid: "0123456789abcdef"
+        )
+        let preamble = DelegationPrompt.preamble(for: context)
+        XCTAssertTrue(preamble.contains("If the task asks for code changes"))
+        XCTAssertTrue(preamble.contains("answer it and change nothing"))
+    }
+
+    func testTheCloudPromptClaimsNoLocalWorktree() {
+        let context = DelegationContext(
+            prID: "PR_1",
+            repo: .init(owner: "schnaq", name: "review"),
+            number: 42,
+            title: "Fix the thing",
+            headRefName: "agent/fix",
+            headRefOid: "0123456789abcdef"
+        )
+        let prompt = DelegationPrompt.cloudFull(for: context, task: "Explain the retry loop.")
+        XCTAssertTrue(prompt.contains("#42"))
+        XCTAssertTrue(prompt.hasSuffix("Explain the retry loop."))
+        XCTAssertFalse(prompt.contains("worktree"))
+        XCTAssertFalse(prompt.hasPrefix("-"), "the CLI must not read the prompt as a flag")
+    }
+
+    // MARK: - Handing off to a session (ADR 0011's 2026-11-19 amendment)
+
+    func testAnInteractiveSessionGetsNoHeadlessOnlyFlags() {
+        var configuration = AgentCLIConfiguration()
+        configuration.model = "opus"
+        configuration.maxTurns = 30
+        configuration.maxBudgetUSD = 10
+        configuration.extraArguments = ["--add-dir", "/tmp/extra"]
+        XCTAssertEqual(
+            configuration.sessionArguments(for: .terminal, permissionMode: .manual, name: "schnaq-review-pr42"),
+            [
+                "--permission-mode", "manual",
+                "--model", "opus",
+                "-n", "schnaq-review-pr42",
+                "--add-dir", "/tmp/extra",
+            ]
+        )
+    }
+
+    func testRemoteControlAlwaysCarriesAName() {
+        // `--remote-control [name]` takes an optional value: without one it would swallow the
+        // prompt the script appends.
+        let arguments = AgentCLIConfiguration()
+            .sessionArguments(for: .remoteControl, permissionMode: .acceptEdits, name: "wt")
+        let flag = arguments.firstIndex(of: "--remote-control")
+        XCTAssertEqual(flag.map { arguments[$0 + 1] }, "wt")
+    }
+
+    func testACloudSessionEndsWithTheFlagThatTakesThePrompt() {
+        XCTAssertEqual(
+            AgentCLIConfiguration().sessionArguments(for: .cloud, permissionMode: .plan, name: "x").last,
+            "--cloud"
+        )
+    }
+
+    func testHeadlessModesLeaveOutAskingForEachAction() {
+        XCTAssertFalse(AgentPermissionMode.headlessCases.contains(.manual))
+        XCTAssertTrue(AgentPermissionMode.allCases.contains(.manual))
+    }
+
+    func testTheLauncherQuotesPathsAndNeverContainsThePrompt() {
+        let script = SessionLauncher.script(
+            directory: URL(fileURLWithPath: "/Users/me/Shepherd Worktrees/it's-pr42"),
+            executable: URL(fileURLWithPath: "/Users/me/.local/bin/claude"),
+            arguments: ["--permission-mode", "plan", "-n", "it's-pr42"],
+            promptFile: URL(fileURLWithPath: "/Users/me/Launchers/it's-pr42.prompt.txt")
+        )
+        XCTAssertTrue(script.hasPrefix("#!/bin/zsh\n"))
+        XCTAssertTrue(script.contains(#"cd '/Users/me/Shepherd Worktrees/it'\''s-pr42' || exit 1"#))
+        XCTAssertTrue(script.contains(
+            #"exec '/Users/me/.local/bin/claude' '--permission-mode' 'plan' '-n' 'it'\''s-pr42' "$(cat '/Users/me/Launchers/it'\''s-pr42.prompt.txt')""#
+        ))
+    }
+
+    func testQuotingNeutralisesEveryShellCharacter() {
+        XCTAssertEqual(SessionLauncher.quote(#"a'b"#), #"'a'\''b'"#)
+        XCTAssertEqual(SessionLauncher.quote("$(rm -rf ~); `x` \"y\""), "'$(rm -rf ~); `x` \"y\"'")
+    }
 }

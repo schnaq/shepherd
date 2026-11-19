@@ -16,7 +16,7 @@ Shepherd startet die Agent-CLI, die du schon hast. Es hält kein Login dafür, l
 - **Claude Code.** Shepherd startet `claude` headless und liest die Ausgabe, sobald sie ankommt. Mit **Suchen** findest du die ausführbare Datei, oder tippe ihren **Pfad** ein.
 - **Eigener Befehl.** Jede andere Agent-CLI. Schreibe eine **Befehl**-Vorlage. `{prompt}` ist die Aufgabe und `{worktree}` der Pfad. `{prompt}` wird immer genau ein Argument, und keine Shell führt den Befehl aus.
 
-Für Claude Code kannst du außerdem das **Modell** und den **Aufwand** wählen. **Zusätzliche Argumente** werden an jeden Lauf angehängt.
+Für Claude Code kannst du außerdem das **Modell**, den **Aufwand** und das **Terminal** wählen, in dem eine interaktive Sitzung geöffnet wird (**Terminal**, **iTerm** oder **Ghostty**). **Zusätzliche Argumente** werden an jeden Lauf angehängt.
 
 Unter **Leitlinien** legst du den **Berechtigungsmodus** fest (**Änderungen zulassen**, **Nur planen**, **Nicht fragen**, **Automatisch** oder **Berechtigungen umgehen**), **Max. Turns** (standardmäßig unbegrenzt), ein optionales Ausgabenlimit (**Begrenzen**, in USD, standardmäßig aus) und die erlaubten **Werkzeuge**. Standardmäßig darf der Agent Dateien lesen, bearbeiten und schreiben, jeden Shell-Befehl ausführen und das Web nutzen, also auch deine Tests laufen lassen.
 
@@ -35,6 +35,21 @@ Drücke in **Einstellungen → Delegation** unter **Lokale Checkouts** auf **Lok
 Das Menü **Agent-Aufgaben** listet jede Aufgabe und ob sie läuft, fertig ist oder fehlgeschlagen ist. **Worktree verwerfen** entfernt den Worktree einer Aufgabe. **Committen & Branch pushen** ist dein Button.
 
 Endet ein Lauf an einem Limit oder mit einem Fehler, setzt **Fortsetzen** dieselbe Claude-Code-Session im selben Worktree fort, mit ihren Änderungen. Bei einem Pull Request oder Issue fängt **Erneut ausführen** neu an und wartet deshalb, bis du die Änderungen des letzten Laufs gepusht oder verworfen hast. Das Ergebnis zeigt auch, welche Werkzeuge dem Agenten verweigert wurden.
+
+Die Aufgabe muss kein Fix sein. Lass den Agenten etwas erklären, einen Plan schreiben oder die Änderung reviewen: Shepherds eigene Anweisungen verlangen kleine Änderungen nur, wenn die Aufgabe Änderungen verlangt.
+
+### Wählen, wie es läuft
+
+Mit Claude Code fragt das Sheet **Wie**. Shepherd merkt sich deine letzte Wahl.
+
+- **Im Hintergrund.** Shepherd führt den Agenten ohne Oberfläche in einem Worktree aus und zeigt das Protokoll im Sheet.
+- **Interaktive Sitzung.** Shepherd bereitet denselben Worktree vor und öffnet dann Claude Code in deinem Terminal, mit der Aufgabe als erster Nachricht. Du steuerst die Sitzung.
+- **Remote Control.** Dieselbe Sitzung, zusätzlich erreichbar über `claude.ai/code` und die Claude-App.
+- **Claude Code im Web.** Startet aus deinem Klon eine Sitzung auf `claude.ai/code`. Sie arbeitet am Repository auf GitHub, nicht an deinen lokalen Änderungen, und es wird kein Worktree angelegt.
+
+Der **Berechtigungsmodus** neben den Leitlinien gilt nur für diesen Lauf. Eine interaktive Sitzung kann auch **Bei jeder Aktion fragen** nutzen: Claude Code fragt dich dann vor jeder Änderung und jedem Befehl. Turn- und Kostenlimits gelten nur im Hintergrund.
+
+Eine Sitzung in deinem Terminal sieht Shepherd nicht. Drücke im Sheet **Aktualisieren**, um zu sehen, was sie geändert hat, und dann wie gewohnt **Committen & pushen**. **Befehl kopieren** kopiert den Befehl, der die Sitzung startet, falls sich das Terminal nicht geöffnet hat. Übergibst du ein Issue an eine Sitzung, erscheint kein Kommentar am Issue. Das macht nur ein Lauf im Hintergrund.
 
 ### Shepherd den Brief schreiben lassen
 

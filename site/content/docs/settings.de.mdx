@@ -175,6 +175,7 @@ Der **Semantische Suchindex** ist standardmäßig an. `⌘K` findet Pull Request
 - **Pfad**: Leer lassen, dann wird an den üblichen Orten gesucht. **Suchen** findet sie.
 - **Befehl** (eigener): `{prompt}` ist die Aufgabe, `{worktree}` der Pfad. Der Befehl läuft ohne Shell, ein Prompt kann also nicht zu einem zweiten Befehl werden.
 - **Modell** und **Aufwand** (Claude Code): werden als `--model` und `--effort` übergeben. Leer und **Standard der CLI** überlassen die Wahl deiner CLI.
+- **Terminal** (Claude Code): wo eine interaktive oder Remote-Control-Sitzung geöffnet wird. **Terminal**, **iTerm** oder **Ghostty**. Standard: Terminal. Diese Einstellung bleibt auf diesem Mac.
 - **Zusätzliche Argumente**: werden an jeden Lauf angehängt und wie in einer Shell aufgeteilt.
 
 ### Leitlinien
@@ -187,6 +188,8 @@ Der **Semantische Suchindex** ist standardmäßig an. `⌘K` findet Pull Request
 | **Werkzeuge** (an `--allowedTools` übergeben) | `Read,Edit,Write,Glob,Grep,Bash,WebFetch,WebSearch` |
 
 **Nicht fragen** führt die Werkzeuge auf der Liste unbeaufsichtigt aus und lehnt alles andere ohne Nachfrage ab. **Berechtigungen umgehen** führt jedes Werkzeug unbeaufsichtigt aus, **Werkzeuge** gilt dann nicht. Wurde einem Lauf ein Werkzeug verweigert, zeigt das Ergebnis, wie viele Aufrufe abgelehnt wurden und welche Werkzeuge. **Fortsetzen** behält diese Leitlinien. Für eine Nachricht über den Rückkanal zur Session unten gelten sie nicht.
+
+Der Berechtigungsmodus hier ist der Standard. Das Delegationsfenster kann ihn für einen Lauf ändern, und eine interaktive Sitzung kann auch **Bei jeder Aktion fragen** nutzen. Turn- und Kostenlimits gelten nur für einen Lauf im Hintergrund.
 
 ### Rückkanal zur Session
 
