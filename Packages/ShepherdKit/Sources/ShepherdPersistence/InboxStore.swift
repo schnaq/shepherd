@@ -391,22 +391,28 @@ extension DatabaseManager {
             arguments: [id]
         ) else { return nil }
 
-        let viewedPaths = try Set(
-            String.fetchAll(
-                db,
-                sql: "SELECT path FROM viewed_files WHERE prID = ? AND headRefOid = ?",
-                arguments: [id, record.headRefOid]
-            )
+        let ticks = try ViewedFileRecord.fetchAll(
+            db,
+            sql: "SELECT * FROM viewed_files WHERE prID = ?",
+            arguments: [id]
         )
+        let tickByPath = Dictionary(ticks.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
 
         let fileRecords = try ChangedFileRecord.fetchAll(
             db,
             sql: "SELECT * FROM changed_files WHERE prID = ? ORDER BY sortIndex ASC",
             arguments: [id]
         )
+        // GitHub's checkbox, or the reviewer's own tick while the file is what they ticked: the
+        // same head, or the same blob at a newer one. A push that changed the file unticks it,
+        // as on GitHub; one that left it alone does not (ADR 0028, 2026-11-19 amendment).
         let files: [ChangedFile] = fileRecords.map { fileRecord in
             var file = fileRecord.changedFile
-            file.isViewed = viewedPaths.contains(file.path)
+            if let tick = tickByPath[file.path],
+               tick.headRefOid == record.headRefOid
+                || (tick.blobSha != nil && tick.blobSha == file.blobSha) {
+                file.isViewed = true
+            }
             return file
         }
 
@@ -472,8 +478,11 @@ extension DatabaseManager {
 
     /// Marks a file as viewed (or not) for a given head commit.
     ///
-    /// Viewed state is scoped to the head SHA so that new commits reset it, which is what
-    /// GitHub's own "viewed" checkbox does.
+    /// The tick keeps the file's blob SHA as the stored detail has it, so it outlives a push that
+    /// leaves the file alone and not one that changes it — what GitHub's own checkbox does
+    /// (``loadPullRequestDetail(_:id:)``). An untick also takes back GitHub's tick as the last
+    /// fetch read it: the outbox is sending the same untick to GitHub, and the next fetch says
+    /// what GitHub then holds (ADR 0028, 2026-11-19 amendment).
     /// - Parameters:
     ///   - prID: The pull request's node id.
     ///   - path: The file path.
@@ -488,34 +497,28 @@ extension DatabaseManager {
         let now = Date().timeIntervalSince1970
         try await writer.write { db in
             if isViewed {
+                let blobSha = try String.fetchOne(
+                    db,
+                    sql: "SELECT blobSha FROM changed_files WHERE prID = ? AND path = ?",
+                    arguments: [prID, path]
+                )
                 try ViewedFileRecord(
                     prID: prID,
                     path: path,
                     headRefOid: headRefOid,
-                    viewedAt: now
+                    viewedAt: now,
+                    blobSha: blobSha
                 ).save(db)
             } else {
                 try db.execute(
                     sql: "DELETE FROM viewed_files WHERE prID = ? AND path = ?",
                     arguments: [prID, path]
                 )
-            }
-        }
-    }
-
-    /// The set of paths marked viewed for a pull request at a given head commit.
-    /// - Parameters:
-    ///   - prID: The pull request's node id.
-    ///   - headRefOid: The head commit.
-    public func viewedFiles(prID: String, headRefOid: String) async throws -> Set<String> {
-        try await writer.read { db in
-            try Set(
-                String.fetchAll(
-                    db,
-                    sql: "SELECT path FROM viewed_files WHERE prID = ? AND headRefOid = ?",
-                    arguments: [prID, headRefOid]
+                try db.execute(
+                    sql: "UPDATE changed_files SET viewedOnGitHub = 0 WHERE prID = ? AND path = ?",
+                    arguments: [prID, path]
                 )
-            )
+            }
         }
     }
 

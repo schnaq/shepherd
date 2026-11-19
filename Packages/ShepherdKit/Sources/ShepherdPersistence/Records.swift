@@ -315,6 +315,12 @@ struct ChangedFileRecord: Codable, FetchableRecord, PersistableRecord {
     var deletions: Int
     var patch: String?
     var sortIndex: Int
+    /// The file's blob SHA at the head (v12).
+    var blobSha: String?
+    /// Whether GitHub reported the file as viewed by the signed-in user on the fetch that wrote
+    /// this row (v12). Replaced with the row on every detail write, so a tick taken back on
+    /// github.com is gone with the next fetch; the reviewer's own ticks are in `viewed_files`.
+    var viewedOnGitHub: Bool
 
     init(prID: String, file: ChangedFile, sortIndex: Int) {
         self.prID = prID
@@ -325,9 +331,12 @@ struct ChangedFileRecord: Codable, FetchableRecord, PersistableRecord {
         self.deletions = file.deletions
         self.patch = file.patch
         self.sortIndex = sortIndex
+        self.blobSha = file.blobSha
+        self.viewedOnGitHub = file.isViewed
     }
 
-    /// Rebuilds the model. Viewed state lives in its own table and is applied by the caller.
+    /// Rebuilds the model with GitHub's viewed state. The reviewer's own ticks live in
+    /// `viewed_files` and are laid over it by the caller.
     var changedFile: ChangedFile {
         ChangedFile(
             path: path,
@@ -336,7 +345,8 @@ struct ChangedFileRecord: Codable, FetchableRecord, PersistableRecord {
             additions: additions,
             deletions: deletions,
             patch: patch,
-            isViewed: false
+            isViewed: viewedOnGitHub,
+            blobSha: blobSha
         )
     }
 }
@@ -349,6 +359,9 @@ struct ViewedFileRecord: Codable, FetchableRecord, PersistableRecord {
     var path: String
     var headRefOid: String
     var viewedAt: Double
+    /// The file's blob SHA when it was ticked (v12), or `nil` for a tick made before it was kept
+    /// or on a file GitHub sent none for — such a tick holds for ``headRefOid`` only.
+    var blobSha: String?
 }
 
 /// A row of `review_threads`.
