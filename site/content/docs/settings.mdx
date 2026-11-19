@@ -175,6 +175,7 @@ Hands a pull request to a local agent CLI. See [Automation](/docs/automation).
 - **Path**: leave empty to look in the usual places. **Detect** finds it.
 - **Command** (custom): `{prompt}` is the task, `{worktree}` the path. No shell runs the command, so a prompt cannot become a second command.
 - **Model** and **Effort** (Claude Code): passed as `--model` and `--effort`. Empty and **CLI default** leave the choice to your CLI.
+- **Terminal** (Claude Code): where an interactive or Remote Control session opens. **Terminal**, **iTerm** or **Ghostty**. Default: Terminal. This setting stays on this Mac.
 - **Extra arguments**: appended to every run, split like a shell would.
 
 ### Guardrails
@@ -187,6 +188,8 @@ Hands a pull request to a local agent CLI. See [Automation](/docs/automation).
 | **Tools** (passed to `--allowedTools`) | `Read,Edit,Write,Glob,Grep,Bash,WebFetch,WebSearch` |
 
 **Don't ask** runs the tools on the list unattended and refuses anything else without asking. **Bypass permissions** runs every tool unattended, so **Tools** does not apply. If a run was refused a tool, the result shows how many calls were denied and which tools. **Continue** keeps these guardrails. They do not apply to a message sent through the session back-channel below.
+
+The permission mode here is the default. The delegation sheet can change it for one run, and an interactive session can also use **Ask for each action**. Turn and spend caps only apply to a run in the background.
 
 ### Session back-channel
 

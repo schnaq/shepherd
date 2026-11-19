@@ -335,3 +335,79 @@ amendment), and these were on the way:
   and says it did not watch, as the folder route's sheet does. Only *Change* on an existing entry,
   the rail's *Link a local checkout…* and the delegation sheet's clone picker still only link. Each
   of those re-links a repository that is already in the inbox.
+
+## Amendment (2026-11-19): hand a run to a session the user drives
+
+Feedback: delegation was only usable for one thing. Every run was a headless one-shot
+`claude -p … --output-format stream-json`, and both the preambles and the default tasks asked for a
+fix. The user works in interactive Claude Code sessions in a terminal and on claude.ai, and wants
+to hand work over in the same way, for tasks that are not fixes.
+
+This amendment relaxes "headless only" and "`manual` is excluded" from the 2026-10-29 amendment.
+Both still hold for a run Shepherd reads.
+
+- **The sheet asks "How".** There are four answers. The last one is remembered per Mac in
+  `delegation.handoff`, which is not synced because it is the last thing pressed, not a preference.
+  - **In the background.** Today's headless run, unchanged.
+  - **Interactive session.** The worktree is prepared as for a background run, by the same
+    `start()` code. Then Claude Code opens in a terminal with the prompt as its first message,
+    instead of being spawned by Shepherd.
+  - **Remote Control.** The same session with `--remote-control <name>`, so claude.ai/code and the
+    Claude app can reach it.
+  - **Claude Code on the web.** `claude --cloud` is started in the linked clone. No worktree is
+    made, because the session works on the repository on GitHub.
+
+  The terminal is a per-Mac setting, `delegation.terminalApp`: Terminal, iTerm or Ghostty. It is
+  not synced, because which apps are installed is a fact about the machine. Terminal and iTerm open
+  a `.command` file. Ghostty does not, so it gets `open -na Ghostty --args -e <script>`, and it may
+  ask the user to confirm.
+- **Only an attended Claude Code run is offered the choice.** A run that a rule starts (ADR 0016),
+  a session send (ADR 0030) and a custom CLI are always background runs. This is decided when the
+  model is built (`DelegationModel.offersHandoff`), not by the sheet hiding the picker. A
+  remembered "Interactive session" therefore cannot open a terminal window that nobody asked for.
+- **The launcher keeps ADR 0030's invariant.** A terminal needs a script, and a script brings a
+  shell back in. So the script contains only Shepherd's own words: the worktree path, the located
+  CLI, the flags Shepherd chose, the user's own extra arguments and the session name (the worktree
+  directory's name). Each of them is single-quoted. The prompt, which contains third-party text
+  (issue bodies, review comments), is written to a file next to the script with mode `0600`. The
+  script reads it at run time as `"$(cat '<file>')"`. zsh expands one double-quoted command
+  substitution to exactly one argv element and never parses its contents again. This was checked
+  with a fake `claude` that prints its arguments: a prompt containing `'; rm -rf ~`, `$(…)`,
+  backticks and a leading `-p` arrived as one argument and ran nothing. Both files are in
+  `Application Support/Shepherd/Launchers`, a sibling of the worktrees directory, so a session cannot
+  commit them. They are overwritten on the next hand-off of the same target. Every prompt starts
+  with Shepherd's preamble, so it never starts with `-`, and no `--` is needed.
+- **Interactive flags.** `--permission-mode`, `--model`, `--effort`, `-n <name>`, the extra
+  arguments and, for Remote Control, `--remote-control <name>`. `--remote-control` and `--cloud`
+  take optional values that would swallow the next word, so remote control always gets a name and
+  `--cloud` is always last, followed by the prompt. Flags that only work with `-p` are left out:
+  `--output-format`, `--max-turns` and `--max-budget-usd`. `--allowedTools` is left out too, because
+  it would pre-approve the commands that "Ask for each action" is meant to ask about. The sheet says
+  that caps do not apply. It is unverified whether `--cloud` uses its "description" as the session's
+  first prompt. The CLI's help only says "Create a cloud session with the given description".
+- **A handed-off run is a state, not an outcome.** `DelegationModel.State.handedOff` stops the
+  clock and announces nothing. Shepherd cannot see the session, so a `delegation.finished` webhook
+  would be false, and so would an `issue.assigned_to_agent` webhook or the public "Handed to …"
+  comment (ADR 0032's amendment of today). While the worktree exists, a local hand-off counts as
+  pending work (`holdsPendingWork`). So a rule or a second sheet cannot prepare the worktree again
+  under a live session, and reopening the delegation shows the same sheet. That sheet has
+  *Refresh*, which reads the diff stat and status again, *Commit & push*, *Reveal in Finder*,
+  *Discard worktree* and *Copy command*. *Copy command* is the fallback when the terminal did not
+  open. There is no *Run again*, because it would prepare the worktree under the session.
+- **Per-run permission mode.** The sheet's read-only guardrail line becomes a picker whose default
+  is the configured mode. A background run offers the headless modes. An interactive one also
+  offers `manual`, "Ask for each action", which is passed explicitly so that a `defaultMode` in the
+  user's Claude settings cannot change it. A background run and *Continue* take the per-run mode
+  through `AgentRunning.run(prompt:in:permissionMode:)` and its `resume` twin. The global setting
+  never offers `manual`.
+- **Neutral wording.** The three preambles now start their rules with "Do what the task asks. If it
+  asks a question, for a plan or for a review, answer it and change nothing." The small-change and
+  commit-and-publish rules apply "if the task asks for code changes". The safety rules are
+  unchanged: a pull-request worktree still must not push or switch branches, and new work stays on
+  Shepherd's branch. "In your final message" is dropped, because a session the user drives has no
+  final message. The default tasks say "Work through the open review feedback…", "Work on this
+  finding." and, in ADR 0032's template, "Work on this issue…", instead of "Address" and "Fix". It
+  is the line a person edits to ask for an explanation or a plan. Presets were considered and left
+  out, because editing one line does the same. The commit message `Fix #N: …` stays, because it is
+  GitHub's closing keyword. A cloud session gets its own short preamble (`DelegationPrompt.cloudFull`),
+  since the other three describe a worktree on this Mac.

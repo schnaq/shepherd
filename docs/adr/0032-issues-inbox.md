@@ -837,3 +837,21 @@ it is `issue.assigned_to_agent`, fired when the run is *actually running* rather
 button was pressed — the plan's §11 has the argument, and the short version is that a click can be
 followed by a missing checkout and a queued comment can fail. Both say who is on it; neither
 carries the brief.
+
+## Amendment, 2026-11-19 — no handover comment for a session Shepherd cannot see
+
+ADR 0011's amendment of the same date lets an issue be handed to an interactive Claude Code
+session in a terminal, to the same session under Remote Control, or to Claude Code on the web.
+On those paths Shepherd starts the session but does not watch it. "Running" is therefore never
+true in the sense Sprint 4b's handover requires. The two records of a handover follow from that:
+
+- The public **"Handed to … via Shepherd" comment** is only queued for a background run. It is
+  still queued when the agent process is actually up, as before.
+- **`issue.assigned_to_agent`** is only fired for a background run, for the same reason.
+
+Both come from one call, `DelegationModel.announceStart()`, which only the background path
+reaches. So this is a missing call on the other paths, not a flag that could be set wrong. A
+person who wants colleagues to know can still comment by hand. The default task template's last
+line now reads "Work on this issue. Read the repository first, and keep any change as small as the
+issue allows." It no longer presumes a fix, and still says nothing about what the run may do
+with the result.
