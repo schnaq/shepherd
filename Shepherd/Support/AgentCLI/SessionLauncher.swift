@@ -7,7 +7,7 @@ extension TerminalApp {
     /// Where the app is installed, or `nil` when this Mac does not have it.
     @MainActor
     var applicationURL: URL? {
-        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier)
+        EditorOpener.application(bundleIdentifier: bundleIdentifier)
     }
 }
 
@@ -18,7 +18,7 @@ extension TerminalApp {
 /// a script the terminal runs. That reintroduces a shell, which ADR 0030's invariant has kept out
 /// of every delegation so far — so the script is built to keep the invariant anyway:
 /// - **Only Shepherd's own words are in the script**: the worktree path, the located CLI, the
-///   flags Shepherd chose and the session name, each single-quoted by ``quote(_:)``.
+///   flags Shepherd chose and the session name, each single-quoted by ``ShellWords/quote(_:)``.
 /// - **The task is not.** It is written to a file of its own, and the script reads it back at
 ///   run time as `"$(cat '<file>')"` — one double-quoted command substitution, which zsh expands
 ///   to exactly one argv element and never re-parses. An issue body containing `'; rm -rf ~` is
@@ -34,14 +34,6 @@ enum SessionLauncher {
             .appendingPathComponent("Launchers", isDirectory: true)
     }
 
-    /// Quotes one word for zsh: `'…'`, with every `'` inside written as `'\''`.
-    ///
-    /// Inside single quotes zsh interprets nothing at all — no `$`, no backtick, no backslash —
-    /// so the only character that needs care is the closing quote itself.
-    static func quote(_ word: String) -> String {
-        "'" + word.replacingOccurrences(of: "'", with: #"'\''"#) + "'"
-    }
-
     /// The launcher script.
     /// - Parameters:
     ///   - directory: Where the session starts: the worktree, or the clone for a cloud session.
@@ -55,12 +47,12 @@ enum SessionLauncher {
         arguments: [String],
         promptFile: URL
     ) -> String {
-        let command = ([executable.path] + arguments).map(quote).joined(separator: " ")
+        let command = ([executable.path] + arguments).map(ShellWords.quote).joined(separator: " ")
         return """
             #!/bin/zsh
             # Written by Shepherd for one delegation. The task is in the prompt file, not here.
-            cd \(quote(directory.path)) || exit 1
-            exec \(command) "$(cat \(quote(promptFile.path)))"
+            cd \(ShellWords.quote(directory.path)) || exit 1
+            exec \(command) "$(cat \(ShellWords.quote(promptFile.path)))"
 
             """
     }
@@ -69,7 +61,7 @@ enum SessionLauncher {
     /// shell.
     /// - Parameter script: The written script.
     static func copyCommand(script: URL) -> String {
-        quote(script.path)
+        ShellWords.quote(script.path)
     }
 
     /// Writes the prompt file and the script.
@@ -115,17 +107,20 @@ enum SessionLauncher {
     /// Terminal and iTerm run a `.command` file they are asked to open. Ghostty does not: it is
     /// started with `-e <script>` instead, through `/usr/bin/open` so a running Ghostty gets a new
     /// window rather than nothing — and it may ask the user to confirm the command first.
+    ///
+    /// Waits for the terminal to take the script, so a refusal from Launch Services is thrown
+    /// rather than lost.
     /// - Parameters:
     ///   - script: The written script.
     ///   - app: The terminal app.
     @MainActor
-    static func open(_ script: URL, in app: TerminalApp) throws {
+    static func open(_ script: URL, in app: TerminalApp) async throws {
         guard let application = app.applicationURL else {
             throw LaunchFailure.notInstalled(app.title)
         }
         switch app {
         case .terminal, .iTerm:
-            NSWorkspace.shared.open(
+            _ = try await NSWorkspace.shared.open(
                 [script],
                 withApplicationAt: application,
                 configuration: NSWorkspace.OpenConfiguration()

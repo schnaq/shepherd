@@ -366,10 +366,7 @@ struct IssueSidebar: View {
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
-                Button(String(localized: "Install Shepherd on another owner…")) {
-                    NSWorkspace.shared.open(AppConfig.githubAppInstallURL)
-                }
-                .buttonStyle(SecondaryButtonStyle(height: 24))
+                InstallShepherdButton(title: String(localized: "Install Shepherd on another owner…"))
             }
             .padding(.horizontal, 10)
         }

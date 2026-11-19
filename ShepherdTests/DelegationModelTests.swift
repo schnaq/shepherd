@@ -10,7 +10,7 @@ final class ScriptedAgentRunner: AgentRunning, @unchecked Sendable {
     var events: [AgentStreamEvent]
     /// The exit code to report.
     var exitCode: Int32
-    /// When set, ``run(prompt:in:)`` throws instead of starting.
+    /// When set, ``run(prompt:in:permissionMode:)`` throws instead of starting.
     var spawnError: (any Error)?
 
     private let lock = NSLock()
@@ -50,14 +50,19 @@ final class ScriptedAgentRunner: AgentRunning, @unchecked Sendable {
         return recordedSessions
     }
 
-    func resume(sessionID: String, prompt: String, in worktree: URL) throws -> AgentSession {
+    func resume(
+        sessionID: String,
+        prompt: String,
+        in worktree: URL,
+        permissionMode: AgentPermissionMode?
+    ) throws -> AgentSession {
         lock.lock()
         recordedSessions.append(sessionID)
         lock.unlock()
-        return try run(prompt: prompt, in: worktree)
+        return try run(prompt: prompt, in: worktree, permissionMode: permissionMode)
     }
 
-    func run(prompt: String, in worktree: URL) throws -> AgentSession {
+    func run(prompt: String, in worktree: URL, permissionMode: AgentPermissionMode?) throws -> AgentSession {
         if let spawnError { throw spawnError }
         lock.lock()
         recordedPrompts.append(prompt)
@@ -93,7 +98,7 @@ final class HangingAgentRunner: AgentRunning, @unchecked Sendable {
         return cancelled
     }
 
-    func run(prompt: String, in worktree: URL) throws -> AgentSession {
+    func run(prompt: String, in worktree: URL, permissionMode: AgentPermissionMode?) throws -> AgentSession {
         let (stream, continuation) = AsyncStream<AgentStreamEvent>.makeStream()
         // One event so the model reaches `.running` before the test cancels it.
         continuation.yield(.systemInit(model: "test-model"))
@@ -161,7 +166,7 @@ final class DelegationModelTests: XCTestCase {
         onDidStart: (@MainActor (DelegationStart) -> Void)? = nil,
         handoff: DelegationHandoff = .background,
         // Never the real terminal: a test must not open windows.
-        openSession: @escaping @MainActor (URL, TerminalApp) throws -> Void = { _, _ in }
+        openSession: @escaping @MainActor (URL, TerminalApp) async throws -> Void = { _, _ in }
     ) -> DelegationModel {
         let context = replacement ?? self.context!
         let tree = worktree

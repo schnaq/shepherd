@@ -818,10 +818,12 @@ struct PullRequestActions {
             }
         }
         guard stored == true else { return false }
-        // A row that could not be written costs GitHub's copy only, so it is not news.
-        if (try? await Self.writeFileViewed(path: path, viewed: isViewed, on: summary, in: session.database)) != nil {
+        do {
+            try await Self.writeFileViewed(path: path, viewed: isViewed, on: summary, in: session.database)
             let session = self.session
             Task { await session.drainOutbox() }
+        } catch {
+            // A row that could not be written costs GitHub's copy only, so it is not news.
         }
         return true
     }

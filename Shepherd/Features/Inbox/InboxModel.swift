@@ -998,17 +998,6 @@ final class InboxModel {
         )
     }
 
-    /// Whether some rows hold a pull request from a repository, compared case-insensitively.
-    ///
-    /// The cross-check on ``AppEnvironment/accessProblem(for:)`` (ADR 0005's 2026-11-19
-    /// amendment): a repository the sweep brought a pull request from is one the token can read,
-    /// whatever an older or wrong `GET /repos` answer recorded. Asked of ``storedRows`` rather
-    /// than ``allRows`` — a pull request the user hid is still proof — and never of the current
-    /// smart view, which says nothing about access.
-    nonisolated static func holdsRows(from repo: RepoRef, in rows: [PullRequestSummary]) -> Bool {
-        rows.contains { $0.repo.isSameRepository(as: repo) }
-    }
-
     /// The repositories of some rows, by count and then by name.
     nonisolated static func repositoryFacets(in rows: [PullRequestSummary]) -> [(repo: RepoRef, count: Int)] {
         var counts: [RepoRef: Int] = [:]

@@ -202,6 +202,26 @@ public struct IssueStateFacet: Sendable, Hashable, Identifiable {
 /// dead end the user has to discover by clicking it, which is what the AGENTS and REPOSITORIES
 /// facets already avoid by only listing what is in the current data.
 public enum IssueFacets {
+    /// Counts issues per relation to the user, in ``IssueRelation``'s order.
+    ///
+    /// An issue that is assigned to you *and* mentions you is counted under both, so the numbers
+    /// can add up to more than the rows.
+    /// - Parameter rows: The issues to count over.
+    /// - Returns: The relations some row has, with counts.
+    public static func relationFacets(
+        _ rows: [IssueRowSummary]
+    ) -> [(relation: IssueRelation, count: Int)] {
+        var counts: [IssueRelation: Int] = [:]
+        for row in rows {
+            for relation in row.myRelation {
+                counts[relation, default: 0] += 1
+            }
+        }
+        return IssueRelation.allCases.compactMap { relation in
+            counts[relation].map { (relation: relation, count: $0) }
+        }
+    }
+
     /// How many label rows the rail has room for.
     ///
     /// Eight rather than the REPOSITORIES facet's six, because a label is usually one short word

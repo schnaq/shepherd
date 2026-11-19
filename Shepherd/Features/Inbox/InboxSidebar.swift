@@ -310,10 +310,7 @@ struct InboxSidebar: View {
                 // Stacked rather than side by side: the rail is too narrow for both labels.
                 VStack(alignment: .leading, spacing: 4) {
                     if offersAppInstall {
-                        Button(String(localized: "Install Shepherd…")) {
-                            NSWorkspace.shared.open(AppConfig.githubAppInstallURL)
-                        }
-                        .buttonStyle(SecondaryButtonStyle(height: 24))
+                        InstallShepherdButton(title: String(localized: "Install Shepherd…"))
                     }
                     Button(String(localized: "Check access again"), action: onCheckAccessAgain)
                         .buttonStyle(SecondaryButtonStyle(height: 24))

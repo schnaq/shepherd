@@ -133,9 +133,6 @@ struct DelegationSettingsTab: View {
                     Text(String(localized: "Terminal"))
                     Text(String(localized: "Where an interactive or Remote Control session opens."))
                 }
-                .onAppear {
-                    installedTerminals = Set(TerminalApp.allCases.filter { $0.applicationURL != nil })
-                }
 
             case .custom:
                 LabeledContent {
@@ -425,7 +422,10 @@ struct DelegationSettingsTab: View {
                 localized: "Lines are counted on the pull request's head, so they match when your checkout is on that commit."
             ))
         }
-        .onAppear { installedEditors = EditorOpener.installedKinds() }
+        .onAppear {
+            installedEditors = EditorOpener.installedKinds()
+            installedTerminals = Set(TerminalApp.allCases.filter { $0.applicationURL != nil })
+        }
     }
 
     /// The picker row for one editor, with a note when this Mac does not have it.

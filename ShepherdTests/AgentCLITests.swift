@@ -524,7 +524,7 @@ final class AgentCLITests: XCTestCase {
     }
 
     func testQuotingNeutralisesEveryShellCharacter() {
-        XCTAssertEqual(SessionLauncher.quote(#"a'b"#), #"'a'\''b'"#)
-        XCTAssertEqual(SessionLauncher.quote("$(rm -rf ~); `x` \"y\""), "'$(rm -rf ~); `x` \"y\"'")
+        XCTAssertEqual(ShellWords.quote(#"a'b"#), #"'a'\''b'"#)
+        XCTAssertEqual(ShellWords.quote("$(rm -rf ~); `x` \"y\""), "'$(rm -rf ~); `x` \"y\"'")
     }
 }

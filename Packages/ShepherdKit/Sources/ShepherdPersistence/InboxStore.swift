@@ -391,28 +391,15 @@ extension DatabaseManager {
             arguments: [id]
         ) else { return nil }
 
-        let ticks = try ViewedFileRecord.fetchAll(
-            db,
-            sql: "SELECT * FROM viewed_files WHERE prID = ?",
-            arguments: [id]
-        )
-        let tickByPath = Dictionary(ticks.map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
-
+        let viewed = try viewedPaths(db, prID: id)
         let fileRecords = try ChangedFileRecord.fetchAll(
             db,
             sql: "SELECT * FROM changed_files WHERE prID = ? ORDER BY sortIndex ASC",
             arguments: [id]
         )
-        // GitHub's checkbox, or the reviewer's own tick while the file is what they ticked: the
-        // same head, or the same blob at a newer one. A push that changed the file unticks it,
-        // as on GitHub; one that left it alone does not (ADR 0028, 2026-11-19 amendment).
         let files: [ChangedFile] = fileRecords.map { fileRecord in
             var file = fileRecord.changedFile
-            if let tick = tickByPath[file.path],
-               tick.headRefOid == record.headRefOid
-                || (tick.blobSha != nil && tick.blobSha == file.blobSha) {
-                file.isViewed = true
-            }
+            file.isViewed = viewed.contains(file.path)
             return file
         }
 
@@ -475,6 +462,39 @@ extension DatabaseManager {
     }
 
     // MARK: - Viewed files
+
+    /// The paths of a pull request's stored files that read back as viewed, without the rest of
+    /// the detail — what a fresh fetch needs laid over it once it is stored.
+    /// - Parameter prID: The pull request's node id.
+    /// - Returns: The viewed paths, the same ones ``fetchPullRequestDetail(id:)`` marks.
+    /// - Throws: A `DatabaseError` when the read fails.
+    public func viewedPaths(prID: String) async throws -> Set<String> {
+        try await writer.read { db in
+            try DatabaseManager.viewedPaths(db, prID: prID)
+        }
+    }
+
+    /// The viewed rule, shared by ``loadPullRequestDetail(_:id:)`` and ``viewedPaths(prID:)``.
+    ///
+    /// GitHub's checkbox, or the reviewer's own tick while the file is what they ticked: the
+    /// same head, or the same blob at a newer one. A push that changed the file unticks it, as on
+    /// GitHub; one that left it alone does not (ADR 0028, 2026-11-19 amendment). A tick without a
+    /// blob SHA holds for its own head only — `NULL = …` is never true.
+    static func viewedPaths(_ db: Database, prID: String) throws -> Set<String> {
+        try Set(
+            String.fetchAll(
+                db,
+                sql: """
+                    SELECT f.path FROM changed_files f
+                    JOIN pull_requests p ON p.id = f.prID
+                    LEFT JOIN viewed_files v ON v.prID = f.prID AND v.path = f.path
+                    WHERE f.prID = ?
+                      AND (f.viewedOnGitHub OR v.headRefOid = p.headRefOid OR v.blobSha = f.blobSha)
+                    """,
+                arguments: [prID]
+            )
+        )
+    }
 
     /// Marks a file as viewed (or not) for a given head commit.
     ///

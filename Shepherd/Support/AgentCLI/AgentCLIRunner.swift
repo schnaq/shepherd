@@ -23,53 +23,39 @@ protocol AgentRunning: Sendable {
     /// - Parameters:
     ///   - prompt: The complete prompt, Shepherd's preamble included.
     ///   - worktree: The detached worktree to run in; also the process's working directory.
+    ///   - permissionMode: The mode chosen in the sheet for this one run, in place of the
+    ///     configured one (ADR 0011's 2026-11-19 amendment); `nil` keeps the configured one.
     /// - Returns: The live session.
     /// - Throws: When the invocation cannot be built or the process cannot be spawned.
-    func run(prompt: String, in worktree: URL) throws -> AgentSession
+    func run(prompt: String, in worktree: URL, permissionMode: AgentPermissionMode?) throws -> AgentSession
 
     /// Continues an earlier Claude Code session in the same worktree, under the same guardrails.
     /// - Parameters:
     ///   - sessionID: The session the earlier run reported.
     ///   - prompt: What to tell it, e.g. "Continue."
     ///   - worktree: The worktree the earlier run used; Claude Code finds a session by directory.
+    ///   - permissionMode: The run's own mode, so *Continue* keeps the guardrail the run was
+    ///     started with; `nil` keeps the configured one.
     /// - Returns: The live session.
     /// - Throws: When the invocation cannot be built or the process cannot be spawned.
-    func resume(sessionID: String, prompt: String, in worktree: URL) throws -> AgentSession
-
-    /// ``run(prompt:in:)`` under the permission mode chosen in the sheet for this one run, in
-    /// place of the configured one (ADR 0011's 2026-11-19 amendment).
-    func run(prompt: String, in worktree: URL, permissionMode: AgentPermissionMode) throws -> AgentSession
-
-    /// ``resume(sessionID:prompt:in:)`` under the run's own permission mode, so *Continue* keeps
-    /// the guardrail the run was started with.
     func resume(
         sessionID: String,
         prompt: String,
         in worktree: URL,
-        permissionMode: AgentPermissionMode
+        permissionMode: AgentPermissionMode?
     ) throws -> AgentSession
 }
 
 extension AgentRunning {
     /// A runner with no notion of a session starts the prompt as a fresh run — what the test
     /// doubles need, and nothing in the app relies on.
-    func resume(sessionID: String, prompt: String, in worktree: URL) throws -> AgentSession {
-        try run(prompt: prompt, in: worktree)
-    }
-
-    /// A runner with no guardrails of its own — the test doubles — has no mode to replace.
-    func run(prompt: String, in worktree: URL, permissionMode: AgentPermissionMode) throws -> AgentSession {
-        try run(prompt: prompt, in: worktree)
-    }
-
-    /// See ``run(prompt:in:permissionMode:)``.
     func resume(
         sessionID: String,
         prompt: String,
         in worktree: URL,
-        permissionMode: AgentPermissionMode
+        permissionMode: AgentPermissionMode?
     ) throws -> AgentSession {
-        try resume(sessionID: sessionID, prompt: prompt, in: worktree)
+        try run(prompt: prompt, in: worktree, permissionMode: permissionMode)
     }
 }
 
@@ -117,15 +103,7 @@ struct AgentCLIRunner: AgentRunning {
         self.terminationGrace = terminationGrace
     }
 
-    func run(prompt: String, in worktree: URL) throws -> AgentSession {
-        try spawn(prompt: prompt, in: worktree, resuming: nil)
-    }
-
-    func resume(sessionID: String, prompt: String, in worktree: URL) throws -> AgentSession {
-        try spawn(prompt: prompt, in: worktree, resuming: sessionID)
-    }
-
-    func run(prompt: String, in worktree: URL, permissionMode: AgentPermissionMode) throws -> AgentSession {
+    func run(prompt: String, in worktree: URL, permissionMode: AgentPermissionMode?) throws -> AgentSession {
         try with(permissionMode).spawn(prompt: prompt, in: worktree, resuming: nil)
     }
 
@@ -133,13 +111,14 @@ struct AgentCLIRunner: AgentRunning {
         sessionID: String,
         prompt: String,
         in worktree: URL,
-        permissionMode: AgentPermissionMode
+        permissionMode: AgentPermissionMode?
     ) throws -> AgentSession {
         try with(permissionMode).spawn(prompt: prompt, in: worktree, resuming: sessionID)
     }
 
-    /// This runner with the configured permission mode replaced for one run.
-    private func with(_ permissionMode: AgentPermissionMode) -> AgentCLIRunner {
+    /// This runner with the configured permission mode replaced for one run, or as it is.
+    private func with(_ permissionMode: AgentPermissionMode?) -> AgentCLIRunner {
+        guard let permissionMode else { return self }
         var runner = self
         runner.configuration.permissionMode = permissionMode
         return runner

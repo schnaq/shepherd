@@ -392,7 +392,7 @@ struct DelegationSheet: View {
         case .handedOff(let handoff, let diffStat):
             VStack(alignment: .leading, spacing: 14) {
                 handoffSummary(handoff)
-                if handoff != .cloud {
+                if handoff.usesLocalWorktree {
                     diffStatBlock(diffStat)
                 }
             }
@@ -409,16 +409,16 @@ struct DelegationSheet: View {
         Card {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
-                    Image(systemName: handoff == .cloud ? "cloud" : "terminal")
+                    Image(systemName: handoff.usesLocalWorktree ? "terminal" : "cloud")
                         .font(.system(size: 12))
                         .foregroundStyle(Theme.accentText)
-                    Text(handoff == .cloud
-                        ? String(localized: "Started on claude.ai from \(model.terminalApp.title)")
-                        : String(localized: "Running in \(model.terminalApp.title)"))
+                    Text(handoff.usesLocalWorktree
+                        ? String(localized: "Running in \(model.terminalApp.title)")
+                        : String(localized: "Started on claude.ai from \(model.terminalApp.title)"))
                         .font(.system(size: 12.5, weight: .semibold))
                         .foregroundStyle(Theme.textStrong)
                     Spacer(minLength: 4)
-                    if handoff != .cloud {
+                    if handoff.usesLocalWorktree {
                         Button(String(localized: "Refresh")) {
                             Task { await model.refreshHandoff() }
                         }
@@ -427,9 +427,9 @@ struct DelegationSheet: View {
                         .help(String(localized: "Reads the worktree again for the diff and Commit & push"))
                     }
                 }
-                Text(handoff == .cloud
-                    ? String(localized: "The session works on the repository on GitHub. Follow it on claude.ai/code or in the Claude app.")
-                    : String(localized: "Shepherd does not see the session. Refresh to see what it changed, then commit and push it here or from the session."))
+                Text(handoff.usesLocalWorktree
+                    ? String(localized: "Shepherd does not see the session. Refresh to see what it changed, then commit and push it here or from the session.")
+                    : String(localized: "The session works on the repository on GitHub. Follow it on claude.ai/code or in the Claude app."))
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)

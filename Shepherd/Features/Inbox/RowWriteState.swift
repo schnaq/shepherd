@@ -56,10 +56,7 @@ enum RowWriteState: Equatable, Sendable {
         // A viewed checkbox's row is left out: it copies a tick the file list already shows, a
         // refusal drops it silently, and a reviewer pressing `a` down a diff would otherwise
         // flash *Sending* on every press (ADR 0028, 2026-11-19 amendment).
-        let mine = items.filter { item in
-            if case .setFileViewed = item.action { return false }
-            return item.prID == id
-        }
+        let mine = items.filter { $0.prID == id && !$0.action.isBackgroundSync }
         let failed = mine.filter { $0.state == .failed }.count
         if failed > 0 { return .failed(failed) }
         let parked = mine.filter { $0.state == .conflicted }.count

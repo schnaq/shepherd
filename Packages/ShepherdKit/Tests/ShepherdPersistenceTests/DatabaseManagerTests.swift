@@ -636,6 +636,26 @@ final class InboxStoreTests: XCTestCase {
         XCTAssertEqual(viewed, [tokenStore])
     }
 
+    func testTheViewedQueryAgreesWithTheDetail() async throws {
+        // GitHub's tick on one file, the reviewer's on the other, then a push that leaves the
+        // second alone: the cheap read and the full one must say the same.
+        let database = try makeDatabase()
+        var before = detail(head: "head-1", blobs: [tokenStore: "blob-a", keychain: "blob-b"])
+        before.files[0].isViewed = true
+        try await database.savePullRequestDetail(before)
+        try await database.setFileViewed(prID: before.id, path: keychain, headRefOid: "head-1", isViewed: true)
+        try await database.savePullRequestDetail(
+            detail(head: "head-2", blobs: [tokenStore: "blob-c", keychain: "blob-b"])
+        )
+
+        let cheap = try await database.viewedPaths(prID: before.id)
+        let full = try await viewedPaths(database, before.id)
+        XCTAssertEqual(cheap, [keychain])
+        XCTAssertEqual(cheap, full)
+        let missing = try await database.viewedPaths(prID: "nope")
+        XCTAssertTrue(missing.isEmpty)
+    }
+
     func testATickWithoutABlobHoldsForItsOwnHeadOnly() async throws {
         // A tick stored before v12, or on a file GitHub sent no SHA for: nothing proves the file
         // is unchanged, so a push unticks it as it always did.

@@ -374,13 +374,7 @@ struct InboxScreen: View {
                             )
                         }
                     },
-                    // A repository the inbox holds a pull request from is readable, whatever the
-                    // access check recorded (ADR 0005's 2026-11-19 amendment).
-                    accessProblem: { repo in
-                        InboxModel.holdsRows(from: repo, in: model.storedRows)
-                            ? nil
-                            : environment.accessProblem(for: repo)
-                    },
+                    accessProblem: { environment.accessProblem(for: $0) },
                     offersAppInstall: environment.offersAppInstall,
                     // The whole route rather than only the check: once access is there, a sweep is
                     // what brings the repository's pull requests in.

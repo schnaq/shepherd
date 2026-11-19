@@ -270,7 +270,7 @@ final class DelegationModel: Identifiable {
     /// The located CLI a hand-off's script runs; `nil` for a custom template.
     private let executable: URL?
     /// Opens a written script in a terminal — replaced in tests, which must not open windows.
-    private let openSession: @MainActor (URL, TerminalApp) throws -> Void
+    private let openSession: @MainActor (URL, TerminalApp) async throws -> Void
     private let toasts: ToastCenter?
     private let onDidPush: (@MainActor () async -> Void)?
     private let onDidFinish: (@MainActor (DelegationOutcome) -> Void)?
@@ -348,7 +348,7 @@ final class DelegationModel: Identifiable {
         executable: URL? = nil,
         handoff: DelegationHandoff = .background,
         terminalApp: TerminalApp = .terminal,
-        openSession: @escaping @MainActor (URL, TerminalApp) throws -> Void = SessionLauncher.open
+        openSession: @escaping @MainActor (URL, TerminalApp) async throws -> Void = SessionLauncher.open
     ) {
         Self.nextSequence += 1
         self.sequence = Self.nextSequence
@@ -389,7 +389,7 @@ final class DelegationModel: Identifiable {
     /// Whether the last run went to a session that works in this Mac's worktree — one Shepherd
     /// must not prepare a second run over (``holdsPendingWork``).
     var isHandedOffLocally: Bool {
-        if case .handedOff(let handoff, _) = state { return handoff != .cloud }
+        if case .handedOff(let handoff, _) = state { return handoff.usesLocalWorktree }
         return false
     }
 
@@ -614,13 +614,19 @@ final class DelegationModel: Identifiable {
         let taskText = task
         let handoff = self.handoff
         if handoff == .cloud {
-            handOff(
-                .cloud,
-                prompt: DelegationPrompt.cloudFull(for: context, task: taskText),
-                in: worktree.checkout,
-                launcherFolder: worktree.managedRoot,
-                name: Self.fileName(context.id) + "-cloud"
-            )
+            let prompt = DelegationPrompt.cloudFull(for: context, task: taskText)
+            let name = Self.fileName(context.id) + "-cloud"
+            runTask = Task { [weak self] in
+                // ``cancel()`` in the hop before this runs must not be overwritten by a hand-off.
+                guard let self, !Task.isCancelled else { return }
+                await self.handOff(
+                    .cloud,
+                    prompt: prompt,
+                    in: worktree.checkout,
+                    launcherFolder: worktree.managedRoot,
+                    name: name
+                )
+            }
             return
         }
         runTask = Task { [weak self] in
@@ -689,7 +695,7 @@ final class DelegationModel: Identifiable {
             let prompt = DelegationPrompt.full(for: promptContext, task: taskText)
             if handoff.isInteractive {
                 let name = worktree.directory.lastPathComponent
-                self.handOff(
+                await self.handOff(
                     handoff,
                     prompt: prompt,
                     in: worktree.directory,
@@ -724,14 +730,15 @@ final class DelegationModel: Identifiable {
         in directory: URL,
         launcherFolder: URL,
         name: String
-    ) {
+    ) async {
         stopTimer()
         guard let executable else {
             fail(with: AgentCLIConfiguration.Failure.executableNotFound)
             return
         }
+        let script: URL
         do {
-            launcherScript = try SessionLauncher.write(
+            script = try SessionLauncher.write(
                 name: name,
                 in: SessionLauncher.directory(worktreesRoot: launcherFolder),
                 prompt: prompt,
@@ -747,15 +754,16 @@ final class DelegationModel: Identifiable {
             fail(with: error)
             return
         }
+        launcherScript = script
         state = .handedOff(handoff, diffStat: "")
         append(
             .note,
-            handoff == .cloud
-                ? String(localized: "Started a Claude Code session on the web from \(terminalApp.title). It works on \(context.repo.fullName) on GitHub.")
-                : String(localized: "Opened \(agentName) in \(terminalApp.title), in \(directory.lastPathComponent).")
+            handoff.usesLocalWorktree
+                ? String(localized: "Opened \(agentName) in \(terminalApp.title), in \(directory.lastPathComponent).")
+                : String(localized: "Started a Claude Code session on the web from \(terminalApp.title). It works on \(context.repo.fullName) on GitHub.")
         )
         do {
-            if let launcherScript { try openSession(launcherScript, terminalApp) }
+            try await openSession(script, terminalApp)
         } catch {
             toasts?.failure(error, context: String(localized: "Could not open the terminal"))
         }
@@ -775,8 +783,7 @@ final class DelegationModel: Identifiable {
     /// Puts the hand-off's command on the pasteboard, to run in any terminal.
     func copyLaunchCommand() {
         guard let launcherScript else { return }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(SessionLauncher.copyCommand(script: launcherScript), forType: .string)
+        PlatformServices.copyToPasteboard(SessionLauncher.copyCommand(script: launcherScript))
         toasts?.info(String(localized: "Copied the command."))
     }
 

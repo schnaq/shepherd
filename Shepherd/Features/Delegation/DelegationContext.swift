@@ -325,6 +325,21 @@ struct DelegationContext: Sendable, Equatable, Identifiable {
 /// issue is the opposite situation: there is nothing to review yet, so the work belongs on a
 /// branch and the run may finish the job with the credentials its own tool already has.
 enum DelegationPrompt {
+    // The ground rules every preamble shares, the cloud one included: one localized copy each,
+    // so the preambles cannot drift apart in either language.
+
+    private static var doWhatTheTaskAsks: String {
+        String(localized: "Do what the task asks. If it asks a question, for a plan or for a review, answer it and change nothing.")
+    }
+
+    private static var keepChangesSmall: String {
+        String(localized: "If the task asks for code changes, keep them as small as they can be. Do not reformat, rename or refactor anything the task does not ask for.")
+    }
+
+    private static var sayWhenUnclear: String {
+        String(localized: "If the task is unclear or you would have to guess at intent, say so instead of guessing.")
+    }
+
     /// The fixed, Shepherd-controlled part of the prompt.
     /// - Parameter context: What the delegation is about.
     static func preamble(for context: DelegationContext) -> String {
@@ -340,13 +355,10 @@ enum DelegationPrompt {
                 Ground rules:
                 - Do not push, do not create or switch branches, and do not open a pull \
                 request. The reviewer reads your diff and pushes it themselves.
-                - Do what the task asks. If it asks a question, for a plan or for a review, \
-                answer it and change nothing.
-                - If the task asks for code changes, keep them as small as they can be. Do not \
-                reformat, rename or refactor anything the task does not ask for.
+                - \(doWhatTheTaskAsks)
+                - \(keepChangesSmall)
                 - Prefer the project's existing tests and tooling over adding new ones.
-                - If the task is unclear or you would have to guess at intent, say so instead of \
-                guessing.
+                - \(sayWhenUnclear)
                 """
         )
     }
@@ -372,8 +384,7 @@ enum DelegationPrompt {
                 to another one.
 
                 Ground rules:
-                - Do what the task asks. If it asks a question, for a plan or for a review, \
-                answer it and change nothing.
+                - \(doWhatTheTaskAsks)
                 - If the task asks for code changes, the work is yours to finish on this \
                 branch. When it is ready you may commit it, publish the branch and open a pull \
                 request, using the git and GitHub credentials you already have. If you cannot \
@@ -408,8 +419,7 @@ enum DelegationPrompt {
                 Shepherd named that branch; do not rename it and do not switch to another one.
 
                 Ground rules:
-                - Do what the task asks. If it asks a question, for a plan or for a review, \
-                answer it and change nothing.
+                - \(doWhatTheTaskAsks)
                 - If the task asks for code changes, the work is yours to finish on this \
                 branch. When it is ready you may commit it, publish the branch and open a pull \
                 request, using the git and GitHub credentials you already have. If you cannot \
@@ -420,8 +430,7 @@ enum DelegationPrompt {
                 - Read the repository before you write: its tests, its conventions and its \
                 contribution notes are the specification, not a suggestion.
                 - Prefer the project's existing tests and tooling over adding new ones.
-                - If the task is unclear or you would have to guess at intent, say so instead of \
-                guessing.
+                - \(sayWhenUnclear)
                 """
         )
     }
@@ -524,12 +533,9 @@ enum DelegationPrompt {
         let rules = String(
             localized: """
                 Ground rules:
-                - Do what the task asks. If it asks a question, for a plan or for a review, \
-                answer it and change nothing.
-                - If the task asks for code changes, keep them as small as they can be. Do not \
-                reformat, rename or refactor anything the task does not ask for.
-                - If the task is unclear or you would have to guess at intent, say so instead of \
-                guessing.
+                - \(doWhatTheTaskAsks)
+                - \(keepChangesSmall)
+                - \(sayWhenUnclear)
                 """
         )
         let trimmed = task.trimmingCharacters(in: .whitespacesAndNewlines)

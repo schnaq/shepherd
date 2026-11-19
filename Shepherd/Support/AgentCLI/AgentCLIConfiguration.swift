@@ -115,6 +115,9 @@ enum DelegationHandoff: String, CaseIterable, Identifiable, Sendable {
 
     /// Whether the run is a session the user drives rather than one Shepherd reads.
     var isInteractive: Bool { self == .terminal || self == .remoteControl }
+
+    /// Whether the run works in a worktree on this Mac — every one but a cloud session.
+    var usesLocalWorktree: Bool { self != .cloud }
 }
 
 /// The terminal app an interactive delegation opens in.

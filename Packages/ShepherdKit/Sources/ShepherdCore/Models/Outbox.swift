@@ -204,6 +204,12 @@ public enum OutboxAction: Sendable, Codable, Hashable {
     /// that type's own note.
     public var targetsIssue: Bool { basedOnIssueUpdatedAt != nil }
 
+    /// Whether the row only copies to GitHub what the screen already shows — a *Viewed* tick —
+    /// so nothing announces it while it waits (ADR 0028, 2026-11-19 amendment).
+    public var isBackgroundSync: Bool {
+        if case .setFileViewed = self { true } else { false }
+    }
+
     // MARK: - Coding
 
     // The compiler would synthesise all of this, and did until the merge case grew a third

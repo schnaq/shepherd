@@ -278,10 +278,7 @@ final class IssueInboxModel {
     /// out rather than shown at zero. An issue that is assigned to you *and* mentions you is
     /// counted under both, so the numbers can add up to more than the list.
     var relationFacets: [(relation: IssueRelation, count: Int)] {
-        IssueRelation.allCases.compactMap { relation in
-            let count = stateScopedRows.filter { $0.myRelation.contains(relation) }.count
-            return count > 0 ? (relation: relation, count: count) : nil
-        }
+        IssueFacets.relationFacets(stateScopedRows)
     }
 
     /// The labels present in the section, with counts and the cap's overflow (ADR 0032).
