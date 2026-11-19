@@ -510,8 +510,15 @@ final class ReviewModel {
                 // the banner says the copy was not kept — dropping a good diff because SQLite
                 // was unhappy would be the wrong half to throw away.
                 var saveFailure: String?
+                var stored: PullRequestDetail?
                 do {
                     try await self.session.database.savePullRequestDetail(fresh)
+                    // Read back rather than applied as fetched: the viewed ticks are the store's —
+                    // the reviewer's own rows laid over what GitHub reported — and `fresh` alone
+                    // carries GitHub's half only. Applied as fetched, it emptied ``viewedPaths``
+                    // whenever the observation had delivered the stored copy first, and every
+                    // ticked file came back unticked on reopening.
+                    stored = try? await self.session.database.fetchPullRequestDetail(id: self.prID)
                 } catch {
                     guard !Task.isCancelled else { return }
                     saveFailure = error.userFacingDescription
@@ -521,7 +528,10 @@ final class ReviewModel {
                 // ``received(_:)`` reacting to the save — so applying it again would only re-run
                 // the prioritiser and reload the round for nothing. Compared and applied with the
                 // conversation on screen kept where this fetch could not read one.
-                let fetched = ReviewModel.keepingConversation(of: self.detail, in: fresh)
+                let fetched = ReviewModel.keepingConversation(
+                    of: self.detail,
+                    in: stored ?? ReviewModel.keepingViewed(of: self.detail, in: fresh)
+                )
                 if fetched != self.detail { self.apply(fetched) }
                 self.onDidLoadDetail?(self.prID)
                 // After the apply, which clears the banner: this notice is about the apply that
@@ -683,6 +693,28 @@ final class ReviewModel {
         guard fresh.conversation == nil else { return fresh }
         var kept = fresh
         kept.conversation = shown?.conversation
+        return kept
+    }
+
+    /// The detail ``load()`` puts on the screen when the store could not be read back, with the
+    /// viewed ticks on screen kept.
+    ///
+    /// A fetch carries only what GitHub reported as viewed; the reviewer's own ticks live in the
+    /// store. Applied as it came, a fetch that could not be stored would untick every file the
+    /// reviewer ticked here. Only for the same head: a tick on another head is the store's to
+    /// carry forward or not (`DatabaseManager.loadPullRequestDetail`). Pure and `static` for
+    /// ``change(shown:fresh:)``'s reason.
+    /// - Parameters:
+    ///   - shown: The detail the screen is showing, or `nil` when it is showing none.
+    ///   - fresh: The detail GitHub just returned.
+    /// - Returns: `fresh`, with every file viewed on screen still viewed.
+    static func keepingViewed(of shown: PullRequestDetail?, in fresh: PullRequestDetail) -> PullRequestDetail {
+        guard let shown, shown.summary.headRefOid == fresh.summary.headRefOid else { return fresh }
+        let viewed = Set(shown.files.filter(\.isViewed).map(\.path))
+        var kept = fresh
+        for index in kept.files.indices where viewed.contains(kept.files[index].path) {
+            kept.files[index].isViewed = true
+        }
         return kept
     }
 
