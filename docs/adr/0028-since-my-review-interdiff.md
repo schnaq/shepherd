@@ -158,3 +158,58 @@ stay instant.
 - **"Addressed" remains a heuristic.** It is a reading aid for a reviewer walking a fix round; it
   never resolves a thread, never approves anything and is not readable by the auto-merge (ADR 0018)
   or auto-delegation (ADR 0016) rules.
+
+## Amendment (2026-11-19): viewed files persist, survive a push, and follow GitHub
+
+The per-file *Viewed* tick is the other half of walking a fix round, and it did not hold. A
+reviewer who ticked half the files, left the pull request and came back found every tick gone.
+
+**Root cause.** The ticks were never lost on disk; `viewed_files` kept them. The screen dropped
+them. `ReviewModel.load()` applied GitHub's fresh detail as fetched, and the REST files listing
+maps every file with `isViewed = false`. The fresh detail therefore differed from the cached one
+in the ticks alone, so `apply` ran and emptied `viewedPaths`. The observation could have restored
+them, but it was in a race: when it delivered the stored copy *before* the fetch landed, that copy
+classified as `.unchanged`, and nothing put the ticks back. A second cause compounded it: a tick
+held for its own head commit only, so every push unticked every file.
+
+**Decisions.**
+
+- **The store is the authority on viewed state.** After saving a fetch, `load()` applies the
+  store's read-back, not the fetch. A fetch that could not be saved keeps the on-screen ticks for
+  the same head (`ReviewModel.keepingViewed(of:in:)`).
+- **A tick survives a push that leaves the file alone.** `viewed_files` and `changed_files` keep
+  the file's blob SHA (`sha` of the REST files listing, migration v12). A tick holds at a newer
+  head while the blob is the same, which is GitHub's own rule. A tick without a SHA, stored before
+  v12 or on a file GitHub sent none for, stays head-scoped. The interdiff machinery was not
+  reused: it compares patches, and a patch moves when the base moves even though the file did not.
+- **GitHub's checkbox is read on every detail fetch.** One more tolerated GraphQL query,
+  `PullRequest.files { path viewerViewedState }`, 100 per page and capped at 30 pages, runs
+  beside the others. There was nothing to piggyback on. `reviewThreads` pages on its own cursor
+  and fails the detail when it fails. Closing issues are tolerated, but a viewer-field refusal
+  would empty that section too. Only `VIEWED` counts. `DISMISSED` ("new changes since last
+  viewed") and `UNVIEWED` do not add a tick, and they do not remove the reviewer's own tick
+  either; the blob rule decides whether the file changed.
+- **GitHub's half lives on the fetched row.** It is stored in `changed_files.viewedOnGitHub`, not
+  in `viewed_files`. That row is replaced on every fetch, so a tick taken back on github.com goes
+  away here with the next fetch. The read is the union of that column and the reviewer's valid
+  tick. An untick in Shepherd clears both, optimistically. A fetch racing an untick can bring
+  GitHub's old tick back for one fetch, and the fetch after the unmark lands corrects it. Copying
+  GitHub's ticks into `viewed_files` would make that same race permanent. A fetch whose viewed
+  read failed writes no GitHub ticks, so ticks made only on github.com disappear until a read
+  succeeds. The reviewer's own ticks are not affected.
+- **Writes go through the outbox (ADR 0006).** They are not too chatty for it: the action is
+  `setFileViewed(path:viewed:)`, and a toggle of the same file cancels the row still waiting, so
+  `v` pressed three times offline sends one mutation. The local tick is written first and shown on
+  the press. The row is drained in the background with no toast. Retryable failures back off like
+  every row, which is what carries a tick made in a tunnel to GitHub later. A refusal no retry can
+  change, such as a read-only token, a file no longer in the pull request, or a closed pull
+  request, *drops* the row in silence (`OutboxOutcome.dropped`). The local tick is the record and
+  GitHub's is the copy, so an alert per `a` press about it would be noise. A sent viewed write
+  re-reads nothing (`SentMutation.Kind.fileViewedChanged` is in neither re-read list).
+- **The iPhone gets it for free.** It reads the same `ReviewModel.viewedPaths` and writes through
+  the same `PullRequestActions`.
+
+**Consequences.** A *Viewed* tick now reaches the reviewer's other machines through GitHub rather
+than through settings sync. A detail fetch costs one more GraphQL point per 100 files. The union
+means a file ticked here stays ticked even when it is unticked on github.com. GitHub's tick drops
+out of the union only when no local tick remains.
