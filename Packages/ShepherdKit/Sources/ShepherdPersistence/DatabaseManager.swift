@@ -66,6 +66,7 @@ public final class DatabaseManager: Sendable {
         migrator.registerMigration("v9", migrate: DatabaseSchema.addV9)
         migrator.registerMigration("v10", migrate: DatabaseSchema.addV10)
         migrator.registerMigration("v11", migrate: DatabaseSchema.addV11)
+        migrator.registerMigration("v12", migrate: DatabaseSchema.addV12)
         return migrator
     }
 
@@ -715,5 +716,26 @@ enum DatabaseSchema {
         try db.execute(sql: "ALTER TABLE review_comments ADD COLUMN viewerCanDelete INTEGER NOT NULL DEFAULT 0")
         try db.execute(sql: "ALTER TABLE review_comments ADD COLUMN isEdited INTEGER NOT NULL DEFAULT 0")
         try db.execute(sql: "ALTER TABLE review_comments ADD COLUMN url TEXT")
+    }
+
+    /// v12 (ADR 0028, 2026-11-19 amendment): viewed files that survive a push and follow GitHub.
+    ///
+    /// - **`blobSha` on both tables**, so a tick made at an older head holds while the file's
+    ///   content at the new head is the same — GitHub's own rule — instead of every push
+    ///   unticking every file. Nullable: a tick stored before reads back as before, valid for
+    ///   its own head only.
+    /// - **`changed_files.viewedOnGitHub`**, GitHub's checkbox as the last fetch read it. On the
+    ///   fetched row rather than in `viewed_files`, so the next fetch replaces it: a tick taken
+    ///   back on github.com goes away here too.
+    /// - **`viewed_files.viewed`**, so the table holds the reviewer's *decision*, an untick as
+    ///   much as a tick. While it applies — same head, or same blob — it wins over GitHub's
+    ///   column; without it an untick GitHub refused, or one that lost a race with an older
+    ///   tick, came back from GitHub's column on every fetch. `1` for the rows stored before,
+    ///   which were all ticks.
+    static func addV12(_ db: Database) throws {
+        try db.execute(sql: "ALTER TABLE changed_files ADD COLUMN blobSha TEXT")
+        try db.execute(sql: "ALTER TABLE changed_files ADD COLUMN viewedOnGitHub INTEGER NOT NULL DEFAULT 0")
+        try db.execute(sql: "ALTER TABLE viewed_files ADD COLUMN blobSha TEXT")
+        try db.execute(sql: "ALTER TABLE viewed_files ADD COLUMN viewed INTEGER NOT NULL DEFAULT 1")
     }
 }

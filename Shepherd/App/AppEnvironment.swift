@@ -499,6 +499,7 @@ final class AppEnvironment {
         // And what its token could not read, which says nothing about the next account's.
         accessCheckTask?.cancel()
         unreadableRepositories = []
+        heldRepositories = []
         if let current {
             await current.shutdown()
             do {
@@ -578,6 +579,7 @@ final class AppEnvironment {
             },
             onInboxRows: { [weak self] rows in
                 guard let self else { return }
+                self.noteHeldRepositories(rows)
                 self.considerAutoMerge(rows: rows)
                 // The same rows, the same moment, for the same reason: the inbox observation is
                 // the one place that reports a change to what is *in* the inbox — including the
@@ -1551,6 +1553,20 @@ final class AppEnvironment {
     /// zero. Filled by ``checkAccess(to:)``.
     private(set) var unreadableRepositories: Set<String> = []
     @ObservationIgnored private var accessCheckTask: Task<Void, Never>?
+    /// The repositories the inbox holds a pull request from, by lowercased `owner/name` — hidden
+    /// ones included.
+    @ObservationIgnored private var heldRepositories: Set<String> = []
+
+    /// Clears the flag of every repository the inbox holds a pull request from: one the sweep
+    /// brought a pull request from is one the token can read, whatever an older or wrong
+    /// `GET /repos` answer recorded (ADR 0005's 2026-11-19 amendment).
+    /// - Parameter rows: Every row the inbox observation just delivered.
+    private func noteHeldRepositories(_ rows: [PullRequestSummary]) {
+        heldRepositories = Set(rows.map { $0.repo.fullName.lowercased() })
+        // Only when it changes something: every write to the set redraws whatever reads it.
+        guard !unreadableRepositories.isDisjoint(with: heldRepositories) else { return }
+        unreadableRepositories.subtract(heldRepositories)
+    }
 
     /// Asks GitHub whether the signed-in token can read a repository, and records the answer.
     /// - Parameter repo: The repository.
@@ -1568,7 +1584,7 @@ final class AppEnvironment {
               self.session === session
         else { return nil }
         let key = repo.fullName.lowercased()
-        if readable {
+        if readable || heldRepositories.contains(key) {
             unreadableRepositories.remove(key)
         } else {
             unreadableRepositories.insert(key)

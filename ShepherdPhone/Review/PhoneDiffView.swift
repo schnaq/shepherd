@@ -789,7 +789,6 @@ struct PhoneDiffView: View {
                     .fixedSize()
                 }
                 .tint(isViewed ? Theme.success : nil)
-                .disabled(environment.activity.isRunning(model.prID, .viewed))
                 .sensoryFeedback(.selection, trigger: viewedTaps)
             }
         }

@@ -42,6 +42,10 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
     var viewerStillReacted = true
     /// What that read throws, when a test wants it to fail.
     var reactionProbeError: GitHubError?
+    /// What every viewed-checkbox call throws, when a test wants GitHub to refuse it.
+    var fileViewedError: GitHubError?
+    /// `prID path viewed` for every viewed-checkbox call that got through, in order.
+    private(set) var fileViewedCalls: [String] = []
     /// What the already-merged probe answers, keyed by number. A missing key answers `false` —
     /// "GitHub has not merged this", which is what every test that never scripts it means.
     var mergedPullRequests: [Int: Bool] = [:]
@@ -321,6 +325,15 @@ actor MockGitHub: PullRequestFetching, BranchDeleting {
         reactions.append(ReactionCall(subjectID: subjectID, content: content, adding: adding))
     }
 
+    func setFileViewedError(_ error: GitHubError?) {
+        fileViewedError = error
+    }
+
+    func setFileViewed(pullRequestID: String, path: String, viewed: Bool) async throws {
+        if let fileViewedError { throw fileViewedError }
+        fileViewedCalls.append("\(pullRequestID) \(path) \(viewed)")
+    }
+
     func viewerHasReacted(subjectID: String, content: ReactionContent) async throws -> Bool {
         reactionProbes.append("\(subjectID) \(content.rawValue)")
         if let reactionProbeError { throw reactionProbeError }
@@ -515,6 +528,10 @@ actor MarkRecordingStore: SyncStoring {
 
     func cancelPendingOutboxItem(id: UUID) async throws {
         try await wrapped.cancelPendingOutboxItem(id: id)
+    }
+
+    func viewedDecision(prID: String, path: String) async throws -> Bool? {
+        try await wrapped.viewedDecision(prID: prID, path: path)
     }
 
     func syncState(forKey key: String) async throws -> String? {

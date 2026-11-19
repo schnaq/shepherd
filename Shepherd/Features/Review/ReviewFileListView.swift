@@ -277,7 +277,6 @@ struct ReviewFileHeader: View {
                 }
 
                 if let file = model.selectedFile {
-                    let isWriting = actions.activity.isRunning(model.prID, .viewed)
                     Button {
                         Task { await model.toggleViewed(path: file.path, actions: actions) }
                     } label: {
@@ -289,20 +288,11 @@ struct ReviewFileHeader: View {
                                 : String(localized: "Mark viewed"))
                         }
                         .font(.system(size: 11.5))
-                        // Applied to the label rather than left to ``View/busy(_:)``: this is the
-                        // one write button in the app on `.plain` rather than on one of the three
-                        // styles, and the styles are where that modifier's spinner lives. The
-                        // spinner itself is the shared one, so it matches theirs.
-                        .busyLabel(isBusy: isWriting)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(
                         model.viewedPaths.contains(file.path) ? Theme.success : Theme.textSecondary
                     )
-                    // `v` does not come through this button — it is a character the screen
-                    // handles (``ReviewScreen``) — so the key is refused by the funnel rather
-                    // than by the disable. This is here so the click and `v` show one state.
-                    .busy(isWriting)
                     .help(String(localized: "Toggle viewed (v) — or accept and go to the next file (a)"))
                 }
             }

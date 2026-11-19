@@ -285,12 +285,26 @@ extension DatabaseManager {
             // the closing issues below.
             try conversation?.save(db)
 
+            // GitHub's *Viewed* checkboxes as this fetch read them, or — `nil`, the read failed —
+            // as the last fetch did: a failed read is "unknown", not "nothing viewed".
+            let viewedOnGitHub = try detail.viewedOnGitHub ?? Set(
+                String.fetchAll(
+                    db,
+                    sql: "SELECT path FROM changed_files WHERE prID = ? AND viewedOnGitHub",
+                    arguments: [detail.id]
+                )
+            )
             try db.execute(
                 sql: "DELETE FROM changed_files WHERE prID = ?",
                 arguments: [detail.id]
             )
             for (index, file) in detail.files.enumerated() {
-                try ChangedFileRecord(prID: detail.id, file: file, sortIndex: index).save(db)
+                try ChangedFileRecord(
+                    prID: detail.id,
+                    file: file,
+                    sortIndex: index,
+                    viewedOnGitHub: viewedOnGitHub.contains(file.path)
+                ).save(db)
             }
 
             // Replaced on every detail write, exactly as `changed_files` is, and for the same
@@ -391,14 +405,7 @@ extension DatabaseManager {
             arguments: [id]
         ) else { return nil }
 
-        let viewedPaths = try Set(
-            String.fetchAll(
-                db,
-                sql: "SELECT path FROM viewed_files WHERE prID = ? AND headRefOid = ?",
-                arguments: [id, record.headRefOid]
-            )
-        )
-
+        let viewed = try viewedPaths(db, prID: id)
         let fileRecords = try ChangedFileRecord.fetchAll(
             db,
             sql: "SELECT * FROM changed_files WHERE prID = ? ORDER BY sortIndex ASC",
@@ -406,7 +413,7 @@ extension DatabaseManager {
         )
         let files: [ChangedFile] = fileRecords.map { fileRecord in
             var file = fileRecord.changedFile
-            file.isViewed = viewedPaths.contains(file.path)
+            file.isViewed = viewed.contains(file.path)
             return file
         }
 
@@ -470,51 +477,101 @@ extension DatabaseManager {
 
     // MARK: - Viewed files
 
-    /// Marks a file as viewed (or not) for a given head commit.
+    /// The paths of a pull request's stored files that read back as viewed, without the rest of
+    /// the detail — what a fresh fetch needs laid over it once it is stored.
+    /// - Parameter prID: The pull request's node id.
+    /// - Returns: The viewed paths, the same ones ``fetchPullRequestDetail(id:)`` marks.
+    /// - Throws: A `DatabaseError` when the read fails.
+    public func viewedPaths(prID: String) async throws -> Set<String> {
+        try await writer.read { db in
+            try DatabaseManager.viewedPaths(db, prID: prID)
+        }
+    }
+
+    /// The viewed rule, shared by ``loadPullRequestDetail(_:id:)`` and ``viewedPaths(prID:)``.
     ///
-    /// Viewed state is scoped to the head SHA so that new commits reset it, which is what
-    /// GitHub's own "viewed" checkbox does.
+    /// The reviewer's own decision while it applies (``decisionApplies``), else GitHub's
+    /// checkbox as the last fetch read it. A decision is a tick *or* an untick: an untick made
+    /// here stays an untick even while GitHub still says `VIEWED` — GitHub refused it, or has not
+    /// been sent it yet — instead of coming back on every fetch (ADR 0028, 2026-11-19 amendment).
+    static func viewedPaths(_ db: Database, prID: String) throws -> Set<String> {
+        try Set(
+            String.fetchAll(
+                db,
+                sql: """
+                    SELECT f.path FROM changed_files f
+                    JOIN pull_requests p ON p.id = f.prID
+                    LEFT JOIN viewed_files v ON v.prID = f.prID AND v.path = f.path
+                    WHERE f.prID = ?
+                      AND CASE WHEN \(decisionApplies) THEN v.viewed ELSE f.viewedOnGitHub END
+                    """,
+                arguments: [prID]
+            )
+        )
+    }
+
+    /// When a stored decision (`v`) still speaks for the file (`f`) of the pull request (`p`):
+    /// the head it was made at, or the same blob at a newer one. A push that changed the file
+    /// voids it, as GitHub voids its own checkbox; one that left it alone does not. A decision
+    /// without a blob SHA holds for its own head only — `NULL = …` is never true.
+    private static let decisionApplies = "(v.headRefOid = p.headRefOid OR v.blobSha = f.blobSha)"
+
+    /// The reviewer's decision for one file while it applies — what the outbox sends to GitHub,
+    /// read when the row is sent rather than when it was queued, so rows sent out of order
+    /// still leave GitHub with the last decision (ADR 0028, 2026-11-19 amendment).
+    /// - Parameters:
+    ///   - prID: The pull request's node id.
+    ///   - path: The file path.
+    /// - Returns: `true` or `false`, or `nil` when there is no decision that applies — none was
+    ///   made, a push changed the file since, or the file is no longer in the pull request.
+    /// - Throws: A `DatabaseError` when the read fails.
+    public func viewedDecision(prID: String, path: String) async throws -> Bool? {
+        try await writer.read { db in
+            try Bool.fetchOne(
+                db,
+                sql: """
+                    SELECT v.viewed FROM viewed_files v
+                    JOIN changed_files f ON f.prID = v.prID AND f.path = v.path
+                    JOIN pull_requests p ON p.id = v.prID
+                    WHERE v.prID = ? AND v.path = ? AND \(DatabaseManager.decisionApplies)
+                    """,
+                arguments: [prID, path]
+            )
+        }
+    }
+
+    /// Records the reviewer's decision that a file is viewed, or not, at a head commit.
+    ///
+    /// Kept with the file's blob SHA as the stored detail has it, so it outlives a push that
+    /// leaves the file alone and not one that changes it — what GitHub's own checkbox does
+    /// (``loadPullRequestDetail(_:id:)``). An untick is stored as a decision too, and wins over
+    /// GitHub's tick while it applies (ADR 0028, 2026-11-19 amendment).
     /// - Parameters:
     ///   - prID: The pull request's node id.
     ///   - path: The file path.
     ///   - headRefOid: The head commit the file was reviewed at.
     ///   - isViewed: Whether the file is now viewed.
+    ///   - decidedAt: When the reviewer decided. The default is evaluated at the call site, so
+    ///     two presses whose writes reach the database out of order still leave the later
+    ///     press's decision: an older one never replaces a newer one.
     public func setFileViewed(
         prID: String,
         path: String,
         headRefOid: String,
-        isViewed: Bool
+        isViewed: Bool,
+        decidedAt: Date = Date()
     ) async throws {
-        let now = Date().timeIntervalSince1970
         try await writer.write { db in
-            if isViewed {
-                try ViewedFileRecord(
-                    prID: prID,
-                    path: path,
-                    headRefOid: headRefOid,
-                    viewedAt: now
-                ).save(db)
-            } else {
-                try db.execute(
-                    sql: "DELETE FROM viewed_files WHERE prID = ? AND path = ?",
-                    arguments: [prID, path]
-                )
-            }
-        }
-    }
-
-    /// The set of paths marked viewed for a pull request at a given head commit.
-    /// - Parameters:
-    ///   - prID: The pull request's node id.
-    ///   - headRefOid: The head commit.
-    public func viewedFiles(prID: String, headRefOid: String) async throws -> Set<String> {
-        try await writer.read { db in
-            try Set(
-                String.fetchAll(
-                    db,
-                    sql: "SELECT path FROM viewed_files WHERE prID = ? AND headRefOid = ?",
-                    arguments: [prID, headRefOid]
-                )
+            try db.execute(
+                sql: """
+                    INSERT INTO viewed_files (prID, path, headRefOid, viewedAt, blobSha, viewed)
+                    VALUES (?, ?, ?, ?, (SELECT blobSha FROM changed_files WHERE prID = ? AND path = ?), ?)
+                    ON CONFLICT (prID, path) DO UPDATE SET
+                        headRefOid = excluded.headRefOid, viewedAt = excluded.viewedAt,
+                        blobSha = excluded.blobSha, viewed = excluded.viewed
+                    WHERE excluded.viewedAt >= viewed_files.viewedAt
+                    """,
+                arguments: [prID, path, headRefOid, decidedAt.timeIntervalSince1970, prID, path, isViewed]
             )
         }
     }

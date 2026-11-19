@@ -383,7 +383,8 @@ struct InboxScreen: View {
             case .issues:
                 IssueSidebar(
                     model: issueModel,
-                    onOpenSettings: { environment.showSettings(.account) }
+                    onOpenSettings: { environment.showSettings(.account) },
+                    offersAppInstall: environment.offersAppInstall
                 )
             }
         }

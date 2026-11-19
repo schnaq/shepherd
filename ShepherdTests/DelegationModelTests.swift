@@ -10,13 +10,14 @@ final class ScriptedAgentRunner: AgentRunning, @unchecked Sendable {
     var events: [AgentStreamEvent]
     /// The exit code to report.
     var exitCode: Int32
-    /// When set, ``run(prompt:in:)`` throws instead of starting.
+    /// When set, ``run(prompt:in:permissionMode:)`` throws instead of starting.
     var spawnError: (any Error)?
 
     private let lock = NSLock()
     private var recordedPrompts: [String] = []
     private var recordedDirectories: [URL] = []
     private var recordedSessions: [String] = []
+    private var recordedModes: [AgentPermissionMode?] = []
 
     /// Creates a scripted runner.
     init(
@@ -43,6 +44,13 @@ final class ScriptedAgentRunner: AgentRunning, @unchecked Sendable {
         return recordedDirectories
     }
 
+    /// The permission mode of every run and resume, in order.
+    var permissionModes: [AgentPermissionMode?] {
+        lock.lock()
+        defer { lock.unlock() }
+        return recordedModes
+    }
+
     /// The sessions the model asked to resume.
     var resumedSessions: [String] {
         lock.lock()
@@ -50,18 +58,24 @@ final class ScriptedAgentRunner: AgentRunning, @unchecked Sendable {
         return recordedSessions
     }
 
-    func resume(sessionID: String, prompt: String, in worktree: URL) throws -> AgentSession {
+    func resume(
+        sessionID: String,
+        prompt: String,
+        in worktree: URL,
+        permissionMode: AgentPermissionMode?
+    ) throws -> AgentSession {
         lock.lock()
         recordedSessions.append(sessionID)
         lock.unlock()
-        return try run(prompt: prompt, in: worktree)
+        return try run(prompt: prompt, in: worktree, permissionMode: permissionMode)
     }
 
-    func run(prompt: String, in worktree: URL) throws -> AgentSession {
+    func run(prompt: String, in worktree: URL, permissionMode: AgentPermissionMode?) throws -> AgentSession {
         if let spawnError { throw spawnError }
         lock.lock()
         recordedPrompts.append(prompt)
         recordedDirectories.append(worktree)
+        recordedModes.append(permissionMode)
         lock.unlock()
 
         let (stream, continuation) = AsyncStream<AgentStreamEvent>.makeStream()
@@ -93,7 +107,7 @@ final class HangingAgentRunner: AgentRunning, @unchecked Sendable {
         return cancelled
     }
 
-    func run(prompt: String, in worktree: URL) throws -> AgentSession {
+    func run(prompt: String, in worktree: URL, permissionMode: AgentPermissionMode?) throws -> AgentSession {
         let (stream, continuation) = AsyncStream<AgentStreamEvent>.makeStream()
         // One event so the model reaches `.running` before the test cancels it.
         continuation.yield(.systemInit(model: "test-model"))
@@ -158,7 +172,10 @@ final class DelegationModelTests: XCTestCase {
         context replacement: DelegationContext? = nil,
         onDidPush: (@MainActor () async -> Void)? = nil,
         onDidFinish: (@MainActor (DelegationOutcome) -> Void)? = nil,
-        onDidStart: (@MainActor (DelegationStart) -> Void)? = nil
+        onDidStart: (@MainActor (DelegationStart) -> Void)? = nil,
+        handoff: DelegationHandoff = .background,
+        // Never the real terminal: a test must not open windows.
+        openSession: @escaping @MainActor (URL, TerminalApp) async throws -> Void = { _, _ in }
     ) -> DelegationModel {
         let context = replacement ?? self.context!
         let tree = worktree
@@ -182,7 +199,10 @@ final class DelegationModelTests: XCTestCase {
             toasts: nil,
             onDidPush: onDidPush,
             onDidFinish: onDidFinish,
-            onDidStart: onDidStart
+            onDidStart: onDidStart,
+            executable: URL(fileURLWithPath: "/opt/homebrew/bin/claude"),
+            handoff: handoff,
+            openSession: openSession
         )
     }
 
@@ -385,6 +405,29 @@ final class DelegationModelTests: XCTestCase {
     }
 
     // MARK: - Continuing a capped run
+
+    func testContinueResumesWithTheModeTheRunStartedWithNotThePickersNewOne() async throws {
+        let runner = ScriptedAgentRunner(
+            events: [
+                .result(AgentRunResult(isError: true, sessionID: "6f2a-0001", subtype: "error_max_turns"))
+            ],
+            exitCode: 1
+        )
+        let model = makeModel(runner: runner, git: gitRunnerWithDiffStat())
+        let started = try XCTUnwrap(model.permissionModeChoices.last)
+        model.permissionMode = started
+        model.start()
+        await model.runTask?.value
+        let directory = try XCTUnwrap(model.worktree?.directory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        model.permissionMode = try XCTUnwrap(model.permissionModeChoices.first { $0 != started })
+        model.continueRun()
+        await model.runTask?.value
+
+        XCTAssertEqual(runner.resumedSessions, ["6f2a-0001"])
+        XCTAssertEqual(runner.permissionModes, [started, started])
+    }
 
     func testContinueResumesTheCappedSessionInTheSameWorktreeWithoutPreparingIt() async throws {
         let git = gitRunnerWithDiffStat()
@@ -715,6 +758,77 @@ final class DelegationModelTests: XCTestCase {
         XCTAssertTrue(task.contains("Sources/App.swift"))
         XCTAssertTrue(task.contains("42"))
         XCTAssertTrue(task.contains("leaks the file handle"))
+    }
+
+    // MARK: - Handing off to a session (ADR 0011's 2026-11-19 amendment)
+
+    private final class OpenedSessions {
+        var scripts: [URL] = []
+        var outcomes: [DelegationOutcome] = []
+    }
+
+    func testAnInteractiveHandoffWritesALauncherAndRunsNothingItself() async throws {
+        let runner = ScriptedAgentRunner()
+        let opened = OpenedSessions()
+        let model = makeModel(
+            runner: runner,
+            git: gitRunnerWithDiffStat(),
+            onDidFinish: { opened.outcomes.append($0) },
+            handoff: .terminal,
+            openSession: { script, _ in opened.scripts.append(script) }
+        )
+        model.permissionMode = .manual
+        model.start()
+        await model.runTask?.value
+
+        guard case .handedOff(.terminal, let diffStat) = model.state else {
+            return XCTFail("expected a handed-off state, got \(model.state)")
+        }
+        XCTAssertTrue(diffStat.contains("1 file changed"), "the worktree is read for Commit & push")
+        XCTAssertTrue(runner.prompts.isEmpty, "the session runs in the terminal, not in Shepherd")
+        XCTAssertTrue(opened.outcomes.isEmpty, "Shepherd cannot see the session end")
+
+        let script = try XCTUnwrap(opened.scripts.first)
+        // Beside the test's worktree root rather than in it, so `tearDown` does not get them.
+        addTeardownBlock {
+            try? FileManager.default.removeItem(at: script)
+            try? FileManager.default.removeItem(
+                at: script.deletingPathExtension().appendingPathExtension("prompt.txt")
+            )
+        }
+        XCTAssertEqual(script, model.launcherScript)
+        let worktree = try XCTUnwrap(model.worktree).directory
+        XCTAssertFalse(script.path.hasPrefix(worktree.path), "never where the session could commit it")
+        let text = try String(contentsOf: script, encoding: .utf8)
+        XCTAssertTrue(text.contains("'--permission-mode' 'manual'"))
+        XCTAssertTrue(text.contains("'-n' '\(worktree.lastPathComponent)'"))
+        XCTAssertFalse(text.contains("Fix the off-by-one"), "the task is read from its file, never written into the script")
+    }
+
+    func testARuleStartedOrCustomRunIsAlwaysABackgroundRun() {
+        let automatic = makeModel(runner: ScriptedAgentRunner(), isAutomatic: true, handoff: .terminal)
+        XCTAssertFalse(automatic.offersHandoff)
+        XCTAssertEqual(automatic.handoff, .background, "nobody is at a terminal for a rule")
+
+        let custom = DelegationModel(
+            context: context,
+            configuration: AgentCLIConfiguration(kind: .custom(commandTemplate: "/bin/agent {prompt}")),
+            readiness: .ready,
+            runner: ScriptedAgentRunner(),
+            worktree: nil,
+            handoff: .terminal,
+            openSession: { _, _ in }
+        )
+        XCTAssertFalse(custom.offersHandoff)
+        XCTAssertEqual(custom.handoff, .background, "Shepherd does not know a custom CLI's interactive form")
+    }
+
+    func testAskingForEachActionIsDroppedForABackgroundRun() {
+        let model = makeModel(runner: ScriptedAgentRunner(), handoff: .terminal)
+        model.permissionMode = .manual
+        model.handoff = .background
+        XCTAssertEqual(model.permissionMode, model.configuration.permissionMode)
+        XCTAssertFalse(model.permissionModeChoices.contains(.manual))
     }
 
     // MARK: - Handing over an issue

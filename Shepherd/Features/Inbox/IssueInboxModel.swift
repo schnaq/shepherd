@@ -84,6 +84,15 @@ final class IssueInboxModel {
     var agentPullRequestFilter: IssueAgentPullRequestFilter? {
         didSet { clampSelection() }
     }
+    /// The selected relation facet — assigned to me, opened by me, mentioning me — if any.
+    ///
+    /// The section is the union of the sweep's three facet searches, and every row already says
+    /// which of them found it (``IssueRowSummary/myRelation``), so "only what is assigned to me"
+    /// is a filter over rows Shepherd holds rather than another search (ADR 0032's 2026-11-19
+    /// amendment).
+    var relationFilter: IssueRelation? {
+        didSet { clampSelection() }
+    }
     /// The selected half of the state facet — open, closed, or `nil` for both.
     ///
     /// The only facet with a default, and that is the decision it records (ADR 0032's 2026-09-04
@@ -174,6 +183,7 @@ final class IssueInboxModel {
     /// vocabulary beside ``InboxSortOrder`` would be a decision nobody has made.
     var filteredRows: [IssueRowSummary] {
         stateScopedRows.filter { row in
+            if let relationFilter, !row.myRelation.contains(relationFilter) { return false }
             // Case-insensitive, exactly as the pull-request rail's repository facet is: the rail
             // always sets this from a row it is showing, but a link may carry any casing.
             if let repoFilter, !row.repo.isSameRepository(as: repoFilter) { return false }
@@ -215,21 +225,22 @@ final class IssueInboxModel {
     var hasActiveFacet: Bool {
         if let stateFilter, stateFilter != .open { return true }
         return repoFilter != nil || labelFilter != nil || ageFilter != nil
-            || agentPullRequestFilter != nil
+            || agentPullRequestFilter != nil || relationFilter != nil
     }
 
     /// Clears every facet — the header's ✕ and Escape.
     ///
     /// The state facet goes to `nil` rather than back to `.open`, which is what makes "clear the
     /// facets" mean *show me everything* on this side too: it is the widening step
-    /// ``reveal(issueID:)`` relies on, and a ⌘K hit on a closed issue would otherwise clear four
-    /// facets and still land on a row the fifth is hiding.
+    /// ``reveal(issueID:)`` relies on, and a ⌘K hit on a closed issue would otherwise clear every
+    /// other facet and still land on a row the state facet is hiding.
     func clearFacets() {
-        // The state facet goes first, and the order is not cosmetic: each of these five
-        // assignments clamps the selection, so clearing the widest axis last would run four
+        // The state facet goes first, and the order is not cosmetic: each of these six
+        // assignments clamps the selection, so clearing the widest axis last would run five
         // clamps against a list that still hides a closed row — and a clamp that lands on the
         // first row of the section loads that row's body for nobody.
         stateFilter = nil
+        relationFilter = nil
         repoFilter = nil
         labelFilter = nil
         ageFilter = nil
@@ -259,6 +270,15 @@ final class IssueInboxModel {
                 if left.count != right.count { return left.count > right.count }
                 return left.repo < right.repo
             }
+    }
+
+    /// The relations present in the section, with counts, in ``IssueRelation``'s order.
+    ///
+    /// Counted over ``stateScopedRows`` like the four below, and a relation no row has is left
+    /// out rather than shown at zero. An issue that is assigned to you *and* mentions you is
+    /// counted under both, so the numbers can add up to more than the list.
+    var relationFacets: [(relation: IssueRelation, count: Int)] {
+        IssueFacets.relationFacets(stateScopedRows)
     }
 
     /// The labels present in the section, with counts and the cap's overflow (ADR 0032).
@@ -324,14 +344,14 @@ final class IssueInboxModel {
             pendingReveal = id
             return
         }
-        // Selected first, then widened: `clearFacets()` sets five properties whose `didSet`
+        // Selected first, then widened: `clearFacets()` sets six properties whose `didSet`
         // clamps the selection, and clamping before the cursor has moved would pick the first row
-        // of the widened list and load its body for nothing. The fifth property is the state
-        // facet, which is what lets a *closed* issue be revealed rather than waited for.
+        // of the widened list and load its body for nothing. One of them is the state facet,
+        // which is what lets a *closed* issue be revealed rather than waited for.
         select(id)
         guard !visibleRows.contains(where: { $0.id == id }) else { return }
         clearFacets()
-        // And asked for once more, now that the rail is empty. Those five clamps happen one per
+        // And asked for once more, now that the rail is empty. Those six clamps happen one per
         // assignment, so a row two facets were hiding is still hidden while the first of them is
         // being cleared and the cursor can be moved off it on the way through. A cursor that
         // did survive makes this a no-op — ``select(_:)`` returns early when nothing changed —

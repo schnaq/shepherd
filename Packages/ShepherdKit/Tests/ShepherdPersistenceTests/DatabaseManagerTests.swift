@@ -34,7 +34,7 @@ final class MigrationTests: XCTestCase {
         // edit to `createV1` — which would silently skip on existing installs — fails CI.
         XCTAssertEqual(
             DatabaseManager.migrator.migrations,
-            ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11"]
+            ["v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12"]
         )
     }
 
@@ -583,54 +583,206 @@ final class InboxStoreTests: XCTestCase {
         XCTAssertNil(loaded)
     }
 
-    func testViewedFilesAreScopedToTheHeadCommit() async throws {
+    /// The paths the stored detail reads back as viewed.
+    private func viewedPaths(_ database: DatabaseManager, _ prID: String) async throws -> Set<String> {
+        let loaded = try await database.fetchPullRequestDetail(id: prID)
+        return Set((loaded?.files ?? []).filter(\.isViewed).map(\.path))
+    }
+
+    /// The fixture's detail at `head`, with each file's blob SHA from `blobs`.
+    private func detail(head: String, blobs: [String: String]) -> PullRequestDetail {
+        var summary = PersistenceFixtures.summary()
+        summary.headRefOid = head
+        var made = PersistenceFixtures.detail(summary: summary)
+        for index in made.files.indices {
+            made.files[index].blobSha = blobs[made.files[index].path]
+        }
+        return made
+    }
+
+    private let tokenStore = "Sources/Auth/TokenStore.swift"
+    private let keychain = "Sources/Auth/KeychainTokenStore.swift"
+
+    func testATickHoldsAtItsHead() async throws {
         let database = try makeDatabase()
         let detail = PersistenceFixtures.detail()
         try await database.savePullRequestDetail(detail)
 
         try await database.setFileViewed(
             prID: detail.id,
-            path: "Sources/Auth/TokenStore.swift",
+            path: tokenStore,
             headRefOid: detail.summary.headRefOid,
             isViewed: true
         )
 
-        let viewed = try await database.viewedFiles(
-            prID: detail.id,
-            headRefOid: detail.summary.headRefOid
-        )
-        XCTAssertEqual(viewed, ["Sources/Auth/TokenStore.swift"])
-
-        let loaded = try await database.fetchPullRequestDetail(id: detail.id)
-        XCTAssertEqual(loaded?.files.first?.isViewed, true)
-        XCTAssertEqual(loaded?.files.last?.isViewed, false)
-
-        // A new head commit resets the viewed state.
-        let afterNewCommit = try await database.viewedFiles(
-            prID: detail.id,
-            headRefOid: "newhead"
-        )
-        XCTAssertTrue(afterNewCommit.isEmpty)
+        let viewed = try await viewedPaths(database, detail.id)
+        XCTAssertEqual(viewed, [tokenStore])
     }
 
-    func testUnmarkingAFileRemovesIt() async throws {
+    func testAPushUnticksOnlyTheFilesItChanged() async throws {
+        // GitHub's own rule: a file whose content is the same at the new head stays viewed.
+        let database = try makeDatabase()
+        let before = detail(head: "head-1", blobs: [tokenStore: "blob-a", keychain: "blob-b"])
+        try await database.savePullRequestDetail(before)
+        for path in [tokenStore, keychain] {
+            try await database.setFileViewed(prID: before.id, path: path, headRefOid: "head-1", isViewed: true)
+        }
+
+        try await database.savePullRequestDetail(
+            detail(head: "head-2", blobs: [tokenStore: "blob-a", keychain: "blob-c"])
+        )
+
+        let viewed = try await viewedPaths(database, before.id)
+        XCTAssertEqual(viewed, [tokenStore])
+    }
+
+    func testTheViewedQueryAgreesWithTheDetail() async throws {
+        // GitHub's tick on one file, the reviewer's on the other, then a push that leaves the
+        // second alone: the cheap read and the full one must say the same.
+        let database = try makeDatabase()
+        var before = detail(head: "head-1", blobs: [tokenStore: "blob-a", keychain: "blob-b"])
+        before.viewedOnGitHub = [tokenStore]
+        try await database.savePullRequestDetail(before)
+        try await database.setFileViewed(prID: before.id, path: keychain, headRefOid: "head-1", isViewed: true)
+        // GitHub dismisses its own tick on the file the push changed.
+        var after = detail(head: "head-2", blobs: [tokenStore: "blob-c", keychain: "blob-b"])
+        after.viewedOnGitHub = []
+        try await database.savePullRequestDetail(after)
+
+        let cheap = try await database.viewedPaths(prID: before.id)
+        let full = try await viewedPaths(database, before.id)
+        XCTAssertEqual(cheap, [keychain])
+        XCTAssertEqual(cheap, full)
+        let missing = try await database.viewedPaths(prID: "nope")
+        XCTAssertTrue(missing.isEmpty)
+    }
+
+    func testATickWithoutABlobHoldsForItsOwnHeadOnly() async throws {
+        // A tick stored before v12, or on a file GitHub sent no SHA for: nothing proves the file
+        // is unchanged, so a push unticks it as it always did.
+        let database = try makeDatabase()
+        let before = detail(head: "head-1", blobs: [:])
+        try await database.savePullRequestDetail(before)
+        try await database.setFileViewed(prID: before.id, path: tokenStore, headRefOid: "head-1", isViewed: true)
+
+        try await database.savePullRequestDetail(detail(head: "head-2", blobs: [:]))
+
+        let viewed = try await viewedPaths(database, before.id)
+        XCTAssertTrue(viewed.isEmpty)
+    }
+
+    func testGitHubsTickReadsBackAsViewed() async throws {
+        let database = try makeDatabase()
+        var fetched = PersistenceFixtures.detail()
+        fetched.viewedOnGitHub = [keychain]
+        try await database.savePullRequestDetail(fetched)
+
+        let viewed = try await viewedPaths(database, fetched.id)
+        XCTAssertEqual(viewed, [keychain])
+    }
+
+    func testAViewedReadThatFailedKeepsGitHubsTicks() async throws {
+        // `nil` is "GitHub's checkboxes could not be read", not "nothing is viewed".
+        let database = try makeDatabase()
+        var fetched = PersistenceFixtures.detail()
+        fetched.viewedOnGitHub = [keychain]
+        try await database.savePullRequestDetail(fetched)
+
+        fetched.viewedOnGitHub = nil
+        try await database.savePullRequestDetail(fetched)
+        let kept = try await viewedPaths(database, fetched.id)
+        XCTAssertEqual(kept, [keychain])
+
+        fetched.viewedOnGitHub = []
+        try await database.savePullRequestDetail(fetched)
+        let cleared = try await viewedPaths(database, fetched.id)
+        XCTAssertTrue(cleared.isEmpty, "an answer that says nothing is viewed is an answer")
+    }
+
+    func testAFetchKeepsTheReviewersOwnTicks() async throws {
+        // GitHub not knowing about a tick (read-only token, unsent write) is no reason to drop
+        // it, and GitHub's tick on another file still counts.
         let database = try makeDatabase()
         let detail = PersistenceFixtures.detail()
         try await database.savePullRequestDetail(detail)
         try await database.setFileViewed(
             prID: detail.id,
-            path: "Sources/Auth/TokenStore.swift",
-            headRefOid: "abc123",
+            path: tokenStore,
+            headRefOid: detail.summary.headRefOid,
+            isViewed: true
+        )
+        var fetched = detail
+        fetched.viewedOnGitHub = [keychain]
+        try await database.savePullRequestDetail(fetched)
+
+        let viewed = try await viewedPaths(database, detail.id)
+        XCTAssertEqual(viewed, [tokenStore, keychain])
+    }
+
+    func testAnUntickWinsOverGitHubsTickOnEveryFetch() async throws {
+        // GitHub refused the untick (read-only token), or has not been sent it yet: its column
+        // still says `VIEWED`, fetch after fetch, and the reviewer's decision still wins.
+        let database = try makeDatabase()
+        var fetched = PersistenceFixtures.detail()
+        fetched.viewedOnGitHub = [tokenStore]
+        try await database.savePullRequestDetail(fetched)
+        try await database.setFileViewed(
+            prID: fetched.id,
+            path: tokenStore,
+            headRefOid: fetched.summary.headRefOid,
             isViewed: true
         )
         try await database.setFileViewed(
-            prID: detail.id,
-            path: "Sources/Auth/TokenStore.swift",
-            headRefOid: "abc123",
+            prID: fetched.id,
+            path: tokenStore,
+            headRefOid: fetched.summary.headRefOid,
             isViewed: false
         )
-        let viewed = try await database.viewedFiles(prID: detail.id, headRefOid: "abc123")
+        try await database.savePullRequestDetail(fetched)
+        let viewed = try await viewedPaths(database, fetched.id)
         XCTAssertTrue(viewed.isEmpty)
+        let decision = try await database.viewedDecision(prID: fetched.id, path: tokenStore)
+        XCTAssertEqual(decision, false)
+    }
+
+    func testAnUntickLapsesWhenAPushChangesTheFile() async throws {
+        // Like a tick, it was a decision about content that is gone: GitHub's word counts again,
+        // and the drain has nothing left to send.
+        let database = try makeDatabase()
+        var before = detail(head: "head-1", blobs: [tokenStore: "blob-a"])
+        before.viewedOnGitHub = [tokenStore]
+        try await database.savePullRequestDetail(before)
+        try await database.setFileViewed(prID: before.id, path: tokenStore, headRefOid: "head-1", isViewed: false)
+
+        var after = detail(head: "head-2", blobs: [tokenStore: "blob-c"])
+        after.viewedOnGitHub = [tokenStore]
+        try await database.savePullRequestDetail(after)
+
+        let viewed = try await viewedPaths(database, before.id)
+        XCTAssertEqual(viewed, [tokenStore])
+        let decision = try await database.viewedDecision(prID: before.id, path: tokenStore)
+        XCTAssertNil(decision)
+    }
+
+    func testAnOlderPressNeverReplacesANewerOne() async throws {
+        // Two presses whose writes reach the database out of order: the later press wins.
+        let database = try makeDatabase()
+        let detail = PersistenceFixtures.detail()
+        try await database.savePullRequestDetail(detail)
+        let head = detail.summary.headRefOid
+        try await database.setFileViewed(
+            prID: detail.id, path: tokenStore, headRefOid: head, isViewed: false,
+            decidedAt: Date(timeIntervalSince1970: 2)
+        )
+        try await database.setFileViewed(
+            prID: detail.id, path: tokenStore, headRefOid: head, isViewed: true,
+            decidedAt: Date(timeIntervalSince1970: 1)
+        )
+
+        let decision = try await database.viewedDecision(prID: detail.id, path: tokenStore)
+        XCTAssertEqual(decision, false)
+        let none = try await database.viewedDecision(prID: detail.id, path: keychain)
+        XCTAssertNil(none)
     }
 
     func testSyncStateRoundTrip() async throws {

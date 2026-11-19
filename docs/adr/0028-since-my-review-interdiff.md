@@ -158,3 +158,70 @@ stay instant.
 - **"Addressed" remains a heuristic.** It is a reading aid for a reviewer walking a fix round; it
   never resolves a thread, never approves anything and is not readable by the auto-merge (ADR 0018)
   or auto-delegation (ADR 0016) rules.
+
+## Amendment (2026-11-19): viewed files persist, survive a push, and follow GitHub
+
+The per-file *Viewed* tick is the other half of walking a fix round, and it did not hold. A
+reviewer who ticked half the files, left the pull request and came back found every tick gone.
+
+**Root cause.** The ticks were never lost on disk; `viewed_files` kept them. The screen dropped
+them. `ReviewModel.load()` applied GitHub's fresh detail as fetched, and the REST files listing
+maps every file with `isViewed = false`. The fresh detail therefore differed from the cached one
+in the ticks alone, so `apply` ran and emptied `viewedPaths`. The observation could have restored
+them, but it was in a race: when it delivered the stored copy *before* the fetch landed, that copy
+classified as `.unchanged`, and nothing put the ticks back. A second cause compounded it: a tick
+held for its own head commit only, so every push unticked every file.
+
+**Decisions.**
+
+- **The store is the authority on viewed state.** After saving a fetch, `load()` applies the
+  store's read-back, not the fetch. A fetch that could not be saved keeps the on-screen ticks for
+  the same head (`ReviewModel.keepingViewed(of:in:)`).
+- **A tick survives a push that leaves the file alone.** `viewed_files` and `changed_files` keep
+  the file's blob SHA (`sha` of the REST files listing, migration v12). A tick holds at a newer
+  head while the blob is the same, which is GitHub's own rule. A tick without a SHA, stored before
+  v12 or on a file GitHub sent none for, stays head-scoped. The interdiff machinery was not
+  reused: it compares patches, and a patch moves when the base moves even though the file did not.
+- **GitHub's checkbox is read on every detail fetch.** One more tolerated GraphQL query,
+  `PullRequest.files { path viewerViewedState }`, 100 per page and capped at 30 pages, runs
+  beside the others. There was nothing to piggyback on. `reviewThreads` pages on its own cursor
+  and fails the detail when it fails. Closing issues are tolerated, but a viewer-field refusal
+  would empty that section too. Only `VIEWED` counts. `DISMISSED` ("new changes since last
+  viewed") and `UNVIEWED` do not add a tick, and they do not remove the reviewer's own tick
+  either; the blob rule decides whether the file changed.
+- **GitHub's half lives on the fetched row; the reviewer's decision wins.** GitHub's checkbox is
+  stored in `changed_files.viewedOnGitHub`, not in `viewed_files`. That row is rewritten on every
+  fetch, so a tick taken back on github.com goes away here with the next fetch. A fetch whose
+  viewed read failed carries `nil` (`PullRequestDetail.viewedOnGitHub`), and the store keeps the
+  column it last read: a failed read is "unknown", not "nothing viewed". `viewed_files` holds the
+  reviewer's *decision*, a tick or an untick (`viewed`, v12). While it applies — the same head,
+  or the same blob at a newer one — it decides; otherwise GitHub's column does. A union of the two
+  was tried first and could not hold an untick: one GitHub refused (read-only token), or one
+  overtaken by an older tick still in a retry's backoff, came back from GitHub's column on every
+  fetch. Copying GitHub's ticks into `viewed_files` would make every such race permanent.
+- **Writes go through the outbox (ADR 0006).** They are not too chatty for it: the action is
+  `setFileViewed(path:viewed:)`, and a toggle of the same file replaces the row still waiting, in
+  the transaction that writes its own (`DatabaseManager.enqueue(_:replacingPending:)`, which the
+  conversation's edits use too), so `v` pressed three times offline sends one mutation. The row
+  does not send its own `viewed`: the drain reads the decision stored when the row goes out, and
+  drops the row when none applies any more. Rows sent out of order therefore still leave GitHub
+  with the last decision. The local decision is written first, stamped with the moment of the
+  press so two presses whose writes land out of order keep the later one, and shown on the press.
+  It is not behind the per-pull-request activity guard: that refused `a` on the next file while
+  the last write ran, and the tick was taken back. The row is drained in the background with no
+  toast, and its retryable failures back off without a `syncFailed`, which is what carries a tick
+  made in a tunnel to GitHub later without an error badge. A refusal no retry can change, such as
+  a read-only token or a closed pull request, *drops* the row in silence
+  (`OutboxOutcome.dropped`). The local decision is the record and wins over GitHub's checkbox
+  here, so an alert per `a` press about the copy would be noise. A sent viewed write re-reads
+  nothing (`SentMutation.Kind.fileViewedChanged` is in neither re-read list), and a waiting one
+  raises no *Sending* chip on the row (`RowWriteState`). The settings' global waiting count still
+  includes it, because it is waiting. When the local decision could not be stored, the screen
+  takes its optimistic tick back.
+- **The iPhone gets it for free.** It reads the same `ReviewModel.viewedPaths` and writes through
+  the same `PullRequestActions`.
+
+**Consequences.** A *Viewed* tick now reaches the reviewer's other machines through GitHub rather
+than through settings sync. A detail fetch costs one more GraphQL point per 100 files. A file
+ticked or unticked here stays that way even when it is changed the other way on github.com,
+until a push changes the file; a file never touched here follows GitHub.

@@ -308,6 +308,28 @@ struct PullRequestClosingIssuesData: Decodable {
     var repository: Repository?
 }
 
+/// The payload of ``GraphQLDocuments/pullRequestViewedFiles``.
+struct PullRequestViewedFilesData: Decodable {
+    struct Repository: Decodable {
+        struct PullRequest: Decodable {
+            struct FileConnection: Decodable {
+                struct Node: Decodable {
+                    var path: String?
+                    var viewerViewedState: String?
+                }
+                var pageInfo: PageInfoDTO?
+                var nodes: [Node?]?
+            }
+            var files: FileConnection?
+        }
+        var pullRequest: PullRequest?
+    }
+    var repository: Repository?
+}
+
+/// The payload of the mark/unmark-viewed mutations; nothing in it is read.
+struct FileViewedData: Decodable {}
+
 /// One issue as `closingIssuesReferences` carries it.
 ///
 /// Four optional fields for ``LinkedPullRequestNodeDTO``'s reason — a response is trusted for

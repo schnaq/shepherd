@@ -25,6 +25,10 @@ Closed and merged pull requests leave the inbox. Draft pull requests stay in it 
 
 Next to the pull requests there is a second section for issues. Use the picker at the top of the rail to switch between **Pull requests** and **Issues**.
 
+The issues section shows issues assigned to you, opened by you or mentioning you. The **MINE** facet at the top of its rail narrows the list to one of the three. For example, click **Assigned to me** to see every open issue assigned to you. An issue that is assigned to you and mentions you is counted in both rows.
+
+You don't have to watch a repository for its issues to show up: the issues section searches all of GitHub for issues assigned to you, opened by you or mentioning you, and **Assigned to me** in the rail narrows it to the first. If you signed in with device flow, issues from public repositories always show up, but private repositories only from owners Shepherd's GitHub App is installed on. The end of the issue rail says so and has a button, **Install Shepherd on another owner…**. If you work across many organisations, signing in with a classic token (`repo` scope) sees everything your account sees. Archived repositories are always skipped.
+
 ### Hide a pull request
 
 Right-click a row and choose **Hide this pull request**. A toast offers **Undo**. A new review request brings a hidden pull request back. The full list is in Settings → Sync, under **Hidden pull requests**.
@@ -43,7 +47,7 @@ You can also manage the list in Settings → Sync under **Watched repositories**
 
 ![Watched repositories in the rail](/watched-repositories.png)
 
-A warning triangle instead of a count means Shepherd cannot see the repository. GitHub's search returns nothing for a repository your sign-in has no access to, so without the warning you would only see an empty list. Hover the row to see why. If you signed in with device flow, right-click it and choose **Install Shepherd on …** (with the owner's name). After the app is installed, choose **Check access again**. If you signed in with a token, give the token access to the repository's owner. See [GitHub token](/docs/github-token#device-flow-and-organizations).
+A warning triangle next to the count means Shepherd cannot see the repository. GitHub's search returns nothing for a repository your sign-in has no access to, so without the warning you would only see an empty list. A line under **REPOSITORIES** then says how many watched repositories are affected. Hover the row to see why. If you signed in with device flow, click **Install Shepherd…** on that line, or right-click the row and choose **Install Shepherd on …** (with the owner's name). After the app is installed, click **Check access again**. As soon as Shepherd finds a pull request from the repository, the warning goes away by itself. If you signed in with a token, give the token access to the repository's owner. See [GitHub token](/docs/github-token#device-flow-and-organizations).
 
 ### Add a local clone
 

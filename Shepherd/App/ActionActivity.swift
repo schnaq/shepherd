@@ -42,8 +42,6 @@ final class ActionActivity {
         /// A review thread resolved or reopened. Keyed by the **thread's** id, not the pull
         /// request's: two threads on one pull request are two conversations.
         case thread
-        /// A file's viewed flag.
-        case viewed
         /// Taking a pull request out of draft state.
         case readyForReview
         /// A comment on the pull request's conversation.

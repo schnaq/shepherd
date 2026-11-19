@@ -459,14 +459,14 @@ struct PullRequestActions {
         }
     }
 
-    /// Writes an edit's or a delete's row, after taking out every edit of the same post still
-    /// waiting in the outbox.
+    /// Writes an edit's or a delete's row, taking out every edit of the same post still waiting in
+    /// the outbox in the same transaction.
     ///
     /// A delete makes a waiting edit pointless, and a newer edit makes an older one wrong: an older
     /// edit in a retry's backoff would be sent after the newer one and put back the text the
     /// reviewer replaced. Taking it out is what lets the last word win. A row the drain already
-    /// holds is in flight and is left alone, by the store's state-guarded cancel: it may already be
-    /// on GitHub. Should it fail and wait out a backoff, the new row would be sent first; the drain
+    /// holds is in flight and is left alone, since the store only replaces waiting rows: it may
+    /// already be on GitHub. Should it fail and wait out a backoff, the new row would be sent first; the drain
     /// takes it out then, when it sends the new row (`SyncEngine`'s `isSuperseded`). Static, over the
     /// database alone, so the sequence runs against a real outbox in the tests.
     /// - Parameters:
@@ -482,30 +482,15 @@ struct PullRequestActions {
         on summary: PullRequestSummary,
         in database: DatabaseManager
     ) async throws -> OutboxItem {
-        let items = try await database.outboxItems(prID: summary.id)
-        for edit in pendingEdits(of: target, prID: summary.id, in: items) {
-            try await database.cancelPendingOutboxItem(id: edit.id)
-        }
-        return try await write(action, on: summary, in: database)
+        try await write(action, on: summary, in: database, replacingPending: isEdit(of: target))
     }
 
-    /// The edits of one post still waiting in the outbox: the same target on the same pull
-    /// request, not claimed by the drain yet.
-    /// - Parameters:
-    ///   - target: The post.
-    ///   - prID: The pull request's node id.
-    ///   - items: The outbox.
-    /// - Returns: Every such row — there can be several, one per *Update comment* while offline.
-    static func pendingEdits(
-        of target: ConversationTarget,
-        prID: String,
-        in items: [OutboxItem]
-    ) -> [OutboxItem] {
-        items.filter { item in
-            guard item.prID == prID, item.state == .pending,
-                  case .editComment(let rowTarget, _) = item.action
-            else { return false }
-            return rowTarget == target
+    /// Whether a row is an edit of one post — what an edit or a delete of it replaces while the
+    /// row waits. Every such row: there can be several, one per *Update comment* while offline.
+    /// - Parameter target: The post.
+    static func isEdit(of target: ConversationTarget) -> @Sendable (OutboxAction) -> Bool {
+        { action in
+            if case .editComment(target, _) = action { true } else { false }
         }
     }
 
@@ -785,25 +770,70 @@ struct PullRequestActions {
         toasts.info(String(localized: "Copied \(summary.headRefName)"))
     }
 
-    /// Marks a file viewed (or not) for the current head commit.
+    /// Marks a file viewed (or not) for the current head commit, here and on GitHub.
+    ///
+    /// The local decision is the record and is written first; GitHub's *Viewed* checkbox is a
+    /// copy sent through the outbox afterwards, drained in the background and never announced — a
+    /// reviewer pressing `a` down twenty files gets no toasts, and a token that may not write
+    /// keeps the decisions on this Mac only (ADR 0028, 2026-11-19 amendment).
+    ///
+    /// Not inside ``activity``: keyed on the pull request, it refused the next press while the
+    /// last one was still being written, and `a` down a list of files lost ticks. Nothing needs
+    /// the guard — each press stores its own decision with the moment it was made, so presses
+    /// land in order, and the row sends whatever decision is stored when it goes out.
     /// - Parameters:
     ///   - path: The file path.
     ///   - summary: The pull request.
     ///   - isViewed: The new state.
-    func setFileViewed(path: String, on summary: PullRequestSummary, isViewed: Bool) async {
-        // Keyed on the pull request rather than on the path: one file is selected at a time, so
-        // the toggle and the `v` shortcut are the same button and cannot mean two files at once.
-        await activity.run(summary.id, .viewed) {
-            do {
-                try await session.database.setFileViewed(
-                    prID: summary.id,
-                    path: path,
-                    headRefOid: summary.headRefOid,
-                    isViewed: isViewed
-                )
-            } catch {
-                toasts.failure(error, context: String(localized: "Could not save the viewed state"))
-            }
+    /// - Returns: Whether the decision was stored — `false` when the write failed (toasted here).
+    ///   The caller takes its optimistic tick back on `false`.
+    @discardableResult
+    func setFileViewed(path: String, on summary: PullRequestSummary, isViewed: Bool) async -> Bool {
+        do {
+            // `decidedAt` defaults to now, taken here on the main actor in press order.
+            try await session.database.setFileViewed(
+                prID: summary.id,
+                path: path,
+                headRefOid: summary.headRefOid,
+                isViewed: isViewed
+            )
+        } catch {
+            toasts.failure(error, context: String(localized: "Could not save the viewed state"))
+            return false
+        }
+        do {
+            try await Self.writeFileViewed(path: path, viewed: isViewed, on: summary, in: session.database)
+            let session = self.session
+            Task { await session.drainOutbox() }
+        } catch {
+            // A row that could not be written costs GitHub's copy only, so it is not news.
+        }
+        return true
+    }
+
+    /// Writes a viewed toggle's row, taking out any still-waiting row for the same file in the
+    /// same transaction.
+    ///
+    /// Only one row per file needs to wait: the drain sends the decision stored when the row
+    /// goes out, not the one it was queued with, so `v` pressed three times offline sends one
+    /// mutation, not three. Static, over the database alone, like
+    /// ``write(_:replacingEditsOf:on:in:)``.
+    /// - Parameters:
+    ///   - path: The file path.
+    ///   - viewed: The new state.
+    ///   - summary: The pull request.
+    ///   - database: The outbox.
+    /// - Returns: The row.
+    /// - Throws: When the outbox could not be written.
+    @discardableResult
+    static func writeFileViewed(
+        path: String,
+        viewed: Bool,
+        on summary: PullRequestSummary,
+        in database: DatabaseManager
+    ) async throws -> OutboxItem {
+        try await write(.setFileViewed(path: path, viewed: viewed), on: summary, in: database) { action in
+            if case .setFileViewed(path, _) = action { true } else { false }
         }
     }
 
@@ -1200,7 +1230,8 @@ struct PullRequestActions {
     private static func write(
         _ action: OutboxAction,
         on summary: PullRequestSummary,
-        in database: DatabaseManager
+        in database: DatabaseManager,
+        replacingPending replaces: @escaping @Sendable (OutboxAction) -> Bool = { _ in false }
     ) async throws -> OutboxItem {
         let item = OutboxItem(
             prID: summary.id,
@@ -1208,7 +1239,7 @@ struct PullRequestActions {
             number: summary.number,
             action: action
         )
-        try await database.enqueue(item)
+        try await database.enqueue(item, replacingPending: replaces)
         return item
     }
 

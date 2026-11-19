@@ -131,6 +131,9 @@ struct DelegationSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     promptCard
+                    if model.offersHandoff {
+                        handoffRow
+                    }
                     guardrailRow
                     if !model.transcript.isEmpty {
                         transcriptCard
@@ -204,6 +207,11 @@ struct DelegationSheet: View {
     /// has to describe the one that will actually be sent: new work may be committed and
     /// published by the run itself, which "must not push" would misstate.
     private var promptFootnote: String {
+        if model.handoff == .cloud {
+            return String(
+                localized: "Shepherd prepends short instructions of its own. The session runs on claude.ai against the repository on GitHub, so it does not see your local changes."
+            )
+        }
         if model.context.isRepositoryTask {
             return String(
                 localized: "The first line names the branch. Shepherd prepends its own instructions: the agent works on a new branch from the default branch, may commit and open a pull request with its own credentials, and should keep the change minimal."
@@ -219,15 +227,54 @@ struct DelegationSheet: View {
         )
     }
 
+    /// How the run happens: headless here, or handed to a session the user drives (ADR 0011's
+    /// 2026-11-19 amendment). The choice is remembered for the next sheet.
+    private var handoffRow: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Picker(String(localized: "How"), selection: handoffBinding) {
+                ForEach(DelegationHandoff.allCases) { handoff in
+                    Text(handoff.title).tag(handoff)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .disabled(!model.canChangeHandoff)
+            Text(model.handoff.explanation)
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// The permission mode for this run — the configured one unless changed here — and the
+    /// guardrails that come with the chosen way of running.
     private var guardrailRow: some View {
         HStack(spacing: 8) {
             Image(systemName: "shield.lefthalf.filled")
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textSecondary)
+            if !model.offersPermissionChoice {
+                // A custom template or a session command carries its own mode; this is the
+                // configured one, as the line always said.
+                Text(model.configuration.permissionMode.title)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.textSecondary)
+            } else if model.handoff != .cloud {
+                Picker(String(localized: "Permission mode"), selection: permissionBinding) {
+                    ForEach(model.permissionModeChoices) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .fixedSize()
+                .disabled(model.isBusy)
+                .help(model.permissionMode.explanation)
+            }
             Text(model.guardrailSummary)
                 .font(.system(size: 11.5))
                 .foregroundStyle(Theme.textSecondary)
-            if model.configuration.permissionMode.usesAllowedTools {
+            if model.handoff == .background, model.permissionMode.usesAllowedTools {
                 Text("· \(model.configuration.allowedTools)")
                     .font(Theme.mono(10.5))
                     .foregroundStyle(Theme.textMuted)
@@ -342,8 +389,51 @@ struct DelegationSheet: View {
                 resultSummary(result)
                 diffStatBlock(diffStat)
             }
+        case .handedOff(let handoff, let diffStat):
+            VStack(alignment: .leading, spacing: 14) {
+                handoffSummary(handoff)
+                if handoff.usesLocalWorktree {
+                    diffStatBlock(diffStat)
+                }
+            }
+            // Shepherd is not told when the session changes something, so reopening the sheet
+            // reads the worktree again.
+            .task { await model.refreshHandoff() }
         case .idle, .preparingWorktree, .running:
             EmptyView()
+        }
+    }
+
+    /// Where the handed-off session is, and what Shepherd can still do for it.
+    private func handoffSummary(_ handoff: DelegationHandoff) -> some View {
+        Card {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: handoff.usesLocalWorktree ? "terminal" : "cloud")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.accentText)
+                    Text(handoff.usesLocalWorktree
+                        ? String(localized: "Running in \(model.terminalApp.title)")
+                        : String(localized: "Started on claude.ai from \(model.terminalApp.title)"))
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(Theme.textStrong)
+                    Spacer(minLength: 4)
+                    if handoff.usesLocalWorktree {
+                        Button(String(localized: "Refresh")) {
+                            Task { await model.refreshHandoff() }
+                        }
+                        .buttonStyle(SecondaryButtonStyle(height: 26))
+                        .disabled(model.isPublishing)
+                        .help(String(localized: "Reads the worktree again for the diff and Commit & push"))
+                    }
+                }
+                Text(handoff.usesLocalWorktree
+                    ? String(localized: "Shepherd does not see the session. Refresh to see what it changed, then commit and push it here or from the session.")
+                    : String(localized: "The session works on the repository on GitHub. Follow it on claude.ai/code or in the Claude app."))
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -602,6 +692,28 @@ struct DelegationSheet: View {
                 .buttonStyle(PrimaryButtonStyle())
                 .disabled(!model.canRunAgain)
 
+        case .handedOff(let handoff, _):
+            // The fallback when the terminal did not open, or to run the session somewhere else.
+            Button(String(localized: "Copy command")) { model.copyLaunchCommand() }
+                .buttonStyle(SecondaryButtonStyle(height: 30))
+                .disabled(model.launcherScript == nil)
+                .help(String(localized: "Copies the command that starts the session, to paste into any terminal"))
+            if handoff == .cloud {
+                // Nothing on this Mac belongs to a cloud session, so another run may start.
+                Button(String(localized: "Start again")) { model.start() }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(!model.canStart)
+            } else {
+                // No *Run again*: preparing the worktree again would pull it from under the
+                // session. Discarding it is the way back to a fresh start.
+                Button(String(localized: "Reveal in Finder")) { model.revealWorktreeInFinder() }
+                    .buttonStyle(SecondaryButtonStyle(height: 30))
+                Button(String(localized: "Discard worktree")) { model.discardWorktree() }
+                    .buttonStyle(SecondaryButtonStyle(height: 30, tint: Theme.failure))
+                    .disabled(model.isPublishing)
+                pushButton
+            }
+
         case .idle:
             Button(String(localized: "Start")) { model.start() }
                 .buttonStyle(PrimaryButtonStyle())
@@ -743,6 +855,21 @@ struct DelegationSheet: View {
 
     private var taskBinding: Binding<String> {
         Binding(get: { model.task }, set: { model.task = $0 })
+    }
+
+    /// The run's way of running, also remembered as the next sheet's default.
+    private var handoffBinding: Binding<DelegationHandoff> {
+        Binding(
+            get: { model.handoff },
+            set: {
+                model.handoff = $0
+                environment.settings.delegationHandoff = $0
+            }
+        )
+    }
+
+    private var permissionBinding: Binding<AgentPermissionMode> {
+        Binding(get: { model.permissionMode }, set: { model.permissionMode = $0 })
     }
 
     private func chooseCheckout(repo: String) {

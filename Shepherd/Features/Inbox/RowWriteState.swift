@@ -53,7 +53,10 @@ enum RowWriteState: Equatable, Sendable {
         wasMerged: Bool,
         series: MergeSeriesChip? = nil
     ) -> RowWriteState? {
-        let mine = items.filter { $0.prID == id }
+        // A viewed checkbox's row is left out: it copies a tick the file list already shows, a
+        // refusal drops it silently, and a reviewer pressing `a` down a diff would otherwise
+        // flash *Sending* on every press (ADR 0028, 2026-11-19 amendment).
+        let mine = items.filter { $0.prID == id && !$0.action.isBackgroundSync }
         let failed = mine.filter { $0.state == .failed }.count
         if failed > 0 { return .failed(failed) }
         let parked = mine.filter { $0.state == .conflicted }.count

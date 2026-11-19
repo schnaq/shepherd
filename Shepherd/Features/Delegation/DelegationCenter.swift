@@ -378,7 +378,12 @@ final class DelegationCenter {
             onDidBegin: onDidBegin,
             onDidStart: onDidStart,
             brief: brief,
-            claimedTaskSlugs: claimedTaskSlugs
+            claimedTaskSlugs: claimedTaskSlugs,
+            executable: executable,
+            // The model falls back to the background run on its own where a hand-off makes no
+            // sense — a rule, a session send, a custom CLI (``DelegationModel/offersHandoff``).
+            handoff: settings.delegationHandoff,
+            terminalApp: settings.terminalApp
         )
     }
 }

@@ -20,6 +20,8 @@ struct DelegationSettingsTab: View {
     @State private var localRepositoryDraft: LocalRepositoryDraft?
     /// Which editors this Mac has, read when the tab appears rather than on every redraw.
     @State private var installedEditors: Set<EditorKind> = []
+    /// Which terminal apps this Mac has, read the same way.
+    @State private var installedTerminals: Set<TerminalApp> = []
     /// The *Extra arguments* field as typed. Stored only once it splits, so an unclosed quote
     /// mid-typing neither snaps the field back nor saves half an argument.
     @State private var extraArgumentsText = ""
@@ -120,6 +122,18 @@ struct DelegationSettingsTab: View {
                     }
                 }
 
+                Picker(selection: terminalAppBinding) {
+                    ForEach(TerminalApp.allCases) { app in
+                        Text(installedTerminals.contains(app)
+                            ? app.title
+                            : String(localized: "\(app.title) (not found on this Mac)"))
+                            .tag(app)
+                    }
+                } label: {
+                    Text(String(localized: "Terminal"))
+                    Text(String(localized: "Where an interactive or Remote Control session opens."))
+                }
+
             case .custom:
                 LabeledContent {
                     HStack(spacing: 8) {
@@ -204,7 +218,9 @@ struct DelegationSettingsTab: View {
     private var guardrailSection: some View {
         Section(String(localized: "Guardrails")) {
             Picker(selection: permissionBinding) {
-                ForEach(AgentPermissionMode.allCases) { mode in
+                // Not "Ask for each action": a headless run has nobody to ask. The delegation
+                // sheet offers it for an interactive session (ADR 0011's 2026-11-19 amendment).
+                ForEach(AgentPermissionMode.headlessCases) { mode in
                     Text(mode.title).tag(mode)
                 }
             } label: {
@@ -406,7 +422,10 @@ struct DelegationSettingsTab: View {
                 localized: "Lines are counted on the pull request's head, so they match when your checkout is on that commit."
             ))
         }
-        .onAppear { installedEditors = EditorOpener.installedKinds() }
+        .onAppear {
+            installedEditors = EditorOpener.installedKinds()
+            installedTerminals = Set(TerminalApp.allCases.filter { $0.applicationURL != nil })
+        }
     }
 
     /// The picker row for one editor, with a note when this Mac does not have it.
@@ -617,6 +636,13 @@ struct DelegationSettingsTab: View {
         Binding(
             get: { environment.settings.agentCLI.permissionMode },
             set: { environment.settings.agentCLI.permissionMode = $0 }
+        )
+    }
+
+    private var terminalAppBinding: Binding<TerminalApp> {
+        Binding(
+            get: { environment.settings.terminalApp },
+            set: { environment.settings.terminalApp = $0 }
         )
     }
 

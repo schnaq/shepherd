@@ -539,7 +539,10 @@ public enum ResponseMapping {
             additions: dto.additions ?? 0,
             deletions: dto.deletions ?? 0,
             patch: dto.patch,
-            isViewed: false
+            // GitHub's checkbox is not in REST; ``GitHubClient/pullRequestDetail(repo:number:)``
+            // lays the GraphQL reading over it.
+            isViewed: false,
+            blobSha: dto.sha
         )
     }
 

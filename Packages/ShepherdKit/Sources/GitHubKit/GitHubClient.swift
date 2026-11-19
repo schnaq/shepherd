@@ -105,9 +105,14 @@ public actor GitHubClient {
 
     /// Pages one GraphQL `search` connection — the loop both sweeps (pull requests and issues)
     /// share, so they differ only in document, payload type and row mapper.
+    /// - Parameter acceptsPartialData: Keep a page whose results GitHub answered only in part —
+    ///   a `null` nested inside a result, such as one linked pull request. A page with `nodes`
+    ///   `null`, or with any result itself `null`, still throws: kept, that result would be
+    ///   missing from the facet, and the sweep's prune would delete the row it holds.
     private func sweep<Payload: Decodable, Node, Row>(
         document: String,
         rawQuery: String,
+        acceptsPartialData: Bool = false,
         page: (Payload) -> (nodes: [Node?]?, pageInfo: PageInfoDTO?),
         map: (Node) -> Row?
     ) async throws -> [Row] {
@@ -126,9 +131,18 @@ public actor GitHubClient {
                 document: document,
                 variables: variables,
                 resource: "search",
-                isIdempotent: true
+                isIdempotent: true,
+                acceptsPartialData: acceptsPartialData
             )
             let (nodes, pageInfo) = page(data)
+            if acceptsPartialData {
+                // Only a null *inside* a node is tolerated. A result GitHub nulled as a whole —
+                // SAML, a forbidden repository, a timeout — would otherwise be missing from the
+                // facet, and the prune would delete the row the user still has.
+                guard let nodes, !nodes.contains(where: { $0 == nil }) else {
+                    throw GitHubError.graphQL(messages: ["GitHub refused the search \(rawQuery)"])
+                }
+            }
             results.append(contentsOf: (nodes ?? []).compactMap { $0 }.compactMap(map))
             guard pageInfo?.hasNextPage == true, let next = pageInfo?.endCursor else { break }
             cursor = next
@@ -163,9 +177,17 @@ public actor GitHubClient {
 
     private func searchIssues(_ query: IssueQuery) async throws -> [IssueRowSummary] {
         // The sweep's own five-page cap applies here too (see `sweep`).
+        //
+        // Partial answers are kept (ADR 0032's 2026-11-19 amendment). An issue's
+        // `closedByPullRequestsReferences` may point at a pull request in an owner the token
+        // cannot read — the GitHub App not installed there, SAML — and GitHub answers that one
+        // link with `null` and a `FORBIDDEN` error. Refusing the page failed the whole issue
+        // sweep on every cycle, because of somebody else's pull request. The mapper already
+        // drops `null` links.
         try await sweep(
             document: GraphQLDocuments.searchIssues,
             rawQuery: query.rawQuery,
+            acceptsPartialData: true,
             page: { (data: SearchIssuesData) in (data.search?.nodes, data.search?.pageInfo) },
             map: {
                 ResponseMapping.issueRowSummary(
@@ -270,8 +292,19 @@ public actor GitHubClient {
             number: number
         )
         async let checks: [CheckRun] = headSHA.isEmpty ? [] : checkRuns(repo: repo, ref: headSHA)
+        // Tolerated as well (ADR 0028, 2026-11-19 amendment): GitHub's *Viewed* checkboxes are a
+        // convenience on top of the reviewer's own decisions, which the store keeps either way.
+        // `nil` travels as "unknown", so the store keeps the checkboxes it last read rather than
+        // reading a failure as "nothing viewed".
+        async let viewedRead: Set<String>? = try? viewedFiles(repo: repo, number: number)
 
-        let fileList = try await files
+        var fileList = try await files
+        let viewedOnGitHub = await viewedRead
+        if let viewedOnGitHub {
+            for index in fileList.indices {
+                fileList[index].isViewed = viewedOnGitHub.contains(fileList[index].path)
+            }
+        }
         let commitList = try await commitsRead
         let reviewList = try await reviewsRead
         let threadList = try await threads
@@ -309,7 +342,8 @@ public actor GitHubClient {
             ),
             checks: checkList,
             closingIssues: closingIssueList,
-            conversation: await conversationRead
+            conversation: await conversationRead,
+            viewedOnGitHub: viewedOnGitHub
         )
     }
 
@@ -345,6 +379,59 @@ public actor GitHubClient {
             isIdempotent: true
         )
         return ResponseMapping.closingIssues(from: data)
+    }
+
+    /// The paths the signed-in user marked *Viewed* on GitHub (ADR 0028, 2026-11-19 amendment).
+    ///
+    /// `VIEWED` only: `DISMISSED` is GitHub saying the file changed since it was ticked, which is
+    /// unviewed. Thirty pages of 100, the files listing's own cap.
+    /// - Parameters:
+    ///   - repo: The repository.
+    ///   - number: The pull request number.
+    /// - Returns: The viewed paths.
+    /// - Throws: Any ``GitHubError`` the request maps to. ``pullRequestDetail(repo:number:)``
+    ///   tolerates every one of them and carries `nil` — unknown — in their place.
+    public func viewedFiles(repo: RepoRef, number: Int) async throws -> Set<String> {
+        var viewed: Set<String> = []
+        var cursor: String? = nil
+        for _ in 0..<30 {
+            let data: PullRequestViewedFilesData = try await graphQL(
+                document: GraphQLDocuments.pullRequestViewedFiles,
+                variables: [
+                    "owner": .string(repo.owner),
+                    "name": .string(repo.name),
+                    "number": .int(number),
+                    "after": cursor.map { GraphQLValue.string($0) } ?? .null,
+                ],
+                resource: "\(repo.fullName)#\(number) viewed files",
+                isIdempotent: true
+            )
+            let connection = data.repository?.pullRequest?.files
+            for node in (connection?.nodes ?? []).compactMap({ $0 })
+            where node.viewerViewedState == "VIEWED" {
+                if let path = node.path { viewed.insert(path) }
+            }
+            guard connection?.pageInfo?.hasNextPage == true,
+                  let next = connection?.pageInfo?.endCursor
+            else { break }
+            cursor = next
+        }
+        return viewed
+    }
+
+    /// Ticks or unticks a file's *Viewed* checkbox on GitHub for the signed-in user. GraphQL-only.
+    /// - Parameters:
+    ///   - pullRequestID: The pull request's node id.
+    ///   - path: The file path.
+    ///   - viewed: `true` to tick, `false` to untick.
+    public func setFileViewed(pullRequestID: String, path: String, viewed: Bool) async throws {
+        let _: FileViewedData = try await graphQL(
+            document: viewed ? GraphQLDocuments.markFileAsViewed : GraphQLDocuments.unmarkFileAsViewed,
+            variables: ["pullRequestId": .string(pullRequestID), "path": .string(path)],
+            resource: viewed ? "mark file viewed" : "unmark file viewed",
+            // Setting a checkbox to the state it is in is harmless, so a retry may resend it.
+            isIdempotent: true
+        )
     }
 
     /// Fetches a pull request's conversation: GitHub's timeline, oldest first, and what the
@@ -1838,9 +1925,9 @@ public actor GitHubClient {
     ///   whether replaying the document after a dropped connection is safe.
     /// - Parameter acceptsPartialData: `true` to keep the `data` of an answer that also carries
     ///   `errors`. GitHub nulls what it would not resolve (a node behind SAML enforcement) and
-    ///   answers the rest. Only the conversation read sets it (ADR 0043), because its mapper
-    ///   drops the nulled nodes; every other read would rather fail than act on half an answer.
-    ///   A rate limit throws either way.
+    ///   answers the rest. Only the conversation read (ADR 0043) and the issues sweep (ADR 0032)
+    ///   set it, because their mappers drop the nulled nodes; every other read would rather fail
+    ///   than act on half an answer. A rate limit throws either way.
     private func graphQL<Payload: Decodable>(
         document: String,
         variables: [String: GraphQLValue],

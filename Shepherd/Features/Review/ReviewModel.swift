@@ -500,7 +500,7 @@ final class ReviewModel {
                     return
                 }
                 self.isMissingFromInbox = false
-                let fresh = try await self.session.github.pullRequestDetail(
+                var fresh = try await self.session.github.pullRequestDetail(
                     repo: row.repo,
                     number: row.number
                 )
@@ -510,18 +510,31 @@ final class ReviewModel {
                 // the banner says the copy was not kept — dropping a good diff because SQLite
                 // was unhappy would be the wrong half to throw away.
                 var saveFailure: String?
+                var storedViewed: Set<String>?
                 do {
                     try await self.session.database.savePullRequestDetail(fresh)
+                    // The viewed ticks are the store's — the reviewer's own rows laid over what
+                    // GitHub reported — and `fresh` alone carries GitHub's half only. Applied as
+                    // fetched, it emptied ``viewedPaths`` whenever the observation had delivered
+                    // the stored copy first, and every ticked file came back unticked on reopening.
+                    storedViewed = try? await self.session.database.viewedPaths(prID: self.prID)
                 } catch {
                     guard !Task.isCancelled else { return }
                     saveFailure = error.userFacingDescription
                 }
                 guard !Task.isCancelled else { return }
+                // The store's input only: a stored copy never carries it, so left in, every
+                // fetch would compare unequal and be applied again.
+                fresh.viewedOnGitHub = nil
                 // An equal detail was already applied — by the cached read above, or by
                 // ``received(_:)`` reacting to the save — so applying it again would only re-run
                 // the prioritiser and reload the round for nothing. Compared and applied with the
                 // conversation on screen kept where this fetch could not read one.
-                let fetched = ReviewModel.keepingConversation(of: self.detail, in: fresh)
+                let fetched = ReviewModel.keepingConversation(
+                    of: self.detail,
+                    in: storedViewed.map { ReviewModel.withViewed($0, in: fresh) }
+                        ?? ReviewModel.keepingViewed(of: self.detail, in: fresh)
+                )
                 if fetched != self.detail { self.apply(fetched) }
                 self.onDidLoadDetail?(self.prID)
                 // After the apply, which clears the banner: this notice is about the apply that
@@ -683,6 +696,39 @@ final class ReviewModel {
         guard fresh.conversation == nil else { return fresh }
         var kept = fresh
         kept.conversation = shown?.conversation
+        return kept
+    }
+
+    /// `fresh` with exactly `paths` viewed — the store's ticks laid over a fetch it has just
+    /// stored.
+    static func withViewed(_ paths: Set<String>, in fresh: PullRequestDetail) -> PullRequestDetail {
+        var marked = fresh
+        for index in marked.files.indices {
+            marked.files[index].isViewed = paths.contains(marked.files[index].path)
+        }
+        return marked
+    }
+
+    /// The detail ``load()`` puts on the screen when the store could not be written or read
+    /// back, with the viewed state on screen kept.
+    ///
+    /// A fetch carries only what GitHub reported as viewed; the reviewer's own decisions live in
+    /// the store and win over GitHub's (ADR 0028, 2026-11-19 amendment). Applied as it came, a
+    /// fetch that could not be stored would untick every file the reviewer ticked here, and
+    /// re-tick one they unticked. Only for the same head: a decision on another head is the
+    /// store's to carry forward or not (`DatabaseManager.loadPullRequestDetail`). Pure and
+    /// `static` for ``change(shown:fresh:)``'s reason.
+    /// - Parameters:
+    ///   - shown: The detail the screen is showing, or `nil` when it is showing none.
+    ///   - fresh: The detail GitHub just returned.
+    /// - Returns: `fresh`, with every file the screen shows viewed or not as the screen has it.
+    static func keepingViewed(of shown: PullRequestDetail?, in fresh: PullRequestDetail) -> PullRequestDetail {
+        guard let shown, shown.summary.headRefOid == fresh.summary.headRefOid else { return fresh }
+        let onScreen = Dictionary(shown.files.map { ($0.path, $0.isViewed) }) { first, _ in first }
+        var kept = fresh
+        for index in kept.files.indices {
+            if let isViewed = onScreen[kept.files[index].path] { kept.files[index].isViewed = isViewed }
+        }
         return kept
     }
 
@@ -1626,8 +1672,28 @@ final class ReviewModel {
     ///   - actions: The write helper (for error toasts).
     func toggleViewed(path: String, actions: PullRequestActions) async {
         guard let summary else { return }
-        let isViewed = !viewedPaths.contains(path)
-        await actions.setFileViewed(path: path, on: summary, isViewed: isViewed)
+        await writeViewed(path, !viewedPaths.contains(path), on: summary, actions: actions)
+    }
+
+    /// Ticks or unticks a file on the press, not after the write, and takes it back when the
+    /// write failed: a tick only the screen holds is the one that is gone on reopening.
+    /// - Parameter afterTicking: Runs between the tick and the write, so what follows the tick
+    ///   on screen does not wait for the disk.
+    private func writeViewed(
+        _ path: String,
+        _ isViewed: Bool,
+        on summary: PullRequestSummary,
+        actions: PullRequestActions,
+        afterTicking: () -> Void = {}
+    ) async {
+        setViewed(path, isViewed)
+        afterTicking()
+        if await !actions.setFileViewed(path: path, on: summary, isViewed: isViewed) {
+            setViewed(path, !isViewed)
+        }
+    }
+
+    private func setViewed(_ path: String, _ isViewed: Bool) {
         if isViewed {
             viewedPaths.insert(path)
         } else {
@@ -1650,11 +1716,8 @@ final class ReviewModel {
     ///   - actions: The write helper (for error toasts).
     func acceptFile(path: String, actions: PullRequestActions) async {
         guard let summary else { return }
-        if !viewedPaths.contains(path) {
-            await actions.setFileViewed(path: path, on: summary, isViewed: true)
-            viewedPaths.insert(path)
-        }
-        selectNextUnviewedFile()
+        guard !viewedPaths.contains(path) else { return selectNextUnviewedFile() }
+        await writeViewed(path, true, on: summary, actions: actions, afterTicking: selectNextUnviewedFile)
     }
 
     /// Selects the next file that has not been marked seen, searching forward and then wrapping.

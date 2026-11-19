@@ -242,7 +242,9 @@ struct EditorOpener {
         kind.bundleIdentifiers.lazy.compactMap(application(bundleIdentifier:)).first
     }
 
-    private static func application(bundleIdentifier: String) -> URL? {
+    /// Where an app is installed, or `nil` when this Mac does not have it. Also the terminal
+    /// lookup (``TerminalApp/applicationURL``).
+    static func application(bundleIdentifier: String) -> URL? {
         NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier)
     }
 }

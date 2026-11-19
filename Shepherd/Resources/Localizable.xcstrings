@@ -281,6 +281,16 @@
         }
       }
     },
+    "%@ is not installed on this Mac. Choose another terminal in Settings → Delegation, or copy the command.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ ist auf diesem Mac nicht installiert. Wähle in Einstellungen → Delegation ein anderes Terminal, oder kopiere den Befehl."
+          }
+        }
+      }
+    },
     "%@ is not one of this pull request's changed files": {
       "localizations": {
         "de": {
@@ -2993,6 +3003,16 @@
         }
       }
     },
+    "Ask for each action": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bei jeder Aktion fragen"
+          }
+        }
+      }
+    },
     "Auto": {
       "localizations": {
         "de": {
@@ -3063,12 +3083,32 @@
         }
       }
     },
+    "Claude Code asks you in the terminal before each edit or command.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claude Code fragt dich im Terminal vor jeder Änderung und jedem Befehl."
+          }
+        }
+      }
+    },
     "Claude Code decides which tool calls run unattended and refuses the rest.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Claude Code entscheidet, welche Werkzeugaufrufe unbeaufsichtigt laufen, und lehnt den Rest ab."
+          }
+        }
+      }
+    },
+    "Claude Code on the web": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claude Code im Web"
           }
         }
       }
@@ -3113,6 +3153,36 @@
         }
       }
     },
+    "Copied the command.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Befehl kopiert."
+          }
+        }
+      }
+    },
+    "Copies the command that starts the session, to paste into any terminal": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kopiert den Befehl, der die Sitzung startet, zum Einfügen in ein beliebiges Terminal"
+          }
+        }
+      }
+    },
+    "Copy command": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Befehl kopieren"
+          }
+        }
+      }
+    },
     "Copy link": {
       "localizations": {
         "de": {
@@ -3149,6 +3219,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dein Beitrag auf %@ konnte nicht bearbeitet werden"
+          }
+        }
+      }
+    },
+    "Could not open the terminal": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Das Terminal konnte nicht geöffnet werden"
           }
         }
       }
@@ -3313,6 +3393,56 @@
         }
       }
     },
+    "Ghostty": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ghostty"
+          }
+        }
+      }
+    },
+    "Do what the task asks. If it asks a question, for a plan or for a review, answer it and change nothing.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu, was die Aufgabe verlangt. Stellt sie eine Frage oder bittet um einen Plan oder ein Review, beantworte sie und ändere nichts."
+          }
+        }
+      }
+    },
+    "If the task asks for code changes, keep them as small as they can be. Do not reformat, rename or refactor anything the task does not ask for.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verlangt die Aufgabe Code-Änderungen, halte sie so klein wie möglich. Formatiere, benenne und refaktoriere nichts um, was die Aufgabe nicht verlangt."
+          }
+        }
+      }
+    },
+    "If the task is unclear or you would have to guess at intent, say so instead of guessing.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ist die Aufgabe unklar oder müsstest du die Absicht erraten, sage das, statt zu raten."
+          }
+        }
+      }
+    },
+    "Ground rules:\n- %@\n- %@\n- %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grundregeln:\n- %@\n- %@\n- %@"
+          }
+        }
+      }
+    },
     "Heart": {
       "localizations": {
         "de": {
@@ -3363,12 +3493,42 @@
         }
       }
     },
+    "How": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie"
+          }
+        }
+      }
+    },
+    "In the background": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Im Hintergrund"
+          }
+        }
+      }
+    },
     "Install Shepherd on %@…": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "Shepherd bei %@ installieren…"
+          }
+        }
+      }
+    },
+    "Interactive session": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interaktive Sitzung"
           }
         }
       }
@@ -3383,12 +3543,312 @@
         }
       }
     },
+    "Like an interactive session, and also reachable from claude.ai/code and the Claude app.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wie eine interaktive Sitzung, zusätzlich erreichbar über claude.ai/code und die Claude-App."
+          }
+        }
+      }
+    },
     "Linked %@, but did not watch it: the watch list is full. Its pull requests reach the inbox only when they involve you.": {
       "localizations": {
         "de": {
           "stringUnit": {
             "state": "translated",
             "value": "%@ verknüpft, aber nicht beobachtet: Die Liste der beobachteten Repositorys ist voll. Seine Pull Requests kommen nur in die Inbox, wenn sie dich betreffen."
+          }
+        }
+      }
+    },
+    "Open a delegation sheet with this issue as the task. Shepherd creates a worktree on its own branch and runs the assistant you configured; a run in the background is queued as a comment on the issue.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnet ein Delegationsfenster mit diesem Issue als Aufgabe. Shepherd legt einen Worktree auf einem eigenen Branch an und startet den Assistenten, den du konfiguriert hast; ein Lauf im Hintergrund wird als Kommentar am Issue eingereiht."
+          }
+        }
+      }
+    },
+    "Opened %@ in %@, in %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ in %@ geöffnet, in %@."
+          }
+        }
+      }
+    },
+    "Opens Claude Code in your terminal, in a prepared worktree. You drive the session.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Öffnet Claude Code in deinem Terminal, in einem vorbereiteten Worktree. Du steuerst die Sitzung."
+          }
+        }
+      }
+    },
+    "Reads the worktree again for the diff and Commit & push": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liest den Worktree erneut für den Diff und „Committen & pushen“"
+          }
+        }
+      }
+    },
+    "Refresh": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aktualisieren"
+          }
+        }
+      }
+    },
+    "Remote Control": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remote Control"
+          }
+        }
+      }
+    },
+    "Running in %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Läuft in %@"
+          }
+        }
+      }
+    },
+    "Runs on claude.ai against GitHub. Local changes and caps do not apply.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Läuft auf claude.ai gegen GitHub. Lokale Änderungen und Limits gelten nicht."
+          }
+        }
+      }
+    },
+    "Shepherd does not see the session. Refresh to see what it changed, then commit and push it here or from the session.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd sieht die Sitzung nicht. Aktualisiere, um zu sehen, was sie geändert hat, und committe und pushe es dann hier oder aus der Sitzung."
+          }
+        }
+      }
+    },
+    "Shepherd handed you a task on %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd hat dir eine Aufgabe in %@ übergeben."
+          }
+        }
+      }
+    },
+    "Shepherd handed you a task on issue #%@ of %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd hat dir eine Aufgabe zu Issue #%@ von %@ übergeben."
+          }
+        }
+      }
+    },
+    "Shepherd handed you a task on pull request #%@ of %@, branch %@.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd hat dir eine Aufgabe zu Pull Request #%@ von %@ übergeben, Branch %@."
+          }
+        }
+      }
+    },
+    "Shepherd prepends short instructions of its own. The session runs on claude.ai against the repository on GitHub, so it does not see your local changes.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd stellt kurze eigene Anweisungen voran. Die Sitzung läuft auf claude.ai gegen das Repository auf GitHub und sieht deine lokalen Änderungen daher nicht."
+          }
+        }
+      }
+    },
+    "Shepherd runs the agent headless in a worktree and shows the transcript here.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd führt den Agenten ohne Oberfläche in einem Worktree aus und zeigt das Protokoll hier."
+          }
+        }
+      }
+    },
+    "Start again": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erneut starten"
+          }
+        }
+      }
+    },
+    "Started a Claude Code session on the web from %@. It works on %@ on GitHub.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Claude-Code-Sitzung im Web aus %@ gestartet. Sie arbeitet an %@ auf GitHub."
+          }
+        }
+      }
+    },
+    "Started on claude.ai from %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auf claude.ai gestartet aus %@"
+          }
+        }
+      }
+    },
+    "Starts a session on claude.ai/code. It works on the repository on GitHub, not on your local changes.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Startet eine Sitzung auf claude.ai/code. Sie arbeitet am Repository auf GitHub, nicht an deinen lokalen Änderungen."
+          }
+        }
+      }
+    },
+    "Terminal": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terminal"
+          }
+        }
+      }
+    },
+    "The session works on the repository on GitHub. Follow it on claude.ai/code or in the Claude app.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Die Sitzung arbeitet am Repository auf GitHub. Verfolge sie auf claude.ai/code oder in der Claude-App."
+          }
+        }
+      }
+    },
+    "Where an interactive or Remote Control session opens.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wo eine interaktive oder Remote-Control-Sitzung geöffnet wird."
+          }
+        }
+      }
+    },
+    "Work on this finding.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bearbeite diesen Befund."
+          }
+        }
+      }
+    },
+    "Work through the open review feedback on this pull request.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Arbeite das offene Review-Feedback zu diesem Pull Request durch."
+          }
+        }
+      }
+    },
+    "You are running inside a detached git worktree that Shepherd created for pull request #%@ of %@ — branch %@, checked out at commit %@.\n\nGround rules:\n- Do not push, do not create or switch branches, and do not open a pull request. The reviewer reads your diff and pushes it themselves.\n- %@\n- %@\n- Prefer the project's existing tests and tooling over adding new ones.\n- %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du läufst in einem separaten Git-Worktree, den Shepherd für Pull Request #%@ von %@ erstellt hat — Branch %@, ausgecheckt auf Commit %@.\n\nGrundregeln:\n- Nicht pushen, keine Branches erstellen oder wechseln und keinen Pull Request öffnen. Der Reviewer liest deinen Diff und pusht ihn selbst.\n- %@\n- %@\n- Nutze bevorzugt die bestehenden Tests und Werkzeuge des Projekts, statt neue hinzuzufügen.\n- %@"
+          }
+        }
+      }
+    },
+    "You are running inside a git worktree that Shepherd created for a task on %@. It is checked out on a new branch, %@, started from the tip of the repository's default branch. Shepherd named that branch; do not rename it and do not switch to another one.\n\nGround rules:\n- %@\n- If the task asks for code changes, the work is yours to finish on this branch. When it is ready you may commit it, publish the branch and open a pull request, using the git and GitHub credentials you already have. If you cannot publish, commit anyway and say so: the reviewer can publish the worktree from Shepherd.\n- Keep code changes to what the task asks for. Do not reformat, rename or refactor anything else.\n- Read the repository before you write: its tests, its conventions and its contribution notes are the specification, not a suggestion.\n- Prefer the project's existing tests and tooling over adding new ones.\n- %@": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du läufst in einem git-Worktree, den Shepherd für eine Aufgabe in %@ angelegt hat. Er ist auf einem neuen Branch ausgecheckt, %@, gestartet von der Spitze des Standard-Branches dieses Repositories. Shepherd hat diesen Branch benannt; benenne ihn nicht um und wechsle nicht auf einen anderen.\n\nGrundregeln:\n- %@\n- Verlangt die Aufgabe Code-Änderungen, ist die Arbeit deine, und du darfst sie auf diesem Branch abschließen. Wenn sie fertig ist, darfst du committen, den Branch veröffentlichen und einen Pull Request öffnen – mit den git- und GitHub-Zugangsdaten, die du ohnehin hast. Wenn du nicht veröffentlichen kannst, committe trotzdem und sage es: Der Reviewer kann den Worktree aus Shepherd veröffentlichen.\n- Ändere am Code nur, was die Aufgabe verlangt. Formatiere, benenne und refaktoriere nichts anderes um.\n- Lies das Repository, bevor du schreibst: Seine Tests, seine Konventionen und seine Hinweise für Beitragende sind die Spezifikation, keine Anregung.\n- Nutze bevorzugt die bestehenden Tests und Werkzeuge des Projekts, statt neue hinzuzufügen.\n- %@"
+          }
+        }
+      }
+    },
+    "You are running inside a git worktree that Shepherd created for issue #%@ of %@. It is checked out on a new branch, %@, started from the tip of the repository's default branch. Shepherd named that branch; do not rename it and do not switch to another one.\n\nGround rules:\n- %@\n- If the task asks for code changes, the work is yours to finish on this branch. When it is ready you may commit it, publish the branch and open a pull request, using the git and GitHub credentials you already have. If you cannot publish, commit anyway and say so: the reviewer can publish the worktree from Shepherd.\n- Keep code changes to what the issue asks for. Do not reformat, rename or refactor anything else.\n- Read the repository before you write: its tests, its conventions and its contribution notes are the specification, not a suggestion.\n- Prefer the project's existing tests and tooling over adding new ones.\n- If the issue is unclear or you would have to guess at intent, say so instead of guessing.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du läufst in einem git-Worktree, den Shepherd für Issue #%@ von %@ angelegt hat. Er ist auf einem neuen Branch ausgecheckt, %@, gestartet von der Spitze des Standard-Branches dieses Repositories. Shepherd hat diesen Branch benannt; benenne ihn nicht um und wechsle nicht auf einen anderen.\n\nGrundregeln:\n- %@\n- Verlangt die Aufgabe Code-Änderungen, ist die Arbeit deine, und du darfst sie auf diesem Branch abschließen. Wenn sie fertig ist, darfst du committen, den Branch veröffentlichen und einen Pull Request öffnen – mit den git- und GitHub-Zugangsdaten, die du ohnehin hast. Wenn du nicht veröffentlichen kannst, committe trotzdem und sage es: Der Reviewer kann den Worktree aus Shepherd veröffentlichen.\n- Ändere am Code nur, was das Issue verlangt. Formatiere, benenne und refaktoriere nichts anderes um.\n- Lies das Repository, bevor du schreibst: Seine Tests, seine Konventionen und seine Hinweise für Beitragende sind die Spezifikation, keine Anregung.\n- Nutze bevorzugt die bestehenden Tests und Werkzeuge des Projekts, statt neue hinzuzufügen.\n- Ist das Issue unklar oder müsstest du die Absicht erraten, sage das, statt zu raten."
+          }
+        }
+      }
+    },
+    "You drive the session. Turn and spend caps do not apply.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Du steuerst die Sitzung. Turn- und Kostenlimits gelten nicht."
+          }
+        }
+      }
+    },
+    "iTerm": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iTerm"
+          }
+        }
+      }
+    },
+    "in a session": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "in einer Sitzung"
           }
         }
       }
@@ -3409,6 +3869,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Wird an --allowedTools übergeben. Standardmäßig sind Lesen, Bearbeiten, jeder Shell-Befehl und das Web erlaubt."
+          }
+        }
+      }
+    },
+    "macOS could not open %@. Copy the command and run it in a terminal instead.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS konnte %@ nicht öffnen. Kopiere den Befehl und führe ihn stattdessen in einem Terminal aus."
           }
         }
       }
@@ -3989,16 +4459,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Review-Befund in %@ umsetzen"
-          }
-        }
-      }
-    },
-    "Address the open review feedback on this pull request.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Setze das offene Review-Feedback zu diesem Pull Request um."
           }
         }
       }
@@ -7033,16 +7493,6 @@
         }
       }
     },
-    "Fix this finding.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Behebe diesen Befund."
-          }
-        }
-      }
-    },
     "Fixes issue #%@": {
       "localizations": {
         "de": {
@@ -8359,6 +8809,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Wird gemerged, sobald die Checks grün sind"
+          }
+        }
+      }
+    },
+    "Mark a file viewed": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Datei als gesehen markieren"
           }
         }
       }
@@ -9779,16 +10239,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Shepherd-Einstellungen öffnen"
-          }
-        }
-      }
-    },
-    "Open a delegation sheet with this issue as the task. Shepherd creates a worktree on its own branch and runs the assistant you configured; the handover is queued as a comment on the issue.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Öffnet ein Delegationsfenster mit diesem Issue als Aufgabe. Shepherd legt einen Worktree auf einem eigenen Branch an und startet den Assistenten, den du konfiguriert hast; die Übergabe wird als Kommentar am Issue eingereiht."
           }
         }
       }
@@ -14223,6 +14673,16 @@
         }
       }
     },
+    "Unmark a viewed file": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eine Datei nicht mehr als gesehen markieren"
+          }
+        }
+      }
+    },
     "Unresolve": {
       "localizations": {
         "de": {
@@ -14699,26 +15159,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Du bist durch."
-          }
-        }
-      }
-    },
-    "You are running inside a detached git worktree that Shepherd created for pull request #%@ of %@ — branch %@, checked out at commit %@.\n\nGround rules:\n- Do not push, do not create or switch branches, and do not open a pull request. The reviewer reads your diff and pushes it themselves.\n- Keep the change as small as it can be. Do not reformat, rename or refactor anything the task does not ask for.\n- Prefer the project's existing tests and tooling over adding new ones.\n- If the task is unclear or you would have to guess at intent, say so in your final message instead of guessing.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Du läufst in einem separaten Git-Worktree, den Shepherd für Pull Request #%@ von %@ erstellt hat — Branch %@, ausgecheckt auf Commit %@.\n\nGrundregeln:\n- Nicht pushen, keine Branches erstellen oder wechseln und keinen Pull Request öffnen. Der Reviewer liest deinen Diff und pusht ihn selbst.\n- Halte die Änderung so klein wie möglich. Formatiere, benenne und refaktoriere nichts um, was die Aufgabe nicht verlangt.\n- Nutze bevorzugt die bestehenden Tests und Werkzeuge des Projekts, statt neue hinzuzufügen.\n- Ist die Aufgabe unklar oder müsstest du die Absicht erraten, sage das in deiner Abschlussnachricht, statt zu raten."
-          }
-        }
-      }
-    },
-    "You are running inside a git worktree that Shepherd created for issue #%@ of %@. It is checked out on a new branch, %@, started from the tip of the repository's default branch. Shepherd named that branch; do not rename it and do not switch to another one.\n\nGround rules:\n- The work is yours to finish on this branch. When it is ready you may commit it, publish the branch and open a pull request, using the git and GitHub credentials you already have. If you cannot publish, commit anyway and say so in your final message: the reviewer can publish the worktree from Shepherd.\n- Solve the issue and nothing else. Do not reformat, rename or refactor anything the issue does not ask for.\n- Read the repository before you write: its tests, its conventions and its contribution notes are the specification, not a suggestion.\n- Prefer the project's existing tests and tooling over adding new ones.\n- If the issue is unclear or you would have to guess at intent, say so in your final message instead of guessing.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Du läufst in einem git-Worktree, den Shepherd für Issue #%@ von %@ angelegt hat. Er ist auf einem neuen Branch ausgecheckt, %@, gestartet von der Spitze des Standard-Branches dieses Repositories. Shepherd hat diesen Branch benannt; benenne ihn nicht um und wechsle nicht auf einen anderen.\n\nGrundregeln:\n- Die Arbeit ist deine, und du darfst sie auf diesem Branch abschließen. Wenn sie fertig ist, darfst du committen, den Branch veröffentlichen und einen Pull Request öffnen – mit den git- und GitHub-Zugangsdaten, die du ohnehin hast. Wenn du nicht veröffentlichen kannst, committe trotzdem und sage es in deiner Abschlussnachricht: die Person, die review macht, kann den Worktree aus Shepherd heraus veröffentlichen.\n- Löse das Issue und nichts anderes. Formatiere, benenne und refaktoriere nichts, wonach das Issue nicht fragt.\n- Lies das Repository, bevor du schreibst: seine Tests, seine Konventionen und seine Hinweise zum Beitragen sind die Spezifikation, kein Vorschlag.\n- Nutze die vorhandenen Tests und Werkzeuge des Projekts, statt neue hinzuzufügen.\n- Wenn das Issue unklar ist oder du die Absicht erraten müsstest, sage das in deiner Abschlussnachricht, statt zu raten."
           }
         }
       }
@@ -18089,16 +18529,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Die erste Zeile benennt den Branch. Shepherd stellt seine eigenen Anweisungen davor: Der Agent arbeitet auf einem neuen Branch vom Standard-Branch, darf mit seinen eigenen Zugangsdaten committen und einen Pull Request öffnen und soll die Änderung minimal halten."
-          }
-        }
-      }
-    },
-    "You are running inside a git worktree that Shepherd created for a task on %@. It is checked out on a new branch, %@, started from the tip of the repository's default branch. Shepherd named that branch; do not rename it and do not switch to another one.\n\nGround rules:\n- The work is yours to finish on this branch. When it is ready you may commit it, publish the branch and open a pull request, using the git and GitHub credentials you already have. If you cannot publish, commit anyway and say so in your final message: the reviewer can publish the worktree from Shepherd.\n- Do what the task asks and nothing else. Do not reformat, rename or refactor anything the task does not ask for.\n- Read the repository before you write: its tests, its conventions and its contribution notes are the specification, not a suggestion.\n- Prefer the project's existing tests and tooling over adding new ones.\n- If the task is unclear or you would have to guess at intent, say so in your final message instead of guessing.": {
-      "localizations": {
-        "de": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Du läufst in einem git-Worktree, den Shepherd für eine Aufgabe in %@ angelegt hat. Er ist auf einem neuen Branch ausgecheckt, %@, gestartet von der Spitze des Standard-Branches dieses Repositories. Shepherd hat diesen Branch benannt; benenne ihn nicht um und wechsle nicht auf einen anderen.\n\nGrundregeln:\n- Die Arbeit ist deine, und du darfst sie auf diesem Branch abschließen. Wenn sie fertig ist, darfst du committen, den Branch veröffentlichen und einen Pull Request öffnen – mit den git- und GitHub-Zugangsdaten, die du ohnehin hast. Wenn du nicht veröffentlichen kannst, committe trotzdem und sage es in deiner Abschlussnachricht: Der Reviewer kann den Worktree aus Shepherd veröffentlichen.\n- Tu, was die Aufgabe verlangt, und nichts sonst. Formatiere, benenne und refaktoriere nichts um, was die Aufgabe nicht verlangt.\n- Lies das Repository, bevor du schreibst: Seine Tests, seine Konventionen und seine Hinweise für Beitragende sind die Spezifikation, keine Anregung.\n- Nutze bevorzugt die bestehenden Tests und Werkzeuge des Projekts, statt neue hinzuzufügen.\n- Ist die Aufgabe unklar oder müsstest du die Absicht erraten, sage das in deiner Abschlussnachricht, statt zu raten."
           }
         }
       }
@@ -21621,6 +22051,126 @@
           "stringUnit": {
             "state": "translated",
             "value": "MERGE-KONFLIKT"
+          }
+        }
+      }
+    },
+    "Assigned to me": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mir zugewiesen"
+          }
+        }
+      }
+    },
+    "Opened by me": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Von mir eröffnet"
+          }
+        }
+      }
+    },
+    "Mentioning me": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Erwähnt mich"
+          }
+        }
+      }
+    },
+    "MINE": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MEINE"
+          }
+        }
+      }
+    },
+    "Which of your three searches found the issue. An issue that is assigned to you and mentions you is counted in both.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Welche deiner drei Suchen das Issue gefunden hat. Ein Issue, das dir zugewiesen ist und dich erwähnt, zählt in beiden."
+          }
+        }
+      }
+    },
+    "Issues from public repositories always reach this list. From private ones, only where Shepherd is installed on the owner: only an owner can install it, everyone else can request it. Or sign in with a classic token (repo scope) to see everything your GitHub account sees.": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issues aus öffentlichen Repositorys kommen immer in diese Liste. Aus privaten nur, wenn Shepherd beim Owner installiert ist: Installieren kann nur ein Owner, alle anderen können es anfragen. Oder melde dich mit einem klassischen Token (Scope „repo“) an, dann siehst du alles, was dein GitHub-Konto sieht."
+          }
+        }
+      }
+    },
+    "Install Shepherd on another owner…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd bei einem weiteren Owner installieren…"
+          }
+        }
+      }
+    },
+    "Install Shepherd…": {
+      "localizations": {
+        "de": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shepherd installieren…"
+          }
+        }
+      }
+    },
+    "%lld watched repositories not visible to Shepherd": {
+      "localizations": {
+        "de": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld beobachtetes Repository für Shepherd nicht sichtbar"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld beobachtete Repositorys für Shepherd nicht sichtbar"
+                }
+              }
+            }
+          }
+        },
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld watched repository not visible to Shepherd"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld watched repositories not visible to Shepherd"
+                }
+              }
+            }
           }
         }
       }

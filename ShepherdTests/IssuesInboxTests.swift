@@ -81,7 +81,8 @@ final class IssuesInboxTests: XCTestCase {
         daysAgo: Double = 0,
         updatedOffset: TimeInterval = 0,
         state: IssueSummary.State = .open,
-        agentLink: Bool = false
+        agentLink: Bool = false,
+        relations: Set<IssueRelation> = [.assigned]
     ) -> IssueRowSummary {
         let repository = repo ?? self.repo
         let links: [LinkedPullRequestReference] = agentLink
@@ -108,7 +109,7 @@ final class IssuesInboxTests: XCTestCase {
             closedAt: state == .closed ? clock.addingTimeInterval(updatedOffset) : nil,
             state: state,
             labels: labels,
-            myRelation: [.assigned],
+            myRelation: relations,
             commentCount: number,
             linkedPullRequests: links
         )
@@ -224,6 +225,33 @@ final class IssuesInboxTests: XCTestCase {
         model.clearFacets()
         XCTAssertFalse(model.hasActiveFacet)
         XCTAssertEqual(model.filteredRows.count, 3)
+    }
+
+    func testTheRelationFacetIsolatesWhatIsAssignedToMe() async throws {
+        // ADR 0032's 2026-11-19 amendment: the section is the union of three searches, and the
+        // rail is where "only what is assigned to me" is asked.
+        let database = try DatabaseManager.inMemory()
+        try await database.saveIssueSummaries([
+            issue(1, relations: [.assigned, .mentioned]),
+            issue(2, relations: [.authored]),
+            issue(3, relations: [.mentioned]),
+            closedIssue(),
+        ])
+        let model = makeModel(database: database, issues: nil)
+        await started(model)
+
+        // Over the open rows, in the enum's order, and an issue in two relations counts in both.
+        XCTAssertEqual(model.relationFacets.map(\.relation), [.assigned, .authored, .mentioned])
+        XCTAssertEqual(model.relationFacets.map(\.count), [1, 1, 2])
+
+        model.relationFilter = .assigned
+        XCTAssertEqual(model.filteredRows.map(\.number), [1])
+        XCTAssertTrue(model.hasActiveFacet)
+        XCTAssertEqual(model.relationFacets.map(\.count), [1, 1, 2], "counts do not move")
+
+        model.clearFacets()
+        XCTAssertNil(model.relationFilter)
+        XCTAssertFalse(model.hasActiveFacet)
     }
 
     func testTheRepositoryFacetIsCaseInsensitive() async throws {

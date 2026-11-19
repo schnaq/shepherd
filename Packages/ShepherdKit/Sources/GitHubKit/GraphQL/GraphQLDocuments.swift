@@ -683,6 +683,41 @@ public enum GraphQLDocuments {
     }
     """
 
+    /// Which changed files the signed-in user ticked *Viewed* on github.com (ADR 0028, 2026-11-19
+    /// amendment).
+    ///
+    /// A query of its own rather than a field on one already made: ``reviewThreads`` pages on its
+    /// own cursor and its failure fails the detail, and a failure here — the field is the
+    /// viewer's, so it is the one most likely to be refused — must not cost the closing issues
+    /// beside it. `viewerViewedState` is `VIEWED`, `UNVIEWED`, or `DISMISSED` ("new changes
+    /// since last viewed"); only `VIEWED` counts.
+    public static let pullRequestViewedFiles = """
+    query ShepherdPullRequestViewedFiles($owner: String!, $name: String!, $number: Int!, $after: String) {
+      repository(owner: $owner, name: $name) {
+        pullRequest(number: $number) {
+          files(first: 100, after: $after) {
+            pageInfo { hasNextPage endCursor }
+            nodes { path viewerViewedState }
+          }
+        }
+      }
+    }
+    """
+
+    /// Tick a file's *Viewed* checkbox on GitHub for the signed-in user. GraphQL-only.
+    public static let markFileAsViewed = """
+    mutation ShepherdMarkFileAsViewed($pullRequestId: ID!, $path: String!) {
+      markFileAsViewed(input: { pullRequestId: $pullRequestId, path: $path }) { clientMutationId }
+    }
+    """
+
+    /// Untick a file's *Viewed* checkbox on GitHub. GraphQL-only.
+    public static let unmarkFileAsViewed = """
+    mutation ShepherdUnmarkFileAsViewed($pullRequestId: ID!, $path: String!) {
+      unmarkFileAsViewed(input: { pullRequestId: $pullRequestId, path: $path }) { clientMutationId }
+    }
+    """
+
     /// The cheapest possible staleness probe: the current head SHA of one pull request.
     /// Used before submitting a review draft (ADR 0006's conflict rule).
     public static let pullRequestHead = """

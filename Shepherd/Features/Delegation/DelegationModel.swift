@@ -99,6 +99,12 @@ final class DelegationModel: Identifiable {
         case failed(message: String)
         /// The user stopped the run.
         case cancelled
+        /// The run was handed to a session the user drives (ADR 0011's 2026-11-19 amendment).
+        ///
+        /// Not a terminal state in the outcome sense: Shepherd does not see the session, so it
+        /// announces no outcome and keeps the worktree's diff stat here, refreshed on request, for
+        /// *Commit & push*. Empty for a cloud session, which has no worktree on this Mac.
+        case handedOff(DelegationHandoff, diffStat: String)
     }
 
     /// Whether this delegation can start at all.
@@ -154,6 +160,61 @@ final class DelegationModel: Identifiable {
     /// never receive generated text (ADR 0016, ADR 0011's amendment).
     let brief: AgentBriefDrafter?
 
+    /// Whether the sheet offers anything but the background run (ADR 0011's 2026-11-19
+    /// amendment).
+    ///
+    /// Decided at construction, and for three reasons it is `false`: a rule started the run and
+    /// nobody is there to drive a terminal (ADR 0016), the run answers a session that already
+    /// exists (ADR 0030), or the CLI is a custom template whose interactive form Shepherd does not
+    /// know.
+    let offersHandoff: Bool
+
+    /// How the next run is carried out. Always ``DelegationHandoff/background`` unless
+    /// ``offersHandoff``.
+    var handoff: DelegationHandoff {
+        didSet {
+            // "Ask for each action" has nobody to ask in a headless run.
+            if !permissionModeChoices.contains(permissionMode) {
+                permissionMode = configuration.permissionMode
+            }
+        }
+    }
+
+    /// The permission mode of the next run; starts at the configured one.
+    var permissionMode: AgentPermissionMode
+
+    /// Whether the sheet's "How" may change now: before a run, or after a cloud hand-off, which
+    /// left nothing on this Mac.
+    ///
+    /// Locked otherwise, because *Run again* would carry the new choice: a cloud run started from
+    /// a sheet holding local work would replace that work's diff and push button with a state that
+    /// has neither. *Discard worktree* unlocks it.
+    var canChangeHandoff: Bool {
+        guard !isBusy else { return false }
+        switch state {
+        case .idle, .handedOff(.cloud, _): return true
+        default: return false
+        }
+    }
+
+    /// Whether the run's permission mode reaches the CLI at all: not for a custom template, and
+    /// not for a session send, whose command carries its own (ADR 0030).
+    var offersPermissionChoice: Bool {
+        configuration.kind == .claudeCode && context.session == nil
+    }
+
+    /// The modes the sheet offers for ``handoff``: ``AgentPermissionMode/manual`` only for a
+    /// session somebody is at.
+    var permissionModeChoices: [AgentPermissionMode] {
+        handoff.isInteractive ? AgentPermissionMode.allCases : AgentPermissionMode.headlessCases
+    }
+
+    /// The terminal a hand-off opens in.
+    let terminalApp: TerminalApp
+
+    /// The script the last hand-off wrote, for *Copy command*.
+    private(set) var launcherScript: URL?
+
     /// The editable task text. Shepherd's preamble is prepended when the run starts.
     var task: String
     /// The state machine.
@@ -206,6 +267,10 @@ final class DelegationModel: Identifiable {
     private let claimedTaskSlugs: (@MainActor () -> Set<String>)?
 
     private let runner: any AgentRunning
+    /// The located CLI a hand-off's script runs; `nil` for a custom template.
+    private let executable: URL?
+    /// Opens a written script in a terminal — replaced in tests, which must not open windows.
+    private let openSession: @MainActor (URL, TerminalApp) async throws -> Void
     private let toasts: ToastCenter?
     private let onDidPush: (@MainActor () async -> Void)?
     private let onDidFinish: (@MainActor (DelegationOutcome) -> Void)?
@@ -220,6 +285,9 @@ final class DelegationModel: Identifiable {
     /// Guards ``onDidStart`` against firing twice: a handover is announced once per run, and a
     /// run that is restarted from the same sheet is a second handover of the same issue.
     private var didAnnounceStart = false
+    /// The permission mode the last background run started with, which *Continue* resumes it
+    /// with: the picker may have moved since, and a resumed session is the same run.
+    private var runPermissionMode: AgentPermissionMode?
 
     /// The run task, so tests (and `deinit`-time cleanup) can await it.
     private(set) var runTask: Task<Void, Never>?
@@ -262,6 +330,10 @@ final class DelegationModel: Identifiable {
     ///     `nil` — for every run a rule started.
     ///   - claimedTaskSlugs: The slugs the repository's other tasks have claimed, for a
     ///     repository task's branch name.
+    ///   - executable: The located CLI, for a hand-off's script.
+    ///   - handoff: How the sheet opens — the last choice; ignored unless ``offersHandoff``.
+    ///   - terminalApp: The terminal a hand-off opens in.
+    ///   - openSession: Opens a written script; the real terminal unless a test replaces it.
     init(
         context: DelegationContext,
         configuration: AgentCLIConfiguration,
@@ -275,7 +347,11 @@ final class DelegationModel: Identifiable {
         onDidBegin: (@MainActor () -> Void)? = nil,
         onDidStart: (@MainActor (DelegationStart) -> Void)? = nil,
         brief: AgentBriefDrafter? = nil,
-        claimedTaskSlugs: (@MainActor () -> Set<String>)? = nil
+        claimedTaskSlugs: (@MainActor () -> Set<String>)? = nil,
+        executable: URL? = nil,
+        handoff: DelegationHandoff = .background,
+        terminalApp: TerminalApp = .terminal,
+        openSession: @escaping @MainActor (URL, TerminalApp) async throws -> Void = SessionLauncher.open
     ) {
         Self.nextSequence += 1
         self.sequence = Self.nextSequence
@@ -285,6 +361,13 @@ final class DelegationModel: Identifiable {
         self.readiness = readiness
         self.agentName = configuration.kind.displayName
         self.runner = runner
+        self.executable = executable
+        self.openSession = openSession
+        self.terminalApp = terminalApp
+        let offersHandoff = configuration.kind == .claudeCode && context.session == nil && !isAutomatic
+        self.offersHandoff = offersHandoff
+        self.handoff = offersHandoff ? handoff : .background
+        self.permissionMode = configuration.permissionMode
         self.worktree = worktree
         self.isAutomatic = isAutomatic
         self.toasts = toasts
@@ -302,8 +385,15 @@ final class DelegationModel: Identifiable {
     var isBusy: Bool {
         switch state {
         case .preparingWorktree, .running: return true
-        case .idle, .finished, .failed, .cancelled: return isPublishing
+        case .idle, .finished, .failed, .cancelled, .handedOff: return isPublishing
         }
+    }
+
+    /// Whether the last run went to a session that works in this Mac's worktree — one Shepherd
+    /// must not prepare a second run over (``holdsPendingWork``).
+    var isHandedOffLocally: Bool {
+        if case .handedOff(let handoff, _) = state { return handoff.usesLocalWorktree }
+        return false
     }
 
     /// Whether the Start button does anything.
@@ -329,6 +419,9 @@ final class DelegationModel: Identifiable {
         guard !isBusy, state != .idle, isWorktreeDirectoryKnown, let worktree,
               FileManager.default.fileExists(atPath: worktree.directory.path)
         else { return false }
+        // A session may still be working in it: a rule or a second sheet must not prepare the
+        // worktree again underneath it.
+        if isHandedOffLocally { return true }
         return continuableSessionID != nil || (hasChanges && !hasPushed)
     }
 
@@ -366,8 +459,11 @@ final class DelegationModel: Identifiable {
     /// have (``unpushedCommits``) — also after a start was refused because of them.
     var hasChanges: Bool {
         if worktreeStatus?.isDirty == true || unpushedCommits > 0 { return true }
-        guard context.isNewWork, case .finished(_, let stat) = state else { return false }
-        return !stat.isEmpty
+        guard context.isNewWork else { return false }
+        switch state {
+        case .finished(_, let stat), .handedOff(_, let stat): return !stat.isEmpty
+        default: return false
+        }
     }
 
     /// The branch the run works on: the pull request's, the issue's, or the one a repository
@@ -405,6 +501,8 @@ final class DelegationModel: Identifiable {
         case cancelled
         /// Not started, or discarded.
         case idle
+        /// Handed to a session the user drives.
+        case handedOff
 
         /// The word the rail and ⌘K show.
         var title: String {
@@ -414,6 +512,7 @@ final class DelegationModel: Identifiable {
             case .failed: return String(localized: "failed")
             case .cancelled: return String(localized: "stopped")
             case .idle: return String(localized: "not started")
+            case .handedOff: return String(localized: "in a session")
             }
         }
     }
@@ -431,6 +530,7 @@ final class DelegationModel: Identifiable {
         case .finished(let result, _): return result.isError ? .failed : .finished
         case .failed: return .failed
         case .cancelled: return .cancelled
+        case .handedOff: return .handedOff
         }
     }
 
@@ -456,10 +556,20 @@ final class DelegationModel: Identifiable {
     /// `1 m 12 s`, for the running header.
     var elapsedText: String { RelativeDate.duration(elapsed) }
 
-    /// A one-line summary of the guardrails in force.
+    /// A one-line summary of the guardrails in force, beside the sheet's permission picker.
+    ///
+    /// The caps are headless flags (`-p` only), so a session the user drives says so instead of
+    /// listing limits that would not apply.
     var guardrailSummary: String {
+        switch handoff {
+        case .cloud:
+            return String(localized: "Runs on claude.ai against GitHub. Local changes and caps do not apply.")
+        case .terminal, .remoteControl:
+            return String(localized: "You drive the session. Turn and spend caps do not apply.")
+        case .background:
+            break
+        }
         var parts = [
-            configuration.permissionMode.title,
             // `0` is "no limit" (Settings → Delegation), and the CLI is then run without
             // `--max-turns` — so the summary says that rather than "0 turns max".
             configuration.maxTurns > 0
@@ -471,7 +581,7 @@ final class DelegationModel: Identifiable {
         } else {
             parts.append(String(localized: "no spend cap"))
         }
-        if !configuration.permissionMode.usesAllowedTools {
+        if !permissionMode.usesAllowedTools {
             parts.append(String(localized: "Tools list does not apply"))
         }
         return parts.joined(separator: " · ")
@@ -494,13 +604,37 @@ final class DelegationModel: Identifiable {
 
     // MARK: - Running
 
-    /// Prepares the worktree and starts the agent.
+    /// Prepares the worktree and starts the agent — or hands the prepared worktree to a session
+    /// in a terminal (``handoff``).
+    ///
+    /// A cloud session skips the worktree: it works on the repository on GitHub, so it starts in
+    /// the clone, which is the directory `claude --cloud` reads the repository from.
     func start() {
         guard canStart, let worktree else { return }
         transcript = []
         beginRun()
 
         let taskText = task
+        let handoff = self.handoff
+        // Taken at the press, not after the worktree step, which the picker can outlast.
+        let mode = permissionMode
+        runPermissionMode = mode
+        if handoff == .cloud {
+            let prompt = DelegationPrompt.cloudFull(for: context, task: taskText)
+            let name = Self.fileName(context.id) + "-cloud"
+            runTask = Task { [weak self] in
+                // ``cancel()`` in the hop before this runs must not be overwritten by a hand-off.
+                guard let self, !Task.isCancelled else { return }
+                await self.handOff(
+                    .cloud,
+                    prompt: prompt,
+                    in: worktree.checkout,
+                    launcherFolder: worktree.managedRoot,
+                    name: name
+                )
+            }
+            return
+        }
         runTask = Task { [weak self] in
             guard let self else { return }
             var startedFrom: String?
@@ -565,10 +699,102 @@ final class DelegationModel: Identifiable {
             var promptContext = self.context
             promptContext.headRefName = self.branchName
             let prompt = DelegationPrompt.full(for: promptContext, task: taskText)
+            if handoff.isInteractive {
+                let name = worktree.directory.lastPathComponent
+                await self.handOff(
+                    handoff,
+                    prompt: prompt,
+                    in: worktree.directory,
+                    launcherFolder: worktree.managedRoot,
+                    name: name
+                )
+                await self.refreshHandoff()
+                return
+            }
             await self.runAgent(in: worktree) {
-                try self.runner.run(prompt: prompt, in: worktree.directory)
+                try self.runner.run(prompt: prompt, in: worktree.directory, permissionMode: mode)
             }
         }
+    }
+
+    /// Writes the launcher and opens it in the terminal (ADR 0011's 2026-11-19 amendment).
+    ///
+    /// No outcome and no handover are announced: Shepherd does not see the session, so it can say
+    /// neither that it finished nor that an assistant is running — which is also why an issue gets
+    /// no "Handed to …" comment on this path (ADR 0032's 2026-11-19 amendment). A terminal that
+    /// will not open is a toast, not a failure: the script is written, and *Copy command* runs it.
+    /// - Parameters:
+    ///   - handoff: The kind of session.
+    ///   - prompt: The full prompt, preamble included.
+    ///   - directory: Where the session starts.
+    ///   - launcherFolder: The managed worktrees root, whose sibling holds the script.
+    ///   - name: The session's name and the files' stem — Shepherd's own words.
+    private func handOff(
+        _ handoff: DelegationHandoff,
+        prompt: String,
+        in directory: URL,
+        launcherFolder: URL,
+        name: String
+    ) async {
+        stopTimer()
+        guard let executable else {
+            fail(with: AgentCLIConfiguration.Failure.executableNotFound)
+            return
+        }
+        let script: URL
+        do {
+            script = try SessionLauncher.write(
+                name: name,
+                in: SessionLauncher.directory(worktreesRoot: launcherFolder),
+                prompt: prompt,
+                directory: directory,
+                executable: executable,
+                arguments: configuration.sessionArguments(
+                    for: handoff,
+                    permissionMode: permissionMode,
+                    name: name
+                )
+            )
+        } catch {
+            fail(with: error)
+            return
+        }
+        launcherScript = script
+        state = .handedOff(handoff, diffStat: "")
+        append(
+            .note,
+            handoff.usesLocalWorktree
+                ? String(localized: "Opened \(agentName) in \(terminalApp.title), in \(directory.lastPathComponent).")
+                : String(localized: "Started a Claude Code session on the web from \(terminalApp.title). It works on \(context.repo.fullName) on GitHub.")
+        )
+        do {
+            try await openSession(script, terminalApp)
+        } catch {
+            toasts?.failure(error, context: String(localized: "Could not open the terminal"))
+        }
+    }
+
+    /// Re-reads what a handed-off session has left in the worktree, for the diff and *Commit &
+    /// push*. Shepherd is not told when the session changes something, so the sheet asks.
+    func refreshHandoff() async {
+        guard isHandedOffLocally else { return }
+        let stat = await diffStat()
+        await refreshWorktreeStatus()
+        // Discarded while git was reading: the state belongs to the discard now.
+        guard case .handedOff(let handoff, _) = state else { return }
+        state = .handedOff(handoff, diffStat: stat)
+    }
+
+    /// Puts the hand-off's command on the pasteboard, to run in any terminal.
+    func copyLaunchCommand() {
+        guard let launcherScript else { return }
+        PlatformServices.copyToPasteboard(SessionLauncher.copyCommand(script: launcherScript))
+        toasts?.info(String(localized: "Copied the command."))
+    }
+
+    /// A target's identity as a file-name stem: letters and digits, everything else a dash.
+    private static func fileName(_ id: String) -> String {
+        String(id.map { $0.isLetter || $0.isNumber ? $0 : "-" })
     }
 
     /// Resumes the session a capped or failed run left, in the same worktree (``continuableSessionID``).
@@ -581,6 +807,7 @@ final class DelegationModel: Identifiable {
         // The same handover, carried on: an issue must not get a second "Handed to …" comment.
         didAnnounceStart = true
         append(.note, String(localized: "Continuing the previous session."))
+        let mode = runPermissionMode ?? permissionMode
         runTask = Task { [weak self] in
             // ``cancel()`` during `.preparingWorktree` cancels this task; it must not spawn after.
             guard let self, !Task.isCancelled else { return }
@@ -588,7 +815,8 @@ final class DelegationModel: Identifiable {
                 try self.runner.resume(
                     sessionID: sessionID,
                     prompt: "Continue.",
-                    in: worktree.directory
+                    in: worktree.directory,
+                    permissionMode: mode
                 )
             }
         }
@@ -780,14 +1008,7 @@ final class DelegationModel: Identifiable {
             resultText: nil,
             subtype: exitCode == 0 ? "success" : String(localized: "exit \(Int(exitCode))")
         )
-        var stat = ""
-        if let worktree {
-            if let newWorkBase {
-                stat = (try? await worktree.diffStat(since: newWorkBase)) ?? ""
-            } else {
-                stat = (try? await worktree.diffStat()) ?? ""
-            }
-        }
+        let stat = await diffStat()
         await refreshWorktreeStatus()
         state = .finished(result: result, diffStat: stat)
         append(
@@ -800,6 +1021,15 @@ final class DelegationModel: Identifiable {
         // though the sheet's state machine calls the state `finished` — the run is over either
         // way, and what an automation wants to know is whether the work got done.
         announce(result.isError ? .failed : .finished, message: result.subtype)
+    }
+
+    /// The worktree's diff stat — against a new-work run's starting point, so committed work counts.
+    private func diffStat() async -> String {
+        guard let worktree else { return "" }
+        if let newWorkBase {
+            return (try? await worktree.diffStat(since: newWorkBase)) ?? ""
+        }
+        return (try? await worktree.diffStat()) ?? ""
     }
 
     private func refreshWorktreeStatus() async {

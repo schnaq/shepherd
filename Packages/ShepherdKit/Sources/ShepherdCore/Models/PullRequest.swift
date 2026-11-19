@@ -340,6 +340,10 @@ public struct PullRequestDetail: Sendable, Codable, Hashable, Identifiable {
     /// not made or failed — which the store treats as "unknown" and does not write over the copy
     /// it already holds.
     public var conversation: PullRequestConversation?
+    /// The paths GitHub reports the signed-in user ticked *Viewed* (ADR 0028, 2026-11-19
+    /// amendment), or `nil` when the read was not made or failed — which the store treats as
+    /// "unknown" and keeps what it last read, like ``conversation``.
+    public var viewedOnGitHub: Set<String>?
 
     /// Creates a detail record.
     public init(
@@ -351,7 +355,8 @@ public struct PullRequestDetail: Sendable, Codable, Hashable, Identifiable {
         timeline: [TimelineEvent] = [],
         checks: [CheckRun] = [],
         closingIssues: [LinkedIssueReference] = [],
-        conversation: PullRequestConversation? = nil
+        conversation: PullRequestConversation? = nil,
+        viewedOnGitHub: Set<String>? = nil
     ) {
         self.summary = summary
         self.bodyMarkdown = bodyMarkdown
@@ -362,6 +367,7 @@ public struct PullRequestDetail: Sendable, Codable, Hashable, Identifiable {
         self.checks = checks
         self.closingIssues = closingIssues
         self.conversation = conversation
+        self.viewedOnGitHub = viewedOnGitHub
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -374,6 +380,7 @@ public struct PullRequestDetail: Sendable, Codable, Hashable, Identifiable {
         case checks
         case closingIssues
         case conversation
+        case viewedOnGitHub
     }
 
     /// Decodes a detail record, tolerating every list being absent.
@@ -400,6 +407,7 @@ public struct PullRequestDetail: Sendable, Codable, Hashable, Identifiable {
             PullRequestConversation.self,
             forKey: .conversation
         )
+        viewedOnGitHub = try container.decodeIfPresent(Set<String>.self, forKey: .viewedOnGitHub)
     }
 
     /// `PullRequestDetail` shares the identity of its ``summary``.

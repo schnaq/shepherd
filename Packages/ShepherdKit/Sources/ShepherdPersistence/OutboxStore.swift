@@ -7,10 +7,27 @@ extension DatabaseManager {
     ///
     /// The UI calls this and returns immediately; the sync engine drains the queue. That is
     /// what makes "approve" work offline (ADR 0006).
-    /// - Parameter item: The mutation to enqueue.
-    public func enqueue(_ item: OutboxItem) async throws {
+    /// - Parameters:
+    ///   - item: The mutation to enqueue.
+    ///   - replaces: Which of the same pull request's still-waiting rows `item` makes pointless.
+    ///     They are deleted in the transaction that writes `item`, so two quick presses cannot
+    ///     interleave a read, a cancel and an insert. A claimed, failed or parked row stays: it
+    ///     may already be on GitHub.
+    public func enqueue(
+        _ item: OutboxItem,
+        replacingPending replaces: @escaping @Sendable (OutboxAction) -> Bool = { _ in false }
+    ) async throws {
         let record = try OutboxRecord(item: item)
         try await writer.write { db in
+            let waiting = try OutboxRecord.fetchAll(
+                db,
+                sql: "SELECT * FROM outbox WHERE prID = ? AND state = ?",
+                arguments: [item.prID, OutboxState.pending.rawValue]
+            )
+            for row in waiting {
+                guard let action = try? row.outboxItem().action, replaces(action) else { continue }
+                try db.execute(sql: "DELETE FROM outbox WHERE id = ?", arguments: [row.id])
+            }
             try DatabaseManager.supersedeParked(by: record, db)
             try record.save(db)
         }

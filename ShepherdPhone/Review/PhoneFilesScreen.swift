@@ -293,7 +293,6 @@ struct PhoneFilesScreen: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(environment.activity.isRunning(model.prID, .viewed))
     }
 
     /// The change kind, the first two prioritiser reasons and the comment count, wrapping onto a

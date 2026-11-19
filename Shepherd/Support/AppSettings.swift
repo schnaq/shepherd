@@ -148,6 +148,12 @@ final class AppSettings {
             default: AutoDelegationRules()
         )
         self.editor = Self.readJSON(defaults, Keys.editor, default: EditorConfiguration())
+        self.delegationHandoff = Self.read(
+            defaults,
+            Keys.delegationHandoff,
+            default: DelegationHandoff.background
+        )
+        self.terminalApp = Self.read(defaults, Keys.terminalApp, default: TerminalApp.terminal)
         self.autoMerge = Self.readJSON(
             defaults,
             Keys.autoMerge,
@@ -627,6 +633,21 @@ final class AppSettings {
     /// (``SyncedSettingsDocument/EditorGroup``).
     var editor: EditorConfiguration {
         didSet { Self.writeJSON(defaults, editor, Keys.editor) }
+    }
+
+    /// How the delegation sheet last ran a delegation — the sheet opens on it again (ADR 0011's
+    /// 2026-11-19 amendment).
+    ///
+    /// Not synced: it is the last thing pressed on this Mac, not a preference, and a terminal
+    /// session needs this Mac's terminal anyway.
+    var delegationHandoff: DelegationHandoff {
+        didSet { Self.write(defaults, delegationHandoff, Keys.delegationHandoff) }
+    }
+
+    /// Which terminal app an interactive delegation opens in. Not synced, because which terminals
+    /// are installed is a fact about this Mac.
+    var terminalApp: TerminalApp {
+        didSet { Self.write(defaults, terminalApp, Keys.terminalApp) }
     }
 
     /// The local clone configured for a repository, if any.
@@ -1115,6 +1136,8 @@ final class AppSettings {
         static let localCheckouts = "delegation.localCheckouts"
         static let autoDelegation = "delegation.autoRules"
         static let editor = "editor.configuration"
+        static let delegationHandoff = "delegation.handoff"
+        static let terminalApp = "delegation.terminalApp"
         static let autoMerge = "automation.autoMergeRules"
         static let trustLaneMaxFiles = "trust.laneMaxFiles"
         static let trustLaneMaxChangedLines = "trust.laneMaxChangedLines"

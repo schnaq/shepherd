@@ -151,12 +151,23 @@ struct RepositoryAccessWarning: View {
                     .foregroundStyle(Theme.pending)
                     .fixedSize(horizontal: false, vertical: true)
                 if environment.offersAppInstall {
-                    Button(String(localized: "Install Shepherd on \(repo.owner)…")) {
-                        NSWorkspace.shared.open(AppConfig.githubAppInstallURL)
-                    }
-                    .buttonStyle(SecondaryButtonStyle(height: 24))
+                    InstallShepherdButton(title: String(localized: "Install Shepherd on \(repo.owner)…"))
                 }
             }
         }
+    }
+}
+
+/// The button that opens the GitHub App's installation page — one view for every place that
+/// offers it, so they open the same page in the same style.
+struct InstallShepherdButton: View {
+    /// The label, which says where it installs when the caller knows.
+    let title: String
+
+    var body: some View {
+        Button(title) {
+            NSWorkspace.shared.open(AppConfig.githubAppInstallURL)
+        }
+        .buttonStyle(SecondaryButtonStyle(height: 24))
     }
 }

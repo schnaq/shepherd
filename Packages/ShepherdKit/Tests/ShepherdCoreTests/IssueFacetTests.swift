@@ -55,6 +55,18 @@ final class IssueFacetTests: XCTestCase {
         )
     }
 
+    // MARK: - Relations
+
+    func testRelationFacetsCountEachRelationInCaseOrderAndOmitAbsentOnes() {
+        var both = issue(1)
+        both.myRelation = [.mentioned, .assigned]
+        var mentioned = issue(2)
+        mentioned.myRelation = [.mentioned]
+        let facets = IssueFacets.relationFacets([both, mentioned, issue(3)])
+        XCTAssertEqual(facets.map(\.relation), [.assigned, .mentioned])
+        XCTAssertEqual(facets.map(\.count), [1, 2])
+    }
+
     // MARK: - Labels
 
     func testLabelFacetsAreSortedByCountThenName() {

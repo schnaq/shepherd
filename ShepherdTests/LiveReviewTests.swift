@@ -172,6 +172,35 @@ final class LiveReviewTests: XCTestCase {
         XCTAssertEqual(ReviewModel.keepingConversation(of: nil, in: fresh), fresh)
     }
 
+    // MARK: - Viewed ticks survive a refresh
+
+    func testAFetchKeepsTheTicksOnScreen() {
+        // The reopen bug: the cached detail carries the reviewer's tick, GitHub's answer does not,
+        // and applying the answer as it came unticked every file.
+        var shown = detail(headRefOid: "head-1", commits: [commit("c1", at: 0)])
+        shown.files[0].isViewed = true
+        let fetched = detail(headRefOid: "head-1", commits: [commit("c1", at: 0)])
+        let kept = ReviewModel.keepingViewed(of: shown, in: fetched)
+        XCTAssertTrue(kept.files[0].isViewed)
+        XCTAssertEqual(kept, shown, "nothing left to apply, so nothing is re-applied")
+    }
+
+    func testAFetchDoesNotRetickAFileUntickedOnScreen() {
+        // GitHub still says `VIEWED` (the untick was refused, or has not gone out); the
+        // reviewer's decision wins, here as in the store.
+        let shown = detail(headRefOid: "head-1", commits: [commit("c1", at: 0)])
+        var fetched = detail(headRefOid: "head-1", commits: [commit("c1", at: 0)])
+        fetched.files[0].isViewed = true
+        XCTAssertFalse(ReviewModel.keepingViewed(of: shown, in: fetched).files[0].isViewed)
+    }
+
+    func testATickOnAnotherHeadIsNotCarriedByTheScreen() {
+        var shown = detail(headRefOid: "head-1", commits: [commit("c1", at: 0)])
+        shown.files[0].isViewed = true
+        let pushed = detail(headRefOid: "head-2", commits: [commit("c2", at: 60)])
+        XCTAssertFalse(ReviewModel.keepingViewed(of: shown, in: pushed).files[0].isViewed)
+    }
+
     // MARK: - A moved head is held back
 
     func testAPushIsHeldBackWithTheNumberOfNewCommits() {

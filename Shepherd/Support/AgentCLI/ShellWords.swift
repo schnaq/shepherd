@@ -100,10 +100,18 @@ enum ShellWords {
         return words
     }
 
+    /// Single-quotes one word: `'…'`, with every `'` inside written as `'\''`.
+    ///
+    /// Inside single quotes zsh interprets nothing at all — no `$`, no backtick, no backslash —
+    /// so the only character that needs care is the closing quote itself.
+    static func quote(_ word: String) -> String {
+        "'" + word.replacingOccurrences(of: "'", with: #"'\''"#) + "'"
+    }
+
     /// Joins argv elements into one line that ``split(_:)`` turns back into the same elements.
     ///
-    /// A word with nothing special in it is written as it is; any other word is single-quoted,
-    /// with each `'` inside it written as `'\''`.
+    /// A word with nothing special in it is written as it is; any other word goes through
+    /// ``quote(_:)``.
     /// - Parameter words: The argv elements.
     /// - Returns: The line, for a text field.
     static func join(_ words: [String]) -> String {
@@ -111,7 +119,7 @@ enum ShellWords {
             let isPlain = !word.isEmpty && !word.contains {
                 $0.isWhitespace || "'\"\\".contains($0)
             }
-            return isPlain ? word : "'" + word.replacingOccurrences(of: "'", with: #"'\''"#) + "'"
+            return isPlain ? word : quote(word)
         }
         .joined(separator: " ")
     }

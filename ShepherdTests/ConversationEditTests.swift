@@ -305,39 +305,16 @@ final class ConversationEditTests: XCTestCase {
 
     // MARK: - What a delete or an edit does to the edits still waiting
 
-    private func row(
-        _ action: OutboxAction,
-        prID: String = "PR_1",
-        state: OutboxState = .pending
-    ) -> OutboxItem {
-        OutboxItem(
-            prID: prID,
-            repo: RepoRef(owner: "schnaq", name: "review"),
-            number: 42,
-            action: action,
-            state: state
-        )
-    }
-
-    func testTheWaitingEditsOfAPostAreEveryPendingEditOfTheSameTarget() {
+    func testAnEditOrADeleteReplacesTheWaitingEditsOfTheSamePostOnly() {
+        // Which pull request and which state are the store's to check, in the transaction that
+        // writes the new row (`DatabaseManager.enqueue(_:replacingPending:)`).
         let target = ConversationTarget.issueComment(databaseID: 11)
-        let first = row(.editComment(target, body: "One."))
-        let second = row(.editComment(target, body: "Two."))
-        let items = [
-            first,
-            row(.editComment(.issueComment(databaseID: 12), body: "Another post.")),
-            row(.editComment(.reviewComment(databaseID: 11), body: "Same number, other kind.")),
-            row(.editComment(target, body: "Other pull request."), prID: "PR_2"),
-            row(.editComment(target, body: "In flight."), state: .sending),
-            row(.editComment(target, body: "Refused."), state: .failed),
-            row(.deleteComment(target)),
-            row(.addPullRequestComment(body: "one thought")),
-            second,
-        ]
-        XCTAssertEqual(
-            PullRequestActions.pendingEdits(of: target, prID: "PR_1", in: items).map(\.id),
-            [first.id, second.id]
-        )
+        let replaces = PullRequestActions.isEdit(of: target)
+        XCTAssertTrue(replaces(.editComment(target, body: "One.")))
+        XCTAssertFalse(replaces(.editComment(.issueComment(databaseID: 12), body: "Another post.")))
+        XCTAssertFalse(replaces(.editComment(.reviewComment(databaseID: 11), body: "Same number, other kind.")))
+        XCTAssertFalse(replaces(.deleteComment(target)))
+        XCTAssertFalse(replaces(.addPullRequestComment(body: "one thought")))
     }
 
     // Against a real outbox: the cancel is the store's own state-guarded delete.

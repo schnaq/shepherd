@@ -1535,11 +1535,13 @@ final class InboxModel {
             self.isRefreshingDetail = true
             defer { self.isRefreshingDetail = false }
             do {
-                let fresh = try await self.session.github.pullRequestDetail(
+                var fresh = try await self.session.github.pullRequestDetail(
                     repo: row.repo,
                     number: row.number
                 )
                 try? await self.session.database.savePullRequestDetail(fresh)
+                // The store's input only (`ReviewModel.load()`): a stored copy never carries it.
+                fresh.viewedOnGitHub = nil
                 // An unchanged copy would re-run the prioritiser and restart the same (possibly
                 // paid) summary request the cached apply already has in flight.
                 guard !Task.isCancelled, self.selectedID == selectedID, fresh != self.detail else { return }
