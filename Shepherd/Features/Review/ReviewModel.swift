@@ -1659,13 +1659,20 @@ final class ReviewModel {
     func toggleViewed(path: String, actions: PullRequestActions) async {
         guard let summary else { return }
         let isViewed = !viewedPaths.contains(path)
-        // On the press, not after the write: the store's answer follows through the observation.
+        // On the press, not after the write, and taken back when nothing was stored: a tick only
+        // the screen holds is the one that is gone on reopening.
+        setViewed(path, isViewed)
+        if await !actions.setFileViewed(path: path, on: summary, isViewed: isViewed) {
+            setViewed(path, !isViewed)
+        }
+    }
+
+    private func setViewed(_ path: String, _ isViewed: Bool) {
         if isViewed {
             viewedPaths.insert(path)
         } else {
             viewedPaths.remove(path)
         }
-        await actions.setFileViewed(path: path, on: summary, isViewed: isViewed)
     }
 
     /// Marks a file as seen and moves to the next one still waiting.
@@ -1686,7 +1693,9 @@ final class ReviewModel {
         if !viewedPaths.contains(path) {
             viewedPaths.insert(path)
             selectNextUnviewedFile()
-            await actions.setFileViewed(path: path, on: summary, isViewed: true)
+            if await !actions.setFileViewed(path: path, on: summary, isViewed: true) {
+                viewedPaths.remove(path)
+            }
             return
         }
         selectNextUnviewedFile()

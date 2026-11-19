@@ -205,7 +205,10 @@ held for its own head commit only, so every push unticked every file.
   change, such as a read-only token, a file no longer in the pull request, or a closed pull
   request, *drops* the row in silence (`OutboxOutcome.dropped`). The local tick is the record and
   GitHub's is the copy, so an alert per `a` press about it would be noise. A sent viewed write
-  re-reads nothing (`SentMutation.Kind.fileViewedChanged` is in neither re-read list).
+  re-reads nothing (`SentMutation.Kind.fileViewedChanged` is in neither re-read list), and a
+  waiting one raises no *Sending* chip on the row (`RowWriteState`). The settings' global
+  waiting count still includes it, because it is waiting. When the local tick could not be
+  stored, the screen takes its optimistic tick back.
 - **The iPhone gets it for free.** It reads the same `ReviewModel.viewedPaths` and writes through
   the same `PullRequestActions`.
 

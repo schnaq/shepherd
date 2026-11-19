@@ -137,6 +137,12 @@ final class RowWriteStateTests: XCTestCase {
         XCTAssertEqual(state([item(comment), item(comment, state: .sending)]), .queued(2))
     }
 
+    func testAViewedCheckboxRowRaisesNoChip() {
+        let viewed = OutboxAction.setFileViewed(path: "a.swift", viewed: true)
+        XCTAssertNil(state([item(viewed), item(viewed, state: .sending)]))
+        XCTAssertEqual(state([item(viewed), item(comment)]), .queued(1))
+    }
+
     func testMergedIsShownOnlyOnceTheDrainConfirmedIt() {
         XCTAssertEqual(state([item(merge)]), .mergeQueued, "a queued merge is not a merged one")
         XCTAssertEqual(state([], wasMerged: true), .merged)

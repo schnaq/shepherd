@@ -790,17 +790,20 @@ struct PullRequestActions {
     /// The local tick is the record and is written first; GitHub's *Viewed* checkbox is a copy
     /// sent through the outbox afterwards, drained in the background and never announced — a
     /// reviewer pressing `a` down twenty files gets no toasts, and a token that may not write
-    /// keeps the ticks on this Mac only (ADR 0028, 2026-11-19 amendment). Only the two local
-    /// writes are inside ``activity``: a drain waiting on the network would otherwise refuse the
-    /// next press.
+    /// keeps the ticks on this Mac only (ADR 0028, 2026-11-19 amendment). Only the local tick is
+    /// inside ``activity``: the outbox row and the drain would widen the window in which the next
+    /// press is refused.
     /// - Parameters:
     ///   - path: The file path.
     ///   - summary: The pull request.
     ///   - isViewed: The new state.
-    func setFileViewed(path: String, on summary: PullRequestSummary, isViewed: Bool) async {
+    /// - Returns: Whether the tick was stored — `false` when the write failed (toasted here) or a
+    ///   toggle was still being written. The caller takes its optimistic tick back on `false`.
+    @discardableResult
+    func setFileViewed(path: String, on summary: PullRequestSummary, isViewed: Bool) async -> Bool {
         // Keyed on the pull request rather than on the path: one file is selected at a time, so
         // the toggle and the `v` shortcut are the same button and cannot mean two files at once.
-        let queued = await activity.run(summary.id, .viewed) { () -> Bool in
+        let stored = await activity.run(summary.id, .viewed) { () -> Bool in
             do {
                 try await session.database.setFileViewed(
                     prID: summary.id,
@@ -808,21 +811,19 @@ struct PullRequestActions {
                     headRefOid: summary.headRefOid,
                     isViewed: isViewed
                 )
+                return true
             } catch {
                 toasts.failure(error, context: String(localized: "Could not save the viewed state"))
                 return false
             }
-            // A row that could not be written costs GitHub's copy only, so it is not news.
-            return (try? await Self.writeFileViewed(
-                path: path,
-                viewed: isViewed,
-                on: summary,
-                in: session.database
-            )) != nil
         }
-        guard queued == true else { return }
-        let session = self.session
-        Task { await session.drainOutbox() }
+        guard stored == true else { return false }
+        // A row that could not be written costs GitHub's copy only, so it is not news.
+        if (try? await Self.writeFileViewed(path: path, viewed: isViewed, on: summary, in: session.database)) != nil {
+            let session = self.session
+            Task { await session.drainOutbox() }
+        }
+        return true
     }
 
     /// Writes a viewed toggle's row, after taking out any still-waiting row for the same file.
